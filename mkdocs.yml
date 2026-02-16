@@ -113,8 +113,3 @@ validation:
   absolute_links: warn
   unrecognized_links: warn
   anchors: warn
-
-# Copyright
-copyright: |
-  Copyright &copy; 2024 Rakibul Yeasin -
-  <a href="#__consent">Change cookie settings</a>
