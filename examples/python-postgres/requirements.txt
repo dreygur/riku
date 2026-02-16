@@ -1,4 +1,20 @@
-Django>=2.2.9
-pytz==2019.1
-sqlparse==0.4.4
-psycopg2-binary==2.8.3
+# Python dependencies for Django example app
+# Updated to latest stable versions
+
+# Django web framework (LTS version recommended for production)
+Django>=4.2,<5.0
+
+# Timezone support
+pytz>=2024.1
+
+# SQL parser (required by Django)
+sqlparse>=0.5.0
+
+# PostgreSQL database adapter
+psycopg2-binary>=2.9.9
+
+# Optional: Production-ready WSGI server
+# gunicorn>=21.2.0
+
+# Optional: Static file handling
+# whitenoise>=6.6.0
