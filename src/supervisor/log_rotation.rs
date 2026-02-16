@@ -122,12 +122,11 @@ impl LogRotator {
             let path = entry.path();
 
             // Only rotate .log files (not rotated ones like .log.1, .log.2)
-            if path.extension().map_or(false, |ext| ext == "log") {
-                if self.needs_rotation(&path)? {
+            if path.extension().is_some_and(|ext| ext == "log")
+                && self.needs_rotation(&path)? {
                     self.rotate(&path)?;
                     println!("Rotated log: {}", path.display());
                 }
-            }
         }
 
         Ok(())

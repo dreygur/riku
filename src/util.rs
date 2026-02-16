@@ -110,7 +110,7 @@ pub fn validate_nginx_cache_config(
         )
     })?;
 
-    if size < 1 || size > 100 {
+    if !(1..=100).contains(&size) {
         return Err(format!(
             "Invalid NGINX_CACHE_SIZE: {} - must be between 1 and 100 GB",
             size
@@ -328,18 +328,16 @@ pub fn parse_procfile(filename: &Path) -> Option<HashMap<String, String>> {
     }
 
     // WSGI trumps regular web workers
-    if workers.contains_key("wsgi")
+    if (workers.contains_key("wsgi")
         || workers.contains_key("jwsgi")
-        || workers.contains_key("rwsgi")
-    {
-        if workers.contains_key("web") {
+        || workers.contains_key("rwsgi"))
+        && workers.contains_key("web") {
             echo(
                 "Warning: found both 'wsgi' and 'web' workers, disabling 'web'",
                 "yellow",
             );
             workers.remove("web");
         }
-    }
 
     Some(workers)
 }

@@ -98,7 +98,7 @@ pub fn transfer_to_remote(local_path: &Path, remote_host: &str, remote_path: &st
         ])
         .status();
 
-    if status.map_or(false, |s| s.success()) {
+    if status.is_ok_and(|s| s.success()) {
         echo("Transfer completed successfully (rsync)", "green");
         Ok(())
     } else {

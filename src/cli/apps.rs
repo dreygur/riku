@@ -499,9 +499,10 @@ fn multi_tail(filenames: &[String]) -> Result<()> {
     for (i, f) in filenames.iter().enumerate() {
         if let Ok(file) = fs::File::open(f) {
             let reader = BufReader::new(file);
+            #[allow(clippy::lines_filter_map_ok)]
             let lines: VecDeque<String> = reader
                 .lines()
-                .filter_map(|l| l.ok())
+                .filter_map(Result::ok)
                 .collect::<VecDeque<String>>();
             // Take last catch_up lines
             let start = if lines.len() > catch_up {

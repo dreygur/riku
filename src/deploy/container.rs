@@ -597,6 +597,7 @@ fn create_compose_workers(
 }
 
 /// Create a single worker configuration for a container process.
+#[allow(clippy::too_many_arguments)]
 fn create_container_worker_config(
     app: &str,
     kind: &str,

@@ -125,17 +125,14 @@ fn create_ruby_worker_config(
         // Update command to include port if it's a web process
         let updated_command = if command.contains("--port") || command.contains("PORT=") {
             command.to_string()
+        } else if command.contains("rackup")
+            || (command.contains("rails") && command.contains("server"))
+            || command.contains("puma")
+        {
+            // Common Ruby web servers - add port binding
+            format!("{} -p {}", command, port)
         } else {
-            // If it's a common Ruby web server, add port binding
-            if command.contains("rackup") {
-                format!("{} -p {}", command, port)
-            } else if command.contains("rails") && command.contains("server") {
-                format!("{} -p {}", command, port)
-            } else if command.contains("puma") {
-                format!("{} -p {}", command, port)
-            } else {
-                command.to_string()
-            }
+            command.to_string()
         };
 
         // Create socket file for web processes

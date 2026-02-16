@@ -533,7 +533,7 @@ pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
 
     // Note cron jobs for supervisor to handle
     if !cron_jobs.is_empty() {
-        for (_index, (kind, command)) in cron_jobs.iter().enumerate() {
+        for (kind, command) in cron_jobs.iter() {
             echo(
                 &format!(
                     "Cron job detected for app '{}': {} - {}",
@@ -595,9 +595,9 @@ pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
         }
         None => {
             // Check for identity-style deployments (PHP, release+web, static)
-            if workers.contains_key("release") && workers.contains_key("web") {
-                identity::create_identity_workers(app, &app_path, &env, paths)?;
-            } else if workers.contains_key("static") {
+            if workers.contains_key("release") && workers.contains_key("web")
+                || workers.contains_key("static")
+            {
                 identity::create_identity_workers(app, &app_path, &env, paths)?;
             } else {
                 echo("-----> Could not detect runtime!", "red");

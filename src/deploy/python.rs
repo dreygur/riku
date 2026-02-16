@@ -193,6 +193,7 @@ fn create_python_workers(
 }
 
 /// Create a single worker configuration for a Python process.
+#[allow(clippy::too_many_arguments)]
 fn create_python_worker_config(
     app: &str,
     kind: &str,

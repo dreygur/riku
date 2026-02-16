@@ -260,7 +260,7 @@ WantedBy=default.target
         .args(["--user", "enable", "riku"])
         .status();
 
-    if status.map_or(false, |s| s.success()) {
+    if status.is_ok_and(|s| s.success()) {
         echo("      ✓ Service enabled", "green");
     }
 
@@ -269,7 +269,7 @@ WantedBy=default.target
         .args(["--user", "start", "riku"])
         .status();
 
-    if status.map_or(false, |s| s.success()) {
+    if status.is_ok_and(|s| s.success()) {
         echo("      ✓ Service started", "green");
     }
 
@@ -325,7 +325,7 @@ fn setup_ssh_key_interactive(paths: &RikuPaths) -> Result<()> {
                 ])
                 .status();
 
-            if status.map_or(false, |s| s.success()) {
+            if status.is_ok_and(|s| s.success()) {
                 echo("      ✓ SSH key created", "green");
                 Some(ssh_dir.join("id_ed25519.pub"))
             } else {

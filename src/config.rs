@@ -1,5 +1,5 @@
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Raw source URL for fetching the latest piku script (for reference implementation).
 pub const RIKU_RAW_SOURCE_URL: &str = "https://raw.githubusercontent.com/piku/piku/master/piku.py";
@@ -53,7 +53,7 @@ impl RikuPaths {
     /// Build paths using the given root directory and home directory.
     ///
     /// This is the core constructor used by both production code and tests.
-    pub fn from_dirs(riku_root: PathBuf, home: &PathBuf) -> Self {
+    pub fn from_dirs(riku_root: PathBuf, home: &Path) -> Self {
         let riku_bin = home.join("bin");
         let riku_script = env::current_exe().unwrap_or_else(|_| PathBuf::from("riku"));
 
