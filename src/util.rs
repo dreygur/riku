@@ -331,13 +331,14 @@ pub fn parse_procfile(filename: &Path) -> Option<HashMap<String, String>> {
     if (workers.contains_key("wsgi")
         || workers.contains_key("jwsgi")
         || workers.contains_key("rwsgi"))
-        && workers.contains_key("web") {
-            echo(
-                "Warning: found both 'wsgi' and 'web' workers, disabling 'web'",
-                "yellow",
-            );
-            workers.remove("web");
-        }
+        && workers.contains_key("web")
+    {
+        echo(
+            "Warning: found both 'wsgi' and 'web' workers, disabling 'web'",
+            "yellow",
+        );
+        workers.remove("web");
+    }
 
     Some(workers)
 }
