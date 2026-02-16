@@ -1,0 +1,14 @@
+# MkDocs dependencies for Riku documentation site
+# Install with: pip install -r requirements.txt
+
+# MkDocs core
+mkdocs>=1.5.0
+
+# Material theme
+mkdocs-material>=9.5.0
+
+# Plugins
+mkdocs-minify-plugin>=0.7.0
+
+# Markdown extensions
+pymdown-extensions>=10.0

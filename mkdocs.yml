@@ -1,0 +1,149 @@
+site_name: Riku
+site_description: The smallest PaaS you've ever seen (Rust edition)
+site_author: Riku Team
+site_url: https://dreygur.github.io/riku
+
+repo_name: dreygur/riku
+repo_url: https://github.com/dreygur/riku
+
+theme:
+  name: material
+  palette:
+    # Palette toggle for light mode
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+    - content.code.annotation
+    - content.code.copy
+  language: en
+  logo: img/logo.svg
+  favicon: img/favicon.ico
+
+# Custom navigation
+nav:
+  - Home:
+    - Welcome: index.md
+    - Quick Start: quick-start.md
+    - Features: features.md
+  - Getting Started:
+    - Installation: installation.md
+    - Your First App: first-app.md
+    - Configuration: configuration.md
+  - Deployment:
+    - Deploying Apps: deploying.md
+    - Environment Variables: env.md
+    - Scaling: scaling.md
+    - Procfile: procfile.md
+  - Features:
+    - Process Management: processes.md
+    - Nginx Configuration: nginx.md
+    - SSL/HTTPS: ssl.md
+    - Cron Jobs: cron.md
+    - Plugins: plugins.md
+  - Runtimes:
+    - Python: runtimes/python.md
+    - Node.js: runtimes/node.md
+    - Ruby: runtimes/ruby.md
+    - Go: runtimes/go.md
+    - Rust: runtimes/rust.md
+    - Java: runtimes/java.md
+    - Clojure: runtimes/clojure.md
+  - Advanced:
+    - Architecture: architecture.md
+    - Client Plugins: client-plugins.md
+    - Server Plugins: server-plugins.md
+    - Troubleshooting: troubleshooting.md
+    - FAQ: faq.md
+  - API: api.md
+
+# Extensions
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - meta
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      normalize_issue_symbols: true
+      repo_url_shorthand: true
+      user: dreygur
+      repo: riku
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      auto_append:
+        - includes/mkdocs.md
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      combine_header_slug: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+plugins:
+  - search:
+      separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+  - minify:
+      minify_html: true
+
+# Validation
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+# Extra files
+extra_files:
+  - ENV: examples/ENV
+  - SCALING: examples/SCALING
+  - Procfile: examples/Procfile
+
+# Copyright
+copyright: |
+  Copyright &copy; 2024 Riku Team - 
+  <a href="#__consent">Change cookie settings</a>
