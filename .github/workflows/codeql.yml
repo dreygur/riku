@@ -33,7 +33,7 @@ jobs:
           queries: +security-and-quality
 
       - name: Install Rust
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
