@@ -46,7 +46,6 @@ jobs:
 
       - name: Build documentation
         run: |
-          cd docs-site
           mkdocs build --strict
 
       - name: Setup Pages
