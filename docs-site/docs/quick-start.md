@@ -244,9 +244,9 @@ ssh deploy@your-server-ip "tail ~/.riku/logs/myapp/*.log"
 ## What's Next?
 
 - [Installation Guide](installation.md) - Detailed installation instructions
-- [Configuration](configuration.md) - Configure your apps
-- [Environment Variables](../env.md) - All available env vars
-- [Scaling](scaling.md) - Scale your applications
+- [FAQ](faq.md) - Common questions
+- [GitHub Repository](https://github.com/dreygur/riku) - Source code and issues
+- [Original Piku](https://github.com/piku/piku) - The original Python version
 
 ---
 

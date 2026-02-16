@@ -96,10 +96,8 @@ git push riku master
 |---------|-------------|
 | [Installation](installation.md) | Install Riku on your server |
 | [Quick Start](quick-start.md) | Deploy your first app in 5 minutes |
-| [Environment Variables](env.md) | Configure your deployments |
-| [Scaling](scaling.md) | Scale your applications |
-| [Plugins](plugins.md) | Extend Riku's functionality |
 | [FAQ](faq.md) | Common questions answered |
+| [GitHub](https://github.com/dreygur/riku) | Source code and issues |
 
 ---
 
