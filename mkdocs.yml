@@ -6,6 +6,12 @@ site_url: https://dreygur.github.io/riku
 repo_name: dreygur/riku
 repo_url: https://github.com/dreygur/riku
 
+# Documentation source directory
+docs_dir: docs-site/docs
+
+# Site output directory
+site_dir: docs-site/site
+
 theme:
   name: material
   palette:
@@ -40,40 +46,11 @@ theme:
 
 # Custom navigation
 nav:
-  - Home:
-    - Welcome: index.md
-    - Quick Start: quick-start.md
-    - Features: features.md
-  - Getting Started:
-    - Installation: installation.md
-    - Your First App: first-app.md
-    - Configuration: configuration.md
-  - Deployment:
-    - Deploying Apps: deploying.md
-    - Environment Variables: env.md
-    - Scaling: scaling.md
-    - Procfile: procfile.md
-  - Features:
-    - Process Management: processes.md
-    - Nginx Configuration: nginx.md
-    - SSL/HTTPS: ssl.md
-    - Cron Jobs: cron.md
-    - Plugins: plugins.md
-  - Runtimes:
-    - Python: runtimes/python.md
-    - Node.js: runtimes/node.md
-    - Ruby: runtimes/ruby.md
-    - Go: runtimes/go.md
-    - Rust: runtimes/rust.md
-    - Java: runtimes/java.md
-    - Clojure: runtimes/clojure.md
-  - Advanced:
-    - Architecture: architecture.md
-    - Client Plugins: client-plugins.md
-    - Server Plugins: server-plugins.md
-    - Troubleshooting: troubleshooting.md
-    - FAQ: faq.md
-  - API: api.md
+  - Home: index.md
+  - Quick Start: quick-start.md
+  - Installation: installation.md
+  - FAQ: faq.md
+  - GitHub: https://github.com/dreygur/riku
 
 # Extensions
 markdown_extensions:
@@ -136,12 +113,6 @@ validation:
   absolute_links: warn
   unrecognized_links: warn
   anchors: warn
-
-# Extra files
-extra_files:
-  - ENV: examples/ENV
-  - SCALING: examples/SCALING
-  - Procfile: examples/Procfile
 
 # Copyright
 copyright: |
