@@ -1,0 +1,120 @@
+#!/bin/sh
+#
+# riku client plugin: example
+#
+# This is an example plugin demonstrating the plugin interface.
+# Copy this file as a template for creating your own plugins.
+#
+# Usage:
+#   riku example                    - basic example
+#   riku example:status             - subcommand example
+#   riku example:download <file>    - example with arguments
+#
+# Installation:
+#   mkdir -p ~/.riku/client-plugins
+#   cp example ~/.riku/client-plugins/myplugin
+#   chmod +x ~/.riku/client-plugins/myplugin
+#
+# Plugin Interface:
+#   $1 = server (e.g., "deploy@myserver.com")
+#   $2 = app name (e.g., "myapp")
+#   $3 = full command (e.g., "example:status")
+#   $4+ = additional arguments
+
+server="$1"
+app="$2"
+cmd="$3"
+shift 3
+
+echo "=== Example Plugin ==="
+echo "Server: $server"
+echo "App: $app"
+echo "Command: $cmd"
+echo "Extra args: $*"
+echo ""
+
+case "$cmd" in
+    example)
+        echo "Basic example command"
+        echo ""
+        echo "This plugin was called with:"
+        echo "  - Server: $server"
+        echo "  - App: $app"
+        echo ""
+        echo "You can use ssh to run riku commands:"
+        echo "  ssh $server logs $app"
+        echo ""
+        echo "Or scp to transfer files:"
+        echo "  scp $app/* $server:.riku/apps/$app/"
+        ;;
+    
+    example:status)
+        echo "Status subcommand"
+        echo ""
+        echo "Fetching app status from server..."
+        ssh "$server" ps:show "$app" 2>/dev/null
+        ;;
+    
+    example:download)
+        file="$1"
+        if [ -z "$file" ]; then
+            echo "Error: Please specify a file to download"
+            echo "Usage: riku example:download <filename>"
+            exit 1
+        fi
+        
+        echo "Downloading $file from $app..."
+        mkdir -p "./downloads"
+        scp "$server:.riku/apps/$app/$file" "./downloads/" 2>/dev/null
+        
+        if [ $? -eq 0 ]; then
+            echo "Downloaded to ./downloads/$file"
+        else
+            echo "Download failed. Check that the file exists."
+            exit 1
+        fi
+        ;;
+    
+    example:upload)
+        file="$1"
+        if [ -z "$file" ]; then
+            echo "Error: Please specify a file to upload"
+            echo "Usage: riku example:upload <filename>"
+            exit 1
+        fi
+        
+        if [ ! -f "$file" ]; then
+            echo "Error: File not found: $file"
+            exit 1
+        fi
+        
+        echo "Uploading $file to $app..."
+        scp "$file" "$server:.riku/apps/$app/" 2>/dev/null
+        
+        if [ $? -eq 0 ]; then
+            echo "Uploaded successfully"
+        else
+            echo "Upload failed"
+            exit 1
+        fi
+        ;;
+    
+    example:tunnel)
+        port="${1:-8000}"
+        echo "Creating tunnel to port $port..."
+        echo "Press Ctrl+C to stop"
+        ssh -N -L "$port:localhost:$port" "$server"
+        ;;
+    
+    *)
+        echo "Unknown command: $cmd"
+        echo ""
+        echo "Available commands:"
+        echo "  riku example              - Show basic example"
+        echo "  riku example:status       - Show app status"
+        echo "  riku example:download <f> - Download a file"
+        echo "  riku example:upload <f>   - Upload a file"
+        echo "  riku example:tunnel [p]   - Create SSH tunnel"
+        exit 1
+        ;;
+esac

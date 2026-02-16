@@ -1,0 +1,63 @@
+# Riku Environment Configuration for Python/Django Example
+# See ../../docs/ENV.md for all available options
+
+# =============================================================================
+# Runtime Settings
+# =============================================================================
+
+# Auto-restart workers on deploy (true/false)
+PIKU_AUTO_RESTART=true
+
+# Python version (forced to 3 in Riku)
+# PYTHON_VERSION=3
+
+# =============================================================================
+# Network Settings
+# =============================================================================
+
+# IP address for workers to bind
+BIND_ADDRESS=127.0.0.1
+
+# Disable IPv6 (optional)
+# DISABLE_IPV6=false
+
+# =============================================================================
+# Nginx Settings
+# =============================================================================
+
+# Your domain name (required for production)
+# NGINX_SERVER_NAME=example.com
+
+# Redirect HTTP to HTTPS (requires SSL cert)
+# NGINX_HTTPS_ONLY=false
+
+# Serve static files directly (Django collectstatic creates these)
+NGINX_STATIC_PATHS=/static:static
+
+# =============================================================================
+# Worker Management
+# =============================================================================
+
+# Worker timeout in seconds (default: 7200)
+# RIKU_WORKER_TIMEOUT=7200
+
+# Graceful shutdown period (default: 30)
+# RIKU_WORKER_GRACE_PERIOD=30
+
+# Max restart attempts (default: 5)
+# RIKU_MAX_RESTARTS=5
+
+# Scale workers (alternative to SCALING file)
+# RIKU_WORKER_PROCESSES=web=4,worker=2
+
+# =============================================================================
+# Django-specific (set these via riku config:set)
+# =============================================================================
+
+# Database name (usually same as domain)
+# NGINX_SERVER_NAME=example.com
+
+# Django settings
+# DJANGO_SETTINGS_MODULE=pikudjango.settings
+# SECRET_KEY=your-secret-key-here
+# DEBUG=false

@@ -1,0 +1,17 @@
+# Proxy cache configuration for {{ APP }}
+# Cache path: {{ NGINX_CACHE_PATH }}
+# Cache size: {{ NGINX_CACHE_SIZE }}GB
+# Cache time: {{ NGINX_CACHE_TIME }}s
+# Cache expiry: {{ NGINX_CACHE_EXPIRY }}s
+
+proxy_cache_path {{ NGINX_CACHE_PATH }} levels=1:2 keys_zone={{ APP }}:{{ NGINX_CACHE_SIZE }}g inactive={{ NGINX_CACHE_EXPIRY }}s max_size={{ NGINX_CACHE_SIZE }}g;
+
+# Cache key
+proxy_cache_key "$scheme$request_method$host$request_uri";
+
+# Cache bypass conditions
+proxy_cache_bypass $http_cache_control $http_pragma $http_authorization;
+proxy_no_cache $http_cache_control $http_pragma $http_authorization;
+
+# Hide cache status header from clients
+proxy_hide_header X-Cache-Status;

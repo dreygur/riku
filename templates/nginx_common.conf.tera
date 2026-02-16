@@ -1,0 +1,89 @@
+client_max_body_size 100M;
+large_client_header_buffers 4 16k;
+
+location ^~ /.well-known/acme-challenge {
+  allow all;
+  root ${ACME_WWW};
+}
+
+{% if NGINX_CLOUDFLARE_ACL == "true" %}
+# Cloudflare IP ACL
+include /etc/nginx/cloudflare.conf;
+{% endif %}
+
+{% if NGINX_ALLOW_GIT_FOLDERS != "true" %}
+# Block access to .git folders
+location ~ /\.git {
+  deny all;
+  return 404;
+}
+{% endif %}
+
+{% if NGINX_STATIC_PATHS %}
+# Static path mappings
+{% for mapping in NGINX_STATIC_PATHS | split(pat=",") %}
+{% set parts = mapping | split(pat=":") %}
+{% if parts | length == 2 %}
+location {{ parts | first | trim }} {
+  alias {{ parts | last | trim }};
+  expires 30d;
+  add_header Cache-Control "public, immutable";
+}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if NGINX_CACHE_PREFIXES %}
+# Proxy cache configuration
+proxy_cache_path {{ NGINX_CACHE_PATH }} levels=1:2 keys_zone={{ APP }}:{{ NGINX_CACHE_SIZE }}g inactive={{ NGINX_CACHE_EXPIRY }}s;
+proxy_cache_key "$scheme$request_method$host$request_uri";
+
+{% for prefix in NGINX_CACHE_PREFIXES | split(pat=",") %}
+location {{ prefix | trim }} {
+  proxy_pass http://{{ APP }}_UPSTREAM;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  
+  proxy_cache {{ APP }};
+  proxy_cache_valid 200 304 {{ NGINX_CACHE_TIME }}s;
+  proxy_cache_valid 301 307 {{ NGINX_CACHE_REDIRECTS }}s;
+  proxy_cache_valid any {{ NGINX_CACHE_ANY }}s;
+  proxy_cache_lock on;
+  
+  add_header X-Cache-Status $upstream_cache_status;
+  {% if NGINX_CACHE_CONTROL %}
+  add_header Cache-Control "public, max-age={{ NGINX_CACHE_CONTROL }}";
+  {% endif %}
+}
+{% endfor %}
+{% else %}
+location / {
+  proxy_pass http://{{ APP }}_UPSTREAM;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_set_header X-Forwarded-Host $host;
+  proxy_set_header X-Forwarded-Port $server_port;
+  proxy_redirect off;
+}
+{% endif %}
+
+{% if NGINX_CATCH_ALL %}
+# Catch-all for client-side routing
+location / {
+  try_files $uri /{{ NGINX_CATCH_ALL }};
+}
+{% endif %}
+
+# Security headers
+add_header X-Frame-Options "SAMEORIGIN" always;
+add_header X-XSS-Protection "1; mode=block" always;
+add_header X-Content-Type-Options "nosniff" always;
+
+{% if NGINX_INCLUDE_FILE %}
+# Custom nginx configuration
+include {{ NGINX_INCLUDE_FILE }};
+{% endif %}

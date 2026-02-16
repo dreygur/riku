@@ -1,0 +1,15 @@
+server {
+  listen              $NGINX_IPV4_ADDRESS:80;
+  listen              $NGINX_IPV6_ADDRESS:80;
+  server_name         $NGINX_SERVER_NAME;
+  root                $NGINX_DOCUMENT_ROOT;
+
+  location ~* \.(jpg|jpeg|png|gif|ico|css|js)$ {
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+  }
+
+  location / {
+    try_files $uri $uri/ =404;
+  }
+}

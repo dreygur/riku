@@ -1,0 +1,123 @@
+# Riku Procfile Examples
+# 
+# The Procfile defines the processes that Riku should run for your application.
+# Each line is a process type followed by a colon and the command to run.
+#
+# Process Types:
+#   web      - Web processes (receive HTTP traffic)
+#   worker   - Background worker processes
+#   release  - Runs once during deployment (migrations, etc.)
+#   cron     - Scheduled tasks (cron expression + command)
+#   <name>   - Custom named processes
+#
+# See ../../docs/ENV.md for environment variable configuration
+# See ../../docs/FAQ.md for scaling and process management
+
+# =============================================================================
+# Web Processes
+# =============================================================================
+
+# Python (Flask/Gunicorn)
+# web: gunicorn app:app
+
+# Python (Django)
+# web: gunicorn myproject.wsgi:application
+
+# Python (simple)
+# web: python app.py
+
+# Node.js
+web: node server.js
+
+# Ruby (Puma)
+# web: bundle exec puma -p $PORT
+
+# Ruby (Unicorn)
+# web: bundle exec unicorn -p $PORT
+
+# Go
+# web: ./server
+
+# Rust
+# web: ./target/release/myapp
+
+# Java (Spring Boot)
+# web: java -jar target/myapp.jar
+
+# Static site
+# static: .
+
+# =============================================================================
+# Background Workers
+# =============================================================================
+
+# Python worker
+# worker: python worker.py
+
+# Node.js worker
+# somenodeworker: node worker.js
+
+# Celery (Django)
+# worker: celery -A myproject worker -l info
+
+# Sidekiq (Ruby)
+# worker: bundle exec sidekiq
+
+# =============================================================================
+# Release Tasks (run once during deploy)
+# =============================================================================
+
+# Database migrations (Django)
+# release: python manage.py migrate --noinput
+
+# Database migrations (Rails)
+# release: bundle exec rails db:migrate
+
+# Database migrations (Laravel)
+# release: php artisan migrate --force
+
+# Collect static files (Django)
+# release: python manage.py collectstatic --noinput
+
+# Build assets
+# release: npm run build
+
+# =============================================================================
+# Cron Jobs
+# Format: cron: <schedule> <command>
+# =============================================================================
+
+# Every 5 minutes
+# cron: */5 * * * * python batch.py
+
+# Daily at 2 AM
+# cron: 0 2 * * * /path/to/daily-script.sh
+
+# Every hour
+# cron: 0 * * * * python hourly.py
+
+# Weekly on Sunday at 3 AM
+# cron: 0 3 * * 0 python weekly-report.py
+
+# =============================================================================
+# Custom Named Processes
+# =============================================================================
+
+# Real-time workers (WebSockets)
+# realtime: python realtime.py
+
+# Queue processors
+# queue: python process_queue.py
+
+# API servers
+# api: python api_server.py
+
+# =============================================================================
+# Scaling
+# =============================================================================
+# Use the SCALING file to control process counts:
+#   echo "web=4" > SCALING
+#   echo "worker=2" >> SCALING
+#
+# Or use environment variable:
+#   RIKU_WORKER_PROCESSES=web=4,worker=2

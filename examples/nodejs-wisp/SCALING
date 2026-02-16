@@ -1,0 +1,8 @@
+# Worker Scaling Configuration
+# Format: process_name=count
+
+# Web workers (handles HTTP requests)
+web=1
+
+# Background workers (uncomment to enable)
+# worker=1

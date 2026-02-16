@@ -1,0 +1,10 @@
+[Unit]
+Description=Monitor Riku Nginx Directory for Changes
+Documentation=https://github.com/dreygur/riku
+
+[Path]
+PathChanged=/home/piku/.riku/nginx
+Unit=riku-nginx.service
+
+[Install]
+WantedBy=multi-user.target

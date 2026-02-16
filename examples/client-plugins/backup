@@ -1,0 +1,60 @@
+#!/bin/sh
+#
+# riku client plugin: backup
+#
+# Downloads app files from the server to a local directory.
+# Uses scp which bypasses the riku shell and accesses the filesystem directly.
+#
+# Usage:
+#   riku backup                    - backup to ./appname-TIMESTAMP/
+#   riku backup ./my-backups       - backup to ./my-backups/appname-TIMESTAMP/
+#   riku backup:data               - backup only the data/ subdirectory
+#
+# Installation:
+#   mkdir -p ~/.riku/client-plugins
+#   cp backup ~/.riku/client-plugins/
+#   chmod +x ~/.riku/client-plugins/backup
+
+server="$1"
+app="$2"
+cmd="$3"
+shift 3
+
+dest_base="${1:-.}"
+timestamp=$(date +%Y%m%d-%H%M%S)
+dest="$dest_base/${app}-${timestamp}"
+
+case "$cmd" in
+    backup)
+        echo "Backing up $app to $dest/..."
+        mkdir -p "$dest"
+        # scp bypasses the riku shell, accesses filesystem directly
+        scp -r "$server:.riku/apps/$app/"* "$dest/" 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo "Done: $dest"
+            ls -la "$dest"
+        else
+            echo "Backup failed. Check that the app exists and you have access."
+            rmdir "$dest" 2>/dev/null
+            exit 1
+        fi
+        ;;
+    backup:data)
+        echo "Backing up $app/data to $dest/..."
+        mkdir -p "$dest"
+        scp -r "$server:.riku/apps/$app/data/"* "$dest/" 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo "Done: $dest"
+            ls -la "$dest"
+        else
+            echo "Backup failed. Check that data/ exists."
+            rmdir "$dest" 2>/dev/null
+            exit 1
+        fi
+        ;;
+    *)
+        echo "Unknown backup command: $cmd"
+        echo "Usage: riku backup [dest]  or  riku backup:data [dest]"
+        exit 1
+        ;;
+esac

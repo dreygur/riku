@@ -1,0 +1,12 @@
+# Worker Scaling Configuration
+# Format: process_name=count
+# Uncomment and adjust to scale your workers
+
+# Web workers (handles HTTP requests)
+web=1
+
+# Background workers
+# worker=2
+
+# Real-time workers (e.g., websockets)
+# realtime=1

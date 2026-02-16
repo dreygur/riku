@@ -1,0 +1,11 @@
+# Worker Scaling Configuration for Django App
+# Format: process_name=count
+
+# Web workers (Django/gunicorn)
+web=4
+
+# Background workers (Celery, etc.)
+worker=2
+
+# Release process (runs migrations on deploy)
+release=1

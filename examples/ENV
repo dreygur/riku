@@ -1,0 +1,113 @@
+# Riku Environment Variables
+# Copy and uncomment the variables you need for your app.
+
+# =============================================================================
+# NETWORK SETTINGS
+# =============================================================================
+
+# Domain name for your app (required for HTTPS)
+# NGINX_SERVER_NAME=example.com
+
+# Redirect HTTP to HTTPS (requires SSL cert)
+# NGINX_HTTPS_ONLY=true
+
+# IP address to bind workers to (default: 127.0.0.1)
+# BIND_ADDRESS=127.0.0.1
+
+# Disable IPv6 in nginx config
+# DISABLE_IPV6=true
+
+# =============================================================================
+# RUNTIME SETTINGS
+# =============================================================================
+
+# Auto-restart workers on deploy (default: true)
+# PIKU_AUTO_RESTART=true
+
+# Node.js version (requires nodeenv)
+# NODE_VERSION=18.17.0
+
+# Node.js package manager: npm, yarn, or pnpm
+# NODE_PACKAGE_MANAGER=yarn
+
+# =============================================================================
+# WORKER MANAGEMENT
+# =============================================================================
+
+# Worker timeout in seconds (default: 7200 = 2 hours)
+# RIKU_WORKER_TIMEOUT=7200
+
+# Graceful shutdown period in seconds (default: 30)
+# RIKU_WORKER_GRACE_PERIOD=30
+
+# Max restart attempts before marking app as failed (default: 5)
+# RIKU_MAX_RESTARTS=5
+
+# Note: For scaling workers, use the SCALING file instead:
+#   echo "web=4" > SCALING
+#   echo "worker=2" >> SCALING
+
+# =============================================================================
+# NGINX STATIC FILES
+# =============================================================================
+
+# Serve static files directly via nginx (comma-separated url:path pairs)
+# NGINX_STATIC_PATHS=/static:public/static,/assets:assets
+
+# Catch-all file for client-side routing (e.g., React Router)
+# NGINX_CATCH_ALL=index.html
+
+# Allow access to .git folders (default: false)
+# NGINX_ALLOW_GIT_FOLDERS=true
+
+# Include custom nginx configuration file
+# NGINX_INCLUDE_FILE=nginx.custom.conf
+
+# =============================================================================
+# NGINX CACHING
+# =============================================================================
+
+# URL prefixes to cache (comma-separated)
+# NGINX_CACHE_PREFIXES=/api/slow,/images
+
+# Cache size in GB (default: 1)
+# NGINX_CACHE_SIZE=1
+
+# Cache validity for 200/304 responses in seconds (default: 3600)
+# NGINX_CACHE_TIME=3600
+
+# Cache validity for redirects in seconds (default: 3600)
+# NGINX_CACHE_REDIRECTS=3600
+
+# Cache validity for other responses in seconds (default: 3600)
+# NGINX_CACHE_ANY=300
+
+# Cache-Control header max-age in seconds (default: 3600)
+# NGINX_CACHE_CONTROL=3600
+
+# Inactive cache expiry in seconds (default: 86400)
+# NGINX_CACHE_EXPIRY=86400
+
+# Custom cache path (default: ~/.riku/cache/<appname>)
+# NGINX_CACHE_PATH=/tmp/nginx-cache
+
+# =============================================================================
+# NGINX SECURITY
+# =============================================================================
+
+# Restrict access to Cloudflare IPs only
+# NGINX_CLOUDFLARE_ACL=true
+
+# =============================================================================
+# ACME/SSL
+# =============================================================================
+
+# Custom ACME certificate authority (default: letsencrypt.org)
+# ACME_ROOT_CA=acme-staging-v02.api.letsencrypt.org
+
+# =============================================================================
+# DEPRECATED (uWSGI-specific - NOT USED in Riku)
+# =============================================================================
+# The following variables are NOT used - Riku uses a custom supervisor:
+# UWSGI_MAX_REQUESTS, UWSGI_PROCESSES, UWSGI_LISTEN, UWSGI_ENABLE_THREADS,
+# UWSGI_LOG_MAXSIZE, UWSGI_IDLE, UWSGI_GEVENT, UWSGI_ASYNCIO, UWSGI_INCLUDE_FILE
