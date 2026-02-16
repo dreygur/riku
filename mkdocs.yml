@@ -1,6 +1,6 @@
 site_name: Riku
 site_description: The smallest PaaS you've ever seen (Rust edition)
-site_author: Riku Team
+site_author: Rakibul Yeasin
 site_url: https://dreygur.github.io/riku
 
 repo_name: dreygur/riku
@@ -116,5 +116,5 @@ validation:
 
 # Copyright
 copyright: |
-  Copyright &copy; 2024 Riku Team - 
+  Copyright &copy; 2024 Rakibul Yeasin -
   <a href="#__consent">Change cookie settings</a>
