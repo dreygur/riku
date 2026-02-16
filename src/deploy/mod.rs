@@ -423,7 +423,7 @@ fn create_identity_workers(
                 if let Some(eq_pos) = proc_def.find('=') {
                     let proc_kind = proc_def[..eq_pos].trim();
                     let proc_count_str = proc_def[eq_pos + 1..].trim();
-                    
+
                     if proc_kind == kind {
                         if let Ok(proc_count) = proc_count_str.parse::<u32>() {
                             count = proc_count;
@@ -501,7 +501,6 @@ fn create_identity_workers(
 pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
     use crate::util::{echo, parse_procfile};
     use std::collections::HashMap;
-    
 
     let app_path = paths.app_root.join(app);
 

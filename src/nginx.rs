@@ -28,7 +28,10 @@ pub fn generate_nginx_config(
     for custom_config in &custom_configs {
         let custom_path = app_path.join(custom_config);
         if custom_path.exists() {
-            echo(&format!("-----> Using custom nginx config: {}", custom_config), "green");
+            echo(
+                &format!("-----> Using custom nginx config: {}", custom_config),
+                "green",
+            );
             return use_custom_nginx_config(&custom_path, app, paths);
         }
     }
@@ -53,7 +56,10 @@ fn use_custom_nginx_config(
     // Validate the nginx configuration
     validate_nginx_config(&config_file)?;
 
-    echo(&format!("-----> Custom nginx config installed for '{}'", app), "green");
+    echo(
+        &format!("-----> Custom nginx config installed for '{}'", app),
+        "green",
+    );
     Ok(())
 }
 
@@ -125,18 +131,18 @@ fn generate_nginx_config_from_template(
         .get("BIND_ADDRESS")
         .cloned()
         .unwrap_or("127.0.0.1".to_string());
-    
+
     let nginx_ipv4_address = env
         .get("NGINX_IPV4_ADDRESS")
         .cloned()
         .unwrap_or("0.0.0.0".to_string());
-    
+
     // Handle DISABLE_IPV6
     let disable_ipv6 = env
         .get("DISABLE_IPV6")
         .map(|v| v.to_lowercase() == "true" || v == "1" || v == "yes")
         .unwrap_or(false);
-    
+
     let nginx_ipv6_address = if disable_ipv6 {
         "".to_string()
     } else {
@@ -144,12 +150,12 @@ fn generate_nginx_config_from_template(
             .cloned()
             .unwrap_or("[::]".to_string())
     };
-    
+
     let nginx_server_name = env
         .get("NGINX_SERVER_NAME")
         .cloned()
         .unwrap_or(format!("{}.example.com", app));
-    
+
     let nginx_socket = env.get("NGINX_SOCKET").cloned().unwrap_or(
         paths
             .nginx_root
@@ -157,7 +163,7 @@ fn generate_nginx_config_from_template(
             .to_string_lossy()
             .to_string(),
     );
-    
+
     let nginx_document_root = env
         .get("NGINX_DOCUMENT_ROOT")
         .cloned()
@@ -168,32 +174,32 @@ fn generate_nginx_config_from_template(
         .get("NGINX_CACHE_SIZE")
         .cloned()
         .unwrap_or(crate::config::NGINX_CACHE_SIZE_DEFAULT.to_string());
-    
+
     let nginx_cache_time = env
         .get("NGINX_CACHE_TIME")
         .cloned()
         .unwrap_or(crate::config::NGINX_CACHE_TIME_DEFAULT.to_string());
-    
+
     let nginx_cache_redirects = env
         .get("NGINX_CACHE_REDIRECTS")
         .cloned()
         .unwrap_or(crate::config::NGINX_CACHE_TIME_DEFAULT.to_string());
-    
+
     let nginx_cache_any = env
         .get("NGINX_CACHE_ANY")
         .cloned()
         .unwrap_or(crate::config::NGINX_CACHE_TIME_DEFAULT.to_string());
-    
+
     let nginx_cache_control = env
         .get("NGINX_CACHE_CONTROL")
         .cloned()
         .unwrap_or(crate::config::NGINX_CACHE_TIME_DEFAULT.to_string());
-    
+
     let nginx_cache_expiry = env
         .get("NGINX_CACHE_EXPIRY")
         .cloned()
         .unwrap_or(crate::config::NGINX_CACHE_EXPIRY_DEFAULT.to_string());
-    
+
     let nginx_cache_path = env
         .get("NGINX_CACHE_PATH")
         .cloned()
@@ -204,7 +210,7 @@ fn generate_nginx_config_from_template(
         .get("NGINX_CLOUDFLARE_ACL")
         .map(|v| v.to_lowercase() == "true" || v == "1" || v == "yes")
         .unwrap_or(false);
-    
+
     let nginx_allow_git_folders = env
         .get("NGINX_ALLOW_GIT_FOLDERS")
         .map(|v| v.to_lowercase() == "true" || v == "1" || v == "yes")
@@ -225,12 +231,20 @@ fn generate_nginx_config_from_template(
     context.insert("NGINX_CACHE_EXPIRY", &nginx_cache_expiry);
     context.insert("NGINX_CACHE_PATH", &nginx_cache_path);
     context.insert("NGINX_CLOUDFLARE_ACL", &nginx_cloudflare_acl.to_string());
-    context.insert("NGINX_ALLOW_GIT_FOLDERS", &nginx_allow_git_folders.to_string());
+    context.insert(
+        "NGINX_ALLOW_GIT_FOLDERS",
+        &nginx_allow_git_folders.to_string(),
+    );
 
     // Additional context values
     context.insert("PIKU_ROOT", &paths.riku_root.to_string_lossy());
     context.insert("ACME_WWW", &paths.acme_www.to_string_lossy());
-    context.insert("ACME_ROOT_CA", &env.get("ACME_ROOT_CA").cloned().unwrap_or_else(|| "letsencrypt.org".to_string()));
+    context.insert(
+        "ACME_ROOT_CA",
+        &env.get("ACME_ROOT_CA")
+            .cloned()
+            .unwrap_or_else(|| "letsencrypt.org".to_string()),
+    );
 
     // Determine which template to use based on configuration
     let template_name = if env.contains_key("NGINX_HTTPS_ONLY") {
@@ -250,12 +264,12 @@ fn generate_nginx_config_from_template(
         .get("NGINX_EXTERNAL_PORT")
         .cloned()
         .unwrap_or("80".to_string());
-    
+
     let nginx_internal_port = env
         .get("NGINX_INTERNAL_PORT")
         .cloned()
         .unwrap_or_else(|| env.get("PORT").cloned().unwrap_or("8080".to_string()));
-    
+
     context.insert("NGINX_EXTERNAL_PORT", &nginx_external_port);
     context.insert("NGINX_INTERNAL_PORT", &nginx_internal_port);
 
@@ -413,7 +427,7 @@ mod tests {
 
         let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
         let config_content = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();
-        
+
         assert!(config_content.contains("192.168.1.1"));
     }
 
@@ -435,7 +449,7 @@ mod tests {
 
         let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
         let config_content = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();
-        
+
         // IPv6 should not be present when disabled
         assert!(!config_content.contains("[::]"));
     }
@@ -448,7 +462,10 @@ mod tests {
 
         let mut env = HashMap::new();
         env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
-        env.insert("NGINX_CACHE_PREFIXES".to_string(), "/api,/images".to_string());
+        env.insert(
+            "NGINX_CACHE_PREFIXES".to_string(),
+            "/api,/images".to_string(),
+        );
         env.insert("NGINX_CACHE_SIZE".to_string(), "2".to_string());
         env.insert("NGINX_CACHE_TIME".to_string(), "7200".to_string());
 
@@ -460,7 +477,7 @@ mod tests {
 
         let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
         let config_content = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();
-        
+
         assert!(config_content.contains("proxy_cache"));
         assert!(config_content.contains("2g"));
         assert!(config_content.contains("7200s"));
@@ -484,7 +501,7 @@ mod tests {
 
         let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
         let config_content = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();
-        
+
         assert!(config_content.contains("cloudflare"));
     }
 
@@ -508,14 +525,14 @@ mod tests {
         // We ignore the error and check the file directly
         let _ = generate_nginx_config("myapp", &app_path, &env, &paths);
         let config_file = paths.nginx_root.join("myapp.conf");
-        
+
         // Config file should be created even if validation fails
         if !config_file.exists() {
             // If file doesn't exist, the error happened before writing
             // This is ok for this test - just skip it
             return;
         }
-        
+
         let config_content = fs::read_to_string(&config_file).unwrap();
         assert!(config_content.contains("return 301"));
         assert!(config_content.contains("https://"));

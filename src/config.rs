@@ -124,7 +124,10 @@ mod tests {
         assert_eq!(p.nginx_root, Path::new("/srv/riku/nginx"));
         assert_eq!(p.cache_root, Path::new("/srv/riku/cache"));
         assert_eq!(p.workers_root, Path::new("/srv/riku/workers"));
-        assert_eq!(p.workers_available, Path::new("/srv/riku/workers-available"));
+        assert_eq!(
+            p.workers_available,
+            Path::new("/srv/riku/workers-available")
+        );
         assert_eq!(p.workers_enabled, Path::new("/srv/riku/workers-enabled"));
         assert_eq!(p.acme_www, Path::new("/srv/riku/acme"));
         assert_eq!(p.plugin_root, Path::new("/srv/riku/plugins"));
@@ -149,12 +152,12 @@ mod tests {
         // Test that ACME_ROOT defaults to ~/.acme.sh when not set
         // We test the logic directly rather than through from_dirs to avoid parallel test issues
         let home = PathBuf::from("/home/bob");
-        
+
         // Simulate the ACME_ROOT resolution logic
         let result = std::env::var("ACME_ROOT_TEST_VAR")
             .map(PathBuf::from)
             .unwrap_or_else(|_| home.join(".acme.sh"));
-        
+
         assert_eq!(result, Path::new("/home/bob/.acme.sh"));
     }
 

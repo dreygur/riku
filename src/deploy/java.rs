@@ -158,7 +158,8 @@ fn create_java_worker_config(
         worker_env.insert("PORT".to_string(), port.to_string());
 
         // Update command to include port if it's a web process
-        let _updated_command = if command.contains("-Dserver.port=") || command.contains("--port=") {
+        let _updated_command = if command.contains("-Dserver.port=") || command.contains("--port=")
+        {
             command.to_string()
         } else {
             // If it's a common Java web server, add port binding

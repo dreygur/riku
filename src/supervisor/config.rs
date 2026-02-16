@@ -269,9 +269,12 @@ mod tests {
         assert_eq!(config.options.timeout, 3600);
         assert_eq!(config.options.grace_period, 60);
         assert_eq!(config.options.max_restarts, 10);
-        
+
         // BIND_ADDRESS should be added automatically
-        assert_eq!(config.env.get("BIND_ADDRESS"), Some(&"127.0.0.1".to_string()));
+        assert_eq!(
+            config.env.get("BIND_ADDRESS"),
+            Some(&"127.0.0.1".to_string())
+        );
     }
 
     #[test]
@@ -290,8 +293,14 @@ mod tests {
 
         // Should use defaults from config constants
         assert_eq!(config.options.timeout, crate::config::RIKU_WORKER_TIMEOUT);
-        assert_eq!(config.options.grace_period, crate::config::RIKU_WORKER_GRACE_PERIOD);
-        assert_eq!(config.options.max_restarts, crate::config::RIKU_MAX_RESTARTS);
+        assert_eq!(
+            config.options.grace_period,
+            crate::config::RIKU_WORKER_GRACE_PERIOD
+        );
+        assert_eq!(
+            config.options.max_restarts,
+            crate::config::RIKU_MAX_RESTARTS
+        );
     }
 
     #[test]
@@ -312,13 +321,19 @@ mod tests {
 
         // Should fall back to defaults when parsing fails
         assert_eq!(config.options.timeout, crate::config::RIKU_WORKER_TIMEOUT);
-        assert_eq!(config.options.max_restarts, crate::config::RIKU_MAX_RESTARTS);
+        assert_eq!(
+            config.options.max_restarts,
+            crate::config::RIKU_MAX_RESTARTS
+        );
     }
 
     #[test]
     fn test_create_worker_config_with_health_check() {
         let mut env = HashMap::new();
-        env.insert("RIKU_HEALTH_CHECK_URL".to_string(), "/api/health".to_string());
+        env.insert(
+            "RIKU_HEALTH_CHECK_URL".to_string(),
+            "/api/health".to_string(),
+        );
         env.insert("RIKU_HEALTH_CHECK_INTERVAL".to_string(), "60".to_string());
         env.insert("RIKU_HEALTH_CHECK_TIMEOUT".to_string(), "10".to_string());
         env.insert("RIKU_HEALTH_CHECK_RETRIES".to_string(), "5".to_string());
@@ -361,7 +376,10 @@ mod tests {
     #[test]
     fn test_create_worker_config_with_worker_processes() {
         let mut env = HashMap::new();
-        env.insert("RIKU_WORKER_PROCESSES".to_string(), "web=4,worker=2".to_string());
+        env.insert(
+            "RIKU_WORKER_PROCESSES".to_string(),
+            "web=4,worker=2".to_string(),
+        );
 
         let config = create_worker_config(
             "testapp",

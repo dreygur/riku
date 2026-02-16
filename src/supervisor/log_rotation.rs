@@ -60,7 +60,7 @@ impl LogRotator {
     }
 
     /// Rotate a log file.
-    /// 
+    ///
     /// Rotation process:
     /// 1. Rename current log to log.1
     /// 2. Shift existing rotated logs (log.1 -> log.2, etc.)
@@ -91,14 +91,14 @@ impl LogRotator {
 
         // Rotate current log
         let rotated_path = log_dir.join(format!("{}.1", log_name));
-        
+
         // Copy current log to rotated (in case file is open)
         let mut src = File::open(log_path)?;
         let mut dst = File::create(&rotated_path)?;
         let mut buffer = Vec::new();
         src.read_to_end(&mut buffer)?;
         dst.write_all(&buffer)?;
-        
+
         // Truncate original log file
         let log_file = OpenOptions::new()
             .write(true)
@@ -112,7 +112,7 @@ impl LogRotator {
     /// Rotate all logs for an application.
     pub fn rotate_app_logs(&self, app: &str, log_root: &Path) -> Result<()> {
         let app_log_dir = log_root.join(app);
-        
+
         if !app_log_dir.exists() {
             return Ok(());
         }
@@ -120,7 +120,7 @@ impl LogRotator {
         for entry in fs::read_dir(&app_log_dir)? {
             let entry = entry?;
             let path = entry.path();
-            
+
             // Only rotate .log files (not rotated ones like .log.1, .log.2)
             if path.extension().map_or(false, |ext| ext == "log") {
                 if self.needs_rotation(&path)? {
@@ -138,7 +138,7 @@ impl LogRotator {
         for entry in fs::read_dir(log_root)? {
             let entry = entry?;
             let path = entry.path();
-            
+
             if path.is_file() {
                 if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
                     // Check if this is a rotated log file (e.g., app.log.5)
@@ -172,7 +172,7 @@ pub fn get_log_age(log_path: &Path) -> Result<u64> {
     if !log_path.exists() {
         return Ok(0);
     }
-    
+
     let metadata = fs::metadata(log_path)?;
     let modified = metadata.modified()?;
     let duration = modified.duration_since(UNIX_EPOCH)?;
@@ -196,11 +196,11 @@ mod tests {
     fn test_needs_rotation() {
         let temp_dir = TempDir::new().unwrap();
         let log_path = temp_dir.path().join("test.log");
-        
+
         // Create small log file
         let mut file = File::create(&log_path).unwrap();
         writeln!(file, "Small log entry").unwrap();
-        
+
         let rotator = LogRotator::with_defaults();
         assert!(!rotator.needs_rotation(&log_path).unwrap());
     }
@@ -209,37 +209,39 @@ mod tests {
     fn test_rotate_log() {
         let temp_dir = TempDir::new().unwrap();
         let log_path = temp_dir.path().join("test.log");
-        
+
         // Create log file with content
         let mut file = File::create(&log_path).unwrap();
         writeln!(file, "Log content").unwrap();
-        
+
         let rotator = LogRotator::new(LogRotationConfig {
             max_size: 0, // Force rotation
             retention_count: 3,
             compress: false,
         });
-        
+
         rotator.rotate(&log_path).unwrap();
-        
+
         // Original file should exist and be empty
         assert!(log_path.exists());
         assert_eq!(fs::read_to_string(&log_path).unwrap(), "");
-        
+
         // Rotated file should exist with content
         let rotated_path = temp_dir.path().join("test.log.1");
         assert!(rotated_path.exists());
-        assert!(fs::read_to_string(&rotated_path).unwrap().contains("Log content"));
+        assert!(fs::read_to_string(&rotated_path)
+            .unwrap()
+            .contains("Log content"));
     }
 
     #[test]
     fn test_log_size() {
         let temp_dir = TempDir::new().unwrap();
         let log_path = temp_dir.path().join("test.log");
-        
+
         let mut file = File::create(&log_path).unwrap();
         writeln!(file, "Test content").unwrap();
-        
+
         let size = get_log_size(&log_path).unwrap();
         assert!(size > 0);
     }

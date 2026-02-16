@@ -43,7 +43,7 @@ impl Supervisor {
             .parent()
             .map(|p| p.join("logs"))
             .unwrap_or_else(|| std::path::PathBuf::from("./logs"));
-        
+
         Ok(Supervisor {
             config_dir,
             process_manager: ProcessManager::new()?,
@@ -85,9 +85,14 @@ impl Supervisor {
                 Err(mpsc::RecvTimeoutError::Timeout) => {
                     // Periodic maintenance tasks
                     self.process_manager.check_processes()?;
-                    
+
                     // Check if it's time for log rotation
-                    if self.last_log_rotation.elapsed().unwrap_or(Duration::from_secs(0)) >= self.log_rotation_interval {
+                    if self
+                        .last_log_rotation
+                        .elapsed()
+                        .unwrap_or(Duration::from_secs(0))
+                        >= self.log_rotation_interval
+                    {
                         if let Err(e) = self.rotate_logs() {
                             eprintln!("Log rotation error: {:?}", e);
                         }
@@ -200,7 +205,7 @@ impl Supervisor {
         for entry in fs::read_dir(&self.log_root)? {
             let entry = entry?;
             let app_dir = entry.path();
-            
+
             if app_dir.is_dir() {
                 if let Some(app_name) = app_dir.file_name().and_then(|s| s.to_str()) {
                     match self.log_rotator.rotate_app_logs(app_name, &self.log_root) {

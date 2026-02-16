@@ -11,9 +11,7 @@ use crate::util::echo;
 /// Get the container runtime command (docker or podman).
 pub fn get_container_runtime() -> Result<String> {
     // Check for Docker first
-    let docker_check = Command::new("docker")
-        .arg("--version")
-        .output();
+    let docker_check = Command::new("docker").arg("--version").output();
 
     if let Ok(output) = docker_check {
         if output.status.success() {
@@ -22,9 +20,7 @@ pub fn get_container_runtime() -> Result<String> {
     }
 
     // Check for Podman
-    let podman_check = Command::new("podman")
-        .arg("--version")
-        .output();
+    let podman_check = Command::new("podman").arg("--version").output();
 
     if let Ok(output) = podman_check {
         if output.status.success() {
@@ -32,22 +28,23 @@ pub fn get_container_runtime() -> Result<String> {
         }
     }
 
-    Err(anyhow::anyhow!("Neither Docker nor Podman is available on this system"))
+    Err(anyhow::anyhow!(
+        "Neither Docker nor Podman is available on this system"
+    ))
 }
 
 /// Build a container image locally and export it to a tar archive.
 /// Automatically detects and uses Docker or Podman.
-pub fn build_and_export(
-    app_name: &str,
-    build_context: &Path,
-    output_path: &Path,
-) -> Result<()> {
+pub fn build_and_export(app_name: &str, build_context: &Path, output_path: &Path) -> Result<()> {
     let runtime = get_container_runtime()?;
-    
-    echo(&format!("-----> Building {} image for '{}'", runtime, app_name), "green");
-    
+
+    echo(
+        &format!("-----> Building {} image for '{}'", runtime, app_name),
+        "green",
+    );
+
     let image_name = format!("riku-{}", app_name);
-    
+
     // Build the image
     let build_status = Command::new(&runtime)
         .args(["build", "-t", &image_name, "."])
@@ -58,8 +55,11 @@ pub fn build_and_export(
         return Err(anyhow::anyhow!("Failed to build {} image", runtime));
     }
 
-    echo(&format!("-----> Exporting image to '{}'", output_path.display()), "green");
-    
+    echo(
+        &format!("-----> Exporting image to '{}'", output_path.display()),
+        "green",
+    );
+
     // Export to tar archive
     let export_status = Command::new(&runtime)
         .args(["save", "-o", output_path.to_str().unwrap(), &image_name])
@@ -69,26 +69,32 @@ pub fn build_and_export(
         return Err(anyhow::anyhow!("Failed to export {} image", runtime));
     }
 
-    echo(&format!("Successfully exported image to '{}'", output_path.display()), "green");
+    echo(
+        &format!("Successfully exported image to '{}'", output_path.display()),
+        "green",
+    );
     Ok(())
 }
 
 /// Transfer a file to a remote server using rsync (with scp fallback).
-pub fn transfer_to_remote(
-    local_path: &Path,
-    remote_host: &str,
-    remote_path: &str,
-) -> Result<()> {
-    echo(&format!("-----> Transferring '{}' to '{}:{}'", 
-        local_path.display(), remote_host, remote_path), "green");
-    
+pub fn transfer_to_remote(local_path: &Path, remote_host: &str, remote_path: &str) -> Result<()> {
+    echo(
+        &format!(
+            "-----> Transferring '{}' to '{}:{}'",
+            local_path.display(),
+            remote_host,
+            remote_path
+        ),
+        "green",
+    );
+
     // Use rsync for better performance (faster than scp, supports resume)
     let status = Command::new("rsync")
         .args([
-            "-avz",  // archive mode, verbose, compress
+            "-avz", // archive mode, verbose, compress
             "--progress",
             local_path.to_str().unwrap(),
-            &format!("{}:{}", remote_host, remote_path)
+            &format!("{}:{}", remote_host, remote_path),
         ])
         .status();
 
@@ -101,7 +107,7 @@ pub fn transfer_to_remote(
         let status = Command::new("scp")
             .args([
                 local_path.to_str().unwrap(),
-                &format!("{}:{}", remote_host, remote_path)
+                &format!("{}:{}", remote_host, remote_path),
             ])
             .status()?;
 
@@ -116,25 +122,32 @@ pub fn transfer_to_remote(
 
 /// Import a container image from a tar archive on the remote server.
 /// Automatically detects and uses Docker or Podman.
-pub fn import_remote(
-    remote_host: &str,
-    archive_path: &str,
-) -> Result<()> {
+pub fn import_remote(remote_host: &str, archive_path: &str) -> Result<()> {
     // Detect remote runtime
-    let runtime = check_remote_runtime(remote_host)?
-        .ok_or_else(|| anyhow::anyhow!("Neither Docker nor Podman is available on remote '{}'", remote_host))?;
-    
-    echo(&format!("-----> Importing {} image on '{}'", runtime, remote_host), "green");
-    
+    let runtime = check_remote_runtime(remote_host)?.ok_or_else(|| {
+        anyhow::anyhow!(
+            "Neither Docker nor Podman is available on remote '{}'",
+            remote_host
+        )
+    })?;
+
+    echo(
+        &format!("-----> Importing {} image on '{}'", runtime, remote_host),
+        "green",
+    );
+
     let status = Command::new("ssh")
         .args([
             remote_host,
-            &format!("{} load -i {}", runtime, archive_path)
+            &format!("{} load -i {}", runtime, archive_path),
         ])
         .status()?;
 
     if !status.success() {
-        return Err(anyhow::anyhow!("Failed to import {} image on remote", runtime));
+        return Err(anyhow::anyhow!(
+            "Failed to import {} image on remote",
+            runtime
+        ));
     }
 
     echo("Image imported successfully", "green");

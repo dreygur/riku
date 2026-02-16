@@ -56,13 +56,18 @@ pub fn get_boolean(value: &str) -> bool {
 pub fn parse_positive_int(name: &str, value: &str) -> Result<u64, String> {
     value
         .parse::<u64>()
-        .map_err(|_| format!(
-            "Invalid value for {}: '{}' is not a valid positive integer",
-            name, value
-        ))
+        .map_err(|_| {
+            format!(
+                "Invalid value for {}: '{}' is not a valid positive integer",
+                name, value
+            )
+        })
         .and_then(|v| {
             if v == 0 {
-                Err(format!("Invalid value for {}: must be greater than 0", name))
+                Err(format!(
+                    "Invalid value for {}: must be greater than 0",
+                    name
+                ))
             } else {
                 Ok(v)
             }
@@ -73,11 +78,11 @@ pub fn parse_positive_int(name: &str, value: &str) -> Result<u64, String> {
 #[allow(dead_code)]
 pub fn validate_node_version(version: &str) -> Result<(), String> {
     let version = version.trim();
-    
+
     if version.is_empty() {
         return Err("NODE_VERSION cannot be empty".to_string());
     }
-    
+
     // Basic version format check (e.g., "18.17.0", "18", "18.x")
     let version_regex = Regex::new(r"^\d+(\.\d+)*(-[\w.]+)?$").unwrap();
     if !version_regex.is_match(version) {
@@ -86,7 +91,7 @@ pub fn validate_node_version(version: &str) -> Result<(), String> {
             version
         ));
     }
-    
+
     Ok(())
 }
 
@@ -99,26 +104,35 @@ pub fn validate_nginx_cache_config(
 ) -> Result<(), String> {
     // Validate cache size (1-100 GB)
     let size = cache_size.parse::<u32>().map_err(|_| {
-        format!("Invalid NGINX_CACHE_SIZE: '{}' - must be a number between 1 and 100", cache_size)
+        format!(
+            "Invalid NGINX_CACHE_SIZE: '{}' - must be a number between 1 and 100",
+            cache_size
+        )
     })?;
-    
+
     if size < 1 || size > 100 {
         return Err(format!(
             "Invalid NGINX_CACHE_SIZE: {} - must be between 1 and 100 GB",
             size
         ));
     }
-    
+
     // Validate cache time (positive integer)
     cache_time.parse::<u32>().map_err(|_| {
-        format!("Invalid NGINX_CACHE_TIME: '{}' - must be a positive integer (seconds)", cache_time)
+        format!(
+            "Invalid NGINX_CACHE_TIME: '{}' - must be a positive integer (seconds)",
+            cache_time
+        )
     })?;
-    
+
     // Validate cache expiry (positive integer)
     cache_expiry.parse::<u32>().map_err(|_| {
-        format!("Invalid NGINX_CACHE_EXPIRY: '{}' - must be a positive integer (seconds)", cache_expiry)
+        format!(
+            "Invalid NGINX_CACHE_EXPIRY: '{}' - must be a positive integer (seconds)",
+            cache_expiry
+        )
     })?;
-    
+
     Ok(())
 }
 
@@ -126,7 +140,7 @@ pub fn validate_nginx_cache_config(
 #[allow(dead_code)]
 pub fn validate_env_vars(env: &HashMap<String, String>) -> Vec<String> {
     let mut warnings = Vec::new();
-    
+
     // Check for deprecated uWSGI variables
     let deprecated_vars = [
         "UWSGI_MAX_REQUESTS",
@@ -139,7 +153,7 @@ pub fn validate_env_vars(env: &HashMap<String, String>) -> Vec<String> {
         "UWSGI_ASYNCIO",
         "UWSGI_INCLUDE_FILE",
     ];
-    
+
     for var in &deprecated_vars {
         if env.contains_key(*var) {
             warnings.push(format!(
@@ -149,25 +163,34 @@ pub fn validate_env_vars(env: &HashMap<String, String>) -> Vec<String> {
             ));
         }
     }
-    
+
     // Validate NODE_VERSION if present
     if let Some(version) = env.get("NODE_VERSION") {
         if let Err(e) = validate_node_version(version) {
             warnings.push(e);
         }
     }
-    
+
     // Validate nginx cache config if present
     if env.contains_key("NGINX_CACHE_PREFIXES") {
-        let cache_size = env.get("NGINX_CACHE_SIZE").map(|s| s.as_str()).unwrap_or("1");
-        let cache_time = env.get("NGINX_CACHE_TIME").map(|s| s.as_str()).unwrap_or("3600");
-        let cache_expiry = env.get("NGINX_CACHE_EXPIRY").map(|s| s.as_str()).unwrap_or("86400");
-        
+        let cache_size = env
+            .get("NGINX_CACHE_SIZE")
+            .map(|s| s.as_str())
+            .unwrap_or("1");
+        let cache_time = env
+            .get("NGINX_CACHE_TIME")
+            .map(|s| s.as_str())
+            .unwrap_or("3600");
+        let cache_expiry = env
+            .get("NGINX_CACHE_EXPIRY")
+            .map(|s| s.as_str())
+            .unwrap_or("86400");
+
         if let Err(e) = validate_nginx_cache_config(cache_size, cache_time, cache_expiry) {
             warnings.push(e);
         }
     }
-    
+
     warnings
 }
 

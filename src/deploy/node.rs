@@ -23,8 +23,11 @@ pub fn deploy_node(
 
     // Handle NODE_VERSION - install specific Node version if requested
     if let Some(node_version) = env.get("NODE_VERSION") {
-        echo(&format!("-----> Installing Node.js version {}", node_version), "green");
-        
+        echo(
+            &format!("-----> Installing Node.js version {}", node_version),
+            "green",
+        );
+
         // Check if nodeenv is available
         if which::which("nodeenv").is_ok() {
             let nodeenv_path = paths.env_root.join(app).join("nodeenv");
@@ -34,11 +37,17 @@ pub fn deploy_node(
                     .arg("-n")
                     .arg(node_version)
                     .status()?;
-                
+
                 if !status.success() {
-                    echo("-----> Failed to install nodeenv, using system Node.js", "yellow");
+                    echo(
+                        "-----> Failed to install nodeenv, using system Node.js",
+                        "yellow",
+                    );
                 } else {
-                    echo(&format!("-----> Node.js {} installed via nodeenv", node_version), "green");
+                    echo(
+                        &format!("-----> Node.js {} installed via nodeenv", node_version),
+                        "green",
+                    );
                 }
             }
         } else {
@@ -53,18 +62,34 @@ pub fn deploy_node(
         .unwrap_or_else(|| "npm".to_string());
 
     // Install dependencies
-    echo(&format!("-----> Installing dependencies with {}", package_manager), "green");
-    
+    echo(
+        &format!("-----> Installing dependencies with {}", package_manager),
+        "green",
+    );
+
     let install_status = if package_manager == "yarn" {
-        Command::new("yarn").arg("install").current_dir(app_path).status()
+        Command::new("yarn")
+            .arg("install")
+            .current_dir(app_path)
+            .status()
     } else if package_manager == "pnpm" {
         // Install pnpm if not available
         if which::which("pnpm").is_err() {
-            let _ = Command::new("npm").arg("install").arg("-g").arg("pnpm").status();
+            let _ = Command::new("npm")
+                .arg("install")
+                .arg("-g")
+                .arg("pnpm")
+                .status();
         }
-        Command::new("pnpm").arg("install").current_dir(app_path).status()
+        Command::new("pnpm")
+            .arg("install")
+            .current_dir(app_path)
+            .status()
     } else {
-        Command::new("npm").arg("install").current_dir(app_path).status()
+        Command::new("npm")
+            .arg("install")
+            .current_dir(app_path)
+            .status()
     };
 
     if let Ok(status) = install_status {

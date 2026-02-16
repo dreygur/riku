@@ -169,21 +169,27 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
 
     // Step 4: Verify installation
     echo("[4/4] Verifying installation...", "");
-    
+
     if !no_systemd {
         let status = Command::new("systemctl")
             .args(["--user", "is-active", "riku"])
             .output();
-        
+
         if let Ok(output) = status {
             if output.status.success() {
                 echo("      ✓ Supervisor running", "green");
             } else {
-                echo("      ⚠ Supervisor not running (start with: systemctl --user start riku)", "yellow");
+                echo(
+                    "      ⚠ Supervisor not running (start with: systemctl --user start riku)",
+                    "yellow",
+                );
             }
         }
     } else {
-        echo("      ℹ Supervisor not started (start manually with: riku supervisor)", "yellow");
+        echo(
+            "      ℹ Supervisor not started (start manually with: riku supervisor)",
+            "yellow",
+        );
     }
 
     echo("", "");
@@ -205,12 +211,12 @@ fn setup_systemd_service(paths: &RikuPaths) -> Result<()> {
     let systemd_dir = dirs::home_dir()
         .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?
         .join(".config/systemd/user");
-    
+
     fs::create_dir_all(&systemd_dir)?;
-    
+
     // Get riku binary path
     let riku_binary = paths.riku_script.to_string_lossy();
-    
+
     // Create service file
     let service_content = format!(
         r#"[Unit]
@@ -238,35 +244,35 @@ WantedBy=default.target
 "#,
         riku_binary = riku_binary
     );
-    
+
     // Create service file
     let service_file = systemd_dir.join("riku.service");
     fs::write(&service_file, &service_content)?;
     echo("      ✓ Service file created", "green");
-    
+
     // Reload systemd daemon
     let _ = Command::new("systemctl")
         .args(["--user", "daemon-reload"])
         .status();
-    
+
     // Enable service
     let status = Command::new("systemctl")
         .args(["--user", "enable", "riku"])
         .status();
-    
+
     if status.map_or(false, |s| s.success()) {
         echo("      ✓ Service enabled", "green");
     }
-    
+
     // Start service
     let status = Command::new("systemctl")
         .args(["--user", "start", "riku"])
         .status();
-    
+
     if status.map_or(false, |s| s.success()) {
         echo("      ✓ Service started", "green");
     }
-    
+
     Ok(())
 }
 
@@ -275,15 +281,15 @@ fn setup_ssh_key_interactive(paths: &RikuPaths) -> Result<()> {
     let ssh_dir = dirs::home_dir()
         .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?
         .join(".ssh");
-    
+
     // Find existing public keys
     let mut found_keys = Vec::new();
-    
+
     if ssh_dir.exists() {
         for entry in fs::read_dir(&ssh_dir)? {
             let entry = entry?;
             let path = entry.path();
-            
+
             if path.extension().and_then(|s| s.to_str()) == Some("pub") {
                 if let Ok(content) = fs::read_to_string(&path) {
                     if content.contains("ssh-") {
@@ -293,77 +299,101 @@ fn setup_ssh_key_interactive(paths: &RikuPaths) -> Result<()> {
             }
         }
     }
-    
+
     let key_to_add = if found_keys.is_empty() {
         // No keys found, offer to create one
         echo("      ℹ No SSH keys found", "yellow");
         print!("      Create new SSH key? [y/N]: ");
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        
+
         if input.trim().to_lowercase() == "y" {
             echo("      Generating SSH key...", "");
-            
+
             let status = Command::new("ssh-keygen")
-                .args(["-t", "ed25519", "-C", "riku@server", "-f", "~/.ssh/id_ed25519", "-N", ""])
+                .args([
+                    "-t",
+                    "ed25519",
+                    "-C",
+                    "riku@server",
+                    "-f",
+                    "~/.ssh/id_ed25519",
+                    "-N",
+                    "",
+                ])
                 .status();
-            
+
             if status.map_or(false, |s| s.success()) {
                 echo("      ✓ SSH key created", "green");
                 Some(ssh_dir.join("id_ed25519.pub"))
             } else {
                 echo("      ⚠ Failed to create SSH key", "red");
-                echo("      You can add a key manually later with: riku setup ssh ~/.ssh/id_rsa.pub", "yellow");
+                echo(
+                    "      You can add a key manually later with: riku setup ssh ~/.ssh/id_rsa.pub",
+                    "yellow",
+                );
                 None
             }
         } else {
-            echo("      ℹ You can add a key manually later with: riku setup ssh ~/.ssh/id_rsa.pub", "yellow");
+            echo(
+                "      ℹ You can add a key manually later with: riku setup ssh ~/.ssh/id_rsa.pub",
+                "yellow",
+            );
             None
         }
     } else if found_keys.len() == 1 {
         // Single key found, use it
-        echo(&format!("      ✓ Found key: {}", found_keys[0].display()), "green");
+        echo(
+            &format!("      ✓ Found key: {}", found_keys[0].display()),
+            "green",
+        );
         Some(found_keys[0].clone())
     } else {
         // Multiple keys found, let user choose
         echo("      Multiple SSH keys found:", "yellow");
-        
+
         for (i, key) in found_keys.iter().enumerate() {
             echo(&format!("        [{}] {}", i + 1, key.display()), "");
         }
-        
+
         print!("      Select key (1-{}): ", found_keys.len());
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        
+
         match input.trim().parse::<usize>() {
             Ok(n) if n >= 1 && n <= found_keys.len() => {
-                echo(&format!("      ✓ Selected: {}", found_keys[n - 1].display()), "green");
+                echo(
+                    &format!("      ✓ Selected: {}", found_keys[n - 1].display()),
+                    "green",
+                );
                 Some(found_keys[n - 1].clone())
             }
             _ => {
                 echo("      ⚠ Invalid selection", "red");
-                echo("      You can add a key manually later with: riku setup ssh ~/.ssh/id_rsa.pub", "yellow");
+                echo(
+                    "      You can add a key manually later with: riku setup ssh ~/.ssh/id_rsa.pub",
+                    "yellow",
+                );
                 None
             }
         }
     };
-    
+
     // Add selected key to authorized_keys
     if let Some(key_path) = key_to_add {
         if key_path.exists() {
             let pubkey = fs::read_to_string(&key_path)?.trim().to_string();
-            
+
             // Get fingerprint
             let output = Command::new("ssh-keygen")
                 .arg("-lf")
                 .arg(&key_path)
                 .output();
-            
+
             let fingerprint = if let Ok(out) = output {
                 String::from_utf8_lossy(&out.stdout)
                     .split_whitespace()
@@ -373,15 +403,18 @@ fn setup_ssh_key_interactive(paths: &RikuPaths) -> Result<()> {
             } else {
                 "unknown".to_string()
             };
-            
-            echo(&format!("      Adding key '{}' to authorized_keys...", fingerprint), "");
-            
+
+            echo(
+                &format!("      Adding key '{}' to authorized_keys...", fingerprint),
+                "",
+            );
+
             let script_path = paths.riku_script.to_string_lossy().to_string();
             setup_authorized_keys(&fingerprint, &script_path, &pubkey)?;
-            
+
             echo("      ✓ Key added to authorized_keys", "green");
         }
     }
-    
+
     Ok(())
 }

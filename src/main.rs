@@ -9,9 +9,9 @@ mod util;
 use anyhow::Result;
 use clap::Parser;
 
-use cli::{Cli, Commands, ConfigCmd, PluginCmd, PsCmd};
 use cli::client_plugins;
 use cli::container;
+use cli::{Cli, Commands, ConfigCmd, PluginCmd, PsCmd};
 use config::RikuPaths;
 
 fn main() -> Result<()> {
@@ -37,7 +37,9 @@ fn main() -> Result<()> {
             ConfigCmd::Unset { app, keys } => cli::apps::cmd_config_unset(&paths, &app, &keys)?,
             ConfigCmd::Live { app } => cli::apps::cmd_config_live(&paths, &app)?,
         },
-        Commands::Container { cmd } => cli::container::cmd_container(container::ContainerCmd { command: cmd }, &paths)?,
+        Commands::Container { cmd } => {
+            cli::container::cmd_container(container::ContainerCmd { command: cmd }, &paths)?
+        }
         Commands::Deploy { app } => cli::apps::cmd_deploy(&paths, &app)?,
         Commands::Destroy { app } => cli::apps::cmd_destroy(&paths, &app)?,
         Commands::Logs { app, process } => cli::apps::cmd_logs(&paths, &app, &process)?,
@@ -99,10 +101,10 @@ fn get_plugin_command(command: &Commands) -> Option<String> {
         Commands::Restart { .. } => Some("restart".to_string()),
         Commands::Stop { .. } => Some("stop".to_string()),
         Commands::Container { .. } => Some("container".to_string()),
-        
+
         // Plugin command - don't recursively check for plugins
         Commands::Plugin(_) => None,
-        
+
         // Core commands that shouldn't be overridden
         Commands::Init { .. } => None,
         Commands::Update => None,
@@ -120,42 +122,40 @@ fn build_plugin_args(command: &Commands) -> Vec<String> {
     // For now, pass empty server (plugin can determine from git remote)
     // and extract app name and command-specific args
     let mut args = Vec::new();
-    
+
     // $1: server (empty for now, plugins can determine from git remote)
     args.push(String::new());
-    
+
     // $2: app name and $3+: command-specific args
     match command {
         Commands::Apps => {
             args.push(String::new()); // No app for apps list
             args.push("apps".to_string());
         }
-        Commands::Config(cmd) => {
-            match cmd {
-                ConfigCmd::Show { app } => {
-                    args.push(app.clone());
-                    args.push("config:show".to_string());
-                }
-                ConfigCmd::Get { app, key } => {
-                    args.push(app.clone());
-                    args.push(format!("config:get:{}", key));
-                }
-                ConfigCmd::Set { app, settings } => {
-                    args.push(app.clone());
-                    args.push("config:set".to_string());
-                    args.extend(settings.clone());
-                }
-                ConfigCmd::Unset { app, keys } => {
-                    args.push(app.clone());
-                    args.push("config:unset".to_string());
-                    args.extend(keys.clone());
-                }
-                ConfigCmd::Live { app } => {
-                    args.push(app.clone());
-                    args.push("config:live".to_string());
-                }
+        Commands::Config(cmd) => match cmd {
+            ConfigCmd::Show { app } => {
+                args.push(app.clone());
+                args.push("config:show".to_string());
             }
-        }
+            ConfigCmd::Get { app, key } => {
+                args.push(app.clone());
+                args.push(format!("config:get:{}", key));
+            }
+            ConfigCmd::Set { app, settings } => {
+                args.push(app.clone());
+                args.push("config:set".to_string());
+                args.extend(settings.clone());
+            }
+            ConfigCmd::Unset { app, keys } => {
+                args.push(app.clone());
+                args.push("config:unset".to_string());
+                args.extend(keys.clone());
+            }
+            ConfigCmd::Live { app } => {
+                args.push(app.clone());
+                args.push("config:live".to_string());
+            }
+        },
         Commands::Deploy { app } => {
             args.push(app.clone());
             args.push("deploy".to_string());
@@ -171,19 +171,17 @@ fn build_plugin_args(command: &Commands) -> Vec<String> {
                 args.push(process.clone());
             }
         }
-        Commands::Ps(cmd) => {
-            match cmd {
-                PsCmd::Show { app } => {
-                    args.push(app.clone());
-                    args.push("ps:show".to_string());
-                }
-                PsCmd::Scale { app, settings } => {
-                    args.push(app.clone());
-                    args.push("ps:scale".to_string());
-                    args.extend(settings.clone());
-                }
+        Commands::Ps(cmd) => match cmd {
+            PsCmd::Show { app } => {
+                args.push(app.clone());
+                args.push("ps:show".to_string());
             }
-        }
+            PsCmd::Scale { app, settings } => {
+                args.push(app.clone());
+                args.push("ps:scale".to_string());
+                args.extend(settings.clone());
+            }
+        },
         Commands::Run { app, cmd } => {
             args.push(app.clone());
             args.push("run".to_string());
@@ -203,6 +201,6 @@ fn build_plugin_args(command: &Commands) -> Vec<String> {
         }
         _ => {}
     }
-    
+
     args
 }

@@ -123,7 +123,10 @@ pub fn cmd_container(cmd: ContainerCmd, _paths: &RikuPaths) -> Result<()> {
                 container_runtime::cleanup_archive(&archive_path)?;
             }
 
-            echo(&format!("Successfully deployed '{}' to '{}'", app, remote), "green");
+            echo(
+                &format!("Successfully deployed '{}' to '{}'", app, remote),
+                "green",
+            );
         }
 
         ContainerSubCmd::DeployArchive {
@@ -132,7 +135,8 @@ pub fn cmd_container(cmd: ContainerCmd, _paths: &RikuPaths) -> Result<()> {
             remote,
         } => {
             // Step 1: Transfer to remote
-            let archive_name = archive.file_name()
+            let archive_name = archive
+                .file_name()
                 .ok_or_else(|| anyhow::anyhow!("Invalid archive path"))?
                 .to_string_lossy();
             let remote_archive_path = format!("/tmp/{}", archive_name);
@@ -150,17 +154,29 @@ pub fn cmd_container(cmd: ContainerCmd, _paths: &RikuPaths) -> Result<()> {
                 echo("Cleaned up remote archive", "green");
             }
 
-            echo(&format!("Successfully deployed '{}' to '{}'", app, remote), "green");
+            echo(
+                &format!("Successfully deployed '{}' to '{}'", app, remote),
+                "green",
+            );
         }
 
         ContainerSubCmd::CheckRemote { remote } => {
             let runtime = container_runtime::check_remote_runtime(&remote)?;
             match runtime {
                 Some(rt) => {
-                    echo(&format!("Remote '{}' has {} installed", remote, rt), "green");
+                    echo(
+                        &format!("Remote '{}' has {} installed", remote, rt),
+                        "green",
+                    );
                 }
                 None => {
-                    echo(&format!("Remote '{}' has neither Docker nor Podman installed", remote), "red");
+                    echo(
+                        &format!(
+                            "Remote '{}' has neither Docker nor Podman installed",
+                            remote
+                        ),
+                        "red",
+                    );
                 }
             }
         }
