@@ -45,7 +45,7 @@ EOF
 esac
 
 cat > Procfile <<EOF
-web: ${RUNTIME == 'static' && echo 'static: .' || echo "$RUNTIME start"}
+web: $(if [ "$RUNTIME" = "static" ]; then echo "static: ."; else echo "$RUNTIME start"; fi)
 EOF
 
 cat > ENV <<EOF
