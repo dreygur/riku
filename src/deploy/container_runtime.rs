@@ -61,8 +61,11 @@ pub fn build_and_export(app_name: &str, build_context: &Path, output_path: &Path
     );
 
     // Export to tar archive
+    let output_path_str = output_path.to_str()
+        .ok_or_else(|| anyhow::anyhow!("Invalid output path"))?;
+    
     let export_status = Command::new(&runtime)
-        .args(["save", "-o", output_path.to_str().unwrap(), &image_name])
+        .args(["save", "-o", output_path_str, &image_name])
         .status()?;
 
     if !export_status.success() {
@@ -89,11 +92,14 @@ pub fn transfer_to_remote(local_path: &Path, remote_host: &str, remote_path: &st
     );
 
     // Use rsync for better performance (faster than scp, supports resume)
+    let local_path_str = local_path.to_str()
+        .ok_or_else(|| anyhow::anyhow!("Invalid local path"))?;
+    
     let status = Command::new("rsync")
         .args([
             "-avz", // archive mode, verbose, compress
             "--progress",
-            local_path.to_str().unwrap(),
+            local_path_str,
             &format!("{}:{}", remote_host, remote_path),
         ])
         .status();
@@ -106,7 +112,7 @@ pub fn transfer_to_remote(local_path: &Path, remote_host: &str, remote_path: &st
         echo("-----> rsync not available, falling back to scp", "yellow");
         let status = Command::new("scp")
             .args([
-                local_path.to_str().unwrap(),
+                local_path_str,
                 &format!("{}:{}", remote_host, remote_path),
             ])
             .status()?;

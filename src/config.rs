@@ -26,6 +26,15 @@ pub const NGINX_CACHE_TIME_DEFAULT: u32 = 3600;
 /// Default nginx cache expiry in seconds (24 hours).
 pub const NGINX_CACHE_EXPIRY_DEFAULT: u32 = 86400;
 
+/// Default nginx cache redirects time in seconds (1 hour).
+pub const NGINX_CACHE_REDIRECTS_DEFAULT: u32 = 3600;
+
+/// Default nginx cache any time in seconds (1 hour).
+pub const NGINX_CACHE_ANY_DEFAULT: u32 = 3600;
+
+/// Default nginx cache control time in seconds (1 hour).
+pub const NGINX_CACHE_CONTROL_DEFAULT: u32 = 3600;
+
 /// All resolved directory paths used by riku.
 #[derive(Debug, Clone)]
 pub struct RikuPaths {

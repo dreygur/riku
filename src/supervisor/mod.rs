@@ -19,6 +19,7 @@ pub mod config;
 pub mod cron;
 pub mod log_rotation;
 pub mod process;
+pub mod stats;
 
 use config::WorkerConfig;
 use log_rotation::{LogRotationConfig, LogRotator};
@@ -242,12 +243,12 @@ pub fn setup_signal_handlers() -> Result<()> {
 
         extern "C" fn handle_sigterm(_: i32) {
             println!("Received SIGTERM, shutting down gracefully...");
-            std::process::exit(0);
+            RUNNING.store(false, Ordering::SeqCst);
         }
 
         extern "C" fn handle_sigint(_: i32) {
             println!("Received SIGINT, shutting down gracefully...");
-            std::process::exit(0);
+            RUNNING.store(false, Ordering::SeqCst);
         }
 
         extern "C" fn handle_sighup(_: i32) {

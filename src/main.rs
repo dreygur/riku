@@ -11,7 +11,7 @@ use clap::Parser;
 
 use cli::client_plugins;
 use cli::container;
-use cli::{Cli, Commands, ConfigCmd, PluginCmd, PsCmd};
+use cli::{Cli, Commands, ConfigCmd, PluginCmd, PsCmd, StatsCmd};
 use config::RikuPaths;
 
 fn main() -> Result<()> {
@@ -44,11 +44,21 @@ fn main() -> Result<()> {
         Commands::Destroy { app } => cli::apps::cmd_destroy(&paths, &app)?,
         Commands::Logs { app, process } => cli::apps::cmd_logs(&paths, &app, &process)?,
         Commands::Ps(cmd) => match cmd {
-            PsCmd::Show { app } => cli::apps::cmd_ps_show(&paths, &app)?,
+            PsCmd::Show { app, verbose } => cli::apps::cmd_ps_show(&paths, &app, verbose)?,
             PsCmd::Scale { app, settings } => cli::apps::cmd_ps_scale(&paths, &app, &settings)?,
         },
+        Commands::Stats(cmd) => match cmd {
+            StatsCmd::All => cli::apps::cmd_stats_all(&paths)?,
+            StatsCmd::App { app } => cli::apps::cmd_stats_app(&paths, &app)?,
+        },
         Commands::Run { app, cmd } => cli::apps::cmd_run(&paths, &app, &cmd)?,
-        Commands::Restart { app } => cli::apps::cmd_restart(&paths, &app)?,
+        Commands::Restart { app, hot } => {
+            if hot {
+                cli::apps::cmd_hot_reload(&paths, &app)?;
+            } else {
+                cli::apps::cmd_restart(&paths, &app)?;
+            }
+        }
         Commands::Stop { app } => cli::apps::cmd_stop(&paths, &app)?,
         Commands::Init { no_systemd } => cli::setup::cmd_init(no_systemd)?,
         Commands::Update => cli::apps::cmd_update()?,
@@ -97,6 +107,7 @@ fn get_plugin_command(command: &Commands) -> Option<String> {
         Commands::Destroy { .. } => Some("destroy".to_string()),
         Commands::Logs { .. } => Some("logs".to_string()),
         Commands::Ps(_) => Some("ps".to_string()),
+        Commands::Stats(_) => Some("stats".to_string()),
         Commands::Run { .. } => Some("run".to_string()),
         Commands::Restart { .. } => Some("restart".to_string()),
         Commands::Stop { .. } => Some("stop".to_string()),
@@ -172,7 +183,7 @@ fn build_plugin_args(command: &Commands) -> Vec<String> {
             }
         }
         Commands::Ps(cmd) => match cmd {
-            PsCmd::Show { app } => {
+            PsCmd::Show { app, .. } => {
                 args.push(app.clone());
                 args.push("ps:show".to_string());
             }
@@ -187,7 +198,7 @@ fn build_plugin_args(command: &Commands) -> Vec<String> {
             args.push("run".to_string());
             args.extend(cmd.clone());
         }
-        Commands::Restart { app } => {
+        Commands::Restart { app, .. } => {
             args.push(app.clone());
             args.push("restart".to_string());
         }

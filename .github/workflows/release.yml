@@ -9,6 +9,9 @@ permissions:
   contents: write
   packages: write
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   build:
     name: Build ${{ matrix.target }}
@@ -19,15 +22,23 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact: riku-linux-amd64
+            deps: ""
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             artifact: riku-linux-arm64
+            deps: "gcc-aarch64-linux-gnu"
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            artifact: riku-linux-armv7
+            deps: "gcc-arm-linux-gnueabihf"
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact: riku-macos-amd64
+            deps: ""
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact: riku-macos-arm64
+            deps: ""
 
     steps:
     - uses: actions/checkout@v4
@@ -36,6 +47,30 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       with:
         target: ${{ matrix.target }}
+
+    - name: Install cross-compilation dependencies
+      if: matrix.deps != ''
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ${{ matrix.deps }}
+
+    - name: Configure cross-compilation
+      if: matrix.target == 'aarch64-unknown-linux-gnu'
+      run: |
+        mkdir -p .cargo
+        cat >> .cargo/config.toml << EOF
+        [target.aarch64-unknown-linux-gnu]
+        linker = "aarch64-linux-gnu-gcc"
+        EOF
+
+    - name: Configure cross-compilation
+      if: matrix.target == 'armv7-unknown-linux-gnueabihf'
+      run: |
+        mkdir -p .cargo
+        cat >> .cargo/config.toml << EOF
+        [target.armv7-unknown-linux-gnueabihf]
+        linker = "arm-linux-gnueabihf-gcc"
+        EOF
 
     - name: Cache cargo registry
       uses: actions/cache@v4
@@ -51,6 +86,10 @@ jobs:
     - name: Build release
       run: cargo build --release --target ${{ matrix.target }}
 
+    - name: Strip binary
+      if: contains(matrix.target, 'linux')
+      run: strip target/${{ matrix.target }}/release/riku
+
     - name: Upload binary artifact
       uses: actions/upload-artifact@v4
       with:
@@ -63,7 +102,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
-    
+
     steps:
     - name: Download all artifacts
       uses: actions/download-artifact@v4
@@ -76,13 +115,17 @@ jobs:
         for dir in */; do
           cd "$dir"
           tar -czvf ../${dir%/}.tar.gz riku
+          sha256sum ../${dir%/}.tar.gz > ../${dir%/}.sha256
           cd ..
         done
+        ls -la
 
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
-        files: artifacts/*.tar.gz
+        files: |
+          artifacts/*.tar.gz
+          artifacts/*.sha256
         generate_release_notes: true
         draft: false
         prerelease: false

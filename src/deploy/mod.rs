@@ -17,6 +17,7 @@ pub mod java;
 pub mod node;
 pub mod python;
 pub mod ruby;
+pub mod rust;
 
 /// Supported application runtimes, detected from marker files.
 #[derive(Debug, PartialEq)]
@@ -149,7 +150,7 @@ pub fn detect_runtime(app_path: &Path) -> Option<Runtime> {
 pub fn do_deploy(
     app: &str,
     paths: &RikuPaths,
-    deltas: &HashMap<String, i64>,
+    _deltas: &HashMap<String, i64>,
     newrev: Option<&str>,
 ) -> Result<()> {
     let app_path = paths.app_root.join(app);
@@ -289,12 +290,12 @@ pub fn do_deploy(
                     // Deploy using the available container runtime
                     crate::deploy::container::deploy_container(app, &app_path, &env, paths)?;
                 }
-                // For other runtimes, we'll add deployers later
-                _ => {
-                    echo(
-                        &format!("TODO: deploy_{:?}('{}', {:?})", rt, app, deltas),
-                        "yellow",
-                    );
+                Runtime::Rust => {
+                    rust::deploy_rust(app, &app_path, &env, paths)?;
+                }
+                Runtime::Identity => {
+                    // Identity deployment for generic apps
+                    identity::deploy_identity(app, &app_path, &env, paths)?;
                 }
             }
         }
@@ -446,7 +447,8 @@ fn create_identity_workers(
             // Set PORT for web processes
             let final_command = command.clone();
             if kind == "web" {
-                let port = get_free_port("127.0.0.1");
+                let port = get_free_port("127.0.0.1")
+                    .expect("Failed to find a free port for web process");
                 worker_env.insert("PORT".to_string(), port.to_string());
 
                 // Create socket file for web processes
@@ -587,9 +589,14 @@ pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
                 Runtime::ClojureLein => {
                     clojure::deploy_clojure_lein(app, &app_path, &env, paths)?;
                 }
-                // For other runtimes, we'll add deployers later
-                _ => {
-                    echo(&format!("TODO: spawn_app for runtime {:?}", rt), "yellow");
+                Runtime::Rust => {
+                    rust::deploy_rust(app, &app_path, &env, paths)?;
+                }
+                Runtime::Identity => {
+                    identity::deploy_identity(app, &app_path, &env, paths)?;
+                }
+                Runtime::Container => {
+                    crate::deploy::container::deploy_container(app, &app_path, &env, paths)?;
                 }
             }
         }

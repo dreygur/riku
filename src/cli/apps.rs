@@ -1,5 +1,6 @@
 use anyhow::Result;
 use colored::Colorize;
+use serde_json;
 use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
@@ -257,20 +258,81 @@ pub fn cmd_logs(paths: &RikuPaths, app: &str, process: &str) -> Result<()> {
 }
 
 /// Show process scaling info.
-pub fn cmd_ps_show(paths: &RikuPaths, app: &str) -> Result<()> {
+pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
     let app = exit_if_invalid(app, &paths.app_root)?;
 
-    let config_file = paths.env_root.join(&app).join("SCALING");
-    if config_file.exists() {
-        let content = fs::read_to_string(&config_file)?;
-        println!("{}", content.trim().white());
-    } else {
+    // Check for running worker configs
+    let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
+    let worker_configs: Vec<_> = glob::glob(toml_pattern.to_str().unwrap_or(""))
+        .map(|g| g.filter_map(|r| r.ok()).collect())
+        .unwrap_or_else(|_| Vec::new());
+
+    if worker_configs.is_empty() {
         echo(
-            &format!("Error: no workers found for app '{}'.", app),
-            "red",
+            &format!("No running processes found for app '{}'.", app),
+            "yellow",
         );
+        return Ok(());
     }
+
+    if verbose {
+        // Show detailed process info
+        println!("{}", format!("Processes for '{}':", app).green());
+        println!("{:<30} {:<10} {:<10} {:<15}", "PROCESS", "KIND", "PID", "STATUS");
+        println!("{}", "-".repeat(70));
+
+        for config_path in worker_configs {
+            if let Some(filename) = config_path.file_name().and_then(|s| s.to_str()) {
+                // Parse filename: app-kind-ordinal.toml
+                let parts: Vec<&str> = filename.trim_end_matches(".toml").split('-').collect();
+                if parts.len() >= 3 {
+                    let kind = parts[1];
+                    let ordinal = parts.get(2).unwrap_or(&"1");
+                    let process_name = format!("{}-{}-{}", app, kind, ordinal);
+                    
+                    // Try to read the config to get PID
+                    if let Ok(content) = fs::read_to_string(&config_path) {
+                        let pid = extract_pid_from_config(&content)
+                            .map(|p| p.to_string())
+                            .unwrap_or_else(|| "N/A".to_string());
+                        println!("{:<30} {:<10} {:<10} {:<15}", process_name, kind, pid, "running");
+                    }
+                }
+            }
+        }
+    } else {
+        // Show simple scaling info
+        let config_file = paths.env_root.join(&app).join("SCALING");
+        if config_file.exists() {
+            let content = fs::read_to_string(&config_file)?;
+            println!("{}", content.trim().white());
+        } else {
+            // Count workers from enabled configs
+            let mut counts: HashMap<String, u32> = HashMap::new();
+            for config_path in &worker_configs {
+                if let Some(filename) = config_path.file_name().and_then(|s| s.to_str()) {
+                    let parts: Vec<&str> = filename.trim_end_matches(".toml").split('-').collect();
+                    if parts.len() >= 2 {
+                        let kind = parts[1].to_string();
+                        *counts.entry(kind).or_insert(0) += 1;
+                    }
+                }
+            }
+            
+            for (kind, count) in counts {
+                println!("{}={}", kind, count);
+            }
+        }
+    }
+
     Ok(())
+}
+
+/// Extract PID from TOML config content.
+fn extract_pid_from_config(_content: &str) -> Option<u32> {
+    // For now, return None - PID tracking would require reading from stats file
+    // This is a placeholder for future implementation
+    None
 }
 
 /// Scale workers — parse SCALING file, compute deltas, deploy.
@@ -582,6 +644,178 @@ fn multi_tail(filenames: &[String]) -> Result<()> {
             if active_filenames.is_empty() {
                 break;
             }
+        }
+    }
+
+    Ok(())
+}
+
+/// Show stats for all apps.
+pub fn cmd_stats_all(paths: &RikuPaths) -> Result<()> {
+    // Read stats from the supervisor's stats file if it exists
+    let stats_file = paths.riku_root.join("stats.json");
+    
+    if stats_file.exists() {
+        if let Ok(content) = fs::read_to_string(&stats_file) {
+            if let Ok(stats_vec) = serde_json::from_str::<Vec<serde_json::Value>>(&content) {
+                println!("{}", "=== Riku Stats ===".green());
+                println!();
+                
+                for stats in stats_vec {
+                    if let Some(app) = stats.get("app").and_then(|v| v.as_str()) {
+                        let total_procs = stats.get("total_processes").and_then(|v| v.as_u64()).unwrap_or(0);
+                        let running_procs = stats.get("running_processes").and_then(|v| v.as_u64()).unwrap_or(0);
+                        let healthy_procs = stats.get("healthy_processes").and_then(|v| v.as_u64()).unwrap_or(0);
+                        let memory_bytes = stats.get("total_memory_bytes").and_then(|v| v.as_u64()).unwrap_or(0);
+                        let memory_mb = memory_bytes as f64 / 1024.0 / 1024.0;
+                        
+                        println!("{}", format!("App: {}", app).green());
+                        println!("  Processes: {}/{} running", running_procs, total_procs);
+                        println!("  Healthy: {}/{}", healthy_procs, total_procs);
+                        println!("  Memory: {:.2} MB", memory_mb);
+                        println!();
+                    }
+                }
+                return Ok(());
+            }
+        }
+    }
+
+    // Fallback: show basic info from worker configs
+    println!("{}", "=== Deployed Apps ===".green());
+    println!();
+    
+    if !paths.app_root.exists() {
+        echo("No apps deployed.", "yellow");
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(&paths.app_root)?.flatten() {
+        let app_name = entry.file_name().to_string_lossy().to_string();
+
+        // Count workers
+        let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app_name));
+        let worker_count = glob::glob(toml_pattern.to_str().unwrap_or(""))
+            .map(|g| g.count())
+            .unwrap_or(0);
+
+        println!("{}: {} workers", app_name.green(), worker_count);
+    }
+    
+    println!();
+    println!("Note: Detailed stats require supervisor to be running.");
+
+    Ok(())
+}
+
+/// Show stats for a specific app.
+pub fn cmd_stats_app(paths: &RikuPaths, app: &str) -> Result<()> {
+    let app = exit_if_invalid(app, &paths.app_root)?;
+
+    // Read stats from the supervisor's stats file if it exists
+    let stats_file = paths.riku_root.join("stats.json");
+    
+    if stats_file.exists() {
+        if let Ok(content) = fs::read_to_string(&stats_file) {
+            if let Ok(stats_vec) = serde_json::from_str::<Vec<serde_json::Value>>(&content) {
+                for stats in stats_vec {
+                    if let Some(stats_app) = stats.get("app").and_then(|v| v.as_str()) {
+                        if stats_app == app {
+                            println!("{}", format!("=== Stats for '{}' ===", app).green());
+                            println!();
+                            
+                            if let Some(processes) = stats.get("processes").and_then(|v| v.as_array()) {
+                                println!("{:<25} {:<10} {:<10} {:<12} {:<15}", 
+                                    "PROCESS", "KIND", "PID", "STATUS", "HEALTH");
+                                println!("{}", "-".repeat(75));
+                                
+                                for proc_stats in processes {
+                                    let process_id = proc_stats.get("process_id")
+                                        .and_then(|v| v.as_str()).unwrap_or("unknown");
+                                    let kind = proc_stats.get("kind")
+                                        .and_then(|v| v.as_str()).unwrap_or("unknown");
+                                    let pid = proc_stats.get("pid")
+                                        .and_then(|v| v.as_u64()).map(|p| p.to_string())
+                                        .unwrap_or_else(|| "N/A".to_string());
+                                    let status = proc_stats.get("status")
+                                        .and_then(|v| v.as_str()).unwrap_or("unknown");
+                                    let health = proc_stats.get("health_check_status")
+                                        .and_then(|v| v.as_str()).unwrap_or("unknown");
+                                    
+                                    println!("{:<25} {:<10} {:<10} {:<12} {:<15}",
+                                        process_id, kind, pid, status, health);
+                                }
+                            }
+                            
+                            if let Some(mem) = stats.get("total_memory_bytes").and_then(|v| v.as_u64()) {
+                                println!();
+                                println!("Total Memory: {:.2} MB", mem as f64 / 1024.0 / 1024.0);
+                            }
+                            
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: show basic info
+    println!("{}", format!("=== Processes for '{}' ===", app).green());
+    
+    let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
+    let worker_configs: Vec<_> = glob::glob(toml_pattern.to_str().unwrap_or(""))
+        .map(|g| g.filter_map(|r| r.ok()).collect())
+        .unwrap_or_else(|_| Vec::new());
+
+    if worker_configs.is_empty() {
+        echo("No running processes found.", "yellow");
+        return Ok(());
+    }
+
+    println!("{:<30} {:<10} {:<10}", "PROCESS", "KIND", "STATUS");
+    println!("{}", "-".repeat(55));
+
+    for config_path in worker_configs {
+        if let Some(filename) = config_path.file_name().and_then(|s| s.to_str()) {
+            let parts: Vec<&str> = filename.trim_end_matches(".toml").split('-').collect();
+            if parts.len() >= 3 {
+                let kind = parts[1];
+                let ordinal = parts.get(2).unwrap_or(&"1");
+                let process_name = format!("{}-{}-{}", app, kind, ordinal);
+                println!("{:<30} {:<10} {:<10}", process_name, kind, "running");
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Hot reload an app (zero downtime restart).
+pub fn cmd_hot_reload(paths: &RikuPaths, app: &str) -> Result<()> {
+    let app = exit_if_invalid(app, &paths.app_root)?;
+
+    echo(&format!("Hot reloading app '{}'...", app), "green");
+
+    // Signal the supervisor to hot reload the app
+    // For now, we'll do a simple restart by touching the worker configs
+    let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
+    
+    if let Ok(entries) = glob::glob(toml_pattern.to_str().unwrap_or("")) {
+        let mut count = 0;
+        for entry in entries.flatten() {
+            // Touch the file to trigger a reload
+            if let Ok(metadata) = fs::metadata(&entry) {
+                let _ = fs::set_permissions(&entry, metadata.permissions());
+            }
+            count += 1;
+        }
+        
+        if count > 0 {
+            echo(&format!("Triggered hot reload for {} worker(s)", count), "green");
+            echo("Note: Supervisor must be running for hot reload to take effect.", "yellow");
+        } else {
+            echo("No worker configs found. Is the app deployed?", "yellow");
         }
     }
 

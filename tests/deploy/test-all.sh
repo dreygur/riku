@@ -135,9 +135,9 @@ EOF
 test_env_vars() {
     local app_dir="$1"
     local test_name="$2"
-    
+
     log_info "Testing environment variables for: $test_name"
-    
+
     # Test basic env vars
     cat > "$app_dir/ENV" <<'EOF'
 PIKU_AUTO_RESTART=true
@@ -147,30 +147,30 @@ RIKU_WORKER_TIMEOUT=3600
 RIKU_WORKER_GRACE_PERIOD=60
 RIKU_MAX_RESTARTS=10
 EOF
-    
+
     log_info "✓ Environment variables test passed for: $test_name"
-    ((PASSED++))
+    PASSED=$((PASSED + 1))
 }
 
 test_node_version() {
     local app_dir="$1"
-    
+
     log_info "Testing NODE_VERSION env var"
-    
+
     cat >> "$app_dir/ENV" <<'EOF'
 NODE_VERSION=18.17.0
 NODE_PACKAGE_MANAGER=npm
 EOF
-    
+
     log_info "✓ NODE_VERSION test passed"
-    ((PASSED++))
+    PASSED=$((PASSED + 1))
 }
 
 test_nginx_vars() {
     local app_dir="$1"
-    
+
     log_info "Testing NGINX_* env vars"
-    
+
     cat >> "$app_dir/ENV" <<'EOF'
 NGINX_SERVER_NAME=test.example.com
 NGINX_HTTPS_ONLY=false
@@ -182,23 +182,23 @@ NGINX_CLOUDFLARE_ACL=false
 NGINX_ALLOW_GIT_FOLDERS=false
 NGINX_CATCH_ALL=index.html
 EOF
-    
+
     log_info "✓ NGINX_* env vars test passed"
-    ((PASSED++))
+    PASSED=$((PASSED + 1))
 }
 
 test_scaling() {
     local app_dir="$1"
-    
+
     log_info "Testing SCALING file"
-    
+
     cat > "$app_dir/SCALING" <<'EOF'
 web=2
 worker=1
 EOF
-    
+
     log_info "✓ SCALING file test passed"
-    ((PASSED++))
+    PASSED=$((PASSED + 1))
 }
 
 run_tests() {

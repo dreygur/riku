@@ -136,7 +136,7 @@ Common utility functions used throughout the system:
 ### Process Management Flow
 
 1. **Config File Creation**: Deployment creates TOML worker config
-2. **Symlink Creation**: Config is symlinked to `uwsgi-enabled/`
+2. **Symlink Creation**: Config is symlinked to `workers-enabled/`
 3. **File Watcher Notification**: Supervisor detects file system change
 4. **Process Spawn**: Supervisor spawns new process based on config
 5. **Health Monitoring**: Supervisor continuously monitors process health
@@ -274,8 +274,8 @@ Maintains full compatibility with Piku's directory structure:
 ├── repos/              # Git repositories
 ├── logs/               # Application logs
 ├── nginx/              # Nginx configurations
-├── uwsgi-available/    # Available worker configs
-├── uwsgi-enabled/      # Active worker configs
+├── workers-available/    # Available worker configs
+├── workers-enabled/      # Active worker configs
 └── plugins/            # Plugin executables
 ```
 

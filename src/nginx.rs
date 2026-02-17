@@ -183,17 +183,17 @@ fn generate_nginx_config_from_template(
     let nginx_cache_redirects = env
         .get("NGINX_CACHE_REDIRECTS")
         .cloned()
-        .unwrap_or(crate::config::NGINX_CACHE_TIME_DEFAULT.to_string());
+        .unwrap_or(crate::config::NGINX_CACHE_REDIRECTS_DEFAULT.to_string());
 
     let nginx_cache_any = env
         .get("NGINX_CACHE_ANY")
         .cloned()
-        .unwrap_or(crate::config::NGINX_CACHE_TIME_DEFAULT.to_string());
+        .unwrap_or(crate::config::NGINX_CACHE_ANY_DEFAULT.to_string());
 
     let nginx_cache_control = env
         .get("NGINX_CACHE_CONTROL")
         .cloned()
-        .unwrap_or(crate::config::NGINX_CACHE_TIME_DEFAULT.to_string());
+        .unwrap_or(crate::config::NGINX_CACHE_CONTROL_DEFAULT.to_string());
 
     let nginx_cache_expiry = env
         .get("NGINX_CACHE_EXPIRY")

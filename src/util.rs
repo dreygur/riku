@@ -1,5 +1,6 @@
 use anyhow::Result;
 use colored::Colorize;
+use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
@@ -11,6 +12,12 @@ use which::which;
 
 /// Cron regexp matching five time fields followed by a command.
 const CRON_REGEXP: &str = r"^((?:(?:\*/)?\d+)|\*) ((?:(?:\*/)?\d+)|\*) ((?:(?:\*/)?\d+)|\*) ((?:(?:\*/)?\d+)|\*) ((?:(?:\*/)?\d+)|\*) (.*)$";
+
+/// Pre-compiled cron regex for performance.
+static CRON_RE: Lazy<Regex> = Lazy::new(|| Regex::new(CRON_REGEXP).unwrap());
+
+/// Pre-compiled environment variable expansion regex.
+static ENVVAR_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\$(\w+|\{([^}]*)\})").unwrap());
 
 /// Sanitize the app name: only allow alphanumeric, dots, underscores, hyphens.
 /// Strip leading slashes, trim trailing whitespace.
@@ -35,10 +42,13 @@ pub fn exit_if_invalid(app: &str, app_root: &Path) -> Result<String> {
 }
 
 /// Find a free TCP port (entirely at random) by binding to port 0.
-pub fn get_free_port(address: &str) -> u16 {
+/// Returns None if no port is available.
+pub fn get_free_port(address: &str) -> Option<u16> {
     let bind_addr = format!("{}:0", address);
-    let listener = TcpListener::bind(&bind_addr).expect("Failed to bind to address");
-    listener.local_addr().unwrap().port()
+    TcpListener::bind(&bind_addr)
+        .ok()
+        .and_then(|listener| listener.local_addr().ok())
+        .map(|addr| addr.port())
 }
 
 /// Convert a boolean-ish string to a boolean.
@@ -171,23 +181,71 @@ pub fn validate_env_vars(env: &HashMap<String, String>) -> Vec<String> {
         }
     }
 
-    // Validate nginx cache config if present
-    if env.contains_key("NGINX_CACHE_PREFIXES") {
-        let cache_size = env
-            .get("NGINX_CACHE_SIZE")
-            .map(|s| s.as_str())
-            .unwrap_or("1");
-        let cache_time = env
-            .get("NGINX_CACHE_TIME")
-            .map(|s| s.as_str())
-            .unwrap_or("3600");
-        let cache_expiry = env
-            .get("NGINX_CACHE_EXPIRY")
-            .map(|s| s.as_str())
-            .unwrap_or("86400");
+    // Validate individual nginx cache config variables if present
+    // Validate NGINX_CACHE_SIZE (1-100 GB)
+    if let Some(size_str) = env.get("NGINX_CACHE_SIZE") {
+        if let Ok(size) = size_str.parse::<u32>() {
+            if !(1..=100).contains(&size) {
+                warnings.push(format!(
+                    "Invalid NGINX_CACHE_SIZE: {} - must be between 1 and 100 GB",
+                    size
+                ));
+            }
+        } else {
+            warnings.push(format!(
+                "Invalid NGINX_CACHE_SIZE: '{}' - must be a number between 1 and 100",
+                size_str
+            ));
+        }
+    }
 
-        if let Err(e) = validate_nginx_cache_config(cache_size, cache_time, cache_expiry) {
-            warnings.push(e);
+    // Validate NGINX_CACHE_TIME (positive integer)
+    if let Some(time_str) = env.get("NGINX_CACHE_TIME") {
+        if time_str.parse::<u32>().is_err() {
+            warnings.push(format!(
+                "Invalid NGINX_CACHE_TIME: '{}' - must be a positive integer (seconds)",
+                time_str
+            ));
+        }
+    }
+
+    // Validate NGINX_CACHE_EXPIRY (positive integer)
+    if let Some(expiry_str) = env.get("NGINX_CACHE_EXPIRY") {
+        if expiry_str.parse::<u32>().is_err() {
+            warnings.push(format!(
+                "Invalid NGINX_CACHE_EXPIRY: '{}' - must be a positive integer (seconds)",
+                expiry_str
+            ));
+        }
+    }
+
+    // Validate NGINX_CACHE_REDIRECTS (positive integer)
+    if let Some(redirects_str) = env.get("NGINX_CACHE_REDIRECTS") {
+        if redirects_str.parse::<u32>().is_err() {
+            warnings.push(format!(
+                "Invalid NGINX_CACHE_REDIRECTS: '{}' - must be a positive integer (seconds)",
+                redirects_str
+            ));
+        }
+    }
+
+    // Validate NGINX_CACHE_ANY (positive integer)
+    if let Some(any_str) = env.get("NGINX_CACHE_ANY") {
+        if any_str.parse::<u32>().is_err() {
+            warnings.push(format!(
+                "Invalid NGINX_CACHE_ANY: '{}' - must be a positive integer (seconds)",
+                any_str
+            ));
+        }
+    }
+
+    // Validate NGINX_CACHE_CONTROL (positive integer)
+    if let Some(control_str) = env.get("NGINX_CACHE_CONTROL") {
+        if control_str.parse::<u32>().is_err() {
+            warnings.push(format!(
+                "Invalid NGINX_CACHE_CONTROL: '{}' - must be a positive integer (seconds)",
+                control_str
+            ));
         }
     }
 
@@ -252,7 +310,6 @@ pub fn parse_procfile(filename: &Path) -> Option<HashMap<String, String>> {
     }
 
     let content = fs::read_to_string(filename).ok()?;
-    let cron_re = Regex::new(CRON_REGEXP).unwrap();
     let mut workers: HashMap<String, String> = HashMap::new();
 
     for (line_number, line) in content.lines().enumerate() {
@@ -267,7 +324,7 @@ pub fn parse_procfile(filename: &Path) -> Option<HashMap<String, String>> {
             // Check for cron patterns
             if kind.starts_with("cron") {
                 let limits = [59, 24, 31, 12, 7];
-                if let Some(caps) = cron_re.captures(&command) {
+                if let Some(caps) = CRON_RE.captures(&command) {
                     let mut valid = true;
                     for i in 0..limits.len() {
                         let field = &caps[i + 1];
@@ -346,24 +403,24 @@ pub fn parse_procfile(filename: &Path) -> Option<HashMap<String, String>> {
 /// Expand shell-style environment variables ($VAR and ${VAR}) in a buffer.
 /// If var not found and no default, keep original text. If default given, use it.
 pub fn expandvars(buffer: &str, env: &HashMap<String, String>, default: Option<&str>) -> String {
-    let re = Regex::new(r"\$(\w+|\{([^}]*)\})").unwrap();
-    re.replace_all(buffer, |caps: &regex::Captures| {
-        // Group 2 is the braced name (${VAR}), group 1 is $VAR (word chars)
-        let var_name = caps
-            .get(2)
-            .map(|m| m.as_str())
-            .unwrap_or_else(|| caps.get(1).unwrap().as_str());
+    ENVVAR_RE
+        .replace_all(buffer, |caps: &regex::Captures| {
+            // Group 2 is the braced name (${VAR}), group 1 is $VAR (word chars)
+            let var_name = caps
+                .get(2)
+                .map(|m| m.as_str())
+                .unwrap_or_else(|| caps.get(1).unwrap().as_str());
 
-        if let Some(val) = env.get(var_name) {
-            val.clone()
-        } else {
-            match default {
-                Some(d) => d.to_string(),
-                None => caps.get(0).unwrap().as_str().to_string(),
+            if let Some(val) = env.get(var_name) {
+                val.clone()
+            } else {
+                match default {
+                    Some(d) => d.to_string(),
+                    None => caps.get(0).unwrap().as_str().to_string(),
+                }
             }
-        }
-    })
-    .to_string()
+        })
+        .to_string()
 }
 
 /// Run shell command, return stdout. Return empty string on failure.
@@ -664,7 +721,8 @@ mod tests {
     #[test]
     fn test_get_free_port_returns_valid_port() {
         let port = get_free_port("127.0.0.1");
-        assert!(port > 0);
+        assert!(port.is_some());
+        assert!(port.unwrap() > 0);
     }
 
     #[test]
@@ -673,8 +731,10 @@ mod tests {
         let port2 = get_free_port("127.0.0.1");
         // Ports should be valid (>0). They will almost always differ, but
         // we just check they are valid.
-        assert!(port1 > 0);
-        assert!(port2 > 0);
+        assert!(port1.is_some());
+        assert!(port2.is_some());
+        assert!(port1.unwrap() > 0);
+        assert!(port2.unwrap() > 0);
     }
 
     // --- write_config ---

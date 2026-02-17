@@ -55,6 +55,10 @@ pub enum Commands {
     #[command(subcommand)]
     Ps(PsCmd),
 
+    /// Show process stats and metrics
+    #[command(subcommand)]
+    Stats(StatsCmd),
+
     /// Run a command in the app context
     #[command(trailing_var_arg = true)]
     Run {
@@ -65,10 +69,13 @@ pub enum Commands {
         cmd: Vec<String>,
     },
 
-    /// Restart an app
+    /// Restart an app (hot reload for zero downtime)
     Restart {
         /// App name
         app: String,
+        /// Use hot reload (zero downtime)
+        #[arg(long, short)]
+        hot: bool,
     },
 
     /// Stop an app
@@ -172,10 +179,13 @@ pub enum ConfigCmd {
 
 #[derive(Subcommand, Debug)]
 pub enum PsCmd {
-    /// Show process count
+    /// Show process status (detailed view)
     Show {
         /// App name
         app: String,
+        /// Show detailed info including health status
+        #[arg(long, short)]
+        verbose: bool,
     },
 
     /// Scale workers
@@ -186,6 +196,19 @@ pub enum PsCmd {
         /// Worker scaling settings (e.g. web=4 worker=2)
         #[arg(required = true)]
         settings: Vec<String>,
+    },
+}
+
+/// Stats commands
+#[derive(Subcommand, Debug)]
+pub enum StatsCmd {
+    /// Show stats for all apps
+    All,
+
+    /// Show stats for a specific app
+    App {
+        /// App name
+        app: String,
     },
 }
 

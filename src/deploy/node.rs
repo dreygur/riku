@@ -185,7 +185,8 @@ fn create_node_worker_config(
 
     // Set PORT for web processes and determine final command
     let final_command = if kind == "web" {
-        let port = get_free_port("127.0.0.1");
+        let port = get_free_port("127.0.0.1")
+            .expect("Failed to find a free port for web process");
         worker_env.insert("PORT".to_string(), port.to_string());
 
         // Update command to include port if it's a web process
