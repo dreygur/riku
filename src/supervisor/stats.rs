@@ -128,7 +128,13 @@ impl StatsManager {
     }
 
     /// Register a new process.
-    pub fn register_process(&mut self, process_id: String, app: String, kind: String, ordinal: u32) {
+    pub fn register_process(
+        &mut self,
+        process_id: String,
+        app: String,
+        kind: String,
+        ordinal: u32,
+    ) {
         let stats = ProcessStats {
             process_id: process_id.clone(),
             app,
@@ -205,7 +211,10 @@ impl StatsManager {
             }
         }
 
-        *self.request_counts.entry(process_id.to_string()).or_insert(0) += 1;
+        *self
+            .request_counts
+            .entry(process_id.to_string())
+            .or_insert(0) += 1;
     }
 
     /// Get stats for a specific process.
@@ -225,8 +234,14 @@ impl StatsManager {
             .collect();
 
         let total_processes = processes.len() as u32;
-        let running_processes = processes.iter().filter(|p| p.status == ProcessStatus::Running).count() as u32;
-        let healthy_processes = processes.iter().filter(|p| p.health_check_status == HealthStatus::Healthy).count() as u32;
+        let running_processes = processes
+            .iter()
+            .filter(|p| p.status == ProcessStatus::Running)
+            .count() as u32;
+        let healthy_processes = processes
+            .iter()
+            .filter(|p| p.health_check_status == HealthStatus::Healthy)
+            .count() as u32;
         let total_restarts = processes.iter().map(|p| p.restart_count).sum();
         let total_memory_bytes = processes.iter().map(|p| p.memory_bytes).sum();
         let total_cpu_time_ms = processes.iter().map(|p| p.cpu_time_ms).sum();
@@ -301,7 +316,10 @@ impl StatsManager {
     /// Get running process count.
     #[allow(dead_code)]
     pub fn running_processes(&self) -> usize {
-        self.stats.values().filter(|s| s.status == ProcessStatus::Running).count()
+        self.stats
+            .values()
+            .filter(|s| s.status == ProcessStatus::Running)
+            .count()
     }
 }
 
@@ -372,7 +390,12 @@ mod tests {
     #[test]
     fn test_register_process() {
         let mut manager = StatsManager::new();
-        manager.register_process("app-web-1".to_string(), "app".to_string(), "web".to_string(), 1);
+        manager.register_process(
+            "app-web-1".to_string(),
+            "app".to_string(),
+            "web".to_string(),
+            1,
+        );
 
         let stats = manager.get_process_stats("app-web-1");
         assert!(stats.is_some());
@@ -385,7 +408,12 @@ mod tests {
     #[test]
     fn test_mark_running() {
         let mut manager = StatsManager::new();
-        manager.register_process("app-web-1".to_string(), "app".to_string(), "web".to_string(), 1);
+        manager.register_process(
+            "app-web-1".to_string(),
+            "app".to_string(),
+            "web".to_string(),
+            1,
+        );
         manager.mark_running("app-web-1", 12345);
 
         let stats = manager.get_process_stats("app-web-1").unwrap();
@@ -396,7 +424,12 @@ mod tests {
     #[test]
     fn test_health_check_update() {
         let mut manager = StatsManager::new();
-        manager.register_process("app-web-1".to_string(), "app".to_string(), "web".to_string(), 1);
+        manager.register_process(
+            "app-web-1".to_string(),
+            "app".to_string(),
+            "web".to_string(),
+            1,
+        );
         manager.update_health_check("app-web-1", HealthStatus::Healthy);
 
         let stats = manager.get_process_stats("app-web-1").unwrap();
@@ -407,8 +440,18 @@ mod tests {
     #[test]
     fn test_app_stats() {
         let mut manager = StatsManager::new();
-        manager.register_process("app-web-1".to_string(), "app".to_string(), "web".to_string(), 1);
-        manager.register_process("app-web-2".to_string(), "app".to_string(), "web".to_string(), 2);
+        manager.register_process(
+            "app-web-1".to_string(),
+            "app".to_string(),
+            "web".to_string(),
+            1,
+        );
+        manager.register_process(
+            "app-web-2".to_string(),
+            "app".to_string(),
+            "web".to_string(),
+            2,
+        );
         manager.mark_running("app-web-1", 12345);
         manager.mark_running("app-web-2", 12346);
         manager.update_health_check("app-web-1", HealthStatus::Healthy);

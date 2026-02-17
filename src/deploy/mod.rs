@@ -447,8 +447,8 @@ fn create_identity_workers(
             // Set PORT for web processes
             let final_command = command.clone();
             if kind == "web" {
-                let port = get_free_port("127.0.0.1")
-                    .expect("Failed to find a free port for web process");
+                let port =
+                    get_free_port("127.0.0.1").expect("Failed to find a free port for web process");
                 worker_env.insert("PORT".to_string(), port.to_string());
 
                 // Create socket file for web processes
@@ -557,49 +557,47 @@ pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
     // Determine runtime and call appropriate deployer to create worker configs
     let runtime = detect_runtime(&app_path);
     match &runtime {
-        Some(rt) => {
-            match rt {
-                Runtime::Python => {
-                    python::deploy_python(app, &app_path, &env, paths)?;
-                }
-                Runtime::PythonPoetry => {
-                    python::deploy_python_poetry(app, &app_path, &env, paths)?;
-                }
-                Runtime::PythonUv => {
-                    python::deploy_python_uv(app, &app_path, &env, paths)?;
-                }
-                Runtime::Node => {
-                    node::deploy_node(app, &app_path, &env, paths)?;
-                }
-                Runtime::Ruby => {
-                    ruby::deploy_ruby(app, &app_path, &env, paths)?;
-                }
-                Runtime::Go => {
-                    go::deploy_go(app, &app_path, &env, paths)?;
-                }
-                Runtime::JavaMaven => {
-                    java::deploy_java_maven(app, &app_path, &env, paths)?;
-                }
-                Runtime::JavaGradle => {
-                    java::deploy_java_gradle(app, &app_path, &env, paths)?;
-                }
-                Runtime::ClojureCli => {
-                    clojure::deploy_clojure_cli(app, &app_path, &env, paths)?;
-                }
-                Runtime::ClojureLein => {
-                    clojure::deploy_clojure_lein(app, &app_path, &env, paths)?;
-                }
-                Runtime::Rust => {
-                    rust::deploy_rust(app, &app_path, &env, paths)?;
-                }
-                Runtime::Identity => {
-                    identity::deploy_identity(app, &app_path, &env, paths)?;
-                }
-                Runtime::Container => {
-                    crate::deploy::container::deploy_container(app, &app_path, &env, paths)?;
-                }
+        Some(rt) => match rt {
+            Runtime::Python => {
+                python::deploy_python(app, &app_path, &env, paths)?;
             }
-        }
+            Runtime::PythonPoetry => {
+                python::deploy_python_poetry(app, &app_path, &env, paths)?;
+            }
+            Runtime::PythonUv => {
+                python::deploy_python_uv(app, &app_path, &env, paths)?;
+            }
+            Runtime::Node => {
+                node::deploy_node(app, &app_path, &env, paths)?;
+            }
+            Runtime::Ruby => {
+                ruby::deploy_ruby(app, &app_path, &env, paths)?;
+            }
+            Runtime::Go => {
+                go::deploy_go(app, &app_path, &env, paths)?;
+            }
+            Runtime::JavaMaven => {
+                java::deploy_java_maven(app, &app_path, &env, paths)?;
+            }
+            Runtime::JavaGradle => {
+                java::deploy_java_gradle(app, &app_path, &env, paths)?;
+            }
+            Runtime::ClojureCli => {
+                clojure::deploy_clojure_cli(app, &app_path, &env, paths)?;
+            }
+            Runtime::ClojureLein => {
+                clojure::deploy_clojure_lein(app, &app_path, &env, paths)?;
+            }
+            Runtime::Rust => {
+                rust::deploy_rust(app, &app_path, &env, paths)?;
+            }
+            Runtime::Identity => {
+                identity::deploy_identity(app, &app_path, &env, paths)?;
+            }
+            Runtime::Container => {
+                crate::deploy::container::deploy_container(app, &app_path, &env, paths)?;
+            }
+        },
         None => {
             // Check for identity-style deployments (PHP, release+web, static)
             if workers.contains_key("release") && workers.contains_key("web")

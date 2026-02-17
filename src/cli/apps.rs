@@ -278,7 +278,10 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
     if verbose {
         // Show detailed process info
         println!("{}", format!("Processes for '{}':", app).green());
-        println!("{:<30} {:<10} {:<10} {:<15}", "PROCESS", "KIND", "PID", "STATUS");
+        println!(
+            "{:<30} {:<10} {:<10} {:<15}",
+            "PROCESS", "KIND", "PID", "STATUS"
+        );
         println!("{}", "-".repeat(70));
 
         for config_path in worker_configs {
@@ -289,13 +292,16 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
                     let kind = parts[1];
                     let ordinal = parts.get(2).unwrap_or(&"1");
                     let process_name = format!("{}-{}-{}", app, kind, ordinal);
-                    
+
                     // Try to read the config to get PID
                     if let Ok(content) = fs::read_to_string(&config_path) {
                         let pid = extract_pid_from_config(&content)
                             .map(|p| p.to_string())
                             .unwrap_or_else(|| "N/A".to_string());
-                        println!("{:<30} {:<10} {:<10} {:<15}", process_name, kind, pid, "running");
+                        println!(
+                            "{:<30} {:<10} {:<10} {:<15}",
+                            process_name, kind, pid, "running"
+                        );
                     }
                 }
             }
@@ -318,7 +324,7 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
                     }
                 }
             }
-            
+
             for (kind, count) in counts {
                 println!("{}={}", kind, count);
             }
@@ -654,21 +660,33 @@ fn multi_tail(filenames: &[String]) -> Result<()> {
 pub fn cmd_stats_all(paths: &RikuPaths) -> Result<()> {
     // Read stats from the supervisor's stats file if it exists
     let stats_file = paths.riku_root.join("stats.json");
-    
+
     if stats_file.exists() {
         if let Ok(content) = fs::read_to_string(&stats_file) {
             if let Ok(stats_vec) = serde_json::from_str::<Vec<serde_json::Value>>(&content) {
                 println!("{}", "=== Riku Stats ===".green());
                 println!();
-                
+
                 for stats in stats_vec {
                     if let Some(app) = stats.get("app").and_then(|v| v.as_str()) {
-                        let total_procs = stats.get("total_processes").and_then(|v| v.as_u64()).unwrap_or(0);
-                        let running_procs = stats.get("running_processes").and_then(|v| v.as_u64()).unwrap_or(0);
-                        let healthy_procs = stats.get("healthy_processes").and_then(|v| v.as_u64()).unwrap_or(0);
-                        let memory_bytes = stats.get("total_memory_bytes").and_then(|v| v.as_u64()).unwrap_or(0);
+                        let total_procs = stats
+                            .get("total_processes")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
+                        let running_procs = stats
+                            .get("running_processes")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
+                        let healthy_procs = stats
+                            .get("healthy_processes")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
+                        let memory_bytes = stats
+                            .get("total_memory_bytes")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
                         let memory_mb = memory_bytes as f64 / 1024.0 / 1024.0;
-                        
+
                         println!("{}", format!("App: {}", app).green());
                         println!("  Processes: {}/{} running", running_procs, total_procs);
                         println!("  Healthy: {}/{}", healthy_procs, total_procs);
@@ -684,7 +702,7 @@ pub fn cmd_stats_all(paths: &RikuPaths) -> Result<()> {
     // Fallback: show basic info from worker configs
     println!("{}", "=== Deployed Apps ===".green());
     println!();
-    
+
     if !paths.app_root.exists() {
         echo("No apps deployed.", "yellow");
         return Ok(());
@@ -701,7 +719,7 @@ pub fn cmd_stats_all(paths: &RikuPaths) -> Result<()> {
 
         println!("{}: {} workers", app_name.green(), worker_count);
     }
-    
+
     println!();
     println!("Note: Detailed stats require supervisor to be running.");
 
@@ -714,7 +732,7 @@ pub fn cmd_stats_app(paths: &RikuPaths, app: &str) -> Result<()> {
 
     // Read stats from the supervisor's stats file if it exists
     let stats_file = paths.riku_root.join("stats.json");
-    
+
     if stats_file.exists() {
         if let Ok(content) = fs::read_to_string(&stats_file) {
             if let Ok(stats_vec) = serde_json::from_str::<Vec<serde_json::Value>>(&content) {
@@ -723,35 +741,53 @@ pub fn cmd_stats_app(paths: &RikuPaths, app: &str) -> Result<()> {
                         if stats_app == app {
                             println!("{}", format!("=== Stats for '{}' ===", app).green());
                             println!();
-                            
-                            if let Some(processes) = stats.get("processes").and_then(|v| v.as_array()) {
-                                println!("{:<25} {:<10} {:<10} {:<12} {:<15}", 
-                                    "PROCESS", "KIND", "PID", "STATUS", "HEALTH");
+
+                            if let Some(processes) =
+                                stats.get("processes").and_then(|v| v.as_array())
+                            {
+                                println!(
+                                    "{:<25} {:<10} {:<10} {:<12} {:<15}",
+                                    "PROCESS", "KIND", "PID", "STATUS", "HEALTH"
+                                );
                                 println!("{}", "-".repeat(75));
-                                
+
                                 for proc_stats in processes {
-                                    let process_id = proc_stats.get("process_id")
-                                        .and_then(|v| v.as_str()).unwrap_or("unknown");
-                                    let kind = proc_stats.get("kind")
-                                        .and_then(|v| v.as_str()).unwrap_or("unknown");
-                                    let pid = proc_stats.get("pid")
-                                        .and_then(|v| v.as_u64()).map(|p| p.to_string())
+                                    let process_id = proc_stats
+                                        .get("process_id")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("unknown");
+                                    let kind = proc_stats
+                                        .get("kind")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("unknown");
+                                    let pid = proc_stats
+                                        .get("pid")
+                                        .and_then(|v| v.as_u64())
+                                        .map(|p| p.to_string())
                                         .unwrap_or_else(|| "N/A".to_string());
-                                    let status = proc_stats.get("status")
-                                        .and_then(|v| v.as_str()).unwrap_or("unknown");
-                                    let health = proc_stats.get("health_check_status")
-                                        .and_then(|v| v.as_str()).unwrap_or("unknown");
-                                    
-                                    println!("{:<25} {:<10} {:<10} {:<12} {:<15}",
-                                        process_id, kind, pid, status, health);
+                                    let status = proc_stats
+                                        .get("status")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("unknown");
+                                    let health = proc_stats
+                                        .get("health_check_status")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("unknown");
+
+                                    println!(
+                                        "{:<25} {:<10} {:<10} {:<12} {:<15}",
+                                        process_id, kind, pid, status, health
+                                    );
                                 }
                             }
-                            
-                            if let Some(mem) = stats.get("total_memory_bytes").and_then(|v| v.as_u64()) {
+
+                            if let Some(mem) =
+                                stats.get("total_memory_bytes").and_then(|v| v.as_u64())
+                            {
                                 println!();
                                 println!("Total Memory: {:.2} MB", mem as f64 / 1024.0 / 1024.0);
                             }
-                            
+
                             return Ok(());
                         }
                     }
@@ -762,7 +798,7 @@ pub fn cmd_stats_app(paths: &RikuPaths, app: &str) -> Result<()> {
 
     // Fallback: show basic info
     println!("{}", format!("=== Processes for '{}' ===", app).green());
-    
+
     let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
     let worker_configs: Vec<_> = glob::glob(toml_pattern.to_str().unwrap_or(""))
         .map(|g| g.filter_map(|r| r.ok()).collect())
@@ -800,7 +836,7 @@ pub fn cmd_hot_reload(paths: &RikuPaths, app: &str) -> Result<()> {
     // Signal the supervisor to hot reload the app
     // For now, we'll do a simple restart by touching the worker configs
     let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
-    
+
     if let Ok(entries) = glob::glob(toml_pattern.to_str().unwrap_or("")) {
         let mut count = 0;
         for entry in entries.flatten() {
@@ -810,10 +846,16 @@ pub fn cmd_hot_reload(paths: &RikuPaths, app: &str) -> Result<()> {
             }
             count += 1;
         }
-        
+
         if count > 0 {
-            echo(&format!("Triggered hot reload for {} worker(s)", count), "green");
-            echo("Note: Supervisor must be running for hot reload to take effect.", "yellow");
+            echo(
+                &format!("Triggered hot reload for {} worker(s)", count),
+                "green",
+            );
+            echo(
+                "Note: Supervisor must be running for hot reload to take effect.",
+                "yellow",
+            );
         } else {
             echo("No worker configs found. Is the app deployed?", "yellow");
         }

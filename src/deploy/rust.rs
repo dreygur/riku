@@ -75,7 +75,10 @@ fn create_rust_workers(
             echo("-----> No Procfile found, using default", "yellow");
             // Default to running the binary with the app name
             let mut default_workers = HashMap::new();
-            default_workers.insert("web".to_string(), format!("./target/release/{}", app.replace('-', "_")));
+            default_workers.insert(
+                "web".to_string(),
+                format!("./target/release/{}", app.replace('-', "_")),
+            );
             return create_rust_worker_configs(app, app_path, env, paths, &default_workers);
         }
     };
@@ -158,8 +161,8 @@ fn create_rust_worker_configs(
             // Set PORT for web processes
             let final_command = command.clone();
             if kind == "web" {
-                let port = get_free_port("127.0.0.1")
-                    .expect("Failed to find a free port for web process");
+                let port =
+                    get_free_port("127.0.0.1").expect("Failed to find a free port for web process");
                 worker_env.insert("PORT".to_string(), port.to_string());
 
                 // Create socket file for web processes

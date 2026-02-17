@@ -29,7 +29,7 @@ impl SpawnedProcess {
     pub fn new(child: Child, config: WorkerConfig) -> Result<Self> {
         let pid = Pid::from_raw(child.id() as i32);
         let health_check_config = config.options.health_check.clone();
-        
+
         Ok(SpawnedProcess {
             pid,
             child,
@@ -234,10 +234,11 @@ impl ProcessManager {
         // Second pass: perform health checks (avoids borrow checker issues)
         for (process_id, health_config) in health_checks {
             let health_status = self.perform_health_check(&process_id, &health_config);
-            
+
             // Update stats with health check result
-            self.stats.update_health_check(&process_id, health_status.clone());
-            
+            self.stats
+                .update_health_check(&process_id, health_status.clone());
+
             // Update consecutive failures
             if let Some(process) = self.processes.get_mut(&process_id) {
                 match health_status {
@@ -245,7 +246,10 @@ impl ProcessManager {
                         process.consecutive_health_failures = 0;
                     }
                     _ => {
-                        println!("Health check for {} failed: {:?}", process_id, health_status);
+                        println!(
+                            "Health check for {} failed: {:?}",
+                            process_id, health_status
+                        );
                         process.consecutive_health_failures += 1;
 
                         // Restart if too many consecutive failures
@@ -270,11 +274,7 @@ impl ProcessManager {
     }
 
     /// Perform an HTTP health check on a process.
-    fn perform_health_check(
-        &self,
-        process_id: &str,
-        config: &HealthCheck,
-    ) -> HealthStatus {
+    fn perform_health_check(&self, process_id: &str, config: &HealthCheck) -> HealthStatus {
         use reqwest::blocking::Client;
 
         let port = self.get_process_port(process_id);
@@ -345,10 +345,7 @@ impl ProcessManager {
             let config = process.config.clone();
             let old_pid = process.pid_as_u32();
 
-            println!(
-                "Hot reloading process {} (PID: {})",
-                process_id, old_pid
-            );
+            println!("Hot reloading process {} (PID: {})", process_id, old_pid);
 
             // Spawn new process first
             self.spawn_process(&config)?;
