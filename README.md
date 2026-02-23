@@ -78,7 +78,7 @@ I encourage users to also check out the original [Piku project](https://github.c
 
 ```bash
 # Clone the repository
-git clone https://github.com/piku/piku.git
+git clone https://github.com/dreygur/riku.git
 cd piku
 
 # Build the Rust binary
@@ -129,7 +129,7 @@ worker: python worker.py
 git add .
 git commit -m "Initial commit"
 git remote add piku deploy@your-server.com:myapp
-git push piku master
+git push riku main
 ```
 
 ## Commands
@@ -290,7 +290,7 @@ Riku generates nginx configuration files based on application requirements and e
 
 ## Plugin System
 
-Plugins are executable files placed in `~/.piku/plugins/`. They can be invoked as subcommands to extend Riku's functionality. Plugins are shell scripts or binaries that can interact with the Riku environment and application data.
+Plugins are executable files placed in `~/.riku/plugins/`. They can be invoked as subcommands to extend Riku's functionality. Plugins are shell scripts or binaries that can interact with the Riku environment and application data.
 
 ## Cron Jobs
 
@@ -305,8 +305,8 @@ These are managed by the supervisor's cron scheduler.
 
 ### Building from Source
 ```bash
-git clone https://github.com/piku/piku.git
-cd piku
+git clone https://github.com/dreygur/riku.git
+cd riku
 cargo build
 ```
 
