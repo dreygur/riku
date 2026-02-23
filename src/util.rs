@@ -38,12 +38,13 @@ pub fn exit_if_invalid(app: &str, app_root: &Path) -> Result<String> {
         echo(&format!("Error: app '{}' not found.", app), "red");
         echo("", "");
         echo("To deploy a new app:", "yellow");
-        echo("  1. Create app directory and initialize git", "yellow");
-        echo("  2. Add your code and Procfile", "yellow");
-        echo(
-            "  3. Push to deploy: git remote add riku deploy@server:{} && git push riku master",
-            &app,
-        );
+        echo("  Option 1: Create app and push via git", "yellow");
+        echo("    riku apps create myapp", "yellow");
+        echo("    git remote add riku deploy@server:myapp", "yellow");
+        echo("    git push riku master", "yellow");
+        echo("", "");
+        echo("  Option 2: Deploy from local folder", "yellow");
+        echo("    riku deploy myapp --from ./path/to/app", "yellow");
         echo("", "");
         echo("Or list existing apps:", "yellow");
         echo("  riku apps", "yellow");
