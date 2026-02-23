@@ -49,6 +49,9 @@ pub fn cmd_setup_init(paths: &RikuPaths) -> Result<()> {
         }
     }
 
+    // Install systemd service files (if running as root or with sudo)
+    install_systemd_service(paths)?;
+
     // Start supervisor daemon in background
     echo("Starting supervisor daemon...", "green");
     if let Err(e) = crate::cli::apps::cmd_supervisor_daemon(paths) {
@@ -61,6 +64,161 @@ pub fn cmd_setup_init(paths: &RikuPaths) -> Result<()> {
 
     echo("Riku initialized successfully!", "green");
     echo("Run 'riku --help' for available commands.", "");
+
+    Ok(())
+}
+
+/// Install systemd service files for riku daemon
+fn install_systemd_service(_paths: &RikuPaths) -> Result<()> {
+    // Check if we're running as root (required for systemd installation)
+    if env::var("USER").unwrap_or_default() != "root" {
+        return Ok(()); // Skip if not root
+    }
+
+    // Find the riku binary location
+    let riku_binary = env::current_exe()?;
+    let riku_binary_path = riku_binary.to_string_lossy();
+
+    // Get deploy user's home directory
+    let deploy_home = match Command::new("getent").arg("passwd").arg("deploy").output() {
+        Ok(output) => {
+            if output.status.success() {
+                let line = String::from_utf8_lossy(&output.stdout);
+                line.split(':').nth(5).unwrap_or("/home/deploy").to_string()
+            } else {
+                "/home/deploy".to_string()
+            }
+        }
+        Err(_) => "/home/deploy".to_string(),
+    };
+
+    // Create systemd directory if needed
+    let systemd_dir = Path::new("/etc/systemd/system");
+    if !systemd_dir.exists() {
+        fs::create_dir_all(systemd_dir)?;
+    }
+
+    // Create riku.service file
+    let service_content = format!(
+        r#"[Unit]
+Description=Riku Process Supervisor
+Documentation=https://dreygur.github.io/riku/
+After=network.target nginx.service
+Wants=nginx.service
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+WorkingDirectory={deploy_home}
+ExecStart={riku_bin} supervisor
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=riku
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+
+# Allow writing to riku directories
+ReadWritePaths={deploy_home}/.riku
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target
+"#,
+        deploy_home = deploy_home,
+        riku_bin = riku_binary_path
+    );
+
+    let service_path = systemd_dir.join("riku.service");
+    fs::write(&service_path, &service_content)?;
+    echo(
+        &format!("✓ Created systemd service at {}", service_path.display()),
+        "green",
+    );
+
+    // Create nginx path watcher
+    let nginx_path_content = format!(
+        r#"[Unit]
+Description=Watch for Riku nginx configuration changes
+Documentation=https://dreygur.github.io/riku/
+PartOf=riku.service
+
+[Path]
+PathModified={deploy_home}/.riku/nginx
+Unit=riku-nginx-reload.service
+
+[Install]
+WantedBy=multi-user.target
+"#,
+        deploy_home = deploy_home
+    );
+
+    let nginx_path = systemd_dir.join("riku-nginx.path");
+    fs::write(&nginx_path, nginx_path_content)?;
+
+    // Create nginx reload service
+    let nginx_reload_content = r#"[Unit]
+Description=Reload nginx when Riku configuration changes
+Documentation=https://dreygur.github.io/riku/
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl reload nginx
+
+[Install]
+WantedBy=multi-user.target
+"#;
+
+    let nginx_reload = systemd_dir.join("riku-nginx-reload.service");
+    fs::write(&nginx_reload, nginx_reload_content)?;
+
+    // Reload systemd and enable service
+    echo("Enabling riku systemd service...", "green");
+    if let Ok(output) = Command::new("systemctl").arg("daemon-reload").output() {
+        if output.status.success() {
+            echo("✓ Reloaded systemd daemon", "green");
+        }
+    }
+
+    if let Ok(output) = Command::new("systemctl").args(["enable", "riku"]).output() {
+        if output.status.success() {
+            echo("✓ Enabled riku service (starts on boot)", "green");
+        }
+    }
+
+    if let Ok(output) = Command::new("systemctl").args(["start", "riku"]).output() {
+        if output.status.success() {
+            echo("✓ Started riku service", "green");
+        }
+    }
+
+    // Enable nginx auto-reload
+    if let Ok(output) = Command::new("systemctl")
+        .args(["enable", "riku-nginx.path"])
+        .output()
+    {
+        if output.status.success() {
+            echo("✓ Enabled nginx auto-reload watcher", "green");
+        }
+    }
+
+    if let Ok(output) = Command::new("systemctl")
+        .args(["start", "riku-nginx.path"])
+        .output()
+    {
+        if output.status.success() {
+            echo("✓ Started nginx auto-reload watcher", "green");
+        }
+    }
 
     Ok(())
 }
