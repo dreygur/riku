@@ -53,7 +53,7 @@ htmlcov/
 .tarpaulin/
 
 # Documentation build output
-docs-site/site/
+docs/site/
 
 # Backup files
 *.bak
