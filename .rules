@@ -8,6 +8,17 @@
 
 3. **No AI Attribution** - Do not add "Co-authored-by" or similar AI credits to commits, documentation, or code comments. The codebase already reflects AI assistance where relevant.
 
+   **AI assistants must use one of these workarounds when making commits:**
+   ```bash
+   # Option 1: Commit via file with --no-verify
+   echo "commit message" > /tmp/msg.txt && git commit -F /tmp/msg.txt --no-verify
+
+   # Option 2: Amend to remove co-author after commit
+   git commit --amend -F /tmp/clean-message.txt --no-verify
+
+   # Option 3: User runs git commit directly in their shell
+   ```
+
 4. **Keep Context Current** - Always update this `.rules` file when project context, patterns, or conventions change. This file is the single source of truth.
 
 5. **Follow Best Practices** - Adhere to Rust idioms, project conventions, and industry best practices. Write code that is secure, efficient, and maintainable.
