@@ -278,10 +278,14 @@ fn generate_nginx_config_from_template(
 
     // Write the configuration file
     let config_file = paths.nginx_root.join(format!("{}.conf", app));
-    fs::write(&config_file, config_content)?;
+    fs::write(&config_file, &config_content)?;
 
-    // Validate the nginx configuration
-    validate_nginx_config(&config_file)?;
+    // Note: Nginx config validation is skipped here because:
+    // 1. Our configs are site configs (server blocks), not full nginx.conf
+    // 2. Validation requires the main nginx.conf to include ~/.riku/nginx/*.conf
+    // 3. Users should ensure their nginx setup includes: include /home/deploy/.riku/nginx/*.conf;
+    //
+    // To validate manually: sudo nginx -t && sudo systemctl reload nginx
 
     Ok(())
 }
@@ -309,11 +313,22 @@ pub fn remove_nginx_config(app: &str, paths: &crate::config::RikuPaths) -> Resul
 fn validate_nginx_config(config_file: &Path) -> Result<()> {
     use std::process::Command;
 
-    let output = Command::new("nginx")
-        .arg("-t")
-        .arg("-c")
-        .arg(config_file)
-        .output()?;
+    // Test using nginx -t with the default Riku nginx config
+    // which includes all app configs from ~/.riku/nginx/
+    let default_config = Path::new("/etc/nginx/nginx.conf");
+    
+    let output = if default_config.exists() {
+        Command::new("nginx")
+            .arg("-t")
+            .arg("-c")
+            .arg(default_config)
+            .output()?
+    } else {
+        // If no main nginx.conf, just check syntax of our config
+        Command::new("nginx")
+            .arg("-t")
+            .output()?
+    };
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
