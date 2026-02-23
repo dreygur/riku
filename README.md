@@ -66,11 +66,11 @@ I encourage users to also check out the original [Piku project](https://github.c
 
 ### Why Choose Riku?
 
-- ✅ **No Python dependency** - Single static binary
-- ✅ **Smaller footprint** - Rust compilation vs Python interpreter
-- ✅ **Faster startup** - Compiled binary vs interpreted code
-- ✅ **Type safety** - Catch errors at compile time
-- ✅ **Memory efficient** - No garbage collection overhead
+- **No Python dependency** - Single static binary
+- **Smaller footprint** - Rust compilation vs Python interpreter
+- **Faster startup** - Compiled binary vs interpreted code
+- **Type safety** - Catch errors at compile time
+- **Memory efficient** - No garbage collection overhead
 
 > **Want to benchmark?** I encourage users to run their own benchmarks. See the `benchmarks/` directory for testing scripts. (TODO: Add benchmarking tools)
 

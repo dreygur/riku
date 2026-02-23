@@ -10,7 +10,7 @@ Riku is a complete Rust port of the [Piku](https://github.com/piku/piku) micro-P
 
 ---
 
-## ⚡ Quick Start
+## Quick Start
 
 ### 1. Install Riku
 
@@ -59,7 +59,7 @@ git push riku master
 
 ---
 
-## 🎯 Features
+## Features
 
 | Feature | Description |
 |---------|-------------|
@@ -75,7 +75,7 @@ git push riku master
 
 ---
 
-## 📊 Resource Usage
+## Resource Usage
 
 | Component | Memory | Storage |
 |-----------|--------|---------|
@@ -90,7 +90,7 @@ git push riku master
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 | Section | Description |
 |---------|-------------|
@@ -101,7 +101,7 @@ git push riku master
 
 ---
 
-## 🚀 Supported Runtimes
+## Supported Runtimes
 
 === "Python"
     ```bash
@@ -156,7 +156,7 @@ git push riku master
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────┐    ┌──────────────┐    ┌─────────────┐
@@ -194,7 +194,7 @@ Riku is released under the [MIT License](https://opensource.org/licenses/MIT).
 
 ---
 
-## 🔗 Links
+## Links
 
 - **GitHub Repository**: [github.com/dreygur/riku](https://github.com/dreygur/riku)
 - **Original Piku**: [github.com/piku/piku](https://github.com/piku/piku)
@@ -203,7 +203,7 @@ Riku is released under the [MIT License](https://opensource.org/licenses/MIT).
 
 ---
 
-## 💡 Why Riku?
+## Why Riku?
 
 | Riku (Rust) | Original Piku (Python) |
 |-------------|------------------------|

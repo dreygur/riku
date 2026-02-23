@@ -4,7 +4,7 @@ Client-side plugins extend the `riku` command with local functionality. They ena
 
 ## Status
 
-✅ **Implemented in Riku (Rust)** - Client plugins are fully functional!
+**Implemented in Riku (Rust)** - Client plugins are fully functional!
 
 ## How It Works
 

@@ -250,4 +250,4 @@ ssh deploy@your-server-ip "tail ~/.riku/logs/myapp/*.log"
 
 ---
 
-*Congratulations! You've deployed your first app with Riku!* 🎉
+*Congratulations! You've deployed your first app with Riku!*
