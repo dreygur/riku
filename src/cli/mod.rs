@@ -256,15 +256,3 @@ pub enum PluginCmd {
         name: String,
     },
 }
-
-#[derive(Subcommand, Debug)]
-pub enum SetupCmd {
-    /// Initialize ~/.piku directory structure
-    Init,
-
-    /// Add an SSH public key
-    Ssh {
-        /// Path to public key file
-        pubkey: String,
-    },
-}

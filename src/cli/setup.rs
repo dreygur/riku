@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use std::env;
 use std::fs;
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -9,59 +9,8 @@ use std::process::Command;
 use crate::config::RikuPaths;
 use crate::util::{echo, setup_authorized_keys};
 
-/// Initialize the riku directory structure and install binary.
 #[allow(dead_code)]
-pub fn cmd_setup_init(paths: &RikuPaths) -> Result<()> {
-    // First, try to install riku binary to user's PATH
-    install_riku_binary()?;
-
-    let dirs: Vec<&PathBuf> = vec![
-        &paths.app_root,
-        &paths.cache_root,
-        &paths.data_root,
-        &paths.git_root,
-        &paths.env_root,
-        &paths.workers_root,
-        &paths.workers_available,
-        &paths.workers_enabled,
-        &paths.log_root,
-        &paths.nginx_root,
-    ];
-
-    for dir in &dirs {
-        if !dir.exists() {
-            echo(&format!("Creating '{}'.", dir.display()), "green");
-            fs::create_dir_all(dir)?;
-        }
-    }
-
-    // Mark riku script as executable if it isn't already
-    let script = &paths.riku_script;
-    if script.exists() {
-        let meta = fs::metadata(script)?;
-        let mode = meta.permissions().mode();
-        if mode & 0o100 == 0 {
-            echo(
-                &format!("Setting '{}' as executable.", script.display()),
-                "yellow",
-            );
-            fs::set_permissions(script, fs::Permissions::from_mode(mode | 0o100))?;
-        }
-    }
-
-    // Install systemd service files (if running as root or with sudo)
-    install_systemd_service(paths)?;
-
-    // Install default nginx configuration
-    install_nginx_default_config()?;
-
-    echo("Riku initialized successfully!", "green");
-    echo("Run 'riku --help' for available commands.", "");
-
-    Ok(())
-}
-
-/// Install systemd service files for riku daemon
+/// Install systemd service files for riku daemon (system-wide, requires root)
 fn install_systemd_service(_paths: &RikuPaths) -> Result<()> {
     // Check if we're running as root (required for systemd installation)
     if env::var("USER").unwrap_or_default() != "root" {
@@ -238,6 +187,7 @@ WantedBy=multi-user.target
 }
 
 /// Install default nginx configuration
+#[allow(dead_code)]
 fn install_nginx_default_config() -> Result<()> {
     // Check if we're running as root (required for nginx configuration)
     if env::var("USER").unwrap_or_default() != "root" {
@@ -317,6 +267,7 @@ fn install_nginx_default_config() -> Result<()> {
 }
 
 /// Install riku binary to user's PATH
+#[allow(dead_code)]
 fn install_riku_binary() -> Result<()> {
     // Get current executable path
     let current_exe = env::current_exe()?;
@@ -375,6 +326,7 @@ fn install_riku_binary() -> Result<()> {
 }
 
 /// Get the best directory to install riku binary
+#[allow(dead_code)]
 fn get_install_directory() -> Result<PathBuf> {
     // Try common installation directories in order of preference
 
@@ -405,6 +357,7 @@ fn get_install_directory() -> Result<PathBuf> {
 }
 
 /// Check if a directory is in the PATH environment variable
+#[allow(dead_code)]
 fn is_in_path(dir: &Path) -> bool {
     if let Ok(path) = env::var("PATH") {
         for path_dir in env::split_paths(&path) {
@@ -414,68 +367,6 @@ fn is_in_path(dir: &Path) -> bool {
         }
     }
     false
-}
-
-/// Set up a new SSH key. Use "-" for stdin.
-#[allow(dead_code)]
-pub fn cmd_setup_ssh(paths: &RikuPaths, public_key_file: &str) -> Result<()> {
-    if public_key_file == "-" {
-        // Read from stdin, write to a temp file, then process
-        let mut buffer = String::new();
-        io::stdin().read_to_string(&mut buffer)?;
-
-        let tmp_dir = std::env::temp_dir();
-        let tmp_file = tmp_dir.join("piku_ssh_tmp_key.pub");
-        fs::write(&tmp_file, &buffer)?;
-
-        let result = add_ssh_key(paths, &tmp_file);
-        let _ = fs::remove_file(&tmp_file);
-        result
-    } else {
-        let key_path = PathBuf::from(public_key_file);
-        if !key_path.exists() {
-            echo(
-                &format!("Error: public key file '{}' not found.", public_key_file),
-                "red",
-            );
-            bail!("Public key file not found");
-        }
-        add_ssh_key(paths, &key_path)
-    }
-}
-
-#[allow(dead_code)]
-fn add_ssh_key(paths: &RikuPaths, key_file: &PathBuf) -> Result<()> {
-    // Get fingerprint via ssh-keygen
-    let output = Command::new("ssh-keygen")
-        .arg("-lf")
-        .arg(key_file)
-        .output()?;
-
-    if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr);
-        echo(
-            &format!(
-                "Error: invalid public key file '{}': {}",
-                key_file.display(),
-                err
-            ),
-            "red",
-        );
-        bail!("Invalid public key file");
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let fingerprint = stdout.split_whitespace().nth(1).unwrap_or("").to_string();
-
-    let key = fs::read_to_string(key_file)?.trim().to_string();
-
-    echo(&format!("Adding key '{}'.", fingerprint), "");
-
-    let script_path = paths.riku_script.to_string_lossy().to_string();
-    setup_authorized_keys(&fingerprint, &script_path, &key)?;
-
-    Ok(())
 }
 
 #[allow(dead_code)]

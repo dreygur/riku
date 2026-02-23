@@ -126,14 +126,24 @@ sudo adduser deploy
 sudo su - deploy
 ```
 
-2. Initialize the Riku environment:
+2. Initialize Riku:
 ```bash
-riku setup init
+riku init
 ```
+
+This will:
+- Install riku to `~/.local/bin/riku`
+- Create systemd service (starts on boot)
+- Start supervisor daemon
+- Configure nginx
 
 3. Add your SSH public key:
 ```bash
-riku setup ssh ~/.ssh/id_rsa.pub
+# Copy your local SSH key to server
+ssh-copy-id deploy@your-server
+
+# Or manually add key
+cat ~/.ssh/id_ed25519.pub | ssh deploy@your-server "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
 ```
 
 ### Application Deployment
@@ -155,8 +165,8 @@ worker: python worker.py
 ```bash
 git add .
 git commit -m "Initial commit"
-git remote add piku deploy@your-server.com:myapp
-git push riku main
+git remote add riku deploy@your-server:myapp
+git push riku master
 ```
 
 ## Commands
@@ -184,10 +194,9 @@ git push riku main
 - `riku run <app> command...` - Execute commands in app context
 
 ### Setup and Maintenance
-- `riku setup init` - Initialize Riku environment
-- `riku setup ssh <pubkey>` - Add SSH key
+- `riku init` - Initialize Riku server
 - `riku update` - Update Riku binary
-- `riku supervisor` - Start process supervisor daemon
+- `riku supervisor` - Start supervisor (foreground, for debugging)
 
 ## AI Agent Interface
 
