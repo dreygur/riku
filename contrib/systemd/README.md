@@ -1,37 +1,12 @@
-# Systemd Integration
+# Riku Systemd Service Files
 
-Riku includes optional systemd service files for running the supervisor daemon as a system service.
+This directory contains systemd service files for running Riku as a system service.
 
----
+## Files
 
-## Quick Start
-
-### Install and Enable Service
-
-```bash
-# As root, from the riku repository
-sudo cp contrib/systemd/riku.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable riku
-sudo systemctl start riku
-
-# Check status
-sudo systemctl status riku
-```
-
----
-
-## Service Files
-
-The following systemd units are available in `contrib/systemd/`:
-
-| File | Purpose |
-|------|---------|
-| `riku.service` | Main supervisor daemon service |
-| `riku-nginx.path` | Watches for nginx config changes |
-| `riku-nginx-reload.service` | Reloads nginx automatically |
-
----
+- `riku.service` - Main Riku supervisor daemon service
+- `riku-nginx.path` - Watches for nginx configuration changes
+- `riku-nginx-reload.service` - Reloads nginx when configs change
 
 ## Installation
 
@@ -47,12 +22,8 @@ sudo cp contrib/systemd/riku-nginx-reload.service /etc/systemd/system/
 ### 2. Update Paths (if needed)
 
 Edit `/etc/systemd/system/riku.service` if your installation differs:
-
-```ini
-[Service]
-WorkingDirectory=/home/deploy
-ExecStart=/home/deploy/.local/bin/riku supervisor
-```
+- `WorkingDirectory` - Path to deploy user home
+- `ExecStart` - Path to riku binary
 
 ### 3. Enable and Start
 
@@ -78,9 +49,10 @@ sudo systemctl enable riku-nginx.path
 
 # Start watcher
 sudo systemctl start riku-nginx.path
-```
 
----
+# Check status
+systemctl status riku-nginx.path
+```
 
 ## Usage
 
@@ -122,35 +94,6 @@ sudo journalctl -u riku -f
 sudo journalctl -u riku --since today
 ```
 
----
-
-## Configuration
-
-### Resource Limits
-
-The default service includes resource limits:
-
-```ini
-MemoryMax=512M
-CPUQuota=50%
-```
-
-Adjust in `/etc/systemd/system/riku.service` if needed.
-
-### Security Hardening
-
-The service includes security features:
-
-```ini
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=read-only
-PrivateTmp=true
-ReadWritePaths=/home/deploy/.riku
-```
-
----
-
 ## Troubleshooting
 
 ### Service Won't Start
@@ -180,7 +123,27 @@ sudo systemctl status riku-nginx-reload.service
 sudo nginx -t
 ```
 
----
+### High Resource Usage
+
+The service includes resource limits:
+- Memory: 512MB max
+- CPU: 50% quota
+
+Adjust in `/etc/systemd/system/riku.service` if needed:
+```ini
+MemoryMax=1G
+CPUQuota=100%
+```
+
+## Security
+
+The service includes security hardening:
+- Runs as `deploy` user (not root)
+- `NoNewPrivileges=true` - Prevents privilege escalation
+- `ProtectSystem=strict` - Read-only system directories
+- `ProtectHome=read-only` - Read-only home directories
+- `PrivateTmp=true` - Isolated /tmp directory
+- `ReadWritePaths` - Only allows writing to riku directories
 
 ## Uninstall
 
@@ -199,10 +162,3 @@ sudo rm /etc/systemd/system/riku-nginx-reload.service
 # Reload systemd
 sudo systemctl daemon-reload
 ```
-
----
-
-## See Also
-
-- [Systemd Files](https://github.com/dreygur/riku/tree/main/contrib/systemd) - Source files on GitHub
-- [Nginx Configuration](nginx.md) - How Riku generates nginx configs
