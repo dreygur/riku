@@ -1,59 +1,108 @@
+# OS files
 .DS_Store
-.zip
-# Byte-compiled / optimized / DLL files
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Rust
+target/
+**/target/
+*.rs.bk
+Cargo.lock
+
+# Build artifacts
+build/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# IDE / Editor
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.iml
+
+# Environment files
+.env
+.env.local
+.env.*.local
+ENV
+*.env
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+*.tmp
+*.temp
+
+# Testing
+coverage/
+htmlcov/
+*.gcno
+*.gcda
+.tarpaulin/
+
+# Documentation build output
+docs-site/site/
+
+# Backup files
+*.bak
+*.backup
+*.zip
+
+# Python (for scripts)
 __pycache__/
 *.py[cod]
-
-# C extensions
-*.so
-
-# Distribution / packaging
+*.pyo
 .Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
-
-# Installer logs
 pip-log.txt
-pip-delete-this-directory.txt
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.coverage
-.cache
-nosetests.xml
-coverage.xml
+# Node.js (for testing)
+node_modules/
+npm-debug.log
+yarn-error.log
 
-# Translations
-*.mo
-*.pot
+# Certificates
+*.pem
+*.key
+*.crt
+acme/
 
-# Django stuff:
-*.log
+# Systemd
+*.service
+*.path
+*.socket
 
-# Sphinx documentation
-docs/_build/
+# Nginx
+*.conf
 
-# PyBuilder
-target/
+# TOML configs (worker configs are generated)
+*.toml
+!Cargo.toml
+!rust-toolchain.toml
 
-# IntelliJ
-.idea/docs-site/site/
+# Procfile (app-specific, not repo)
+Procfile
+
+# SCALING file (app-specific)
+SCALING
+
+# Authorized keys (sensitive)
+authorized_keys
+authorized_keys.*
+
+# Rate limiting and audit logs
+/tmp/riku-agent-*.log
+/tmp/riku-confirm-*
+riku-agent-*.log
+riku-confirm-*
