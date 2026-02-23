@@ -52,6 +52,9 @@ pub fn cmd_setup_init(paths: &RikuPaths) -> Result<()> {
     // Install systemd service files (if running as root or with sudo)
     install_systemd_service(paths)?;
 
+    // Install default nginx configuration
+    install_nginx_default_config()?;
+
     // Start supervisor daemon in background
     echo("Starting supervisor daemon...", "green");
     if let Err(e) = crate::cli::apps::cmd_supervisor_daemon(paths) {
@@ -227,6 +230,85 @@ WantedBy=multi-user.target
     {
         if output.status.success() {
             echo("✓ Started nginx auto-reload watcher", "green");
+        }
+    }
+
+    Ok(())
+}
+
+/// Install default nginx configuration
+fn install_nginx_default_config() -> Result<()> {
+    // Check if we're running as root (required for nginx configuration)
+    if env::var("USER").unwrap_or_default() != "root" {
+        return Ok(()); // Skip if not root
+    }
+
+    // Find the contrib/nginx/default.conf file
+    // Try multiple possible locations
+    let possible_paths = [
+        "contrib/nginx/default.conf",
+        "/usr/share/riku/nginx/default.conf",
+        "/etc/riku/nginx/default.conf",
+    ];
+
+    let source_path = possible_paths
+        .iter()
+        .find(|p| std::path::Path::new(p).exists())
+        .map(|s| s.to_string());
+
+    let source_path = match source_path {
+        Some(p) => p,
+        None => return Ok(()), // Skip if template not found
+    };
+
+    // Determine nginx config directory
+    let nginx_conf_dir = if std::path::Path::new("/etc/nginx/sites-available").exists() {
+        "/etc/nginx/sites-available"
+    } else if std::path::Path::new("/etc/nginx/conf.d").exists() {
+        "/etc/nginx/conf.d"
+    } else {
+        return Ok(()); // Skip if nginx not installed
+    };
+
+    let dest_path = std::path::Path::new(nginx_conf_dir).join("riku-default.conf");
+
+    // Copy the default config
+    echo("Installing default nginx configuration...", "green");
+    fs::copy(&source_path, &dest_path)?;
+    echo(&format!("✓ Created {}", dest_path.display()), "green");
+
+    // Enable the config (for sites-available)
+    if nginx_conf_dir.contains("sites-available") {
+        let sites_enabled = std::path::Path::new("/etc/nginx/sites-enabled/riku-default.conf");
+        if !sites_enabled.exists() {
+            std::os::unix::fs::symlink(&dest_path, sites_enabled)?;
+            echo("✓ Enabled nginx configuration", "green");
+        }
+    }
+
+    // Test nginx configuration
+    if let Ok(output) = Command::new("nginx").arg("-t").output() {
+        if output.status.success() {
+            echo("✓ Nginx configuration is valid", "green");
+
+            // Reload nginx if it's running
+            if let Ok(status) = Command::new("systemctl")
+                .arg("is-active")
+                .arg("nginx")
+                .output()
+            {
+                if String::from_utf8_lossy(&status.stdout).trim() == "active" {
+                    if let Ok(_) = Command::new("systemctl")
+                        .arg("reload")
+                        .arg("nginx")
+                        .output()
+                    {
+                        echo("✓ Reloaded nginx", "green");
+                    }
+                }
+            }
+        } else {
+            echo("⚠ Nginx configuration test failed", "yellow");
         }
     }
 
