@@ -272,8 +272,8 @@ fn install_riku_binary() -> Result<()> {
     // Get current executable path
     let current_exe = env::current_exe()?;
 
-    // Determine installation target
-    let target_dir = get_install_directory()?;
+    // Determine installation target (always user-local, never requires root)
+    let target_dir = get_user_install_directory()?;
     let target_path = target_dir.join("riku");
 
     // Check if already installed
@@ -306,54 +306,36 @@ fn install_riku_binary() -> Result<()> {
 
     // Check if target directory is in PATH
     if !is_in_path(&target_dir) {
-        echo(
-            &format!(
-                "⚠ Warning: {} is not in your PATH. Add it with:",
-                target_dir.display()
-            ),
-            "yellow",
-        );
-        echo(
-            &format!(
-                "  export PATH=\"$HOME/.local/bin:$PATH\"  # for {}",
-                target_dir.display()
-            ),
-            "",
-        );
+        echo("", "");
+        echo(&format!("⚠ Note: {} is not in your PATH.", target_dir.display()), "");
+        echo("Add it to your shell config (~/.bashrc, ~/.zshrc):", "");
+        echo("  export PATH=\"$HOME/.local/bin:$PATH\"", "");
+        echo("", "");
+        echo("Or use the full path:", "");
+        echo(&format!("  {}", target_path.display()), "");
     }
 
     Ok(())
 }
 
-/// Get the best directory to install riku binary
+/// Get user-local installation directory (~/.local/bin)
 #[allow(dead_code)]
-fn get_install_directory() -> Result<PathBuf> {
-    // Try common installation directories in order of preference
-
-    // 1. ~/.local/bin (XDG standard for user installations)
+fn get_user_install_directory() -> Result<PathBuf> {
+    // Always install to user-local directory (no root required)
+    // Follows XDG Base Directory specification
+    
     if let Ok(home) = env::var("HOME") {
+        // Primary: ~/.local/bin (XDG standard)
         let local_bin = PathBuf::from(&home).join(".local/bin");
         return Ok(local_bin);
     }
 
-    // 2. ~/bin (common alternative)
-    if let Ok(home) = env::var("HOME") {
-        let home_bin = PathBuf::from(&home).join("bin");
-        return Ok(home_bin);
+    // Fallback: current directory
+    if let Ok(cwd) = env::current_dir() {
+        return Ok(cwd);
     }
 
-    // 3. /usr/local/bin (system-wide, requires sudo)
-    // Only use if we're already running as root
-    if env::var("USER").unwrap_or_default() == "root" {
-        return Ok(PathBuf::from("/usr/local/bin"));
-    }
-
-    // Fallback to ~/.local/bin
-    if let Ok(home) = env::var("HOME") {
-        return Ok(PathBuf::from(&home).join(".local/bin"));
-    }
-
-    bail!("Could not determine installation directory")
+    bail!("Could not determine home directory for installation")
 }
 
 /// Check if a directory is in the PATH environment variable
@@ -608,21 +590,22 @@ fn setup_systemd_service(paths: &RikuPaths) -> Result<()> {
 
     fs::create_dir_all(&systemd_dir)?;
 
-    // Get riku binary path
-    let riku_binary = paths.riku_script.to_string_lossy();
+    // Get riku binary path (user-local, no root required)
+    let riku_binary_path = paths.riku_script.to_string_lossy();
 
     // Create service file
     let service_content = format!(
         r#"[Unit]
-Description=Riku Server
-Documentation=https://github.com/dreygur/riku
-After=network.target
+Description=Riku Process Supervisor
+Documentation=https://dreygur.github.io/riku/
+After=network.target nginx.service
+Wants=nginx.service
 
 [Service]
 Type=simple
-ExecStart={riku_binary} supervisor
+ExecStart={riku_path} supervisor
 Restart=always
-RestartSec=10
+RestartSec=5
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=riku
@@ -633,10 +616,17 @@ ProtectSystem=strict
 ProtectHome=read-only
 PrivateTmp=true
 
+# Allow writing to riku directories
+ReadWritePaths=~/.riku
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%
+
 [Install]
 WantedBy=default.target
 "#,
-        riku_binary = riku_binary
+        riku_path = riku_binary_path
     );
 
     // Create service file
