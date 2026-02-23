@@ -64,7 +64,7 @@ fn main() -> Result<()> {
         Commands::Container { cmd } => {
             cli::container::cmd_container(container::ContainerCmd { command: cmd }, &paths)?
         }
-        Commands::Deploy { app } => cli::apps::cmd_deploy(&paths, &app)?,
+        Commands::Deploy { app, from } => cli::apps::cmd_deploy(&paths, &app, from.as_deref())?,
         Commands::Destroy { app } => cli::apps::cmd_destroy(&paths, &app)?,
         Commands::Logs { app, process } => cli::apps::cmd_logs(&paths, &app, &process)?,
         Commands::Ps(cmd) => match cmd {
@@ -194,9 +194,13 @@ fn build_plugin_args(command: &Commands) -> Vec<String> {
                 args.push("config:live".to_string());
             }
         },
-        Commands::Deploy { app } => {
+        Commands::Deploy { app, from } => {
             args.push(app.clone());
             args.push("deploy".to_string());
+            if let Some(from_path) = from {
+                args.push("--from".to_string());
+                args.push(from_path.clone());
+            }
         }
         Commands::Destroy { app } => {
             args.push(app.clone());

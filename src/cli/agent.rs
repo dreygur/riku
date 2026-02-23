@@ -880,7 +880,7 @@ fn cmd_agent_deploy(paths: &RikuPaths, app: &str) -> AgentResponse {
     );
 
     // Call the actual deploy function
-    match crate::cli::apps::cmd_deploy(paths, app) {
+    match crate::cli::apps::cmd_deploy(paths, app, None) {
         Ok(_) => AgentResponse::success(json!({
             "job_id": job_id,
             "status": "completed",

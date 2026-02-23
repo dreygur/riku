@@ -69,6 +69,10 @@ pub enum Commands {
     Deploy {
         /// App name
         app: String,
+
+        /// Deploy from local path instead of git repo
+        #[arg(long)]
+        from: Option<String>,
     },
 
     /// Remove an app (preserves data dir)

@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use colored::Colorize;
 use serde_json;
 use std::collections::{HashMap, VecDeque};
@@ -164,10 +164,105 @@ pub fn cmd_config_live(paths: &RikuPaths, app: &str) -> Result<()> {
 }
 
 /// Deploy an app.
-pub fn cmd_deploy(paths: &RikuPaths, app: &str) -> Result<()> {
+pub fn cmd_deploy(paths: &RikuPaths, app: &str, from_path: Option<&str>) -> Result<()> {
     let app = exit_if_invalid(app, &paths.app_root)?;
     let deltas: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+    
+    // If deploying from local path, copy files first
+    if let Some(source_path) = from_path {
+        deploy_from_path(paths, &app, source_path)?;
+    }
+    
     crate::deploy::do_deploy(&app, paths, &deltas, None)
+}
+
+/// Deploy from a local path (copies files to app directory).
+fn deploy_from_path(paths: &RikuPaths, app: &str, source: &str) -> Result<()> {
+    use std::path::Path;
+    
+    let source_path = Path::new(source);
+    
+    // Validate source path
+    if !source_path.exists() {
+        echo(&format!("Error: path '{}' does not exist.", source), "red");
+        bail!("Source path does not exist");
+    }
+    
+    if !source_path.is_dir() {
+        echo(&format!("Error: '{}' is not a directory.", source), "red");
+        bail!("Source is not a directory");
+    }
+    
+    // Check for required files
+    let procfile = source_path.join("Procfile");
+    if !procfile.exists() {
+        echo("Error: Procfile not found in source directory.", "red");
+        echo("A Procfile is required for deployment.", "yellow");
+        echo("Example: echo 'web: npm start' > Procfile", "yellow");
+        bail!("Procfile not found");
+    }
+    
+    // Check if it's a git repo (optional but recommended)
+    let git_dir = source_path.join(".git");
+    if !git_dir.exists() {
+        echo("⚠ Warning: source is not a git repository.", "yellow");
+        echo("  Consider initializing git: git init", "yellow");
+    }
+    
+    // Copy files to app directory
+    let app_dir = paths.app_root.join(app);
+    echo(&format!("Copying files from '{}'...", source), "green");
+    
+    // Remove existing app files (preserve data dir)
+    if app_dir.exists() {
+        fs::remove_dir_all(&app_dir)?;
+    }
+    
+    // Copy source to app directory
+    copy_dir_recursive(source_path, &app_dir)?;
+    
+    echo(&format!("✓ Copied {} files", count_files(&app_dir)?), "green");
+    
+    Ok(())
+}
+
+/// Recursively copy a directory.
+fn copy_dir_recursive(source: &Path, dest: &Path) -> Result<()> {
+    fs::create_dir_all(dest)?;
+    
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let entry_path = entry.path();
+        let dest_path = dest.join(entry.file_name());
+        
+        if entry_path.is_dir() {
+            // Skip certain directories
+            if entry_path.file_name().map(|n| n == ".git" || n == "node_modules" || n == ".gitignore").unwrap_or(false) {
+                continue;
+            }
+            copy_dir_recursive(&entry_path, &dest_path)?;
+        } else {
+            fs::copy(&entry_path, &dest_path)?;
+        }
+    }
+    
+    Ok(())
+}
+
+/// Count files in a directory.
+fn count_files(dir: &Path) -> Result<usize> {
+    let mut count = 0;
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                count += count_files(&path)?;
+            } else {
+                count += 1;
+            }
+        }
+    }
+    Ok(count)
 }
 
 /// Destroy an app — remove directories and config files, preserve data/cache.
