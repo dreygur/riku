@@ -267,7 +267,6 @@ fn install_nginx_default_config() -> Result<()> {
 }
 
 /// Install riku binary to user's PATH
-#[allow(dead_code)]
 fn install_riku_binary() -> Result<()> {
     // Get current executable path
     let current_exe = env::current_exe()?;
@@ -319,7 +318,6 @@ fn install_riku_binary() -> Result<()> {
 }
 
 /// Get user-local installation directory (~/.local/bin)
-#[allow(dead_code)]
 fn get_user_install_directory() -> Result<PathBuf> {
     // Always install to user-local directory (no root required)
     // Follows XDG Base Directory specification
@@ -339,7 +337,6 @@ fn get_user_install_directory() -> Result<PathBuf> {
 }
 
 /// Check if a directory is in the PATH environment variable
-#[allow(dead_code)]
 fn is_in_path(dir: &Path) -> bool {
     if let Ok(path) = env::var("PATH") {
         for path_dir in env::split_paths(&path) {
@@ -432,7 +429,11 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
             echo(&format!("      ✓ ~/.riku/{} (exists)", name), "green");
         }
     }
-    
+
+    // Install riku binary to user's PATH
+    install_riku_binary()?;
+    echo("", "");
+
     // Create global post-receive hook template
     let hooks_dir = paths.git_root.parent().unwrap().join("hooks");
     if !hooks_dir.exists() {
