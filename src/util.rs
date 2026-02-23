@@ -40,7 +40,10 @@ pub fn exit_if_invalid(app: &str, app_root: &Path) -> Result<String> {
         echo("To deploy a new app:", "yellow");
         echo("  1. Create app directory and initialize git", "yellow");
         echo("  2. Add your code and Procfile", "yellow");
-        echo("  3. Push to deploy: git remote add riku deploy@server:{} && git push riku master", &app);
+        echo(
+            "  3. Push to deploy: git remote add riku deploy@server:{} && git push riku master",
+            &app,
+        );
         echo("", "");
         echo("Or list existing apps:", "yellow");
         echo("  riku apps", "yellow");

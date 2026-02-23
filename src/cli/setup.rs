@@ -248,14 +248,14 @@ fn install_nginx_default_config() -> Result<()> {
                 .arg("nginx")
                 .output()
             {
-                if String::from_utf8_lossy(&status.stdout).trim() == "active" {
-                    if let Ok(_) = Command::new("systemctl")
+                if String::from_utf8_lossy(&status.stdout).trim() == "active"
+                    && Command::new("systemctl")
                         .arg("reload")
                         .arg("nginx")
                         .output()
-                    {
-                        echo("✓ Reloaded nginx", "green");
-                    }
+                        .is_ok()
+                {
+                    echo("✓ Reloaded nginx", "green");
                 }
             }
         } else {
@@ -383,7 +383,7 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
 
     // Check if running as root for full installation
     let is_root = env::var("USER").unwrap_or_default() == "root";
-    
+
     if !is_root {
         echo("⚠ Warning: Not running as root", "yellow");
         echo("  Some features require root privileges:", "yellow");
@@ -396,21 +396,27 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
     // Prerequisites check
     echo("Checking prerequisites...", "");
     let mut missing_deps = Vec::new();
-    
+
     // Check git
     if Command::new("git").arg("--version").output().is_err() {
         missing_deps.push("git");
     }
-    
+
     // Check nginx (warning only)
     let has_nginx = Command::new("nginx").arg("-v").output().is_ok();
     if !has_nginx && is_root {
         echo("  ⚠ nginx not found - install for web serving", "yellow");
     }
-    
+
     if !missing_deps.is_empty() {
-        echo(&format!("  ⚠ Missing dependencies: {}", missing_deps.join(", ")), "yellow");
-        echo(&format!("  Install with: apt install {}", missing_deps.join(" ")), "yellow");
+        echo(
+            &format!("  ⚠ Missing dependencies: {}", missing_deps.join(", ")),
+            "yellow",
+        );
+        echo(
+            &format!("  Install with: apt install {}", missing_deps.join(" ")),
+            "yellow",
+        );
     } else {
         echo("  ✓ All required dependencies found", "green");
     }
@@ -489,18 +495,24 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
     echo("", "");
     echo("-----> Riku server initialized successfully!", "green");
     echo("", "");
-    
+
     // Post-init verification
     echo("Verification:", "green");
-    
+
     // Check binary
     let riku_path = &paths.riku_script;
     if riku_path.exists() {
-        echo(&format!("  ✓ Binary installed: {}", riku_path.display()), "green");
+        echo(
+            &format!("  ✓ Binary installed: {}", riku_path.display()),
+            "green",
+        );
     } else {
-        echo(&format!("  ⚠ Binary not found: {}", riku_path.display()), "yellow");
+        echo(
+            &format!("  ⚠ Binary not found: {}", riku_path.display()),
+            "yellow",
+        );
     }
-    
+
     // Check supervisor
     if !no_systemd {
         let status = Command::new("systemctl")
@@ -523,9 +535,9 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
             "yellow",
         );
     }
-    
+
     echo("", "");
-    
+
     // First app guide
     echo("Deploy your first app:", "green");
     echo("", "");
@@ -537,7 +549,13 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
     echo("   echo 'web: python app.py' > Procfile", "yellow");
     echo("", "");
     echo("3. Deploy:", "yellow");
-    echo(&format!("   git remote add riku {}@your-server:myapp", env::var("USER").unwrap_or_else(|_| "deploy".to_string())), "yellow");
+    echo(
+        &format!(
+            "   git remote add riku {}@your-server:myapp",
+            env::var("USER").unwrap_or_else(|_| "deploy".to_string())
+        ),
+        "yellow",
+    );
     echo("   git push riku master", "yellow");
     echo("", "");
     echo("Documentation: https://dreygur.github.io/riku/", "green");
