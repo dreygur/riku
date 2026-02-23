@@ -200,64 +200,14 @@ git push riku master
 
 ## AI Agent Interface
 
-Riku provides a secure SSH-based interface for AI agents (Claude, Cursor, Copilot, etc.) to perform deployment and management tasks.
-
-### Quick Start
+Riku provides an SSH-based interface for AI agents (Claude, Cursor, Copilot) to automate deployments.
 
 ```bash
-# Generate SSH key for AI agent
-ssh-keygen -t ed25519 -C "cursor-agent" -f ~/.ssh/riku-cursor
-
-# Add to server with scope restriction
-cat ~/.ssh/riku-cursor.pub | ssh deploy@server \
-  "mkdir -p ~/.ssh && echo 'command=\"riku agent --scope staging\",no-port-forwarding,no-pty' >> ~/.ssh/authorized_keys"
-
-# Test connection
-ssh -i ~/.ssh/riku-cursor deploy@server "riku agent --intro"
+# Quick test
+ssh -i ~/.ssh/agent-key deploy@server "riku agent --intro"
 ```
 
-### Agent Commands
-
-```bash
-# Discovery
-riku agent --intro          # Show permissions and scope
-riku agent --schema         # Full command reference (JSON)
-riku agent --agent-help     # Show help
-
-# Execution (all output is JSON)
-riku agent apps             # List applications
-riku agent deploy myapp     # Deploy application
-riku agent ps myapp         # Process status
-riku agent logs myapp       # View logs
-riku agent restart myapp    # Restart application
-riku agent config:get myapp KEY  # Get config value
-riku agent config:set myapp KEY=val  # Set config
-```
-
-### Permission Scopes
-
-| Scope | Permissions |
-|-------|-------------|
-| `readonly` | View only: apps, logs, ps, config:get |
-| `staging` | Deploy + readonly |
-| `production` | Full access including destroy, stop |
-
-### Example: AI Agent Workflow
-
-```bash
-# AI agent connects and checks status
-ssh agent-key@server "riku agent --json ps myapp"
-# → {"success":true,"data":{"app":"myapp","workers":2,"running":true}}
-
-# AI deploys new version
-ssh agent-key@server "riku agent --json deploy myapp"
-# → {"success":true,"data":{"job_id":"deploy-123","status":"completed"}}
-
-# AI verifies deployment
-ssh agent-key@server "riku agent --json logs myapp --lines 10"
-```
-
-For full documentation, see [docs-site/docs/ai-agents.md](docs-site/docs/ai-agents.md).
+See [AI Agents Documentation](docs/docs/ai-agents.md) for full details.
 
 ## Supported Runtimes
 
