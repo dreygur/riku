@@ -1,0 +1,176 @@
+# Riku Development Rules
+
+## Core Principles
+
+1. **No Hallucination** - Never invent APIs, functions, or behaviors. If unsure, check the codebase first. Only reference what actually exists in the project.
+
+2. **Break Down Tasks** - Divide complex tasks into smaller, actionable sub-tasks. Complete and verify each sub-task before moving to the next. Use `todo_write` to track progress.
+
+3. **No AI Attribution** - Do not add "Co-authored-by" or similar AI credits to commits, documentation, or code comments. The codebase already reflects AI assistance where relevant.
+
+4. **Keep Context Current** - Always update this `.rules` file when project context, patterns, or conventions change. This file is the single source of truth.
+
+5. **Follow Best Practices** - Adhere to Rust idioms, project conventions, and industry best practices. Write code that is secure, efficient, and maintainable.
+
+6. **Readability & Optimization First** - Prioritize clean, readable code and performance. Write code humans can understand, then optimize for machines.
+
+## Project Overview
+
+Riku is a complete Rust port of the Piku micro-PaaS, providing Heroku-like git push deployments. It's a single binary written in Rust with no runtime dependencies.
+
+**Repository:** https://github.com/dreygur/riku
+
+## Quick Commands
+
+```bash
+# Build
+cargo build
+cargo build --release
+
+# Run tests
+cargo test
+./tests/deploy/test-all.sh          # Run deployment tests
+./tests/deploy/quick-test.sh myapp node  # Quick deployment test
+
+# Lint
+cargo clippy
+cargo fmt
+
+# Run binary
+cargo run -- <command>
+./target/release/riku <command>
+```
+
+## Project Structure
+
+```
+riku/
+├── src/                    # Main Rust source code
+│   ├── main.rs            # CLI entry point
+│   ├── cli/               # CLI command handlers
+│   ├── config.rs          # Path & environment configuration
+│   ├── nginx.rs           # Nginx configuration generation
+│   ├── supervisor.rs      # Process supervisor logic
+│   └── ...
+├── tests/
+│   ├── integration_tests/ # Rust integration tests
+│   │   ├── cli_tests.rs
+│   │   ├── supervisor_tests.rs
+│   │   ├── nginx_tests.rs
+│   │   ├── plugin_tests.rs
+│   │   └── e2e_tests.rs
+│   └── deploy/            # Shell-based deployment tests
+├── templates/             # Tera templates for config generation
+├── benchmarks/            # Performance benchmarks
+└── docs/                  # Documentation
+```
+
+## Key Concepts
+
+### Directory Structure (~/.riku/)
+- `apps/` - Application code
+- `repos/` - Git bare repositories
+- `envs/` - Environment variables (ENV files)
+- `workers-enabled/` - Active worker configs (TOML)
+- `nginx/` - Nginx configurations
+- `plugins/` - Plugin executables
+
+### Procfile Format
+```
+web: python app.py
+worker: python worker.py
+cron: 0 2 * * * /path/to/script.sh
+```
+
+### Environment Variables
+Set in `~/.riku/envs/<app>/ENV`:
+- `NGINX_SERVER_NAME` - Domain name
+- `NGINX_HTTPS_ONLY` - Force HTTPS
+- `NODE_VERSION` - Node.js version
+- `RIKU_WORKER_TIMEOUT` - Worker timeout seconds
+
+## Development Workflow
+
+1. **Make changes** to source code
+2. **Run tests**: `cargo test`
+3. **Lint**: `cargo clippy && cargo fmt`
+4. **Test deployment**: Use `tests/deploy/quick-test.sh`
+5. **Commit** with conventional commits format
+
+## Testing
+
+### Unit & Integration Tests
+```bash
+cargo test                          # All tests
+cargo test --lib                    # Unit tests only
+cargo test --test integration_tests # Integration tests
+```
+
+### Deployment Tests
+```bash
+./tests/run-all-tests.sh            # Full test suite
+./tests/deploy/quick-test.sh app node  # Single app test
+```
+
+### Test Categories
+- **CLI tests** (19): Environment setup, app management, configuration
+- **Supervisor tests** (22): Worker configs, cron, log rotation
+- **Nginx tests** (15): Configuration generation
+- **Plugin tests** (16): Plugin system functionality
+- **E2E tests** (11): Complete deployment scenarios
+
+## Code Style
+
+- Follow Rust idioms and patterns
+- Use `anyhow::Result` for error handling
+- Add doc comments for public APIs
+- Keep functions focused and testable
+- Use `clap` derive for CLI commands
+
+## Architecture Notes
+
+- **Supervisor**: Monitors TOML configs in `workers-enabled/`, manages processes
+- **Nginx**: Auto-generates configs based on app type and env vars
+- **Git Hooks**: Post-receive hook triggers deployment
+- **Plugins**: Executable scripts in `~/.riku/plugins/`
+
+See `ARCHITECTURE.md` and `API.md` for detailed documentation.
+
+## Common Tasks
+
+### Add a new CLI command
+1. Add command struct in `src/cli/`
+2. Implement handler function
+3. Route in `main.rs`
+
+### Add a new runtime
+1. Add detection logic in build system
+2. Create build/deploy functions
+3. Add tests
+
+### Modify nginx config
+1. Update `src/nginx.rs`
+2. Update templates in `templates/`
+3. Add nginx tests
+
+## Debugging
+
+```bash
+# Enable debug logging
+RUST_LOG=debug cargo run -- <command>
+
+# Check generated configs
+cat ~/.riku/nginx/<app>.conf
+cat ~/.riku/workers-enabled/<app>.toml
+
+# View supervisor logs
+riku logs <app>
+journalctl -u riku-nginx
+```
+
+## Resources
+
+- [API Documentation](API.md)
+- [Architecture Design](ARCHITECTURE.md)
+- [Systemd Integration](SYSTEMD.md)
+- [Contributing Guide](CONTRIBUTING.md)
