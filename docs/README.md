@@ -1,207 +1,258 @@
-# Riku Documentation
+# Riku Documentation Site
 
-Welcome to the Riku documentation! This directory contains comprehensive guides for using and extending Riku.
+This directory contains the MkDocs-based documentation site for Riku.
 
 ## Quick Start
 
-New to Riku? Start here:
-
-1. **[Installation Guide](INSTALL.md)** - Install Riku on your server
-2. **[Environment Variables](ENV.md)** - Configure your deployments
-3. **[FAQ](FAQ.md)** - Common questions and answers
-
-## Documentation Index
-
-### Core Documentation
-
-| Document | Description |
-|----------|-------------|
-| [INSTALL.md](INSTALL.md) | Installation instructions for all platforms |
-| [ENV.md](ENV.md) | Complete environment variable reference |
-| [FAQ.md](FAQ.md) | Frequently asked questions |
-| [PLUGINS.md](PLUGINS.md) | Plugin system guide |
-| [../README.md](../README.md) | Main project README |
-
-### Architecture Documentation
-
-| Document | Description |
-|----------|-------------|
-| [../ARCHITECTURE.md](../ARCHITECTURE.md) | System architecture overview |
-| [../API.md](../API.md) | API reference |
-| [../SYSTEMD.md](../SYSTEMD.md) | Systemd service configuration |
-
-### Plans and Design
-
-The `plans/` directory contains design documents and implementation plans for future features.
-
-## For Users
-
-### Getting Started
-1. Install Riku following [INSTALL.md](INSTALL.md)
-2. Set up your SSH key
-3. Deploy your first app with `git push`
-
-### Configuration
-- Use `ENV` file for environment variables
-- Use `Procfile` to define processes
-- Use `SCALING` file to scale workers
-- See [ENV.md](ENV.md) for all available options
-
-### Common Tasks
+### 1. Install Dependencies
 
 ```bash
-# Deploy an app
-git remote add riku deploy@server:appname
-git push riku master
+# Create virtual environment (optional but recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# View logs
-riku logs appname
-
-# Scale workers
-echo "web=4" > SCALING
-git add SCALING && git commit -m "scale"
-git push riku master
-
-# Set environment variables
-riku config:set appname KEY=value
-
-# Restart app
-riku restart appname
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-## For Developers
-
-### Building from Source
+### 2. Preview Locally
 
 ```bash
-git clone https://github.com/piku/piku.git
-cd piku
-cargo build
+# Start development server with live reload
+mkdocs serve
+
+# Open http://localhost:8000 in your browser
 ```
 
-### Running Tests
+### 3. Build Static Site
 
 ```bash
-# Run all tests
-cargo test
+# Build for production
+mkdocs build
 
-# Run deployment tests
-./tests/deploy/test-all.sh
-
-# Run Clippy lints
-cargo clippy
+# Output will be in the 'site/' directory
 ```
 
-### Project Structure
+### 4. Deploy
 
-```
-piku/
-├── src/                    # Rust source code
-│   ├── cli/               # Command-line interface
-│   ├── config/            # Configuration handling
-│   ├── deploy/            # Deployment logic
-│   ├── nginx/             # Nginx configuration
-│   ├── supervisor/        # Process supervisor
-│   └── util/              # Utility functions
-├── templates/              # Nginx templates
-├── tests/                  # Test scripts
-├── docs/                   # Documentation
-└── examples/               # Example applications
+Documentation is automatically deployed to GitHub Pages when you push to the `main` branch.
+
+Manual deployment:
+```bash
+# Build and deploy using mkdocs-gh-deploy (optional)
+pip install mkdocs-gh-deploy
+mkdocs gh-deploy
 ```
 
-### Key Components
+---
 
-- **Supervisor** (`src/supervisor/`) - Process management daemon
-- **Deploy** (`src/deploy/`) - Runtime-specific deployment logic
-- **Nginx** (`src/nginx.rs`) - Nginx configuration generation
-- **Config** (`src/config.rs`) - Configuration and paths
+## Directory Structure
 
-## For Contributors
+```
+docs-site/
+├── docs/                  # Documentation source files
+│   ├── index.md          # Home page
+│   ├── runtimes/         # Runtime-specific docs
+│   └── includes/         # Reusable content snippets
+├── site/                  # Generated site (after build)
+├── requirements.txt       # Python dependencies
+└── mkdocs.yml            # MkDocs configuration (root directory)
+```
 
-### How to Contribute
+---
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Make your changes
-4. Add tests for new features
-5. Run `cargo test` and `cargo clippy`
-6. Submit a pull request
+## Writing Documentation
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for detailed guidelines.
+### File Format
 
-### Documentation Guidelines
+All documentation is written in Markdown with MkDocs extensions:
 
-When adding documentation:
+```markdown
+# Page Title
 
-1. Use Markdown format
-2. Keep lines under 80 characters when possible
-3. Include code examples
-4. Update the index (this file) if adding new docs
-5. Use relative links for cross-references
+## Section
 
-## Environment Variables Reference
+Content here...
 
-See [ENV.md](ENV.md) for the complete list. Quick reference:
+=== "Tabbed Content"
+    ```python
+    print("Hello")
+    ```
 
-### Runtime
-- `PIKU_AUTO_RESTART` - Auto-restart on deploy
+!!! note "Note Title"
+    This is a note
 
-### Node.js
-- `NODE_VERSION` - Node.js version
-- `NODE_PACKAGE_MANAGER` - npm/yarn/pnpm
+!!! tip "Tip"
+    This is a tip
+```
 
-### Network
-- `BIND_ADDRESS` - Worker bind address
-- `DISABLE_IPV6` - Disable IPv6
+### Admonitions
 
-### Worker Management
-- `RIKU_WORKER_TIMEOUT` - Worker timeout
-- `RIKU_WORKER_GRACE_PERIOD` - Graceful shutdown
-- `RIKU_MAX_RESTARTS` - Max restart attempts
-- `RIKU_WORKER_PROCESSES` - Process scaling
+```markdown
+!!! note "Note"
+    Regular note
 
-### Nginx
-- `NGINX_SERVER_NAME` - Domain name
-- `NGINX_HTTPS_ONLY` - HTTPS redirect
-- `NGINX_CACHE_*` - Caching options
-- `NGINX_STATIC_PATHS` - Static file paths
+!!! tip "Tip"
+    Helpful tip
+
+!!! warning "Warning"
+    Warning message
+
+!!! danger "Danger"
+    Danger message
+
+!!! info "Info"
+    Information
+```
+
+### Code Blocks
+
+````markdown
+```python
+# Python code
+def hello():
+    print("Hello, World!")
+```
+
+```bash
+# Shell commands
+$ riku apps
+$ riku logs myapp
+```
+````
+
+### Tabbed Content
+
+```markdown
+=== "Python"
+    ```bash
+    pip install flask
+    ```
+
+=== "Node.js"
+    ```bash
+    npm install express
+    ```
+
+=== "Ruby"
+    ```bash
+    gem install sinatra
+    ```
+```
+
+---
+
+## Configuration
+
+The main configuration is in `mkdocs.yml` at the repository root:
+
+- **Site metadata**: name, description, author
+- **Theme**: Material for MkDocs
+- **Navigation**: Site structure
+- **Plugins**: Search, minify
+- **Extensions**: Markdown features
+
+---
+
+## Customization
+
+### Adding New Pages
+
+1. Create a new `.md` file in `docs/`
+2. Add to `nav:` in `mkdocs.yml`
+3. Write your content
+
+### Changing Theme Colors
+
+Edit `mkdocs.yml`:
+
+```yaml
+theme:
+  palette:
+    - scheme: default
+      primary: indigo  # Change this
+      accent: indigo   # Change this
+```
+
+Available colors: `red`, `pink`, `purple`, `deep-purple`, `indigo`, `blue`, `light-blue`, `cyan`, `teal`, `green`, `light-green`, `lime`, `yellow`, `amber`, `orange`, `deep-orange`, `brown`, `grey`, `blue-grey`
+
+### Adding Images
+
+1. Place images in `docs/img/`
+2. Reference in markdown:
+
+```markdown
+![Alt text](img/filename.png)
+```
+
+---
+
+## Testing
+
+### Check Links
+
+```bash
+mkdocs build --strict
+```
+
+### Validate Configuration
+
+```bash
+mkdocs --config-file mkdocs.yml validate
+```
+
+---
+
+## Deployment
+
+### Automatic (GitHub Actions)
+
+Documentation is automatically deployed when you push to `main`.
+
+### Manual
+
+```bash
+# Install deployment plugin
+pip install mkdocs-gh-deploy
+
+# Deploy
+mkdocs gh-deploy --force
+```
+
+---
 
 ## Troubleshooting
 
-### Common Issues
+### Build Fails
 
-**App won't start:**
 ```bash
-riku logs appname
-riku restart appname
+# Check for syntax errors
+mkdocs build --strict --verbose
 ```
 
-**Nginx errors:**
+### Links Not Working
+
+- Use relative paths: `[Link](other-page.md)`
+- Use absolute paths from docs root: `[Link](/section/page.md)`
+
+### Theme Not Loading
+
 ```bash
-sudo nginx -t
-sudo systemctl reload nginx
+# Clear cache and reinstall
+pip uninstall mkdocs-material
+pip install mkdocs-material
 ```
 
-**Permission denied:**
-```bash
-# Ensure you're the deploy user
-su - deploy
-```
+---
 
-### Getting Help
+## Resources
 
-1. Check the [FAQ](FAQ.md)
-2. Review example apps in `examples/`
-3. Open an issue on GitHub
-4. Check logs with `riku logs appname`
+- [MkDocs Documentation](https://www.mkdocs.org/)
+- [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/)
+- [Markdown Guide](https://www.markdownguide.org/)
 
-## Additional Resources
-
-- **GitHub Repository**: https://github.com/piku/piku
-- **Original Piku**: https://github.com/piku/piku (Python version)
-- **Rust Documentation**: https://doc.rust-lang.org/
-- **Nginx Documentation**: https://nginx.org/en/docs/
+---
 
 ## License
 
-This documentation is part of the Riku project and is available under the MIT License.
+Documentation is part of the Riku project and is available under the MIT License.

@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use std::env;
 use std::fs;
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -9,53 +9,265 @@ use std::process::Command;
 use crate::config::RikuPaths;
 use crate::util::{echo, setup_authorized_keys};
 
-/// Initialize the riku directory structure and install binary.
 #[allow(dead_code)]
-pub fn cmd_setup_init(paths: &RikuPaths) -> Result<()> {
-    // First, try to install riku binary to user's PATH
-    install_riku_binary()?;
+/// Install systemd service files for riku daemon (system-wide, requires root)
+fn install_systemd_service(_paths: &RikuPaths) -> Result<()> {
+    // Check if we're running as root (required for systemd installation)
+    if env::var("USER").unwrap_or_default() != "root" {
+        return Ok(()); // Skip if not root
+    }
 
-    let dirs: Vec<&PathBuf> = vec![
-        &paths.app_root,
-        &paths.cache_root,
-        &paths.data_root,
-        &paths.git_root,
-        &paths.env_root,
-        &paths.workers_root,
-        &paths.workers_available,
-        &paths.workers_enabled,
-        &paths.log_root,
-        &paths.nginx_root,
+    // Find the riku binary location
+    let riku_binary = env::current_exe()?;
+    let riku_binary_path = riku_binary.to_string_lossy();
+
+    // Get the actual deploy user's home directory from system
+    // Default to "deploy" but can be overridden by RIKU_USER env var
+    let deploy_user = env::var("RIKU_USER").unwrap_or_else(|_| "deploy".to_string());
+    let deploy_home = match Command::new("getent")
+        .arg("passwd")
+        .arg(&deploy_user)
+        .output()
+    {
+        Ok(output) => {
+            if output.status.success() {
+                let line = String::from_utf8_lossy(&output.stdout);
+                line.split(':')
+                    .nth(5)
+                    .unwrap_or(&format!("/home/{}", deploy_user))
+                    .to_string()
+            } else {
+                format!("/home/{}", deploy_user)
+            }
+        }
+        Err(_) => format!("/home/{}", deploy_user),
+    };
+
+    // Create systemd directory if needed
+    let systemd_dir = Path::new("/etc/systemd/system");
+    if !systemd_dir.exists() {
+        fs::create_dir_all(systemd_dir)?;
+    }
+
+    // Create riku.service file
+    let service_content = format!(
+        r#"[Unit]
+Description=Riku Process Supervisor
+Documentation=https://dreygur.github.io/riku/
+After=network.target nginx.service
+Wants=nginx.service
+
+[Service]
+Type=simple
+User={deploy_user}
+Group={deploy_user}
+WorkingDirectory={deploy_home}
+ExecStart={riku_bin} supervisor
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=riku
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+
+# Allow writing to riku directories
+ReadWritePaths={deploy_home}/.riku
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target
+"#,
+        deploy_user = deploy_user,
+        deploy_home = deploy_home,
+        riku_bin = riku_binary_path
+    );
+
+    let service_path = systemd_dir.join("riku.service");
+    fs::write(&service_path, &service_content)?;
+    echo(
+        &format!("✓ Created systemd service at {}", service_path.display()),
+        "green",
+    );
+
+    // Create nginx path watcher
+    let nginx_path_content = format!(
+        r#"[Unit]
+Description=Watch for Riku nginx configuration changes
+Documentation=https://dreygur.github.io/riku/
+PartOf=riku.service
+
+[Path]
+PathModified={deploy_home}/.riku/nginx
+Unit=riku-nginx-reload.service
+
+[Install]
+WantedBy=multi-user.target
+"#,
+        deploy_home = deploy_home
+    );
+
+    let nginx_path = systemd_dir.join("riku-nginx.path");
+    fs::write(&nginx_path, nginx_path_content)?;
+
+    // Create nginx reload service
+    let nginx_reload_content = r#"[Unit]
+Description=Reload nginx when Riku configuration changes
+Documentation=https://dreygur.github.io/riku/
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl reload nginx
+
+[Install]
+WantedBy=multi-user.target
+"#;
+
+    let nginx_reload = systemd_dir.join("riku-nginx-reload.service");
+    fs::write(&nginx_reload, nginx_reload_content)?;
+
+    // Reload systemd and enable service
+    echo("Enabling riku systemd service...", "green");
+    if let Ok(output) = Command::new("systemctl").arg("daemon-reload").output() {
+        if output.status.success() {
+            echo("✓ Reloaded systemd daemon", "green");
+        }
+    }
+
+    if let Ok(output) = Command::new("systemctl").args(["enable", "riku"]).output() {
+        if output.status.success() {
+            echo("✓ Enabled riku service (starts on boot)", "green");
+        }
+    }
+
+    if let Ok(output) = Command::new("systemctl").args(["start", "riku"]).output() {
+        if output.status.success() {
+            echo("✓ Started riku service", "green");
+
+            // Verify supervisor is running
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            if let Ok(status) = Command::new("systemctl")
+                .args(["is-active", "riku"])
+                .output()
+            {
+                if String::from_utf8_lossy(&status.stdout).trim() == "active" {
+                    echo("✓ Supervisor daemon is running", "green");
+                }
+            }
+        }
+    }
+
+    // Enable nginx auto-reload
+    if let Ok(output) = Command::new("systemctl")
+        .args(["enable", "riku-nginx.path"])
+        .output()
+    {
+        if output.status.success() {
+            echo("✓ Enabled nginx auto-reload watcher", "green");
+        }
+    }
+
+    if let Ok(output) = Command::new("systemctl")
+        .args(["start", "riku-nginx.path"])
+        .output()
+    {
+        if output.status.success() {
+            echo("✓ Started nginx auto-reload watcher", "green");
+        }
+    }
+
+    Ok(())
+}
+
+/// Install default nginx configuration
+#[allow(dead_code)]
+fn install_nginx_default_config() -> Result<()> {
+    // Check if we're running as root (required for nginx configuration)
+    if env::var("USER").unwrap_or_default() != "root" {
+        return Ok(()); // Skip if not root
+    }
+
+    // Find the contrib/nginx/default.conf file
+    // Try multiple possible locations
+    let possible_paths = [
+        "contrib/nginx/default.conf",
+        "/usr/share/riku/nginx/default.conf",
+        "/etc/riku/nginx/default.conf",
     ];
 
-    for dir in &dirs {
-        if !dir.exists() {
-            echo(&format!("Creating '{}'.", dir.display()), "green");
-            fs::create_dir_all(dir)?;
+    let source_path = possible_paths
+        .iter()
+        .find(|p| std::path::Path::new(p).exists())
+        .map(|s| s.to_string());
+
+    let source_path = match source_path {
+        Some(p) => p,
+        None => return Ok(()), // Skip if template not found
+    };
+
+    // Determine nginx config directory
+    let nginx_conf_dir = if std::path::Path::new("/etc/nginx/sites-available").exists() {
+        "/etc/nginx/sites-available"
+    } else if std::path::Path::new("/etc/nginx/conf.d").exists() {
+        "/etc/nginx/conf.d"
+    } else {
+        return Ok(()); // Skip if nginx not installed
+    };
+
+    let dest_path = std::path::Path::new(nginx_conf_dir).join("riku-default.conf");
+
+    // Copy the default config
+    echo("Installing default nginx configuration...", "green");
+    fs::copy(&source_path, &dest_path)?;
+    echo(&format!("✓ Created {}", dest_path.display()), "green");
+
+    // Enable the config (for sites-available)
+    if nginx_conf_dir.contains("sites-available") {
+        let sites_enabled = std::path::Path::new("/etc/nginx/sites-enabled/riku-default.conf");
+        if !sites_enabled.exists() {
+            std::os::unix::fs::symlink(&dest_path, sites_enabled)?;
+            echo("✓ Enabled nginx configuration", "green");
         }
     }
 
-    // Mark riku script as executable if it isn't already
-    let script = &paths.riku_script;
-    if script.exists() {
-        let meta = fs::metadata(script)?;
-        let mode = meta.permissions().mode();
-        if mode & 0o100 == 0 {
-            echo(
-                &format!("Setting '{}' as executable.", script.display()),
-                "yellow",
-            );
-            fs::set_permissions(script, fs::Permissions::from_mode(mode | 0o100))?;
+    // Test nginx configuration
+    if let Ok(output) = Command::new("nginx").arg("-t").output() {
+        if output.status.success() {
+            echo("✓ Nginx configuration is valid", "green");
+
+            // Reload nginx if it's running
+            if let Ok(status) = Command::new("systemctl")
+                .arg("is-active")
+                .arg("nginx")
+                .output()
+            {
+                if String::from_utf8_lossy(&status.stdout).trim() == "active" {
+                    if let Ok(_) = Command::new("systemctl")
+                        .arg("reload")
+                        .arg("nginx")
+                        .output()
+                    {
+                        echo("✓ Reloaded nginx", "green");
+                    }
+                }
+            }
+        } else {
+            echo("⚠ Nginx configuration test failed", "yellow");
         }
     }
-
-    echo("Riku initialized successfully!", "green");
-    echo("Run 'riku --help' for available commands.", "");
 
     Ok(())
 }
 
 /// Install riku binary to user's PATH
+#[allow(dead_code)]
 fn install_riku_binary() -> Result<()> {
     // Get current executable path
     let current_exe = env::current_exe()?;
@@ -114,6 +326,7 @@ fn install_riku_binary() -> Result<()> {
 }
 
 /// Get the best directory to install riku binary
+#[allow(dead_code)]
 fn get_install_directory() -> Result<PathBuf> {
     // Try common installation directories in order of preference
 
@@ -144,6 +357,7 @@ fn get_install_directory() -> Result<PathBuf> {
 }
 
 /// Check if a directory is in the PATH environment variable
+#[allow(dead_code)]
 fn is_in_path(dir: &Path) -> bool {
     if let Ok(path) = env::var("PATH") {
         for path_dir in env::split_paths(&path) {
@@ -153,68 +367,6 @@ fn is_in_path(dir: &Path) -> bool {
         }
     }
     false
-}
-
-/// Set up a new SSH key. Use "-" for stdin.
-#[allow(dead_code)]
-pub fn cmd_setup_ssh(paths: &RikuPaths, public_key_file: &str) -> Result<()> {
-    if public_key_file == "-" {
-        // Read from stdin, write to a temp file, then process
-        let mut buffer = String::new();
-        io::stdin().read_to_string(&mut buffer)?;
-
-        let tmp_dir = std::env::temp_dir();
-        let tmp_file = tmp_dir.join("piku_ssh_tmp_key.pub");
-        fs::write(&tmp_file, &buffer)?;
-
-        let result = add_ssh_key(paths, &tmp_file);
-        let _ = fs::remove_file(&tmp_file);
-        result
-    } else {
-        let key_path = PathBuf::from(public_key_file);
-        if !key_path.exists() {
-            echo(
-                &format!("Error: public key file '{}' not found.", public_key_file),
-                "red",
-            );
-            bail!("Public key file not found");
-        }
-        add_ssh_key(paths, &key_path)
-    }
-}
-
-#[allow(dead_code)]
-fn add_ssh_key(paths: &RikuPaths, key_file: &PathBuf) -> Result<()> {
-    // Get fingerprint via ssh-keygen
-    let output = Command::new("ssh-keygen")
-        .arg("-lf")
-        .arg(key_file)
-        .output()?;
-
-    if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr);
-        echo(
-            &format!(
-                "Error: invalid public key file '{}': {}",
-                key_file.display(),
-                err
-            ),
-            "red",
-        );
-        bail!("Invalid public key file");
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let fingerprint = stdout.split_whitespace().nth(1).unwrap_or("").to_string();
-
-    let key = fs::read_to_string(key_file)?.trim().to_string();
-
-    echo(&format!("Adding key '{}'.", fingerprint), "");
-
-    let script_path = paths.riku_script.to_string_lossy().to_string();
-    setup_authorized_keys(&fingerprint, &script_path, &key)?;
-
-    Ok(())
 }
 
 #[allow(dead_code)]
@@ -228,6 +380,41 @@ fn num_cpus() -> usize {
 /// Creates directory structure, optionally sets up systemd, and configures SSH keys.
 pub fn cmd_init(no_systemd: bool) -> Result<()> {
     let paths = RikuPaths::from_env();
+
+    // Check if running as root for full installation
+    let is_root = env::var("USER").unwrap_or_default() == "root";
+    
+    if !is_root {
+        echo("⚠ Warning: Not running as root", "yellow");
+        echo("  Some features require root privileges:", "yellow");
+        echo("    - System-wide systemd service", "yellow");
+        echo("    - Nginx configuration", "yellow");
+        echo("  Run 'sudo riku init' for full installation.", "yellow");
+        echo("", "");
+    }
+
+    // Prerequisites check
+    echo("Checking prerequisites...", "");
+    let mut missing_deps = Vec::new();
+    
+    // Check git
+    if Command::new("git").arg("--version").output().is_err() {
+        missing_deps.push("git");
+    }
+    
+    // Check nginx (warning only)
+    let has_nginx = Command::new("nginx").arg("-v").output().is_ok();
+    if !has_nginx && is_root {
+        echo("  ⚠ nginx not found - install for web serving", "yellow");
+    }
+    
+    if !missing_deps.is_empty() {
+        echo(&format!("  ⚠ Missing dependencies: {}", missing_deps.join(", ")), "yellow");
+        echo(&format!("  Install with: apt install {}", missing_deps.join(" ")), "yellow");
+    } else {
+        echo("  ✓ All required dependencies found", "green");
+    }
+    echo("", "");
 
     echo("-----> Initializing Riku server...", "");
     echo("", "");
@@ -302,11 +489,58 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
     echo("", "");
     echo("-----> Riku server initialized successfully!", "green");
     echo("", "");
-    echo("Your server is ready to receive deployments.", "green");
+    
+    // Post-init verification
+    echo("Verification:", "green");
+    
+    // Check binary
+    let riku_path = &paths.riku_script;
+    if riku_path.exists() {
+        echo(&format!("  ✓ Binary installed: {}", riku_path.display()), "green");
+    } else {
+        echo(&format!("  ⚠ Binary not found: {}", riku_path.display()), "yellow");
+    }
+    
+    // Check supervisor
+    if !no_systemd {
+        let status = Command::new("systemctl")
+            .args(["--user", "is-active", "riku"])
+            .output();
+
+        if let Ok(output) = status {
+            if output.status.success() {
+                echo("  ✓ Supervisor running", "green");
+            } else {
+                echo(
+                    "  ⚠ Supervisor not running (start with: systemctl --user start riku)",
+                    "yellow",
+                );
+            }
+        }
+    } else {
+        echo(
+            "  ℹ Supervisor not started (start manually with: riku supervisor)",
+            "yellow",
+        );
+    }
+    
     echo("", "");
-    echo("From your local machine:", "");
-    echo("  git remote add riku deploy@your-server:myapp", "");
-    echo("  git push riku master", "");
+    
+    // First app guide
+    echo("Deploy your first app:", "green");
+    echo("", "");
+    echo("1. Create app directory on your local machine:", "yellow");
+    echo("   mkdir myapp && cd myapp", "yellow");
+    echo("   git init", "yellow");
+    echo("", "");
+    echo("2. Add your code and create a Procfile:", "yellow");
+    echo("   echo 'web: python app.py' > Procfile", "yellow");
+    echo("", "");
+    echo("3. Deploy:", "yellow");
+    echo(&format!("   git remote add riku {}@your-server:myapp", env::var("USER").unwrap_or_else(|_| "deploy".to_string())), "yellow");
+    echo("   git push riku master", "yellow");
+    echo("", "");
+    echo("Documentation: https://dreygur.github.io/riku/", "green");
     echo("", "");
 
     Ok(())

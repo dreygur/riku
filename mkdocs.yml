@@ -7,10 +7,10 @@ repo_name: dreygur/riku
 repo_url: https://github.com/dreygur/riku
 
 # Documentation source directory
-docs_dir: docs-site/docs
+docs_dir: docs/docs
 
 # Site output directory
-site_dir: docs-site/site
+site_dir: docs/site
 
 theme:
   name: material
@@ -49,17 +49,17 @@ theme:
 nav:
   - Home: index.md
   - Getting Started:
-    - Quick Start: quick-start.md
-    - Installation: installation.md
+      - Quick Start: quick-start.md
+      - Installation: installation.md
   - Reference:
-    - CLI: cli.md
-    - Environment Variables: env.md
-    - Runtimes: runtimes.md
-    - Nginx: nginx.md
-    - Supervisor: supervisor.md
-    - Plugins: plugins.md
-    - AI Agents: ai-agents.md
-    - Systemd: systemd.md
+      - CLI: cli.md
+      - Environment Variables: env.md
+      - Runtimes: runtimes.md
+      - Nginx: nginx.md
+      - Supervisor: supervisor.md
+      - Plugins: plugins.md
+      - AI Agents: ai-agents.md
+      - Systemd: systemd.md
   - FAQ: faq.md
   - GitHub: https://github.com/dreygur/riku
 

@@ -1,6 +1,6 @@
 [Unit]
-Description=Riku Nginx Config Monitor
-Documentation=https://github.com/dreygur/riku
+Description=Reload nginx when Riku configuration changes
+Documentation=https://dreygur.github.io/riku/
 
 [Service]
 Type=oneshot

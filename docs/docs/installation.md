@@ -1,42 +1,34 @@
-# Installation - Riku
+# Installation
 
 ## TL;DR
 
 To install Riku on your server, `ssh` in as `root` and run:
 
 ```bash
-curl https://riku.github.io/get | sh
-```
+# Download the latest release binary
+curl -LO https://github.com/dreygur/riku/releases/latest/download/riku-linux-amd64.tar.gz
+tar -xzf riku-linux-amd64.tar.gz
+chmod +x riku
 
-Or manually:
-
-```bash
-# Install Rust (if not already installed)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Clone and build Riku
-git clone https://github.com/piku/piku.git
-cd piku
-cargo build --release
-sudo cp target/release/riku /usr/local/bin/
+# Run init (automatically installs riku to ~/.local/bin)
+./riku init
 
 # Create deploy user
 sudo adduser --disabled-password --gecos '' deploy
 sudo su - deploy
 
-# Initialize Riku
-riku setup init
-
 # Add your SSH public key
 riku setup ssh ~/.ssh/id_rsa.pub
 ```
+
+After running `riku init`, the binary will be installed to `~/.local/bin/riku` and you can use `riku` from anywhere.
 
 ## Installation Methods
 
 There are several ways to install Riku:
 
-1. **Automated script** - Use the installation script (recommended)
-2. **Manual installation** - Follow the guide below
+1. **Release binary** - Download pre-built binary (recommended)
+2. **Build from source** - Follow the manual installation guide below
 3. **Cloud-init** - Automatic VPS setup (see `cloud-init` repository)
 4. **Ansible** - Use the Ansible playbook (coming soon)
 5. **Docker** - Run Riku in a container (experimental)
@@ -75,8 +67,8 @@ source $HOME/.cargo/env
 ### Step 2: Build Riku
 
 ```bash
-git clone https://github.com/piku/piku.git
-cd piku
+git clone https://github.com/dreygur/riku.git
+cd riku
 cargo build --release
 ```
 
@@ -89,12 +81,20 @@ sudo chmod +x /usr/local/bin/riku
 
 ### Step 4: Create Deploy User
 
-Riku requires a separate user account:
+Riku requires a separate user account. The default is `deploy`, but you can use any username:
 
 ```bash
+# Default: deploy user
 sudo adduser --disabled-password --gecos '' deploy
 sudo su - deploy
+
+# Or use a custom username
+sudo adduser --disabled-password --gecos '' riku
+sudo su - riku
+export RIKU_USER=riku  # Tell riku to use this username
 ```
+
+**Note:** If using a custom username, set `RIKU_USER` before running `riku init` so systemd services are configured correctly.
 
 ### Step 5: Initialize Riku
 
@@ -161,8 +161,8 @@ sudo apt install -y git nginx curl build-essential
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Build and install Riku
-git clone https://github.com/piku/piku.git
-cd piku
+git clone https://github.com/dreygur/riku.git
+cd riku
 cargo build --release
 sudo cp target/release/riku /usr/local/bin/
 
@@ -171,7 +171,7 @@ sudo adduser --disabled-password --gecos '' deploy
 sudo su - deploy
 
 # Initialize
-riku setup init
+riku init
 ```
 
 ### CentOS/RHEL
@@ -187,8 +187,8 @@ sudo yum install -y git nginx curl gcc
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Build and install Riku
-git clone https://github.com/piku/piku.git
-cd piku
+git clone https://github.com/dreygur/riku.git
+cd riku
 cargo build --release
 sudo cp target/release/riku /usr/local/bin/
 
@@ -197,7 +197,7 @@ sudo adduser -m deploy
 sudo su - deploy
 
 # Initialize
-riku setup init
+riku init
 ```
 
 ### Arch Linux
@@ -207,8 +207,8 @@ riku setup init
 sudo pacman -S git nginx curl rust
 
 # Build and install Riku
-git clone https://github.com/piku/piku.git
-cd piku
+git clone https://github.com/dreygur/riku.git
+cd riku
 cargo build --release
 sudo cp target/release/riku /usr/local/bin/
 
@@ -217,7 +217,7 @@ sudo useradd -m deploy
 sudo su - deploy
 
 # Initialize
-riku setup init
+riku init
 ```
 
 ## Post-Installation
@@ -282,7 +282,7 @@ To upgrade to the latest version:
 
 ```bash
 # Pull latest changes
-cd ~/piku
+cd ~/riku
 git pull
 
 # Rebuild
@@ -291,7 +291,7 @@ cargo build --release
 # Install new binary
 cp target/release/riku /usr/local/bin/
 
-# Restart supervisor
+# Restart supervisor (if running as user service)
 systemctl --user restart riku
 ```
 
