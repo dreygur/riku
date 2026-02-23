@@ -83,7 +83,13 @@ fn main() -> Result<()> {
         Commands::Stop { app } => cli::apps::cmd_stop(&paths, &app)?,
         Commands::Init { no_systemd } => cli::setup::cmd_init(no_systemd)?,
         Commands::Update => cli::apps::cmd_update()?,
-        Commands::Supervisor => cli::apps::cmd_supervisor(&paths)?,
+        Commands::Supervisor { daemon } => {
+            if daemon {
+                cli::apps::cmd_supervisor_daemon(&paths)?;
+            } else {
+                cli::apps::cmd_supervisor(&paths)?;
+            }
+        }
         Commands::Plugin(cmd) => match cmd {
             PluginCmd::List => {
                 let plugins = client_plugins::list_client_plugins()?;
@@ -143,7 +149,7 @@ fn get_plugin_command(command: &Commands) -> Option<String> {
         // Core commands that shouldn't be overridden
         Commands::Init { .. } => None,
         Commands::Update => None,
-        Commands::Supervisor => None,
+        Commands::Supervisor { .. } => None,
         Commands::GitHook { .. } => None,
         Commands::GitReceivePack { .. } => None,
         Commands::GitUploadPack { .. } => None,

@@ -49,6 +49,16 @@ pub fn cmd_setup_init(paths: &RikuPaths) -> Result<()> {
         }
     }
 
+    // Start supervisor daemon in background
+    echo("Starting supervisor daemon...", "green");
+    if let Err(e) = crate::cli::apps::cmd_supervisor_daemon(paths) {
+        echo(
+            &format!("Warning: Failed to start supervisor: {}", e),
+            "yellow",
+        );
+        echo("You can start it manually with: riku supervisor", "");
+    }
+
     echo("Riku initialized successfully!", "green");
     echo("Run 'riku --help' for available commands.", "");
 

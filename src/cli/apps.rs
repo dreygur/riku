@@ -479,6 +479,52 @@ pub fn cmd_supervisor(paths: &RikuPaths) -> Result<()> {
     supervisor.run()
 }
 
+/// Start the supervisor daemon in the background.
+pub fn cmd_supervisor_daemon(_paths: &RikuPaths) -> Result<()> {
+    use std::process::{Command, Stdio};
+
+    // Get current executable path
+    let current_exe = std::env::current_exe()?;
+
+    // Start supervisor as background process
+    Command::new(current_exe)
+        .arg("supervisor")
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(std::fs::File::create(
+            "/tmp/riku-supervisor.out",
+        )?))
+        .stderr(Stdio::from(std::fs::File::create(
+            "/tmp/riku-supervisor.err",
+        )?))
+        .spawn()?;
+
+    // Wait a moment for supervisor to start
+    std::thread::sleep(std::time::Duration::from_secs(1));
+
+    // Check if supervisor started successfully
+    if std::path::Path::new("/tmp/riku-supervisor.out").exists() {
+        let output = std::fs::read_to_string("/tmp/riku-supervisor.out").unwrap_or_default();
+        if output.contains("Supervisor running") {
+            println!("✓ Supervisor started in background");
+            println!("  Logs: /tmp/riku-supervisor.out");
+            println!("  Errors: /tmp/riku-supervisor.err");
+            println!("  To stop: kill $(pgrep -f 'riku supervisor')");
+            return Ok(());
+        }
+    }
+
+    // If we get here, something went wrong
+    if std::path::Path::new("/tmp/riku-supervisor.err").exists() {
+        let errors = std::fs::read_to_string("/tmp/riku-supervisor.err").unwrap_or_default();
+        if !errors.is_empty() {
+            eprintln!("Supervisor failed to start: {}", errors);
+        }
+    }
+
+    eprintln!("Failed to start supervisor daemon");
+    std::process::exit(1);
+}
+
 // --- Internal helpers ---
 
 /// Stop an app by removing its enabled worker config files.
