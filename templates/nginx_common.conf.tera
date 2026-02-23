@@ -3,7 +3,7 @@ large_client_header_buffers 4 16k;
 
 location ^~ /.well-known/acme-challenge {
   allow all;
-  root ${ACME_WWW};
+  root {{ ACME_WWW }};
 }
 
 {% if NGINX_CLOUDFLARE_ACL == "true" %}
