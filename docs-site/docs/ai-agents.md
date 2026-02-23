@@ -50,6 +50,49 @@ ssh -i ~/.ssh/riku-cursor deploy@your-server "riku agent --intro"
 
 ---
 
+## SSH Key Setup
+
+### authorized_keys Format
+
+Each line in `~/.ssh/authorized_keys` can include restrictions before the key:
+
+```
+command="riku agent --scope SCOPE",no-port-forwarding,no-pty,no-X11-forwarding ssh-ed25519 AAAA... comment
+```
+
+### Example authorized_keys Entries
+
+```bash
+# Read-only AI agent (monitoring, logs, config:get)
+command="riku agent --scope readonly",no-port-forwarding,no-pty ssh-ed25519 AAAA... monitoring-agent
+
+# Staging deployment AI agent (can deploy to staging)
+command="riku agent --scope staging",no-port-forwarding,no-pty ssh-ed25519 BBBB... cursor-staging
+
+# Production AI agent (full access, use with caution)
+command="riku agent --scope production",no-port-forwarding ssh-ed25519 CCCC... claude-production
+
+# Agent with specific app restriction (advanced)
+command="riku agent --scope staging --app myapp",no-port-forwarding,no-pty ssh-ed25519 DDDD... limited-agent
+```
+
+### SSH Key Options Explained
+
+| Option | Purpose |
+|--------|---------|
+| `command="..."` | Restrict to specific command with scope |
+| `no-port-forwarding` | Prevent SSH tunneling |
+| `no-pty` | No interactive shell (required for automation) |
+| `no-X11-forwarding` | Disable X11 forwarding |
+| `from="IP"` | Only allow from specific IP addresses |
+
+**Recommended minimum configuration:**
+```bash
+command="riku agent --scope staging",no-port-forwarding,no-pty,no-X11-forwarding ssh-ed25519 ...
+```
+
+---
+
 ## Authentication & Permissions
 
 ### SSH Key Scopes
@@ -58,38 +101,9 @@ Configure permissions in `~/.ssh/authorized_keys`:
 
 | Scope | Permissions |
 |-------|-------------|
-| `readonly` | `apps`, `logs`, `ps`, `config:get` |
-| `staging` | All readonly + deploy to staging apps |
-| `production` | Full access (including destructive actions) |
-| `custom` | Define custom permission set |
-
-### Example authorized_keys Entries
-
-```bash
-# Read-only AI agent (monitoring, logs)
-command="riku agent --scope readonly",no-port-forwarding,no-pty ssh-ed25519 AAAA... monitoring-agent
-
-# Staging deployment AI agent
-command="riku agent --scope staging",no-port-forwarding,no-pty ssh-ed25519 BBBB... cursor-staging
-
-# Full access AI agent (use with caution)
-command="riku agent --scope production",no-port-forwarding ssh-ed25519 CCCC... claude-production
-```
-
-### SSH Key Options
-
-| Option | Purpose |
-|--------|---------|
-| `command="..."` | Restrict to specific command |
-| `no-port-forwarding` | Prevent SSH tunneling |
-| `no-pty` | No interactive shell |
-| `no-X11-forwarding` | Disable X11 forwarding |
-| `from="IP"` | Only allow from specific IP |
-
-**Recommended minimum:**
-```bash
-command="riku agent --scope staging",no-port-forwarding,no-pty,no-X11-forwarding ssh-ed25519 ...
-```
+| `readonly` | `apps`, `logs`, `ps`, `config:get`, `config:show`, `stats` |
+| `staging` | All readonly + `deploy`, `restart`, `run`, `config:set`, `config:unset` |
+| `production` | Full access including `destroy`, `stop` |
 
 ---
 
