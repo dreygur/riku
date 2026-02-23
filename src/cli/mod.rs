@@ -19,7 +19,10 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// List deployed apps
-    Apps,
+    Apps {
+        #[command(subcommand)]
+        cmd: Option<AppsCmd>,
+    },
 
     /// AI agent interface (SSH-based automation)
     Agent {
@@ -253,6 +256,16 @@ pub enum PluginCmd {
     /// Check if a plugin exists
     Exists {
         /// Plugin name
+        name: String,
+    },
+}
+
+/// Apps subcommands
+#[derive(Subcommand, Debug)]
+pub enum AppsCmd {
+    /// Create a new application
+    Create {
+        /// Application name
         name: String,
     },
 }

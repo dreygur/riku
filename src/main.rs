@@ -11,7 +11,7 @@ use clap::Parser;
 
 use cli::client_plugins;
 use cli::container;
-use cli::{Cli, Commands, ConfigCmd, PluginCmd, PsCmd, StatsCmd};
+use cli::{AppsCmd, Cli, Commands, ConfigCmd, PluginCmd, PsCmd, StatsCmd};
 use config::RikuPaths;
 
 fn main() -> Result<()> {
@@ -50,7 +50,10 @@ fn main() -> Result<()> {
                 cli::agent::cmd_agent_help(None)?;
             }
         }
-        Commands::Apps => cli::apps::cmd_apps(&paths)?,
+        Commands::Apps { cmd } => match cmd {
+            Some(AppsCmd::Create { name }) => cli::apps::cmd_apps_create(&paths, &name)?,
+            None => cli::apps::cmd_apps(&paths)?,
+        },
         Commands::Config(cmd) => match cmd {
             ConfigCmd::Show { app } => cli::apps::cmd_config_show(&paths, &app)?,
             ConfigCmd::Get { app, key } => cli::apps::cmd_config_get(&paths, &app, &key)?,
@@ -122,7 +125,7 @@ fn main() -> Result<()> {
 fn get_plugin_command(command: &Commands) -> Option<String> {
     match command {
         // These commands can be overridden by client plugins
-        Commands::Apps => Some("apps".to_string()),
+        Commands::Apps { .. } => Some("apps".to_string()),
         Commands::Config(_) => Some("config".to_string()),
         Commands::Deploy { .. } => Some("deploy".to_string()),
         Commands::Destroy { .. } => Some("destroy".to_string()),
@@ -163,7 +166,7 @@ fn build_plugin_args(command: &Commands) -> Vec<String> {
 
     // $2: app name and $3+: command-specific args
     match command {
-        Commands::Apps => {
+        Commands::Apps { .. } => {
             args.push(String::new()); // No app for apps list
             args.push("apps".to_string());
         }
