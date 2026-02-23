@@ -1036,17 +1036,16 @@ fn cmd_agent_logs(paths: &RikuPaths, app: &str, process: &str) -> AgentResponse 
         if let Ok(entries) = fs::read_dir(&log_dir) {
             for entry in entries.filter_map(|e| e.ok()) {
                 let path = entry.path();
-                if path.extension().map(|e| e == "log").unwrap_or(false) {
-                    if process == "*"
+                if path.extension().map(|e| e == "log").unwrap_or(false)
+                    && (process == "*"
                         || path
                             .file_stem()
                             .map(|s| s.to_string_lossy().contains(process))
-                            .unwrap_or(false)
-                    {
-                        if let Ok(content) = fs::read_to_string(&path) {
-                            for line in content.lines().take(100) {
-                                lines.push(line.to_string());
-                            }
+                            .unwrap_or(false))
+                {
+                    if let Ok(content) = fs::read_to_string(&path) {
+                        for line in content.lines().take(100) {
+                            lines.push(line.to_string());
                         }
                     }
                 }
