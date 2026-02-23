@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 
+pub mod agent;
 pub mod apps;
 pub mod client_plugins;
 pub mod container;
@@ -19,6 +20,37 @@ pub struct Cli {
 pub enum Commands {
     /// List deployed apps
     Apps,
+
+    /// AI agent interface (SSH-based automation)
+    Agent {
+        /// Show agent introduction and permissions
+        #[arg(long)]
+        intro: bool,
+
+        /// Show full command schema (JSON)
+        #[arg(long)]
+        schema: bool,
+
+        /// Show help for a command
+        #[arg(long, name = "agent-help")]
+        agent_help: bool,
+
+        /// Command to execute
+        #[arg()]
+        command: Option<String>,
+
+        /// Arguments for the command
+        #[arg(last = true)]
+        args: Vec<String>,
+
+        /// Confirmation token for destructive actions
+        #[arg(long)]
+        confirm: Option<String>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
 
     /// Manage app configuration
     #[command(subcommand)]

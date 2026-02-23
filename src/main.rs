@@ -29,6 +29,19 @@ fn main() -> Result<()> {
     }
 
     match args.command {
+        Commands::Agent { intro, schema, agent_help, command, args, confirm, json: _ } => {
+            if intro {
+                cli::agent::cmd_agent_intro(&paths)?;
+            } else if schema {
+                cli::agent::cmd_agent_schema()?;
+            } else if agent_help {
+                cli::agent::cmd_agent_help(command.as_deref())?;
+            } else if let Some(cmd) = command {
+                cli::agent::cmd_agent_execute(&paths, &cmd, &args, confirm.as_deref())?;
+            } else {
+                cli::agent::cmd_agent_help(None)?;
+            }
+        }
         Commands::Apps => cli::apps::cmd_apps(&paths)?,
         Commands::Config(cmd) => match cmd {
             ConfigCmd::Show { app } => cli::apps::cmd_config_show(&paths, &app)?,
@@ -115,6 +128,9 @@ fn get_plugin_command(command: &Commands) -> Option<String> {
 
         // Plugin command - don't recursively check for plugins
         Commands::Plugin(_) => None,
+        
+        // Agent command - don't check for plugins
+        Commands::Agent { .. } => None,
 
         // Core commands that shouldn't be overridden
         Commands::Init { .. } => None,
