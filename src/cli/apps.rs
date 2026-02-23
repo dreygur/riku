@@ -19,6 +19,9 @@ pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
     let app_root = &paths.app_root;
     if !app_root.exists() {
         echo("There are no applications deployed.", "");
+        echo("Deploy your first app:", "yellow");
+        echo("  git remote add riku deploy@your-server:myapp", "yellow");
+        echo("  git push riku master", "yellow");
         return Ok(());
     }
 
@@ -30,6 +33,9 @@ pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
 
     if apps.is_empty() {
         echo("There are no applications deployed.", "");
+        echo("Deploy your first app:", "yellow");
+        echo("  git remote add riku deploy@your-server:myapp", "yellow");
+        echo("  git push riku master", "yellow");
         return Ok(());
     }
 
