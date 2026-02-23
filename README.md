@@ -85,9 +85,15 @@ curl -LO https://github.com/dreygur/riku/releases/latest/download/riku-linux-amd
 tar -xzf riku-linux-amd64.tar.gz
 chmod +x riku
 
-# Initialize (auto-installs to ~/.local/bin)
-./riku init
+# Initialize as root (auto-installs everything)
+sudo ./riku init
 ```
+
+When running `riku init` as root, it automatically:
+- Installs riku binary to `~/.local/bin`
+- Creates systemd service (starts on boot)
+- Starts supervisor daemon
+- Enables nginx auto-reload
 
 ### Build from Source
 
