@@ -381,6 +381,18 @@ fn num_cpus() -> usize {
 pub fn cmd_init(no_systemd: bool) -> Result<()> {
     let paths = RikuPaths::from_env();
 
+    // Check if running as root for full installation
+    let is_root = env::var("USER").unwrap_or_default() == "root";
+    
+    if !is_root {
+        echo("⚠ Warning: Not running as root", "yellow");
+        echo("  Some features require root privileges:", "yellow");
+        echo("    - System-wide systemd service", "yellow");
+        echo("    - Nginx configuration", "yellow");
+        echo("  Run 'sudo riku init' for full installation.", "yellow");
+        echo("", "");
+    }
+
     echo("-----> Initializing Riku server...", "");
     echo("", "");
 
@@ -454,11 +466,58 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
     echo("", "");
     echo("-----> Riku server initialized successfully!", "green");
     echo("", "");
-    echo("Your server is ready to receive deployments.", "green");
+    
+    // Post-init verification
+    echo("Verification:", "green");
+    
+    // Check binary
+    let riku_path = &paths.riku_script;
+    if riku_path.exists() {
+        echo(&format!("  ✓ Binary installed: {}", riku_path.display()), "green");
+    } else {
+        echo(&format!("  ⚠ Binary not found: {}", riku_path.display()), "yellow");
+    }
+    
+    // Check supervisor
+    if !no_systemd {
+        let status = Command::new("systemctl")
+            .args(["--user", "is-active", "riku"])
+            .output();
+
+        if let Ok(output) = status {
+            if output.status.success() {
+                echo("  ✓ Supervisor running", "green");
+            } else {
+                echo(
+                    "  ⚠ Supervisor not running (start with: systemctl --user start riku)",
+                    "yellow",
+                );
+            }
+        }
+    } else {
+        echo(
+            "  ℹ Supervisor not started (start manually with: riku supervisor)",
+            "yellow",
+        );
+    }
+    
     echo("", "");
-    echo("From your local machine:", "");
-    echo("  git remote add riku deploy@your-server:myapp", "");
-    echo("  git push riku master", "");
+    
+    // First app guide
+    echo("Deploy your first app:", "green");
+    echo("", "");
+    echo("1. Create app directory on your local machine:", "yellow");
+    echo("   mkdir myapp && cd myapp", "yellow");
+    echo("   git init", "yellow");
+    echo("", "");
+    echo("2. Add your code and create a Procfile:", "yellow");
+    echo("   echo 'web: python app.py' > Procfile", "yellow");
+    echo("", "");
+    echo("3. Deploy:", "yellow");
+    echo(&format!("   git remote add riku {}@your-server:myapp", env::var("USER").unwrap_or_else(|_| "deploy".to_string())), "yellow");
+    echo("   git push riku master", "yellow");
+    echo("", "");
+    echo("Documentation: https://dreygur.github.io/riku/", "green");
     echo("", "");
 
     Ok(())
