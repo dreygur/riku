@@ -13,10 +13,9 @@ This directory contains systemd service files for running Riku as a system servi
 ### 1. Copy Service Files
 
 ```bash
-# As root
-sudo cp contrib/systemd/riku.service /etc/systemd/system/
-sudo cp contrib/systemd/riku-nginx.path /etc/systemd/system/
-sudo cp contrib/systemd/riku-nginx-reload.service /etc/systemd/system/
+# As root, from the riku repository
+sudo cp contrib/systemd/*.service /etc/systemd/system/
+sudo cp contrib/systemd/*.path /etc/systemd/system/
 ```
 
 ### 2. Update Paths (if needed)

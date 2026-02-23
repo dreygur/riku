@@ -10,7 +10,8 @@ Riku includes optional systemd service files for running the supervisor daemon a
 
 ```bash
 # As root, from the riku repository
-sudo cp contrib/systemd/riku.service /etc/systemd/system/
+sudo cp contrib/systemd/*.service /etc/systemd/system/
+sudo cp contrib/systemd/*.path /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable riku
 sudo systemctl start riku
