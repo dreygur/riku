@@ -67,11 +67,11 @@ pub fn deploy_node(
         "green",
     );
 
-    let install_status = if package_manager == "yarn" {
+    let install_result = if package_manager == "yarn" {
         Command::new("yarn")
             .arg("install")
             .current_dir(app_path)
-            .status()
+            .output()
     } else if package_manager == "pnpm" {
         // Install pnpm if not available
         if which::which("pnpm").is_err() {
@@ -84,20 +84,33 @@ pub fn deploy_node(
         Command::new("pnpm")
             .arg("install")
             .current_dir(app_path)
-            .status()
+            .output()
     } else {
         Command::new("npm")
             .arg("install")
             .current_dir(app_path)
-            .status()
+            .output()
     };
 
-    if let Ok(status) = install_status {
-        if !status.success() {
-            return Err(anyhow::anyhow!("Failed to install dependencies"));
+    match install_result {
+        Ok(output) => {
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                echo(&format!("npm install stdout: {}", stdout), "yellow");
+                echo(&format!("npm install stderr: {}", stderr), "red");
+                return Err(anyhow::anyhow!("Failed to install dependencies"));
+            }
+            // Show success message with package count if available
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if stdout.contains("added") {
+                echo(&format!("-----> {}", stdout.lines().find(|l| l.contains("added")).unwrap_or("Dependencies installed")), "green");
+            }
         }
-    } else {
-        return Err(anyhow::anyhow!("Failed to run package manager"));
+        Err(e) => {
+            echo(&format!("Failed to run {}: {}", package_manager, e), "red");
+            return Err(anyhow::anyhow!("Failed to run package manager"));
+        }
     }
 
     // Create worker configurations

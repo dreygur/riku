@@ -238,8 +238,8 @@ fn copy_dir_recursive(source: &Path, dest: &Path) -> Result<()> {
         let dest_path = dest.join(entry.file_name());
 
         if entry_path.is_dir() {
-            // Skip certain directories (but NOT node_modules - we need dependencies!)
-            if entry_path.file_name().map(|n| n == ".git" || n == ".gitignore").unwrap_or(false) {
+            // Skip certain directories (git, node_modules - will be installed)
+            if entry_path.file_name().map(|n| n == ".git" || n == "node_modules" || n == ".gitignore").unwrap_or(false) {
                 continue;
             }
             copy_dir_recursive(&entry_path, &dest_path)?;
