@@ -3,7 +3,6 @@
 /// Provides SSH-based access for AI agents (Claude, Cursor, Copilot, etc.)
 /// to perform deployment and management tasks with proper authentication,
 /// authorization, and audit logging.
-
 use anyhow::Result;
 use serde_json::json;
 use std::collections::HashMap;
@@ -152,19 +151,21 @@ pub fn get_agent_identity() -> Option<String> {
     if let Ok(id) = std::env::var("RIKU_AGENT_ID") {
         return Some(id);
     }
-    
+
     // Try to extract from SSH key comment via SSH_CONNECTION
     // This would typically be set in the forced command in authorized_keys
     if let Ok(cmd) = std::env::var("SSH_ORIGINAL_COMMAND") {
         // Extract agent ID from command if present
         if cmd.contains("--agent-id=") {
-            return cmd.split("--agent-id=").nth(1)
+            return cmd
+                .split("--agent-id=")
+                .nth(1)
                 .and_then(|s| s.split_whitespace().next())
                 .map(|s| s.to_string());
         }
         return Some("ssh-agent".to_string());
     }
-    
+
     Some("unknown-agent".to_string())
 }
 
@@ -174,21 +175,20 @@ pub fn get_agent_scope() -> AgentScope {
     if let Ok(scope) = std::env::var("RIKU_AGENT_SCOPE") {
         return AgentScope::from_str(&scope);
     }
-    
+
     // Parse authorized_keys to find scope from command restriction
     // Format: command="riku agent --scope staging",no-port-forwarding ssh-rsa AAAA... comment
     if let Some(scope) = parse_scope_from_authorized_keys() {
         return scope;
     }
-    
+
     AgentScope::Readonly
 }
 
 /// Parse agent scope from authorized_keys file
 fn parse_scope_from_authorized_keys() -> Option<AgentScope> {
-    let auth_keys_path = dirs::home_dir()
-        .map(|h| h.join(".ssh/authorized_keys"));
-    
+    let auth_keys_path = dirs::home_dir().map(|h| h.join(".ssh/authorized_keys"));
+
     if let Some(path) = auth_keys_path {
         if let Ok(content) = fs::read_to_string(&path) {
             for line in content.lines() {
@@ -523,7 +523,8 @@ pub fn cmd_agent_help(command: Option<&str>) -> Result<()> {
     match command {
         Some(cmd) => {
             let help = match cmd {
-                "apps" => r#"Usage: riku agent apps
+                "apps" => {
+                    r#"Usage: riku agent apps
 
 List all deployed applications. Running apps are marked with *.
 
@@ -531,8 +532,10 @@ Example:
   riku agent apps
 
 Response:
-  {"apps": [{"name": "myapp", "running": true}]}"#,
-                "deploy" => r#"Usage: riku agent deploy <app>
+  {"apps": [{"name": "myapp", "running": true}]}"#
+                }
+                "deploy" => {
+                    r#"Usage: riku agent deploy <app>
 
 Deploy an application. Requires 'staging' or 'production' scope.
 
@@ -540,8 +543,10 @@ Example:
   riku agent deploy myapp
 
 Response:
-  {"success": true, "job_id": "deploy-123"}"#,
-                "destroy" => r#"Usage: riku agent destroy <app> --confirm <token>
+  {"success": true, "job_id": "deploy-123"}"#
+                }
+                "destroy" => {
+                    r#"Usage: riku agent destroy <app> --confirm <token>
 
 Permanently remove an application and all its data.
 Requires 'production' scope and human confirmation.
@@ -554,8 +559,10 @@ Example:
   riku agent destroy myapp --confirm abc123
 
 Response:
-  {"confirmation_required": true, "confirm_token": "abc123"}"#,
-                "config:get" => r#"Usage: riku agent config:get <app> <key>
+  {"confirmation_required": true, "confirm_token": "abc123"}"#
+                }
+                "config:get" => {
+                    r#"Usage: riku agent config:get <app> <key>
 
 Get a single configuration value.
 
@@ -563,8 +570,10 @@ Example:
   riku agent config:get myapp DATABASE_URL
 
 Response:
-  {"value": "postgres://localhost/db"}"#,
-                "config:set" => r#"Usage: riku agent config:set <app> KEY=value [KEY2=value2 ...]
+  {"value": "postgres://localhost/db"}"#
+                }
+                "config:set" => {
+                    r#"Usage: riku agent config:set <app> KEY=value [KEY2=value2 ...]
 
 Set configuration values. Critical keys require confirmation.
 
@@ -572,8 +581,10 @@ Example:
   riku agent config:set myapp DEBUG=true
 
 Response:
-  {"success": true} or {"confirmation_required": true}"#,
-                "logs" => r#"Usage: riku agent logs <app> [process] [--lines N]
+  {"success": true} or {"confirmation_required": true}"#
+                }
+                "logs" => {
+                    r#"Usage: riku agent logs <app> [process] [--lines N]
 
 View application logs.
 
@@ -581,8 +592,10 @@ Example:
   riku agent logs myapp web --lines 100
 
 Response:
-  {"lines": ["2024-01-01 10:00:00 App started", ...]}"#,
-                "ps" => r#"Usage: riku agent ps <app>
+  {"lines": ["2024-01-01 10:00:00 App started", ...]}"#
+                }
+                "ps" => {
+                    r#"Usage: riku agent ps <app>
 
 Show process status for an application.
 
@@ -590,8 +603,10 @@ Example:
   riku agent ps myapp
 
 Response:
-  {"processes": {"web": {"running": 2, "desired": 2}}}"#,
-                "restart" => r#"Usage: riku agent restart <app> [process]
+  {"processes": {"web": {"running": 2, "desired": 2}}}"#
+                }
+                "restart" => {
+                    r#"Usage: riku agent restart <app> [process]
 
 Restart an application or specific process.
 
@@ -600,8 +615,10 @@ Example:
   riku agent restart myapp web
 
 Response:
-  {"success": true}"#,
-                "stop" => r#"Usage: riku agent stop <app>
+  {"success": true}"#
+                }
+                "stop" => {
+                    r#"Usage: riku agent stop <app>
 
 Stop an application. Requires confirmation for production apps.
 
@@ -609,8 +626,10 @@ Example:
   riku agent stop myapp
 
 Response:
-  {"confirmation_required": true, "confirm_token": "abc123"}"#,
-                "run" => r#"Usage: riku agent run <app> <command>
+  {"confirmation_required": true, "confirm_token": "abc123"}"#
+                }
+                "run" => {
+                    r#"Usage: riku agent run <app> <command>
 
 Run a command in the application context.
 
@@ -618,8 +637,10 @@ Example:
   riku agent run myapp python manage.py migrate
 
 Response:
-  {"output": "Migrations applied", "exit_code": 0}"#,
-                "stats" => r#"Usage: riku agent stats [app]
+  {"output": "Migrations applied", "exit_code": 0}"#
+                }
+                "stats" => {
+                    r#"Usage: riku agent stats [app]
 
 Show statistics. Without app argument, shows all apps.
 
@@ -628,7 +649,8 @@ Example:
   riku agent stats myapp
 
 Response:
-  {"apps": {"myapp": {"cpu": 0.5, "memory": 128}}}"#,
+  {"apps": {"myapp": {"cpu": 0.5, "memory": 128}}}"#
+                }
                 _ => "Unknown command. Use 'riku agent --schema' for full reference.",
             };
             println!("{}", help);
@@ -687,8 +709,7 @@ pub fn cmd_agent_execute(
     // Check permission
     if !scope.allows(command) {
         log_agent_action(&agent_id, command, "", false);
-        let response =
-            AgentResponse::error("PERMISSION_DENIED", "Agent lacks required permission");
+        let response = AgentResponse::error("PERMISSION_DENIED", "Agent lacks required permission");
         println!("{}", serde_json::to_string(&response.to_json())?);
         return Ok(());
     }
@@ -788,7 +809,12 @@ pub fn cmd_agent_execute(
     };
 
     // Log action
-    log_agent_action(&agent_id, command, args.first().map(|s| s.as_str()).unwrap_or(""), response.success);
+    log_agent_action(
+        &agent_id,
+        command,
+        args.first().map(|s| s.as_str()).unwrap_or(""),
+        response.success,
+    );
 
     println!("{}", serde_json::to_string(&response.to_json())?);
     Ok(())
@@ -845,7 +871,13 @@ fn cmd_agent_deploy(paths: &RikuPaths, app: &str) -> AgentResponse {
     }
 
     // Generate job ID
-    let job_id = format!("deploy-{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs());
+    let job_id = format!(
+        "deploy-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    );
 
     // Call the actual deploy function
     match crate::cli::apps::cmd_deploy(paths, app) {
@@ -869,7 +901,10 @@ fn cmd_agent_destroy_request(paths: &RikuPaths, app: &str) -> AgentResponse {
     let token = format!(
         "destroy-{}-{}",
         app,
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
     );
 
     // Store token for verification (in real impl, use Redis or similar)
@@ -905,7 +940,12 @@ fn cmd_agent_destroy_confirm(paths: &RikuPaths, app: &str, token: &str) -> Agent
 fn cmd_agent_config_get(paths: &RikuPaths, app: &str, key: &str) -> AgentResponse {
     let app = match exit_if_invalid(app, &paths.app_root) {
         Ok(a) => a,
-        Err(_) => return AgentResponse::error("APP_NOT_FOUND", &format!("Application '{}' not found", app)),
+        Err(_) => {
+            return AgentResponse::error(
+                "APP_NOT_FOUND",
+                &format!("Application '{}' not found", app),
+            )
+        }
     };
 
     let config_file = paths.env_root.join(&app).join("ENV");
@@ -923,7 +963,13 @@ fn cmd_agent_config_get(paths: &RikuPaths, app: &str, key: &str) -> AgentRespons
 
 fn cmd_agent_config_set(_paths: &RikuPaths, app: &str, settings: &[String]) -> AgentResponse {
     // Check for critical keys that require confirmation
-    let critical_keys = ["DATABASE_URL", "SECRET_KEY", "PASSWORD", "API_KEY", "PRIVATE_KEY"];
+    let critical_keys = [
+        "DATABASE_URL",
+        "SECRET_KEY",
+        "PASSWORD",
+        "API_KEY",
+        "PRIVATE_KEY",
+    ];
 
     for setting in settings {
         if let Some(key) = setting.split('=').next() {
@@ -931,7 +977,10 @@ fn cmd_agent_config_set(_paths: &RikuPaths, app: &str, settings: &[String]) -> A
                 let token = format!(
                     "config-{}-{}",
                     app,
-                    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs()
                 );
                 return AgentResponse::confirmation_required("config:set", app, &token);
             }
@@ -950,7 +999,12 @@ fn cmd_agent_config_set(_paths: &RikuPaths, app: &str, settings: &[String]) -> A
 fn cmd_agent_config_show(paths: &RikuPaths, app: &str) -> AgentResponse {
     let app = match exit_if_invalid(app, &paths.app_root) {
         Ok(a) => a,
-        Err(_) => return AgentResponse::error("APP_NOT_FOUND", &format!("Application '{}' not found", app)),
+        Err(_) => {
+            return AgentResponse::error(
+                "APP_NOT_FOUND",
+                &format!("Application '{}' not found", app),
+            )
+        }
     };
 
     let config_file = paths.env_root.join(&app).join("ENV");
@@ -966,7 +1020,12 @@ fn cmd_agent_config_show(paths: &RikuPaths, app: &str) -> AgentResponse {
 fn cmd_agent_logs(paths: &RikuPaths, app: &str, process: &str) -> AgentResponse {
     let app = match exit_if_invalid(app, &paths.app_root) {
         Ok(a) => a,
-        Err(_) => return AgentResponse::error("APP_NOT_FOUND", &format!("Application '{}' not found", app)),
+        Err(_) => {
+            return AgentResponse::error(
+                "APP_NOT_FOUND",
+                &format!("Application '{}' not found", app),
+            )
+        }
     };
 
     let log_dir = paths.log_root.join(&app);
@@ -978,7 +1037,12 @@ fn cmd_agent_logs(paths: &RikuPaths, app: &str, process: &str) -> AgentResponse 
             for entry in entries.filter_map(|e| e.ok()) {
                 let path = entry.path();
                 if path.extension().map(|e| e == "log").unwrap_or(false) {
-                    if process == "*" || path.file_stem().map(|s| s.to_string_lossy().contains(process)).unwrap_or(false) {
+                    if process == "*"
+                        || path
+                            .file_stem()
+                            .map(|s| s.to_string_lossy().contains(process))
+                            .unwrap_or(false)
+                    {
                         if let Ok(content) = fs::read_to_string(&path) {
                             for line in content.lines().take(100) {
                                 lines.push(line.to_string());
@@ -996,7 +1060,12 @@ fn cmd_agent_logs(paths: &RikuPaths, app: &str, process: &str) -> AgentResponse 
 fn cmd_agent_ps(paths: &RikuPaths, app: &str) -> AgentResponse {
     let app = match exit_if_invalid(app, &paths.app_root) {
         Ok(a) => a,
-        Err(_) => return AgentResponse::error("APP_NOT_FOUND", &format!("Application '{}' not found", app)),
+        Err(_) => {
+            return AgentResponse::error(
+                "APP_NOT_FOUND",
+                &format!("Application '{}' not found", app),
+            )
+        }
     };
 
     // Count workers
@@ -1015,7 +1084,12 @@ fn cmd_agent_ps(paths: &RikuPaths, app: &str) -> AgentResponse {
 fn cmd_agent_restart(paths: &RikuPaths, app: &str, _process: Option<&str>) -> AgentResponse {
     let app = match exit_if_invalid(app, &paths.app_root) {
         Ok(a) => a,
-        Err(_) => return AgentResponse::error("APP_NOT_FOUND", &format!("Application '{}' not found", app)),
+        Err(_) => {
+            return AgentResponse::error(
+                "APP_NOT_FOUND",
+                &format!("Application '{}' not found", app),
+            )
+        }
     };
 
     // Call the actual restart function
@@ -1030,14 +1104,22 @@ fn cmd_agent_restart(paths: &RikuPaths, app: &str, _process: Option<&str>) -> Ag
 fn cmd_agent_stop(paths: &RikuPaths, app: &str) -> AgentResponse {
     let _app = match exit_if_invalid(app, &paths.app_root) {
         Ok(a) => a,
-        Err(_) => return AgentResponse::error("APP_NOT_FOUND", &format!("Application '{}' not found", app)),
+        Err(_) => {
+            return AgentResponse::error(
+                "APP_NOT_FOUND",
+                &format!("Application '{}' not found", app),
+            )
+        }
     };
 
     // Require confirmation for stop
     let token = format!(
         "stop-{}-{}",
         app,
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
     );
 
     AgentResponse::confirmation_required("stop", app, &token)
@@ -1045,7 +1127,7 @@ fn cmd_agent_stop(paths: &RikuPaths, app: &str) -> AgentResponse {
 
 fn cmd_agent_stop_confirm(paths: &RikuPaths, app: &str, _token: &str) -> AgentResponse {
     // Note: In production, verify token matches the stop request
-    
+
     // Call the actual stop function
     match crate::cli::apps::cmd_stop(paths, app) {
         Ok(_) => AgentResponse::success(json!({
@@ -1058,7 +1140,12 @@ fn cmd_agent_stop_confirm(paths: &RikuPaths, app: &str, _token: &str) -> AgentRe
 fn cmd_agent_run(paths: &RikuPaths, app: &str, cmd: &[String]) -> AgentResponse {
     let app = match exit_if_invalid(app, &paths.app_root) {
         Ok(a) => a,
-        Err(_) => return AgentResponse::error("APP_NOT_FOUND", &format!("Application '{}' not found", app)),
+        Err(_) => {
+            return AgentResponse::error(
+                "APP_NOT_FOUND",
+                &format!("Application '{}' not found", app),
+            )
+        }
     };
 
     // In real implementation, run the command
@@ -1075,7 +1162,12 @@ fn cmd_agent_stats(paths: &RikuPaths, app: Option<&str>) -> AgentResponse {
         Some(app_name) => {
             let app = match exit_if_invalid(app_name, &paths.app_root) {
                 Ok(a) => a,
-                Err(_) => return AgentResponse::error("APP_NOT_FOUND", &format!("Application '{}' not found", app_name)),
+                Err(_) => {
+                    return AgentResponse::error(
+                        "APP_NOT_FOUND",
+                        &format!("Application '{}' not found", app_name),
+                    )
+                }
             };
 
             // In real implementation, gather actual stats

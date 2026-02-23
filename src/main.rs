@@ -29,7 +29,15 @@ fn main() -> Result<()> {
     }
 
     match args.command {
-        Commands::Agent { intro, schema, agent_help, command, args, confirm, json: _ } => {
+        Commands::Agent {
+            intro,
+            schema,
+            agent_help,
+            command,
+            args,
+            confirm,
+            json: _,
+        } => {
             if intro {
                 cli::agent::cmd_agent_intro(&paths)?;
             } else if schema {
@@ -128,7 +136,7 @@ fn get_plugin_command(command: &Commands) -> Option<String> {
 
         // Plugin command - don't recursively check for plugins
         Commands::Plugin(_) => None,
-        
+
         // Agent command - don't check for plugins
         Commands::Agent { .. } => None,
 
