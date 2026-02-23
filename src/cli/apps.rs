@@ -165,15 +165,17 @@ pub fn cmd_config_live(paths: &RikuPaths, app: &str) -> Result<()> {
 
 /// Deploy an app.
 pub fn cmd_deploy(paths: &RikuPaths, app: &str, from_path: Option<&str>) -> Result<()> {
-    let app = exit_if_invalid(app, &paths.app_root)?;
     let deltas: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
-    
-    // If deploying from local path, copy files first
+
+    // If deploying from local path, copy files first (creates app directory)
     if let Some(source_path) = from_path {
-        deploy_from_path(paths, &app, source_path)?;
+        deploy_from_path(paths, app, source_path)?;
+    } else {
+        // For git-based deploy, app must already exist
+        let _ = exit_if_invalid(app, &paths.app_root)?;
     }
-    
-    crate::deploy::do_deploy(&app, paths, &deltas, None)
+
+    crate::deploy::do_deploy(app, paths, &deltas, None)
 }
 
 /// Deploy from a local path (copies files to app directory).
@@ -229,15 +231,15 @@ fn deploy_from_path(paths: &RikuPaths, app: &str, source: &str) -> Result<()> {
 /// Recursively copy a directory.
 fn copy_dir_recursive(source: &Path, dest: &Path) -> Result<()> {
     fs::create_dir_all(dest)?;
-    
+
     for entry in fs::read_dir(source)? {
         let entry = entry?;
         let entry_path = entry.path();
         let dest_path = dest.join(entry.file_name());
-        
+
         if entry_path.is_dir() {
-            // Skip certain directories
-            if entry_path.file_name().map(|n| n == ".git" || n == "node_modules" || n == ".gitignore").unwrap_or(false) {
+            // Skip certain directories (but NOT node_modules - we need dependencies!)
+            if entry_path.file_name().map(|n| n == ".git" || n == ".gitignore").unwrap_or(false) {
                 continue;
             }
             copy_dir_recursive(&entry_path, &dest_path)?;
@@ -245,7 +247,7 @@ fn copy_dir_recursive(source: &Path, dest: &Path) -> Result<()> {
             fs::copy(&entry_path, &dest_path)?;
         }
     }
-    
+
     Ok(())
 }
 
