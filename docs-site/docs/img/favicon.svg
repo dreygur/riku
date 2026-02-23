@@ -1,20 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <defs>
-    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="icon-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#f97316;stop-opacity:1" />
-      <stop offset="50%" style="stop-color:#ea580c;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#c2410c;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#fbbf24;stop-opacity:1" />
     </linearGradient>
   </defs>
   
-  <!-- Background -->
-  <circle cx="16" cy="16" r="15" fill="url(#grad)"/>
-  
-  <!-- Stylized R - simplified -->
-  <path d="M8 22 L8 10 L11 10 C14 10 14 13 11 13 L10 13 L14 17" 
-        stroke="white" stroke-width="2" fill="none" 
-        stroke-linecap="round" stroke-linejoin="round"/>
-  
-  <!-- Speed lines -->
-  <line x1="5" y1="7" x2="8" y2="7" stroke="white" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+  <!-- Stylized R - single continuous path -->
+  <path d="M8 24 
+           C8 24, 8 10, 14 10 
+           C18 10, 20 14, 20 17 
+           C20 20, 18 24, 14 24 
+           M16 17 L24 8" 
+        fill="none" stroke="url(#icon-gradient)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
