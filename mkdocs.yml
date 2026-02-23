@@ -35,6 +35,7 @@ theme:
     - navigation.sections
     - navigation.expand
     - navigation.top
+    - navigation.indexes
     - search.suggest
     - search.highlight
     - content.tabs.link
@@ -49,13 +50,12 @@ nav:
   - Home: index.md
   - Quick Start: quick-start.md
   - Installation: installation.md
-  - Documentation:
-    - CLI Reference: cli.md
-    - Environment Variables: env.md
-    - Runtimes: runtimes.md
-    - Nginx Configuration: nginx.md
-    - Process Supervisor: supervisor.md
-    - Plugin System: plugins.md
+  - CLI Reference: cli.md
+  - Environment Variables: env.md
+  - Runtimes: runtimes.md
+  - Nginx Configuration: nginx.md
+  - Process Supervisor: supervisor.md
+  - Plugin System: plugins.md
   - FAQ: faq.md
   - GitHub: https://github.com/dreygur/riku
 
