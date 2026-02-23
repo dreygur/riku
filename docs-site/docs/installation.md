@@ -81,12 +81,20 @@ sudo chmod +x /usr/local/bin/riku
 
 ### Step 4: Create Deploy User
 
-Riku requires a separate user account:
+Riku requires a separate user account. The default is `deploy`, but you can use any username:
 
 ```bash
+# Default: deploy user
 sudo adduser --disabled-password --gecos '' deploy
 sudo su - deploy
+
+# Or use a custom username
+sudo adduser --disabled-password --gecos '' riku
+sudo su - riku
+export RIKU_USER=riku  # Tell riku to use this username
 ```
+
+**Note:** If using a custom username, set `RIKU_USER` before running `riku init` so systemd services are configured correctly.
 
 ### Step 5: Initialize Riku
 

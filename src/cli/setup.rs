@@ -79,17 +79,26 @@ fn install_systemd_service(_paths: &RikuPaths) -> Result<()> {
     let riku_binary = env::current_exe()?;
     let riku_binary_path = riku_binary.to_string_lossy();
 
-    // Get deploy user's home directory
-    let deploy_home = match Command::new("getent").arg("passwd").arg("deploy").output() {
+    // Get the actual deploy user's home directory from system
+    // Default to "deploy" but can be overridden by RIKU_USER env var
+    let deploy_user = env::var("RIKU_USER").unwrap_or_else(|_| "deploy".to_string());
+    let deploy_home = match Command::new("getent")
+        .arg("passwd")
+        .arg(&deploy_user)
+        .output()
+    {
         Ok(output) => {
             if output.status.success() {
                 let line = String::from_utf8_lossy(&output.stdout);
-                line.split(':').nth(5).unwrap_or("/home/deploy").to_string()
+                line.split(':')
+                    .nth(5)
+                    .unwrap_or(&format!("/home/{}", deploy_user))
+                    .to_string()
             } else {
-                "/home/deploy".to_string()
+                format!("/home/{}", deploy_user)
             }
         }
-        Err(_) => "/home/deploy".to_string(),
+        Err(_) => format!("/home/{}", deploy_user),
     };
 
     // Create systemd directory if needed
@@ -108,8 +117,8 @@ Wants=nginx.service
 
 [Service]
 Type=simple
-User=deploy
-Group=deploy
+User={deploy_user}
+Group={deploy_user}
 WorkingDirectory={deploy_home}
 ExecStart={riku_bin} supervisor
 Restart=always
@@ -134,6 +143,7 @@ CPUQuota=50%
 [Install]
 WantedBy=multi-user.target
 "#,
+        deploy_user = deploy_user,
         deploy_home = deploy_home,
         riku_bin = riku_binary_path
     );

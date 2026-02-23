@@ -95,6 +95,11 @@ When running `riku init` as root, it automatically:
 - Starts supervisor daemon
 - Enables nginx auto-reload
 
+**Custom username:** If not using `deploy`, set `RIKU_USER`:
+```bash
+sudo RIKU_USER=myuser ./riku init
+```
+
 ### Build from Source
 
 ```bash
