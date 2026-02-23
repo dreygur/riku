@@ -11,7 +11,7 @@ use clap::Parser;
 
 use cli::client_plugins;
 use cli::container;
-use cli::{AppsCmd, Cli, Commands, ConfigCmd, PluginCmd, PsCmd, StatsCmd};
+use cli::{AppsCmd, Cli, Commands, ConfigCmd, PluginCmd, StatsCmd};
 use config::RikuPaths;
 
 fn main() -> Result<()> {
@@ -67,9 +67,18 @@ fn main() -> Result<()> {
         Commands::Deploy { app, from } => cli::apps::cmd_deploy(&paths, &app, from.as_deref())?,
         Commands::Destroy { app } => cli::apps::cmd_destroy(&paths, &app)?,
         Commands::Logs { app, process } => cli::apps::cmd_logs(&paths, &app, &process)?,
-        Commands::Ps(cmd) => match cmd {
-            PsCmd::Show { app, verbose } => cli::apps::cmd_ps_show(&paths, &app, verbose)?,
-            PsCmd::Scale { app, settings } => cli::apps::cmd_ps_scale(&paths, &app, &settings)?,
+        Commands::Ps { app, verbose, scale } => {
+            if !scale.is_empty() {
+                // Scale command
+                let app_name = app.ok_or_else(|| anyhow::anyhow!("App name required for scaling"))?;
+                cli::apps::cmd_ps_scale(&paths, &app_name, &scale)?;
+            } else if let Some(app_name) = app {
+                // Show specific app
+                cli::apps::cmd_ps_show(&paths, &app_name, verbose)?;
+            } else {
+                // Show all processes (always verbose by default)
+                cli::apps::cmd_ps_all(&paths, true)?;
+            }
         },
         Commands::Stats(cmd) => match cmd {
             StatsCmd::All => cli::apps::cmd_stats_all(&paths)?,
@@ -130,7 +139,7 @@ fn get_plugin_command(command: &Commands) -> Option<String> {
         Commands::Deploy { .. } => Some("deploy".to_string()),
         Commands::Destroy { .. } => Some("destroy".to_string()),
         Commands::Logs { .. } => Some("logs".to_string()),
-        Commands::Ps(_) => Some("ps".to_string()),
+        Commands::Ps { .. } => Some("ps".to_string()),
         Commands::Stats(_) => Some("stats".to_string()),
         Commands::Run { .. } => Some("run".to_string()),
         Commands::Restart { .. } => Some("restart".to_string()),
@@ -213,15 +222,14 @@ fn build_plugin_args(command: &Commands) -> Vec<String> {
                 args.push(process.clone());
             }
         }
-        Commands::Ps(cmd) => match cmd {
-            PsCmd::Show { app, .. } => {
-                args.push(app.clone());
-                args.push("ps:show".to_string());
-            }
-            PsCmd::Scale { app, settings } => {
-                args.push(app.clone());
+        Commands::Ps { app, scale, .. } => {
+            if !scale.is_empty() {
+                args.push(app.clone().unwrap_or_default());
                 args.push("ps:scale".to_string());
-                args.extend(settings.clone());
+                args.extend(scale.clone());
+            } else {
+                args.push(app.clone().unwrap_or_default());
+                args.push("ps:show".to_string());
             }
         },
         Commands::Run { app, cmd } => {

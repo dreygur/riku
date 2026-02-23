@@ -102,6 +102,8 @@ impl ProcessManager {
 
     /// Spawn a new process based on the worker configuration.
     pub fn spawn_process(&mut self, config: &WorkerConfig) -> Result<()> {
+        use std::os::unix::process::CommandExt;
+
         let app_name = &config.worker.app;
         let worker_kind = &config.worker.kind;
         let ordinal = config.worker.ordinal;
@@ -122,7 +124,9 @@ impl ProcessManager {
             .current_dir(&config.options.working_dir)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .stderr(Stdio::piped())
+            // Create new process group for proper signal handling
+            .process_group(0);
 
         // Set environment variables
         for (key, value) in &config.env {

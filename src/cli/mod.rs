@@ -91,8 +91,17 @@ pub enum Commands {
     },
 
     /// Manage app processes
-    #[command(subcommand)]
-    Ps(PsCmd),
+    Ps {
+        /// Show all processes (default) or specify an app
+        #[arg()]
+        app: Option<String>,
+        /// Show detailed info including health status
+        #[arg(long, short)]
+        verbose: bool,
+        /// Scale workers (e.g. web=4 worker=2)
+        #[arg(short, long, num_args = 1..)]
+        scale: Vec<String>,
+    },
 
     /// Show process stats and metrics
     #[command(subcommand)]
@@ -213,28 +222,6 @@ pub enum ConfigCmd {
     Live {
         /// App name
         app: String,
-    },
-}
-
-#[derive(Subcommand, Debug)]
-pub enum PsCmd {
-    /// Show process status (detailed view)
-    Show {
-        /// App name
-        app: String,
-        /// Show detailed info including health status
-        #[arg(long, short)]
-        verbose: bool,
-    },
-
-    /// Scale workers
-    #[command(trailing_var_arg = true)]
-    Scale {
-        /// App name
-        app: String,
-        /// Worker scaling settings (e.g. web=4 worker=2)
-        #[arg(required = true)]
-        settings: Vec<String>,
     },
 }
 

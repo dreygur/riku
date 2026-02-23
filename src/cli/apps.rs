@@ -360,6 +360,101 @@ pub fn cmd_logs(paths: &RikuPaths, app: &str, process: &str) -> Result<()> {
     Ok(())
 }
 
+/// Show all processes for all apps.
+pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
+    let app_root = &paths.app_root;
+    
+    if !app_root.exists() {
+        echo("No applications deployed.", "yellow");
+        return Ok(());
+    }
+
+    let mut apps: Vec<String> = fs::read_dir(app_root)?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+
+    if apps.is_empty() {
+        echo("No applications deployed.", "yellow");
+        return Ok(());
+    }
+
+    apps.sort();
+
+    if verbose {
+        // Show detailed view
+        println!("{}", "=== All Processes ===".green().bold());
+        println!();
+        println!(
+            "{:<25} {:<15} {:<10} {:<10} {:<15}",
+            "APP", "PROCESS", "KIND", "PID", "STATUS"
+        );
+        println!("{}", "-".repeat(80));
+
+        let mut total_processes = 0;
+
+        for app in &apps {
+            let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
+            let worker_configs: Vec<_> = match glob::glob(toml_pattern.to_str().unwrap_or("")) {
+                Ok(g) => g.filter_map(|r| r.ok()).collect(),
+                Err(e) => {
+                    eprintln!("Warning: glob failed for worker configs: {}", e);
+                    continue;
+                }
+            };
+
+            for config_path in worker_configs {
+                if let Some(filename) = config_path.file_name().and_then(|s| s.to_str()) {
+                    let parts: Vec<&str> = filename.trim_end_matches(".toml").split('-').collect();
+                    if parts.len() >= 3 {
+                        let kind = parts[1];
+                        let ordinal = parts.get(2).unwrap_or(&"1");
+                        let process_name = format!("{}-{}-{}", app, kind, ordinal);
+
+                        let pid = if let Ok(content) = fs::read_to_string(&config_path) {
+                            extract_pid_from_config(&content)
+                                .map(|p| p.to_string())
+                                .unwrap_or_else(|| "N/A".to_string())
+                        } else {
+                            "N/A".to_string()
+                        };
+
+                        println!(
+                            "{:<25} {:<15} {:<10} {:<10} {:<15}",
+                            app.green(), process_name, kind, pid, "running"
+                        );
+                        total_processes += 1;
+                    }
+                }
+            }
+        }
+
+        println!("{}", "-".repeat(80));
+        println!("Total: {} process(es) across {} app(s)", total_processes.to_string().green(), apps.len().to_string().green());
+    } else {
+        // Show compact view
+        println!("{}", "=== Deployed Apps ===".green().bold());
+        println!();
+
+        for app in &apps {
+            let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
+            let worker_count = match glob::glob(toml_pattern.to_str().unwrap_or("")) {
+                Ok(g) => g.count(),
+                Err(_) => 0
+            };
+
+            let prefix = if worker_count > 0 { "*" } else { " " };
+            println!("  {}{} ({} worker(s))", prefix, app.green(), worker_count);
+        }
+
+        println!();
+        echo("Use 'riku ps <app> --verbose' for detailed process info", "yellow");
+    }
+
+    Ok(())
+}
+
 /// Show process scaling info.
 pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
     let app = exit_if_invalid(app, &paths.app_root)?;

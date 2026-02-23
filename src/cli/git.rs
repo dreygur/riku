@@ -2,10 +2,40 @@ use anyhow::Result;
 use std::fs;
 use std::io::{self, BufRead};
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::process::Command;
 
 use crate::config::RikuPaths;
 use crate::util::{echo, sanitize_app_name};
+
+/// Create symlink from user's bare repo to riku's repos directory.
+/// If bare repo exists at ~/app.git, symlink ~/.riku/repos/app.git → ~/app.git
+/// Otherwise use ~/.riku/repos/app.git as the canonical location.
+pub fn ensure_repo_symlink(paths: &RikuPaths, app: &str) -> Result<()> {
+    let home = std::env::var("HOME").unwrap_or_else(|_| String::from("."));
+    let user_repo = Path::new(&home).join(format!("{}.git", app));
+    let riku_repo = paths.git_root.join(format!("{}.git", app));
+    
+    // If user's bare repo exists, create symlink
+    if user_repo.exists() {
+        if riku_repo.exists() {
+            // Check if it's already a symlink to the right place
+            if let Ok(target) = fs::read_link(&riku_repo) {
+                if target == user_repo {
+                    return Ok(()); // Already correctly symlinked
+                }
+            }
+            // Remove existing file/symlink
+            fs::remove_file(&riku_repo)?;
+        }
+        // Create symlink: ~/.riku/repos/app.git → ~/app.git
+        std::os::unix::fs::symlink(&user_repo, &riku_repo)?;
+        echo(&format!("Symlinked {} → {}", riku_repo.display(), user_repo.display()), "green");
+    }
+    // If user repo doesn't exist, riku will create it at ~/.riku/repos/app.git
+    
+    Ok(())
+}
 
 /// Post-receive git hook handler.
 pub fn cmd_git_hook(paths: &RikuPaths, app: &str) -> Result<()> {
@@ -30,7 +60,8 @@ pub fn cmd_git_hook(paths: &RikuPaths, app: &str) -> Result<()> {
         let newrev = parts[1];
         let _refname = parts[2];
 
-        if !app_path.exists() {
+        // Clone repo if app directory doesn't exist or is empty (no Procfile)
+        if !app_path.exists() || !app_path.join("Procfile").exists() {
             echo(&format!("-----> Creating app '{}'", app), "green");
             fs::create_dir_all(&app_path)?;
             if !data_path.exists() {
@@ -60,6 +91,10 @@ pub fn cmd_git_hook(paths: &RikuPaths, app: &str) -> Result<()> {
 /// then delegates to git-shell.
 pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
     let app = sanitize_app_name(app);
+    
+    // Ensure symlink is set up for user's bare repo
+    ensure_repo_symlink(paths, &app)?;
+    
     let hook_path = paths.git_root.join(&app).join("hooks").join("post-receive");
 
     if !hook_path.exists() {
@@ -68,25 +103,42 @@ pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
             fs::create_dir_all(parent)?;
         }
 
-        // Initialize bare repo
-        let status = Command::new("git")
-            .arg("init")
-            .arg("--quiet")
-            .arg("--bare")
-            .arg(&app)
-            .current_dir(&paths.git_root)
-            .status()?;
-        if !status.success() {
-            echo("Error: git init failed.", "red");
+        // Initialize bare repo at riku's location if it doesn't exist
+        let riku_repo = paths.git_root.join(&app);
+        if !riku_repo.exists() {
+            let status = Command::new("git")
+                .arg("init")
+                .arg("--quiet")
+                .arg("--bare")
+                .arg(&app)
+                .current_dir(&paths.git_root)
+                .status()?;
+            if !status.success() {
+                echo("Error: git init failed.", "red");
+            }
         }
 
-        // Write post-receive hook
-        let hook_content = format!(
-            "#!/usr/bin/env bash\nset -e; set -o pipefail;\ncat | PIKU_ROOT=\"{piku_root}\" {piku_script} git-hook {app}",
-            piku_root = paths.riku_root.display(),
-            piku_script = paths.riku_script.display(),
-            app = app,
-        );
+        // Write post-receive hook that uses PATH to find riku
+        // This is more robust than hardcoding the binary path
+        let hook_content = r#"#!/usr/bin/env bash
+set -e; set -o pipefail;
+# Find riku binary from PATH or use common locations
+RIKU_BIN="${RIKU_BIN:-$(command -v riku)}"
+if [ -z "$RIKU_BIN" ]; then
+    # Fallback to common installation paths
+    if [ -x "$HOME/.local/bin/riku" ]; then
+        RIKU_BIN="$HOME/.local/bin/riku"
+    elif [ -x "$HOME/riku" ]; then
+        RIKU_BIN="$HOME/riku"
+    elif [ -x "/usr/local/bin/riku" ]; then
+        RIKU_BIN="/usr/local/bin/riku"
+    else
+        echo "Error: riku binary not found" >&2
+        exit 1
+    fi
+fi
+cat | PIKU_ROOT="${PIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$2"
+"#;
         fs::write(&hook_path, hook_content)?;
 
         // Make hook executable
