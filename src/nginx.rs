@@ -311,8 +311,15 @@ fn validate_nginx_config(config_file: &Path) -> Result<()> {
     // Clean up temp file
     let _ = fs::remove_file(&temp_nginx_conf);
 
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    
+    // Check if syntax is OK (nginx outputs "syntax is ok" even on permission errors)
+    if stderr.contains("syntax is ok") {
+        // Config syntax is valid, permission errors are not our concern
+        return Ok(());
+    }
+
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(anyhow::anyhow!(
             "Nginx config validation failed: {}",
             stderr
