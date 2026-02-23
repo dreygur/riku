@@ -398,4 +398,3 @@ location /ws/ {
 
 - [Environment Variables](env.md) - All nginx-related ENV vars
 - [CLI Reference](cli.md) - Config management commands
-- [SSL Setup](ssl.md) - Detailed SSL configuration

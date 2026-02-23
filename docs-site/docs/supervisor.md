@@ -475,4 +475,3 @@ rlimit_nproc = 4096
 
 - [CLI Reference](cli.md) - Process management commands
 - [Environment Variables](env.md) - Supervisor configuration
-- [Cron Jobs](cron.md) - Detailed cron documentation
