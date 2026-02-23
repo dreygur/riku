@@ -85,8 +85,9 @@ acme/
 !contrib/systemd/*.path
 *.socket
 
-# Nginx
+# Nginx (except contrib/)
 *.conf
+!contrib/nginx/*.conf
 
 # TOML configs (worker configs are generated)
 *.toml
