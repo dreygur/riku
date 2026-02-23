@@ -1,0 +1,10 @@
+[Unit]
+Description=Reload nginx when Riku configuration changes
+Documentation=https://dreygur.github.io/riku/
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl reload nginx
+
+[Install]
+WantedBy=multi-user.target

@@ -78,9 +78,11 @@ yarn-error.log
 *.crt
 acme/
 
-# Systemd
+# Systemd (except contrib/)
 *.service
+!contrib/systemd/*.service
 *.path
+!contrib/systemd/*.path
 *.socket
 
 # Nginx

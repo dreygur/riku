@@ -1,0 +1,33 @@
+[Unit]
+Description=Riku Process Supervisor
+Documentation=https://dreygur.github.io/riku/
+After=network.target nginx.service
+Wants=nginx.service
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+WorkingDirectory=/home/deploy
+ExecStart=/home/deploy/.local/bin/riku supervisor
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=riku
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+
+# Allow writing to riku directories
+ReadWritePaths=/home/deploy/.riku
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target
