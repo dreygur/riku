@@ -48,14 +48,16 @@ theme:
 # Custom navigation
 nav:
   - Home: index.md
-  - Quick Start: quick-start.md
-  - Installation: installation.md
-  - CLI Reference: cli.md
-  - Environment Variables: env.md
-  - Runtimes: runtimes.md
-  - Nginx Configuration: nginx.md
-  - Process Supervisor: supervisor.md
-  - Plugin System: plugins.md
+  - Getting Started:
+    - Quick Start: quick-start.md
+    - Installation: installation.md
+  - Reference:
+    - CLI: cli.md
+    - Environment Variables: env.md
+    - Runtimes: runtimes.md
+    - Nginx: nginx.md
+    - Supervisor: supervisor.md
+    - Plugins: plugins.md
   - FAQ: faq.md
   - GitHub: https://github.com/dreygur/riku
 
