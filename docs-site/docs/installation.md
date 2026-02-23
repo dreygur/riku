@@ -1,22 +1,16 @@
-# Installation - Riku
+# Installation
 
 ## TL;DR
 
 To install Riku on your server, `ssh` in as `root` and run:
 
 ```bash
-curl https://riku.github.io/get | sh
-```
-
-Or manually:
-
-```bash
-# Install Rust (if not already installed)
+# Manual installation
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Clone and build Riku
-git clone https://github.com/piku/piku.git
-cd piku
+git clone https://github.com/dreygur/riku.git
+cd riku
 cargo build --release
 sudo cp target/release/riku /usr/local/bin/
 
@@ -25,7 +19,7 @@ sudo adduser --disabled-password --gecos '' deploy
 sudo su - deploy
 
 # Initialize Riku
-riku setup init
+riku init
 
 # Add your SSH public key
 riku setup ssh ~/.ssh/id_rsa.pub
@@ -75,8 +69,8 @@ source $HOME/.cargo/env
 ### Step 2: Build Riku
 
 ```bash
-git clone https://github.com/piku/piku.git
-cd piku
+git clone https://github.com/dreygur/riku.git
+cd riku
 cargo build --release
 ```
 
@@ -161,8 +155,8 @@ sudo apt install -y git nginx curl build-essential
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Build and install Riku
-git clone https://github.com/piku/piku.git
-cd piku
+git clone https://github.com/dreygur/riku.git
+cd riku
 cargo build --release
 sudo cp target/release/riku /usr/local/bin/
 
@@ -171,7 +165,7 @@ sudo adduser --disabled-password --gecos '' deploy
 sudo su - deploy
 
 # Initialize
-riku setup init
+riku init
 ```
 
 ### CentOS/RHEL
@@ -187,8 +181,8 @@ sudo yum install -y git nginx curl gcc
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Build and install Riku
-git clone https://github.com/piku/piku.git
-cd piku
+git clone https://github.com/dreygur/riku.git
+cd riku
 cargo build --release
 sudo cp target/release/riku /usr/local/bin/
 
@@ -197,7 +191,7 @@ sudo adduser -m deploy
 sudo su - deploy
 
 # Initialize
-riku setup init
+riku init
 ```
 
 ### Arch Linux
@@ -207,8 +201,8 @@ riku setup init
 sudo pacman -S git nginx curl rust
 
 # Build and install Riku
-git clone https://github.com/piku/piku.git
-cd piku
+git clone https://github.com/dreygur/riku.git
+cd riku
 cargo build --release
 sudo cp target/release/riku /usr/local/bin/
 
@@ -217,7 +211,7 @@ sudo useradd -m deploy
 sudo su - deploy
 
 # Initialize
-riku setup init
+riku init
 ```
 
 ## Post-Installation
@@ -282,7 +276,7 @@ To upgrade to the latest version:
 
 ```bash
 # Pull latest changes
-cd ~/piku
+cd ~/riku
 git pull
 
 # Rebuild
@@ -291,7 +285,7 @@ cargo build --release
 # Install new binary
 cp target/release/riku /usr/local/bin/
 
-# Restart supervisor
+# Restart supervisor (if running as user service)
 systemctl --user restart riku
 ```
 

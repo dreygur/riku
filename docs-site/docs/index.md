@@ -102,6 +102,8 @@ git push riku master
 | [Nginx](nginx.md) | Web server configuration |
 | [Supervisor](supervisor.md) | Process management |
 | [Plugins](plugins.md) | Extend functionality |
+| [AI Agents](ai-agents.md) | SSH-based AI automation |
+| [Systemd](systemd.md) | Systemd integration |
 | [FAQ](faq.md) | Common questions |
 
 ---
