@@ -1,16 +1,20 @@
 use anyhow::{bail, Result};
+use std::env;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::config::RikuPaths;
 use crate::util::{echo, setup_authorized_keys};
 
-/// Initialize the riku directory structure.
+/// Initialize the riku directory structure and install binary.
 #[allow(dead_code)]
 pub fn cmd_setup_init(paths: &RikuPaths) -> Result<()> {
+    // First, try to install riku binary to user's PATH
+    install_riku_binary()?;
+
     let dirs: Vec<&PathBuf> = vec![
         &paths.app_root,
         &paths.cache_root,
@@ -45,7 +49,110 @@ pub fn cmd_setup_init(paths: &RikuPaths) -> Result<()> {
         }
     }
 
+    echo("Riku initialized successfully!", "green");
+    echo("Run 'riku --help' for available commands.", "");
+
     Ok(())
+}
+
+/// Install riku binary to user's PATH
+fn install_riku_binary() -> Result<()> {
+    // Get current executable path
+    let current_exe = env::current_exe()?;
+
+    // Determine installation target
+    let target_dir = get_install_directory()?;
+    let target_path = target_dir.join("riku");
+
+    // Check if already installed
+    if target_path.exists() && current_exe == target_path {
+        // Already installed in correct location
+        return Ok(());
+    }
+
+    // Create target directory if it doesn't exist
+    if !target_dir.exists() {
+        fs::create_dir_all(&target_dir)?;
+    }
+
+    // Copy binary to target location
+    echo(
+        &format!("Installing riku to '{}'...", target_path.display()),
+        "green",
+    );
+    fs::copy(&current_exe, &target_path)?;
+
+    // Set executable permissions
+    let mut perms = fs::metadata(&target_path)?.permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&target_path, perms)?;
+
+    echo(
+        &format!("✓ Installed to {}", target_path.display()),
+        "green",
+    );
+
+    // Check if target directory is in PATH
+    if !is_in_path(&target_dir) {
+        echo(
+            &format!(
+                "⚠ Warning: {} is not in your PATH. Add it with:",
+                target_dir.display()
+            ),
+            "yellow",
+        );
+        echo(
+            &format!(
+                "  export PATH=\"$HOME/.local/bin:$PATH\"  # for {}",
+                target_dir.display()
+            ),
+            "",
+        );
+    }
+
+    Ok(())
+}
+
+/// Get the best directory to install riku binary
+fn get_install_directory() -> Result<PathBuf> {
+    // Try common installation directories in order of preference
+
+    // 1. ~/.local/bin (XDG standard for user installations)
+    if let Ok(home) = env::var("HOME") {
+        let local_bin = PathBuf::from(&home).join(".local/bin");
+        return Ok(local_bin);
+    }
+
+    // 2. ~/bin (common alternative)
+    if let Ok(home) = env::var("HOME") {
+        let home_bin = PathBuf::from(&home).join("bin");
+        return Ok(home_bin);
+    }
+
+    // 3. /usr/local/bin (system-wide, requires sudo)
+    // Only use if we're already running as root
+    if env::var("USER").unwrap_or_default() == "root" {
+        return Ok(PathBuf::from("/usr/local/bin"));
+    }
+
+    // Fallback to ~/.local/bin
+    if let Ok(home) = env::var("HOME") {
+        return Ok(PathBuf::from(&home).join(".local/bin"));
+    }
+
+    bail!("Could not determine installation directory")
+}
+
+/// Check if a directory is in the PATH environment variable
+fn is_in_path(dir: &Path) -> bool {
+    if let Ok(path) = env::var("PATH") {
+        for path_dir in env::split_paths(&path) {
+            if path_dir == dir {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Set up a new SSH key. Use "-" for stdin.

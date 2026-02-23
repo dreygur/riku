@@ -5,32 +5,30 @@
 To install Riku on your server, `ssh` in as `root` and run:
 
 ```bash
-# Manual installation
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# Download the latest release binary
+curl -LO https://github.com/dreygur/riku/releases/latest/download/riku-linux-amd64.tar.gz
+tar -xzf riku-linux-amd64.tar.gz
+chmod +x riku
 
-# Clone and build Riku
-git clone https://github.com/dreygur/riku.git
-cd riku
-cargo build --release
-sudo cp target/release/riku /usr/local/bin/
+# Run init (automatically installs riku to ~/.local/bin)
+./riku init
 
 # Create deploy user
 sudo adduser --disabled-password --gecos '' deploy
 sudo su - deploy
 
-# Initialize Riku
-riku init
-
 # Add your SSH public key
 riku setup ssh ~/.ssh/id_rsa.pub
 ```
+
+After running `riku init`, the binary will be installed to `~/.local/bin/riku` and you can use `riku` from anywhere.
 
 ## Installation Methods
 
 There are several ways to install Riku:
 
-1. **Automated script** - Use the installation script (recommended)
-2. **Manual installation** - Follow the guide below
+1. **Release binary** - Download pre-built binary (recommended)
+2. **Build from source** - Follow the manual installation guide below
 3. **Cloud-init** - Automatic VPS setup (see `cloud-init` repository)
 4. **Ansible** - Use the Ansible playbook (coming soon)
 5. **Docker** - Run Riku in a container (experimental)

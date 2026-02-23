@@ -77,18 +77,33 @@ I encourage users to also check out the original [Piku project](https://github.c
 
 ## Installation
 
+### Quick Install (Recommended)
+
+```bash
+# Download the latest release
+curl -LO https://github.com/dreygur/riku/releases/latest/download/riku-linux-amd64.tar.gz
+tar -xzf riku-linux-amd64.tar.gz
+chmod +x riku
+
+# Initialize (auto-installs to ~/.local/bin)
+./riku init
+```
+
+### Build from Source
+
 ```bash
 # Clone the repository
 git clone https://github.com/dreygur/riku.git
-cd piku
+cd riku
 
 # Build the Rust binary
-cd riku
 cargo build --release
 
-# Copy the binary to your PATH
-sudo cp target/release/riku /usr/local/bin/
+# Initialize (auto-installs to ~/.local/bin)
+./target/release/riku init
 ```
+
+After running `riku init`, the binary will be available at `~/.local/bin/riku`.
 
 ## Quick Start
 
