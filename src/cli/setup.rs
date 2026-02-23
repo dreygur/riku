@@ -55,16 +55,6 @@ pub fn cmd_setup_init(paths: &RikuPaths) -> Result<()> {
     // Install default nginx configuration
     install_nginx_default_config()?;
 
-    // Start supervisor daemon in background
-    echo("Starting supervisor daemon...", "green");
-    if let Err(e) = crate::cli::apps::cmd_supervisor_daemon(paths) {
-        echo(
-            &format!("Warning: Failed to start supervisor: {}", e),
-            "yellow",
-        );
-        echo("You can start it manually with: riku supervisor", "");
-    }
-
     echo("Riku initialized successfully!", "green");
     echo("Run 'riku --help' for available commands.", "");
 
@@ -211,6 +201,17 @@ WantedBy=multi-user.target
     if let Ok(output) = Command::new("systemctl").args(["start", "riku"]).output() {
         if output.status.success() {
             echo("✓ Started riku service", "green");
+
+            // Verify supervisor is running
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            if let Ok(status) = Command::new("systemctl")
+                .args(["is-active", "riku"])
+                .output()
+            {
+                if String::from_utf8_lossy(&status.stdout).trim() == "active" {
+                    echo("✓ Supervisor daemon is running", "green");
+                }
+            }
         }
     }
 

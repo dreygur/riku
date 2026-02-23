@@ -127,11 +127,7 @@ pub enum Commands {
     Update,
 
     /// Start the process supervisor daemon
-    Supervisor {
-        /// Run as background daemon
-        #[arg(long)]
-        daemon: bool,
-    },
+    Supervisor,
 
     /// List or manage client plugins
     #[command(subcommand)]
