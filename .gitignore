@@ -109,3 +109,4 @@ authorized_keys.*
 /tmp/riku-confirm-*
 riku-agent-*.log
 riku-confirm-*
+docs/site/
