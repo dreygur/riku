@@ -83,6 +83,11 @@ impl ProcessManager {
         })
     }
 
+    /// Get the number of managed processes.
+    pub fn get_process_count(&self) -> usize {
+        self.processes.len()
+    }
+
     /// Get a reference to the stats manager.
     #[allow(dead_code)]
     pub fn stats(&self) -> &StatsManager {
