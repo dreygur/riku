@@ -516,18 +516,20 @@ done
     // Post-init verification
     echo("Verification:", "green");
 
-    // Check binary
-    let riku_path = &paths.riku_script;
-    if riku_path.exists() {
-        echo(
-            &format!("  ✓ Binary installed: {}", riku_path.display()),
-            "green",
-        );
-    } else {
-        echo(
-            &format!("  ⚠ Binary not found: {}", riku_path.display()),
-            "yellow",
-        );
+    // Check binary (user-local installation)
+    if let Ok(home) = env::var("HOME") {
+        let riku_path = PathBuf::from(&home).join(".local/bin/riku");
+        if riku_path.exists() {
+            echo(
+                &format!("  ✓ Binary installed: {}", riku_path.display()),
+                "green",
+            );
+        } else {
+            echo(
+                &format!("  ⚠ Binary not found: {}", riku_path.display()),
+                "yellow",
+            );
+        }
     }
 
     // Check supervisor
