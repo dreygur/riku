@@ -59,6 +59,8 @@ impl Supervisor {
     /// Start the supervisor daemon loop.
     pub fn run(&mut self) -> Result<()> {
         println!("Starting riku supervisor daemon...");
+        println!("Monitoring: {}", self.config_dir.display());
+        println!("Press Ctrl+C to stop");
 
         // Set up signal handlers for graceful shutdown
         setup_signal_handlers()?;
@@ -66,16 +68,21 @@ impl Supervisor {
         // Load existing configurations
         self.load_initial_configs()?;
 
+        let initial_count = self.process_manager.get_process_count();
+        println!("Loaded {} worker configurations", initial_count);
+
         // Set up file watcher for config directory
         let (tx, rx) = mpsc::channel();
         let mut watcher = recommended_watcher(tx)?;
         watcher.watch(&self.config_dir, RecursiveMode::NonRecursive)?;
 
+        println!("Supervisor running. Waiting for configuration changes...");
+
         // Main event loop
         loop {
             // Check if we should shut down
             if !is_running() {
-                println!("Shutting down supervisor...");
+                println!("\nShutting down supervisor...");
                 break;
             }
 
