@@ -307,11 +307,45 @@ fn install_riku_binary() -> Result<()> {
     if !is_in_path(&target_dir) {
         echo("", "");
         echo(&format!("⚠ Note: {} is not in your PATH.", target_dir.display()), "");
-        echo("Add it to your shell config (~/.bashrc, ~/.zshrc):", "");
-        echo("  export PATH=\"$HOME/.local/bin:$PATH\"", "");
+        
+        // Try to add to shell config automatically
+        let shell_configs = [".bashrc", ".zshrc", ".profile"];
+        let mut added = false;
+        
+        if let Ok(home) = env::var("HOME") {
+            for config in &shell_configs {
+                let config_path = PathBuf::from(&home).join(config);
+                if config_path.exists() {
+                    // Check if already in config
+                    if let Ok(content) = fs::read_to_string(&config_path) {
+                        if !content.contains(".local/bin") {
+                            // Add to config
+                            if let Ok(mut file) = fs::OpenOptions::new()
+                                .append(true)
+                                .open(&config_path)
+                            {
+                                use std::io::Write;
+                                let _ = writeln!(file, "\n# Add Riku to PATH\nexport PATH=\"$HOME/.local/bin:$PATH\"");
+                                added = true;
+                                echo(&format!("✓ Added PATH export to ~/{}", config), "");
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if !added {
+            echo("Add it manually to your shell config (~/.bashrc, ~/.zshrc):", "");
+            echo("  export PATH=\"$HOME/.local/bin:$PATH\"", "");
+        }
+        
         echo("", "");
-        echo("Or use the full path:", "");
+        echo("Or reload your shell, or use the full path:", "");
         echo(&format!("  {}", target_path.display()), "");
+        echo("", "");
+        echo("After adding to PATH, run: exec $SHELL -l", "");
     }
 
     Ok(())
