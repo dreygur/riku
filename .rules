@@ -25,6 +25,13 @@
 
 6. **Readability & Optimization First** - Prioritize clean, readable code and performance. Write code humans can understand, then optimize for machines.
 
+7. **No Shortcuts** - Never remove or bypass functionality to fix errors. When encountering bugs or failures:
+   - Debug and understand the root cause
+   - Fix the underlying issue properly
+   - Maintain existing validation, error handling, and safety checks
+   - If validation fails, fix the code being validated—not the validation itself
+   - Senior developers solve problems; they don't hide them
+
 ## Project Overview
 
 Riku is a complete Rust port of the Piku micro-PaaS, providing Heroku-like git push deployments. It's a single binary written in Rust with no runtime dependencies.
