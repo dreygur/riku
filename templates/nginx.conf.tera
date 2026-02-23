@@ -1,7 +1,3 @@
-upstream {{ APP }}_UPSTREAM {
-  server {{ NGINX_SOCKET }};
-}
-
 server {
   listen              {{ NGINX_IPV4_ADDRESS }}:80;
 {% if NGINX_IPV6_ADDRESS %}
