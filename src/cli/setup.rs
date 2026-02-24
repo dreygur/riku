@@ -248,14 +248,14 @@ fn install_nginx_default_config() -> Result<()> {
                 .arg("nginx")
                 .output()
             {
-                if String::from_utf8_lossy(&status.stdout).trim() == "active" {
-                    if let Ok(_) = Command::new("systemctl")
+                if String::from_utf8_lossy(&status.stdout).trim() == "active"
+                    && Command::new("systemctl")
                         .arg("reload")
                         .arg("nginx")
                         .output()
-                    {
-                        echo("✓ Reloaded nginx", "green");
-                    }
+                        .is_ok()
+                {
+                    echo("✓ Reloaded nginx", "green");
                 }
             }
         } else {
@@ -267,13 +267,12 @@ fn install_nginx_default_config() -> Result<()> {
 }
 
 /// Install riku binary to user's PATH
-#[allow(dead_code)]
 fn install_riku_binary() -> Result<()> {
     // Get current executable path
     let current_exe = env::current_exe()?;
 
-    // Determine installation target
-    let target_dir = get_install_directory()?;
+    // Determine installation target (always user-local, never requires root)
+    let target_dir = get_user_install_directory()?;
     let target_path = target_dir.join("riku");
 
     // Check if already installed
@@ -306,58 +305,72 @@ fn install_riku_binary() -> Result<()> {
 
     // Check if target directory is in PATH
     if !is_in_path(&target_dir) {
-        echo(
-            &format!(
-                "⚠ Warning: {} is not in your PATH. Add it with:",
-                target_dir.display()
-            ),
-            "yellow",
-        );
-        echo(
-            &format!(
-                "  export PATH=\"$HOME/.local/bin:$PATH\"  # for {}",
-                target_dir.display()
-            ),
-            "",
-        );
+        echo("", "");
+        echo(&format!("⚠ Note: {} is not in your PATH.", target_dir.display()), "");
+        
+        // Try to add to shell config automatically
+        let shell_configs = [".bashrc", ".zshrc", ".profile"];
+        let mut added = false;
+        
+        if let Ok(home) = env::var("HOME") {
+            for config in &shell_configs {
+                let config_path = PathBuf::from(&home).join(config);
+                if config_path.exists() {
+                    // Check if already in config
+                    if let Ok(content) = fs::read_to_string(&config_path) {
+                        if !content.contains(".local/bin") {
+                            // Add to config
+                            if let Ok(mut file) = fs::OpenOptions::new()
+                                .append(true)
+                                .open(&config_path)
+                            {
+                                use std::io::Write;
+                                let _ = writeln!(file, "\n# Add Riku to PATH\nexport PATH=\"$HOME/.local/bin:$PATH\"");
+                                added = true;
+                                echo(&format!("✓ Added PATH export to ~/{}", config), "");
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if !added {
+            echo("Add it manually to your shell config (~/.bashrc, ~/.zshrc):", "");
+            echo("  export PATH=\"$HOME/.local/bin:$PATH\"", "");
+        }
+        
+        echo("", "");
+        echo("Or reload your shell, or use the full path:", "");
+        echo(&format!("  {}", target_path.display()), "");
+        echo("", "");
+        echo("After adding to PATH, run: exec $SHELL -l", "");
     }
 
     Ok(())
 }
 
-/// Get the best directory to install riku binary
-#[allow(dead_code)]
-fn get_install_directory() -> Result<PathBuf> {
-    // Try common installation directories in order of preference
-
-    // 1. ~/.local/bin (XDG standard for user installations)
+/// Get user-local installation directory (~/.local/bin)
+fn get_user_install_directory() -> Result<PathBuf> {
+    // Always install to user-local directory (no root required)
+    // Follows XDG Base Directory specification
+    
     if let Ok(home) = env::var("HOME") {
+        // Primary: ~/.local/bin (XDG standard)
         let local_bin = PathBuf::from(&home).join(".local/bin");
         return Ok(local_bin);
     }
 
-    // 2. ~/bin (common alternative)
-    if let Ok(home) = env::var("HOME") {
-        let home_bin = PathBuf::from(&home).join("bin");
-        return Ok(home_bin);
+    // Fallback: current directory
+    if let Ok(cwd) = env::current_dir() {
+        return Ok(cwd);
     }
 
-    // 3. /usr/local/bin (system-wide, requires sudo)
-    // Only use if we're already running as root
-    if env::var("USER").unwrap_or_default() == "root" {
-        return Ok(PathBuf::from("/usr/local/bin"));
-    }
-
-    // Fallback to ~/.local/bin
-    if let Ok(home) = env::var("HOME") {
-        return Ok(PathBuf::from(&home).join(".local/bin"));
-    }
-
-    bail!("Could not determine installation directory")
+    bail!("Could not determine home directory for installation")
 }
 
 /// Check if a directory is in the PATH environment variable
-#[allow(dead_code)]
 fn is_in_path(dir: &Path) -> bool {
     if let Ok(path) = env::var("PATH") {
         for path_dir in env::split_paths(&path) {
@@ -383,7 +396,7 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
 
     // Check if running as root for full installation
     let is_root = env::var("USER").unwrap_or_default() == "root";
-    
+
     if !is_root {
         echo("⚠ Warning: Not running as root", "yellow");
         echo("  Some features require root privileges:", "yellow");
@@ -396,21 +409,27 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
     // Prerequisites check
     echo("Checking prerequisites...", "");
     let mut missing_deps = Vec::new();
-    
+
     // Check git
     if Command::new("git").arg("--version").output().is_err() {
         missing_deps.push("git");
     }
-    
+
     // Check nginx (warning only)
     let has_nginx = Command::new("nginx").arg("-v").output().is_ok();
     if !has_nginx && is_root {
         echo("  ⚠ nginx not found - install for web serving", "yellow");
     }
-    
+
     if !missing_deps.is_empty() {
-        echo(&format!("  ⚠ Missing dependencies: {}", missing_deps.join(", ")), "yellow");
-        echo(&format!("  Install with: apt install {}", missing_deps.join(" ")), "yellow");
+        echo(
+            &format!("  ⚠ Missing dependencies: {}", missing_deps.join(", ")),
+            "yellow",
+        );
+        echo(
+            &format!("  Install with: apt install {}", missing_deps.join(" ")),
+            "yellow",
+        );
     } else {
         echo("  ✓ All required dependencies found", "green");
     }
@@ -444,6 +463,45 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
             echo(&format!("      ✓ ~/.riku/{} (exists)", name), "green");
         }
     }
+
+    // Install riku binary to user's PATH
+    install_riku_binary()?;
+    echo("", "");
+
+    // Create global post-receive hook template
+    let hooks_dir = paths.git_root.parent().unwrap().join("hooks");
+    if !hooks_dir.exists() {
+        fs::create_dir_all(&hooks_dir)?;
+    }
+    
+    let post_receive = hooks_dir.join("post-receive");
+    let hook_script = r#"#!/bin/bash
+# Riku global post-receive hook
+# This hook is called when code is pushed to any app repository
+
+while read oldrev newrev refname; do
+    # Extract app name from repository path
+    APP=$(basename "$(pwd)" .git)
+    
+    # Run riku git-hook
+    RIKU_BIN="$HOME/.local/bin/riku"
+    if [ -x "$RIKU_BIN" ]; then
+        "$RIKU_BIN" git-hook "$APP"
+    else
+        echo " !     Riku binary not found at $RIKU_BIN"
+    fi
+done
+"#;
+    
+    fs::write(&post_receive, hook_script)?;
+    
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&post_receive, fs::Permissions::from_mode(0o755))?;
+    }
+    
+    echo("      ✓ Global git hook created", "green");
     echo("", "");
 
     // Step 2: Setup systemd (unless --no-systemd)
@@ -489,18 +547,26 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
     echo("", "");
     echo("-----> Riku server initialized successfully!", "green");
     echo("", "");
-    
+
     // Post-init verification
     echo("Verification:", "green");
-    
-    // Check binary
-    let riku_path = &paths.riku_script;
-    if riku_path.exists() {
-        echo(&format!("  ✓ Binary installed: {}", riku_path.display()), "green");
-    } else {
-        echo(&format!("  ⚠ Binary not found: {}", riku_path.display()), "yellow");
+
+    // Check binary (user-local installation)
+    if let Ok(home) = env::var("HOME") {
+        let riku_path = PathBuf::from(&home).join(".local/bin/riku");
+        if riku_path.exists() {
+            echo(
+                &format!("  ✓ Binary installed: {}", riku_path.display()),
+                "green",
+            );
+        } else {
+            echo(
+                &format!("  ⚠ Binary not found: {}", riku_path.display()),
+                "yellow",
+            );
+        }
     }
-    
+
     // Check supervisor
     if !no_systemd {
         let status = Command::new("systemctl")
@@ -523,9 +589,9 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
             "yellow",
         );
     }
-    
+
     echo("", "");
-    
+
     // First app guide
     echo("Deploy your first app:", "green");
     echo("", "");
@@ -537,7 +603,13 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
     echo("   echo 'web: python app.py' > Procfile", "yellow");
     echo("", "");
     echo("3. Deploy:", "yellow");
-    echo(&format!("   git remote add riku {}@your-server:myapp", env::var("USER").unwrap_or_else(|_| "deploy".to_string())), "yellow");
+    echo(
+        &format!(
+            "   git remote add riku {}@your-server:myapp",
+            env::var("USER").unwrap_or_else(|_| "deploy".to_string())
+        ),
+        "yellow",
+    );
     echo("   git push riku master", "yellow");
     echo("", "");
     echo("Documentation: https://dreygur.github.io/riku/", "green");
@@ -555,21 +627,22 @@ fn setup_systemd_service(paths: &RikuPaths) -> Result<()> {
 
     fs::create_dir_all(&systemd_dir)?;
 
-    // Get riku binary path
-    let riku_binary = paths.riku_script.to_string_lossy();
+    // Get riku binary path (user-local, no root required)
+    let riku_binary_path = paths.riku_script.to_string_lossy();
 
     // Create service file
     let service_content = format!(
         r#"[Unit]
-Description=Riku Server
-Documentation=https://github.com/dreygur/riku
-After=network.target
+Description=Riku Process Supervisor
+Documentation=https://dreygur.github.io/riku/
+After=network.target nginx.service
+Wants=nginx.service
 
 [Service]
 Type=simple
-ExecStart={riku_binary} supervisor
+ExecStart={riku_path} supervisor
 Restart=always
-RestartSec=10
+RestartSec=5
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=riku
@@ -580,10 +653,17 @@ ProtectSystem=strict
 ProtectHome=read-only
 PrivateTmp=true
 
+# Allow writing to riku directories
+ReadWritePaths=~/.riku
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%
+
 [Install]
 WantedBy=default.target
 "#,
-        riku_binary = riku_binary
+        riku_path = riku_binary_path
     );
 
     // Create service file

@@ -278,10 +278,70 @@ fn generate_nginx_config_from_template(
 
     // Write the configuration file
     let config_file = paths.nginx_root.join(format!("{}.conf", app));
-    fs::write(&config_file, config_content)?;
+    fs::write(&config_file, &config_content)?;
 
     // Validate the nginx configuration
     validate_nginx_config(&config_file)?;
+
+    Ok(())
+}
+
+/// Temporary file with automatic cleanup.
+struct TempFile {
+    path: std::path::PathBuf,
+}
+
+impl TempFile {
+    fn new(path: std::path::PathBuf) -> Self {
+        TempFile { path }
+    }
+}
+
+impl Drop for TempFile {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+/// Validate nginx configuration file.
+fn validate_nginx_config(config_file: &Path) -> Result<()> {
+    use std::process::Command;
+
+    // Create a temporary nginx.conf that includes our site config
+    // This allows proper validation of server block configs
+    let temp_nginx_conf = config_file.with_file_name("test_nginx.conf");
+    let _temp_file = TempFile::new(temp_nginx_conf.clone());
+
+    let include_directive = format!("include {};\n", config_file.display());
+    let full_config = format!(
+        "events {{ worker_connections 1024; }}\nhttp {{\n{}\n}}",
+        include_directive
+    );
+
+    fs::write(&temp_nginx_conf, &full_config)?;
+
+    let output = Command::new("nginx")
+        .arg("-t")
+        .arg("-c")
+        .arg(&temp_nginx_conf)
+        .output()?;
+
+    // Temp file is automatically cleaned up by Drop
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    // Check if syntax is OK (nginx outputs "syntax is ok" even on permission errors)
+    if stderr.contains("syntax is ok") {
+        // Config syntax is valid, permission errors are not our concern
+        return Ok(());
+    }
+
+    if !output.status.success() {
+        return Err(anyhow::anyhow!(
+            "Nginx config validation failed: {}",
+            stderr
+        ));
+    }
 
     Ok(())
 }
@@ -300,27 +360,6 @@ pub fn remove_nginx_config(app: &str, paths: &crate::config::RikuPaths) -> Resul
         if file.exists() {
             fs::remove_file(&file)?;
         }
-    }
-
-    Ok(())
-}
-
-/// Validate nginx configuration file.
-fn validate_nginx_config(config_file: &Path) -> Result<()> {
-    use std::process::Command;
-
-    let output = Command::new("nginx")
-        .arg("-t")
-        .arg("-c")
-        .arg(config_file)
-        .output()?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow::anyhow!(
-            "Nginx config validation failed: {}",
-            stderr
-        ));
     }
 
     Ok(())

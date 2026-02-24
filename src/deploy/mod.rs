@@ -164,37 +164,31 @@ pub fn do_deploy(
     echo(&format!("-----> Deploying app '{}'", app), "green");
 
     // Git fetch and reset if newrev provided
-    let env_vars: Vec<(&str, String)> = vec![("GIT_WORK_DIR", app_path.display().to_string())];
-
-    Command::new("git")
-        .args(["fetch", "--quiet"])
+    // Fetch from origin to get the latest changes
+    // Clear GIT_DIR and GIT_WORK_TREE that might be set by git hooks
+    let git_fetch_result = Command::new("git")
+        .args(["fetch", "--quiet", "origin"])
         .current_dir(&app_path)
-        .envs(env_vars.iter().cloned())
-        .status()
-        .ok();
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .status();
 
-    if let Some(rev) = newrev {
-        Command::new("git")
-            .args(["reset", "--hard", rev])
-            .current_dir(&app_path)
-            .envs(env_vars.iter().cloned())
-            .status()
-            .ok();
+    if let Err(e) = git_fetch_result {
+        echo(&format!("Warning: git fetch failed: {}", e), "yellow");
     }
 
-    Command::new("git")
-        .args(["submodule", "init"])
-        .current_dir(&app_path)
-        .envs(env_vars.iter().cloned())
-        .status()
-        .ok();
+    if let Some(rev) = newrev {
+        let git_reset_result = Command::new("git")
+            .args(["reset", "--hard", rev])
+            .current_dir(&app_path)
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .status();
 
-    Command::new("git")
-        .args(["submodule", "update"])
-        .current_dir(&app_path)
-        .envs(env_vars.iter().cloned())
-        .status()
-        .ok();
+        if let Err(e) = git_reset_result {
+            echo(&format!("Warning: git reset failed: {}", e), "yellow");
+        }
+    }
 
     // Ensure log directory exists
     if !log_path.exists() {
@@ -447,8 +441,7 @@ fn create_identity_workers(
             // Set PORT for web processes
             let final_command = command.clone();
             if kind == "web" {
-                let port =
-                    get_free_port("127.0.0.1").expect("Failed to find a free port for web process");
+                let port = get_free_port("127.0.0.1")?;
                 worker_env.insert("PORT".to_string(), port.to_string());
 
                 // Create socket file for web processes
@@ -479,7 +472,7 @@ fn create_identity_workers(
             let config_path = paths.workers_available.join(&config_filename);
 
             let config_content = toml::to_string(&worker_config)?;
-            fs::write(&config_path, config_content)?;
+            fs::write(&config_path, &config_content)?;
 
             // Create a symlink to enable the worker
             let enabled_path = paths.workers_enabled.join(&config_filename);
@@ -498,119 +491,44 @@ fn create_identity_workers(
     Ok(())
 }
 
-/// Spawn application processes based on Procfile and SCALING.
-/// This function is called after deployment to start the application processes.
+/// Notify the supervisor to reload configurations (if running).
+fn notify_supervisor_reload() {
+    // Send SIGHUP to the supervisor process to trigger config reload
+    if let Ok(output) = std::process::Command::new("pgrep")
+        .args(["-f", "riku supervisor"])
+        .output()
+    {
+        if output.status.success() && !output.stdout.is_empty() {
+            let pids = String::from_utf8_lossy(&output.stdout);
+            for pid in pids.split_whitespace() {
+                if let Ok(pid_num) = pid.parse::<i32>() {
+                    let _ = nix::sys::signal::kill(
+                        nix::unistd::Pid::from_raw(pid_num),
+                        nix::sys::signal::Signal::SIGHUP,
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// Notify the supervisor to reload configurations and spawn processes.
+/// This function is called after deployment to start/restart application processes.
+/// The worker configs should already exist from the deploy step.
 pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
-    use crate::util::{echo, parse_procfile};
+    use crate::util::echo;
     use std::collections::HashMap;
 
     let app_path = paths.app_root.join(app);
 
-    // Read Procfile to determine processes to run
-    let procfile_path = app_path.join("Procfile");
-    let workers = parse_procfile(&procfile_path);
-
-    let mut workers = match workers {
-        Some(w) if !w.is_empty() => w,
-        _ => {
-            echo(
-                &format!("Error: Invalid Procfile for app '{}'.", app),
-                "red",
-            );
-            return Ok(());
-        }
-    };
-
-    // Handle cron jobs separately from regular processes
-    let cron_jobs: Vec<(String, String)> = workers
-        .iter()
-        .filter(|(kind, _)| kind.starts_with("cron"))
-        .map(|(k, v)| (k.clone(), v.clone()))
-        .collect();
-
-    // Remove cron jobs from the regular workers list
-    for (kind, _) in &cron_jobs {
-        workers.remove(kind);
-    }
-
-    // Note cron jobs for supervisor to handle
-    if !cron_jobs.is_empty() {
-        for (kind, command) in cron_jobs.iter() {
-            echo(
-                &format!(
-                    "Cron job detected for app '{}': {} - {}",
-                    app, kind, command
-                ),
-                "green",
-            );
-            // The supervisor will handle cron jobs when processing worker configs
-        }
-    }
-
-    // Get environment variables for the app
+    // Get environment variables for nginx config generation
     let env_file = paths.env_root.join(app).join("ENV");
     let mut env: HashMap<String, String> = HashMap::new();
     if env_file.exists() {
         crate::util::parse_settings(&env_file, &mut env)?;
     }
 
-    // Determine runtime and call appropriate deployer to create worker configs
-    let runtime = detect_runtime(&app_path);
-    match &runtime {
-        Some(rt) => match rt {
-            Runtime::Python => {
-                python::deploy_python(app, &app_path, &env, paths)?;
-            }
-            Runtime::PythonPoetry => {
-                python::deploy_python_poetry(app, &app_path, &env, paths)?;
-            }
-            Runtime::PythonUv => {
-                python::deploy_python_uv(app, &app_path, &env, paths)?;
-            }
-            Runtime::Node => {
-                node::deploy_node(app, &app_path, &env, paths)?;
-            }
-            Runtime::Ruby => {
-                ruby::deploy_ruby(app, &app_path, &env, paths)?;
-            }
-            Runtime::Go => {
-                go::deploy_go(app, &app_path, &env, paths)?;
-            }
-            Runtime::JavaMaven => {
-                java::deploy_java_maven(app, &app_path, &env, paths)?;
-            }
-            Runtime::JavaGradle => {
-                java::deploy_java_gradle(app, &app_path, &env, paths)?;
-            }
-            Runtime::ClojureCli => {
-                clojure::deploy_clojure_cli(app, &app_path, &env, paths)?;
-            }
-            Runtime::ClojureLein => {
-                clojure::deploy_clojure_lein(app, &app_path, &env, paths)?;
-            }
-            Runtime::Rust => {
-                rust::deploy_rust(app, &app_path, &env, paths)?;
-            }
-            Runtime::Identity => {
-                identity::deploy_identity(app, &app_path, &env, paths)?;
-            }
-            Runtime::Container => {
-                crate::deploy::container::deploy_container(app, &app_path, &env, paths)?;
-            }
-        },
-        None => {
-            // Check for identity-style deployments (PHP, release+web, static)
-            if workers.contains_key("release") && workers.contains_key("web")
-                || workers.contains_key("static")
-            {
-                identity::create_identity_workers(app, &app_path, &env, paths)?;
-            } else {
-                echo("-----> Could not detect runtime!", "red");
-            }
-        }
-    }
-
-    // Generate nginx configuration after creating worker configs
+    // Generate nginx configuration
     let nginx_result = crate::nginx::generate_nginx_config(app, &app_path, &env, paths);
     if let Err(e) = nginx_result {
         echo(
@@ -618,6 +536,15 @@ pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
             "yellow",
         );
     }
+
+    // Notify the supervisor to reload configurations
+    // The supervisor will detect new/changed configs and spawn processes
+    notify_supervisor_reload();
+
+    echo(
+        "-----> Notified supervisor to spawn processes...",
+        "green",
+    );
 
     Ok(())
 }

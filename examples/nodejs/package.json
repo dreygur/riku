@@ -1,0 +1,23 @@
+{
+  "name": "riku-nodejs-example",
+  "version": "1.0.0",
+  "description": "Example Node.js application for Riku PaaS",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": [
+    "riku",
+    "paas",
+    "example"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

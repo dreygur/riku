@@ -33,10 +33,22 @@ pub fn run_plugin(plugin_name: &str, paths: &RikuPaths, args: &[String]) -> Resu
     }
 
     // Execute the plugin with the provided arguments
-    let status = Command::new(&plugin_path).args(args).status()?;
+    let status = match Command::new(&plugin_path).args(args).status() {
+        Ok(s) => s,
+        Err(e) => {
+            return Err(anyhow::anyhow!(
+                "Failed to execute plugin '{}': {}",
+                plugin_name,
+                e
+            ));
+        }
+    };
 
     if !status.success() {
-        let code = status.code().unwrap_or(1);
+        let code = status.code().unwrap_or_else(|| {
+            eprintln!("Plugin '{}' crashed without exit code", plugin_name);
+            1
+        });
         return Err(anyhow::anyhow!(
             "Plugin '{}' exited with code {}",
             plugin_name,

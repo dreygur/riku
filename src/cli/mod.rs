@@ -19,7 +19,10 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// List deployed apps
-    Apps,
+    Apps {
+        #[command(subcommand)]
+        cmd: Option<AppsCmd>,
+    },
 
     /// AI agent interface (SSH-based automation)
     Agent {
@@ -66,6 +69,10 @@ pub enum Commands {
     Deploy {
         /// App name
         app: String,
+
+        /// Deploy from local path instead of git repo
+        #[arg(long)]
+        from: Option<String>,
     },
 
     /// Remove an app (preserves data dir)
@@ -84,8 +91,17 @@ pub enum Commands {
     },
 
     /// Manage app processes
-    #[command(subcommand)]
-    Ps(PsCmd),
+    Ps {
+        /// Show all processes (default) or specify an app
+        #[arg()]
+        app: Option<String>,
+        /// Show detailed info including health status
+        #[arg(long, short)]
+        verbose: bool,
+        /// Scale workers (e.g. web=4 worker=2)
+        #[arg(short, long, num_args = 1..)]
+        scale: Vec<String>,
+    },
 
     /// Show process stats and metrics
     #[command(subcommand)]
@@ -209,28 +225,6 @@ pub enum ConfigCmd {
     },
 }
 
-#[derive(Subcommand, Debug)]
-pub enum PsCmd {
-    /// Show process status (detailed view)
-    Show {
-        /// App name
-        app: String,
-        /// Show detailed info including health status
-        #[arg(long, short)]
-        verbose: bool,
-    },
-
-    /// Scale workers
-    #[command(trailing_var_arg = true)]
-    Scale {
-        /// App name
-        app: String,
-        /// Worker scaling settings (e.g. web=4 worker=2)
-        #[arg(required = true)]
-        settings: Vec<String>,
-    },
-}
-
 /// Stats commands
 #[derive(Subcommand, Debug)]
 pub enum StatsCmd {
@@ -253,6 +247,16 @@ pub enum PluginCmd {
     /// Check if a plugin exists
     Exists {
         /// Plugin name
+        name: String,
+    },
+}
+
+/// Apps subcommands
+#[derive(Subcommand, Debug)]
+pub enum AppsCmd {
+    /// Create a new application
+    Create {
+        /// Application name
         name: String,
     },
 }

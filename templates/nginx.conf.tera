@@ -1,18 +1,9 @@
-upstream {{ APP }}_UPSTREAM {
-  server {{ NGINX_SOCKET }};
-}
-
 server {
   listen              {{ NGINX_IPV4_ADDRESS }}:80;
 {% if NGINX_IPV6_ADDRESS %}
   listen              {{ NGINX_IPV6_ADDRESS }}:80;
 {% endif %}
   server_name         {{ NGINX_SERVER_NAME }};
-
-  location ^~ /.well-known/acme-challenge {
-    allow all;
-    root {{ ACME_WWW }};
-  }
 
 {% include "nginx_common.conf.tera" %}
 }

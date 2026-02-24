@@ -11,7 +11,7 @@ use clap::Parser;
 
 use cli::client_plugins;
 use cli::container;
-use cli::{Cli, Commands, ConfigCmd, PluginCmd, PsCmd, StatsCmd};
+use cli::{AppsCmd, Cli, Commands, ConfigCmd, PluginCmd, StatsCmd};
 use config::RikuPaths;
 
 fn main() -> Result<()> {
@@ -50,7 +50,10 @@ fn main() -> Result<()> {
                 cli::agent::cmd_agent_help(None)?;
             }
         }
-        Commands::Apps => cli::apps::cmd_apps(&paths)?,
+        Commands::Apps { cmd } => match cmd {
+            Some(AppsCmd::Create { name }) => cli::apps::cmd_apps_create(&paths, &name)?,
+            None => cli::apps::cmd_apps(&paths)?,
+        },
         Commands::Config(cmd) => match cmd {
             ConfigCmd::Show { app } => cli::apps::cmd_config_show(&paths, &app)?,
             ConfigCmd::Get { app, key } => cli::apps::cmd_config_get(&paths, &app, &key)?,
@@ -61,12 +64,21 @@ fn main() -> Result<()> {
         Commands::Container { cmd } => {
             cli::container::cmd_container(container::ContainerCmd { command: cmd }, &paths)?
         }
-        Commands::Deploy { app } => cli::apps::cmd_deploy(&paths, &app)?,
+        Commands::Deploy { app, from } => cli::apps::cmd_deploy(&paths, &app, from.as_deref())?,
         Commands::Destroy { app } => cli::apps::cmd_destroy(&paths, &app)?,
         Commands::Logs { app, process } => cli::apps::cmd_logs(&paths, &app, &process)?,
-        Commands::Ps(cmd) => match cmd {
-            PsCmd::Show { app, verbose } => cli::apps::cmd_ps_show(&paths, &app, verbose)?,
-            PsCmd::Scale { app, settings } => cli::apps::cmd_ps_scale(&paths, &app, &settings)?,
+        Commands::Ps { app, verbose, scale } => {
+            if !scale.is_empty() {
+                // Scale command
+                let app_name = app.ok_or_else(|| anyhow::anyhow!("App name required for scaling"))?;
+                cli::apps::cmd_ps_scale(&paths, &app_name, &scale)?;
+            } else if let Some(app_name) = app {
+                // Show specific app
+                cli::apps::cmd_ps_show(&paths, &app_name, verbose)?;
+            } else {
+                // Show all processes (always verbose by default)
+                cli::apps::cmd_ps_all(&paths, true)?;
+            }
         },
         Commands::Stats(cmd) => match cmd {
             StatsCmd::All => cli::apps::cmd_stats_all(&paths)?,
@@ -122,12 +134,12 @@ fn main() -> Result<()> {
 fn get_plugin_command(command: &Commands) -> Option<String> {
     match command {
         // These commands can be overridden by client plugins
-        Commands::Apps => Some("apps".to_string()),
+        Commands::Apps { .. } => Some("apps".to_string()),
         Commands::Config(_) => Some("config".to_string()),
         Commands::Deploy { .. } => Some("deploy".to_string()),
         Commands::Destroy { .. } => Some("destroy".to_string()),
         Commands::Logs { .. } => Some("logs".to_string()),
-        Commands::Ps(_) => Some("ps".to_string()),
+        Commands::Ps { .. } => Some("ps".to_string()),
         Commands::Stats(_) => Some("stats".to_string()),
         Commands::Run { .. } => Some("run".to_string()),
         Commands::Restart { .. } => Some("restart".to_string()),
@@ -143,7 +155,7 @@ fn get_plugin_command(command: &Commands) -> Option<String> {
         // Core commands that shouldn't be overridden
         Commands::Init { .. } => None,
         Commands::Update => None,
-        Commands::Supervisor { .. } => None,
+        Commands::Supervisor => None,
         Commands::GitHook { .. } => None,
         Commands::GitReceivePack { .. } => None,
         Commands::GitUploadPack { .. } => None,
@@ -163,7 +175,7 @@ fn build_plugin_args(command: &Commands) -> Vec<String> {
 
     // $2: app name and $3+: command-specific args
     match command {
-        Commands::Apps => {
+        Commands::Apps { .. } => {
             args.push(String::new()); // No app for apps list
             args.push("apps".to_string());
         }
@@ -191,9 +203,13 @@ fn build_plugin_args(command: &Commands) -> Vec<String> {
                 args.push("config:live".to_string());
             }
         },
-        Commands::Deploy { app } => {
+        Commands::Deploy { app, from } => {
             args.push(app.clone());
             args.push("deploy".to_string());
+            if let Some(from_path) = from {
+                args.push("--from".to_string());
+                args.push(from_path.clone());
+            }
         }
         Commands::Destroy { app } => {
             args.push(app.clone());
@@ -206,15 +222,14 @@ fn build_plugin_args(command: &Commands) -> Vec<String> {
                 args.push(process.clone());
             }
         }
-        Commands::Ps(cmd) => match cmd {
-            PsCmd::Show { app, .. } => {
-                args.push(app.clone());
-                args.push("ps:show".to_string());
-            }
-            PsCmd::Scale { app, settings } => {
-                args.push(app.clone());
+        Commands::Ps { app, scale, .. } => {
+            if !scale.is_empty() {
+                args.push(app.clone().unwrap_or_default());
                 args.push("ps:scale".to_string());
-                args.extend(settings.clone());
+                args.extend(scale.clone());
+            } else {
+                args.push(app.clone().unwrap_or_default());
+                args.push("ps:show".to_string());
             }
         },
         Commands::Run { app, cmd } => {

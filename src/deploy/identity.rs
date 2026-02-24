@@ -129,7 +129,7 @@ fn create_identity_worker_config(
 
     // Set PORT for web processes
     if kind == "web" {
-        let port = get_free_port("127.0.0.1").expect("Failed to find a free port for web process");
+        let port = get_free_port("127.0.0.1")?;
         worker_env.insert("PORT".to_string(), port.to_string());
 
         // Create socket file for web processes
@@ -160,7 +160,7 @@ fn create_identity_worker_config(
     let config_path = paths.workers_available.join(&config_filename);
 
     let config_content = toml::to_string(&worker_config)?;
-    fs::write(&config_path, config_content)?;
+    fs::write(&config_path, &config_content)?;
 
     // Create a symlink to enable the worker
     let enabled_path = paths.workers_enabled.join(&config_filename);

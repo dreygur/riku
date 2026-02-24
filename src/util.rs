@@ -3,12 +3,130 @@ use colored::Colorize;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
-use std::fs::{self, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::net::TcpListener;
 use std::path::Path;
 use std::process::{self, Command};
 use which::which;
+
+/// Table column definition.
+pub struct TableColumn {
+    pub header: String,
+    pub width: usize,
+}
+
+/// Build a formatted table from headers and rows.
+pub fn format_table(headers: &[&str], rows: &[Vec<String>], column_spacing: usize) -> String {
+    if headers.is_empty() {
+        return String::new();
+    }
+
+    // Calculate column widths from headers
+    let mut widths: Vec<usize> = headers.iter().map(|h| h.len()).collect();
+
+    // Expand widths based on row data
+    for row in rows {
+        for (i, cell) in row.iter().enumerate() {
+            if i < widths.len() {
+                widths[i] = widths[i].max(cell.len());
+            }
+        }
+    }
+
+    let mut output = String::new();
+    let spacing = " ".repeat(column_spacing);
+
+    // Header row
+    let header_line: Vec<String> = headers
+        .iter()
+        .enumerate()
+        .map(|(i, h)| format!("{:<width$}", h, width = widths[i]))
+        .collect();
+    output.push_str(&header_line.join(&spacing));
+    output.push('\n');
+
+    // Separator line
+    let separator_line: Vec<String> = widths
+        .iter()
+        .map(|w| "-".repeat(*w))
+        .collect();
+    output.push_str(&separator_line.join(&spacing));
+    output.push('\n');
+
+    // Data rows
+    for row in rows {
+        let row_line: Vec<String> = row
+            .iter()
+            .enumerate()
+            .map(|(i, cell)| format!("{:<width$}", cell, width = widths.get(i).unwrap_or(&0)))
+            .collect();
+        output.push_str(&row_line.join(&spacing));
+        output.push('\n');
+    }
+
+    output
+}
+
+/// Print a table with colored headers.
+pub fn print_table(headers: &[&str], rows: &[Vec<String>], column_spacing: usize) {
+    let table = format_table(headers, rows, column_spacing);
+    println!("{}", table);
+}
+
+/// Print a table with a title.
+pub fn print_table_with_title(title: &str, headers: &[&str], rows: &[Vec<String>], column_spacing: usize) {
+    println!("{}", title.green().bold());
+    println!();
+    print_table(headers, rows, column_spacing);
+}
+
+/// File lock wrapper for safe concurrent access.
+pub struct FileLock {
+    _file: File,
+}
+
+impl FileLock {
+    /// Acquire an exclusive lock on a file.
+    pub fn acquire(path: &Path) -> Result<Self> {
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(path)
+            .map_err(|e| anyhow::anyhow!("Failed to open lock file {:?}: {}", path, e))?;
+        
+        fs2::FileExt::lock_exclusive(&file)
+            .map_err(|e| anyhow::anyhow!("Failed to acquire lock on {:?}: {}", path, e))?;
+        
+        Ok(FileLock { _file: file })
+    }
+}
+
+impl Drop for FileLock {
+    fn drop(&mut self) {
+        // Lock is automatically released when file is closed
+    }
+}
+
+/// Write content to a file atomically with locking.
+/// This ensures concurrent writes don't corrupt the file.
+pub fn atomic_write_with_lock(path: &Path, content: &str) -> Result<()> {
+    // Acquire lock
+    let lock_path = path.with_extension(format!("{}.lock", path.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_default()));
+    let _lock = FileLock::acquire(&lock_path)?;
+    
+    // Write to temp file
+    let temp_path = path.with_extension("tmp");
+    fs::write(&temp_path, content)
+        .map_err(|e| anyhow::anyhow!("Failed to write temp file {:?}: {}", temp_path, e))?;
+    
+    // Atomic rename
+    fs::rename(&temp_path, path)
+        .map_err(|e| anyhow::anyhow!("Failed to rename temp file to {:?}: {}", path, e))?;
+    
+    Ok(())
+}
 
 /// Cron regexp matching five time fields followed by a command.
 const CRON_REGEXP: &str = r"^((?:(?:\*/)?\d+)|\*) ((?:(?:\*/)?\d+)|\*) ((?:(?:\*/)?\d+)|\*) ((?:(?:\*/)?\d+)|\*) ((?:(?:\*/)?\d+)|\*) (.*)$";
@@ -38,9 +156,13 @@ pub fn exit_if_invalid(app: &str, app_root: &Path) -> Result<String> {
         echo(&format!("Error: app '{}' not found.", app), "red");
         echo("", "");
         echo("To deploy a new app:", "yellow");
-        echo("  1. Create app directory and initialize git", "yellow");
-        echo("  2. Add your code and Procfile", "yellow");
-        echo("  3. Push to deploy: git remote add riku deploy@server:{} && git push riku master", &app);
+        echo("  Option 1: Create app and push via git", "yellow");
+        echo("    riku apps create myapp", "yellow");
+        echo("    git remote add riku deploy@server:myapp", "yellow");
+        echo("    git push riku master", "yellow");
+        echo("", "");
+        echo("  Option 2: Deploy from local folder", "yellow");
+        echo("    riku deploy myapp --from ./path/to/app", "yellow");
         echo("", "");
         echo("Or list existing apps:", "yellow");
         echo("  riku apps", "yellow");
@@ -50,13 +172,14 @@ pub fn exit_if_invalid(app: &str, app_root: &Path) -> Result<String> {
 }
 
 /// Find a free TCP port (entirely at random) by binding to port 0.
-/// Returns None if no port is available.
-pub fn get_free_port(address: &str) -> Option<u16> {
+/// Returns an error if no port is available.
+pub fn get_free_port(address: &str) -> Result<u16> {
     let bind_addr = format!("{}:0", address);
-    TcpListener::bind(&bind_addr)
-        .ok()
-        .and_then(|listener| listener.local_addr().ok())
-        .map(|addr| addr.port())
+    let listener = TcpListener::bind(&bind_addr)
+        .map_err(|e| anyhow::anyhow!("Failed to bind to {}: {}", bind_addr, e))?;
+    let addr = listener.local_addr()
+        .map_err(|e| anyhow::anyhow!("Failed to get local address: {}", e))?;
+    Ok(addr.port())
 }
 
 /// Convert a boolean-ish string to a boolean.
@@ -729,7 +852,7 @@ mod tests {
     #[test]
     fn test_get_free_port_returns_valid_port() {
         let port = get_free_port("127.0.0.1");
-        assert!(port.is_some());
+        assert!(port.is_ok());
         assert!(port.unwrap() > 0);
     }
 
@@ -739,8 +862,8 @@ mod tests {
         let port2 = get_free_port("127.0.0.1");
         // Ports should be valid (>0). They will almost always differ, but
         // we just check they are valid.
-        assert!(port1.is_some());
-        assert!(port2.is_some());
+        assert!(port1.is_ok());
+        assert!(port2.is_ok());
         assert!(port1.unwrap() > 0);
         assert!(port2.unwrap() > 0);
     }

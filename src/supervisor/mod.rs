@@ -7,8 +7,9 @@ use anyhow::Result;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
+static RELOAD_REQUESTED: AtomicBool = AtomicBool::new(false);
 
-use notify::{recommended_watcher, Event, RecursiveMode, Watcher};
+use notify::{Event, RecursiveMode, Watcher};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -65,15 +66,15 @@ impl Supervisor {
         // Set up signal handlers for graceful shutdown
         setup_signal_handlers()?;
 
-        // Load existing configurations
+        // Load existing configurations at startup
         self.load_initial_configs()?;
 
         let initial_count = self.process_manager.get_process_count();
         println!("Loaded {} worker configurations", initial_count);
 
-        // Set up file watcher for config directory
+        // Set up file watcher for config directory with symlink following enabled
         let (tx, rx) = mpsc::channel();
-        let mut watcher = recommended_watcher(tx)?;
+        let mut watcher = notify::RecommendedWatcher::new(tx, notify::Config::default().with_follow_symlinks(true))?;
         watcher.watch(&self.config_dir, RecursiveMode::NonRecursive)?;
 
         println!("Supervisor running. Waiting for configuration changes...");
@@ -86,12 +87,19 @@ impl Supervisor {
                 break;
             }
 
+            // Check if reload was requested via SIGHUP
+            if RELOAD_REQUESTED.load(Ordering::SeqCst) {
+                println!("Reloading all configurations...");
+                self.reload_all_configs()?;
+                RELOAD_REQUESTED.store(false, Ordering::SeqCst);
+            }
+
             match rx.recv_timeout(Duration::from_secs(1)) {
                 Ok(event) => {
                     self.handle_file_event(event?)?;
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
-                    // Periodic maintenance tasks
+                    // Periodic maintenance tasks - check process health
                     self.process_manager.check_processes()?;
 
                     // Check if it's time for log rotation
@@ -117,6 +125,69 @@ impl Supervisor {
         println!("Stopping all managed processes...");
         self.process_manager.stop_all_processes()?;
 
+        Ok(())
+    }
+
+    /// Reload all configurations - stop removed configs, start new/modified ones.
+    fn reload_all_configs(&mut self) -> Result<()> {
+        // Scan directory for current config files
+        let mut current_configs: HashMap<String, std::path::PathBuf> = HashMap::new();
+
+        if self.config_dir.exists() {
+            for entry in fs::read_dir(&self.config_dir)? {
+                let entry = entry?;
+                let path = entry.path();
+
+                if path.extension().and_then(|s| s.to_str()) == Some("toml") {
+                    if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
+                        current_configs.insert(filename.to_string(), path);
+                    }
+                }
+            }
+        }
+
+        // Stop processes for configs that no longer exist
+        let configs_to_remove: Vec<String> = self.watched_configs
+            .keys()
+            .filter(|k| !current_configs.contains_key(*k))
+            .cloned()
+            .collect();
+
+        for filename in &configs_to_remove {
+            println!("Config file removed: {}", filename);
+            self.unload_config(filename)?;
+            self.watched_configs.remove(filename);
+        }
+
+        // Load new or modified configs
+        for (filename, path) in current_configs {
+            if let Some(_old_modified) = self.watched_configs.get(&filename) {
+                // Config already loaded, check if modified
+                if let Ok(new_metadata) = fs::metadata(&path) {
+                    if let Ok(new_modified) = new_metadata.modified() {
+                        // Compare with stored modification time
+                        if new_modified > *_old_modified {
+                            println!("Config file modified: {}", filename);
+                            self.unload_config(&filename)?;
+                            self.load_config_file(&path, &filename)?;
+                            self.watched_configs.insert(filename, new_modified);
+                        }
+                    }
+                }
+            } else {
+                // New config
+                println!("New config file detected: {}", filename);
+                self.load_config_file(&path, &filename)?;
+                if let Ok(metadata) = fs::metadata(&path) {
+                    if let Ok(modified) = metadata.modified() {
+                        self.watched_configs.insert(filename, modified);
+                    }
+                }
+            }
+        }
+
+        let new_count = self.process_manager.get_process_count();
+        println!("Reload complete. Managing {} processes", new_count);
         Ok(())
     }
 
@@ -260,7 +331,7 @@ pub fn setup_signal_handlers() -> Result<()> {
 
         extern "C" fn handle_sighup(_: i32) {
             println!("Received SIGHUP, reloading configurations...");
-            // In a real implementation, this would trigger a config reload
+            RELOAD_REQUESTED.store(true, Ordering::SeqCst);
         }
 
         unsafe {
