@@ -1,6 +1,6 @@
 FROM public.ecr.aws/ubuntu/ubuntu:24.04_stable
 
-RUN apt-get update -y && apt-get install -y openssh-server
+RUN apt-get update -y && apt-get install -y openssh-server git
 RUN mkdir /var/run/sshd
 RUN echo 'root:password' | chpasswd
 
