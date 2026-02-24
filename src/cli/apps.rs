@@ -41,20 +41,56 @@ pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
 
     apps.sort();
 
+    // Build table data
+    let headers = vec!["APP", "STATUS", "WORKERS"];
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    let mut total_workers = 0;
+
     for a in &apps {
-        // Check for running worker configs (*.ini or *.toml) in workers_enabled
+        // Check for running worker configs
         let ini_pattern = paths.workers_enabled.join(format!("{}*.ini", a));
         let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", a));
         let ini_matches = glob::glob(ini_pattern.to_str().unwrap_or(""))
             .map(|g| g.count())
-            .unwrap_or(0);
+            .unwrap_or_else(|e| {
+                eprintln!("Warning: glob failed for ini pattern: {}", e);
+                0
+            });
         let toml_matches = glob::glob(toml_pattern.to_str().unwrap_or(""))
             .map(|g| g.count())
-            .unwrap_or(0);
-        let running = ini_matches + toml_matches > 0;
-        let prefix = if running { "*" } else { " " };
-        println!("{}", format!("{}{}", prefix, a).green());
+            .unwrap_or_else(|e| {
+                eprintln!("Warning: glob failed for toml pattern: {}", e);
+                0
+            });
+        let worker_count = ini_matches + toml_matches;
+        let status = if worker_count > 0 { "running" } else { "stopped" };
+        let prefix = if worker_count > 0 { "*" } else { " " };
+        
+        rows.push(vec![
+            format!("{}{}", prefix, a),
+            status.to_string(),
+            worker_count.to_string(),
+        ]);
+        
+        total_workers += worker_count;
     }
+
+    // Print table using utility
+    crate::util::print_table_with_title(
+        "=== Deployed Apps ===",
+        &headers,
+        &rows,
+        2
+    );
+    
+    println!();
+    println!(
+        "Total: {} app(s), {} worker(s) running",
+        apps.len().to_string().green(),
+        total_workers.to_string().green()
+    );
+    println!();
+    echo("* = running", "yellow");
 
     Ok(())
 }
@@ -384,14 +420,8 @@ pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
 
     if verbose {
         // Show detailed view
-        println!("{}", "=== All Processes ===".green().bold());
-        println!();
-        println!(
-            "{:<25} {:<15} {:<10} {:<10} {:<15}",
-            "APP", "PROCESS", "KIND", "PID", "STATUS"
-        );
-        println!("{}", "-".repeat(80));
-
+        let headers = vec!["APP", "PROCESS", "KIND", "PID", "STATUS"];
+        let mut rows: Vec<Vec<String>> = Vec::new();
         let mut total_processes = 0;
 
         for app in &apps {
@@ -420,22 +450,35 @@ pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
                             "N/A".to_string()
                         };
 
-                        println!(
-                            "{:<25} {:<15} {:<10} {:<10} {:<15}",
-                            app.green(), process_name, kind, pid, "running"
-                        );
+                        rows.push(vec![
+                            app.clone(),
+                            process_name,
+                            kind.to_string(),
+                            pid,
+                            "running".to_string(),
+                        ]);
                         total_processes += 1;
                     }
                 }
             }
         }
 
-        println!("{}", "-".repeat(80));
-        println!("Total: {} process(es) across {} app(s)", total_processes.to_string().green(), apps.len().to_string().green());
+        crate::util::print_table_with_title(
+            "=== All Processes ===",
+            &headers,
+            &rows,
+            2
+        );
+        
+        println!(
+            "Total: {} process(es) across {} app(s)",
+            total_processes.to_string().green(),
+            apps.len().to_string().green()
+        );
     } else {
         // Show compact view
-        println!("{}", "=== Deployed Apps ===".green().bold());
-        println!();
+        let headers = vec!["APP", "WORKERS"];
+        let mut rows: Vec<Vec<String>> = Vec::new();
 
         for app in &apps {
             let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
@@ -445,9 +488,19 @@ pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
             };
 
             let prefix = if worker_count > 0 { "*" } else { " " };
-            println!("  {}{} ({} worker(s))", prefix, app.green(), worker_count);
+            rows.push(vec![
+                format!("{}{}", prefix, app),
+                format!("{} worker(s)", worker_count),
+            ]);
         }
 
+        crate::util::print_table_with_title(
+            "=== Deployed Apps ===",
+            &headers,
+            &rows,
+            2
+        );
+        
         println!();
         echo("Use 'riku ps <app> --verbose' for detailed process info", "yellow");
     }
@@ -461,9 +514,13 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
 
     // Check for running worker configs
     let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
-    let worker_configs: Vec<_> = glob::glob(toml_pattern.to_str().unwrap_or(""))
-        .map(|g| g.filter_map(|r| r.ok()).collect())
-        .unwrap_or_else(|_| Vec::new());
+    let worker_configs: Vec<_> = match glob::glob(toml_pattern.to_str().unwrap_or("")) {
+        Ok(g) => g.filter_map(|r| r.ok()).collect(),
+        Err(e) => {
+            eprintln!("Warning: glob failed for worker configs: {}", e);
+            Vec::new()
+        }
+    };
 
     if worker_configs.is_empty() {
         echo(
@@ -475,12 +532,8 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
 
     if verbose {
         // Show detailed process info
-        println!("{}", format!("Processes for '{}':", app).green());
-        println!(
-            "{:<30} {:<10} {:<10} {:<15}",
-            "PROCESS", "KIND", "PID", "STATUS"
-        );
-        println!("{}", "-".repeat(70));
+        let headers = vec!["PROCESS", "KIND", "PID", "STATUS"];
+        let mut rows: Vec<Vec<String>> = Vec::new();
 
         for config_path in worker_configs {
             if let Some(filename) = config_path.file_name().and_then(|s| s.to_str()) {
@@ -491,25 +544,48 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
                     let ordinal = parts.get(2).unwrap_or(&"1");
                     let process_name = format!("{}-{}-{}", app, kind, ordinal);
 
-                    // Try to read the config to get PID
-                    if let Ok(content) = fs::read_to_string(&config_path) {
-                        let pid = extract_pid_from_config(&content)
+                    let pid = if let Ok(content) = fs::read_to_string(&config_path) {
+                        extract_pid_from_config(&content)
                             .map(|p| p.to_string())
-                            .unwrap_or_else(|| "N/A".to_string());
-                        println!(
-                            "{:<30} {:<10} {:<10} {:<15}",
-                            process_name, kind, pid, "running"
-                        );
-                    }
+                            .unwrap_or_else(|| "N/A".to_string())
+                    } else {
+                        "N/A".to_string()
+                    };
+
+                    rows.push(vec![
+                        process_name,
+                        kind.to_string(),
+                        pid,
+                        "running".to_string(),
+                    ]);
                 }
             }
         }
+
+        crate::util::print_table_with_title(
+            &format!("=== Processes for '{}' ===", app),
+            &headers,
+            &rows,
+            2
+        );
     } else {
         // Show simple scaling info
+        let headers = vec!["KIND", "COUNT"];
+        let mut rows: Vec<Vec<String>> = Vec::new();
+        
         let config_file = paths.env_root.join(&app).join("SCALING");
         if config_file.exists() {
             let content = fs::read_to_string(&config_file)?;
-            println!("{}", content.trim().white());
+            for line in content.lines() {
+                let line = line.trim();
+                if !line.is_empty() && !line.starts_with('#') {
+                    if let Some(pos) = line.find('=') {
+                        let kind = line[..pos].trim().to_string();
+                        let count = line[pos+1..].trim().to_string();
+                        rows.push(vec![kind, count]);
+                    }
+                }
+            }
         } else {
             // Count workers from enabled configs
             let mut counts: HashMap<String, u32> = HashMap::new();
@@ -524,9 +600,16 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
             }
 
             for (kind, count) in counts {
-                println!("{}={}", kind, count);
+                rows.push(vec![kind, count.to_string()]);
             }
         }
+
+        crate::util::print_table_with_title(
+            &format!("=== Scaling for '{}' ===", app),
+            &headers,
+            &rows,
+            2
+        );
     }
 
     Ok(())
