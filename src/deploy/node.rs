@@ -104,7 +104,16 @@ pub fn deploy_node(
             // Show success message with package count if available
             let stdout = String::from_utf8_lossy(&output.stdout);
             if stdout.contains("added") {
-                echo(&format!("-----> {}", stdout.lines().find(|l| l.contains("added")).unwrap_or("Dependencies installed")), "green");
+                echo(
+                    &format!(
+                        "-----> {}",
+                        stdout
+                            .lines()
+                            .find(|l| l.contains("added"))
+                            .unwrap_or("Dependencies installed")
+                    ),
+                    "green",
+                );
             }
         }
         Err(e) => {

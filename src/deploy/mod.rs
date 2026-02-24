@@ -541,10 +541,7 @@ pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
     // The supervisor will detect new/changed configs and spawn processes
     notify_supervisor_reload();
 
-    echo(
-        "-----> Notified supervisor to spawn processes...",
-        "green",
-    );
+    echo("-----> Notified supervisor to spawn processes...", "green");
 
     Ok(())
 }

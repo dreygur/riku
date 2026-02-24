@@ -15,7 +15,7 @@ pub fn ensure_repo_symlink(paths: &RikuPaths, app: &str) -> Result<()> {
     let home = std::env::var("HOME").unwrap_or_else(|_| String::from("."));
     let user_repo = Path::new(&home).join(format!("{}.git", app));
     let riku_repo = paths.git_root.join(format!("{}.git", app));
-    
+
     // If user's bare repo exists, create symlink
     if user_repo.exists() {
         if riku_repo.exists() {
@@ -30,10 +30,17 @@ pub fn ensure_repo_symlink(paths: &RikuPaths, app: &str) -> Result<()> {
         }
         // Create symlink: ~/.riku/repos/app.git → ~/app.git
         std::os::unix::fs::symlink(&user_repo, &riku_repo)?;
-        echo(&format!("Symlinked {} → {}", riku_repo.display(), user_repo.display()), "green");
+        echo(
+            &format!(
+                "Symlinked {} → {}",
+                riku_repo.display(),
+                user_repo.display()
+            ),
+            "green",
+        );
     }
     // If user repo doesn't exist, riku will create it at ~/.riku/repos/app.git
-    
+
     Ok(())
 }
 
@@ -91,10 +98,10 @@ pub fn cmd_git_hook(paths: &RikuPaths, app: &str) -> Result<()> {
 /// then delegates to git-shell.
 pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
     let app = sanitize_app_name(app);
-    
+
     // Ensure symlink is set up for user's bare repo
     ensure_repo_symlink(paths, &app)?;
-    
+
     let hook_path = paths.git_root.join(&app).join("hooks").join("post-receive");
 
     if !hook_path.exists() {

@@ -74,7 +74,10 @@ impl Supervisor {
 
         // Set up file watcher for config directory with symlink following enabled
         let (tx, rx) = mpsc::channel();
-        let mut watcher = notify::RecommendedWatcher::new(tx, notify::Config::default().with_follow_symlinks(true))?;
+        let mut watcher = notify::RecommendedWatcher::new(
+            tx,
+            notify::Config::default().with_follow_symlinks(true),
+        )?;
         watcher.watch(&self.config_dir, RecursiveMode::NonRecursive)?;
 
         println!("Supervisor running. Waiting for configuration changes...");
@@ -147,7 +150,8 @@ impl Supervisor {
         }
 
         // Stop processes for configs that no longer exist
-        let configs_to_remove: Vec<String> = self.watched_configs
+        let configs_to_remove: Vec<String> = self
+            .watched_configs
             .keys()
             .filter(|k| !current_configs.contains_key(*k))
             .cloned()

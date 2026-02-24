@@ -63,26 +63,25 @@ pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
                 0
             });
         let worker_count = ini_matches + toml_matches;
-        let status = if worker_count > 0 { "running" } else { "stopped" };
+        let status = if worker_count > 0 {
+            "running"
+        } else {
+            "stopped"
+        };
         let prefix = if worker_count > 0 { "*" } else { " " };
-        
+
         rows.push(vec![
             format!("{}{}", prefix, a),
             status.to_string(),
             worker_count.to_string(),
         ]);
-        
+
         total_workers += worker_count;
     }
 
     // Print table using utility
-    crate::util::print_table_with_title(
-        "=== Deployed Apps ===",
-        &headers,
-        &rows,
-        2
-    );
-    
+    crate::util::print_table_with_title("=== Deployed Apps ===", &headers, &rows, 2);
+
     println!();
     println!(
         "Total: {} app(s), {} worker(s) running",
@@ -217,20 +216,20 @@ pub fn cmd_deploy(paths: &RikuPaths, app: &str, from_path: Option<&str>) -> Resu
 /// Deploy from a local path (copies files to app directory).
 fn deploy_from_path(paths: &RikuPaths, app: &str, source: &str) -> Result<()> {
     use std::path::Path;
-    
+
     let source_path = Path::new(source);
-    
+
     // Validate source path
     if !source_path.exists() {
         echo(&format!("Error: path '{}' does not exist.", source), "red");
         bail!("Source path does not exist");
     }
-    
+
     if !source_path.is_dir() {
         echo(&format!("Error: '{}' is not a directory.", source), "red");
         bail!("Source is not a directory");
     }
-    
+
     // Check for required files
     let procfile = source_path.join("Procfile");
     if !procfile.exists() {
@@ -239,28 +238,31 @@ fn deploy_from_path(paths: &RikuPaths, app: &str, source: &str) -> Result<()> {
         echo("Example: echo 'web: npm start' > Procfile", "yellow");
         bail!("Procfile not found");
     }
-    
+
     // Check if it's a git repo (optional but recommended)
     let git_dir = source_path.join(".git");
     if !git_dir.exists() {
         echo("⚠ Warning: source is not a git repository.", "yellow");
         echo("  Consider initializing git: git init", "yellow");
     }
-    
+
     // Copy files to app directory
     let app_dir = paths.app_root.join(app);
     echo(&format!("Copying files from '{}'...", source), "green");
-    
+
     // Remove existing app files (preserve data dir)
     if app_dir.exists() {
         fs::remove_dir_all(&app_dir)?;
     }
-    
+
     // Copy source to app directory
     copy_dir_recursive(source_path, &app_dir)?;
-    
-    echo(&format!("✓ Copied {} files", count_files(&app_dir)?), "green");
-    
+
+    echo(
+        &format!("✓ Copied {} files", count_files(&app_dir)?),
+        "green",
+    );
+
     Ok(())
 }
 
@@ -275,7 +277,11 @@ fn copy_dir_recursive(source: &Path, dest: &Path) -> Result<()> {
 
         if entry_path.is_dir() {
             // Skip certain directories (git, node_modules - will be installed)
-            if entry_path.file_name().map(|n| n == ".git" || n == "node_modules" || n == ".gitignore").unwrap_or(false) {
+            if entry_path
+                .file_name()
+                .map(|n| n == ".git" || n == "node_modules" || n == ".gitignore")
+                .unwrap_or(false)
+            {
                 continue;
             }
             copy_dir_recursive(&entry_path, &dest_path)?;
@@ -399,7 +405,7 @@ pub fn cmd_logs(paths: &RikuPaths, app: &str, process: &str) -> Result<()> {
 /// Show all processes for all apps.
 pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
     let app_root = &paths.app_root;
-    
+
     if !app_root.exists() {
         echo("No applications deployed.", "yellow");
         return Ok(());
@@ -463,13 +469,8 @@ pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
             }
         }
 
-        crate::util::print_table_with_title(
-            "=== All Processes ===",
-            &headers,
-            &rows,
-            2
-        );
-        
+        crate::util::print_table_with_title("=== All Processes ===", &headers, &rows, 2);
+
         println!(
             "Total: {} process(es) across {} app(s)",
             total_processes.to_string().green(),
@@ -484,7 +485,7 @@ pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
             let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
             let worker_count = match glob::glob(toml_pattern.to_str().unwrap_or("")) {
                 Ok(g) => g.count(),
-                Err(_) => 0
+                Err(_) => 0,
             };
 
             let prefix = if worker_count > 0 { "*" } else { " " };
@@ -494,15 +495,13 @@ pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
             ]);
         }
 
-        crate::util::print_table_with_title(
-            "=== Deployed Apps ===",
-            &headers,
-            &rows,
-            2
-        );
-        
+        crate::util::print_table_with_title("=== Deployed Apps ===", &headers, &rows, 2);
+
         println!();
-        echo("Use 'riku ps <app> --verbose' for detailed process info", "yellow");
+        echo(
+            "Use 'riku ps <app> --verbose' for detailed process info",
+            "yellow",
+        );
     }
 
     Ok(())
@@ -566,13 +565,13 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
             &format!("=== Processes for '{}' ===", app),
             &headers,
             &rows,
-            2
+            2,
         );
     } else {
         // Show simple scaling info
         let headers = vec!["KIND", "COUNT"];
         let mut rows: Vec<Vec<String>> = Vec::new();
-        
+
         let config_file = paths.env_root.join(&app).join("SCALING");
         if config_file.exists() {
             let content = fs::read_to_string(&config_file)?;
@@ -581,7 +580,7 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
                 if !line.is_empty() && !line.starts_with('#') {
                     if let Some(pos) = line.find('=') {
                         let kind = line[..pos].trim().to_string();
-                        let count = line[pos+1..].trim().to_string();
+                        let count = line[pos + 1..].trim().to_string();
                         rows.push(vec![kind, count]);
                     }
                 }
@@ -608,7 +607,7 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
             &format!("=== Scaling for '{}' ===", app),
             &headers,
             &rows,
-            2
+            2,
         );
     }
 
@@ -1149,36 +1148,42 @@ pub fn cmd_hot_reload(paths: &RikuPaths, app: &str) -> Result<()> {
 /// Create a new application (directory and git repository).
 pub fn cmd_apps_create(paths: &RikuPaths, name: &str) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
-    
+
     let app = sanitize_app_name(name);
-    
+
     // Check if app already exists
     if paths.app_root.join(&app).exists() {
         echo(&format!("Error: app '{}' already exists.", app), "red");
         return Ok(());
     }
-    
+
     // Create app directory
     let app_dir = paths.app_root.join(&app);
     fs::create_dir_all(&app_dir)?;
-    echo(&format!("✓ Created app directory: {}", app_dir.display()), "green");
-    
+    echo(
+        &format!("✓ Created app directory: {}", app_dir.display()),
+        "green",
+    );
+
     // Create git repository
     let repo_dir = paths.git_root.join(format!("{}.git", app));
     fs::create_dir_all(&repo_dir)?;
-    
+
     // Initialize bare git repo
     Command::new("git")
         .args(["init", "--bare"])
         .current_dir(&repo_dir)
         .output()?;
-    
-    echo(&format!("✓ Created git repository: {}", repo_dir.display()), "green");
-    
+
+    echo(
+        &format!("✓ Created git repository: {}", repo_dir.display()),
+        "green",
+    );
+
     // Create post-receive hook
     let hooks_dir = repo_dir.join("hooks");
     fs::create_dir_all(&hooks_dir)?;
-    
+
     let post_receive = hooks_dir.join("post-receive");
     let hook_script = format!(
         r#"#!/bin/bash
@@ -1195,19 +1200,25 @@ done
 "#,
         app, app
     );
-    
+
     fs::write(&post_receive, hook_script)?;
     fs::set_permissions(&post_receive, PermissionsExt::from_mode(0o755))?;
-    
-    echo(&format!("✓ Created git hook: {}", post_receive.display()), "green");
+
+    echo(
+        &format!("✓ Created git hook: {}", post_receive.display()),
+        "green",
+    );
     echo("", "");
-    
+
     echo(&format!("App '{}' created successfully!", app), "green");
     echo("", "");
     echo("Deploy your code:", "yellow");
-    echo(&format!("  git remote add riku deploy@your-server:{}", app), "yellow");
+    echo(
+        &format!("  git remote add riku deploy@your-server:{}", app),
+        "yellow",
+    );
     echo("  git push riku master", "yellow");
     echo("", "");
-    
+
     Ok(())
 }
