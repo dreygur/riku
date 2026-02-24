@@ -5,7 +5,7 @@ RUN mkdir /var/run/sshd
 RUN echo 'root:password' | chpasswd
 
 # git defaultBranch main
-RUN git config --global init.defaultBranch
+RUN git config --global init.defaultBranch main
 
 # Configure SSH to use id_ed25519 key for authentication
 RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh
