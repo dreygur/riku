@@ -1,6 +1,6 @@
 [package]
 name = "riku"
-version = "1.0.0"
+version = "2.1.0"
 edition = "2021"
 description = "The smallest PaaS you've ever seen — in Rust"
 
