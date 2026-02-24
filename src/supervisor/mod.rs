@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 static RUNNING: AtomicBool = AtomicBool::new(true);
 static RELOAD_REQUESTED: AtomicBool = AtomicBool::new(false);
 
-use notify::{recommended_watcher, Event, RecursiveMode, Watcher};
+use notify::{Event, RecursiveMode, Watcher};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
