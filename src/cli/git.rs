@@ -95,7 +95,7 @@ pub fn cmd_git_hook(paths: &RikuPaths, app: &str) -> Result<()> {
 }
 
 /// Handle git pushes for an app. Sets up bare repo and hook if needed,
-/// then delegates to git-shell.
+/// then delegates to git-receive-pack directly.
 pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
     let app = sanitize_app_name(app);
 
@@ -154,12 +154,9 @@ cat | PIKU_ROOT="${PIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$2"
         fs::set_permissions(&hook_path, fs::Permissions::from_mode(mode | 0o755))?;
     }
 
-    // Delegate to git-shell for the actual receive
-    let shell_cmd = format!("git-receive-pack '{}'", app);
-    let status = Command::new("git-shell")
-        .arg("-c")
-        .arg(&shell_cmd)
-        .current_dir(&paths.git_root)
+    // Delegate directly to git-receive-pack (avoiding shell interpolation)
+    let status = Command::new("git-receive-pack")
+        .arg(paths.git_root.join(&app))
         .status()?;
 
     std::process::exit(status.code().unwrap_or(1));
@@ -169,11 +166,9 @@ cat | PIKU_ROOT="${PIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$2"
 pub fn cmd_git_upload_pack(paths: &RikuPaths, app: &str) -> Result<()> {
     let app = sanitize_app_name(app);
 
-    let shell_cmd = format!("git-upload-pack '{}'", app);
-    let status = Command::new("git-shell")
-        .arg("-c")
-        .arg(&shell_cmd)
-        .current_dir(&paths.git_root)
+    // Call git-upload-pack directly (avoiding shell interpolation)
+    let status = Command::new("git-upload-pack")
+        .arg(paths.git_root.join(&app))
         .status()?;
 
     std::process::exit(status.code().unwrap_or(1));

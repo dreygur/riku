@@ -8,9 +8,25 @@ use std::process::Command;
 
 use crate::config::RikuPaths;
 
+/// Validate plugin name does not contain path separators or traversal sequences.
+fn validate_plugin_name(plugin_name: &str) -> Result<()> {
+    if plugin_name.contains('/')
+        || plugin_name.contains('\\')
+        || plugin_name.contains("..")
+        || plugin_name.is_empty()
+    {
+        return Err(anyhow::anyhow!(
+            "Invalid plugin name '{}': must not contain path separators or '..'",
+            plugin_name
+        ));
+    }
+    Ok(())
+}
+
 /// Discover and execute plugins from the plugins directory.
 #[allow(dead_code)]
 pub fn run_plugin(plugin_name: &str, paths: &RikuPaths, args: &[String]) -> Result<()> {
+    validate_plugin_name(plugin_name)?;
     let plugin_path = paths.plugin_root.join(plugin_name);
 
     if !plugin_path.exists() {
@@ -103,6 +119,9 @@ pub fn list_plugins(paths: &RikuPaths) -> Result<Vec<String>> {
 /// Check if a plugin exists and is executable.
 #[allow(dead_code)]
 pub fn plugin_exists(plugin_name: &str, paths: &RikuPaths) -> bool {
+    if validate_plugin_name(plugin_name).is_err() {
+        return false;
+    }
     let plugin_path = paths.plugin_root.join(plugin_name);
 
     if !plugin_path.exists() {
@@ -170,5 +189,34 @@ mod tests {
 
         assert!(plugin_exists("test_plugin", &paths));
         assert!(!plugin_exists("nonexistent_plugin", &paths));
+    }
+
+    #[test]
+    fn test_validate_plugin_name_rejects_path_traversal() {
+        assert!(validate_plugin_name("../etc/passwd").is_err());
+        assert!(validate_plugin_name("..").is_err());
+        assert!(validate_plugin_name("foo/bar").is_err());
+        assert!(validate_plugin_name("foo\\bar").is_err());
+        assert!(validate_plugin_name("").is_err());
+    }
+
+    #[test]
+    fn test_validate_plugin_name_allows_valid() {
+        assert!(validate_plugin_name("my-plugin").is_ok());
+        assert!(validate_plugin_name("plugin_v2").is_ok());
+        assert!(validate_plugin_name("deploy.sh").is_ok());
+    }
+
+    #[test]
+    fn test_plugin_exists_rejects_path_traversal() {
+        let temp_dir = TempDir::new().unwrap();
+        let paths = crate::config::RikuPaths::from_dirs(
+            temp_dir.path().join(".piku"),
+            &temp_dir.path().to_path_buf(),
+        );
+        fs::create_dir_all(&paths.plugin_root).unwrap();
+
+        assert!(!plugin_exists("../etc/passwd", &paths));
+        assert!(!plugin_exists("foo/bar", &paths));
     }
 }

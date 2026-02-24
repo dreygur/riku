@@ -6,4 +6,5 @@ mod cli_tests;
 mod e2e_tests;
 mod nginx_tests;
 mod plugin_tests;
+mod security_tests;
 mod supervisor_tests;

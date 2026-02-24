@@ -89,7 +89,7 @@ jobs:
         run: cargo install cargo-audit
 
       - name: Run security audit
-        run: cargo audit || echo "No security vulnerabilities found"
+        run: cargo audit
 
   release:
     name: Create Release

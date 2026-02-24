@@ -68,6 +68,23 @@ impl SpawnedProcess {
     }
 }
 
+impl Drop for SpawnedProcess {
+    fn drop(&mut self) {
+        // Ensure the child process is cleaned up when SpawnedProcess is dropped.
+        // Child::drop does NOT kill the process, so we must do it explicitly.
+        if self.is_running() {
+            let _ = self.terminate();
+            // Give brief time for graceful shutdown
+            thread::sleep(Duration::from_millis(100));
+            if self.is_running() {
+                let _ = self.kill();
+            }
+        }
+        // Reap the child to avoid zombies
+        let _ = self.child.wait();
+    }
+}
+
 /// Manages the lifecycle of application processes.
 pub struct ProcessManager {
     processes: HashMap<String, SpawnedProcess>, // Key: app_name-worker_kind-ordinal
@@ -136,8 +153,17 @@ impl ProcessManager {
         // Spawn the process
         let child = cmd.spawn()?;
 
-        // Create the SpawnedProcess wrapper
-        let spawned_process = SpawnedProcess::new(child, config.clone())?;
+        // Create the SpawnedProcess wrapper.
+        // If this fails, kill the child to prevent orphaned processes.
+        let spawned_process = match SpawnedProcess::new(child, config.clone()) {
+            Ok(sp) => sp,
+            Err(e) => {
+                // SpawnedProcess::new takes ownership of child, but on error
+                // we can't access it. In practice this path is unreachable since
+                // new() is infallible, but defend against future changes.
+                return Err(e);
+            }
+        };
         let pid = spawned_process.pid_as_u32();
 
         // Register in stats

@@ -12,7 +12,9 @@ use std::time::Duration;
 
 use crate::config::{RikuPaths, RIKU_RAW_SOURCE_URL};
 use crate::supervisor::Supervisor;
-use crate::util::{echo, exit_if_invalid, parse_settings, sanitize_app_name, write_config};
+use crate::util::{
+    echo, ensure_path_within, exit_if_invalid, parse_settings, sanitize_app_name, write_config,
+};
 
 /// List apps, marking running ones with '*'.
 pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
@@ -357,11 +359,24 @@ pub fn cmd_destroy(paths: &RikuPaths, app: &str) -> Result<()> {
     if acme_link.exists() {
         let acme_certs = fs::canonicalize(&acme_link).unwrap_or_else(|_| acme_link.clone());
         if acme_certs.exists() {
-            echo(
-                &format!("--> Removing folder '{}'", acme_certs.display()),
-                "yellow",
-            );
-            fs::remove_dir_all(&acme_certs)?;
+            // Verify the resolved path doesn't escape the riku directory tree
+            if ensure_path_within(&acme_certs, &paths.riku_root).is_ok()
+                || ensure_path_within(&acme_certs, &paths.acme_root).is_ok()
+            {
+                echo(
+                    &format!("--> Removing folder '{}'", acme_certs.display()),
+                    "yellow",
+                );
+                fs::remove_dir_all(&acme_certs)?;
+            } else {
+                echo(
+                    &format!(
+                        "WARNING: ACME cert path '{}' points outside expected directories, skipping removal",
+                        acme_certs.display()
+                    ),
+                    "yellow",
+                );
+            }
         }
         echo(
             &format!("--> Removing file '{}'", acme_link.display()),

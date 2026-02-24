@@ -1,3 +1,20 @@
+//! Deployment orchestration module.
+//!
+//! # Security Model
+//!
+//! **Anyone with git push access to a riku server can execute arbitrary commands
+//! on the host.** Procfile commands (web, worker, preflight, release) are run via
+//! `sh -c` as the riku user with no sandboxing. This is inherent to the PaaS model.
+//!
+//! Operators MUST:
+//! - Only grant SSH access to trusted users
+//! - Run riku under a dedicated unprivileged user account
+//! - Consider additional isolation (containers, namespaces) for untrusted workloads
+//!
+//! Input validation is applied to app names, environment variables, and plugin
+//! names to prevent path traversal and injection, but deployed application code
+//! itself runs with full user-level privileges.
+
 use anyhow::Result;
 use std::collections::HashMap;
 use std::fs;
