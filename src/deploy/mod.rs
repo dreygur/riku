@@ -500,7 +500,7 @@ fn notify_supervisor_reload() {
     {
         if output.status.success() && !output.stdout.is_empty() {
             let pids = String::from_utf8_lossy(&output.stdout);
-            for pid in pids.trim().split_whitespace() {
+            for pid in pids.split_whitespace() {
                 if let Ok(pid_num) = pid.parse::<i32>() {
                     let _ = nix::sys::signal::kill(
                         nix::unistd::Pid::from_raw(pid_num),
@@ -515,8 +515,27 @@ fn notify_supervisor_reload() {
 /// Notify the supervisor to reload configurations and spawn processes.
 /// This function is called after deployment to start/restart application processes.
 /// The worker configs should already exist from the deploy step.
-pub fn spawn_app(_app: &str, _paths: &RikuPaths) -> Result<()> {
+pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
     use crate::util::echo;
+    use std::collections::HashMap;
+
+    let app_path = paths.app_root.join(app);
+
+    // Get environment variables for nginx config generation
+    let env_file = paths.env_root.join(app).join("ENV");
+    let mut env: HashMap<String, String> = HashMap::new();
+    if env_file.exists() {
+        crate::util::parse_settings(&env_file, &mut env)?;
+    }
+
+    // Generate nginx configuration
+    let nginx_result = crate::nginx::generate_nginx_config(app, &app_path, &env, paths);
+    if let Err(e) = nginx_result {
+        echo(
+            &format!("Warning: Failed to generate nginx config: {}", e),
+            "yellow",
+        );
+    }
 
     // Notify the supervisor to reload configurations
     // The supervisor will detect new/changed configs and spawn processes

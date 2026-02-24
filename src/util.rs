@@ -91,6 +91,7 @@ impl FileLock {
     pub fn acquire(path: &Path) -> Result<Self> {
         let file = OpenOptions::new()
             .create(true)
+            .truncate(true)
             .write(true)
             .open(path)
             .map_err(|e| anyhow::anyhow!("Failed to open lock file {:?}: {}", path, e))?;
