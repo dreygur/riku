@@ -4,6 +4,9 @@ RUN apt-get update -y && apt-get install -y openssh-server git
 RUN mkdir /var/run/sshd
 RUN echo 'root:password' | chpasswd
 
+# git defaultBranch main
+RUN git config --global init.defaultBranch
+
 # Configure SSH to use id_ed25519 key for authentication
 RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh
 COPY tests/e2e/id_ed25519.pub /root/.ssh/authorized_keys
