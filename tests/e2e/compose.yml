@@ -1,0 +1,11 @@
+services:
+  riku-ssh-server:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile
+    container_name: riku-ssh-server
+    hostname: riku
+    ports:
+      - "2222:22"
+    volumes:
+      - ./id_ed25519:/root/.ssh/id_ed25519:ro
