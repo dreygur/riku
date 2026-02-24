@@ -207,12 +207,43 @@ pub fn cmd_deploy(paths: &RikuPaths, app: &str, from_path: Option<&str>) -> Resu
     // If deploying from local path, copy files first (creates app directory)
     if let Some(source_path) = from_path {
         deploy_from_path(paths, app, source_path)?;
+    } else if is_bare_repo() {
+        // Deploying from a bare repo - extract files and set up hook
+        deploy_from_bare_repo(paths, app)?;
     } else {
         // For git-based deploy, app must already exist
         let _ = exit_if_invalid(app, &paths.app_root)?;
     }
 
     crate::deploy::do_deploy(app, paths, &deltas, None)
+}
+
+/// Check if current directory is a bare git repo.
+fn is_bare_repo() -> bool {
+    Command::new("git")
+        .args(["rev-parse", "--is-bare-repository"])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim() == "true")
+        .unwrap_or(false)
+}
+
+/// Deploy from a bare repo by extracting files and setting up auto-deploy hook.
+fn deploy_from_bare_repo(paths: &RikuPaths, app: &str) -> Result<()> {
+    // Get current directory (the bare repo)
+    let bare_repo = std::env::current_dir()?;
+
+    // Ensure symlink is set up
+    crate::cli::git::ensure_repo_symlink(paths, app)?;
+
+    // Extract files from bare repo to app directory
+    crate::cli::git::extract_bare_repo_to_app(&bare_repo, app, paths)?;
+
+    // Set up post-receive hook for auto-deploy on push
+    crate::cli::git::setup_post_receive_hook(&bare_repo, app)?;
+
+    Ok(())
 }
 
 /// Deploy from a local path (copies files to app directory).

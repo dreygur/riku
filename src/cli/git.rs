@@ -1,9 +1,9 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::fs;
 use std::io::{self, BufRead};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use crate::config::RikuPaths;
 use crate::util::{echo, sanitize_app_name};
@@ -41,6 +41,72 @@ pub fn ensure_repo_symlink(paths: &RikuPaths, app: &str) -> Result<()> {
     }
     // If user repo doesn't exist, riku will create it at ~/.riku/repos/app.git
 
+    Ok(())
+}
+
+/// Set up post-receive hook in a bare repo for auto-deploy.
+pub fn setup_post_receive_hook(repo_path: &Path, _app: &str) -> Result<()> {
+    let hooks_dir = repo_path.join("hooks");
+    fs::create_dir_all(&hooks_dir)?;
+
+    let hook_path = hooks_dir.join("post-receive");
+    let hook_content = r#"#!/usr/bin/env bash
+set -e; set -o pipefail;
+# Find riku binary from PATH or use common locations
+RIKU_BIN="${RIKU_BIN:-$(command -v riku)}"
+if [ -z "$RIKU_BIN" ]; then
+    # Fallback to common installation paths
+    if [ -x "$HOME/.local/bin/riku" ]; then
+        RIKU_BIN="$HOME/.local/bin/riku"
+    elif [ -x "$HOME/riku" ]; then
+        RIKU_BIN="$HOME/riku"
+    elif [ -x "/usr/local/bin/riku" ]; then
+        RIKU_BIN="/usr/local/bin/riku"
+    else
+        echo "Error: riku binary not found" >&2
+        exit 1
+    fi
+fi
+cat | PIKU_ROOT="${PIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$2"
+"#;
+
+    fs::write(&hook_path, hook_content)?;
+    fs::set_permissions(&hook_path, PermissionsExt::from_mode(0o755))?;
+
+    echo(
+        &format!("✓ Created post-receive hook in {}", repo_path.display()),
+        "green",
+    );
+    Ok(())
+}
+
+/// Extract files from bare repo to app directory using git archive.
+pub fn extract_bare_repo_to_app(bare_repo: &Path, app: &str, paths: &RikuPaths) -> Result<()> {
+    let app_dir = paths.app_root.join(app);
+
+    // Create app directory
+    if app_dir.exists() {
+        fs::remove_dir_all(&app_dir)?;
+    }
+    fs::create_dir_all(&app_dir)?;
+
+    // Use git archive piped to tar to extract files
+    let status = Command::new("sh")
+        .args([
+            "-c",
+            &format!(
+                "git archive --format=tar HEAD | tar -xf - -C '{}'",
+                app_dir.display()
+            ),
+        ])
+        .current_dir(bare_repo)
+        .status()?;
+
+    if !status.success() {
+        bail!("Failed to extract files from bare repo");
+    }
+
+    echo("✓ Extracted files from bare repo", "green");
     Ok(())
 }
 
