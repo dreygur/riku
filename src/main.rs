@@ -67,10 +67,15 @@ fn main() -> Result<()> {
         Commands::Deploy { app, from } => cli::apps::cmd_deploy(&paths, &app, from.as_deref())?,
         Commands::Destroy { app } => cli::apps::cmd_destroy(&paths, &app)?,
         Commands::Logs { app, process } => cli::apps::cmd_logs(&paths, &app, &process)?,
-        Commands::Ps { app, verbose, scale } => {
+        Commands::Ps {
+            app,
+            verbose,
+            scale,
+        } => {
             if !scale.is_empty() {
                 // Scale command
-                let app_name = app.ok_or_else(|| anyhow::anyhow!("App name required for scaling"))?;
+                let app_name =
+                    app.ok_or_else(|| anyhow::anyhow!("App name required for scaling"))?;
                 cli::apps::cmd_ps_scale(&paths, &app_name, &scale)?;
             } else if let Some(app_name) = app {
                 // Show specific app
@@ -79,7 +84,7 @@ fn main() -> Result<()> {
                 // Show all processes (always verbose by default)
                 cli::apps::cmd_ps_all(&paths, true)?;
             }
-        },
+        }
         Commands::Stats(cmd) => match cmd {
             StatsCmd::All => cli::apps::cmd_stats_all(&paths)?,
             StatsCmd::App { app } => cli::apps::cmd_stats_app(&paths, &app)?,
@@ -231,7 +236,7 @@ fn build_plugin_args(command: &Commands) -> Vec<String> {
                 args.push(app.clone().unwrap_or_default());
                 args.push("ps:show".to_string());
             }
-        },
+        }
         Commands::Run { app, cmd } => {
             args.push(app.clone());
             args.push("run".to_string());

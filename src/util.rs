@@ -47,10 +47,7 @@ pub fn format_table(headers: &[&str], rows: &[Vec<String>], column_spacing: usiz
     output.push('\n');
 
     // Separator line
-    let separator_line: Vec<String> = widths
-        .iter()
-        .map(|w| "-".repeat(*w))
-        .collect();
+    let separator_line: Vec<String> = widths.iter().map(|w| "-".repeat(*w)).collect();
     output.push_str(&separator_line.join(&spacing));
     output.push('\n');
 
@@ -75,7 +72,12 @@ pub fn print_table(headers: &[&str], rows: &[Vec<String>], column_spacing: usize
 }
 
 /// Print a table with a title.
-pub fn print_table_with_title(title: &str, headers: &[&str], rows: &[Vec<String>], column_spacing: usize) {
+pub fn print_table_with_title(
+    title: &str,
+    headers: &[&str],
+    rows: &[Vec<String>],
+    column_spacing: usize,
+) {
     println!("{}", title.green().bold());
     println!();
     print_table(headers, rows, column_spacing);
@@ -95,10 +97,10 @@ impl FileLock {
             .write(true)
             .open(path)
             .map_err(|e| anyhow::anyhow!("Failed to open lock file {:?}: {}", path, e))?;
-        
+
         fs2::FileExt::lock_exclusive(&file)
             .map_err(|e| anyhow::anyhow!("Failed to acquire lock on {:?}: {}", path, e))?;
-        
+
         Ok(FileLock { _file: file })
     }
 }
@@ -113,18 +115,23 @@ impl Drop for FileLock {
 /// This ensures concurrent writes don't corrupt the file.
 pub fn atomic_write_with_lock(path: &Path, content: &str) -> Result<()> {
     // Acquire lock
-    let lock_path = path.with_extension(format!("{}.lock", path.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_default()));
+    let lock_path = path.with_extension(format!(
+        "{}.lock",
+        path.extension()
+            .map(|e| e.to_string_lossy().to_string())
+            .unwrap_or_default()
+    ));
     let _lock = FileLock::acquire(&lock_path)?;
-    
+
     // Write to temp file
     let temp_path = path.with_extension("tmp");
     fs::write(&temp_path, content)
         .map_err(|e| anyhow::anyhow!("Failed to write temp file {:?}: {}", temp_path, e))?;
-    
+
     // Atomic rename
     fs::rename(&temp_path, path)
         .map_err(|e| anyhow::anyhow!("Failed to rename temp file to {:?}: {}", path, e))?;
-    
+
     Ok(())
 }
 
@@ -177,7 +184,8 @@ pub fn get_free_port(address: &str) -> Result<u16> {
     let bind_addr = format!("{}:0", address);
     let listener = TcpListener::bind(&bind_addr)
         .map_err(|e| anyhow::anyhow!("Failed to bind to {}: {}", bind_addr, e))?;
-    let addr = listener.local_addr()
+    let addr = listener
+        .local_addr()
         .map_err(|e| anyhow::anyhow!("Failed to get local address: {}", e))?;
     Ok(addr.port())
 }

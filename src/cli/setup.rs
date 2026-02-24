@@ -306,12 +306,15 @@ fn install_riku_binary() -> Result<()> {
     // Check if target directory is in PATH
     if !is_in_path(&target_dir) {
         echo("", "");
-        echo(&format!("⚠ Note: {} is not in your PATH.", target_dir.display()), "");
-        
+        echo(
+            &format!("⚠ Note: {} is not in your PATH.", target_dir.display()),
+            "",
+        );
+
         // Try to add to shell config automatically
         let shell_configs = [".bashrc", ".zshrc", ".profile"];
         let mut added = false;
-        
+
         if let Ok(home) = env::var("HOME") {
             for config in &shell_configs {
                 let config_path = PathBuf::from(&home).join(config);
@@ -320,12 +323,14 @@ fn install_riku_binary() -> Result<()> {
                     if let Ok(content) = fs::read_to_string(&config_path) {
                         if !content.contains(".local/bin") {
                             // Add to config
-                            if let Ok(mut file) = fs::OpenOptions::new()
-                                .append(true)
-                                .open(&config_path)
+                            if let Ok(mut file) =
+                                fs::OpenOptions::new().append(true).open(&config_path)
                             {
                                 use std::io::Write;
-                                let _ = writeln!(file, "\n# Add Riku to PATH\nexport PATH=\"$HOME/.local/bin:$PATH\"");
+                                let _ = writeln!(
+                                    file,
+                                    "\n# Add Riku to PATH\nexport PATH=\"$HOME/.local/bin:$PATH\""
+                                );
                                 added = true;
                                 echo(&format!("✓ Added PATH export to ~/{}", config), "");
                                 break;
@@ -335,12 +340,15 @@ fn install_riku_binary() -> Result<()> {
                 }
             }
         }
-        
+
         if !added {
-            echo("Add it manually to your shell config (~/.bashrc, ~/.zshrc):", "");
+            echo(
+                "Add it manually to your shell config (~/.bashrc, ~/.zshrc):",
+                "",
+            );
             echo("  export PATH=\"$HOME/.local/bin:$PATH\"", "");
         }
-        
+
         echo("", "");
         echo("Or reload your shell, or use the full path:", "");
         echo(&format!("  {}", target_path.display()), "");
@@ -355,7 +363,7 @@ fn install_riku_binary() -> Result<()> {
 fn get_user_install_directory() -> Result<PathBuf> {
     // Always install to user-local directory (no root required)
     // Follows XDG Base Directory specification
-    
+
     if let Ok(home) = env::var("HOME") {
         // Primary: ~/.local/bin (XDG standard)
         let local_bin = PathBuf::from(&home).join(".local/bin");
@@ -473,7 +481,7 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
     if !hooks_dir.exists() {
         fs::create_dir_all(&hooks_dir)?;
     }
-    
+
     let post_receive = hooks_dir.join("post-receive");
     let hook_script = r#"#!/bin/bash
 # Riku global post-receive hook
@@ -492,15 +500,15 @@ while read oldrev newrev refname; do
     fi
 done
 "#;
-    
+
     fs::write(&post_receive, hook_script)?;
-    
+
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&post_receive, fs::Permissions::from_mode(0o755))?;
     }
-    
+
     echo("      ✓ Global git hook created", "green");
     echo("", "");
 
