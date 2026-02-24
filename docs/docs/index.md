@@ -54,7 +54,7 @@ echo 'web: node server.js' > Procfile
 # Deploy
 git add . && git commit -m "Initial commit"
 git remote add riku deploy@your-server:myapp
-git push riku master
+git push riku main
 ```
 
 ---

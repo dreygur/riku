@@ -216,7 +216,7 @@ This creates/updates the `SCALING` file and triggers a restart.
 echo "web=4" > SCALING
 echo "worker=2" >> SCALING
 git add SCALING && git commit -m "scale up"
-git push riku master
+git push riku main
 ```
 
 ---
@@ -343,7 +343,7 @@ riku --version
 
 ### Post-receive Hook
 
-When you `git push riku master`, the post-receive hook:
+When you `git push riku main`, the post-receive hook:
 1. Checks out code to `~/.riku/apps/<app>/`
 2. Detects the runtime
 3. Installs dependencies
@@ -400,7 +400,7 @@ git add . && git commit -m "init"
 
 # Add remote and deploy
 git remote add riku deploy@server:myapp
-git push riku master
+git push riku main
 
 # Configure
 riku config set myapp DATABASE_URL=postgres://localhost/db

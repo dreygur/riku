@@ -23,7 +23,7 @@ pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
         echo("There are no applications deployed.", "");
         echo("Deploy your first app:", "yellow");
         echo("  git remote add riku deploy@your-server:myapp", "yellow");
-        echo("  git push riku master", "yellow");
+        echo("  git push riku main", "yellow");
         return Ok(());
     }
 
@@ -37,7 +37,7 @@ pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
         echo("There are no applications deployed.", "");
         echo("Deploy your first app:", "yellow");
         echo("  git remote add riku deploy@your-server:myapp", "yellow");
-        echo("  git push riku master", "yellow");
+        echo("  git push riku main", "yellow");
         return Ok(());
     }
 
@@ -1232,7 +1232,7 @@ done
         &format!("  git remote add riku deploy@your-server:{}", app),
         "yellow",
     );
-    echo("  git push riku master", "yellow");
+    echo("  git push riku main", "yellow");
     echo("", "");
 
     Ok(())

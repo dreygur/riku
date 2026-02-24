@@ -273,7 +273,7 @@ echo 'NGINX_SERVER_NAME=test.example.com' > ENV
 git add .
 git commit -m "test"
 git remote add riku deploy@your-server:test-app
-git push riku master
+git push riku main
 ```
 
 ## Upgrading Riku

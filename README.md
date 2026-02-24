@@ -166,7 +166,7 @@ worker: python worker.py
 git add .
 git commit -m "Initial commit"
 git remote add riku deploy@your-server:myapp
-git push riku master
+git push riku main
 ```
 
 ## Commands
@@ -376,7 +376,7 @@ cargo test
 cd /tmp/riku-quick-test-*/
 git init && git add . && git commit -m "test"
 git remote add riku deploy@your-server:test-node
-git push riku master
+git push riku main
 ```
 
 ### Contributing

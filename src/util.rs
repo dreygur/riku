@@ -186,7 +186,7 @@ pub fn exit_if_invalid(app: &str, app_root: &Path) -> Result<String> {
         echo("  Option 1: Create app and push via git", "yellow");
         echo("    riku apps create myapp", "yellow");
         echo("    git remote add riku deploy@server:myapp", "yellow");
-        echo("    git push riku master", "yellow");
+        echo("    git push riku main", "yellow");
         echo("", "");
         echo("  Option 2: Deploy from local folder", "yellow");
         echo("    riku deploy myapp --from ./path/to/app", "yellow");
@@ -615,7 +615,10 @@ pub fn parse_settings(
             let k = line[..eq_pos].trim().to_string();
             let v = line[eq_pos + 1..].trim().to_string();
             // Strip null bytes and control characters (except common whitespace)
-            let cleaned: String = v.chars().filter(|c| !c.is_control() || *c == '\t').collect();
+            let cleaned: String = v
+                .chars()
+                .filter(|c| !c.is_control() || *c == '\t')
+                .collect();
             let expanded = expandvars(&cleaned, env, None);
             env.insert(k, expanded);
         } else {

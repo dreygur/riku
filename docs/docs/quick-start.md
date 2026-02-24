@@ -147,7 +147,7 @@ git remote add riku deploy@your-server-ip:myapp
 
 # Deploy
 git add . && git commit -m "Initial commit"
-git push riku master
+git push riku main
 ```
 
 ---
@@ -167,7 +167,7 @@ http://your-server-ip
 | Task | Command |
 |------|---------|
 | View logs | `riku logs myapp` |
-| Scale workers | `echo "web=4" > SCALING && git push riku master` |
+| Scale workers | `echo "web=4" > SCALING && git push riku main` |
 | Set env vars | `riku config:set myapp KEY=value` |
 | Restart app | `riku restart myapp` |
 | Stop app | `riku stop myapp` |

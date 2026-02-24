@@ -53,7 +53,7 @@
 **A:** Just like Heroku or Piku:
 ```bash
 git remote add riku deploy@your-server:myapp
-git push riku master
+git push riku main
 ```
 
 **Q: How do I scale my app?**
@@ -63,7 +63,7 @@ git push riku master
 echo "web=4" > SCALING
 echo "worker=2" >> SCALING
 git add SCALING && git commit -m "scale"
-git push riku master
+git push riku main
 ```
 
 Or use environment variables:

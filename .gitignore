@@ -5,6 +5,9 @@ Thumbs.db
 *.swo
 *~
 
+# Docker
+tests/e2e/id_ed25519
+
 # Rust
 target/
 **/target/

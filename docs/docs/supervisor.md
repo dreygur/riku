@@ -163,7 +163,7 @@ Commit and push:
 
 ```bash
 git add SCALING && git commit -m "scale up"
-git push riku master
+git push riku main
 ```
 
 ### Using CLI

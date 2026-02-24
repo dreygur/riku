@@ -16,7 +16,7 @@ git commit -m "Initial commit"
 git remote add riku deploy@your-server:nodejs-example
 
 # Deploy
-git push riku master
+git push riku main
 ```
 
 ### 2. Set Environment Variables (Optional)
@@ -87,7 +87,7 @@ Then commit and push:
 echo "web=4" > SCALING
 git add SCALING
 git commit -m "Scale to 4 workers"
-git push riku master
+git push riku main
 ```
 
 ## Project Structure

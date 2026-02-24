@@ -28,7 +28,7 @@ web: gunicorn app:app
 
 **Deploy:**
 ```bash
-git push riku master
+git push riku main
 ```
 
 ### Poetry

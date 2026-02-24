@@ -490,7 +490,7 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
 while read oldrev newrev refname; do
     # Extract app name from repository path
     APP=$(basename "$(pwd)" .git)
-    
+
     # Run riku git-hook
     RIKU_BIN="$HOME/.local/bin/riku"
     if [ -x "$RIKU_BIN" ]; then
@@ -618,7 +618,7 @@ done
         ),
         "yellow",
     );
-    echo("   git push riku master", "yellow");
+    echo("   git push riku main", "yellow");
     echo("", "");
     echo("Documentation: https://dreygur.github.io/riku/", "green");
     echo("", "");
