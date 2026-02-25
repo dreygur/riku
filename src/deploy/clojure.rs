@@ -166,12 +166,35 @@ fn create_clojure_worker_config(
             }
         };
 
-        // Create socket file for web processes
+        // Create socket file for web processes (kept for backwards compatibility)
         let socket_path = paths.nginx_root.join(format!("{}.sock", app));
         worker_env.insert(
             "SOCKET".to_string(),
             socket_path.to_string_lossy().to_string(),
         );
+
+        // Set NGINX_PORTMAP to use TCP proxying instead of unix socket
+        worker_env.insert("NGINX_PORTMAP".to_string(), "true".to_string());
+        worker_env.insert("NGINX_INTERNAL_PORT".to_string(), port.to_string());
+        worker_env.insert("NGINX_EXTERNAL_PORT".to_string(), "80".to_string());
+
+        // Write NGINX settings to ENV file for nginx config generation
+        let env_dir = paths.env_root.join(app);
+        fs::create_dir_all(&env_dir)?;
+        let env_file = env_dir.join("ENV");
+
+        let mut env_content = if env_file.exists() {
+            fs::read_to_string(&env_file)?
+        } else {
+            String::new()
+        };
+
+        if !env_content.contains("NGINX_PORTMAP") {
+            env_content.push_str(&format!("NGINX_PORTMAP=true\n"));
+            env_content.push_str(&format!("NGINX_INTERNAL_PORT={}\n", port));
+            env_content.push_str("NGINX_EXTERNAL_PORT=80\n");
+            fs::write(&env_file, &env_content)?;
+        }
     }
 
     // Add Clojure-specific environment variables

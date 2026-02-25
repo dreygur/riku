@@ -35,6 +35,9 @@ pub struct Supervisor {
     log_root: std::path::PathBuf,
     last_log_rotation: std::time::SystemTime,
     log_rotation_interval: Duration,
+    stats_file: std::path::PathBuf,
+    last_stats_write: std::time::SystemTime,
+    stats_write_interval: Duration,
 }
 
 impl Supervisor {
@@ -46,6 +49,12 @@ impl Supervisor {
             .map(|p| p.join("logs"))
             .unwrap_or_else(|| std::path::PathBuf::from("./logs"));
 
+        // Determine stats file path (in .riku root)
+        let stats_file = config_dir
+            .parent()
+            .map(|p| p.join("stats.json"))
+            .unwrap_or_else(|| std::path::PathBuf::from("./stats.json"));
+
         Ok(Supervisor {
             config_dir,
             process_manager: ProcessManager::new()?,
@@ -54,6 +63,9 @@ impl Supervisor {
             log_root,
             last_log_rotation: std::time::SystemTime::now(),
             log_rotation_interval: Duration::from_secs(300), // Check every 5 minutes
+            stats_file,
+            last_stats_write: std::time::SystemTime::now(),
+            stats_write_interval: Duration::from_secs(5), // Write stats every 5 seconds
         })
     }
 
@@ -116,6 +128,19 @@ impl Supervisor {
                             eprintln!("Log rotation error: {:?}", e);
                         }
                         self.last_log_rotation = std::time::SystemTime::now();
+                    }
+
+                    // Check if it's time to write stats
+                    if self
+                        .last_stats_write
+                        .elapsed()
+                        .unwrap_or(Duration::from_secs(0))
+                        >= self.stats_write_interval
+                    {
+                        if let Err(e) = self.write_stats() {
+                            eprintln!("Failed to write stats: {:?}", e);
+                        }
+                        self.last_stats_write = std::time::SystemTime::now();
                     }
                 }
                 Err(e) => {
@@ -314,6 +339,14 @@ impl Supervisor {
         }
 
         self.log_rotator.cleanup_old_logs(&self.log_root)
+    }
+
+    /// Write current stats to the stats file.
+    fn write_stats(&self) -> Result<()> {
+        self.process_manager
+            .stats()
+            .write_stats_to_file(&self.stats_file)?;
+        Ok(())
     }
 }
 

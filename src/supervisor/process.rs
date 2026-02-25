@@ -6,6 +6,8 @@ use anyhow::Result;
 use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
 use std::collections::HashMap;
+use std::fs::{File, OpenOptions};
+use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::Duration;
@@ -22,11 +24,13 @@ pub struct SpawnedProcess {
     pub last_restart: std::time::Instant,
     pub health_check_config: Option<HealthCheck>,
     pub consecutive_health_failures: u32,
+    #[allow(dead_code)]
+    log_handles: Option<(File, File)>,
 }
 
 impl SpawnedProcess {
     /// Create a new SpawnedProcess instance.
-    pub fn new(child: Child, config: WorkerConfig) -> Result<Self> {
+    pub fn new(child: Child, config: WorkerConfig, log_handles: Option<(File, File)>) -> Result<Self> {
         let pid = Pid::from_raw(child.id() as i32);
         let health_check_config = config.options.health_check.clone();
 
@@ -38,6 +42,7 @@ impl SpawnedProcess {
             last_restart: std::time::Instant::now(),
             health_check_config,
             consecutive_health_failures: 0,
+            log_handles,
         })
     }
 
@@ -134,6 +139,10 @@ impl ProcessManager {
             self.stop_process_by_id(&process_id)?;
         }
 
+        // Open log files for stdout and stderr
+        let log_path = &config.options.log_file;
+        let log_handles = Self::open_log_files(log_path)?;
+
         // Build the command to run
         let mut cmd = Command::new("sh");
         cmd.arg("-c")
@@ -151,11 +160,59 @@ impl ProcessManager {
         }
 
         // Spawn the process
-        let child = cmd.spawn()?;
+        let mut child = cmd.spawn()?;
+
+        // Start log capture threads before creating SpawnedProcess
+        let stdout = child.stdout.take();
+        let stderr = child.stderr.take();
+        
+        if let Some((ref log_file, ref _log_file_mut)) = log_handles {
+            // Capture stdout
+            if let Some(stdout_reader) = stdout {
+                let mut stdout_log = log_file.try_clone()?;
+                thread::spawn(move || {
+                    let reader = BufReader::new(stdout_reader);
+                    for line in reader.lines() {
+                        match line {
+                            Ok(line) => {
+                                let _ = writeln!(stdout_log, "{}", line);
+                                let _ = stdout_log.flush();
+                            }
+                            Err(e) => {
+                                eprintln!("Error reading stdout: {}", e);
+                                break;
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Capture stderr
+            if let Some(stderr_reader) = stderr {
+                if let Some((_, ref stderr_log)) = log_handles {
+                    let mut stderr_log = stderr_log.try_clone()?;
+                    thread::spawn(move || {
+                        let reader = BufReader::new(stderr_reader);
+                        for line in reader.lines() {
+                            match line {
+                                Ok(line) => {
+                                    let _ = writeln!(stderr_log, "{}", line);
+                                    let _ = stderr_log.flush();
+                                }
+                                Err(e) => {
+                                    eprintln!("Error reading stderr: {}", e);
+                                    break;
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+        }
 
         // Create the SpawnedProcess wrapper.
         // If this fails, kill the child to prevent orphaned processes.
-        let spawned_process = match SpawnedProcess::new(child, config.clone()) {
+        let spawned_process = match SpawnedProcess::new(child, config.clone(), log_handles) {
             Ok(sp) => sp,
             Err(e) => {
                 // SpawnedProcess::new takes ownership of child, but on error
@@ -179,6 +236,30 @@ impl ProcessManager {
 
         println!("Spawned process: {} (PID: {})", process_id, pid);
         Ok(())
+    }
+
+    /// Open log files for stdout and stderr.
+    fn open_log_files(log_path: &str) -> Result<Option<(File, File)>> {
+        use std::path::Path;
+        
+        let path = Path::new(log_path);
+        
+        // Create parent directories if they don't exist
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        
+        // Open log file for appending
+        let log_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)?;
+        
+        // Return two handles (one for stdout, one for stderr - both write to same file)
+        let stdout_handle = log_file.try_clone()?;
+        let stderr_handle = log_file.try_clone()?;
+        
+        Ok(Some((stdout_handle, stderr_handle)))
     }
 
     /// Stop a specific process by its ID.

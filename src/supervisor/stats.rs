@@ -321,6 +321,15 @@ impl StatsManager {
             .filter(|s| s.status == ProcessStatus::Running)
             .count()
     }
+
+    /// Write stats to a JSON file for CLI consumption.
+    pub fn write_stats_to_file(&self, path: &std::path::Path) -> Result<(), std::io::Error> {
+        let app_stats = self.get_all_stats();
+        let json = serde_json::to_string_pretty(&app_stats)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        fs::write(path, json)?;
+        Ok(())
+    }
 }
 
 /// Get process resource usage from /proc filesystem (Linux only).

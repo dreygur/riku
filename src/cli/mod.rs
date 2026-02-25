@@ -259,4 +259,16 @@ pub enum AppsCmd {
         /// Application name
         name: String,
     },
+
+    /// Show detailed information about an application
+    Info {
+        /// Application name
+        name: String,
+    },
+
+    /// Destroy an application (preserves data/cache)
+    Destroy {
+        /// Application name
+        name: String,
+    },
 }
