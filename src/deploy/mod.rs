@@ -160,6 +160,24 @@ pub fn create_workers_generic(
     use crate::supervisor::config::create_worker_config;
     use crate::util::get_free_port;
 
+    // Handle RIKU_AUTO_RESTART - if false, skip removing existing worker configs
+    let auto_restart = env
+        .get("RIKU_AUTO_RESTART")
+        .map(|v| v.to_lowercase() != "false" && v != "0" && v != "no")
+        .unwrap_or(true);
+
+    if auto_restart {
+        // Remove existing worker configs to trigger restart
+        for ext in &["toml", "ini"] {
+            let pattern = paths.workers_enabled.join(format!("{}*.{}", app, ext));
+            if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
+                for entry in entries.flatten() {
+                    let _ = fs::remove_file(&entry);
+                }
+            }
+        }
+    }
+
     // Read Procfile to determine processes to run
     let procfile_path = app_path.join("Procfile");
     if !procfile_path.exists() {
@@ -418,11 +436,98 @@ pub fn detect_runtime(app_path: &Path) -> Option<Runtime> {
     None
 }
 
+/// Apply scaling deltas to the SCALING file and return the new worker counts.
+/// Also removes symlinks for workers that have been scaled down.
+fn apply_scaling_deltas(
+    app: &str,
+    paths: &RikuPaths,
+    deltas: &HashMap<String, i64>,
+    workers: &HashMap<String, String>,
+) -> Result<HashMap<String, u32>> {
+    let scaling_path = paths.env_root.join(app).join("SCALING");
+    let mut worker_counts: HashMap<String, u32> = HashMap::new();
+
+    // Read current scaling values
+    if scaling_path.exists() {
+        let content = fs::read_to_string(&scaling_path)?;
+        for line in content.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            if let Some(pos) = line.find('=') {
+                let key = line[..pos].trim();
+                let val = line[pos + 1..].trim();
+                if let Ok(count) = val.parse::<u32>() {
+                    worker_counts.insert(key.to_string(), count);
+                }
+            }
+        }
+    }
+
+    // Default to 1 for any worker types not in SCALING
+    for kind in workers.keys() {
+        worker_counts.entry(kind.clone()).or_insert(1);
+    }
+
+    // Apply deltas
+    let mut new_counts: HashMap<String, u32> = worker_counts.clone();
+    for (kind, delta) in deltas {
+        let current = *worker_counts.get(kind).unwrap_or(&1);
+        let new_count = if *delta < 0 {
+            current.saturating_sub((-delta) as u32)
+        } else {
+            current + (*delta as u32)
+        };
+        new_counts.insert(kind.clone(), new_count);
+        echo(
+            &format!(
+                "-----> Scaling '{}': {} -> {} (delta: {})",
+                kind, current, new_count, delta
+            ),
+            "green",
+        );
+    }
+
+    // Write new scaling file
+    let mut scaling_content = String::new();
+    let mut counts: Vec<_> = new_counts.iter().collect();
+    counts.sort();
+    for (kind, count) in counts {
+        scaling_content.push_str(&format!("{}:{}\n", kind, count));
+    }
+    fs::create_dir_all(paths.env_root.join(app))?;
+    fs::write(&scaling_path, &scaling_content)?;
+
+    // Remove symlinks for scaled-down workers
+    for (kind, new_count) in &new_counts {
+        let old_count = *worker_counts.get(kind).unwrap_or(&1);
+        if new_count < &old_count {
+            for ordinal in (*new_count + 1)..=old_count {
+                let config_filename = format!("{}-{}-{}.toml", app, kind, ordinal);
+                let enabled_path = paths.workers_enabled.join(&config_filename);
+                if enabled_path.exists() {
+                    fs::remove_file(&enabled_path)?;
+                    echo(
+                        &format!(
+                            "-----> Removed worker config: {} (scaled down)",
+                            config_filename
+                        ),
+                        "yellow",
+                    );
+                }
+            }
+        }
+    }
+
+    Ok(new_counts)
+}
+
 /// Deploy an app by resetting the work directory, detecting runtime, and spawning workers.
 pub fn do_deploy(
     app: &str,
     paths: &RikuPaths,
-    _deltas: &HashMap<String, i64>,
+    deltas: &HashMap<String, i64>,
     newrev: Option<&str>,
 ) -> Result<()> {
     let app_path = paths.app_root.join(app);
@@ -460,6 +565,35 @@ pub fn do_deploy(
         if let Err(e) = git_reset_result {
             echo(&format!("Warning: git reset failed: {}", e), "yellow");
         }
+
+        // Initialize and update git submodules
+        let submodule_init_result = Command::new("git")
+            .args(["submodule", "init"])
+            .current_dir(&app_path)
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .status();
+
+        if let Err(e) = submodule_init_result {
+            echo(
+                &format!("Warning: git submodule init failed: {}", e),
+                "yellow",
+            );
+        }
+
+        let submodule_update_result = Command::new("git")
+            .args(["submodule", "update", "--recursive"])
+            .current_dir(&app_path)
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .status();
+
+        if let Err(e) = submodule_update_result {
+            echo(
+                &format!("Warning: git submodule update failed: {}", e),
+                "yellow",
+            );
+        }
     }
 
     // Ensure log directory exists
@@ -481,6 +615,9 @@ pub fn do_deploy(
             return Ok(());
         }
     };
+
+    // Apply scaling deltas if any
+    let _scaling_counts = apply_scaling_deltas(app, paths, deltas, &workers)?;
 
     // Run preflight command if present
     if let Some(preflight_cmd) = workers.remove("preflight") {
@@ -608,6 +745,35 @@ pub fn do_deploy(
             }
         }
     }
+
+    // Write LIVE_ENV with resolved environment
+    let live_env_path = paths.env_root.join(app).join("LIVE_ENV");
+    let mut live_env_content = String::new();
+    // Add standard bootstrap variables
+    live_env_content.push_str(&format!("APP={}\n", app));
+    live_env_content.push_str(&format!("LOG_ROOT={}\n", paths.log_root.display()));
+    live_env_content.push_str(&format!(
+        "DATA_ROOT={}\n",
+        paths.data_root.join(app).display()
+    ));
+    if let Ok(home) = std::env::var("HOME") {
+        live_env_content.push_str(&format!("HOME={}\n", home));
+    }
+    if let Ok(user) = std::env::var("USER") {
+        live_env_content.push_str(&format!("USER={}\n", user));
+    }
+    // Add all env vars from the ENV file
+    let env_file = paths.env_root.join(app).join("ENV");
+    if env_file.exists() {
+        let env_content = fs::read_to_string(&env_file)?;
+        for line in env_content.lines() {
+            let line = line.trim();
+            if !line.is_empty() && !line.starts_with('#') {
+                live_env_content.push_str(&format!("{}\n", line));
+            }
+        }
+    }
+    fs::write(&live_env_path, &live_env_content)?;
 
     // Call spawn_app to start the application processes
     spawn_app(app, paths)?;

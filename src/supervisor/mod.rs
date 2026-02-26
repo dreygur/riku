@@ -23,6 +23,7 @@ pub mod process;
 pub mod stats;
 
 use config::WorkerConfig;
+use cron::CronScheduler;
 use log_rotation::{LogRotationConfig, LogRotator};
 use process::ProcessManager;
 
@@ -38,6 +39,9 @@ pub struct Supervisor {
     stats_file: std::path::PathBuf,
     last_stats_write: std::time::SystemTime,
     stats_write_interval: Duration,
+    cron_scheduler: CronScheduler,
+    last_cron_check: std::time::SystemTime,
+    cron_check_interval: Duration,
 }
 
 impl Supervisor {
@@ -66,6 +70,9 @@ impl Supervisor {
             stats_file,
             last_stats_write: std::time::SystemTime::now(),
             stats_write_interval: Duration::from_secs(5), // Write stats every 5 seconds
+            cron_scheduler: CronScheduler::new(),
+            last_cron_check: std::time::SystemTime::now(),
+            cron_check_interval: Duration::from_secs(10), // Check cron jobs every 10 seconds
         })
     }
 
@@ -141,6 +148,19 @@ impl Supervisor {
                             eprintln!("Failed to write stats: {:?}", e);
                         }
                         self.last_stats_write = std::time::SystemTime::now();
+                    }
+
+                    // Check if it's time to check cron jobs
+                    if self
+                        .last_cron_check
+                        .elapsed()
+                        .unwrap_or(Duration::from_secs(0))
+                        >= self.cron_check_interval
+                    {
+                        if let Err(e) = self.check_cron_jobs() {
+                            eprintln!("Cron job check error: {:?}", e);
+                        }
+                        self.last_cron_check = std::time::SystemTime::now();
                     }
                 }
                 Err(e) => {
@@ -346,6 +366,113 @@ impl Supervisor {
         self.process_manager
             .stats()
             .write_stats_to_file(&self.stats_file)?;
+        Ok(())
+    }
+
+    /// Check and execute cron jobs that are due.
+    fn check_cron_jobs(&mut self) -> Result<()> {
+        // Collect jobs to run first (we need to clone to avoid borrow issues)
+        let jobs_to_run: Vec<(String, String, String)> = self
+            .cron_scheduler
+            .get_jobs_to_run()
+            .iter()
+            .map(|j| (j.app.clone(), j.schedule.clone(), j.command.clone()))
+            .collect();
+
+        // Execute jobs
+        for (app, _schedule, command) in jobs_to_run {
+            let output = std::process::Command::new("sh")
+                .arg("-c")
+                .arg(&command)
+                .output();
+
+            match output {
+                Ok(out) if out.status.success() => {
+                    println!("Cron job for app '{}' completed successfully", app);
+                }
+                Ok(out) => {
+                    eprintln!(
+                        "Cron job for app '{}' failed: {}",
+                        app,
+                        String::from_utf8_lossy(&out.stderr)
+                    );
+                }
+                Err(e) => {
+                    eprintln!("Error executing cron job for app '{}': {}", app, e);
+                }
+            }
+
+            // Update next run time - get job index from the scheduler
+            if let Some(job_id) = self
+                .cron_scheduler
+                .get_jobs()
+                .keys()
+                .find(|k| k.starts_with(&format!("{}-cron-", app)))
+            {
+                if let Some(idx) = job_id.rsplit('-').next() {
+                    if let Ok(index) = idx.parse::<usize>() {
+                        let _ = self.cron_scheduler.mark_job_run(&app, index);
+                    }
+                }
+            }
+        }
+
+        // Remove apps that no longer have cron workers from scheduler
+        // (This would require access to the current Procfile, which we don't have here)
+        // For now, cron jobs persist until supervisor restart
+
+        Ok(())
+    }
+
+    /// Load cron jobs from an app's Procfile.
+    #[allow(dead_code)]
+    pub fn load_cron_jobs(&mut self, app: &str, procfile_path: &Path) -> Result<()> {
+        if !procfile_path.exists() {
+            return Ok(());
+        }
+
+        let content = fs::read_to_string(procfile_path)?;
+        let mut cron_index = 0;
+
+        for line in content.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+
+            if let Some(pos) = line.find(':') {
+                let kind = line[..pos].trim();
+                let command = line[pos + 1..].trim();
+
+                if kind.starts_with("cron") {
+                    // The kind is like "cron0", "cron1", etc.
+                    // We don't need the number, just that it starts with "cron"
+
+                    // Parse the command as a cron expression followed by the command
+                    let parts: Vec<&str> = command.split_whitespace().collect();
+                    if parts.len() >= 5 {
+                        // This is a valid cron expression + command
+                        let schedule = parts[..5].join(" ");
+                        let actual_command = parts[5..].join(" ");
+
+                        if cron::validate_cron_expression(&schedule) {
+                            self.cron_scheduler.add_job(
+                                app,
+                                cron_index,
+                                &schedule,
+                                &actual_command,
+                            )?;
+                            println!(
+                                "Loaded cron job for app '{}': {} {}",
+                                app, schedule, actual_command
+                            );
+                            cron_index += 1;
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 }

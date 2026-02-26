@@ -84,6 +84,23 @@ fn create_java_workers(
     env: &HashMap<String, String>,
     paths: &RikuPaths,
 ) -> Result<()> {
+    // Handle RIKU_AUTO_RESTART - if false, skip removing existing worker configs
+    let auto_restart = env
+        .get("RIKU_AUTO_RESTART")
+        .map(|v| v.to_lowercase() != "false" && v != "0" && v != "no")
+        .unwrap_or(true);
+
+    if auto_restart {
+        for ext in &["toml", "ini"] {
+            let pattern = paths.workers_enabled.join(format!("{}*.{}", app, ext));
+            if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
+                for entry in entries.flatten() {
+                    let _ = fs::remove_file(&entry);
+                }
+            }
+        }
+    }
+
     // Read Procfile to determine processes to run
     let procfile_path = app_path.join("Procfile");
     if !procfile_path.exists() {

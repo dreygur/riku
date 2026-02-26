@@ -5,11 +5,11 @@
 #![allow(dead_code)]
 
 use anyhow::Result;
-use regex::Regex;
 use std::collections::HashMap;
 use std::process::Command;
-use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use chrono::{Datelike, Timelike};
 
 /// A scheduled cron job.
 #[derive(Clone, Debug)]
@@ -100,40 +100,82 @@ impl CronScheduler {
         Ok(())
     }
 
-    /// Run the scheduler loop, checking for jobs to execute.
-    pub fn run_scheduler(&mut self) -> Result<()> {
-        loop {
-            let now = SystemTime::now();
-            let jobs_to_run: Vec<String> = self
-                .jobs
-                .iter()
-                .filter(|(_, job)| now >= job.next_run)
-                .map(|(id, _)| id.clone())
-                .collect();
-
-            for job_id in jobs_to_run {
-                if let Some(job) = self.jobs.get_mut(&job_id) {
-                    // Execute the job
-                    if let Err(e) = job.execute() {
-                        eprintln!("Error executing cron job {}: {}", job_id, e);
-                    }
-
-                    // Update next run time
-                    if let Err(e) = job.update_next_run() {
-                        eprintln!("Error updating next run time for job {}: {}", job_id, e);
-                    }
-                }
-            }
-
-            // Sleep for 1 second before checking again
-            thread::sleep(Duration::from_secs(1));
-        }
-    }
-
     /// Get all scheduled jobs.
     pub fn get_jobs(&self) -> &HashMap<String, CronJob> {
         &self.jobs
     }
+
+    /// Get jobs that should run now.
+    pub fn get_jobs_to_run(&self) -> Vec<&CronJob> {
+        let now = SystemTime::now();
+        self.jobs
+            .values()
+            .filter(|job| now >= job.next_run)
+            .collect()
+    }
+
+    /// Mark a job as run and update its next run time.
+    pub fn mark_job_run(&mut self, app: &str, index: usize) -> Result<()> {
+        let job_id = format!("{}-cron-{}", app, index);
+        if let Some(job) = self.jobs.get_mut(&job_id) {
+            job.next_run = calculate_next_run_after(&job.schedule, job.next_run)?;
+        }
+        Ok(())
+    }
+}
+
+/// Parse a cron field (minute, hour, day, month, weekday) and return matching values.
+fn parse_cron_field(field: &str, min: u32, max: u32) -> Result<Vec<u32>> {
+    let mut values = Vec::new();
+
+    for part in field.split(',') {
+        if part.contains('/') {
+            // Handle */n or n/m syntax
+            let parts: Vec<&str> = part.split('/').collect();
+            let range = parts[0];
+            let step: u32 = parts[1].parse()?;
+
+            let (start, end) = if range == "*" {
+                (min, max)
+            } else if range.contains('-') {
+                let range_parts: Vec<&str> = range.split('-').collect();
+                (range_parts[0].parse()?, range_parts[1].parse()?)
+            } else {
+                (range.parse()?, range.parse()?)
+            };
+
+            for v in (start..=end).step_by(step as usize) {
+                if v >= min && v <= max {
+                    values.push(v);
+                }
+            }
+        } else if part.contains('-') {
+            // Handle n-m range
+            let parts: Vec<&str> = part.split('-').collect();
+            let start: u32 = parts[0].parse()?;
+            let end: u32 = parts[1].parse()?;
+            for v in start..=end {
+                if v >= min && v <= max {
+                    values.push(v);
+                }
+            }
+        } else if part == "*" {
+            // Handle * (all values)
+            for v in min..=max {
+                values.push(v);
+            }
+        } else {
+            // Single value
+            let v: u32 = part.parse()?;
+            if v >= min && v <= max {
+                values.push(v);
+            }
+        }
+    }
+
+    values.sort();
+    values.dedup();
+    Ok(values)
 }
 
 /// Parse a cron expression and calculate the next run time.
@@ -144,26 +186,69 @@ fn calculate_next_run(schedule: &str) -> Result<SystemTime> {
 
 /// Parse a cron expression and calculate the next run time after a given time.
 fn calculate_next_run_after(schedule: &str, after: SystemTime) -> Result<SystemTime> {
-    // This is a simplified implementation
-    // A full implementation would properly parse cron expressions
     let parts: Vec<&str> = schedule.split_whitespace().collect();
 
     if parts.len() < 5 {
         return Err(anyhow::anyhow!("Invalid cron expression: {}", schedule));
     }
 
-    // For now, we'll just return the next minute as a placeholder
-    // A full implementation would calculate the actual next time based on the cron pattern
-    Ok(after + Duration::from_secs(60))
+    let minute_parts = parse_cron_field(parts[0], 0, 59)?;
+    let hour_parts = parse_cron_field(parts[1], 0, 23)?;
+    let day_parts = parse_cron_field(parts[2], 1, 31)?;
+    let month_parts = parse_cron_field(parts[3], 1, 12)?;
+    let weekday_parts = parse_cron_field(parts[4], 0, 6)?; // 0 = Sunday in cron
+
+    // Convert after to NaiveDateTime
+    let after_secs = after
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| anyhow::anyhow!("Time went backwards"))?
+        .as_secs();
+    let after_datetime = chrono::DateTime::from_timestamp(after_secs as i64, 0)
+        .ok_or_else(|| anyhow::anyhow!("Invalid timestamp"))?
+        .naive_utc();
+
+    let mut candidate = after_datetime;
+
+    // Simple approach: iterate forward minute by minute until we find a match
+    // This is not the most efficient but is correct and simple
+    for _ in 0..60 * 24 * 366 {
+        // Max 1 year lookahead
+        candidate += Duration::from_secs(60);
+
+        let minute = candidate.minute();
+        let hour = candidate.hour();
+        let day = candidate.day();
+        let month = candidate.month();
+        let weekday = candidate.weekday().num_days_from_sunday();
+
+        if minute_parts.contains(&minute)
+            && hour_parts.contains(&hour)
+            && (day_parts.contains(&day) || weekday_parts.contains(&weekday))
+            && month_parts.contains(&month)
+        {
+            // Convert NaiveDateTime back to SystemTime
+            let timestamp = candidate.and_utc().timestamp();
+            return Ok(SystemTime::UNIX_EPOCH + Duration::from_secs(timestamp as u64));
+        }
+    }
+
+    // Fallback: return 1 hour from now
+    Ok(after + Duration::from_secs(3600))
 }
 
 /// Validate a cron expression.
 pub fn validate_cron_expression(expr: &str) -> bool {
-    let cron_regex = Regex::new(
-        r#"^((\*(/\d+)?|[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*)\s+){4}(\*(/\d+)?|[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*)$"#,
-    ).unwrap();
+    let parts: Vec<&str> = expr.split_whitespace().collect();
+    if parts.len() < 5 {
+        return false;
+    }
 
-    cron_regex.is_match(expr)
+    // Try to parse each field - if any fails, it's invalid
+    parse_cron_field(parts[0], 0, 59).is_ok()
+        && parse_cron_field(parts[1], 0, 23).is_ok()
+        && parse_cron_field(parts[2], 1, 31).is_ok()
+        && parse_cron_field(parts[3], 1, 12).is_ok()
+        && parse_cron_field(parts[4], 0, 6).is_ok()
 }
 
 #[cfg(test)]
