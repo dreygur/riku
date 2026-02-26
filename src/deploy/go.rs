@@ -9,8 +9,10 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::config::RikuPaths;
-use crate::supervisor::config::create_worker_config;
-use crate::util::{echo, get_free_port};
+use crate::deploy::read_scaling_count;
+use crate::setup_web_port;
+use crate::util::echo;
+use crate::write_worker_config;
 
 /// Deploy a Go application.
 pub fn deploy_go(
@@ -68,33 +70,8 @@ fn create_go_workers(
             let kind = line[..pos].trim();
             let command = line[pos + 1..].trim();
 
-            // Parse scaling info if available
-            let scaling_path = paths.env_root.join(app).join("SCALING");
-            let mut count = 1; // default to 1 instance
+            let count = read_scaling_count(paths, app, kind)?;
 
-            if scaling_path.exists() {
-                let scaling_content = fs::read_to_string(&scaling_path)?;
-                for scale_line in scaling_content.lines() {
-                    let scale_line = scale_line.trim();
-                    if scale_line.is_empty() || scale_line.starts_with('#') {
-                        continue;
-                    }
-
-                    if let Some(scale_pos) = scale_line.find('=') {
-                        let scale_kind = scale_line[..scale_pos].trim();
-                        let scale_count_str = scale_line[scale_pos + 1..].trim();
-
-                        if scale_kind == kind {
-                            if let Ok(scale_count) = scale_count_str.parse::<u32>() {
-                                count = scale_count;
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Create worker configs for each instance
             for i in 1..=count {
                 create_go_worker_config(app, kind, command, i, env, paths, app_path)?;
             }
@@ -114,96 +91,35 @@ fn create_go_worker_config(
     paths: &RikuPaths,
     app_path: &Path,
 ) -> Result<()> {
-    // Prepare environment for the worker
     let mut worker_env = env.clone();
 
     // Set PORT for web processes and determine final command
     let final_command = if kind == "web" {
-        let port = get_free_port("127.0.0.1")?;
-        worker_env.insert("PORT".to_string(), port.to_string());
+        let port = setup_web_port!(worker_env, app, paths);
 
-        // Update command to include port if it's a web process
-        let updated_command = if command.contains("--port") || command.contains("PORT=") {
+        // If the binary doesn't already accept a port flag, append -port=
+        if command.contains("--port") || command.contains("PORT=") {
             command.to_string()
+        } else if command.ends_with("_bin") {
+            format!("{} -port={}", command, port)
         } else {
-            // If it's a common Go web server, add port binding
-            if command.ends_with("_bin") {
-                format!("{} -port={}", command, port)
-            } else {
-                command.to_string()
-            }
-        };
-
-        // Create socket file for web processes (kept for backwards compatibility)
-        let socket_path = paths.nginx_root.join(format!("{}.sock", app));
-        worker_env.insert(
-            "SOCKET".to_string(),
-            socket_path.to_string_lossy().to_string(),
-        );
-
-        // Set NGINX_PORTMAP to use TCP proxying instead of unix socket
-        worker_env.insert("NGINX_PORTMAP".to_string(), "true".to_string());
-        worker_env.insert("NGINX_INTERNAL_PORT".to_string(), port.to_string());
-        worker_env.insert("NGINX_EXTERNAL_PORT".to_string(), "80".to_string());
-
-        // Write NGINX settings to ENV file for nginx config generation
-        let env_dir = paths.env_root.join(app);
-        fs::create_dir_all(&env_dir)?;
-        let env_file = env_dir.join("ENV");
-
-        let mut env_content = if env_file.exists() {
-            fs::read_to_string(&env_file)?
-        } else {
-            String::new()
-        };
-
-        if !env_content.contains("NGINX_PORTMAP") {
-            env_content.push_str(&format!("NGINX_PORTMAP=true\n"));
-            env_content.push_str(&format!("NGINX_INTERNAL_PORT={}\n", port));
-            env_content.push_str("NGINX_EXTERNAL_PORT=80\n");
-            fs::write(&env_file, &env_content)?;
+            command.to_string()
         }
-
-        updated_command
     } else {
         command.to_string()
     };
 
     // Add Go-specific environment variables
-    worker_env.insert("GOROOT".to_string(), "".to_string()); // Will be picked up from environment
+    worker_env.insert("GOROOT".to_string(), String::new()); // picked up from environment
 
-    // Create the worker config
-    let worker_config = create_worker_config(
+    write_worker_config!(
         app,
         kind,
         &final_command,
         ordinal,
         worker_env,
-        &app_path.to_string_lossy(),
-        &paths
-            .log_root
-            .join(app)
-            .join(format!("{}.{}.log", kind, ordinal))
-            .to_string_lossy(),
-    );
-
-    // Write the worker config to the available directory
-    let config_filename = format!("{}-{}-{}.toml", app, kind, ordinal);
-    let config_path = paths.workers_available.join(&config_filename);
-
-    let config_content = toml::to_string(&worker_config)?;
-    fs::write(&config_path, &config_content)?;
-
-    // Create a symlink to enable the worker
-    let enabled_path = paths.workers_enabled.join(&config_filename);
-    if enabled_path.exists() {
-        fs::remove_file(&enabled_path)?;
-    }
-    std::os::unix::fs::symlink(&config_path, &enabled_path)?;
-
-    echo(
-        &format!("-----> Created worker config: {}", config_filename),
-        "green",
+        app_path,
+        paths
     );
 
     Ok(())

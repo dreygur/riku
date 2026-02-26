@@ -36,6 +36,116 @@ pub mod python;
 pub mod ruby;
 pub mod rust;
 
+/// Read the scaling count for a given process kind from the SCALING file.
+///
+/// Returns 1 if the file doesn't exist or the kind isn't listed.
+pub fn read_scaling_count(paths: &RikuPaths, app: &str, kind: &str) -> Result<u32> {
+    let scaling_path = paths.env_root.join(app).join("SCALING");
+    if !scaling_path.exists() {
+        return Ok(1);
+    }
+    let content = fs::read_to_string(&scaling_path)?;
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some(pos) = line.find('=') {
+            let key = line[..pos].trim();
+            let val = line[pos + 1..].trim();
+            if key == kind {
+                if let Ok(n) = val.parse::<u32>() {
+                    return Ok(n);
+                }
+            }
+        }
+    }
+    Ok(1)
+}
+
+/// Set up PORT/SOCKET/NGINX_PORTMAP env vars for a web worker and persist them
+/// to the app ENV file.  Expands to the allocated `u16` port number.
+///
+/// Usage (inside a `Result`-returning function):
+/// ```ignore
+/// let port = setup_web_port!(worker_env, app, paths);
+/// ```
+#[macro_export]
+macro_rules! setup_web_port {
+    ($worker_env:expr, $app:expr, $paths:expr) => {{
+        use $crate::util::get_free_port;
+        let port = get_free_port("127.0.0.1")?;
+        $worker_env.insert("PORT".to_string(), port.to_string());
+
+        let socket_path = $paths.nginx_root.join(format!("{}.sock", $app));
+        $worker_env.insert(
+            "SOCKET".to_string(),
+            socket_path.to_string_lossy().to_string(),
+        );
+
+        $worker_env.insert("NGINX_PORTMAP".to_string(), "true".to_string());
+        $worker_env.insert("NGINX_INTERNAL_PORT".to_string(), port.to_string());
+        $worker_env.insert("NGINX_EXTERNAL_PORT".to_string(), "80".to_string());
+
+        let env_dir = $paths.env_root.join($app);
+        std::fs::create_dir_all(&env_dir)?;
+        let env_file = env_dir.join("ENV");
+        let mut env_content = if env_file.exists() {
+            std::fs::read_to_string(&env_file)?
+        } else {
+            String::new()
+        };
+        if !env_content.contains("NGINX_PORTMAP") {
+            env_content.push_str("NGINX_PORTMAP=true\n");
+            env_content.push_str(&format!("NGINX_INTERNAL_PORT={}\n", port));
+            env_content.push_str("NGINX_EXTERNAL_PORT=80\n");
+            std::fs::write(&env_file, &env_content)?;
+        }
+        port
+    }};
+}
+
+/// Write a worker config TOML to `workers_available/` and symlink it into
+/// `workers_enabled/`.  Emits the standard "Created worker config" message.
+///
+/// Usage (inside a `Result`-returning function):
+/// ```ignore
+/// write_worker_config!(app, kind, &final_command, ordinal, worker_env, app_path, paths);
+/// ```
+#[macro_export]
+macro_rules! write_worker_config {
+    ($app:expr, $kind:expr, $command:expr, $ordinal:expr, $worker_env:expr, $app_path:expr, $paths:expr) => {{
+        use $crate::supervisor::config::create_worker_config;
+        use $crate::util::echo;
+        let worker_config = create_worker_config(
+            $app,
+            $kind,
+            $command,
+            $ordinal,
+            $worker_env,
+            &$app_path.to_string_lossy(),
+            &$paths
+                .log_root
+                .join($app)
+                .join(format!("{}.{}.log", $kind, $ordinal))
+                .to_string_lossy(),
+        );
+        let config_filename = format!("{}-{}-{}.toml", $app, $kind, $ordinal);
+        let config_path = $paths.workers_available.join(&config_filename);
+        let config_content = toml::to_string(&worker_config)?;
+        std::fs::write(&config_path, &config_content)?;
+        let enabled_path = $paths.workers_enabled.join(&config_filename);
+        if enabled_path.exists() {
+            std::fs::remove_file(&enabled_path)?;
+        }
+        std::os::unix::fs::symlink(&config_path, &enabled_path)?;
+        echo(
+            &format!("-----> Created worker config: {}", config_filename),
+            "green",
+        );
+    }};
+}
+
 /// Generic worker configuration creation for standard runtimes.
 /// This eliminates ~60 lines of duplicated code per runtime.
 ///
@@ -131,7 +241,7 @@ pub fn create_workers_generic(
                     };
 
                     if !env_content.contains("NGINX_PORTMAP") {
-                        env_content.push_str(&format!("NGINX_PORTMAP=true\n"));
+                        env_content.push_str("NGINX_PORTMAP=true\n");
                         env_content.push_str(&format!("NGINX_INTERNAL_PORT={}\n", port));
                         env_content.push_str("NGINX_EXTERNAL_PORT=80\n");
                         fs::write(&env_file, &env_content)?;
@@ -197,7 +307,6 @@ pub enum Runtime {
     ClojureCli,
     ClojureLein,
     Container,
-    #[allow(dead_code)]
     Identity,
 }
 
@@ -460,10 +569,11 @@ pub fn do_deploy(
             // Check for identity-style deployments (PHP, release+web, static)
             if workers.contains_key("release") && workers.contains_key("web") {
                 echo("-----> Generic app detected.", "green");
-                // For now, treat as identity deployment
+                found_app(&Runtime::Identity.to_string());
                 identity::create_identity_workers(app, &app_path, &env, paths)?;
             } else if workers.contains_key("static") {
                 echo("-----> Static app detected.", "green");
+                found_app(&Runtime::Identity.to_string());
                 identity::create_identity_workers(app, &app_path, &env, paths)?;
             } else {
                 echo("-----> Could not detect runtime!", "red");
@@ -501,181 +611,6 @@ pub fn do_deploy(
 
     // Call spawn_app to start the application processes
     spawn_app(app, paths)?;
-
-    Ok(())
-}
-
-/// Create worker configurations for identity-style deployments.
-#[allow(dead_code)]
-fn create_identity_workers(
-    app: &str,
-    app_path: &Path,
-    workers: &HashMap<String, String>,
-    env: &HashMap<String, String>,
-    paths: &RikuPaths,
-) -> Result<()> {
-    use crate::supervisor::config::create_worker_config;
-    use crate::util::get_free_port;
-    use std::collections::HashMap;
-    use std::fs;
-
-    // Handle PIKU_AUTO_RESTART - if false, skip removing existing worker configs
-    let auto_restart = env
-        .get("PIKU_AUTO_RESTART")
-        .map(|v| v.to_lowercase() != "false" && v != "0" && v != "no")
-        .unwrap_or(true);
-
-    if auto_restart {
-        // Remove existing worker configs to trigger restart
-        for ext in &["toml", "ini"] {
-            let pattern = paths.workers_enabled.join(format!("{}*.{}", app, ext));
-            if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
-                for entry in entries.flatten() {
-                    let _ = fs::remove_file(&entry);
-                }
-            }
-        }
-    }
-
-    for (kind, command) in workers {
-        if kind == "release" || kind == "preflight" {
-            continue; // Skip release and preflight commands as they're run once during deploy
-        }
-
-        // Parse scaling info if available
-        let scaling_path = paths.env_root.join(app).join("SCALING");
-        let mut count = 1; // default to 1 instance
-
-        if scaling_path.exists() {
-            let scaling_content = fs::read_to_string(&scaling_path)?;
-            for scale_line in scaling_content.lines() {
-                let scale_line = scale_line.trim();
-                if scale_line.is_empty() || scale_line.starts_with('#') {
-                    continue;
-                }
-
-                if let Some(scale_pos) = scale_line.find('=') {
-                    let scale_kind = scale_line[..scale_pos].trim();
-                    let scale_count_str = scale_line[scale_pos + 1..].trim();
-
-                    if scale_kind == kind {
-                        if let Ok(scale_count) = scale_count_str.parse::<u32>() {
-                            count = scale_count;
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Check for RIKU_WORKER_PROCESSES env var (format: "web=2,worker=1")
-        let env_file = paths.env_root.join(app).join("ENV");
-        let mut app_env: HashMap<String, String> = HashMap::new();
-        if env_file.exists() {
-            crate::util::parse_settings(&env_file, &mut app_env)?;
-        }
-
-        if let Some(worker_processes) = app_env.get("RIKU_WORKER_PROCESSES") {
-            for proc_def in worker_processes.split(',') {
-                let proc_def = proc_def.trim();
-                if let Some(eq_pos) = proc_def.find('=') {
-                    let proc_kind = proc_def[..eq_pos].trim();
-                    let proc_count_str = proc_def[eq_pos + 1..].trim();
-
-                    if proc_kind == kind {
-                        if let Ok(proc_count) = proc_count_str.parse::<u32>() {
-                            count = proc_count;
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Create worker configs for each instance
-        for i in 1..=count {
-            // Prepare environment for the worker
-            let env_file = paths.env_root.join(app).join("ENV");
-            let mut worker_env: HashMap<String, String> = HashMap::new();
-            if env_file.exists() {
-                crate::util::parse_settings(&env_file, &mut worker_env)?;
-            }
-
-            // Set PORT for web processes
-            let final_command = command.clone();
-            if kind == "web" {
-                let port = get_free_port("127.0.0.1")?;
-                worker_env.insert("PORT".to_string(), port.to_string());
-
-                // Create socket file for web processes (kept for backwards compatibility)
-                let socket_path = paths.nginx_root.join(format!("{}.sock", app));
-                worker_env.insert(
-                    "SOCKET".to_string(),
-                    socket_path.to_string_lossy().to_string(),
-                );
-
-                // Set NGINX_PORTMAP to use TCP proxying instead of unix socket
-                // This allows apps to bind to TCP ports (most common case)
-                worker_env.insert("NGINX_PORTMAP".to_string(), "true".to_string());
-                worker_env.insert("NGINX_INTERNAL_PORT".to_string(), port.to_string());
-                worker_env.insert("NGINX_EXTERNAL_PORT".to_string(), "80".to_string());
-
-                // Write NGINX settings to ENV file for nginx config generation
-                let env_dir = paths.env_root.join(app);
-                fs::create_dir_all(&env_dir)?;
-                let env_file = env_dir.join("ENV");
-                
-                // Read existing ENV or create new
-                let mut env_content = if env_file.exists() {
-                    fs::read_to_string(&env_file)?
-                } else {
-                    String::new()
-                };
-                
-                // Add NGINX settings if not already present
-                if !env_content.contains("NGINX_PORTMAP") {
-                    env_content.push_str(&format!("NGINX_PORTMAP=true\n"));
-                    env_content.push_str(&format!("NGINX_INTERNAL_PORT={}\n", port));
-                    env_content.push_str("NGINX_EXTERNAL_PORT=80\n");
-                    fs::write(&env_file, &env_content)?;
-                }
-            }
-
-            // Create the worker config
-            let worker_config = create_worker_config(
-                app,
-                kind,
-                &final_command,
-                i,
-                worker_env,
-                &app_path.to_string_lossy(),
-                &paths
-                    .log_root
-                    .join(app)
-                    .join(format!("{}.{}.log", kind, i))
-                    .to_string_lossy(),
-            );
-
-            // Write the worker config to the available directory
-            let config_filename = format!("{}-{}-{}.toml", app, kind, i);
-            let config_path = paths.workers_available.join(&config_filename);
-
-            let config_content = toml::to_string(&worker_config)?;
-            fs::write(&config_path, &config_content)?;
-
-            // Create a symlink to enable the worker
-            let enabled_path = paths.workers_enabled.join(&config_filename);
-            if enabled_path.exists() {
-                fs::remove_file(&enabled_path)?;
-            }
-            std::os::unix::fs::symlink(&config_path, &enabled_path)?;
-
-            crate::util::echo(
-                &format!("-----> Created worker config: {}", config_filename),
-                "green",
-            );
-        }
-    }
 
     Ok(())
 }
