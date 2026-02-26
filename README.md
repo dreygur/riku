@@ -284,7 +284,7 @@ Riku supports comprehensive environment variable configuration via the `ENV` fil
 
 #### Runtime Settings
 ```bash
-PIKU_AUTO_RESTART=true      # Auto-restart workers on deploy (default: true)
+RIKU_AUTO_RESTART=true      # Auto-restart workers on deploy (default: true)
 ```
 
 #### Node.js Settings

@@ -216,7 +216,7 @@ fn check_rate_limit(agent_id: &str, scope: &AgentScope) -> bool {
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_default()
         .as_secs();
 
     let window = 60; // 1 minute window
@@ -875,7 +875,7 @@ fn cmd_agent_deploy(paths: &RikuPaths, app: &str) -> AgentResponse {
         "deploy-{}",
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs()
     );
 
@@ -903,7 +903,7 @@ fn cmd_agent_destroy_request(paths: &RikuPaths, app: &str) -> AgentResponse {
         app,
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs()
     );
 
@@ -979,7 +979,7 @@ fn cmd_agent_config_set(_paths: &RikuPaths, app: &str, settings: &[String]) -> A
                     app,
                     SystemTime::now()
                         .duration_since(UNIX_EPOCH)
-                        .unwrap()
+                        .unwrap_or_default()
                         .as_secs()
                 );
                 return AgentResponse::confirmation_required("config:set", app, &token);
@@ -1117,7 +1117,7 @@ fn cmd_agent_stop(paths: &RikuPaths, app: &str) -> AgentResponse {
         app,
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs()
     );
 

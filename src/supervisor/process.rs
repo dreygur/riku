@@ -31,7 +31,11 @@ pub struct SpawnedProcess {
 
 impl SpawnedProcess {
     /// Create a new SpawnedProcess instance.
-    pub fn new(child: Child, config: WorkerConfig, log_handles: Option<(File, File)>) -> Result<Self> {
+    pub fn new(
+        child: Child,
+        config: WorkerConfig,
+        log_handles: Option<(File, File)>,
+    ) -> Result<Self> {
         let pid = Pid::from_raw(child.id() as i32);
         let health_check_config = config.options.health_check.clone();
 
@@ -177,7 +181,7 @@ impl ProcessManager {
         // Start log capture threads before creating SpawnedProcess
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
-        
+
         if let Some((ref log_file, ref _log_file_mut)) = log_handles {
             // Capture stdout
             if let Some(stdout_reader) = stdout {
@@ -198,7 +202,7 @@ impl ProcessManager {
                     }
                 });
             }
-            
+
             // Capture stderr
             if let Some(stderr_reader) = stderr {
                 if let Some((_, ref stderr_log)) = log_handles {
@@ -253,24 +257,21 @@ impl ProcessManager {
     /// Open log files for stdout and stderr.
     fn open_log_files(log_path: &str) -> Result<Option<(File, File)>> {
         use std::path::Path;
-        
+
         let path = Path::new(log_path);
-        
+
         // Create parent directories if they don't exist
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        
+
         // Open log file for appending
-        let log_file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)?;
-        
+        let log_file = OpenOptions::new().create(true).append(true).open(path)?;
+
         // Return two handles (one for stdout, one for stderr - both write to same file)
         let stdout_handle = log_file.try_clone()?;
         let stderr_handle = log_file.try_clone()?;
-        
+
         Ok(Some((stdout_handle, stderr_handle)))
     }
 

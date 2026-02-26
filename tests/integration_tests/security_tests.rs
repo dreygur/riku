@@ -314,11 +314,7 @@ working_dir = "/tmp"
             let metadata = fs::metadata(&hook_path)?;
             let mode = metadata.permissions().mode();
             // Verify not world-writable
-            assert_eq!(
-                mode & 0o002,
-                0,
-                "Git hook should not be world-writable"
-            );
+            assert_eq!(mode & 0o002, 0, "Git hook should not be world-writable");
         }
 
         Ok(())

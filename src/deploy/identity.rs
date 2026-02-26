@@ -12,7 +12,6 @@ use crate::supervisor::config::create_worker_config;
 use crate::util::{echo, get_free_port};
 
 /// Deploy an identity application (generic deployment).
-#[allow(dead_code)]
 pub fn deploy_identity(
     app: &str,
     app_path: &Path,
@@ -28,7 +27,6 @@ pub fn deploy_identity(
 }
 
 /// Create worker configurations for identity-style deployments.
-#[allow(dead_code)]
 pub fn create_identity_workers(
     app: &str,
     app_path: &Path,
@@ -37,9 +35,9 @@ pub fn create_identity_workers(
 ) -> Result<()> {
     use crate::util::parse_procfile;
 
-    // Handle PIKU_AUTO_RESTART - if false, skip removing existing worker configs
+    // Handle RIKU_AUTO_RESTART - if false, skip removing existing worker configs
     let auto_restart = env
-        .get("PIKU_AUTO_RESTART")
+        .get("RIKU_AUTO_RESTART")
         .map(|v| v.to_lowercase() != "false" && v != "0" && v != "no")
         .unwrap_or(true);
 
@@ -156,7 +154,7 @@ fn create_identity_worker_config(
         };
 
         if !env_content.contains("NGINX_PORTMAP") {
-            env_content.push_str(&format!("NGINX_PORTMAP=true\n"));
+            env_content.push_str("NGINX_PORTMAP=true\n");
             env_content.push_str(&format!("NGINX_INTERNAL_PORT={}\n", port));
             env_content.push_str("NGINX_EXTERNAL_PORT=80\n");
             fs::write(&env_file, &env_content)?;

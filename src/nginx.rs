@@ -272,7 +272,7 @@ fn generate_nginx_config_from_template(
     );
 
     // Additional context values
-    context.insert("PIKU_ROOT", &paths.riku_root.to_string_lossy());
+    context.insert("RIKU_ROOT", &paths.riku_root.to_string_lossy());
     context.insert("ACME_WWW", &paths.acme_www.to_string_lossy());
     context.insert(
         "ACME_ROOT_CA",
@@ -382,7 +382,6 @@ fn validate_nginx_config(config_file: &Path) -> Result<()> {
 }
 
 /// Remove nginx configuration for an app.
-#[allow(dead_code)]
 pub fn remove_nginx_config(app: &str, paths: &crate::config::RikuPaths) -> Result<()> {
     let config_file = paths.nginx_root.join(format!("{}.conf", app));
     if config_file.exists() {
@@ -401,7 +400,6 @@ pub fn remove_nginx_config(app: &str, paths: &crate::config::RikuPaths) -> Resul
 }
 
 /// Generate a minimal nginx configuration for ACME challenges.
-#[allow(dead_code)]
 pub fn generate_acme_nginx_config(paths: &crate::config::RikuPaths) -> Result<()> {
     let mut tera = tera::Tera::default();
     tera.add_raw_template(
@@ -432,7 +430,10 @@ mod tests {
 
     #[test]
     fn test_sanitize_nginx_value_rejects_semicolons() {
-        assert!(sanitize_nginx_value("NGINX_SERVER_NAME", "example.com; proxy_pass http://evil").is_err());
+        assert!(
+            sanitize_nginx_value("NGINX_SERVER_NAME", "example.com; proxy_pass http://evil")
+                .is_err()
+        );
     }
 
     #[test]

@@ -45,7 +45,7 @@ NGINX_SERVER_NAME=example.com
 NGINX_HTTPS_ONLY=true
 
 # Worker settings
-PIKU_AUTO_RESTART=true
+RIKU_AUTO_RESTART=true
 BIND_ADDRESS=127.0.0.1
 
 # Node.js specific

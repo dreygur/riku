@@ -326,7 +326,7 @@ impl StatsManager {
     pub fn write_stats_to_file(&self, path: &std::path::Path) -> Result<(), std::io::Error> {
         let app_stats = self.get_all_stats();
         let json = serde_json::to_string_pretty(&app_stats)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
         fs::write(path, json)?;
         Ok(())
     }

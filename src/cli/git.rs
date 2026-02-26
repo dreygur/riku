@@ -67,7 +67,7 @@ if [ -z "$RIKU_BIN" ]; then
         exit 1
     fi
 fi
-cat | PIKU_ROOT="${PIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$2"
+cat | RIKU_ROOT="${RIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$2"
 "#;
 
     fs::write(&hook_path, hook_content)?;
@@ -210,7 +210,7 @@ if [ -z "$RIKU_BIN" ]; then
         exit 1
     fi
 fi
-cat | PIKU_ROOT="${PIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$2"
+cat | RIKU_ROOT="${RIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$2"
 "#;
         fs::write(&hook_path, hook_content)?;
 

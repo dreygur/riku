@@ -376,14 +376,12 @@ pub fn cmd_destroy(paths: &RikuPaths, app: &str) -> Result<()> {
         }
     }
 
-    // Remove nginx files
-    for ext in &["conf", "sock", "key", "crt"] {
-        let f = paths.nginx_root.join(format!("{}.{}", app, ext));
-        if f.exists() {
-            echo(&format!("--> Removing file '{}'", f.display()), "yellow");
-            fs::remove_file(&f)?;
-        }
-    }
+    // Remove nginx configuration and associated files
+    echo(
+        &format!("--> Removing nginx config for '{}'", app),
+        "yellow",
+    );
+    crate::nginx::remove_nginx_config(&app, paths)?;
 
     // Remove ACME certs if they exist
     let acme_link = paths.acme_www.join(&app);
@@ -490,7 +488,7 @@ pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
             // Check both .toml and .ini worker configs
             let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
             let ini_pattern = paths.workers_enabled.join(format!("{}*.ini", app));
-            
+
             let mut worker_configs: Vec<_> = match glob::glob(toml_pattern.to_str().unwrap_or("")) {
                 Ok(g) => g.filter_map(|r| r.ok()).collect(),
                 Err(e) => {
@@ -498,7 +496,7 @@ pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
                     Vec::new()
                 }
             };
-            
+
             let ini_configs: Vec<_> = match glob::glob(ini_pattern.to_str().unwrap_or("")) {
                 Ok(g) => g.filter_map(|r| r.ok()).collect(),
                 Err(e) => {
@@ -523,21 +521,28 @@ pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
                             let mut pid = "N/A".to_string();
                             let mut status = "unknown".to_string();
                             let mut health = "unknown".to_string();
-                            
+
                             for app_stats in stats_vec {
-                                if let Some(processes) = app_stats.get("processes").and_then(|v| v.as_array()) {
+                                if let Some(processes) =
+                                    app_stats.get("processes").and_then(|v| v.as_array())
+                                {
                                     for proc_stats in processes {
-                                        if let Some(proc_id) = proc_stats.get("process_id").and_then(|v| v.as_str()) {
+                                        if let Some(proc_id) =
+                                            proc_stats.get("process_id").and_then(|v| v.as_str())
+                                        {
                                             if proc_id == process_name {
-                                                pid = proc_stats.get("pid")
+                                                pid = proc_stats
+                                                    .get("pid")
                                                     .and_then(|v| v.as_u64())
                                                     .map(|p| p.to_string())
                                                     .unwrap_or_else(|| "N/A".to_string());
-                                                status = proc_stats.get("status")
+                                                status = proc_stats
+                                                    .get("status")
                                                     .and_then(|v| v.as_str())
                                                     .unwrap_or("unknown")
                                                     .to_string();
-                                                health = proc_stats.get("health_check_status")
+                                                health = proc_stats
+                                                    .get("health_check_status")
                                                     .and_then(|v| v.as_str())
                                                     .unwrap_or("unknown")
                                                     .to_string();
@@ -556,7 +561,14 @@ pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
                             )
                         };
 
-                        rows.push(vec![app.clone(), process_name, kind.to_string(), pid, status, health]);
+                        rows.push(vec![
+                            app.clone(),
+                            process_name,
+                            kind.to_string(),
+                            pid,
+                            status,
+                            health,
+                        ]);
                         total_processes += 1;
                     }
                 }
@@ -579,7 +591,7 @@ pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
             // Count both .toml and .ini worker configs
             let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
             let ini_pattern = paths.workers_enabled.join(format!("{}*.ini", app));
-            
+
             let toml_count = match glob::glob(toml_pattern.to_str().unwrap_or("")) {
                 Ok(g) => g.count(),
                 Err(_) => 0,
@@ -639,7 +651,7 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
             let content = fs::read_to_string(&config_file)?;
             let headers = vec!["KIND", "DESIRED", "STATUS"];
             let mut rows: Vec<Vec<String>> = Vec::new();
-            
+
             for line in content.lines() {
                 let line = line.trim();
                 if !line.is_empty() && !line.starts_with('#') {
@@ -650,7 +662,7 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
                     }
                 }
             }
-            
+
             if !rows.is_empty() {
                 crate::util::print_table_with_title(
                     &format!("=== Processes for '{}' (stopped) ===", app),
@@ -661,7 +673,7 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
                 return Ok(());
             }
         }
-        
+
         echo(
             &format!("No processes configured for app '{}'.", app),
             "yellow",
@@ -676,7 +688,7 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
             let content = fs::read_to_string(&config_file)?;
             let headers = vec!["KIND", "DESIRED"];
             let mut rows: Vec<Vec<String>> = Vec::new();
-            
+
             for line in content.lines() {
                 let line = line.trim();
                 if !line.is_empty() && !line.starts_with('#') {
@@ -687,7 +699,7 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
                     }
                 }
             }
-            
+
             if !rows.is_empty() {
                 crate::util::print_table_with_title(
                     &format!("=== Scaling for '{}' (stopped) ===", app),
@@ -698,7 +710,7 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
                 return Ok(());
             }
         }
-        
+
         echo(
             &format!("No running processes found for app '{}'.", app),
             "yellow",
@@ -736,21 +748,28 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
                         let mut pid = "N/A".to_string();
                         let mut status = "unknown".to_string();
                         let mut health = "unknown".to_string();
-                        
+
                         for app_stats in stats_vec {
-                            if let Some(processes) = app_stats.get("processes").and_then(|v| v.as_array()) {
+                            if let Some(processes) =
+                                app_stats.get("processes").and_then(|v| v.as_array())
+                            {
                                 for proc_stats in processes {
-                                    if let Some(proc_id) = proc_stats.get("process_id").and_then(|v| v.as_str()) {
+                                    if let Some(proc_id) =
+                                        proc_stats.get("process_id").and_then(|v| v.as_str())
+                                    {
                                         if proc_id == process_name {
-                                            pid = proc_stats.get("pid")
+                                            pid = proc_stats
+                                                .get("pid")
                                                 .and_then(|v| v.as_u64())
                                                 .map(|p| p.to_string())
                                                 .unwrap_or_else(|| "N/A".to_string());
-                                            status = proc_stats.get("status")
+                                            status = proc_stats
+                                                .get("status")
                                                 .and_then(|v| v.as_str())
                                                 .unwrap_or("unknown")
                                                 .to_string();
-                                            health = proc_stats.get("health_check_status")
+                                            health = proc_stats
+                                                .get("health_check_status")
                                                 .and_then(|v| v.as_str())
                                                 .unwrap_or("unknown")
                                                 .to_string();
@@ -1451,20 +1470,16 @@ pub fn cmd_apps_info(paths: &RikuPaths, app: &str) -> Result<()> {
     let git_dir = paths.git_root.join(format!("{}.git", app));
     if git_dir.exists() {
         println!("Git Repository: {}", git_dir.display());
-        println!(
-            "Git Remote: deploy@your-server:{}",
-            app
-        );
+        println!("Git Remote: deploy@your-server:{}", app);
     }
 
     // Disk usage
-    if let Ok(output) = Command::new("du")
-        .args(["-sh", app_dir.to_str().unwrap()])
-        .output()
-    {
-        if let Ok(du_output) = String::from_utf8(output.stdout) {
-            if let Some(size) = du_output.split_whitespace().next() {
-                println!("Disk Usage: {}", size);
+    if let Some(app_dir_str) = app_dir.to_str() {
+        if let Ok(output) = Command::new("du").args(["-sh", app_dir_str]).output() {
+            if let Ok(du_output) = String::from_utf8(output.stdout) {
+                if let Some(size) = du_output.split_whitespace().next() {
+                    println!("Disk Usage: {}", size);
+                }
             }
         }
     }
@@ -1525,24 +1540,18 @@ pub fn cmd_apps_info(paths: &RikuPaths, app: &str) -> Result<()> {
                     for app_stats in stats_vec {
                         if let Some(app_name) = app_stats.get("app").and_then(|v| v.as_str()) {
                             if app_name == app {
-                                if let Some(mem) = app_stats
-                                    .get("total_memory_bytes")
-                                    .and_then(|v| v.as_u64())
+                                if let Some(mem) =
+                                    app_stats.get("total_memory_bytes").and_then(|v| v.as_u64())
                                 {
-                                    println!(
-                                        "Memory: {:.2} MB",
-                                        mem as f64 / 1024.0 / 1024.0
-                                    );
+                                    println!("Memory: {:.2} MB", mem as f64 / 1024.0 / 1024.0);
                                 }
-                                if let Some(running) = app_stats
-                                    .get("running_processes")
-                                    .and_then(|v| v.as_u64())
+                                if let Some(running) =
+                                    app_stats.get("running_processes").and_then(|v| v.as_u64())
                                 {
                                     println!("Running Processes: {}", running);
                                 }
-                                if let Some(healthy) = app_stats
-                                    .get("healthy_processes")
-                                    .and_then(|v| v.as_u64())
+                                if let Some(healthy) =
+                                    app_stats.get("healthy_processes").and_then(|v| v.as_u64())
                                 {
                                     println!("Healthy Processes: {}", healthy);
                                 }

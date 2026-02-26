@@ -9,8 +9,7 @@ use std::process::Command;
 use crate::config::RikuPaths;
 use crate::util::{echo, setup_authorized_keys};
 
-#[allow(dead_code)]
-/// Install systemd service files for riku daemon (system-wide, requires root)
+/// Install systemd service files for riku daemon (system-wide, requires root).
 fn install_systemd_service(_paths: &RikuPaths) -> Result<()> {
     // Check if we're running as root (required for systemd installation)
     if env::var("USER").unwrap_or_default() != "root" {
@@ -186,86 +185,6 @@ WantedBy=multi-user.target
     Ok(())
 }
 
-/// Install default nginx configuration
-#[allow(dead_code)]
-fn install_nginx_default_config() -> Result<()> {
-    // Check if we're running as root (required for nginx configuration)
-    if env::var("USER").unwrap_or_default() != "root" {
-        return Ok(()); // Skip if not root
-    }
-
-    // Find the contrib/nginx/default.conf file
-    // Try multiple possible locations
-    let possible_paths = [
-        "contrib/nginx/default.conf",
-        "/usr/share/riku/nginx/default.conf",
-        "/etc/riku/nginx/default.conf",
-    ];
-
-    let source_path = possible_paths
-        .iter()
-        .find(|p| std::path::Path::new(p).exists())
-        .map(|s| s.to_string());
-
-    let source_path = match source_path {
-        Some(p) => p,
-        None => return Ok(()), // Skip if template not found
-    };
-
-    // Determine nginx config directory
-    let nginx_conf_dir = if std::path::Path::new("/etc/nginx/sites-available").exists() {
-        "/etc/nginx/sites-available"
-    } else if std::path::Path::new("/etc/nginx/conf.d").exists() {
-        "/etc/nginx/conf.d"
-    } else {
-        return Ok(()); // Skip if nginx not installed
-    };
-
-    let dest_path = std::path::Path::new(nginx_conf_dir).join("riku-default.conf");
-
-    // Copy the default config
-    echo("Installing default nginx configuration...", "green");
-    fs::copy(&source_path, &dest_path)?;
-    echo(&format!("✓ Created {}", dest_path.display()), "green");
-
-    // Enable the config (for sites-available)
-    if nginx_conf_dir.contains("sites-available") {
-        let sites_enabled = std::path::Path::new("/etc/nginx/sites-enabled/riku-default.conf");
-        if !sites_enabled.exists() {
-            std::os::unix::fs::symlink(&dest_path, sites_enabled)?;
-            echo("✓ Enabled nginx configuration", "green");
-        }
-    }
-
-    // Test nginx configuration
-    if let Ok(output) = Command::new("nginx").arg("-t").output() {
-        if output.status.success() {
-            echo("✓ Nginx configuration is valid", "green");
-
-            // Reload nginx if it's running
-            if let Ok(status) = Command::new("systemctl")
-                .arg("is-active")
-                .arg("nginx")
-                .output()
-            {
-                if String::from_utf8_lossy(&status.stdout).trim() == "active"
-                    && Command::new("systemctl")
-                        .arg("reload")
-                        .arg("nginx")
-                        .output()
-                        .is_ok()
-                {
-                    echo("✓ Reloaded nginx", "green");
-                }
-            }
-        } else {
-            echo("⚠ Nginx configuration test failed", "yellow");
-        }
-    }
-
-    Ok(())
-}
-
 /// Install riku binary to user's PATH
 fn install_riku_binary() -> Result<()> {
     // Get current executable path
@@ -390,13 +309,6 @@ fn is_in_path(dir: &Path) -> bool {
     false
 }
 
-#[allow(dead_code)]
-fn num_cpus() -> usize {
-    std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(1)
-}
-
 /// Initialize Riku on a server.
 /// Creates directory structure, optionally sets up systemd, and configures SSH keys.
 pub fn cmd_init(no_systemd: bool) -> Result<()> {
@@ -474,10 +386,26 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
 
     // Install riku binary to user's PATH
     install_riku_binary()?;
+
+    // Generate ACME bootstrap nginx config (for Let's Encrypt challenge setup)
+    if let Err(e) = crate::nginx::generate_acme_nginx_config(&paths) {
+        echo(
+            &format!(
+                "  ⚠ Could not generate ACME nginx config (nginx may not be installed): {}",
+                e
+            ),
+            "yellow",
+        );
+    }
+
     echo("", "");
 
     // Create global post-receive hook template
-    let hooks_dir = paths.git_root.parent().unwrap().join("hooks");
+    let hooks_dir = paths
+        .git_root
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("git_root has no parent directory"))?
+        .join("hooks");
     if !hooks_dir.exists() {
         fs::create_dir_all(&hooks_dir)?;
     }
@@ -515,7 +443,13 @@ done
     // Step 2: Setup systemd (unless --no-systemd)
     if !no_systemd {
         echo("[2/4] Setting up systemd service...", "");
-        setup_systemd_service(&paths)?;
+        if is_root {
+            // System-wide service installation (requires root)
+            install_systemd_service(&paths)?;
+        } else {
+            // User-level service (no root required)
+            setup_systemd_service(&paths)?;
+        }
         echo("", "");
     } else {
         echo("[2/4] Skipping systemd setup (--no-systemd)", "yellow");
@@ -629,14 +563,18 @@ done
 /// Setup systemd service for Riku supervisor.
 fn setup_systemd_service(paths: &RikuPaths) -> Result<()> {
     // Create user systemd directory
-    let systemd_dir = dirs::home_dir()
-        .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?
-        .join(".config/systemd/user");
+    let home_dir =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    let systemd_dir = home_dir.join(".config/systemd/user");
 
     fs::create_dir_all(&systemd_dir)?;
 
     // Get riku binary path (user-local, no root required)
     let riku_binary_path = paths.riku_script.to_string_lossy();
+
+    // Use the absolute path for ReadWritePaths to avoid tilde expansion issues
+    // in systemd user services on some distributions.
+    let riku_root_abs = paths.riku_root.to_string_lossy();
 
     // Create service file
     let service_content = format!(
@@ -661,8 +599,9 @@ ProtectSystem=strict
 ProtectHome=read-only
 PrivateTmp=true
 
-# Allow writing to riku directories
-ReadWritePaths=~/.riku
+# Allow writing to riku directories (absolute path required — ~ is not expanded
+# by systemd in ReadWritePaths for user services on all distributions)
+ReadWritePaths={riku_root}
 
 # Resource limits
 MemoryMax=512M
@@ -671,7 +610,8 @@ CPUQuota=50%
 [Install]
 WantedBy=default.target
 "#,
-        riku_path = riku_binary_path
+        riku_path = riku_binary_path,
+        riku_root = riku_root_abs,
     );
 
     // Create service file

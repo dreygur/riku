@@ -16,8 +16,8 @@ Thank you for your interest in contributing to Riku! This document outlines the 
 1. Fork the repository on GitHub
 2. Clone your fork:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/piku.git
-   cd piku/riku
+   git clone https://github.com/YOUR_USERNAME/riku.git
+   cd riku
    ```
 
 3. Build the project:

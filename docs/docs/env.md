@@ -36,7 +36,7 @@ API_URL=$BASE_URL/api
 ### Auto Restart
 
 ```bash
-PIKU_AUTO_RESTART=true
+RIKU_AUTO_RESTART=true
 ```
 
 - **Default:** `true`

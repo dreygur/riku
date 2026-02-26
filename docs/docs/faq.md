@@ -104,7 +104,7 @@ riku logs myapp web
 riku restart myapp
 ```
 
-Or set `PIKU_AUTO_RESTART=false` and restart manually.
+Or set `RIKU_AUTO_RESTART=false` and restart manually.
 
 **Q: Where are logs stored?**
 
@@ -150,7 +150,7 @@ cron: 0 2 * * * /path/to/script.sh
 
 **Q: Does Riku support zero-downtime deployments?**
 
-**A:** Yes! The supervisor gracefully restarts workers. Set `PIKU_AUTO_RESTART=true` (default) for automatic restarts on deploy.
+**A:** Yes! The supervisor gracefully restarts workers. Set `RIKU_AUTO_RESTART=true` (default) for automatic restarts on deploy.
 
 ## Migration from Piku
 
