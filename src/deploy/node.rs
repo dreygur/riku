@@ -63,6 +63,31 @@ pub fn deploy_node(
         .cloned()
         .unwrap_or_else(|| "npm".to_string());
 
+    // Create isolated node_modules in ENV_ROOT if not using yarn (yarn handles this differently)
+    let node_modules_path = paths.env_root.join(app).join("node_modules");
+    let should_isolate = package_manager != "yarn" && !node_modules_path.exists();
+
+    if should_isolate {
+        echo("-----> Creating isolated node_modules in ENV_ROOT", "green");
+        fs::create_dir_all(&node_modules_path)?;
+
+        // Create symlink from app directory to ENV_ROOT node_modules
+        let app_node_modules = app_path.join("node_modules");
+        if app_node_modules.exists() {
+            // Remove existing node_modules if it's a symlink
+            if app_node_modules
+                .symlink_metadata()
+                .map(|m| m.file_type().is_symlink())
+                .unwrap_or(false)
+            {
+                let _ = fs::remove_file(&app_node_modules);
+            }
+        }
+        if !app_node_modules.exists() {
+            let _ = std::os::unix::fs::symlink(&node_modules_path, &app_node_modules);
+        }
+    }
+
     // Install dependencies
     echo(
         &format!("-----> Installing dependencies with {}", package_manager),
@@ -218,6 +243,15 @@ fn create_node_worker_config(
 
     // Add Node-specific environment variables
     worker_env.insert("NODE_ENV".to_string(), "production".to_string());
+
+    // Add NODE_PATH for isolated node_modules in ENV_ROOT
+    let node_modules_path = paths.env_root.join(app).join("node_modules");
+    if node_modules_path.exists() {
+        worker_env.insert(
+            "NODE_PATH".to_string(),
+            node_modules_path.to_string_lossy().to_string(),
+        );
+    }
 
     write_worker_config!(
         app,

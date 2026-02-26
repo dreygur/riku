@@ -23,17 +23,87 @@ pub fn deploy_go(
 ) -> Result<()> {
     echo(&format!("-----> Deploying Go app '{}'", app), "green");
 
-    // Build the Go application
-    echo("-----> Building Go application", "green");
-    let status = Command::new("go")
-        .arg("build")
-        .arg("-o")
-        .arg(format!("{}_bin", app))
-        .current_dir(app_path)
-        .status()?;
+    // Check for Godeps directory (legacy dep support)
+    let godeps_path = app_path.join("Godeps");
+    let go_path = app_path.join("vendor");
+    let go_mod_path = app_path.join("go.mod");
 
-    if !status.success() {
-        return Err(anyhow::anyhow!("Failed to build Go application"));
+    // If using go modules (go.mod exists)
+    if go_mod_path.exists() {
+        echo("-----> Building Go application (modules)", "green");
+
+        // Set GO15VENDOREXPERIMENT if vendor directory exists
+        let mut go_env = env.clone();
+        if go_path.exists() {
+            go_env.insert("GO15VENDOREXPERIMENT".to_string(), "1".to_string());
+        }
+
+        let status = Command::new("go")
+            .arg("build")
+            .arg("-mod=vendor")
+            .arg("-o")
+            .arg(format!("{}_bin", app))
+            .current_dir(app_path)
+            .envs(go_env.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+            .status()?;
+
+        if !status.success() {
+            // Try without vendor flag if it failed
+            let status = Command::new("go")
+                .arg("build")
+                .arg("-o")
+                .arg(format!("{}_bin", app))
+                .current_dir(app_path)
+                .envs(go_env.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+                .status()?;
+
+            if !status.success() {
+                return Err(anyhow::anyhow!("Failed to build Go application"));
+            }
+        }
+    } else if godeps_path.exists() {
+        // Legacy: using godep
+        echo("-----> Building Go application (godep)", "green");
+
+        // Check if godep is available
+        if which::which("godep").is_ok() {
+            let status = Command::new("godep")
+                .arg("go")
+                .arg("build")
+                .arg("-o")
+                .arg(format!("{}_bin", app))
+                .current_dir(app_path)
+                .status()?;
+
+            if !status.success() {
+                return Err(anyhow::anyhow!("Failed to build Go application with godep"));
+            }
+        } else {
+            echo("-----> godep not found, using standard go build", "yellow");
+            let status = Command::new("go")
+                .arg("build")
+                .arg("-o")
+                .arg(format!("{}_bin", app))
+                .current_dir(app_path)
+                .status()?;
+
+            if !status.success() {
+                return Err(anyhow::anyhow!("Failed to build Go application"));
+            }
+        }
+    } else {
+        // Standard go build
+        echo("-----> Building Go application", "green");
+        let status = Command::new("go")
+            .arg("build")
+            .arg("-o")
+            .arg(format!("{}_bin", app))
+            .current_dir(app_path)
+            .status()?;
+
+        if !status.success() {
+            return Err(anyhow::anyhow!("Failed to build Go application"));
+        }
     }
 
     // Create worker configurations

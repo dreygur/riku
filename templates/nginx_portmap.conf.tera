@@ -42,7 +42,10 @@ server {
   add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
   add_header X-Deployed-By "Riku" always;
 
-{% if NGINX_INCLUDE_FILE %}
+{% if NGINX_INCLUDE_CONTENT %}
+  # Custom nginx configuration from file
+  {{ NGINX_INCLUDE_CONTENT }}
+{% elif NGINX_INCLUDE_FILE %}
   # Custom nginx configuration
   include {{ NGINX_INCLUDE_FILE }};
 {% endif %}
