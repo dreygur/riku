@@ -3,7 +3,7 @@ use std::fs;
 use std::io::{self, BufRead};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 use crate::config::RikuPaths;
 use crate::util::{echo, sanitize_app_name};

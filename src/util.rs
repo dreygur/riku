@@ -3,18 +3,12 @@ use colored::Colorize;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::net::TcpListener;
 use std::path::Path;
 use std::process::{self, Command};
 use which::which;
-
-/// Table column definition.
-pub struct TableColumn {
-    pub header: String,
-    pub width: usize,
-}
 
 /// Build a formatted table from headers and rows.
 pub fn format_table(headers: &[&str], rows: &[Vec<String>], column_spacing: usize) -> String {
@@ -81,56 +75,6 @@ pub fn print_table_with_title(
     println!("{}", title.green().bold());
     println!();
     print_table(headers, rows, column_spacing);
-}
-
-/// File lock wrapper for safe concurrent access.
-pub struct FileLock {
-    _file: File,
-}
-
-impl FileLock {
-    /// Acquire an exclusive lock on a file using OS-level advisory locking.
-    pub fn acquire(path: &Path) -> Result<Self> {
-        let file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .open(path)
-            .map_err(|e| anyhow::anyhow!("Failed to open lock file {:?}: {}", path, e))?;
-
-        fs2::FileExt::lock_exclusive(&file)
-            .map_err(|e| anyhow::anyhow!("Failed to acquire lock on {:?}: {}", path, e))?;
-
-        Ok(FileLock { _file: file })
-    }
-}
-
-impl Drop for FileLock {
-    fn drop(&mut self) {
-        // Lock is automatically released when file is closed
-    }
-}
-
-/// Write content to a file atomically with locking.
-/// This ensures concurrent writes don't corrupt the file.
-pub fn atomic_write_with_lock(path: &Path, content: &str) -> Result<()> {
-    // Derive a lock file path unique to this target file
-    let file_name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_default();
-    let lock_path = path.with_file_name(format!(".{}.lock", file_name));
-    let _lock = FileLock::acquire(&lock_path)?;
-
-    // Write to a temp file unique to this target file
-    let temp_path = path.with_file_name(format!(".{}.tmp", file_name));
-    fs::write(&temp_path, content)
-        .map_err(|e| anyhow::anyhow!("Failed to write temp file {:?}: {}", temp_path, e))?;
-
-    // Atomic rename
-    fs::rename(&temp_path, path)
-        .map_err(|e| anyhow::anyhow!("Failed to rename temp file to {:?}: {}", path, e))?;
-
-    Ok(())
 }
 
 /// Cron regexp matching five time fields followed by a command.
@@ -652,13 +596,17 @@ pub fn found_app(kind: &str) -> bool {
     true
 }
 
-/// Print colored output with different log levels.
-/// "green" -> green (info), "yellow" -> yellow (warning), "red" -> stderr red (error), other -> plain.
+/// Print colored output with different log levels (Heroku/Piku style).
+///
+/// This follows the Heroku buildpack output convention:
+/// - Info messages: "-----> " prefix, green, stdout
+/// - Warnings: " !     " prefix, yellow, stderr  
+/// - Errors: " !     " prefix, red, stderr
 pub fn echo(msg: &str, color: &str) {
     match color {
-        "green" => println!("{}", format!("-----> {}", msg).green()),
-        "yellow" => eprintln!("{}", format!(" !     {}", msg).yellow()),
-        "red" => eprintln!("{}", format!(" !     {}", msg).red()),
+        "green" => println!("-----> {}", msg.green()),
+        "yellow" => eprintln!(" !     {}", msg.yellow()),
+        "red" => eprintln!(" !     {}", msg.red()),
         _ => println!("{}", msg),
     }
 }

@@ -36,6 +36,152 @@ pub mod python;
 pub mod ruby;
 pub mod rust;
 
+/// Generic worker configuration creation for standard runtimes.
+/// This eliminates ~60 lines of duplicated code per runtime.
+///
+/// Runtimes with special requirements (Python venv, Node version, etc.) can still
+/// use their custom implementations.
+pub fn create_workers_generic(
+    app: &str,
+    app_path: &Path,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+) -> Result<()> {
+    use crate::supervisor::config::create_worker_config;
+    use crate::util::get_free_port;
+
+    // Read Procfile to determine processes to run
+    let procfile_path = app_path.join("Procfile");
+    if !procfile_path.exists() {
+        echo(
+            "-----> No Procfile found, skipping process creation",
+            "yellow",
+        );
+        return Ok(());
+    }
+
+    let procfile_content = fs::read_to_string(&procfile_path)?;
+    for line in procfile_content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        if let Some(pos) = line.find(':') {
+            let kind = line[..pos].trim();
+            let command = line[pos + 1..].trim();
+
+            // Parse scaling info if available
+            let scaling_path = paths.env_root.join(app).join("SCALING");
+            let mut count = 1; // default to 1 instance
+
+            if scaling_path.exists() {
+                let scaling_content = fs::read_to_string(&scaling_path)?;
+                for scale_line in scaling_content.lines() {
+                    let scale_line = scale_line.trim();
+                    if scale_line.is_empty() || scale_line.starts_with('#') {
+                        continue;
+                    }
+
+                    if let Some(scale_pos) = scale_line.find('=') {
+                        let scale_kind = scale_line[..scale_pos].trim();
+                        let scale_count_str = scale_line[scale_pos + 1..].trim();
+
+                        if scale_kind == kind {
+                            if let Ok(scale_count) = scale_count_str.parse::<u32>() {
+                                count = scale_count;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Create worker configs for each instance
+            for i in 1..=count {
+                // Prepare environment for the worker
+                let mut worker_env = env.clone();
+
+                // Set PORT for web processes
+                let final_command = if kind == "web" {
+                    let port = get_free_port("127.0.0.1")?;
+                    worker_env.insert("PORT".to_string(), port.to_string());
+
+                    // Create socket file for web processes
+                    let socket_path = paths.nginx_root.join(format!("{}.sock", app));
+                    worker_env.insert(
+                        "SOCKET".to_string(),
+                        socket_path.to_string_lossy().to_string(),
+                    );
+
+                    // Set NGINX_PORTMAP to use TCP proxying
+                    worker_env.insert("NGINX_PORTMAP".to_string(), "true".to_string());
+                    worker_env.insert("NGINX_INTERNAL_PORT".to_string(), port.to_string());
+                    worker_env.insert("NGINX_EXTERNAL_PORT".to_string(), "80".to_string());
+
+                    // Write NGINX settings to ENV file
+                    let env_dir = paths.env_root.join(app);
+                    fs::create_dir_all(&env_dir)?;
+                    let env_file = env_dir.join("ENV");
+
+                    let mut env_content = if env_file.exists() {
+                        fs::read_to_string(&env_file)?
+                    } else {
+                        String::new()
+                    };
+
+                    if !env_content.contains("NGINX_PORTMAP") {
+                        env_content.push_str(&format!("NGINX_PORTMAP=true\n"));
+                        env_content.push_str(&format!("NGINX_INTERNAL_PORT={}\n", port));
+                        env_content.push_str("NGINX_EXTERNAL_PORT=80\n");
+                        fs::write(&env_file, &env_content)?;
+                    }
+
+                    command.to_string()
+                } else {
+                    command.to_string()
+                };
+
+                // Create the worker config
+                let worker_config = create_worker_config(
+                    app,
+                    kind,
+                    &final_command,
+                    i,
+                    worker_env,
+                    &app_path.to_string_lossy(),
+                    &paths
+                        .log_root
+                        .join(app)
+                        .join(format!("{}.{}.log", kind, i))
+                        .to_string_lossy(),
+                );
+
+                // Write the worker config to the available directory
+                let config_filename = format!("{}-{}-{}.toml", app, kind, i);
+                let config_path = paths.workers_available.join(&config_filename);
+
+                let config_content = toml::to_string(&worker_config)?;
+                fs::write(&config_path, &config_content)?;
+
+                // Create a symlink to enable the worker
+                let enabled_path = paths.workers_enabled.join(&config_filename);
+                if enabled_path.exists() {
+                    fs::remove_file(&enabled_path)?;
+                }
+                std::os::unix::fs::symlink(&config_path, &enabled_path)?;
+
+                echo(
+                    &format!("-----> Created worker config: {}", config_filename),
+                    "green",
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Supported application runtimes, detected from marker files.
 #[derive(Debug, PartialEq)]
 pub enum Runtime {

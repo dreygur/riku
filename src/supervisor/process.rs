@@ -3,6 +3,7 @@
 //! Handles spawning, monitoring, health checks, and managing application processes.
 
 use anyhow::Result;
+use nix::sys::resource::{setrlimit, Resource};
 use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
 use std::collections::HashMap;
@@ -145,14 +146,25 @@ impl ProcessManager {
 
         // Build the command to run
         let mut cmd = Command::new("sh");
-        cmd.arg("-c")
-            .arg(&config.worker.command)
-            .current_dir(&config.options.working_dir)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            // Create new process group for proper signal handling
-            .process_group(0);
+        // Set resource limits to prevent runaway processes (pre_exec is unsafe)
+        unsafe {
+            cmd.arg("-c")
+                .arg(&config.worker.command)
+                .current_dir(&config.options.working_dir)
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                // Create new process group for proper signal handling
+                .process_group(0)
+                // Set resource limits in child process before exec
+                .pre_exec(|| {
+                    // Limit max open files to 1024 (prevents fd exhaustion)
+                    let _ = setrlimit(Resource::RLIMIT_NOFILE, 1024, 1024);
+                    // Limit max processes to 64 (prevents fork bombs)
+                    let _ = setrlimit(Resource::RLIMIT_NPROC, 64, 64);
+                    Ok(())
+                });
+        }
 
         // Set environment variables
         for (key, value) in &config.env {
