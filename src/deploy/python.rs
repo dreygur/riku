@@ -32,7 +32,8 @@ pub fn deploy_python(
     };
 
     // Create virtual environment if it doesn't exist
-    let venv_path = paths.env_root.join(app);
+    // Use a `venv/` subdirectory so the venv doesn't collide with ENV/SCALING files
+    let venv_path = paths.env_root.join(app).join("venv");
     if !venv_path.exists() {
         echo("-----> Creating virtual environment", "green");
         let status = Command::new(python_bin)

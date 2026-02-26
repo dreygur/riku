@@ -5,7 +5,7 @@
 use anyhow::Result;
 use nix::sys::resource::{setrlimit, Resource};
 use nix::sys::signal::{kill, Signal};
-use nix::unistd::Pid;
+use nix::unistd::{Gid, Pid, Uid};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
@@ -148,6 +148,29 @@ impl ProcessManager {
         let log_path = &config.options.log_file;
         let log_handles = Self::open_log_files(log_path)?;
 
+        // Resolve optional uid/gid names to numeric IDs before forking.
+        // This must happen in the parent so we can use the libc name-lookup functions safely.
+        let target_uid: Option<Uid> = config.options.uid.as_deref().and_then(|name| {
+            // Try numeric first, then name lookup via nix
+            if let Ok(n) = name.parse::<u32>() {
+                return Some(Uid::from_raw(n));
+            }
+            // nix::unistd::User::from_name uses getpwnam
+            nix::unistd::User::from_name(name)
+                .ok()
+                .flatten()
+                .map(|u| u.uid)
+        });
+        let target_gid: Option<Gid> = config.options.gid.as_deref().and_then(|name| {
+            if let Ok(n) = name.parse::<u32>() {
+                return Some(Gid::from_raw(n));
+            }
+            nix::unistd::Group::from_name(name)
+                .ok()
+                .flatten()
+                .map(|g| g.gid)
+        });
+
         // Build the command to run
         let mut cmd = Command::new("sh");
         // Set resource limits to prevent runaway processes (pre_exec is unsafe)
@@ -161,7 +184,18 @@ impl ProcessManager {
                 // Create new process group for proper signal handling
                 .process_group(0)
                 // Set resource limits in child process before exec
-                .pre_exec(|| {
+                .pre_exec(move || {
+                    // Drop to configured gid/uid if specified (gid must be set before uid).
+                    if let Some(gid) = target_gid {
+                        nix::unistd::setgid(gid).map_err(|e| {
+                            std::io::Error::new(std::io::ErrorKind::PermissionDenied, e.to_string())
+                        })?;
+                    }
+                    if let Some(uid) = target_uid {
+                        nix::unistd::setuid(uid).map_err(|e| {
+                            std::io::Error::new(std::io::ErrorKind::PermissionDenied, e.to_string())
+                        })?;
+                    }
                     // Limit max open files to 1024 (prevents fd exhaustion)
                     let _ = setrlimit(Resource::RLIMIT_NOFILE, 1024, 1024);
                     // Limit max processes to 64 (prevents fork bombs)
@@ -286,18 +320,22 @@ impl ProcessManager {
             // Try graceful shutdown with SIGTERM
             process.terminate()?;
 
-            // Wait for graceful shutdown (with timeout)
-            let mut attempts = 0;
-            while process.is_running() && attempts < 10 {
-                thread::sleep(Duration::from_millis(1000));
-                attempts += 1;
+            // Wait for graceful shutdown using the configured grace_period (in seconds).
+            // Poll every 100 ms so we exit promptly when the process dies.
+            let grace_period = process.config.options.grace_period;
+            let deadline = Duration::from_secs(grace_period);
+            let poll_interval = Duration::from_millis(100);
+            let mut elapsed = Duration::ZERO;
+            while process.is_running() && elapsed < deadline {
+                thread::sleep(poll_interval);
+                elapsed += poll_interval;
             }
 
-            // If still running, force kill with SIGKILL
+            // If still running after the grace period, force kill with SIGKILL
             if process.is_running() {
                 println!(
-                    "Process {} didn't respond to SIGTERM, sending SIGKILL",
-                    process_id
+                    "Process {} didn't respond to SIGTERM within {}s, sending SIGKILL",
+                    process_id, grace_period
                 );
                 process.kill()?;
 
@@ -335,6 +373,16 @@ impl ProcessManager {
             if !process.is_running() {
                 println!("Process {} has crashed", process_id);
                 self.stats.mark_crashed(process_id);
+
+                // Enforce max_restarts: stop trying once the limit is hit.
+                let max_restarts = process.config.options.max_restarts;
+                if process.restart_count >= max_restarts {
+                    println!(
+                        "Process {} has crashed {} time(s) (max_restarts={}), giving up",
+                        process_id, process.restart_count, max_restarts
+                    );
+                    continue;
+                }
 
                 // Calculate backoff time based on restart count
                 let backoff = std::cmp::min(60, 2_i32.pow(process.restart_count.min(6))) as u64;
@@ -447,20 +495,26 @@ impl ProcessManager {
     fn restart_process(&mut self, process_id: &str) -> Result<()> {
         println!("Restarting process: {}", process_id);
 
-        // Get the config before removing the process
-        let config = self.processes.get(process_id).map(|p| p.config.clone());
+        // Capture config and current restart count before removing the process.
+        let (config, prev_restart_count) = match self.processes.get(process_id) {
+            Some(p) => (Some(p.config.clone()), p.restart_count),
+            None => (None, 0),
+        };
 
         if let Some(config) = config {
             // Mark as restarting in stats
             self.stats.mark_restarting(process_id);
 
-            // Remove the old process
-            if let Some(mut process) = self.processes.remove(process_id) {
-                process.restart_count += 1;
-                process.last_restart = std::time::Instant::now();
+            // Remove the old process entry (terminates it via Drop).
+            self.processes.remove(process_id);
 
-                // Respawn the process with the original config
-                self.spawn_process(&config)?;
+            // Spawn a fresh process and then update its restart counter so that
+            // the exponential backoff keeps growing across successive crashes.
+            self.spawn_process(&config)?;
+
+            if let Some(new_process) = self.processes.get_mut(process_id) {
+                new_process.restart_count = prev_restart_count + 1;
+                new_process.last_restart = std::time::Instant::now();
             }
         }
 

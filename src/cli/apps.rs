@@ -1340,18 +1340,33 @@ pub fn cmd_hot_reload(paths: &RikuPaths, app: &str) -> Result<()> {
 
     echo(&format!("Hot reloading app '{}'...", app), "green");
 
-    // Signal the supervisor to hot reload the app
-    // For now, we'll do a simple restart by touching the worker configs
+    // Signal the supervisor by updating the mtime of each enabled worker TOML.
+    // The supervisor's file watcher (notify) detects the Modify event and reloads the config.
+    // We achieve a real mtime bump by reading the content and writing it back.
     let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
 
     if let Ok(entries) = glob::glob(toml_pattern.to_str().unwrap_or("")) {
         let mut count = 0;
         for entry in entries.flatten() {
-            // Touch the file to trigger a reload
-            if let Ok(metadata) = fs::metadata(&entry) {
-                let _ = fs::set_permissions(&entry, metadata.permissions());
+            // Read and rewrite the file to bump its mtime, triggering a supervisor reload.
+            match fs::read_to_string(&entry) {
+                Ok(content) => {
+                    if let Err(e) = fs::write(&entry, content) {
+                        echo(
+                            &format!("Warning: failed to touch {}: {}", entry.display(), e),
+                            "yellow",
+                        );
+                    } else {
+                        count += 1;
+                    }
+                }
+                Err(e) => {
+                    echo(
+                        &format!("Warning: failed to read {}: {}", entry.display(), e),
+                        "yellow",
+                    );
+                }
             }
-            count += 1;
         }
 
         if count > 0 {

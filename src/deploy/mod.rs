@@ -266,11 +266,15 @@ pub fn create_workers_generic(
                         worker_env.insert("NGINX_EXTERNAL_PORT".to_string(), "80".to_string());
                     }
 
-                    // Common: create socket path env var
-                    worker_env.insert(
-                        "SOCKET".to_string(),
-                        socket_path.to_string_lossy().to_string(),
-                    );
+                    // For plain web workers, set the SOCKET env var to the socket path.
+                    // wsgi/jwsgi/rwsgi/php workers already set SOCKET above with the
+                    // uwsgi unix:// prefix, so do not overwrite it here.
+                    if kind != "wsgi" && kind != "jwsgi" && kind != "rwsgi" && kind != "php" {
+                        worker_env.insert(
+                            "SOCKET".to_string(),
+                            socket_path.to_string_lossy().to_string(),
+                        );
+                    }
 
                     // Write NGINX settings to ENV file
                     let env_dir = paths.env_root.join(app);
@@ -587,7 +591,7 @@ fn apply_scaling_deltas(
     let mut counts: Vec<_> = new_counts.iter().collect();
     counts.sort();
     for (kind, count) in counts {
-        scaling_content.push_str(&format!("{}:{}\n", kind, count));
+        scaling_content.push_str(&format!("{}={}\n", kind, count));
     }
     fs::create_dir_all(paths.env_root.join(app))?;
     fs::write(&scaling_path, &scaling_content)?;
@@ -790,9 +794,34 @@ pub fn do_deploy(
                     rust::deploy_rust(app, &app_path, &env, paths)?;
                 }
                 Runtime::Wsgi | Runtime::Jwsgi | Runtime::Rwsgi | Runtime::Php => {
-                    // These use the generic identity deployer with special config
-                    // The unix socket setup is handled in create_workers_generic
-                    identity::deploy_identity(app, &app_path, &env, paths)?;
+                    // Pre-inject NGINX_WSGI and unix socket env vars so that
+                    // create_identity_worker_config selects the uwsgi nginx template.
+                    let mut wsgi_env = env.clone();
+                    let socket_path = paths.nginx_root.join(format!("{}.sock", app));
+                    wsgi_env.insert("NGINX_WSGI".to_string(), "true".to_string());
+                    wsgi_env.insert(
+                        "UWSGI_SOCKET".to_string(),
+                        socket_path.to_string_lossy().to_string(),
+                    );
+                    wsgi_env.insert(
+                        "SOCKET".to_string(),
+                        format!("unix://{}", socket_path.to_string_lossy()),
+                    );
+                    // Persist to ENV file so nginx config generation picks it up
+                    let env_dir = paths.env_root.join(app);
+                    fs::create_dir_all(&env_dir)?;
+                    let env_file = env_dir.join("ENV");
+                    let mut env_content = if env_file.exists() {
+                        fs::read_to_string(&env_file)?
+                    } else {
+                        String::new()
+                    };
+                    if !env_content.contains("NGINX_WSGI") {
+                        env_content.push_str("NGINX_WSGI=true\n");
+                        env_content.push_str(&format!("UWSGI_SOCKET={}\n", socket_path.display()));
+                        fs::write(&env_file, &env_content)?;
+                    }
+                    identity::deploy_identity(app, &app_path, &wsgi_env, paths)?;
                 }
                 Runtime::Identity => {
                     // Identity deployment for generic apps

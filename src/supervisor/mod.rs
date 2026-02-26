@@ -311,6 +311,16 @@ impl Supervisor {
         let config_content = fs::read_to_string(path)?;
         let worker_config: WorkerConfig = toml::from_str(&config_content)?;
 
+        // If this is a cron worker, load cron jobs from the app's Procfile instead of
+        // spawning a persistent process (cron entries are driven by the scheduler).
+        if worker_config.worker.kind.starts_with("cron") {
+            let procfile_path =
+                std::path::Path::new(&worker_config.options.working_dir).join("Procfile");
+            let app = &worker_config.worker.app.clone();
+            self.load_cron_jobs(app, &procfile_path)?;
+            return Ok(());
+        }
+
         self.process_manager.spawn_process(&worker_config)?;
         Ok(())
     }
@@ -425,7 +435,6 @@ impl Supervisor {
     }
 
     /// Load cron jobs from an app's Procfile.
-    #[allow(dead_code)]
     pub fn load_cron_jobs(&mut self, app: &str, procfile_path: &Path) -> Result<()> {
         if !procfile_path.exists() {
             return Ok(());

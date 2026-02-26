@@ -8,7 +8,7 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
-use crate::util::echo;
+use crate::util::{echo, ensure_path_within};
 
 /// Characters that could inject nginx directives when placed inside config values.
 const NGINX_DANGEROUS_CHARS: &[char] = &[';', '{', '}', '\n', '\r', '`', '$', '\\', '"', '\''];
@@ -297,12 +297,27 @@ fn generate_nginx_config_from_template(
     );
 
     // Read NGINX_INCLUDE_FILE from app directory if specified
-    // The env var contains the filename, we read its contents
+    // The env var contains the filename, we read its contents.
+    // Validate that the resolved path stays within the app directory to prevent
+    // path-traversal attacks that could read arbitrary files into the nginx config.
     if let Some(include_file) = env.get("NGINX_INCLUDE_FILE") {
         let include_path = app_path.join(include_file);
         if include_path.exists() {
-            if let Ok(content) = fs::read_to_string(&include_path) {
-                context.insert("NGINX_INCLUDE_CONTENT", &content);
+            match ensure_path_within(&include_path, app_path) {
+                Ok(()) => {
+                    if let Ok(content) = fs::read_to_string(&include_path) {
+                        context.insert("NGINX_INCLUDE_CONTENT", &content);
+                    }
+                }
+                Err(_) => {
+                    echo(
+                        &format!(
+                            "Warning: NGINX_INCLUDE_FILE '{}' is outside the app directory, ignoring",
+                            include_file
+                        ),
+                        "yellow",
+                    );
+                }
             }
         }
     }

@@ -27,9 +27,29 @@ pub fn deploy_clojure_cli(
     );
 
     echo(
-        "-----> Preparing Clojure application with tools.deps",
+        "-----> Building Clojure application with tools.deps",
         "green",
     );
+
+    // Resolve and download dependencies using the Clojure CLI.
+    // `clojure -P` (prepare) downloads all declared deps without running anything.
+    // Prefer `clojure` binary; fall back to `clj` (the shell-wrapper variant).
+    let clojure_bin = if which::which("clojure").is_ok() {
+        "clojure"
+    } else {
+        "clj"
+    };
+
+    let status = Command::new(clojure_bin)
+        .arg("-P") // prepare / download deps only
+        .current_dir(app_path)
+        .status()?;
+
+    if !status.success() {
+        return Err(anyhow::anyhow!(
+            "Failed to resolve dependencies with tools.deps (clojure -P)"
+        ));
+    }
 
     // Create worker configurations
     create_clojure_workers(app, app_path, env, paths)?;
