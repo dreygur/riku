@@ -230,22 +230,47 @@ pub fn create_workers_generic(
                 // Prepare environment for the worker
                 let mut worker_env = env.clone();
 
-                // Set PORT for web processes
-                let final_command = if kind == "web" {
-                    let port = get_free_port("127.0.0.1")?;
-                    worker_env.insert("PORT".to_string(), port.to_string());
-
-                    // Create socket file for web processes
+                // Set PORT/WSGI_SOCKET for web/wsgi/jwsgi/rwsgi/php processes
+                // wsgi/jwsgi/rwsgi use unix socket, others use TCP port
+                let final_command = if kind == "web"
+                    || kind == "wsgi"
+                    || kind == "jwsgi"
+                    || kind == "rwsgi"
+                    || kind == "php"
+                {
+                    // Create socket file for wsgi/jwsgi/rwsgi/php (unix socket)
+                    // For plain web, we use TCP port (NGINX_PORTMAP)
                     let socket_path = paths.nginx_root.join(format!("{}.sock", app));
+
+                    if kind == "wsgi" || kind == "jwsgi" || kind == "rwsgi" || kind == "php" {
+                        // Use unix socket with uwsgi protocol
+                        worker_env.insert(
+                            "SOCKET".to_string(),
+                            format!("unix://{}", socket_path.to_string_lossy()),
+                        );
+                        worker_env.insert(
+                            "UWSGI_SOCKET".to_string(),
+                            socket_path.to_string_lossy().to_string(),
+                        );
+                        worker_env.insert("NGINX_WSGI".to_string(), "true".to_string());
+
+                        // Add uwsgi-specific env vars
+                        worker_env.insert("UWSGI_PROCESSES".to_string(), "4".to_string());
+                        worker_env.insert("UWSGI_THREADS".to_string(), "4".to_string());
+                    } else {
+                        // Plain web uses TCP port
+                        let port = get_free_port("127.0.0.1")?;
+                        worker_env.insert("PORT".to_string(), port.to_string());
+                        worker_env.insert("NGINX_PORTMAP".to_string(), "true".to_string());
+                        worker_env.insert("NGINX_INTERNAL_PORT".to_string(), port.to_string());
+                        worker_env.insert("NGINX_EXTERNAL_PORT".to_string(), "80".to_string());
+                    }
+
+                    // Common: create socket path env var
                     worker_env.insert(
                         "SOCKET".to_string(),
                         socket_path.to_string_lossy().to_string(),
                     );
-
-                    // Set NGINX_PORTMAP to use TCP proxying
-                    worker_env.insert("NGINX_PORTMAP".to_string(), "true".to_string());
-                    worker_env.insert("NGINX_INTERNAL_PORT".to_string(), port.to_string());
-                    worker_env.insert("NGINX_EXTERNAL_PORT".to_string(), "80".to_string());
 
                     // Write NGINX settings to ENV file
                     let env_dir = paths.env_root.join(app);
@@ -258,10 +283,18 @@ pub fn create_workers_generic(
                         String::new()
                     };
 
-                    if !env_content.contains("NGINX_PORTMAP") {
-                        env_content.push_str("NGINX_PORTMAP=true\n");
-                        env_content.push_str(&format!("NGINX_INTERNAL_PORT={}\n", port));
-                        env_content.push_str("NGINX_EXTERNAL_PORT=80\n");
+                    if !env_content.contains("NGINX_PORTMAP") && !env_content.contains("NGINX_WSGI")
+                    {
+                        if kind == "wsgi" || kind == "jwsgi" || kind == "rwsgi" || kind == "php" {
+                            env_content.push_str("NGINX_WSGI=true\n");
+                            env_content
+                                .push_str(&format!("UWSGI_SOCKET={}\n", socket_path.display()));
+                        } else {
+                            let port = worker_env.get("PORT").map(|s| s.as_str()).unwrap_or("8080");
+                            env_content.push_str("NGINX_PORTMAP=true\n");
+                            env_content.push_str(&format!("NGINX_INTERNAL_PORT={}\n", port));
+                            env_content.push_str("NGINX_EXTERNAL_PORT=80\n");
+                        }
                         fs::write(&env_file, &env_content)?;
                     }
 
@@ -326,6 +359,10 @@ pub enum Runtime {
     ClojureLein,
     Container,
     Identity,
+    Wsgi,
+    Jwsgi,
+    Rwsgi,
+    Php,
 }
 
 impl std::fmt::Display for Runtime {
@@ -344,6 +381,10 @@ impl std::fmt::Display for Runtime {
             Runtime::ClojureLein => write!(f, "Clojure Lein"),
             Runtime::Container => write!(f, "Container"),
             Runtime::Identity => write!(f, "Identity"),
+            Runtime::Wsgi => write!(f, "Python WSGI"),
+            Runtime::Jwsgi => write!(f, "Java WSGI"),
+            Runtime::Rwsgi => write!(f, "Ruby WSGI"),
+            Runtime::Php => write!(f, "PHP"),
         }
     }
 }
@@ -432,7 +473,59 @@ pub fn detect_runtime(app_path: &Path) -> Option<Runtime> {
         return Some(Runtime::Rust);
     }
 
-    // 17. No runtime detected
+    // 17. Check Procfile for wsgi/jwsgi/rwsgi/php workers
+    let procfile_path = app_path.join("Procfile");
+    if procfile_path.exists() {
+        if let Ok(content) = fs::read_to_string(&procfile_path) {
+            for line in content.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                if let Some(pos) = line.find(':') {
+                    let kind = line[..pos].trim();
+                    match kind {
+                        "wsgi" | "jwsgi" | "rwsgi" | "php" => {
+                            // Check if corresponding marker file exists
+                            match kind {
+                                "wsgi" => {
+                                    // WSGI needs Python app
+                                    if app_path.join("requirements.txt").exists()
+                                        || app_path.join("pyproject.toml").exists()
+                                        || app_path.join("wsgi.py").exists()
+                                    {
+                                        return Some(Runtime::Wsgi);
+                                    }
+                                }
+                                "jwsgi" => {
+                                    // JWSGI needs Java
+                                    if app_path.join("pom.xml").exists()
+                                        || app_path.join("build.gradle").exists()
+                                    {
+                                        return Some(Runtime::Jwsgi);
+                                    }
+                                }
+                                "rwsgi" => {
+                                    // RWSGI needs Ruby
+                                    if app_path.join("Gemfile").exists() {
+                                        return Some(Runtime::Rwsgi);
+                                    }
+                                }
+                                "php" => {
+                                    // PHP just needs the php worker
+                                    return Some(Runtime::Php);
+                                }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    // 18. No runtime detected
     None
 }
 
@@ -695,6 +788,11 @@ pub fn do_deploy(
                 }
                 Runtime::Rust => {
                     rust::deploy_rust(app, &app_path, &env, paths)?;
+                }
+                Runtime::Wsgi | Runtime::Jwsgi | Runtime::Rwsgi | Runtime::Php => {
+                    // These use the generic identity deployer with special config
+                    // The unix socket setup is handled in create_workers_generic
+                    identity::deploy_identity(app, &app_path, &env, paths)?;
                 }
                 Runtime::Identity => {
                     // Identity deployment for generic apps

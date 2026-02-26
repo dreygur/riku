@@ -23,11 +23,19 @@ pub fn deploy_python(
 ) -> Result<()> {
     echo(&format!("-----> Deploying Python app '{}'", app), "green");
 
+    // Get Python version from env or default to python3
+    let python_version = env.get("PYTHON_VERSION").map(|s| s.as_str()).unwrap_or("3");
+    let python_bin = if python_version == "2" {
+        "python2"
+    } else {
+        "python3"
+    };
+
     // Create virtual environment if it doesn't exist
     let venv_path = paths.env_root.join(app);
     if !venv_path.exists() {
         echo("-----> Creating virtual environment", "green");
-        let status = Command::new("python3")
+        let status = Command::new(python_bin)
             .arg("-m")
             .arg("venv")
             .arg(&venv_path)
@@ -54,8 +62,17 @@ pub fn deploy_python(
         return Err(anyhow::anyhow!("Failed to install dependencies"));
     }
 
-    // Create worker configurations
-    create_python_workers(app, app_path, env, paths, &venv_path)?;
+    // Add Python-specific env vars
+    let mut python_env = env.clone();
+    python_env.insert("PYTHONUNBUFFERED".to_string(), "1".to_string());
+    python_env.insert("PYTHONIOENCODING".to_string(), "UTF-8".to_string());
+    python_env.insert(
+        "VIRTUAL_ENV".to_string(),
+        venv_path.to_string_lossy().to_string(),
+    );
+
+    // Create worker configurations with modified env
+    create_python_workers(app, app_path, &python_env, paths, &venv_path)?;
 
     Ok(())
 }

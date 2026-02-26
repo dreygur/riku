@@ -139,6 +139,10 @@ fn generate_nginx_config_from_template(
             "nginx_proxy.conf.tera",
             include_str!("../templates/nginx_proxy.conf.tera"),
         ),
+        (
+            "nginx_wsgi.conf.tera",
+            include_str!("../templates/nginx_wsgi.conf.tera"),
+        ),
     ];
 
     // Add templates to tera
@@ -284,6 +288,9 @@ fn generate_nginx_config_from_template(
     // Determine which template to use based on configuration
     let template_name = if env.contains_key("NGINX_HTTPS_ONLY") {
         "nginx_https_only.conf.tera"
+    } else if env.contains_key("NGINX_WSGI") {
+        // NGINX_WSGI: use uwsgi protocol with unix socket
+        "nginx_wsgi.conf.tera"
     } else if env.contains_key("NGINX_PORTMAP") {
         // NGINX_PORTMAP: proxy to external port instead of unix socket
         "nginx_portmap.conf.tera"
@@ -307,6 +314,11 @@ fn generate_nginx_config_from_template(
 
     context.insert("NGINX_EXTERNAL_PORT", &nginx_external_port);
     context.insert("NGINX_INTERNAL_PORT", &nginx_internal_port);
+
+    // Add uwsgi socket for wsgi/php workers
+    if let Some(socket) = env.get("UWSGI_SOCKET") {
+        context.insert("UWSGI_SOCKET", socket);
+    }
 
     // If HTTPS_ONLY is enabled, ensure SSL certificates exist
     if env.contains_key("NGINX_HTTPS_ONLY") {
