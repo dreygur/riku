@@ -154,6 +154,8 @@ pub enum Commands {
     GitHook {
         /// App name
         app: String,
+        /// Actual repo path (optional)
+        repo_path: Option<String>,
     },
 
     /// Git receive-pack (internal)

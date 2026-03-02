@@ -67,7 +67,9 @@ if [ -z "$RIKU_BIN" ]; then
         exit 1
     fi
 fi
-cat | RIKU_ROOT="${RIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$2"
+# Get the actual repo path (where the hook is running)
+REPO_PATH="$(pwd)"
+cat | RIKU_ROOT="${RIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$2" "$REPO_PATH"
 "#;
 
     fs::write(&hook_path, hook_content)?;
@@ -111,8 +113,28 @@ pub fn extract_bare_repo_to_app(bare_repo: &Path, app: &str, paths: &RikuPaths) 
 }
 
 /// Post-receive git hook handler.
-pub fn cmd_git_hook(paths: &RikuPaths, app: &str) -> Result<()> {
+pub fn cmd_git_hook(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> Result<()> {
     let app = sanitize_app_name(app);
+
+    // If repo_path is provided, create symlink from ~/.riku/repos/{app}.git to actual location
+    if let Some(actual_repo) = repo_path {
+        let actual_path = Path::new(actual_repo);
+        if actual_path.exists() {
+            let riku_repo = paths.git_root.join(format!("{}.git", app));
+            if !riku_repo.exists() {
+                std::os::unix::fs::symlink(actual_path, &riku_repo)?;
+                echo(
+                    &format!(
+                        "Symlinked {} → {}",
+                        riku_repo.display(),
+                        actual_path.display()
+                    ),
+                    "green",
+                );
+            }
+        }
+    }
+
     let repo_path = paths.git_root.join(&app);
     let app_path = paths.app_root.join(&app);
     let data_path = paths.data_root.join(&app);
@@ -210,7 +232,9 @@ if [ -z "$RIKU_BIN" ]; then
         exit 1
     fi
 fi
-cat | RIKU_ROOT="${RIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$2"
+# Get the actual repo path (where the hook is running)
+REPO_PATH="$(pwd)"
+cat | RIKU_ROOT="${RIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$2" "$REPO_PATH"
 "#;
         fs::write(&hook_path, hook_content)?;
 

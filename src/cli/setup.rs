@@ -418,11 +418,13 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
 while read oldrev newrev refname; do
     # Extract app name from repository path
     APP=$(basename "$(pwd)" .git)
+    # Get the actual repo path
+    REPO_PATH="$(pwd)"
 
     # Run riku git-hook
     RIKU_BIN="$HOME/.local/bin/riku"
     if [ -x "$RIKU_BIN" ]; then
-        "$RIKU_BIN" git-hook "$APP"
+        "$RIKU_BIN" git-hook "$APP" "$REPO_PATH"
     else
         echo " !     Riku binary not found at $RIKU_BIN"
     fi

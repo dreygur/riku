@@ -1433,7 +1433,9 @@ pub fn cmd_apps_create(paths: &RikuPaths, name: &str) -> Result<()> {
 while read oldrev newrev refname; do
     RIKU_BIN="$HOME/.local/bin/riku"
     if [ -x "$RIKU_BIN" ]; then
-        "$RIKU_BIN" git-hook "{}"
+        # Get the actual repo path
+        REPO_PATH="$(pwd)"
+        "$RIKU_BIN" git-hook "{}" "$REPO_PATH"
     else
         echo " !     Riku binary not found at $RIKU_BIN"
     fi

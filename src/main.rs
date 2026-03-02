@@ -127,7 +127,9 @@ fn main() -> Result<()> {
                 }
             }
         },
-        Commands::GitHook { app } => cli::git::cmd_git_hook(&paths, &app)?,
+        Commands::GitHook { app, repo_path } => {
+            cli::git::cmd_git_hook(&paths, &app, repo_path.as_deref())?
+        }
         Commands::GitReceivePack { app } => cli::git::cmd_git_receive_pack(&paths, &app)?,
         Commands::GitUploadPack { app } => cli::git::cmd_git_upload_pack(&paths, &app)?,
         Commands::Scp { args } => cli::scp::cmd_scp(&paths, &args)?,
