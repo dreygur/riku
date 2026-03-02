@@ -67,9 +67,11 @@ if [ -z "$RIKU_BIN" ]; then
         exit 1
     fi
 fi
-# Get the actual repo path (where the hook is running)
+# Derive app name from the repo directory name (strip .git suffix).
+# $2 in post-receive is NOT an argument - all data comes from stdin.
+APP="$(basename "$(pwd)" .git)"
 REPO_PATH="$(pwd)"
-cat | RIKU_ROOT="${RIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$2" "$REPO_PATH"
+cat | RIKU_ROOT="${RIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$APP" "$REPO_PATH"
 "#;
 
     fs::write(&hook_path, hook_content)?;
@@ -232,9 +234,11 @@ if [ -z "$RIKU_BIN" ]; then
         exit 1
     fi
 fi
-# Get the actual repo path (where the hook is running)
+# Derive app name from the repo directory name (strip .git suffix).
+# $2 in post-receive is NOT an argument - all data comes from stdin.
+APP="$(basename "$(pwd)" .git)"
 REPO_PATH="$(pwd)"
-cat | RIKU_ROOT="${RIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$2" "$REPO_PATH"
+cat | RIKU_ROOT="${RIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$APP" "$REPO_PATH"
 "#;
         fs::write(&hook_path, hook_content)?;
 

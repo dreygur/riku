@@ -380,17 +380,43 @@ fn generate_nginx_config_from_template(
     // Validate the nginx configuration
     validate_nginx_config(&config_file)?;
 
-    // Create symlink in /etc/nginx/sites-enabled/ if it exists
+    // Create/update symlink in /etc/nginx/sites-enabled/
     let nginx_sites_enabled = Path::new("/etc/nginx/sites-enabled");
     if nginx_sites_enabled.exists() {
         let symlink_path = nginx_sites_enabled.join(format!("{}.conf", app));
-        if !symlink_path.exists() {
-            let _ = std::os::unix::fs::symlink(&config_file, &symlink_path);
-            // Reload nginx to pick up the new config
-            let _ = std::process::Command::new("nginx")
-                .arg("-s")
-                .arg("reload")
-                .output();
+
+        // Remove any existing entry (regular file, symlink, or dangling symlink).
+        // Use symlink_metadata() so dangling symlinks (where exists() returns false)
+        // are also detected and removed.
+        if symlink_path.symlink_metadata().is_ok() {
+            if let Err(e) = fs::remove_file(&symlink_path) {
+                eprintln!(
+                    "Warning: could not remove old nginx symlink {:?}: {}",
+                    symlink_path, e
+                );
+            }
+        }
+
+        if let Err(e) = std::os::unix::fs::symlink(&config_file, &symlink_path) {
+            eprintln!(
+                "Warning: could not create nginx symlink {:?}: {}",
+                symlink_path, e
+            );
+        } else {
+            // Reload nginx to pick up the new config; log on failure.
+            match std::process::Command::new("nginx")
+                .args(["-s", "reload"])
+                .output()
+            {
+                Ok(out) if !out.status.success() => {
+                    eprintln!(
+                        "Warning: nginx reload failed: {}",
+                        String::from_utf8_lossy(&out.stderr).trim()
+                    );
+                }
+                Err(e) => eprintln!("Warning: could not reload nginx: {}", e),
+                _ => {}
+            }
         }
     }
 

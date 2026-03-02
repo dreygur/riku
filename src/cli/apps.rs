@@ -910,11 +910,15 @@ pub fn cmd_run(paths: &RikuPaths, app: &str, cmd: &[String]) -> Result<()> {
     parse_settings(&config_file, &mut env)?;
 
     let app_dir = paths.app_root.join(&app);
-    let shell_cmd = cmd.join(" ");
 
-    let mut child = Command::new("sh")
-        .arg("-c")
-        .arg(&shell_cmd)
+    if cmd.is_empty() {
+        return Err(anyhow::anyhow!("No command specified for 'riku run'"));
+    }
+
+    // Exec the binary directly rather than rejoining into `sh -c` to avoid
+    // shell injection via metacharacters in the command arguments.
+    let mut child = Command::new(&cmd[0])
+        .args(&cmd[1..])
         .current_dir(&app_dir)
         .envs(&env)
         .stdin(Stdio::inherit())

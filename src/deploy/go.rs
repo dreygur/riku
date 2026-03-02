@@ -127,7 +127,7 @@ fn create_go_workers(
 
     if auto_restart {
         for ext in &["toml", "ini"] {
-            let pattern = paths.workers_enabled.join(format!("{}*.{}", app, ext));
+            let pattern = paths.workers_enabled.join(format!("{}-*.{}", app, ext));
             if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
                 for entry in entries.flatten() {
                     let _ = fs::remove_file(&entry);

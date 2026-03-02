@@ -169,7 +169,10 @@ pub fn create_workers_generic(
     if auto_restart {
         // Remove existing worker configs to trigger restart
         for ext in &["toml", "ini"] {
-            let pattern = paths.workers_enabled.join(format!("{}*.{}", app, ext));
+            // Use "{app}-*" not "{app}*" to avoid matching configs for apps
+            // whose names share a prefix (e.g. "foo" would otherwise delete
+            // configs for "foobar").
+            let pattern = paths.workers_enabled.join(format!("{}-*.{}", app, ext));
             if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
                 for entry in entries.flatten() {
                     let _ = fs::remove_file(&entry);
@@ -631,8 +634,11 @@ pub fn do_deploy(
     let log_path = paths.log_root.join(app);
 
     if !app_path.exists() {
-        echo(&format!("Error: app '{}' not found.", app), "red");
-        return Ok(());
+        return Err(anyhow::anyhow!(
+            "App '{}' not found at {}",
+            app,
+            app_path.display()
+        ));
     }
 
     echo(&format!("-----> Deploying app '{}'", app), "green");
@@ -652,15 +658,20 @@ pub fn do_deploy(
     }
 
     if let Some(rev) = newrev {
-        let git_reset_result = Command::new("git")
+        let git_reset_status = Command::new("git")
             .args(["reset", "--hard", rev])
             .current_dir(&app_path)
             .env_remove("GIT_DIR")
             .env_remove("GIT_WORK_TREE")
-            .status();
+            .status()
+            .map_err(|e| anyhow::anyhow!("Failed to run git reset: {}", e))?;
 
-        if let Err(e) = git_reset_result {
-            echo(&format!("Warning: git reset failed: {}", e), "yellow");
+        if !git_reset_status.success() {
+            return Err(anyhow::anyhow!(
+                "git reset --hard {} failed (exit {}). Deploy aborted.",
+                rev,
+                git_reset_status.code().unwrap_or(-1)
+            ));
         }
 
         // Initialize and update git submodules
@@ -705,11 +716,10 @@ pub fn do_deploy(
     let mut workers = match workers {
         Some(w) if !w.is_empty() => w,
         _ => {
-            echo(
-                &format!("Error: Invalid Procfile for app '{}'.", app),
-                "red",
-            );
-            return Ok(());
+            return Err(anyhow::anyhow!(
+                "Invalid or missing Procfile for app '{}'. Deploy aborted.",
+                app
+            ));
         }
     };
 
