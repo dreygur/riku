@@ -388,11 +388,11 @@ impl Supervisor {
         // dash-delimited components (ordinal, then kind).
         let stem = filename.strip_suffix(".toml").unwrap_or(filename);
         // Strip "-<ordinal>" (last component)
-        let without_ordinal = stem.rsplitn(2, '-').nth(1).unwrap_or(stem);
+        let without_ordinal = stem.rsplit_once('-').map(|x| x.0).unwrap_or(stem);
         // Strip "-<kind>" (now last component)
         let app_name = without_ordinal
-            .rsplitn(2, '-')
-            .nth(1)
+            .rsplit_once('-')
+            .map(|x| x.0)
             .unwrap_or(without_ordinal);
         self.process_manager.stop_app_processes(app_name)?;
         Ok(())
