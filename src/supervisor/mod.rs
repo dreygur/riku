@@ -217,8 +217,12 @@ impl Supervisor {
                         // Compare with stored modification time
                         if new_modified > *_old_modified {
                             println!("Config file modified: {}", filename);
-                            self.unload_config(&filename)?;
-                            self.load_config_file(&path, &filename)?;
+                            if let Err(e) = self.unload_config(&filename) {
+                                eprintln!("Error unloading config {}: {}", filename, e);
+                            }
+                            if let Err(e) = self.load_config_file(&path, &filename) {
+                                eprintln!("Error loading config {}: {}", filename, e);
+                            }
                             self.watched_configs.insert(filename, new_modified);
                         }
                     }
@@ -226,7 +230,9 @@ impl Supervisor {
             } else {
                 // New config
                 println!("New config file detected: {}", filename);
-                self.load_config_file(&path, &filename)?;
+                if let Err(e) = self.load_config_file(&path, &filename) {
+                    eprintln!("Error loading config {}: {}", filename, e);
+                }
                 if let Ok(metadata) = fs::metadata(&path) {
                     if let Ok(modified) = metadata.modified() {
                         self.watched_configs.insert(filename, modified);
@@ -308,8 +314,20 @@ impl Supervisor {
 
     /// Load and start a configuration from a TOML file.
     fn load_config_file(&mut self, path: &Path, _filename: &str) -> Result<()> {
-        let config_content = fs::read_to_string(path)?;
-        let worker_config: WorkerConfig = toml::from_str(&config_content)?;
+        let config_content = match fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Error reading config file {}: {}", path.display(), e);
+                return Err(e.into());
+            }
+        };
+        let worker_config: WorkerConfig = match toml::from_str(&config_content) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Error parsing config file {}: {}", path.display(), e);
+                return Err(e.into());
+            }
+        };
 
         // If this is a cron worker, load cron jobs from the app's Procfile instead of
         // spawning a persistent process (cron entries are driven by the scheduler).
@@ -317,11 +335,19 @@ impl Supervisor {
             let procfile_path =
                 std::path::Path::new(&worker_config.options.working_dir).join("Procfile");
             let app = &worker_config.worker.app.clone();
-            self.load_cron_jobs(app, &procfile_path)?;
+            if let Err(e) = self.load_cron_jobs(app, &procfile_path) {
+                eprintln!("Error loading cron jobs for {}: {}", app, e);
+            }
             return Ok(());
         }
 
-        self.process_manager.spawn_process(&worker_config)?;
+        if let Err(e) = self.process_manager.spawn_process(&worker_config) {
+            eprintln!(
+                "Error spawning process for {}: {}",
+                worker_config.worker.app, e
+            );
+            return Err(e);
+        }
         Ok(())
     }
 

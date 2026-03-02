@@ -241,10 +241,12 @@ fn create_python_worker_config(
     // Prepend the venv bin/ directory to PATH
     let bin_path = python_env_path.join("bin");
     let current_path = worker_env.get("PATH").cloned().unwrap_or_default();
-    worker_env.insert(
-        "PATH".to_string(),
-        format!("{}:{}", bin_path.to_string_lossy(), current_path),
-    );
+    let new_path = if current_path.is_empty() {
+        bin_path.to_string_lossy().to_string()
+    } else {
+        format!("{}:{}", bin_path.to_string_lossy(), current_path)
+    };
+    worker_env.insert("PATH".to_string(), new_path);
 
     // Set PYTHONPATH to app directory
     worker_env.insert(
