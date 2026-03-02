@@ -378,8 +378,22 @@ impl Supervisor {
 
     /// Stop and remove a configuration.
     fn unload_config(&mut self, filename: &str) -> Result<()> {
-        // Extract app name from filename (remove .toml extension)
-        let app_name = filename.strip_suffix(".toml").unwrap_or(filename);
+        // Worker config filenames are <app>-<kind>-<ordinal>.toml.
+        // stop_app_processes() matches processes whose ID starts with "<app>-",
+        // so we must pass only the app name, not the full stem.
+        //
+        // The app name itself may contain hyphens (e.g. "my-app"), so we
+        // reconstruct it by stripping both the known suffix pattern "-<kind>-<ordinal>"
+        // and the ".toml" extension.  We do this by splitting off the last two
+        // dash-delimited components (ordinal, then kind).
+        let stem = filename.strip_suffix(".toml").unwrap_or(filename);
+        // Strip "-<ordinal>" (last component)
+        let without_ordinal = stem.rsplitn(2, '-').nth(1).unwrap_or(stem);
+        // Strip "-<kind>" (now last component)
+        let app_name = without_ordinal
+            .rsplitn(2, '-')
+            .nth(1)
+            .unwrap_or(without_ordinal);
         self.process_manager.stop_app_processes(app_name)?;
         Ok(())
     }
