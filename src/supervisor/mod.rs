@@ -37,6 +37,7 @@ pub struct Supervisor {
     last_log_rotation: std::time::SystemTime,
     log_rotation_interval: Duration,
     stats_file: std::path::PathBuf,
+    pid_file: std::path::PathBuf,
     last_stats_write: std::time::SystemTime,
     stats_write_interval: Duration,
     cron_scheduler: CronScheduler,
@@ -54,10 +55,12 @@ impl Supervisor {
             .unwrap_or_else(|| std::path::PathBuf::from("./logs"));
 
         // Determine stats file path (in .riku root)
-        let stats_file = config_dir
+        let riku_root = config_dir
             .parent()
-            .map(|p| p.join("stats.json"))
-            .unwrap_or_else(|| std::path::PathBuf::from("./stats.json"));
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| std::path::PathBuf::from("."));
+        let stats_file = riku_root.join("stats.json");
+        let pid_file = riku_root.join("supervisor.pid");
 
         Ok(Supervisor {
             config_dir,
@@ -68,6 +71,7 @@ impl Supervisor {
             last_log_rotation: std::time::SystemTime::now(),
             log_rotation_interval: Duration::from_secs(300), // Check every 5 minutes
             stats_file,
+            pid_file,
             last_stats_write: std::time::SystemTime::now(),
             stats_write_interval: Duration::from_secs(5), // Write stats every 5 seconds
             cron_scheduler: CronScheduler::new(),
@@ -81,6 +85,15 @@ impl Supervisor {
         println!("Starting riku supervisor daemon...");
         println!("Monitoring: {}", self.config_dir.display());
         println!("Press Ctrl+C to stop");
+
+        // Write PID file so deploy can find us reliably without pgrep.
+        let my_pid = std::process::id();
+        if let Err(e) = fs::write(&self.pid_file, format!("{}\n", my_pid)) {
+            eprintln!(
+                "Warning: could not write PID file {:?}: {}",
+                self.pid_file, e
+            );
+        }
 
         // Set up signal handlers for graceful shutdown
         setup_signal_handlers()?;
@@ -172,6 +185,9 @@ impl Supervisor {
         // Clean shutdown - stop all managed processes
         println!("Stopping all managed processes...");
         self.process_manager.stop_all_processes()?;
+
+        // Remove PID file on clean exit.
+        let _ = fs::remove_file(&self.pid_file);
 
         Ok(())
     }

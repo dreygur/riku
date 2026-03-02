@@ -908,37 +908,48 @@ pub fn do_deploy(
     Ok(())
 }
 
-/// Check if supervisor is running and start it if not.
+/// Read the supervisor PID from the PID file. Returns None if the file is absent,
+/// unreadable, or contains a non-numeric value.
+fn read_supervisor_pid(paths: &crate::config::RikuPaths) -> Option<i32> {
+    let pid_file = paths.riku_root.join("supervisor.pid");
+    let content = std::fs::read_to_string(&pid_file).ok()?;
+    let pid: i32 = content.trim().parse().ok()?;
+    Some(pid)
+}
+
+/// Return true if a process with the given PID exists (sending signal 0).
+fn pid_is_alive(pid: i32) -> bool {
+    nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None).is_ok()
+}
+
+/// Check if supervisor is running (via PID file) and start it if not.
 fn ensure_supervisor_running(paths: &crate::config::RikuPaths) -> bool {
-    // Check if supervisor is already running
-    if let Ok(output) = std::process::Command::new("pgrep")
-        .args(["-f", "riku supervisor"])
-        .output()
-    {
-        if output.status.success() && !output.stdout.is_empty() {
-            return true; // Supervisor is already running
+    // Check PID file first — reliable and does not match unrelated processes.
+    if let Some(pid) = read_supervisor_pid(paths) {
+        if pid_is_alive(pid) {
+            return true;
         }
+        // Stale PID file — supervisor died without cleaning up. Remove it.
+        let _ = std::fs::remove_file(paths.riku_root.join("supervisor.pid"));
     }
 
-    // Supervisor is not running, try to start it
-    // Look for riku binary in common locations
+    // Supervisor is not running, try to start it.
+    // Prefer the binary that deploy is executing ($RIKU_BIN), then fall back
+    // to the installed location and finally bare "riku" on PATH.
     let riku_bin = std::env::var("RIKU_BIN")
         .ok()
         .filter(|b| !b.is_empty())
         .unwrap_or_else(|| {
-            if std::path::Path::new("/root/riku").exists() {
-                "/root/riku".to_string()
-            } else if std::path::Path::new("riku").exists() {
-                "riku".to_string()
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+            let local_bin = format!("{}/.local/bin/riku", home);
+            if std::path::Path::new(&local_bin).exists() {
+                local_bin
             } else {
                 "riku".to_string()
             }
         });
 
-    // Try to start supervisor in background using nohup
     let riku_root = paths.riku_root.to_str().unwrap_or("/root/.riku");
-
-    // Use sh -c with nohup to run supervisor in background
     let supervisor_cmd = format!("nohup {} supervisor > /dev/null 2>&1 &", riku_bin);
 
     if std::process::Command::new("sh")
@@ -947,31 +958,29 @@ fn ensure_supervisor_running(paths: &crate::config::RikuPaths) -> bool {
         .spawn()
         .is_ok()
     {
-        // Wait briefly for supervisor to start
-        std::thread::sleep(std::time::Duration::from_millis(500));
-        return true;
+        // Poll PID file for up to 3 seconds instead of a blind sleep.
+        for _ in 0..30 {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            if let Some(pid) = read_supervisor_pid(paths) {
+                if pid_is_alive(pid) {
+                    return true;
+                }
+            }
+        }
     }
 
     false
 }
 
-/// Notify the supervisor to reload configurations (if running).
-fn notify_supervisor_reload() {
-    // Send SIGHUP to the supervisor process to trigger config reload
-    if let Ok(output) = std::process::Command::new("pgrep")
-        .args(["-f", "riku supervisor"])
-        .output()
-    {
-        if output.status.success() && !output.stdout.is_empty() {
-            let pids = String::from_utf8_lossy(&output.stdout);
-            for pid in pids.split_whitespace() {
-                if let Ok(pid_num) = pid.parse::<i32>() {
-                    let _ = nix::sys::signal::kill(
-                        nix::unistd::Pid::from_raw(pid_num),
-                        nix::sys::signal::Signal::SIGHUP,
-                    );
-                }
-            }
+/// Notify the supervisor to reload configurations by sending SIGHUP to the
+/// PID recorded in the PID file. Only signals our own supervisor process.
+fn notify_supervisor_reload(paths: &crate::config::RikuPaths) {
+    if let Some(pid) = read_supervisor_pid(paths) {
+        if pid_is_alive(pid) {
+            let _ = nix::sys::signal::kill(
+                nix::unistd::Pid::from_raw(pid),
+                nix::sys::signal::Signal::SIGHUP,
+            );
         }
     }
 }
@@ -1011,7 +1020,7 @@ pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
 
     // Notify the supervisor to reload configurations
     // The supervisor will detect new/changed configs and spawn processes
-    notify_supervisor_reload();
+    notify_supervisor_reload(paths);
 
     echo("-----> Notified supervisor to spawn processes...", "green");
 
