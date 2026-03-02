@@ -46,6 +46,7 @@ There are several ways to install Riku:
 - **Git** (for deployments)
 - **Nginx** (for reverse proxy)
 - **SSH** (for remote access)
+- **python3-venv** (for Python apps)
 
 ### Optional Software
 - **Node.js** (for Node.js apps)
@@ -155,7 +156,7 @@ You should see the Riku help message.
 sudo apt update && sudo apt upgrade -y
 
 # Install dependencies
-sudo apt install -y git nginx curl build-essential
+sudo apt install -y git nginx curl build-essential python3-venv python3-full
 
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh

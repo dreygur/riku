@@ -169,6 +169,21 @@ git remote add riku deploy@your-server:myapp
 git push riku main
 ```
 
+### Custom Bare Repo Location
+
+You can create your bare git repo anywhere and Riku will automatically symlink it to `~/.riku/repos/`:
+
+```bash
+# On server: create bare repo anywhere
+git init --bare ~/my-projects/myapp.git
+
+# Push to custom path
+git remote add riku deploy@server:~/my-projects/myapp.git
+git push riku main
+
+# Riku creates: ~/.riku/repos/myapp.git → ~/my-projects/myapp.git
+```
+
 ## Commands
 
 ### Application Management
