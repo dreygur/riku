@@ -380,6 +380,20 @@ fn generate_nginx_config_from_template(
     // Validate the nginx configuration
     validate_nginx_config(&config_file)?;
 
+    // Create symlink in /etc/nginx/sites-enabled/ if it exists
+    let nginx_sites_enabled = Path::new("/etc/nginx/sites-enabled");
+    if nginx_sites_enabled.exists() {
+        let symlink_path = nginx_sites_enabled.join(format!("{}.conf", app));
+        if !symlink_path.exists() {
+            let _ = std::os::unix::fs::symlink(&config_file, &symlink_path);
+            // Reload nginx to pick up the new config
+            let _ = std::process::Command::new("nginx")
+                .arg("-s")
+                .arg("reload")
+                .output();
+        }
+    }
+
     Ok(())
 }
 
@@ -448,6 +462,20 @@ pub fn remove_nginx_config(app: &str, paths: &crate::config::RikuPaths) -> Resul
     let config_file = paths.nginx_root.join(format!("{}.conf", app));
     if config_file.exists() {
         fs::remove_file(&config_file)?;
+    }
+
+    // Remove symlink from /etc/nginx/sites-enabled/ if it exists
+    let nginx_sites_enabled = Path::new("/etc/nginx/sites-enabled");
+    if nginx_sites_enabled.exists() {
+        let symlink_path = nginx_sites_enabled.join(format!("{}.conf", app));
+        if symlink_path.exists() {
+            let _ = fs::remove_file(&symlink_path);
+            // Reload nginx to apply changes
+            let _ = std::process::Command::new("nginx")
+                .arg("-s")
+                .arg("reload")
+                .output();
+        }
     }
 
     // Also remove associated socket, cert, and key files

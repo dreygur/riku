@@ -1,6 +1,6 @@
 FROM public.ecr.aws/ubuntu/ubuntu:24.04_stable
 
-RUN apt-get update -y && apt-get install -y openssh-server git nodejs npm python3 python3-pip nginx curl
+RUN apt-get update -y && apt-get install -y openssh-server git nodejs npm python3 python3-pip python3-venv nginx curl
 RUN mkdir /var/run/sshd
 RUN echo 'root:password' | chpasswd
 

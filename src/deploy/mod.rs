@@ -908,6 +908,53 @@ pub fn do_deploy(
     Ok(())
 }
 
+/// Check if supervisor is running and start it if not.
+fn ensure_supervisor_running(paths: &crate::config::RikuPaths) -> bool {
+    // Check if supervisor is already running
+    if let Ok(output) = std::process::Command::new("pgrep")
+        .args(["-f", "riku supervisor"])
+        .output()
+    {
+        if output.status.success() && !output.stdout.is_empty() {
+            return true; // Supervisor is already running
+        }
+    }
+
+    // Supervisor is not running, try to start it
+    // Look for riku binary in common locations
+    let riku_bin = std::env::var("RIKU_BIN")
+        .ok()
+        .filter(|b| !b.is_empty())
+        .unwrap_or_else(|| {
+            if std::path::Path::new("/root/riku").exists() {
+                "/root/riku".to_string()
+            } else if std::path::Path::new("riku").exists() {
+                "riku".to_string()
+            } else {
+                "riku".to_string()
+            }
+        });
+
+    // Try to start supervisor in background using nohup
+    let riku_root = paths.riku_root.to_str().unwrap_or("/root/.riku");
+
+    // Use sh -c with nohup to run supervisor in background
+    let supervisor_cmd = format!("nohup {} supervisor > /dev/null 2>&1 &", riku_bin);
+
+    if std::process::Command::new("sh")
+        .args(["-c", &supervisor_cmd])
+        .env("RIKU_ROOT", riku_root)
+        .spawn()
+        .is_ok()
+    {
+        // Wait briefly for supervisor to start
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        return true;
+    }
+
+    false
+}
+
 /// Notify the supervisor to reload configurations (if running).
 fn notify_supervisor_reload() {
     // Send SIGHUP to the supervisor process to trigger config reload
@@ -950,6 +997,14 @@ pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
     if let Err(e) = nginx_result {
         echo(
             &format!("Warning: Failed to generate nginx config: {}", e),
+            "yellow",
+        );
+    }
+
+    // Ensure supervisor is running, start if not
+    if !ensure_supervisor_running(paths) {
+        echo(
+            "Warning: Could not start supervisor. Run 'riku supervisor' manually.",
             "yellow",
         );
     }
