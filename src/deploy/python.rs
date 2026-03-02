@@ -103,8 +103,10 @@ pub fn deploy_python_poetry(
         ));
     }
 
-    // Create worker configurations
-    create_python_workers(app, app_path, env, paths, app_path)?;
+    // Create worker configurations — wrap every command with `poetry run` so
+    // that the Poetry-managed virtualenv is used.  Do NOT prepend {app_path}/bin
+    // to PATH; that directory does not exist and would be the wrong venv anyway.
+    create_python_workers_with_runner(app, app_path, env, paths, "poetry run")?;
 
     Ok(())
 }
@@ -132,8 +134,9 @@ pub fn deploy_python_uv(
         return Err(anyhow::anyhow!("Failed to install dependencies with uv"));
     }
 
-    // Create worker configurations
-    create_python_workers(app, app_path, env, paths, app_path)?;
+    // Create worker configurations — wrap every command with `uv run` so that
+    // the uv-managed virtualenv is used.  Do NOT prepend {app_path}/bin to PATH.
+    create_python_workers_with_runner(app, app_path, env, paths, "uv run")?;
 
     Ok(())
 }
@@ -197,6 +200,92 @@ fn create_python_workers(
                     python_env_path,
                     app_path,
                 )?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Create worker configurations for Poetry/uv apps, wrapping each Procfile
+/// command with `runner` (e.g. "poetry run" or "uv run").
+fn create_python_workers_with_runner(
+    app: &str,
+    app_path: &Path,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+    runner: &str,
+) -> Result<()> {
+    let auto_restart = env
+        .get("RIKU_AUTO_RESTART")
+        .map(|v| v.to_lowercase() != "false" && v != "0" && v != "no")
+        .unwrap_or(true);
+
+    if auto_restart {
+        for ext in &["toml", "ini"] {
+            let pattern = paths.workers_enabled.join(format!("{}-*.{}", app, ext));
+            if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
+                for entry in entries.flatten() {
+                    let _ = fs::remove_file(&entry);
+                }
+            }
+        }
+    }
+
+    let procfile_path = app_path.join("Procfile");
+    if !procfile_path.exists() {
+        echo(
+            "-----> No Procfile found, skipping process creation",
+            "yellow",
+        );
+        return Ok(());
+    }
+
+    let procfile_content = fs::read_to_string(&procfile_path)?;
+    for line in procfile_content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        if let Some(pos) = line.find(':') {
+            let kind = line[..pos].trim();
+            let command = line[pos + 1..].trim();
+            // Prefix the command with the runner (e.g. "poetry run gunicorn ...")
+            let wrapped = format!("{} {}", runner, command);
+
+            let count = read_scaling_count(paths, app, kind)?;
+            for i in 1..=count {
+                let mut worker_env = env.clone();
+
+                // Set PORT for web processes
+                let final_command = if kind == "web" {
+                    let port = setup_web_port!(worker_env, app, paths);
+                    if wrapped.contains("--bind") || wrapped.contains("--port") {
+                        wrapped.clone()
+                    } else if wrapped.contains("gunicorn") {
+                        format!("{} --bind 127.0.0.1:{}", wrapped, port)
+                    } else if wrapped.contains("flask") {
+                        format!("{} run --host=127.0.0.1 --port={}", wrapped, port)
+                    } else if wrapped.contains("uvicorn") {
+                        format!("{} --host 127.0.0.1 --port {}", wrapped, port)
+                    } else {
+                        wrapped.clone()
+                    }
+                } else {
+                    wrapped.clone()
+                };
+
+                worker_env.insert("PYTHONUNBUFFERED".to_string(), "1".to_string());
+                worker_env.insert("PYTHONIOENCODING".to_string(), "UTF-8".to_string());
+                worker_env.insert(
+                    "PYTHONPATH".to_string(),
+                    app_path.to_string_lossy().to_string(),
+                );
+                // Do NOT prepend any bin/ directory — the runner (poetry run /
+                // uv run) activates the correct virtualenv itself.
+
+                write_worker_config!(app, kind, &final_command, i, worker_env, app_path, paths);
             }
         }
     }

@@ -11,7 +11,7 @@ use std::process::Command;
 use crate::config::RikuPaths;
 use crate::deploy::read_scaling_count;
 use crate::setup_web_port;
-use crate::util::echo;
+use crate::util::{echo, validate_node_version};
 use crate::write_worker_config;
 
 /// Deploy a Node.js application using npm.
@@ -25,6 +25,13 @@ pub fn deploy_node(
 
     // Handle NODE_VERSION - install specific Node version if requested
     if let Some(node_version) = env.get("NODE_VERSION") {
+        // Validate the version string before passing it to nodeenv to prevent
+        // arbitrary argument injection (e.g. "--extra-flag" or shell metacharacters
+        // if nodeenv is ever invoked via a shell).
+        if let Err(e) = validate_node_version(node_version) {
+            return Err(anyhow::anyhow!("Invalid NODE_VERSION: {}", e));
+        }
+
         echo(
             &format!("-----> Installing Node.js version {}", node_version),
             "green",

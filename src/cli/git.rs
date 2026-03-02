@@ -18,15 +18,27 @@ pub fn ensure_repo_symlink(paths: &RikuPaths, app: &str) -> Result<()> {
 
     // If user's bare repo exists, create symlink
     if user_repo.exists() {
-        if riku_repo.exists() {
-            // Check if it's already a symlink to the right place
-            if let Ok(target) = fs::read_link(&riku_repo) {
-                if target == user_repo {
-                    return Ok(()); // Already correctly symlinked
+        // Use symlink_metadata so we detect even dangling symlinks.
+        if let Ok(meta) = riku_repo.symlink_metadata() {
+            if meta.file_type().is_symlink() {
+                // Check if it's already a symlink to the right place
+                if let Ok(target) = fs::read_link(&riku_repo) {
+                    if target == user_repo {
+                        return Ok(()); // Already correctly symlinked
+                    }
                 }
+                // Remove the old symlink
+                fs::remove_file(&riku_repo)?;
+            } else if meta.file_type().is_dir() {
+                // Refuse to remove a real directory — that would destroy data.
+                return Err(anyhow::anyhow!(
+                    "Repo path '{}' is a real directory, not a symlink; refusing to remove it",
+                    riku_repo.display()
+                ));
+            } else {
+                // Regular file at the repo path — remove it.
+                fs::remove_file(&riku_repo)?;
             }
-            // Remove existing file/symlink
-            fs::remove_file(&riku_repo)?;
         }
         // Create symlink: ~/.riku/repos/app.git → ~/app.git
         std::os::unix::fs::symlink(&user_repo, &riku_repo)?;

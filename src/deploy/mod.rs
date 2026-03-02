@@ -573,7 +573,9 @@ fn apply_scaling_deltas(
     // Apply deltas
     let mut new_counts: HashMap<String, u32> = worker_counts.clone();
     for (kind, delta) in deltas {
-        let current = *worker_counts.get(kind).unwrap_or(&1);
+        // Use 0 as the baseline for kinds not yet in the SCALING file so that
+        // "web=2" on a fresh app gives exactly 2 workers (not 1+2=3).
+        let current = *worker_counts.get(kind).unwrap_or(&0);
         let new_count = if *delta < 0 {
             current.saturating_sub((-delta) as u32)
         } else {
@@ -960,11 +962,15 @@ fn ensure_supervisor_running(paths: &crate::config::RikuPaths) -> bool {
         });
 
     let riku_root = paths.riku_root.to_str().unwrap_or("/root/.riku");
-    let supervisor_cmd = format!("nohup {} supervisor > /dev/null 2>&1 &", riku_bin);
 
-    if std::process::Command::new("sh")
-        .args(["-c", &supervisor_cmd])
+    // Exec nohup directly — never interpolate riku_bin into a shell string to
+    // avoid injection if RIKU_BIN contains metacharacters.
+    if std::process::Command::new("nohup")
+        .args([&riku_bin, "supervisor"])
         .env("RIKU_ROOT", riku_root)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .spawn()
         .is_ok()
     {

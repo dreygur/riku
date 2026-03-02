@@ -50,8 +50,8 @@ pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
 
     for a in &apps {
         // Check for running worker configs
-        let ini_pattern = paths.workers_enabled.join(format!("{}*.ini", a));
-        let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", a));
+        let ini_pattern = paths.workers_enabled.join(format!("{}-*.ini", a));
+        let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", a));
         let ini_matches = glob::glob(ini_pattern.to_str().unwrap_or(""))
             .map(|g| g.count())
             .unwrap_or_else(|e| {
@@ -283,13 +283,27 @@ fn deploy_from_path(paths: &RikuPaths, app: &str, source: &str) -> Result<()> {
     let app_dir = paths.app_root.join(app);
     echo(&format!("Copying files from '{}'...", source), "green");
 
-    // Remove existing app files (preserve data dir)
+    // Copy to a temporary directory alongside the app dir first, then do an
+    // atomic rename — this prevents leaving the app dir in a destroyed state
+    // if the copy fails partway through.
+    let tmp_dir = paths.app_root.join(format!(".{}.tmp", app));
+    if tmp_dir.exists() {
+        fs::remove_dir_all(&tmp_dir)?;
+    }
+
+    if let Err(e) = copy_dir_recursive(source_path, &tmp_dir) {
+        // Clean up the incomplete temp dir before propagating the error.
+        let _ = fs::remove_dir_all(&tmp_dir);
+        return Err(e);
+    }
+
+    // Remove old app dir only after the copy succeeded.
     if app_dir.exists() {
         fs::remove_dir_all(&app_dir)?;
     }
 
-    // Copy source to app directory
-    copy_dir_recursive(source_path, &app_dir)?;
+    // Rename temp dir to app dir (atomic on the same filesystem).
+    fs::rename(&tmp_dir, &app_dir)?;
 
     echo(
         &format!("✓ Copied {} files", count_files(&app_dir)?),
@@ -363,7 +377,7 @@ pub fn cmd_destroy(paths: &RikuPaths, app: &str) -> Result<()> {
     // Remove worker config files (*.ini and *.toml)
     for dir in [&paths.workers_available, &paths.workers_enabled] {
         for ext in &["ini", "toml"] {
-            let pattern = dir.join(format!("{}*.{}", app, ext));
+            let pattern = dir.join(format!("{}-*.{}", app, ext));
             if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
                 for entry in entries.flatten() {
                     echo(
@@ -486,8 +500,8 @@ pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
 
         for app in &apps {
             // Check both .toml and .ini worker configs
-            let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
-            let ini_pattern = paths.workers_enabled.join(format!("{}*.ini", app));
+            let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", app));
+            let ini_pattern = paths.workers_enabled.join(format!("{}-*.ini", app));
 
             let mut worker_configs: Vec<_> = match glob::glob(toml_pattern.to_str().unwrap_or("")) {
                 Ok(g) => g.filter_map(|r| r.ok()).collect(),
@@ -508,12 +522,14 @@ pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
 
             for config_path in worker_configs {
                 if let Some(filename) = config_path.file_name().and_then(|s| s.to_str()) {
-                    // Parse filename: app-kind-ordinal.toml or app-kind-ordinal.ini
+                    // Parse filename: {app}-{kind}-{ordinal}.toml/.ini
+                    // Strip the extension, then strip the known "{app}-" prefix so
+                    // that hyphens within the app name do not break the parse.
                     let stem = filename.trim_end_matches(".toml").trim_end_matches(".ini");
-                    let parts: Vec<&str> = stem.split('-').collect();
-                    if parts.len() >= 3 {
-                        let kind = parts[1];
-                        let ordinal = parts.get(2).unwrap_or(&"1");
+                    let prefix = format!("{}-", app);
+                    let remainder = stem.strip_prefix(prefix.as_str()).unwrap_or("");
+                    // remainder is now "{kind}-{ordinal}"
+                    if let Some((kind, ordinal)) = remainder.split_once('-') {
                         let process_name = format!("{}-{}-{}", app, kind, ordinal);
 
                         // Get PID, status, and health from stats if available
@@ -589,8 +605,8 @@ pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
 
         for app in &apps {
             // Count both .toml and .ini worker configs
-            let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
-            let ini_pattern = paths.workers_enabled.join(format!("{}*.ini", app));
+            let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", app));
+            let ini_pattern = paths.workers_enabled.join(format!("{}-*.ini", app));
 
             let toml_count = match glob::glob(toml_pattern.to_str().unwrap_or("")) {
                 Ok(g) => g.count(),
@@ -626,8 +642,8 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
     let app = exit_if_invalid(app, &paths.app_root)?;
 
     // Check for running worker configs (both .toml and .ini)
-    let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
-    let ini_pattern = paths.workers_enabled.join(format!("{}*.ini", app));
+    let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", app));
+    let ini_pattern = paths.workers_enabled.join(format!("{}-*.ini", app));
     let mut worker_configs: Vec<_> = match glob::glob(toml_pattern.to_str().unwrap_or("")) {
         Ok(g) => g.filter_map(|r| r.ok()).collect(),
         Err(e) => {
@@ -735,12 +751,14 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
 
         for config_path in worker_configs {
             if let Some(filename) = config_path.file_name().and_then(|s| s.to_str()) {
-                // Parse filename: app-kind-ordinal.toml or app-kind-ordinal.ini
+                // Parse filename: {app}-{kind}-{ordinal}.toml/.ini
+                // Strip the extension, then strip the known "{app}-" prefix so
+                // that hyphens within the app name do not break the parse.
                 let stem = filename.trim_end_matches(".toml").trim_end_matches(".ini");
-                let parts: Vec<&str> = stem.split('-').collect();
-                if parts.len() >= 3 {
-                    let kind = parts[1];
-                    let ordinal = parts.get(2).unwrap_or(&"1");
+                let prefix = format!("{}-", app);
+                let remainder = stem.strip_prefix(prefix.as_str()).unwrap_or("");
+                // remainder is now "{kind}-{ordinal}"
+                if let Some((kind, ordinal)) = remainder.split_once('-') {
                     let process_name = format!("{}-{}-{}", app, kind, ordinal);
 
                     // Get PID and status from stats if available
@@ -997,7 +1015,7 @@ fn do_stop(paths: &RikuPaths, app: &str) {
     let mut configs: Vec<std::path::PathBuf> = Vec::new();
 
     for ext in &["ini", "toml"] {
-        let pattern = paths.workers_enabled.join(format!("{}*.{}", app, ext));
+        let pattern = paths.workers_enabled.join(format!("{}-*.{}", app, ext));
         if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
             for entry in entries.flatten() {
                 configs.push(entry);
@@ -1223,7 +1241,7 @@ pub fn cmd_stats_all(paths: &RikuPaths) -> Result<()> {
         let app_name = entry.file_name().to_string_lossy().to_string();
 
         // Count workers
-        let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app_name));
+        let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", app_name));
         let worker_count = glob::glob(toml_pattern.to_str().unwrap_or(""))
             .map(|g| g.count())
             .unwrap_or(0);
@@ -1310,7 +1328,7 @@ pub fn cmd_stats_app(paths: &RikuPaths, app: &str) -> Result<()> {
     // Fallback: show basic info
     println!("{}", format!("=== Processes for '{}' ===", app).green());
 
-    let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
+    let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", app));
     let worker_configs: Vec<_> = glob::glob(toml_pattern.to_str().unwrap_or(""))
         .map(|g| g.filter_map(|r| r.ok()).collect())
         .unwrap_or_else(|_| Vec::new());
@@ -1347,7 +1365,7 @@ pub fn cmd_hot_reload(paths: &RikuPaths, app: &str) -> Result<()> {
     // Signal the supervisor by updating the mtime of each enabled worker TOML.
     // The supervisor's file watcher (notify) detects the Modify event and reloads the config.
     // We achieve a real mtime bump by reading the content and writing it back.
-    let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
+    let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", app));
 
     if let Ok(entries) = glob::glob(toml_pattern.to_str().unwrap_or("")) {
         let mut count = 0;
@@ -1538,8 +1556,8 @@ pub fn cmd_apps_info(paths: &RikuPaths, app: &str) -> Result<()> {
     }
 
     // Process status
-    let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
-    let ini_pattern = paths.workers_enabled.join(format!("{}*.ini", app));
+    let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", app));
+    let ini_pattern = paths.workers_enabled.join(format!("{}-*.ini", app));
 
     let toml_count = glob::glob(toml_pattern.to_str().unwrap_or(""))
         .map(|g| g.count())

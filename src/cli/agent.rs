@@ -850,8 +850,8 @@ fn cmd_agent_apps(paths: &RikuPaths) -> AgentResponse {
 }
 
 fn check_app_running(paths: &RikuPaths, app: &str) -> bool {
-    let ini_pattern = paths.workers_enabled.join(format!("{}*.ini", app));
-    let toml_pattern = paths.workers_enabled.join(format!("{}*.toml", app));
+    let ini_pattern = paths.workers_enabled.join(format!("{}-*.ini", app));
+    let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", app));
 
     let ini_matches = glob::glob(ini_pattern.to_str().unwrap_or(""))
         .map(|g| g.count())
@@ -1068,7 +1068,7 @@ fn cmd_agent_ps(paths: &RikuPaths, app: &str) -> AgentResponse {
     };
 
     // Count workers
-    let pattern = paths.workers_enabled.join(format!("{}*.toml", app));
+    let pattern = paths.workers_enabled.join(format!("{}-*.toml", app));
     let worker_count = glob::glob(pattern.to_str().unwrap_or(""))
         .map(|g| g.count())
         .unwrap_or(0);

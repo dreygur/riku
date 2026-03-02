@@ -88,9 +88,17 @@ static ENVVAR_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\$(\w+|\{([^}]*)\})").
 
 /// Verify that a resolved (canonicalized) path stays within an expected root directory.
 /// Returns Ok(()) if the path is within bounds, Err otherwise.
+///
+/// Both `path` and `root` must exist on the filesystem; if either cannot be
+/// canonicalized (e.g. because it does not exist or is a dangling symlink)
+/// this function returns Err rather than falling back to the raw path.
+/// Falling back would silently bypass the traversal check for non-existent
+/// paths (an attacker could supply a path that only exists after the check).
 pub fn ensure_path_within(path: &Path, root: &Path) -> Result<()> {
-    let resolved = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-    let root_resolved = fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let resolved = fs::canonicalize(path)
+        .map_err(|e| anyhow::anyhow!("Cannot resolve path '{}': {}", path.display(), e))?;
+    let root_resolved = fs::canonicalize(root)
+        .map_err(|e| anyhow::anyhow!("Cannot resolve root '{}': {}", root.display(), e))?;
     if !resolved.starts_with(&root_resolved) {
         return Err(anyhow::anyhow!(
             "Path '{}' escapes expected root '{}'",
