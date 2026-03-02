@@ -68,14 +68,14 @@ git push riku main
 
 Or use environment variables:
 ```bash
-riku config:set myapp RIKU_WORKER_PROCESSES="web=4,worker=2"
+riku config set myapp RIKU_WORKER_PROCESSES="web=4,worker=2"
 ```
 
 **Q: How do I set environment variables?**
 
 **A:** Use the config command:
 ```bash
-riku config:set myapp KEY=value ANOTHER_KEY=value2
+riku config set myapp KEY=value ANOTHER_KEY=value2
 ```
 
 Or create an `ENV` file in `~/.riku/envs/myapp/ENV`.
@@ -155,7 +155,7 @@ tar -czf backup.tar.gz ~/.riku/apps/myapp
 
 **A:** Set the domain and enable HTTPS redirect:
 ```bash
-riku config:set myapp NGINX_SERVER_NAME=example.com NGINX_HTTPS_ONLY=true
+riku config set myapp NGINX_SERVER_NAME=example.com NGINX_HTTPS_ONLY=true
 ```
 
 Then obtain SSL certificates (ACME support is built-in).
@@ -178,7 +178,7 @@ cron: 0 2 * * * /path/to/script.sh
 
 **Q: Does Riku support zero-downtime deployments?**
 
-**A:** Yes! The supervisor gracefully restarts workers. Set `RIKU_AUTO_RESTART=true` (default) for automatic restarts on deploy.
+**A:** Yes! Use `riku restart myapp --hot` for a rolling zero-downtime restart. Standard `riku restart` does a graceful restart (brief downtime). Set `RIKU_AUTO_RESTART=true` (default) for automatic restarts on deploy.
 
 ## Migration from Piku
 
@@ -201,7 +201,7 @@ cron: 0 2 * * * /path/to/script.sh
 **A:** Riku doesn't use uWSGI. Replace uWSGI-specific env vars with Riku equivalents:
 - `UWSGI_PROCESSES` → Use `SCALING` file or `RIKU_WORKER_PROCESSES`
 - `UWSGI_MAX_REQUESTS` → Not needed (handled by supervisor)
-- `UWSGI_*` → See `docs/ENV.md` for deprecated list
+- `UWSGI_*` → See [docs/docs/env.md](env.md) for the full variable reference
 
 ## Performance
 

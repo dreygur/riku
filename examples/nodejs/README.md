@@ -23,17 +23,17 @@ git push riku main
 
 ```bash
 # Set custom port
-riku config:set nodejs-example PORT=3000
+riku config set nodejs-example PORT=3000
 
 # Set Node environment
-riku config:set nodejs-example NODE_ENV=production
+riku config set nodejs-example NODE_ENV=production
 ```
 
 ### 3. Access Your App
 
 ```bash
 # Get the app URL (if domain is configured)
-riku config:get nodejs-example NGINX_SERVER_NAME
+riku config get nodejs-example NGINX_SERVER_NAME
 
 # Or access via server IP
 curl http://your-server-ip

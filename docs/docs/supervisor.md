@@ -32,9 +32,9 @@ The supervisor:
          │
     ┌────┴─────────────────────────────┐
     │  ~/.riku/workers-enabled/        │
-    │  ├── myapp-web.toml              │
-    │  ├── myapp-worker.toml           │
-    │  └── myapp-cron.toml             │
+     │  ├── myapp-web-1.toml            │
+     │  ├── myapp-worker-1.toml         │
+     │  └── myapp-cron-1.toml           │
     └──────────────────────────────────┘
          │
     ┌────┴────┐
@@ -74,7 +74,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=%h/.riku/riku supervisor
+ExecStart=%h/.local/bin/riku supervisor
 Restart=always
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 
@@ -169,13 +169,13 @@ git push riku main
 ### Using CLI
 
 ```bash
-riku ps scale myapp web=4 worker=2
+riku ps myapp --scale web=4 worker=2
 ```
 
 ### Using Environment Variable
 
 ```bash
-riku config:set myapp RIKU_WORKER_PROCESSES="web=4,worker=2"
+riku config set myapp RIKU_WORKER_PROCESSES="web=4,worker=2"
 ```
 
 ---
@@ -205,8 +205,8 @@ When a process fails:
 Configure restart behavior:
 
 ```bash
-riku config:set myapp RIKU_WORKER_TIMEOUT=3600
-riku config:set myapp RIKU_MAX_RESTARTS=10
+riku config set myapp RIKU_WORKER_TIMEOUT=3600
+riku config set myapp RIKU_MAX_RESTARTS=10
 ```
 
 ---
@@ -290,7 +290,7 @@ The supervisor handles log rotation automatically.
 ### Configure Rotation
 
 ```bash
-riku config:set myapp LOG_ROTATION_SIZE=5242880  # 5MB
+riku config set myapp LOG_ROTATION_SIZE=5242880  # 5MB
 ```
 
 ### View Logs
@@ -347,10 +347,10 @@ riku restart myapp
 riku stop myapp
 ```
 
-### Restart Specific Process
+### Restart App
 
 ```bash
-riku ps restart myapp web
+riku restart myapp
 ```
 
 ### View Running Processes
@@ -393,7 +393,7 @@ ps aux | grep myapp
 
 2. **Increase timeout:**
    ```bash
-   riku config:set myapp RIKU_WORKER_TIMEOUT=7200
+   riku config set myapp RIKU_WORKER_TIMEOUT=7200
    ```
 
 3. **Check resource limits:**
@@ -406,7 +406,7 @@ ps aux | grep myapp
 
 1. **Verify cron expression:**
    ```bash
-   cat ~/.riku/workers-enabled/myapp-cron.toml
+   cat ~/.riku/workers-enabled/myapp-cron-1.toml
    ```
 
 2. **Check supervisor logs:**
@@ -428,7 +428,7 @@ ps aux | grep myapp
 
 2. **Reduce worker count:**
    ```bash
-   riku ps scale myapp web=1
+   riku ps myapp --scale web=1
    ```
 
 3. **Set memory limits** (via cgroups or container)

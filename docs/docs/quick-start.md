@@ -75,7 +75,7 @@ ssh-keygen -t ed25519 -C "your-email@example.com"
 ssh-copy-id deploy@your-server-ip
 
 # Or manually add it
-riku setup ssh ~/.ssh/id_ed25519.pub
+cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
 ```
 
 ---
@@ -209,7 +209,7 @@ When you push to Riku:
 |------|---------|
 | View logs | `riku logs myapp` |
 | Scale workers | `echo "web=4" > SCALING && git push riku main` |
-| Set env vars | `riku config:set myapp KEY=value` |
+| Set env vars | `riku config set myapp KEY=value` |
 | Restart app | `riku restart myapp` |
 | Stop app | `riku stop myapp` |
 
@@ -230,10 +230,10 @@ A record: *.example.com → your-server-ip
 
 ```bash
 # Set domain name
-riku config:set myapp NGINX_SERVER_NAME=example.com
+riku config set myapp NGINX_SERVER_NAME=example.com
 
 # Enable HTTPS (after getting SSL cert)
-riku config:set myapp NGINX_HTTPS_ONLY=true
+riku config set myapp NGINX_HTTPS_ONLY=true
 ```
 
 ---

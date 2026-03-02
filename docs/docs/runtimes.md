@@ -10,8 +10,8 @@ Riku supports multiple programming languages and frameworks. This guide covers d
 
 Riku detects Python apps by the presence of:
 - `requirements.txt` - Standard pip
-- `pyproject.toml` + `poetry.lock` - Poetry
-- `pyproject.toml` + `uv.lock` - uv
+- `pyproject.toml` + `poetry` binary on PATH - Poetry
+- `pyproject.toml` + `uv` binary on PATH - uv
 
 ### Standard Pip
 
@@ -117,17 +117,17 @@ web: node server.js
 
 **npm (default):**
 ```bash
-riku config:set myapp NODE_PACKAGE_MANAGER=npm
+riku config set myapp NODE_PACKAGE_MANAGER=npm
 ```
 
 **yarn:**
 ```bash
-riku config:set myapp NODE_PACKAGE_MANAGER=yarn
+riku config set myapp NODE_PACKAGE_MANAGER=yarn
 ```
 
 **pnpm:**
 ```bash
-riku config:set myapp NODE_PACKAGE_MANAGER=pnpm
+riku config set myapp NODE_PACKAGE_MANAGER=pnpm
 ```
 
 ### Environment Variables
@@ -368,7 +368,7 @@ web: lein run
 
 ### Detection
 
-Riku detects Rust apps by the presence of `Cargo.toml`.
+Riku detects Rust apps by the presence of both `Cargo.toml` **and** `rust-toolchain.toml`.
 
 ### Cargo.toml
 
@@ -435,7 +435,7 @@ Riku detects static sites when no runtime is detected but nginx can serve files 
 ### Configuration
 
 ```bash
-riku config:set myapp NGINX_STATIC_PATHS=/:public
+riku config set myapp NGINX_STATIC_PATHS=/:public
 ```
 
 ### Directory Structure
@@ -454,7 +454,7 @@ myapp/
 For single-page applications:
 
 ```bash
-riku config:set myapp NGINX_CATCH_ALL=index.html
+riku config set myapp NGINX_CATCH_ALL=index.html
 ```
 
 ---

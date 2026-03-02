@@ -26,7 +26,7 @@ I encourage users to also check out the original [Piku project](https://github.c
 - **Scaling**: Horizontal scaling with SCALING file or environment variables
 - **Plugin system**: Extensible functionality through shell-based plugins
 - **Cron scheduling**: Built-in cron job support via Procfile
-- **Zero-downtime deployments**: Process management with graceful restarts
+- **Zero-downtime deployments**: Hot reload support via `riku restart --hot`
 - **Environment variables**: Comprehensive env var support for configuration
 - **Static site hosting**: Serve static files directly via nginx
 - **SSL/HTTPS**: Automatic HTTPS redirect and SSL certificate support
@@ -157,8 +157,13 @@ git init
 
 2. Add your application code and create a Procfile:
 ```
-web: python app.py
+web: gunicorn app:app
 worker: python worker.py
+```
+
+Or for Node.js:
+```
+web: node server.js
 ```
 
 3. Push to deploy:
@@ -189,13 +194,13 @@ git push riku main
 ### Application Management
 - `riku apps` - List deployed applications
 - `riku deploy <app>` - Force redeploy an application
-- `riku destroy <app>` - Remove an application
+- `riku destroy <app>` - Remove an application (preserves `~/.riku/data/<app>/` and `~/.riku/cache/<app>/`)
 - `riku logs <app> [process]` - View application logs
 - `riku restart <app>` - Restart an application
 - `riku stop <app>` - Stop an application
 
 ### Configuration Management
-- `riku config <app>` - Show application configuration
+- `riku config show <app>` - Show application configuration
 - `riku config get <app> <key>` - Get a specific configuration value
 - `riku config set <app> KEY=VALUE...` - Set configuration values
 - `riku config unset <app> KEY...` - Remove configuration values
@@ -203,7 +208,7 @@ git push riku main
 
 ### Process Management
 - `riku ps <app>` - Show process counts
-- `riku ps scale <app> web=2 worker=1` - Scale processes
+- `riku ps <app> --scale web=2 worker=1` - Scale processes
 
 ### Running Commands
 - `riku run <app> command...` - Execute commands in app context
@@ -256,9 +261,14 @@ See [AI Agents Documentation](docs/docs/ai-agents.md) for full details.
 ### Procfile
 Define processes in `Procfile`:
 ```
-web: python app.py
+web: gunicorn app:app
 worker: python worker.py
 cron: 0 2 * * * /path/to/script.sh
+```
+
+For Node.js:
+```
+web: node server.js
 ```
 
 ### Scaling
@@ -345,7 +355,7 @@ NGINX_CACHE_EXPIRY=86400               # Cache expiry (seconds)
 ACME_ROOT_CA=letsencrypt.org           # Certificate authority
 ```
 
-> **Note:** For uWSGI-specific variables from the original Piku, see `docs/ENV.md` for deprecated alternatives. Riku uses a custom supervisor, so uWSGI variables are not applicable.
+> **Note:** Riku uses a custom supervisor; uWSGI variables from the original Piku are not applicable. See [docs/docs/env.md](docs/docs/env.md) for the full variable reference.
 
 ### Nginx Integration
 Riku generates nginx configuration files based on application requirements and environment variables, supporting various deployment scenarios including HTTP, HTTPS, static file serving, and reverse proxy configurations.

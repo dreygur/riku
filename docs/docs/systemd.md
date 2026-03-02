@@ -1,84 +1,81 @@
 # Systemd Integration
 
-Riku includes optional systemd service files for running the supervisor daemon as a system service.
+Riku automatically generates and installs a systemd user service when you run `riku init`. No manual service file copying is required.
 
 ---
 
 ## Quick Start
 
-### Install and Enable Service
+### Enable the Service
+
+After running `riku init`, the service file is placed at `~/.config/systemd/user/riku.service`. Enable and start it:
 
 ```bash
-# As root, from the riku repository
-sudo cp contrib/systemd/*.service /etc/systemd/system/
-sudo cp contrib/systemd/*.path /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable riku
-sudo systemctl start riku
+systemctl --user daemon-reload
+systemctl --user enable riku
+systemctl --user start riku
 
 # Check status
-sudo systemctl status riku
+systemctl --user status riku
 ```
 
 ---
 
-## Service Files
+## Service File
 
-The following systemd units are available in `contrib/systemd/`:
-
-| File | Purpose |
-|------|---------|
-| `riku.service` | Main supervisor daemon service |
-| `riku-nginx.path` | Watches for nginx config changes |
-| `riku-nginx-reload.service` | Reloads nginx automatically |
-
----
-
-## Installation
-
-### 1. Copy Service Files
-
-```bash
-# As root
-sudo cp contrib/systemd/riku.service /etc/systemd/system/
-sudo cp contrib/systemd/riku-nginx.path /etc/systemd/system/
-sudo cp contrib/systemd/riku-nginx-reload.service /etc/systemd/system/
-```
-
-### 2. Update Paths (if needed)
-
-Edit `/etc/systemd/system/riku.service` if your installation differs:
+The generated service file (`~/.config/systemd/user/riku.service`) looks like:
 
 ```ini
+[Unit]
+Description=Riku Process Supervisor
+After=network.target
+
 [Service]
-WorkingDirectory=/home/deploy
-ExecStart=/home/deploy/.local/bin/riku supervisor
+Type=simple
+ExecStart=%h/.local/bin/riku supervisor
+Restart=always
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target
 ```
 
-### 3. Enable and Start
+**Note:** The binary is installed at `~/.local/bin/riku` (i.e., `%h/.local/bin/riku` in systemd notation).
 
-```bash
-# Reload systemd
-sudo systemctl daemon-reload
+---
 
-# Enable riku service (starts on boot)
-sudo systemctl enable riku
+## Nginx Auto-Reload
 
-# Start riku service
-sudo systemctl start riku
+To automatically reload nginx when Riku generates new configurations, enable a path watcher. Create `~/.config/systemd/user/riku-nginx.path`:
 
-# Check status
-sudo systemctl status riku
+```ini
+[Unit]
+Description=Watch for Riku nginx config changes
+
+[Path]
+PathChanged=%h/.riku/nginx
+
+[Install]
+WantedBy=default.target
 ```
 
-### 4. Enable Nginx Auto-Reload (Optional)
+And `~/.config/systemd/user/riku-nginx-reload.service`:
+
+```ini
+[Unit]
+Description=Reload nginx on Riku config change
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/sudo /bin/systemctl reload nginx
+```
+
+Enable:
 
 ```bash
-# Enable path watcher
-sudo systemctl enable riku-nginx.path
-
-# Start watcher
-sudo systemctl start riku-nginx.path
+systemctl --user daemon-reload
+systemctl --user enable riku-nginx.path
+systemctl --user start riku-nginx.path
 ```
 
 ---
@@ -89,65 +86,38 @@ sudo systemctl start riku-nginx.path
 
 ```bash
 # Check riku service status
-sudo systemctl status riku
+systemctl --user status riku
 
 # View logs
-sudo journalctl -u riku -f
+journalctl --user -u riku -f
 
 # Check if supervisor is running
-sudo systemctl is-active riku
+systemctl --user is-active riku
 ```
 
 ### Restart Service
 
 ```bash
-sudo systemctl restart riku
+systemctl --user restart riku
 ```
 
 ### Stop Service
 
 ```bash
-sudo systemctl stop riku
+systemctl --user stop riku
 ```
 
 ### View Logs
 
 ```bash
 # Recent logs
-sudo journalctl -u riku -n 50
+journalctl --user -u riku -n 50
 
 # Follow logs in real-time
-sudo journalctl -u riku -f
+journalctl --user -u riku -f
 
 # Logs from today
-sudo journalctl -u riku --since today
-```
-
----
-
-## Configuration
-
-### Resource Limits
-
-The default service includes resource limits:
-
-```ini
-MemoryMax=512M
-CPUQuota=50%
-```
-
-Adjust in `/etc/systemd/system/riku.service` if needed.
-
-### Security Hardening
-
-The service includes security features:
-
-```ini
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=read-only
-PrivateTmp=true
-ReadWritePaths=/home/deploy/.riku
+journalctl --user -u riku --since today
 ```
 
 ---
@@ -158,24 +128,21 @@ ReadWritePaths=/home/deploy/.riku
 
 ```bash
 # Check for errors
-sudo systemctl status riku
-sudo journalctl -u riku -n 100
+systemctl --user status riku
+journalctl --user -u riku -n 100
 
 # Verify binary exists
-ls -la /home/deploy/.local/bin/riku
+ls -la ~/.local/bin/riku
 
 # Test binary manually
-sudo -u deploy /home/deploy/.local/bin/riku --help
+~/.local/bin/riku --help
 ```
 
 ### Nginx Not Reloading
 
 ```bash
 # Check path watcher status
-systemctl status riku-nginx.path
-
-# Check nginx reload service
-sudo systemctl status riku-nginx-reload.service
+systemctl --user status riku-nginx.path
 
 # Test nginx configuration
 sudo nginx -t
@@ -187,23 +154,20 @@ sudo nginx -t
 
 ```bash
 # Stop and disable services
-sudo systemctl stop riku
-sudo systemctl disable riku
-sudo systemctl stop riku-nginx.path
-sudo systemctl disable riku-nginx.path
+systemctl --user stop riku
+systemctl --user disable riku
 
 # Remove service files
-sudo rm /etc/systemd/system/riku.service
-sudo rm /etc/systemd/system/riku-nginx.path
-sudo rm /etc/systemd/system/riku-nginx-reload.service
+rm ~/.config/systemd/user/riku.service
+rm -f ~/.config/systemd/user/riku-nginx.path
+rm -f ~/.config/systemd/user/riku-nginx-reload.service
 
 # Reload systemd
-sudo systemctl daemon-reload
+systemctl --user daemon-reload
 ```
 
 ---
 
 ## See Also
 
-- [Systemd Files](https://github.com/dreygur/riku/tree/main/contrib/systemd) - Source files on GitHub
 - [Nginx Configuration](nginx.md) - How Riku generates nginx configs

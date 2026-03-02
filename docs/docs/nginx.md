@@ -44,7 +44,7 @@ Custom configs are included at the end of the generated config.
 | `NGINX_SERVER_NAME` | Domain name for the app | (none) |
 | `NGINX_HTTPS_ONLY` | Force HTTPS redirect | `false` |
 | `DISABLE_IPV6` | Disable IPv6 | `false` |
-| `BIND_ADDRESS` | Backend bind address | `0.0.0.0` |
+| `BIND_ADDRESS` | Backend bind address | `127.0.0.1` |
 
 ### Static Files
 
@@ -222,7 +222,7 @@ location /api/ {
 
 Set in ENV:
 ```bash
-riku config:set myapp NGINX_INCLUDE_FILE=myapp.custom.conf
+riku config set myapp NGINX_INCLUDE_FILE=myapp.custom.conf
 ```
 
 ---
@@ -235,12 +235,12 @@ Riku supports ACME (Let's Encrypt) for automatic SSL certificates.
 
 1. **Set domain:**
    ```bash
-   riku config:set myapp NGINX_SERVER_NAME=example.com
+   riku config set myapp NGINX_SERVER_NAME=example.com
    ```
 
 2. **Enable HTTPS:**
    ```bash
-   riku config:set myapp NGINX_HTTPS_ONLY=true
+   riku config set myapp NGINX_HTTPS_ONLY=true
    ```
 
 3. **Obtain certificate:**

@@ -188,5 +188,5 @@ esac
 
 ## See Also
 
-- [Server-side Plugins](../../docs/PLUGINS.md) - Extend Riku on the server
-- [Environment Variables](../../docs/ENV.md) - Configure your apps
+- [Server-side Plugins](../../docs/docs/plugins.md) - Extend Riku on the server
+- [Environment Variables](../../docs/docs/env.md) - Configure your apps
