@@ -4,9 +4,8 @@
 
 use anyhow::Result;
 use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::{self, Write};
 use std::path::Path;
-use std::time::UNIX_EPOCH;
 
 /// Log rotation configuration.
 #[derive(Debug, Clone)]
@@ -89,17 +88,17 @@ impl LogRotator {
             }
         }
 
-        // Rotate current log
+        // Rotate current log by streaming (avoids reading the whole file into RAM).
         let rotated_path = log_dir.join(format!("{}.1", log_name));
-
-        // Copy current log to rotated (in case file is open)
         let mut src = File::open(log_path)?;
         let mut dst = File::create(&rotated_path)?;
-        let mut buffer = Vec::new();
-        src.read_to_end(&mut buffer)?;
-        dst.write_all(&buffer)?;
+        io::copy(&mut src, &mut dst)?;
+        dst.flush()?;
+        drop(src);
+        drop(dst);
 
-        // Truncate original log file
+        // Truncate the original log file in-place so open file descriptors held
+        // by log-capture threads remain valid and continue writing to position 0.
         let log_file = OpenOptions::new()
             .write(true)
             .truncate(true)
@@ -164,7 +163,7 @@ pub fn get_log_size(log_path: &Path) -> Result<u64> {
     Ok(fs::metadata(log_path)?.len())
 }
 
-/// Get log file age in seconds.
+/// Get log file age in seconds (time elapsed since last modification).
 #[allow(dead_code)]
 pub fn get_log_age(log_path: &Path) -> Result<u64> {
     if !log_path.exists() {
@@ -173,8 +172,9 @@ pub fn get_log_age(log_path: &Path) -> Result<u64> {
 
     let metadata = fs::metadata(log_path)?;
     let modified = metadata.modified()?;
-    let duration = modified.duration_since(UNIX_EPOCH)?;
-    Ok(duration.as_secs())
+    // elapsed() returns the duration since `modified`; if the clock went
+    // backwards we fall back to 0 rather than panicking.
+    Ok(modified.elapsed().unwrap_or_default().as_secs())
 }
 
 #[cfg(test)]

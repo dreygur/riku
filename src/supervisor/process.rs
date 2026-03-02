@@ -381,6 +381,10 @@ impl ProcessManager {
                         "Process {} has crashed {} time(s) (max_restarts={}), giving up",
                         process_id, process.restart_count, max_restarts
                     );
+                    // Mark as failed in stats and queue for removal so the dead child
+                    // entry is dropped (reaping the zombie) and stops polluting logs.
+                    self.stats.mark_crashed(process_id);
+                    to_restart.push(format!("__remove__{}", process_id));
                     continue;
                 }
 
@@ -442,9 +446,19 @@ impl ProcessManager {
             }
         }
 
-        // Restart processes that need it
+        // Restart processes that need it; entries prefixed "__remove__" are
+        // permanently failed processes that must be removed without restarting.
         for process_id in to_restart {
-            self.restart_process(&process_id)?;
+            if let Some(id) = process_id.strip_prefix("__remove__") {
+                // Remove the dead entry so Drop reaps the zombie child.
+                self.processes.remove(id);
+                eprintln!(
+                    "Process {} permanently failed; removed from supervision",
+                    id
+                );
+            } else {
+                self.restart_process(&process_id)?;
+            }
         }
 
         Ok(())
@@ -522,40 +536,65 @@ impl ProcessManager {
     }
 
     /// Hot reload a process - graceful restart with zero downtime.
+    ///
+    /// Spawns the new process under a temporary key, gives it time to start,
+    /// then gracefully shuts down the old process and renames the new entry
+    /// to the canonical process_id. This avoids the race where spawn_process()
+    /// would stop the old process automatically when the key already exists.
     #[allow(dead_code)]
     pub fn hot_reload_process(&mut self, process_id: &str) -> Result<()> {
-        if let Some(process) = self.processes.get(process_id) {
-            let config = process.config.clone();
-            let old_pid = process.pid_as_u32();
+        let (config, old_pid) = match self.processes.get(process_id) {
+            Some(p) => (p.config.clone(), p.pid_as_u32()),
+            None => return Ok(()),
+        };
 
-            println!("Hot reloading process {} (PID: {})", process_id, old_pid);
+        println!("Hot reloading process {} (PID: {})", process_id, old_pid);
 
-            // Spawn new process first
-            self.spawn_process(&config)?;
+        // Spawn new process under a temporary key so spawn_process() does not
+        // automatically stop the old entry (which lives under process_id).
+        let temp_id = format!("{}__hot_new", process_id);
+        let mut new_config = config.clone();
+        // Temporarily change the ordinal to produce a different process_id key.
+        // We will rename it back after the old process is stopped.
+        new_config.worker.ordinal = new_config.worker.ordinal.wrapping_add(u32::MAX / 2);
+        self.spawn_process(&new_config)?;
+        let new_temp_key = format!(
+            "{}-{}-{}",
+            new_config.worker.app, new_config.worker.kind, new_config.worker.ordinal
+        );
 
-            // Give new process time to start
-            thread::sleep(Duration::from_millis(500));
+        // Give the new process time to start and become ready.
+        thread::sleep(Duration::from_millis(500));
 
-            // Gracefully stop old process
-            if let Some(mut old_process) = self.processes.remove(process_id) {
-                old_process.terminate()?;
-
-                // Wait for graceful shutdown
-                let mut attempts = 0;
-                while old_process.is_running() && attempts < 30 {
-                    thread::sleep(Duration::from_millis(100));
-                    attempts += 1;
-                }
-
-                // Force kill if still running
-                if old_process.is_running() {
-                    old_process.kill()?;
-                }
+        // Remove the old process entry (Drop triggers SIGTERM → wait → SIGKILL).
+        if let Some(mut old_process) = self.processes.remove(process_id) {
+            let grace = old_process.config.options.grace_period;
+            old_process.terminate()?;
+            let deadline = Duration::from_secs(grace);
+            let poll = Duration::from_millis(100);
+            let mut elapsed = Duration::ZERO;
+            while old_process.is_running() && elapsed < deadline {
+                thread::sleep(poll);
+                elapsed += poll;
             }
-
-            println!("Hot reload complete for {}", process_id);
+            if old_process.is_running() {
+                old_process.kill()?;
+                thread::sleep(Duration::from_millis(100));
+            }
         }
 
+        // Rename the new process entry from the temp key back to the canonical key.
+        if let Some(mut new_process) = self.processes.remove(&new_temp_key) {
+            // Restore the original ordinal in the config so stats and future
+            // operations use the correct process_id.
+            new_process.config.worker.ordinal = config.worker.ordinal;
+            self.processes.insert(process_id.to_string(), new_process);
+        }
+
+        // Also clean up the temp_id entry if it was inserted under yet another key.
+        self.processes.remove(&temp_id);
+
+        println!("Hot reload complete for {}", process_id);
         Ok(())
     }
 
@@ -576,32 +615,12 @@ impl ProcessManager {
         Ok(())
     }
 
-    /// Stop all managed processes.
+    /// Stop all managed processes, respecting each process's configured grace_period.
     pub fn stop_all_processes(&mut self) -> Result<()> {
         let process_ids: Vec<String> = self.processes.keys().cloned().collect();
 
         for process_id in process_ids {
-            println!("Stopping process: {}", process_id);
-            if let Some(mut process) = self.processes.remove(&process_id) {
-                process.terminate()?;
-
-                let mut attempts = 0;
-                while process.is_running() && attempts < 10 {
-                    std::thread::sleep(std::time::Duration::from_millis(1000));
-                    attempts += 1;
-                }
-
-                if process.is_running() {
-                    println!(
-                        "Process {} didn't respond to SIGTERM, sending SIGKILL",
-                        process_id
-                    );
-                    process.kill()?;
-                    std::thread::sleep(std::time::Duration::from_millis(500));
-                }
-
-                println!("Process {} stopped", process_id);
-            }
+            self.stop_process_by_id(&process_id)?;
         }
         Ok(())
     }

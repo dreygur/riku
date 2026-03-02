@@ -103,15 +103,15 @@ impl Supervisor {
 
         // Main event loop
         loop {
-            // Check if we should shut down
+            // Check if we should shut down (SIGTERM/SIGINT received)
             if !is_running() {
-                println!("\nShutting down supervisor...");
+                println!("\nReceived shutdown signal. Shutting down supervisor...");
                 break;
             }
 
             // Check if reload was requested via SIGHUP
             if RELOAD_REQUESTED.load(Ordering::SeqCst) {
-                println!("Reloading all configurations...");
+                println!("Received SIGHUP. Reloading all configurations...");
                 self.reload_all_configs()?;
                 RELOAD_REQUESTED.store(false, Ordering::SeqCst);
             }
@@ -289,12 +289,21 @@ impl Supervisor {
                                     if let Some(old_modified) = self.watched_configs.get(filename) {
                                         if new_modified > *old_modified {
                                             println!("Config file modified: {}", filename);
-                                            // Reload the config
                                             self.unload_config(filename)?;
                                             self.load_config_file(&path, filename)?;
                                             self.watched_configs
                                                 .insert(filename.to_string(), new_modified);
                                         }
+                                    } else {
+                                        // File not yet tracked (e.g. atomic-write editors send
+                                        // Modify before Create). Treat as a new config.
+                                        println!(
+                                            "New config file detected via Modify: {}",
+                                            filename
+                                        );
+                                        self.load_config_file(&path, filename)?;
+                                        self.watched_configs
+                                            .insert(filename.to_string(), new_modified);
                                     }
                                 }
                             }
@@ -406,58 +415,112 @@ impl Supervisor {
     }
 
     /// Check and execute cron jobs that are due.
+    ///
+    /// Each due job is run in its own thread so it cannot block the supervisor
+    /// main loop. The `next_run` time is updated using the exact `job_id` so
+    /// that all jobs for the same app are advanced independently (Bug #5 fix).
+    /// Working directory and environment variables are taken from the app's
+    /// worker config in `workers-enabled/` when available.
     fn check_cron_jobs(&mut self) -> Result<()> {
-        // Collect jobs to run first (we need to clone to avoid borrow issues)
+        // Collect (job_id, app, command) for every job that is due.
+        // We clone here to avoid holding an immutable borrow while we later
+        // call mark_job_run (which takes &mut self).
         let jobs_to_run: Vec<(String, String, String)> = self
             .cron_scheduler
-            .get_jobs_to_run()
+            .get_jobs()
             .iter()
-            .map(|j| (j.app.clone(), j.schedule.clone(), j.command.clone()))
+            .filter(|(_id, job)| job.should_run_now())
+            .map(|(id, job)| (id.clone(), job.app.clone(), job.command.clone()))
             .collect();
 
-        // Execute jobs
-        for (app, _schedule, command) in jobs_to_run {
-            let output = std::process::Command::new("sh")
-                .arg("-c")
-                .arg(&command)
-                .output();
+        for (job_id, app, command) in jobs_to_run {
+            // Try to find the app's working directory and env vars from any
+            // existing worker config file so the cron command has the right
+            // context (e.g. virtualenv PATH, DATABASE_URL, etc.).
+            let (working_dir, env_vars) = self.get_app_context(&app);
 
-            match output {
-                Ok(out) if out.status.success() => {
-                    println!("Cron job for app '{}' completed successfully", app);
+            // Spawn each cron job in its own thread so a slow job cannot stall
+            // process health-checking or stats writing in the main loop.
+            let app_clone = app.clone();
+            let job_id_clone = job_id.clone();
+            std::thread::spawn(move || {
+                let mut cmd = std::process::Command::new("sh");
+                cmd.arg("-c").arg(&command);
+                if let Some(ref dir) = working_dir {
+                    cmd.current_dir(dir);
                 }
-                Ok(out) => {
-                    eprintln!(
-                        "Cron job for app '{}' failed: {}",
-                        app,
-                        String::from_utf8_lossy(&out.stderr)
-                    );
+                for (k, v) in &env_vars {
+                    cmd.env(k, v);
                 }
-                Err(e) => {
-                    eprintln!("Error executing cron job for app '{}': {}", app, e);
+                match cmd.output() {
+                    Ok(out) if out.status.success() => {
+                        println!(
+                            "Cron job {} for app '{}' completed successfully",
+                            job_id_clone, app_clone
+                        );
+                    }
+                    Ok(out) => {
+                        eprintln!(
+                            "Cron job {} for app '{}' failed: {}",
+                            job_id_clone,
+                            app_clone,
+                            String::from_utf8_lossy(&out.stderr)
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "Error executing cron job {} for app '{}': {}",
+                            job_id_clone, app_clone, e
+                        );
+                    }
                 }
-            }
+            });
 
-            // Update next run time - get job index from the scheduler
-            if let Some(job_id) = self
-                .cron_scheduler
-                .get_jobs()
-                .keys()
-                .find(|k| k.starts_with(&format!("{}-cron-", app)))
-            {
-                if let Some(idx) = job_id.rsplit('-').next() {
-                    if let Ok(index) = idx.parse::<usize>() {
-                        let _ = self.cron_scheduler.mark_job_run(&app, index);
+            // Update next_run using the exact job_id (Bug #5 fix: each job
+            // is advanced independently, not just the first matching one).
+            if let Some(idx) = job_id.rsplit('-').next() {
+                if let Ok(index) = idx.parse::<usize>() {
+                    if let Err(e) = self.cron_scheduler.mark_job_run(&app, index) {
+                        eprintln!("Failed to update next_run for cron job {}: {}", job_id, e);
                     }
                 }
             }
         }
 
-        // Remove apps that no longer have cron workers from scheduler
-        // (This would require access to the current Procfile, which we don't have here)
-        // For now, cron jobs persist until supervisor restart
-
         Ok(())
+    }
+
+    /// Return the working directory and environment variables for an app by
+    /// reading the first matching worker config file from workers-enabled/.
+    fn get_app_context(&self, app: &str) -> (Option<String>, HashMap<String, String>) {
+        let workers_enabled = self.config_dir.clone();
+        let mut env_vars: HashMap<String, String> = HashMap::new();
+        let mut working_dir: Option<String> = None;
+
+        if let Ok(entries) = fs::read_dir(&workers_enabled) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) != Some("toml") {
+                    continue;
+                }
+                let fname = path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or_default();
+                if !fname.starts_with(&format!("{}-", app)) {
+                    continue;
+                }
+                if let Ok(content) = fs::read_to_string(&path) {
+                    if let Ok(cfg) = toml::from_str::<WorkerConfig>(&content) {
+                        working_dir = Some(cfg.options.working_dir.clone());
+                        env_vars = cfg.env.clone();
+                        break;
+                    }
+                }
+            }
+        }
+
+        (working_dir, env_vars)
     }
 
     /// Load cron jobs from an app's Procfile.
@@ -518,18 +581,20 @@ pub fn setup_signal_handlers() -> Result<()> {
     {
         use nix::sys::signal::{sigaction, SaFlags, SigAction, SigHandler, Signal};
 
+        // SAFETY: Only async-signal-safe operations (atomic stores) are performed
+        // inside these handlers. println!/eprintln! are NOT async-signal-safe and
+        // must not be called here as they can deadlock if the signal interrupts a
+        // write or allocation in the main thread. The main loop logs the event
+        // after observing the flag change.
         extern "C" fn handle_sigterm(_: i32) {
-            println!("Received SIGTERM, shutting down gracefully...");
             RUNNING.store(false, Ordering::SeqCst);
         }
 
         extern "C" fn handle_sigint(_: i32) {
-            println!("Received SIGINT, shutting down gracefully...");
             RUNNING.store(false, Ordering::SeqCst);
         }
 
         extern "C" fn handle_sighup(_: i32) {
-            println!("Received SIGHUP, reloading configurations...");
             RELOAD_REQUESTED.store(true, Ordering::SeqCst);
         }
 
