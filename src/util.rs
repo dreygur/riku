@@ -128,9 +128,30 @@ pub fn sanitize_app_name(app: &str) -> String {
     sanitized
 }
 
+/// Validate and sanitize app name, returning an error if invalid.
+pub fn validate_app_name(app: &str) -> Result<String> {
+    let sanitized = sanitize_app_name(app);
+    if sanitized.is_empty() {
+        return Err(anyhow::anyhow!(
+            "Invalid app name '{}': contains invalid characters or path traversal sequences",
+            app
+        ));
+    }
+    Ok(sanitized)
+}
+
 /// Sanitize name, check app dir exists, exit(1) if not.
 pub fn exit_if_invalid(app: &str, app_root: &Path) -> Result<String> {
     let app = sanitize_app_name(app);
+    if app.is_empty() {
+        echo(&format!("Error: invalid app name '{}'.", app), "red");
+        echo(
+            "App names must contain only alphanumeric characters, dots, underscores, and hyphens.",
+            "yellow",
+        );
+        echo("Path traversal sequences (..) are not allowed.", "yellow");
+        process::exit(1);
+    }
     if !app_root.join(&app).exists() {
         echo(&format!("Error: app '{}' not found.", app), "red");
         echo("", "");

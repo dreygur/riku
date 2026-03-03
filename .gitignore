@@ -96,6 +96,7 @@ acme/
 *.toml
 !Cargo.toml
 !rust-toolchain.toml
+!deny.toml
 
 # Procfile (app-specific, not repo)
 Procfile

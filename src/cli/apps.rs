@@ -12,9 +12,7 @@ use std::time::Duration;
 
 use crate::config::{RikuPaths, RIKU_RAW_SOURCE_URL};
 use crate::supervisor::Supervisor;
-use crate::util::{
-    echo, ensure_path_within, exit_if_invalid, parse_settings, sanitize_app_name, write_config,
-};
+use crate::util::{echo, ensure_path_within, exit_if_invalid, parse_settings, write_config};
 
 /// List apps, marking running ones with '*'.
 pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
@@ -1412,7 +1410,7 @@ pub fn cmd_hot_reload(paths: &RikuPaths, app: &str) -> Result<()> {
 pub fn cmd_apps_create(paths: &RikuPaths, name: &str) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
 
-    let app = sanitize_app_name(name);
+    let app = crate::util::validate_app_name(name)?;
 
     // Check if app already exists
     if paths.app_root.join(&app).exists() {
@@ -1490,7 +1488,7 @@ done
 
 /// Show detailed information about an application.
 pub fn cmd_apps_info(paths: &RikuPaths, app: &str) -> Result<()> {
-    let app = sanitize_app_name(app);
+    let app = crate::util::validate_app_name(app)?;
     let app_dir = paths.app_root.join(&app);
 
     // Check if app exists
