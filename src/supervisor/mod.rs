@@ -4,10 +4,13 @@
 //! handling process lifecycle, monitoring, and restart logic.
 
 use anyhow::Result;
-use std::sync::atomic::{AtomicBool, Ordering};
+use once_cell::sync::Lazy;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
-static RELOAD_REQUESTED: AtomicBool = AtomicBool::new(false);
+static RELOAD_COUNTER: AtomicUsize = AtomicUsize::new(0);
+static CONFIG_RELOAD_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 use notify::{Event, RecursiveMode, Watcher};
 use std::collections::HashMap;
@@ -15,11 +18,14 @@ use std::fs;
 use std::path::Path;
 use std::sync::mpsc;
 use std::time::Duration;
+use threadpool::ThreadPool;
 
 pub mod config;
 pub mod cron;
+pub mod health;
 pub mod log_rotation;
 pub mod process;
+pub mod resource_limits;
 pub mod stats;
 
 use config::WorkerConfig;
@@ -43,6 +49,11 @@ pub struct Supervisor {
     cron_scheduler: CronScheduler,
     last_cron_check: std::time::SystemTime,
     cron_check_interval: Duration,
+    start_time: std::time::SystemTime,
+    health_running: Arc<AtomicBool>,
+    cron_thread_pool: ThreadPool,
+    #[allow(dead_code)]
+    pid_file_lock: Option<fs::File>,
 }
 
 impl Supervisor {
@@ -77,7 +88,53 @@ impl Supervisor {
             cron_scheduler: CronScheduler::new(),
             last_cron_check: std::time::SystemTime::now(),
             cron_check_interval: Duration::from_secs(10), // Check cron jobs every 10 seconds
+            start_time: std::time::SystemTime::now(),
+            health_running: Arc::new(AtomicBool::new(true)),
+            cron_thread_pool: ThreadPool::new(10), // Max 10 concurrent cron jobs
+            pid_file_lock: None,                   // Will be set when PID file is created
         })
+    }
+
+    /// Create PID file with exclusive lock to prevent multiple supervisors.
+    ///
+    /// Returns Ok(File) with the locked file handle (lock is held until File is dropped).
+    /// Returns Err if another supervisor is already running.
+    fn create_pid_file_with_lock(&self, pid: u32) -> Result<fs::File> {
+        use std::fs::OpenOptions;
+        use std::io::Write;
+
+        // Create or open PID file
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&self.pid_file)?;
+
+        // Try to acquire exclusive lock (non-blocking)
+        #[cfg(unix)]
+        {
+            use nix::libc;
+            use std::os::unix::io::AsRawFd;
+
+            // Use libc::flock directly (portable across Unix systems)
+            let fd = file.as_raw_fd();
+            let result = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
+
+            if result != 0 {
+                return Err(anyhow::anyhow!(
+                    "Failed to lock PID file (another supervisor running?): {}",
+                    std::io::Error::last_os_error()
+                ));
+            }
+
+            // Lock is held until file descriptor is closed (when File is dropped)
+        }
+
+        // Write PID to file
+        writeln!(file, "{}", pid)?;
+        file.flush()?;
+
+        Ok(file)
     }
 
     /// Start the supervisor daemon loop.
@@ -86,17 +143,37 @@ impl Supervisor {
         println!("Monitoring: {}", self.config_dir.display());
         println!("Press Ctrl+C to stop");
 
-        // Write PID file so deploy can find us reliably without pgrep.
+        // Create PID file with exclusive lock to prevent multiple supervisors
         let my_pid = std::process::id();
-        if let Err(e) = fs::write(&self.pid_file, format!("{}\n", my_pid)) {
-            eprintln!(
-                "Warning: could not write PID file {:?}: {}",
-                self.pid_file, e
-            );
+        match self.create_pid_file_with_lock(my_pid) {
+            Ok(file) => {
+                self.pid_file_lock = Some(file);
+            }
+            Err(e) => {
+                return Err(anyhow::anyhow!(
+                    "Another supervisor is already running (PID file locked): {}",
+                    e
+                ));
+            }
         }
 
         // Set up signal handlers for graceful shutdown
         setup_signal_handlers()?;
+
+        // Start health check server
+        let health_port = std::env::var("RIKU_HEALTH_PORT")
+            .ok()
+            .and_then(|p| p.parse().ok())
+            .unwrap_or(9091);
+
+        if let Err(e) = health::start_health_server(
+            health_port,
+            self.health_running.clone(),
+            self.start_time,
+            self.stats_file.clone(),
+        ) {
+            eprintln!("Warning: Failed to start health server: {}", e);
+        }
 
         // Load existing configurations at startup
         self.load_initial_configs()?;
@@ -123,10 +200,14 @@ impl Supervisor {
             }
 
             // Check if reload was requested via SIGHUP
-            if RELOAD_REQUESTED.load(Ordering::SeqCst) {
-                println!("Received SIGHUP. Reloading all configurations...");
+            // Use swap to atomically get and reset the counter, preventing signal loss
+            let pending_reloads = RELOAD_COUNTER.swap(0, Ordering::SeqCst);
+            if pending_reloads > 0 {
+                println!(
+                    "Received {} reload request(s). Reloading all configurations...",
+                    pending_reloads
+                );
                 self.reload_all_configs()?;
-                RELOAD_REQUESTED.store(false, Ordering::SeqCst);
             }
 
             match rx.recv_timeout(Duration::from_secs(1)) {
@@ -182,11 +263,20 @@ impl Supervisor {
             }
         }
 
-        // Clean shutdown - stop all managed processes
+        // Clean shutdown
+        println!("Shutting down health server...");
+        self.health_running.store(false, Ordering::SeqCst);
+
+        println!("Waiting for cron jobs to complete...");
+        self.cron_thread_pool.join();
+
         println!("Stopping all managed processes...");
         self.process_manager.stop_all_processes()?;
 
-        // Remove PID file on clean exit.
+        // Drop PID file lock (releases exclusive lock automatically)
+        drop(self.pid_file_lock.take());
+
+        // Remove PID file on clean exit
         let _ = fs::remove_file(&self.pid_file);
 
         Ok(())
@@ -194,6 +284,9 @@ impl Supervisor {
 
     /// Reload all configurations - stop removed configs, start new/modified ones.
     fn reload_all_configs(&mut self) -> Result<()> {
+        // Acquire lock to prevent race with file watcher events
+        let _lock = CONFIG_RELOAD_LOCK.lock().unwrap();
+
         // Scan directory for current config files
         let mut current_configs: HashMap<String, std::path::PathBuf> = HashMap::new();
 
@@ -286,6 +379,9 @@ impl Supervisor {
 
     /// Handle file system events (create, modify, remove config files).
     fn handle_file_event(&mut self, event: Event) -> Result<()> {
+        // Acquire lock to prevent race with manual reload (SIGHUP)
+        let _lock = CONFIG_RELOAD_LOCK.lock().unwrap();
+
         for path in event.paths {
             if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
                 if path.extension().and_then(|s| s.to_str()) == Some("toml") {
@@ -469,13 +565,27 @@ impl Supervisor {
             // context (e.g. virtualenv PATH, DATABASE_URL, etc.).
             let (working_dir, env_vars) = self.get_app_context(&app);
 
-            // Spawn each cron job in its own thread so a slow job cannot stall
-            // process health-checking or stats writing in the main loop.
+            // Get resource limits from ProcessManager to apply to cron jobs
+            let limits = self.process_manager.get_resource_limits().clone();
+
+            // Execute cron job in thread pool to prevent unbounded thread creation.
+            // Thread pool limits concurrent cron jobs to prevent resource exhaustion.
             let app_clone = app.clone();
             let job_id_clone = job_id.clone();
-            std::thread::spawn(move || {
+            self.cron_thread_pool.execute(move || {
+                use std::os::unix::process::CommandExt;
+
                 let mut cmd = std::process::Command::new("sh");
                 cmd.arg("-c").arg(&command);
+
+                // Apply resource limits to cron jobs for security
+                unsafe {
+                    cmd.pre_exec(move || {
+                        limits.apply()?;
+                        Ok(())
+                    });
+                }
+
                 if let Some(ref dir) = working_dir {
                     cmd.current_dir(dir);
                 }
@@ -625,7 +735,7 @@ pub fn setup_signal_handlers() -> Result<()> {
         }
 
         extern "C" fn handle_sighup(_: i32) {
-            RELOAD_REQUESTED.store(true, Ordering::SeqCst);
+            RELOAD_COUNTER.fetch_add(1, Ordering::SeqCst);
         }
 
         unsafe {

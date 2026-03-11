@@ -327,7 +327,14 @@ impl StatsManager {
         let app_stats = self.get_all_stats();
         let json = serde_json::to_string_pretty(&app_stats)
             .map_err(|e| std::io::Error::other(e.to_string()))?;
-        fs::write(path, json)?;
+
+        // Write to temporary file first, then atomically rename
+        // This prevents corruption if supervisor crashes mid-write
+        let temp_path = path.with_extension("tmp");
+        fs::write(&temp_path, json)?;
+
+        // Atomic rename (guaranteed atomic on POSIX systems)
+        fs::rename(&temp_path, path)?;
         Ok(())
     }
 }

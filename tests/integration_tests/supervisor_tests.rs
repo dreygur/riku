@@ -4,14 +4,14 @@
 /// cron scheduler, and log rotation functionality.
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use anyhow::Result;
     use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
 
     // Helper to create a temporary Riku environment
-    fn setup_riku_env() -> Result<(TempDir, PathBuf)> {
+    pub fn setup_riku_env() -> Result<(TempDir, PathBuf)> {
         let temp_dir = TempDir::new()?;
         let riku_root = temp_dir.path().join(".riku");
 
@@ -39,7 +39,7 @@ mod tests {
     }
 
     // Helper to create a worker config TOML
-    fn create_worker_config(
+    pub fn create_worker_config(
         workers_dir: &PathBuf,
         app: &str,
         kind: &str,

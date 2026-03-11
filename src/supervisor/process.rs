@@ -3,7 +3,6 @@
 //! Handles spawning, monitoring, health checks, and managing application processes.
 
 use anyhow::Result;
-use nix::sys::resource::{setrlimit, Resource};
 use nix::sys::signal::{kill, Signal};
 use nix::unistd::{Gid, Pid, Uid};
 use std::collections::HashMap;
@@ -14,6 +13,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::supervisor::config::{HealthCheck, WorkerConfig};
+use crate::supervisor::resource_limits::ResourceLimits;
 use crate::supervisor::stats::{get_process_resources, HealthStatus, ProcessStatus, StatsManager};
 
 /// Represents a spawned application process with metadata.
@@ -60,15 +60,24 @@ impl SpawnedProcess {
         }
     }
 
-    /// Send a termination signal to the process.
+    /// Send a termination signal to the process and its entire process group.
+    ///
+    /// This kills all child processes spawned by the main process,
+    /// preventing orphaned background jobs.
     pub fn terminate(&mut self) -> Result<()> {
-        kill(self.pid, Signal::SIGTERM)?;
+        use nix::sys::signal::killpg;
+
+        // Kill the entire process group (PGID == PID since we used process_group(0))
+        killpg(self.pid, Signal::SIGTERM)?;
         Ok(())
     }
 
-    /// Force kill the process.
+    /// Force kill the process and its entire process group.
     pub fn kill(&mut self) -> Result<()> {
-        kill(self.pid, Signal::SIGKILL)?;
+        use nix::sys::signal::killpg;
+
+        // Force kill the entire process group
+        killpg(self.pid, Signal::SIGKILL)?;
         Ok(())
     }
 
@@ -99,20 +108,34 @@ impl Drop for SpawnedProcess {
 pub struct ProcessManager {
     processes: HashMap<String, SpawnedProcess>, // Key: app_name-worker_kind-ordinal
     stats: StatsManager,
+    resource_limits: ResourceLimits,
 }
 
 impl ProcessManager {
     /// Create a new process manager.
     pub fn new() -> Result<Self> {
+        let resource_limits = ResourceLimits::from_env();
+
+        tracing::info!(
+            "ProcessManager initialized with resource limits: {}",
+            resource_limits.summary()
+        );
+
         Ok(ProcessManager {
             processes: HashMap::new(),
             stats: StatsManager::new(),
+            resource_limits,
         })
     }
 
     /// Get the number of managed processes.
     pub fn get_process_count(&self) -> usize {
         self.processes.len()
+    }
+
+    /// Get a clone of the resource limits configuration.
+    pub fn get_resource_limits(&self) -> ResourceLimits {
+        self.resource_limits.clone()
     }
 
     /// Get a reference to the stats manager.
@@ -173,6 +196,10 @@ impl ProcessManager {
 
         // Build the command to run
         let mut cmd = Command::new("sh");
+
+        // Clone resource limits for use in pre_exec closure
+        let limits = self.resource_limits.clone();
+
         // Set resource limits to prevent runaway processes (pre_exec is unsafe)
         unsafe {
             cmd.arg("-c")
@@ -196,10 +223,10 @@ impl ProcessManager {
                             std::io::Error::new(std::io::ErrorKind::PermissionDenied, e.to_string())
                         })?;
                     }
-                    // Limit max open files to 1024 (prevents fd exhaustion)
-                    let _ = setrlimit(Resource::RLIMIT_NOFILE, 1024, 1024);
-                    // Limit max processes to 64 (prevents fork bombs)
-                    let _ = setrlimit(Resource::RLIMIT_NPROC, 64, 64);
+
+                    // Apply configured resource limits
+                    limits.apply()?;
+
                     Ok(())
                 });
         }
@@ -229,11 +256,14 @@ impl ProcessManager {
                                 let _ = stdout_log.flush();
                             }
                             Err(e) => {
-                                eprintln!("Error reading stdout: {}", e);
+                                tracing::debug!("Error reading stdout: {}", e);
                                 break;
                             }
                         }
                     }
+                    // Explicitly drop the file handle to ensure it's closed
+                    drop(stdout_log);
+                    tracing::debug!("stdout log capture thread exited");
                 });
             }
 
@@ -250,24 +280,36 @@ impl ProcessManager {
                                     let _ = stderr_log.flush();
                                 }
                                 Err(e) => {
-                                    eprintln!("Error reading stderr: {}", e);
+                                    tracing::debug!("Error reading stderr: {}", e);
                                     break;
                                 }
                             }
                         }
+                        // Explicitly drop the file handle to ensure it's closed
+                        drop(stderr_log);
+                        tracing::debug!("stderr log capture thread exited");
                     });
                 }
             }
         }
+
+        // Save PID before transferring ownership to SpawnedProcess::new().
+        // This allows us to kill the child if new() fails, preventing zombie processes.
+        let child_pid = child.id();
 
         // Create the SpawnedProcess wrapper.
         // If this fails, kill the child to prevent orphaned processes.
         let spawned_process = match SpawnedProcess::new(child, config.clone(), log_handles) {
             Ok(sp) => sp,
             Err(e) => {
-                // SpawnedProcess::new takes ownership of child, but on error
-                // we can't access it. In practice this path is unreachable since
-                // new() is infallible, but defend against future changes.
+                // Kill the child process using the saved PID
+                use nix::sys::signal::Signal;
+                let pid = Pid::from_raw(child_pid as i32);
+                let _ = kill(pid, Signal::SIGKILL);
+                eprintln!(
+                    "Failed to create SpawnedProcess, killed child PID {}: {}",
+                    child_pid, e
+                );
                 return Err(e);
             }
         };
@@ -388,8 +430,12 @@ impl ProcessManager {
                     continue;
                 }
 
-                // Calculate backoff time based on restart count
-                let backoff = std::cmp::min(60, 2_i32.pow(process.restart_count.min(6))) as u64;
+                // Calculate backoff time based on restart count with jitter
+                // Jitter prevents thundering herd when many processes crash simultaneously
+                let base_backoff =
+                    std::cmp::min(60, 2_i32.pow(process.restart_count.min(6))) as u64;
+                let jitter = (process.pid_as_u32() % 10) as u64; // 0-9 second jitter based on PID
+                let backoff = base_backoff + jitter;
 
                 // Only restart if enough time has passed since the last restart
                 if process.last_restart.elapsed().as_secs() >= backoff {
@@ -448,6 +494,10 @@ impl ProcessManager {
 
         // Restart processes that need it; entries prefixed "__remove__" are
         // permanently failed processes that must be removed without restarting.
+        // Limit concurrent restarts to prevent thundering herd
+        const MAX_RESTARTS_PER_CYCLE: usize = 5;
+        let mut restarts_this_cycle = 0;
+
         for process_id in to_restart {
             if let Some(id) = process_id.strip_prefix("__remove__") {
                 // Remove the dead entry so Drop reaps the zombie child.
@@ -457,7 +507,16 @@ impl ProcessManager {
                     id
                 );
             } else {
-                self.restart_process(&process_id)?;
+                // Stagger restarts to prevent system overload
+                if restarts_this_cycle < MAX_RESTARTS_PER_CYCLE {
+                    self.restart_process(&process_id)?;
+                    restarts_this_cycle += 1;
+                } else {
+                    tracing::debug!(
+                        "Deferring restart of {} to next cycle (throttling)",
+                        process_id
+                    );
+                }
             }
         }
 

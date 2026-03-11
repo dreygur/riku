@@ -14,7 +14,25 @@ use cli::container;
 use cli::{AppsCmd, Cli, Commands, ConfigCmd, PluginCmd, StatsCmd};
 use config::RikuPaths;
 
+/// Initialize tracing subscriber for structured logging
+fn init_tracing() {
+    use tracing_subscriber::{fmt, EnvFilter};
+
+    // Default to INFO level, can be overridden with RUST_LOG env var
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    fmt()
+        .with_env_filter(filter)
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_file(false)
+        .init();
+}
+
 fn main() -> Result<()> {
+    // Initialize structured logging
+    init_tracing();
+
     let args = Cli::parse();
     let paths = RikuPaths::from_env();
 
