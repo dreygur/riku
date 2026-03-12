@@ -201,10 +201,10 @@ mod tests {
             },
             env,
             options: WorkerOptions {
-                working_dir: "/home/piku/.piku/apps/myapp".to_string(),
-                log_file: "/home/piku/.piku/logs/myapp/web.1.log".to_string(),
-                uid: Some("piku".to_string()),
-                gid: Some("piku".to_string()),
+                working_dir: "/home/deploy/.riku/apps/myapp".to_string(),
+                log_file: "/home/deploy/.riku/logs/myapp/web.1.log".to_string(),
+                uid: Some("deploy".to_string()),
+                gid: Some("deploy".to_string()),
                 timeout: default_timeout(),
                 grace_period: default_grace_period(),
                 max_restarts: default_max_restarts(),
@@ -221,8 +221,8 @@ mod tests {
         assert_eq!(parsed.worker.command, "python app.py");
         assert_eq!(parsed.worker.ordinal, 1);
         assert_eq!(parsed.env.get("PORT").unwrap(), "8080");
-        assert_eq!(parsed.options.working_dir, "/home/piku/.piku/apps/myapp");
-        assert_eq!(parsed.options.uid, Some("piku".to_string()));
+        assert_eq!(parsed.options.working_dir, "/home/deploy/.riku/apps/myapp");
+        assert_eq!(parsed.options.uid, Some("deploy".to_string()));
     }
 
     #[test]

@@ -1,8 +1,9 @@
 use std::env;
 use std::path::{Path, PathBuf};
 
-/// Raw source URL for fetching the latest piku script (for reference implementation).
-pub const RIKU_RAW_SOURCE_URL: &str = "https://raw.githubusercontent.com/piku/piku/master/piku.py";
+/// Raw source URL for fetching the latest riku script (for reference implementation).
+pub const RIKU_RAW_SOURCE_URL: &str =
+    "https://raw.githubusercontent.com/dreygur/riku/master/src/main.rs";
 
 /// Default maximum log size for worker log files (in bytes).
 #[allow(dead_code)]
@@ -194,7 +195,7 @@ mod tests {
     #[test]
     fn riku_raw_source_url_constant() {
         assert!(RIKU_RAW_SOURCE_URL.starts_with("https://"));
-        assert!(RIKU_RAW_SOURCE_URL.contains("piku")); // Still refers to the original piku repo
+        assert!(RIKU_RAW_SOURCE_URL.contains("riku")); // Refers to the riku repo
     }
 
     #[test]

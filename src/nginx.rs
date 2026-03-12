@@ -825,7 +825,7 @@ mod tests {
         );
 
         let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".piku"),
+            temp_dir.path().join(".riku"),
             &temp_dir.path().to_path_buf(),
         );
 
@@ -853,7 +853,7 @@ mod tests {
         env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
 
         let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".piku"),
+            temp_dir.path().join(".riku"),
             &temp_dir.path().to_path_buf(),
         );
         fs::create_dir_all(&paths.nginx_root).unwrap();
@@ -875,7 +875,7 @@ mod tests {
         env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
 
         let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".piku"),
+            temp_dir.path().join(".riku"),
             &temp_dir.path().to_path_buf(),
         );
         fs::create_dir_all(&paths.nginx_root).unwrap();
@@ -897,7 +897,7 @@ mod tests {
         env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
 
         let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".piku"),
+            temp_dir.path().join(".riku"),
             &temp_dir.path().to_path_buf(),
         );
         fs::create_dir_all(&paths.nginx_root).unwrap();
@@ -925,7 +925,7 @@ mod tests {
         env.insert("NGINX_CACHE_TIME".to_string(), "7200".to_string());
 
         let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".piku"),
+            temp_dir.path().join(".riku"),
             &temp_dir.path().to_path_buf(),
         );
         fs::create_dir_all(&paths.nginx_root).unwrap();
@@ -949,7 +949,7 @@ mod tests {
         env.insert("NGINX_CLOUDFLARE_ACL".to_string(), "true".to_string());
 
         let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".piku"),
+            temp_dir.path().join(".riku"),
             &temp_dir.path().to_path_buf(),
         );
         fs::create_dir_all(&paths.nginx_root).unwrap();
@@ -971,7 +971,7 @@ mod tests {
         env.insert("NGINX_HTTPS_ONLY".to_string(), "true".to_string());
 
         let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".piku"),
+            temp_dir.path().join(".riku"),
             &temp_dir.path().to_path_buf(),
         );
         fs::create_dir_all(&paths.nginx_root).unwrap();

@@ -155,7 +155,7 @@ mod tests {
     fn test_list_plugins_empty_directory() {
         let temp_dir = TempDir::new().unwrap();
         let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".piku"),
+            temp_dir.path().join(".riku"),
             &temp_dir.path().to_path_buf(),
         );
 
@@ -170,7 +170,7 @@ mod tests {
     fn test_plugin_exists() {
         let temp_dir = TempDir::new().unwrap();
         let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".piku"),
+            temp_dir.path().join(".riku"),
             &temp_dir.path().to_path_buf(),
         );
 
@@ -211,7 +211,7 @@ mod tests {
     fn test_plugin_exists_rejects_path_traversal() {
         let temp_dir = TempDir::new().unwrap();
         let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".piku"),
+            temp_dir.path().join(".riku"),
             &temp_dir.path().to_path_buf(),
         );
         fs::create_dir_all(&paths.plugin_root).unwrap();

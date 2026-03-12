@@ -985,7 +985,7 @@ pub fn cmd_update() -> Result<()> {
             "Note: self-update for riku binary is not yet implemented.",
             "yellow",
         );
-        echo("The piku.py reference source is accessible.", "");
+        echo("The reference source is accessible.", "");
     } else {
         echo(
             &format!(

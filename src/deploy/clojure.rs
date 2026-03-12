@@ -203,7 +203,7 @@ mod tests {
     fn test_create_clojure_worker_config() {
         let temp_dir = TempDir::new().unwrap();
         let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".piku"),
+            temp_dir.path().join(".riku"),
             &temp_dir.path().to_path_buf(),
         );
 
