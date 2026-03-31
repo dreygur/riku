@@ -168,7 +168,7 @@ mod tests {
                 let plugin_path = riku_root.join("plugins").join(name);
                 // If the path contains traversal, it should resolve outside plugins
                 if has_dots {
-                    let plugin_root = riku_root.join("plugins");
+                    let _plugin_root = riku_root.join("plugins");
                     // Don't actually create these paths, just verify the logic
                     assert!(
                         plugin_path.to_str().unwrap().contains("..") || has_slash,

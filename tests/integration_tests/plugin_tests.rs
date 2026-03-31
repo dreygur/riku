@@ -407,7 +407,7 @@ echo "Plugin: $plugin_name v$version"
 
         assert!(config_path.exists());
 
-        let config: toml::Value =
+        let _config: toml::Value =
             toml::from_str(config_content).unwrap_or(toml::Value::Table(toml::map::Map::new()));
         // Basic check that config is readable
         assert!(config_content.contains("plugin_name"));
