@@ -121,6 +121,33 @@ pub fn list_client_plugins() -> Result<Vec<String>> {
     Ok(plugins)
 }
 
+/// Handler for `riku plugin list`.
+pub fn cmd_plugin_list() -> Result<()> {
+    let plugins = list_client_plugins()?;
+    if plugins.is_empty() {
+        println!("No client plugins installed.");
+        println!("\nInstall plugins by placing executable scripts in:");
+        println!("  ~/.riku/client-plugins/");
+    } else {
+        println!("Available client plugins:");
+        for plugin in plugins {
+            println!("  {}", plugin);
+        }
+    }
+    Ok(())
+}
+
+/// Handler for `riku plugin exists <name>`.
+pub fn cmd_plugin_exists(name: &str) -> Result<()> {
+    if client_plugin_exists(name)? {
+        println!("Plugin '{}' is installed and executable.", name);
+        std::process::exit(0);
+    } else {
+        println!("Plugin '{}' not found or not executable.", name);
+        std::process::exit(1);
+    }
+}
+
 /// Check if a client plugin exists.
 pub fn client_plugin_exists(command: &str) -> Result<bool> {
     let plugin_path = get_client_plugin_path(command)?;

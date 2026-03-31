@@ -11,7 +11,7 @@ use clap::Parser;
 
 use cli::client_plugins;
 use cli::container;
-use cli::{AppsCmd, Cli, Commands, ConfigCmd, PluginCmd, StatsCmd};
+use cli::{AppsCmd, Cli, Commands, ConfigCmd, HookCmd, PluginCmd, StatsCmd};
 use config::RikuPaths;
 
 /// Initialize tracing subscriber for structured logging
@@ -122,54 +122,12 @@ fn main() -> Result<()> {
         Commands::Update => cli::apps::cmd_update()?,
         Commands::Supervisor => cli::apps::cmd_supervisor(&paths)?,
         Commands::Plugin(cmd) => match cmd {
-            PluginCmd::List => {
-                let plugins = client_plugins::list_client_plugins()?;
-                if plugins.is_empty() {
-                    println!("No client plugins installed.");
-                    println!("\nInstall plugins by placing executable scripts in:");
-                    println!("  ~/.riku/client-plugins/");
-                } else {
-                    println!("Available client plugins:");
-                    for plugin in plugins {
-                        println!("  {}", plugin);
-                    }
-                }
-            }
-            PluginCmd::Exists { name } => {
-                if client_plugins::client_plugin_exists(&name)? {
-                    println!("Plugin '{}' is installed and executable.", name);
-                    std::process::exit(0);
-                } else {
-                    println!("Plugin '{}' not found or not executable.", name);
-                    std::process::exit(1);
-                }
-            }
-            PluginCmd::Hooks => {
-                let hooks = plugins::list_plugins(&paths)?;
-                if hooks.is_empty() {
-                    println!("No server-side hook plugins installed.");
-                    println!("\nInstall hook plugins by placing executable scripts in:");
-                    println!("  ~/.riku/plugins/");
-                } else {
-                    println!("Available server-side hook plugins:");
-                    for hook in hooks {
-                        println!("  {}", hook);
-                    }
-                }
-            }
-            PluginCmd::Check { name } => {
-                plugins::discovery::validate_plugin_name(&name)
-                    .map_err(|e| anyhow::anyhow!("{}", e))?;
-                if plugins::plugin_exists(&name, &paths) {
-                    let plugin_path = paths.plugin_root.join(&name);
-                    println!("Hook plugin '{}' exists and is executable.", name);
-                    println!("  Path: {}", plugin_path.display());
-                    std::process::exit(0);
-                } else {
-                    println!("Hook plugin '{}' not found or not executable.", name);
-                    std::process::exit(1);
-                }
-            }
+            PluginCmd::List => cli::client_plugins::cmd_plugin_list()?,
+            PluginCmd::Exists { name } => cli::client_plugins::cmd_plugin_exists(&name)?,
+        },
+        Commands::Hook(cmd) => match cmd {
+            HookCmd::List => cli::hooks::cmd_hook_list(&paths)?,
+            HookCmd::Check { name } => cli::hooks::cmd_hook_check(&paths, &name)?,
         },
         Commands::GitHook { app, repo_path } => {
             cli::git::cmd_git_hook(&paths, &app, repo_path.as_deref())?
@@ -199,8 +157,9 @@ fn get_plugin_command(command: &Commands) -> Option<String> {
         Commands::Stop { .. } => Some("stop".to_string()),
         Commands::Container { .. } => Some("container".to_string()),
 
-        // Plugin command - don't recursively check for plugins
+        // Plugin/Hook commands — don't recursively check for plugins
         Commands::Plugin(_) => None,
+        Commands::Hook(_) => None,
 
         // Agent command - don't check for plugins
         Commands::Agent { .. } => None,

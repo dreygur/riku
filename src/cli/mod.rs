@@ -3,14 +3,23 @@ use clap::{Parser, Subcommand};
 pub mod agent;
 pub mod apps;
 pub mod client_plugins;
+pub mod cmds;
 pub mod container;
 pub mod git;
+pub mod hooks;
 pub mod scp;
 pub mod setup;
 
+pub use cmds::{AppsCmd, ConfigCmd, HookCmd, PluginCmd, StatsCmd};
+
 /// riku — the smallest PaaS you've ever seen (Rust edition)
 #[derive(Parser, Debug)]
-#[command(name = "riku", version, about)]
+#[command(
+    name = "riku",
+    version,
+    about = "riku — the smallest PaaS you've ever seen (Rust edition)",
+    long_about = "riku is a single-binary micro-PaaS that provides Heroku-like git push deployments.\nManage apps, config, processes, and plugins — all from one tool.",
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -66,6 +75,7 @@ pub enum Commands {
     },
 
     /// Force redeploy of an app
+    #[command(after_help = "Examples:\n  riku deploy myapp\n  riku deploy myapp --from ./local-path")]
     Deploy {
         /// App name
         app: String,
@@ -76,12 +86,14 @@ pub enum Commands {
     },
 
     /// Remove an app (preserves data dir)
+    #[command(after_help = "Examples:\n  riku destroy myapp")]
     Destroy {
         /// App name
         app: String,
     },
 
     /// Tail app logs
+    #[command(after_help = "Examples:\n  riku logs myapp\n  riku logs myapp web\n  riku logs myapp worker")]
     Logs {
         /// App name
         app: String,
@@ -91,6 +103,7 @@ pub enum Commands {
     },
 
     /// Manage app processes
+    #[command(after_help = "Examples:\n  riku ps\n  riku ps myapp\n  riku ps myapp --scale web=2 worker=1\n  riku ps myapp --verbose")]
     Ps {
         /// Show all processes (default) or specify an app
         #[arg()]
@@ -108,7 +121,10 @@ pub enum Commands {
     Stats(StatsCmd),
 
     /// Run a command in the app context
-    #[command(trailing_var_arg = true)]
+    #[command(
+        trailing_var_arg = true,
+        after_help = "Examples:\n  riku run myapp python manage.py shell\n  riku run myapp bash"
+    )]
     Run {
         /// App name
         app: String,
@@ -118,6 +134,7 @@ pub enum Commands {
     },
 
     /// Restart an app (hot reload for zero downtime)
+    #[command(after_help = "Examples:\n  riku restart myapp\n  riku restart myapp --hot")]
     Restart {
         /// App name
         app: String,
@@ -127,12 +144,14 @@ pub enum Commands {
     },
 
     /// Stop an app
+    #[command(after_help = "Examples:\n  riku stop myapp")]
     Stop {
         /// App name
         app: String,
     },
 
     /// Initialize Riku server (directories + systemd + SSH)
+    #[command(after_help = "Examples:\n  riku init\n  riku init --no-systemd")]
     Init {
         /// Skip systemd service setup
         #[arg(long)]
@@ -145,9 +164,21 @@ pub enum Commands {
     /// Start the process supervisor daemon
     Supervisor,
 
-    /// List or manage client plugins
-    #[command(subcommand)]
+    /// Manage client-side plugins (local scripts that extend riku CLI)
+    #[command(
+        subcommand,
+        about = "Manage client-side plugins (local scripts that extend riku CLI)",
+        after_help = "Examples:\n  riku plugin list\n  riku plugin exists riku-deploy"
+    )]
     Plugin(PluginCmd),
+
+    /// Manage server-side lifecycle hook plugins
+    #[command(
+        subcommand,
+        about = "Manage server-side lifecycle hook plugins",
+        after_help = "Examples:\n  riku hook list\n  riku hook check riku-pre-deploy"
+    )]
+    Hook(HookCmd),
 
     /// Git post-receive hook (internal)
     #[command(hide = true)]
@@ -181,105 +212,5 @@ pub enum Commands {
     Scp {
         /// SCP arguments
         args: Vec<String>,
-    },
-}
-
-#[derive(Subcommand, Debug)]
-pub enum ConfigCmd {
-    /// Show app configuration
-    Show {
-        /// App name
-        app: String,
-    },
-
-    /// Get a single configuration value
-    Get {
-        /// App name
-        app: String,
-        /// Configuration key
-        key: String,
-    },
-
-    /// Set environment variables (triggers redeploy)
-    #[command(trailing_var_arg = true)]
-    Set {
-        /// App name
-        app: String,
-        /// KEY=VAL pairs
-        #[arg(required = true)]
-        settings: Vec<String>,
-    },
-
-    /// Remove environment variables (triggers redeploy)
-    #[command(trailing_var_arg = true)]
-    Unset {
-        /// App name
-        app: String,
-        /// Keys to remove
-        #[arg(required = true)]
-        keys: Vec<String>,
-    },
-
-    /// Show live running configuration
-    Live {
-        /// App name
-        app: String,
-    },
-}
-
-/// Stats commands
-#[derive(Subcommand, Debug)]
-pub enum StatsCmd {
-    /// Show stats for all apps
-    All,
-
-    /// Show stats for a specific app
-    App {
-        /// App name
-        app: String,
-    },
-}
-
-/// Plugin management commands
-#[derive(Subcommand, Debug)]
-pub enum PluginCmd {
-    /// List available client plugins
-    List,
-
-    /// Check if a client plugin exists
-    Exists {
-        /// Plugin name
-        name: String,
-    },
-
-    /// List all executable server-side hook plugins (~/.riku/plugins/)
-    Hooks,
-
-    /// Check if a server-side hook plugin exists and is executable
-    Check {
-        /// Hook plugin name (e.g. riku-post-deploy)
-        name: String,
-    },
-}
-
-/// Apps subcommands
-#[derive(Subcommand, Debug)]
-pub enum AppsCmd {
-    /// Create a new application
-    Create {
-        /// Application name
-        name: String,
-    },
-
-    /// Show detailed information about an application
-    Info {
-        /// Application name
-        name: String,
-    },
-
-    /// Destroy an application (preserves data/cache)
-    Destroy {
-        /// Application name
-        name: String,
     },
 }
