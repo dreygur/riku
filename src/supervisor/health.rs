@@ -1,12 +1,15 @@
 //! Health check and metrics HTTP endpoint for monitoring and load balancers.
 //!
 //! Provides a simple HTTP server that responds to:
-//! - /health - Supervisor health status in JSON
-//! - /metrics - Process metrics from stats.json
+//! - /health             - Supervisor health status in JSON
+//! - /metrics            - All process metrics from stats.json
+//! - /metrics/apps       - Per-app aggregated metrics
+//! - /metrics/apps/{app} - Metrics for a specific app
 
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use serde_json;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -40,7 +43,7 @@ pub fn start_health_server(
     listener.set_nonblocking(true)?;
 
     tracing::info!(
-        "Health server listening on http://{} (/health, /metrics)",
+        "Health server listening on http://{} (/health, /metrics, /metrics/apps, /metrics/apps/{{app}})",
         addr
     );
 
@@ -101,10 +104,21 @@ fn handle_request(
     let parts: Vec<&str> = first_line.split_whitespace().collect();
 
     if parts.len() >= 2 && parts[0] == "GET" {
-        match parts[1] {
-            "/health" => send_health_response(&mut stream, start_time)?,
-            "/metrics" => send_metrics_response(&mut stream, stats_file)?,
-            _ => send_404_response(&mut stream)?,
+        let path = parts[1];
+        if path == "/health" {
+            send_health_response(&mut stream, start_time)?;
+        } else if path == "/metrics" {
+            send_metrics_response(&mut stream, stats_file)?;
+        } else if path == "/metrics/apps" {
+            send_app_metrics_response(&mut stream, stats_file, None)?;
+        } else if let Some(app) = path.strip_prefix("/metrics/apps/") {
+            if app.is_empty() {
+                send_app_metrics_response(&mut stream, stats_file, None)?;
+            } else {
+                send_app_metrics_response(&mut stream, stats_file, Some(app))?;
+            }
+        } else {
+            send_404_response(&mut stream)?;
         }
     } else {
         send_404_response(&mut stream)?;
@@ -156,6 +170,77 @@ fn send_metrics_response(stream: &mut TcpStream, stats_file: &PathBuf) -> anyhow
             .unwrap_or_else(|_| r#"{"error":"Failed to read stats"}"#.to_string())
     } else {
         r#"{"error":"Stats not available yet"}"#.to_string()
+    };
+
+    let response = format!(
+        "HTTP/1.1 200 OK\r\n\
+         Content-Type: application/json\r\n\
+         Content-Length: {}\r\n\
+         Connection: close\r\n\
+         \r\n\
+         {}",
+        json.len(),
+        json
+    );
+
+    stream.write_all(response.as_bytes())?;
+    stream.flush()?;
+
+    Ok(())
+}
+
+/// Send per-app metrics response.
+///
+/// If `app` is `Some`, filters to just that app. If `None`, returns all apps.
+/// Returns 404 JSON if a specific app is not found.
+fn send_app_metrics_response(
+    stream: &mut TcpStream,
+    stats_file: &PathBuf,
+    app: Option<&str>,
+) -> anyhow::Result<()> {
+    let raw = if stats_file.exists() {
+        fs::read_to_string(stats_file)
+            .unwrap_or_else(|_| "[]".to_string())
+    } else {
+        "[]".to_string()
+    };
+
+    // Parse the stats array and filter if needed
+    let json = match serde_json::from_str::<serde_json::Value>(&raw) {
+        Ok(serde_json::Value::Array(apps)) => {
+            if let Some(app_name) = app {
+                // Find the specific app
+                let found = apps
+                    .iter()
+                    .find(|a| a.get("app").and_then(|v| v.as_str()) == Some(app_name));
+                match found {
+                    Some(v) => serde_json::to_string(v)
+                        .unwrap_or_else(|_| r#"{"error":"Serialization failed"}"#.to_string()),
+                    None => {
+                        let body = format!(
+                            r#"{{"error":"Not Found","app":"{}","message":"No metrics for this app"}}"#,
+                            app_name
+                        );
+                        let response = format!(
+                            "HTTP/1.1 404 Not Found\r\n\
+                             Content-Type: application/json\r\n\
+                             Content-Length: {}\r\n\
+                             Connection: close\r\n\
+                             \r\n\
+                             {}",
+                            body.len(),
+                            body
+                        );
+                        stream.write_all(response.as_bytes())?;
+                        stream.flush()?;
+                        return Ok(());
+                    }
+                }
+            } else {
+                raw
+            }
+        }
+        _ => raw,
     };
 
     let response = format!(
@@ -258,6 +343,119 @@ mod tests {
 
         assert!(response.contains("HTTP/1.1 404 Not Found"));
         assert!(response.contains(r#""error":"Not Found""#));
+
+        running.store(false, Ordering::Relaxed);
+    }
+
+    #[test]
+    fn test_metrics_apps_endpoint_empty() {
+        use tempfile::TempDir;
+        let running = Arc::new(AtomicBool::new(true));
+        let start_time = SystemTime::now();
+        let temp_dir = TempDir::new().unwrap();
+        let stats_file = temp_dir.path().join("stats.json");
+        // Write empty stats array
+        fs::write(&stats_file, "[]").unwrap();
+        let port = 19093;
+
+        start_health_server(port, running.clone(), start_time, stats_file).unwrap();
+        thread::sleep(Duration::from_millis(100));
+
+        let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
+        stream
+            .write_all(b"GET /metrics/apps HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            .unwrap();
+
+        let mut response = String::new();
+        stream.read_to_string(&mut response).unwrap();
+
+        assert!(response.contains("HTTP/1.1 200 OK"));
+        assert!(response.contains("[]"));
+
+        running.store(false, Ordering::Relaxed);
+    }
+
+    #[test]
+    fn test_metrics_apps_endpoint_with_data() {
+        use tempfile::TempDir;
+        let running = Arc::new(AtomicBool::new(true));
+        let start_time = SystemTime::now();
+        let temp_dir = TempDir::new().unwrap();
+        let stats_file = temp_dir.path().join("stats.json");
+        // Write sample stats
+        let stats = r#"[{"app":"myapp","total_processes":2,"running_processes":2,"healthy_processes":1,"total_restarts":0,"total_memory_bytes":0,"total_cpu_time_ms":0,"processes":[],"last_updated":"2026-01-01T00:00:00Z"}]"#;
+        fs::write(&stats_file, stats).unwrap();
+        let port = 19094;
+
+        start_health_server(port, running.clone(), start_time, stats_file).unwrap();
+        thread::sleep(Duration::from_millis(100));
+
+        // /metrics/apps returns all apps
+        let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
+        stream
+            .write_all(b"GET /metrics/apps HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            .unwrap();
+        let mut response = String::new();
+        stream.read_to_string(&mut response).unwrap();
+        assert!(response.contains("HTTP/1.1 200 OK"));
+        assert!(response.contains("myapp"));
+
+        running.store(false, Ordering::Relaxed);
+    }
+
+    #[test]
+    fn test_metrics_app_specific_found() {
+        use tempfile::TempDir;
+        let running = Arc::new(AtomicBool::new(true));
+        let start_time = SystemTime::now();
+        let temp_dir = TempDir::new().unwrap();
+        let stats_file = temp_dir.path().join("stats.json");
+        let stats = r#"[{"app":"myapp","total_processes":1,"running_processes":1,"healthy_processes":1,"total_restarts":0,"total_memory_bytes":0,"total_cpu_time_ms":0,"processes":[],"last_updated":"2026-01-01T00:00:00Z"},{"app":"otherapp","total_processes":1,"running_processes":0,"healthy_processes":0,"total_restarts":0,"total_memory_bytes":0,"total_cpu_time_ms":0,"processes":[],"last_updated":"2026-01-01T00:00:00Z"}]"#;
+        fs::write(&stats_file, stats).unwrap();
+        let port = 19095;
+
+        start_health_server(port, running.clone(), start_time, stats_file).unwrap();
+        thread::sleep(Duration::from_millis(100));
+
+        let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
+        stream
+            .write_all(b"GET /metrics/apps/myapp HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            .unwrap();
+        let mut response = String::new();
+        stream.read_to_string(&mut response).unwrap();
+
+        assert!(response.contains("HTTP/1.1 200 OK"));
+        assert!(response.contains("myapp"));
+        // Should not include otherapp in the body
+        let body_start = response.find("\r\n\r\n").unwrap_or(0) + 4;
+        let body = &response[body_start..];
+        assert!(!body.contains("otherapp"), "Should only return myapp, not otherapp");
+
+        running.store(false, Ordering::Relaxed);
+    }
+
+    #[test]
+    fn test_metrics_app_specific_not_found() {
+        use tempfile::TempDir;
+        let running = Arc::new(AtomicBool::new(true));
+        let start_time = SystemTime::now();
+        let temp_dir = TempDir::new().unwrap();
+        let stats_file = temp_dir.path().join("stats.json");
+        fs::write(&stats_file, "[]").unwrap();
+        let port = 19096;
+
+        start_health_server(port, running.clone(), start_time, stats_file).unwrap();
+        thread::sleep(Duration::from_millis(100));
+
+        let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
+        stream
+            .write_all(b"GET /metrics/apps/nonexistent HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            .unwrap();
+        let mut response = String::new();
+        stream.read_to_string(&mut response).unwrap();
+
+        assert!(response.contains("HTTP/1.1 404 Not Found"));
+        assert!(response.contains("nonexistent"));
 
         running.store(false, Ordering::Relaxed);
     }
