@@ -760,8 +760,44 @@ pub fn do_deploy(
     let warnings = crate::util::validate_env_vars(&env);
     crate::util::print_env_warnings(&warnings);
 
-    // Detect and deploy runtime
+    // Run pre-deploy hook plugins (failures abort the deploy)
+    {
+        use crate::plugins::{HookContext, PluginHook, PluginManager};
+        let plugin_manager = PluginManager::new(paths);
+        let env_path = paths.env_root.join(app);
+        let ctx = HookContext {
+            app,
+            hook: &PluginHook::PreDeploy,
+            app_path: &app_path,
+            env_path: &env_path,
+            riku_root: &paths.riku_root,
+            runtime: None,
+            app_env: &env,
+        };
+        plugin_manager.run_hook(&ctx)?;
+    }
+
+    // Detect runtime (needed for both hook context and dispatch)
     let runtime = detect_runtime(&app_path);
+
+    // Run pre-build hook plugins (fires before the runtime build step)
+    {
+        use crate::plugins::{HookContext, PluginHook, PluginManager};
+        let plugin_manager = PluginManager::new(paths);
+        let env_path = paths.env_root.join(app);
+        let runtime_name = runtime.as_ref().map(|r| r.to_string());
+        let ctx = HookContext {
+            app,
+            hook: &PluginHook::PreBuild,
+            app_path: &app_path,
+            env_path: &env_path,
+            riku_root: &paths.riku_root,
+            runtime: runtime_name.as_deref(),
+            app_env: &env,
+        };
+        plugin_manager.run_hook(&ctx)?;
+    }
+
     match &runtime {
         Some(rt) => {
             found_app(&rt.to_string());
@@ -857,6 +893,24 @@ pub fn do_deploy(
         }
     }
 
+    // Run post-build hook plugins (fires after runtime build, before workers start)
+    {
+        use crate::plugins::{HookContext, PluginHook, PluginManager};
+        let plugin_manager = PluginManager::new(paths);
+        let env_path = paths.env_root.join(app);
+        let runtime_name = runtime.as_ref().map(|r| r.to_string());
+        let ctx = HookContext {
+            app,
+            hook: &PluginHook::PostBuild,
+            app_path: &app_path,
+            env_path: &env_path,
+            riku_root: &paths.riku_root,
+            runtime: runtime_name.as_deref(),
+            app_env: &env,
+        };
+        plugin_manager.run_hook(&ctx)?;
+    }
+
     // Run release command if present
     if let Some(release_cmd) = workers.remove("release") {
         echo("-----> Releasing", "green");
@@ -916,6 +970,24 @@ pub fn do_deploy(
 
     // Call spawn_app to start the application processes
     spawn_app(app, paths)?;
+
+    // Run post-deploy hook plugins (failures are warnings, not fatal)
+    {
+        use crate::plugins::{HookContext, PluginHook, PluginManager};
+        let plugin_manager = PluginManager::new(paths);
+        let env_path = paths.env_root.join(app);
+        let runtime_name = runtime.as_ref().map(|r| r.to_string());
+        let ctx = HookContext {
+            app,
+            hook: &PluginHook::PostDeploy,
+            app_path: &app_path,
+            env_path: &env_path,
+            riku_root: &paths.riku_root,
+            runtime: runtime_name.as_deref(),
+            app_env: &env,
+        };
+        plugin_manager.run_hook(&ctx)?;
+    }
 
     Ok(())
 }

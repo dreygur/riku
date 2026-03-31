@@ -1,6 +1,7 @@
-//! Plugin system module for Riku.
+//! Plugin discovery and execution primitives.
 //!
-//! Implements shell-based plugin discovery and execution.
+//! Handles locating executable plugins in `~/.riku/plugins/` and
+//! running them as child processes.
 
 use anyhow::Result;
 use std::fs;
@@ -9,7 +10,7 @@ use std::process::Command;
 use crate::config::RikuPaths;
 
 /// Validate plugin name does not contain path separators or traversal sequences.
-fn validate_plugin_name(plugin_name: &str) -> Result<()> {
+pub(crate) fn validate_plugin_name(plugin_name: &str) -> Result<()> {
     if plugin_name.contains('/')
         || plugin_name.contains('\\')
         || plugin_name.contains("..")
@@ -23,7 +24,10 @@ fn validate_plugin_name(plugin_name: &str) -> Result<()> {
     Ok(())
 }
 
-/// Discover and execute plugins from the plugins directory.
+/// Discover and execute a named plugin from the plugins directory.
+///
+/// The plugin is run with the provided arguments and inherits stdout/stderr.
+/// Returns an error if the plugin is not found, not executable, or exits non-zero.
 #[allow(dead_code)]
 pub fn run_plugin(plugin_name: &str, paths: &RikuPaths, args: &[String]) -> Result<()> {
     validate_plugin_name(plugin_name)?;
@@ -95,7 +99,7 @@ pub fn list_plugins(paths: &RikuPaths) -> Result<Vec<String>> {
                 let metadata = entry.metadata()?;
                 let permissions = metadata.permissions();
 
-                // Check if the file is executable
+                // Only list executable files
                 if permissions.mode() & 0o111 != 0 {
                     if let Some(name) = entry.file_name().to_str() {
                         plugins.push(name.to_string());
@@ -103,7 +107,6 @@ pub fn list_plugins(paths: &RikuPaths) -> Result<Vec<String>> {
                 }
             }
 
-            // On non-Unix systems, just add all files
             #[cfg(not(unix))]
             {
                 if let Some(name) = entry.file_name().to_str() {
@@ -141,7 +144,7 @@ pub fn plugin_exists(plugin_name: &str, paths: &RikuPaths) -> bool {
 
     #[cfg(not(unix))]
     {
-        true // On Windows, just check if the file exists
+        true
     }
 }
 
@@ -158,10 +161,7 @@ mod tests {
             temp_dir.path().join(".riku"),
             &temp_dir.path().to_path_buf(),
         );
-
-        // Create the plugin directory
         fs::create_dir_all(&paths.plugin_root).unwrap();
-
         let plugins = list_plugins(&paths).unwrap();
         assert!(plugins.is_empty());
     }
@@ -173,11 +173,8 @@ mod tests {
             temp_dir.path().join(".riku"),
             &temp_dir.path().to_path_buf(),
         );
-
-        // Create the plugin directory
         fs::create_dir_all(&paths.plugin_root).unwrap();
 
-        // Create a dummy plugin file
         let plugin_path = paths.plugin_root.join("test_plugin");
         fs::write(&plugin_path, "#!/bin/bash\necho 'test plugin'\n").unwrap();
 
@@ -215,7 +212,6 @@ mod tests {
             &temp_dir.path().to_path_buf(),
         );
         fs::create_dir_all(&paths.plugin_root).unwrap();
-
         assert!(!plugin_exists("../etc/passwd", &paths));
         assert!(!plugin_exists("foo/bar", &paths));
     }
