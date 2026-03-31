@@ -2,7 +2,9 @@
 
 use anyhow::Result;
 use std::fs;
-use std::process::Command;
+use std::io::{BufRead, BufReader};
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use crate::config::RikuPaths;
 use crate::plugins::hooks::{HookContext, PluginHook};
@@ -67,6 +69,7 @@ impl<'a> PluginManager<'a> {
         }
 
         let env = ctx.build_env();
+        let timeout = plugin_timeout();
 
         tracing::info!(
             hook = ctx.hook.hook_name(),
@@ -75,10 +78,33 @@ impl<'a> PluginManager<'a> {
             "Running plugin hook"
         );
 
-        let status = Command::new(&plugin_path)
+        let mut child = Command::new(&plugin_path)
             .envs(&env)
-            .status()
-            .map_err(|e| anyhow::anyhow!("Failed to execute hook plugin '{}': {}", plugin_name, e))?;
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| anyhow::anyhow!("Failed to spawn hook plugin '{}': {}", plugin_name, e))?;
+
+        let timed_out = wait_with_timeout(&mut child, timeout);
+
+        // Stream captured output to tracing regardless of exit code
+        emit_plugin_output(&mut child, plugin_name);
+
+        if timed_out {
+            let msg = format!(
+                "Hook plugin '{}' for app '{}' timed out after {:?}",
+                plugin_name, ctx.app, timeout
+            );
+            return match ctx.hook {
+                PluginHook::PreDeploy | PluginHook::PreBuild => Err(anyhow::anyhow!("{}", msg)),
+                PluginHook::PostBuild | PluginHook::PostDeploy => {
+                    tracing::warn!("{}", msg);
+                    Ok(true)
+                }
+            };
+        }
+
+        let status = child.wait()?;
 
         if status.success() {
             tracing::info!(
@@ -95,27 +121,54 @@ impl<'a> PluginManager<'a> {
             plugin_name, ctx.app, code
         );
 
-        // Pre-deploy and pre-build failures abort the deploy
         match ctx.hook {
-            PluginHook::PreDeploy | PluginHook::PreBuild => {
-                Err(anyhow::anyhow!("{}", msg))
-            }
-            // Post-deploy and post-build failures are warnings, not fatal
+            PluginHook::PreDeploy | PluginHook::PreBuild => Err(anyhow::anyhow!("{}", msg)),
             PluginHook::PostBuild | PluginHook::PostDeploy => {
                 tracing::warn!("{}", msg);
                 Ok(true)
             }
         }
     }
+}
 
-    /// Run all hooks that have corresponding plugin files, collecting results.
-    ///
-    /// Returns `Ok(n)` with the number of plugins that ran, or `Err` if any
-    /// abort-on-failure hook failed.
-    #[allow(dead_code)]
-    pub fn run_all_hooks(&self, ctx: &HookContext<'_>) -> Result<usize> {
-        let ran = self.run_hook(ctx)? as usize;
-        Ok(ran)
+/// Read plugin timeout from `RIKU_PLUGIN_TIMEOUT` env var (seconds).
+/// Defaults to 300 seconds (5 minutes).
+fn plugin_timeout() -> Duration {
+    std::env::var("RIKU_PLUGIN_TIMEOUT")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .map(Duration::from_secs)
+        .unwrap_or(Duration::from_secs(300))
+}
+
+/// Poll child every 200ms until it exits or the timeout elapses.
+/// Kills the child (and reaps it) on timeout. Returns `true` if timed out.
+fn wait_with_timeout(child: &mut std::process::Child, timeout: Duration) -> bool {
+    let start = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return false, // exited normally
+            Ok(None) if start.elapsed() >= timeout => {
+                child.kill().ok();
+                child.wait().ok(); // reap to avoid zombie
+                return true;
+            }
+            _ => std::thread::sleep(Duration::from_millis(200)),
+        }
+    }
+}
+
+/// Emit captured stdout as INFO and stderr as WARN via tracing.
+fn emit_plugin_output(child: &mut std::process::Child, plugin_name: &str) {
+    if let Some(stdout) = child.stdout.take() {
+        for line in BufReader::new(stdout).lines().flatten() {
+            tracing::info!(plugin = plugin_name, "{}", line);
+        }
+    }
+    if let Some(stderr) = child.stderr.take() {
+        for line in BufReader::new(stderr).lines().flatten() {
+            tracing::warn!(plugin = plugin_name, "{}", line);
+        }
     }
 }
 
@@ -282,5 +335,67 @@ mod tests {
         let output = fs::read_to_string(&output_file).unwrap();
         assert!(output.contains("app=testapp"), "RIKU_APP not passed to plugin");
         assert!(output.contains("hook=post-build"), "RIKU_HOOK not passed to plugin");
+    }
+
+    #[test]
+    fn test_plugin_timeout_kills_hung_plugin() {
+        let temp = TempDir::new().unwrap();
+        let paths = setup_paths(&temp);
+
+        // Plugin that sleeps 60 seconds — will be killed by 1s timeout
+        let plugin_path = paths.plugin_root.join("riku-pre-deploy");
+        fs::write(&plugin_path, "#!/bin/sh\nsleep 60\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&plugin_path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        std::env::set_var("RIKU_PLUGIN_TIMEOUT", "1");
+        let manager = PluginManager::new(&paths);
+        let app_path = PathBuf::from("/tmp/myapp");
+        let env_path = PathBuf::from("/tmp/envs/myapp");
+        let riku_root = paths.riku_root.clone();
+        let app_env = HashMap::new();
+        let hook = PluginHook::PreDeploy;
+
+        let ctx = make_ctx("myapp", &hook, &app_path, &env_path, &riku_root, &app_env);
+        let result = manager.run_hook(&ctx);
+        std::env::remove_var("RIKU_PLUGIN_TIMEOUT");
+
+        assert!(result.is_err(), "Timed-out pre-deploy plugin should abort");
+        assert!(result.unwrap_err().to_string().contains("timed out"));
+    }
+
+    #[test]
+    fn test_plugin_stdout_stderr_captured() {
+        let temp = TempDir::new().unwrap();
+        let paths = setup_paths(&temp);
+
+        // Plugin that writes to stdout and stderr then exits 0
+        let plugin_path = paths.plugin_root.join("riku-post-deploy");
+        fs::write(
+            &plugin_path,
+            "#!/bin/sh\necho 'stdout line'\necho 'stderr line' >&2\nexit 0\n",
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&plugin_path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let manager = PluginManager::new(&paths);
+        let app_path = PathBuf::from("/tmp/myapp");
+        let env_path = PathBuf::from("/tmp/envs/myapp");
+        let riku_root = paths.riku_root.clone();
+        let app_env = HashMap::new();
+        let hook = PluginHook::PostDeploy;
+
+        let ctx = make_ctx("myapp", &hook, &app_path, &env_path, &riku_root, &app_env);
+        // Should succeed — output is captured and emitted via tracing (not panicked)
+        let result = manager.run_hook(&ctx);
+        assert!(result.is_ok(), "Plugin with stdout/stderr should not fail: {:?}", result);
+        assert!(result.unwrap(), "Should return true on success");
     }
 }

@@ -1,0 +1,32 @@
+#!/bin/bash
+# riku-post-deploy — send a deployment notification (Slack, etc.)
+#
+# Install: cp riku-post-deploy ~/.riku/plugins/ && chmod +x ~/.riku/plugins/riku-post-deploy
+#
+# Set SLACK_WEBHOOK in the app's ENV file or in the server environment.
+# Exits 0 even if no webhook is configured (notification is optional).
+set -euo pipefail
+
+echo "-----> [post-deploy] Sending deploy notification for '${RIKU_APP}'"
+
+if [[ -z "${SLACK_WEBHOOK:-}" ]]; then
+    echo "       SLACK_WEBHOOK not set — skipping notification."
+    exit 0
+fi
+
+if ! command -v curl &>/dev/null; then
+    echo "       curl not found — skipping notification." >&2
+    exit 0
+fi
+
+RUNTIME="${RIKU_RUNTIME:-unknown}"
+PAYLOAD="{\"text\": \"Deployed *${RIKU_APP}* (${RUNTIME}) at $(date -u '+%Y-%m-%d %H:%M UTC')\"}"
+
+curl -sf -X POST \
+    -H "Content-Type: application/json" \
+    -d "${PAYLOAD}" \
+    "${SLACK_WEBHOOK}" \
+    && echo "       Notification sent." \
+    || echo "       Warning: notification failed (non-fatal)." >&2
+
+exit 0

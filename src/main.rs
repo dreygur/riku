@@ -144,6 +144,32 @@ fn main() -> Result<()> {
                     std::process::exit(1);
                 }
             }
+            PluginCmd::Hooks => {
+                let hooks = plugins::list_plugins(&paths)?;
+                if hooks.is_empty() {
+                    println!("No server-side hook plugins installed.");
+                    println!("\nInstall hook plugins by placing executable scripts in:");
+                    println!("  ~/.riku/plugins/");
+                } else {
+                    println!("Available server-side hook plugins:");
+                    for hook in hooks {
+                        println!("  {}", hook);
+                    }
+                }
+            }
+            PluginCmd::Check { name } => {
+                plugins::discovery::validate_plugin_name(&name)
+                    .map_err(|e| anyhow::anyhow!("{}", e))?;
+                if plugins::plugin_exists(&name, &paths) {
+                    let plugin_path = paths.plugin_root.join(&name);
+                    println!("Hook plugin '{}' exists and is executable.", name);
+                    println!("  Path: {}", plugin_path.display());
+                    std::process::exit(0);
+                } else {
+                    println!("Hook plugin '{}' not found or not executable.", name);
+                    std::process::exit(1);
+                }
+            }
         },
         Commands::GitHook { app, repo_path } => {
             cli::git::cmd_git_hook(&paths, &app, repo_path.as_deref())?

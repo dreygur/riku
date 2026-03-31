@@ -246,9 +246,18 @@ pub enum PluginCmd {
     /// List available client plugins
     List,
 
-    /// Check if a plugin exists
+    /// Check if a client plugin exists
     Exists {
         /// Plugin name
+        name: String,
+    },
+
+    /// List all executable server-side hook plugins (~/.riku/plugins/)
+    Hooks,
+
+    /// Check if a server-side hook plugin exists and is executable
+    Check {
+        /// Hook plugin name (e.g. riku-post-deploy)
         name: String,
     },
 }

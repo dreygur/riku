@@ -1,0 +1,26 @@
+#!/bin/bash
+# riku-post-build — run database migrations after the build step.
+#
+# Install: cp riku-post-build ~/.riku/plugins/ && chmod +x ~/.riku/plugins/riku-post-build
+#
+# Exits 0 even if the app has no manage.py (not all runtimes need it).
+set -euo pipefail
+
+echo "-----> [post-build] Running post-build tasks for '${RIKU_APP}'"
+
+MANAGE="${RIKU_APP_PATH}/manage.py"
+VENV_PYTHON="${RIKU_ENV_PATH}/venv/bin/python"
+
+if [[ ! -f "${MANAGE}" ]]; then
+    echo "       No manage.py found — skipping migrations."
+    exit 0
+fi
+
+if [[ ! -x "${VENV_PYTHON}" ]]; then
+    echo "       No venv python found — skipping migrations." >&2
+    exit 0
+fi
+
+echo "       Running: python manage.py migrate --run-syncdb"
+"${VENV_PYTHON}" "${MANAGE}" migrate --run-syncdb
+echo "       Migrations complete."
