@@ -225,3 +225,203 @@ pub(super) fn create_container_worker_config(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn make_paths(tmp: &TempDir) -> RikuPaths {
+        let paths = crate::config::RikuPaths::from_dirs(
+            tmp.path().join(".riku"),
+            &tmp.path().to_path_buf(),
+        );
+        fs::create_dir_all(&paths.workers_available).unwrap();
+        fs::create_dir_all(&paths.workers_enabled).unwrap();
+        fs::create_dir_all(&paths.nginx_root).unwrap();
+        paths
+    }
+
+    // --- create_container_worker_config ---
+
+    #[test]
+    fn test_create_container_worker_config_creates_toml_file() -> Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+
+        let env = HashMap::new();
+        create_container_worker_config(
+            "myapp",
+            "worker",
+            "echo hello",
+            1,
+            &env,
+            &paths,
+            tmp.path(),
+            "docker",
+        )?;
+
+        let config_path = paths.workers_available.join("myapp-worker-1.toml");
+        assert!(config_path.exists(), "TOML config file should be created");
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_container_worker_config_creates_symlink_in_enabled() -> Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+
+        let env = HashMap::new();
+        create_container_worker_config(
+            "myapp",
+            "worker",
+            "echo hello",
+            1,
+            &env,
+            &paths,
+            tmp.path(),
+            "podman",
+        )?;
+
+        let enabled_path = paths.workers_enabled.join("myapp-worker-1.toml");
+        assert!(enabled_path.exists(), "Symlink should be created in workers_enabled");
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_container_worker_config_web_sets_port_env() -> Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+
+        let env = HashMap::new();
+        // "web" kind should allocate a PORT
+        create_container_worker_config(
+            "myapp",
+            "web",
+            "docker run --rm -p ${PORT}:80 myimage",
+            1,
+            &env,
+            &paths,
+            tmp.path(),
+            "docker",
+        )?;
+
+        let config_path = paths.workers_available.join("myapp-web-1.toml");
+        assert!(config_path.exists());
+        let content = fs::read_to_string(&config_path)?;
+        // The PORT placeholder should have been substituted with a real port number
+        assert!(!content.contains("${PORT}"), "PORT placeholder should be substituted");
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_container_worker_config_replaces_existing_symlink() -> Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+
+        let env = HashMap::new();
+        // First deploy
+        create_container_worker_config(
+            "myapp",
+            "worker",
+            "echo first",
+            1,
+            &env,
+            &paths,
+            tmp.path(),
+            "docker",
+        )?;
+        // Second deploy — should not fail even though symlink already exists
+        create_container_worker_config(
+            "myapp",
+            "worker",
+            "echo second",
+            1,
+            &env,
+            &paths,
+            tmp.path(),
+            "docker",
+        )?;
+
+        let enabled_path = paths.workers_enabled.join("myapp-worker-1.toml");
+        assert!(enabled_path.exists(), "Symlink should still exist after re-deploy");
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_container_worker_config_non_web_keeps_command_unchanged() -> Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+
+        let env = HashMap::new();
+        let cmd = "python worker.py";
+        create_container_worker_config(
+            "myapp",
+            "worker",
+            cmd,
+            1,
+            &env,
+            &paths,
+            tmp.path(),
+            "docker",
+        )?;
+
+        let config_path = paths.workers_available.join("myapp-worker-1.toml");
+        let content = fs::read_to_string(&config_path)?;
+        assert!(content.contains(cmd), "Worker command should be preserved as-is");
+        Ok(())
+    }
+
+    // --- create_container_workers (from Procfile) ---
+
+    #[test]
+    fn test_create_container_workers_skips_release_and_preflight() -> Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+        fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
+
+        let app_path = tmp.path().join("app");
+        fs::create_dir_all(&app_path).unwrap();
+        fs::write(
+            app_path.join("Procfile"),
+            "release: ./migrate\npreflight: ./healthcheck\nworker: python w.py\n",
+        )?;
+
+        let env = HashMap::new();
+        create_container_workers("myapp", &app_path, &env, &paths, "docker")?;
+
+        // Only worker config should exist, not release or preflight
+        assert!(!paths.workers_available.join("myapp-release-1.toml").exists());
+        assert!(!paths.workers_available.join("myapp-preflight-1.toml").exists());
+        assert!(paths.workers_available.join("myapp-worker-1.toml").exists());
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_container_workers_no_procfile_creates_default_web() -> Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+        fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
+
+        let app_path = tmp.path().join("app");
+        fs::create_dir_all(&app_path).unwrap();
+        // No Procfile — should fall back to default web worker
+
+        let env = HashMap::new();
+        create_container_workers("myapp", &app_path, &env, &paths, "docker")?;
+
+        assert!(
+            paths.workers_available.join("myapp-web-1.toml").exists(),
+            "Default web worker should be created when no Procfile"
+        );
+        Ok(())
+    }
+}

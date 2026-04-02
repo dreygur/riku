@@ -244,3 +244,166 @@ pub fn create_workers_generic(
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn make_paths(tmp: &TempDir) -> RikuPaths {
+        let paths = crate::config::RikuPaths::from_dirs(
+            tmp.path().join(".riku"),
+            &tmp.path().to_path_buf(),
+        );
+        fs::create_dir_all(&paths.workers_available).unwrap();
+        fs::create_dir_all(&paths.workers_enabled).unwrap();
+        fs::create_dir_all(&paths.nginx_root).unwrap();
+        paths
+    }
+
+    // --- read_scaling_count ---
+
+    #[test]
+    fn test_read_scaling_count_default_when_no_file() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
+        let count = read_scaling_count(&paths, "myapp", "web")?;
+        assert_eq!(count, 1, "Default scaling count should be 1");
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_scaling_count_reads_file() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        let env_dir = paths.env_root.join("myapp");
+        fs::create_dir_all(&env_dir).unwrap();
+        fs::write(env_dir.join("SCALING"), "web=3\nworker=2\n")?;
+        assert_eq!(read_scaling_count(&paths, "myapp", "web")?, 3);
+        assert_eq!(read_scaling_count(&paths, "myapp", "worker")?, 2);
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_scaling_count_unknown_kind_returns_one() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        let env_dir = paths.env_root.join("myapp");
+        fs::create_dir_all(&env_dir).unwrap();
+        fs::write(env_dir.join("SCALING"), "web=2\n")?;
+        assert_eq!(read_scaling_count(&paths, "myapp", "cron")?, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_scaling_count_ignores_comments() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        let env_dir = paths.env_root.join("myapp");
+        fs::create_dir_all(&env_dir).unwrap();
+        fs::write(env_dir.join("SCALING"), "# web=99\nweb=1\n")?;
+        assert_eq!(read_scaling_count(&paths, "myapp", "web")?, 1);
+        Ok(())
+    }
+
+    // --- create_workers_generic ---
+
+    #[test]
+    fn test_create_workers_generic_no_procfile_returns_ok() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        let app_path = tmp.path().join("app");
+        fs::create_dir_all(&app_path).unwrap();
+        fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
+        fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+
+        let env = HashMap::new();
+        // No Procfile — should return Ok without creating configs
+        create_workers_generic("myapp", &app_path, &env, &paths)
+    }
+
+    #[test]
+    fn test_create_workers_generic_worker_kind_creates_config() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        let app_path = tmp.path().join("app");
+        fs::create_dir_all(&app_path).unwrap();
+        fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
+        fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+
+        fs::write(app_path.join("Procfile"), "worker: python worker.py\n")?;
+
+        let env = HashMap::new();
+        create_workers_generic("myapp", &app_path, &env, &paths)?;
+
+        let config_path = paths.workers_available.join("myapp-worker-1.toml");
+        assert!(config_path.exists(), "worker config should be created");
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_workers_generic_symlink_created_in_enabled() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        let app_path = tmp.path().join("app");
+        fs::create_dir_all(&app_path).unwrap();
+        fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
+        fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+
+        fs::write(app_path.join("Procfile"), "worker: python worker.py\n")?;
+
+        let env = HashMap::new();
+        create_workers_generic("myapp", &app_path, &env, &paths)?;
+
+        let symlink_path = paths.workers_enabled.join("myapp-worker-1.toml");
+        assert!(symlink_path.exists(), "symlink in workers_enabled should exist");
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_workers_generic_skips_comment_lines() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        let app_path = tmp.path().join("app");
+        fs::create_dir_all(&app_path).unwrap();
+        fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
+        fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+
+        fs::write(app_path.join("Procfile"), "# comment\nworker: echo hello\n")?;
+
+        let env = HashMap::new();
+        create_workers_generic("myapp", &app_path, &env, &paths)?;
+
+        // Only worker config should exist, not one for the comment
+        let entries: Vec<_> = fs::read_dir(&paths.workers_available)
+            .unwrap()
+            .flatten()
+            .collect();
+        assert_eq!(entries.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_auto_restart_false_skips_removal_of_existing_configs() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        let app_path = tmp.path().join("app");
+        fs::create_dir_all(&app_path).unwrap();
+        fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
+        fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+
+        // Pre-create a dummy config in workers_enabled that should be preserved
+        let existing = paths.workers_enabled.join("myapp-web-1.toml");
+        fs::write(&existing, "[worker]\n")?;
+
+        fs::write(app_path.join("Procfile"), "worker: echo hello\n")?;
+
+        let mut env = HashMap::new();
+        env.insert("RIKU_AUTO_RESTART".to_string(), "false".to_string());
+        create_workers_generic("myapp", &app_path, &env, &paths)?;
+
+        // The pre-existing enabled config should not have been deleted
+        assert!(existing.exists(), "existing config should be preserved when RIKU_AUTO_RESTART=false");
+        Ok(())
+    }
+}

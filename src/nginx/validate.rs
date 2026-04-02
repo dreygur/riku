@@ -24,6 +24,7 @@ impl Drop for TempFile {
 }
 
 /// Validate nginx configuration file.
+#[allow(dead_code)]
 pub(super) fn validate_nginx_config(config_file: &Path) -> Result<()> {
     use std::process::Command;
 
@@ -64,4 +65,48 @@ pub(super) fn validate_nginx_config(config_file: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_temp_file_deleted_on_drop() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("to_be_deleted.tmp");
+        fs::write(&path, "data").unwrap();
+        assert!(path.exists());
+
+        {
+            let _guard = TempFile::new(path.clone());
+            // Guard is alive; file still exists
+            assert!(path.exists());
+        }
+        // Guard dropped; file must be gone
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn test_temp_file_drop_on_missing_file_does_not_panic() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("never_created.tmp");
+        // Drop should silently ignore the missing file
+        let _guard = TempFile::new(path);
+    }
+
+    #[test]
+    #[ignore = "requires nginx binary on PATH"]
+    fn test_validate_nginx_config_with_real_nginx() {
+        let tmp = TempDir::new().unwrap();
+        let config_file = tmp.path().join("site.conf");
+        fs::write(
+            &config_file,
+            "server { listen 8080; server_name localhost; location / { return 200; } }",
+        )
+        .unwrap();
+        let result = validate_nginx_config(&config_file);
+        assert!(result.is_ok());
+    }
 }

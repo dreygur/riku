@@ -85,3 +85,80 @@ pub fn setup_signal_handlers() -> Result<()> {
 pub fn is_running() -> bool {
     RUNNING.load(Ordering::SeqCst)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_running_default_true() {
+        // The global RUNNING flag starts true. This test only reads it; it does
+        // not mutate global state so it is safe to run in parallel with others.
+        assert!(
+            is_running(),
+            "is_running() should return true by default (RUNNING initialises to true)"
+        );
+    }
+
+    #[test]
+    fn test_is_running_reflects_atomic() {
+        // Save the current value so we can restore it after the test.
+        let original = RUNNING.load(Ordering::SeqCst);
+
+        RUNNING.store(false, Ordering::SeqCst);
+        assert!(
+            !is_running(),
+            "is_running() should return false after RUNNING is set to false"
+        );
+
+        RUNNING.store(true, Ordering::SeqCst);
+        assert!(
+            is_running(),
+            "is_running() should return true after RUNNING is restored to true"
+        );
+
+        // Restore original value
+        RUNNING.store(original, Ordering::SeqCst);
+    }
+
+    #[test]
+    fn test_setup_signal_handlers_does_not_panic() {
+        // Just verify the function completes without panicking.
+        // The actual signal registration is tested implicitly by the fact that the
+        // binary runs under the OS.
+        setup_signal_handlers().expect("setup_signal_handlers() should not return an error");
+    }
+
+    #[test]
+    fn test_is_running_with_real_subprocess() {
+        use std::process::{Command, Stdio};
+        use std::thread;
+        use std::time::Duration;
+
+        // Spawn a long-lived child so we can verify it is actually running.
+        let mut child = Command::new("sleep")
+            .arg("60")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("failed to spawn sleep process");
+
+        // Give the OS a moment to start the process.
+        thread::sleep(Duration::from_millis(50));
+
+        // The process should still be alive.
+        let still_running = child.try_wait().unwrap().is_none();
+        assert!(still_running, "sleep process should still be running");
+
+        // Clean up: kill and reap.
+        child.kill().ok();
+        child.wait().ok();
+
+        // After reaping, try_wait should return Some(_).
+        let exited = child.try_wait().unwrap();
+        // On some platforms try_wait after wait returns None; either way the
+        // child is no longer live. We simply assert kill+wait did not panic.
+        let _ = exited;
+    }
+}

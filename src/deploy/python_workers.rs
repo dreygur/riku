@@ -215,16 +215,21 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    fn make_paths(tmp: &TempDir) -> RikuPaths {
+        let paths = crate::config::RikuPaths::from_dirs(
+            tmp.path().join(".riku"),
+            &tmp.path().to_path_buf(),
+        );
+        fs::create_dir_all(&paths.workers_available).unwrap();
+        fs::create_dir_all(&paths.workers_enabled).unwrap();
+        fs::create_dir_all(&paths.nginx_root).unwrap();
+        paths
+    }
+
     #[test]
     fn test_create_python_worker_config() {
         let temp_dir = TempDir::new().unwrap();
-        let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".riku"),
-            &temp_dir.path().to_path_buf(),
-        );
-
-        fs::create_dir_all(&paths.workers_available).unwrap();
-        fs::create_dir_all(&paths.workers_enabled).unwrap();
+        let paths = make_paths(&temp_dir);
         fs::create_dir_all(&paths.log_root.join("testapp")).unwrap();
 
         let mut env = HashMap::new();
@@ -245,5 +250,145 @@ mod tests {
 
         let config_path = paths.workers_available.join("testapp-web-1.toml");
         assert!(config_path.exists());
+    }
+
+    #[test]
+    fn test_create_python_worker_config_sets_pythonpath() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        fs::create_dir_all(paths.log_root.join("pyapp")).unwrap();
+
+        let env = HashMap::new();
+        create_python_worker_config(
+            "pyapp", "worker", "python worker.py", 1,
+            &env, &paths, tmp.path(), tmp.path(),
+        )?;
+
+        let content = fs::read_to_string(paths.workers_available.join("pyapp-worker-1.toml"))?;
+        assert!(content.contains("PYTHONPATH"), "PYTHONPATH should be set");
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_python_worker_config_prepends_venv_bin_to_path() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        fs::create_dir_all(paths.log_root.join("pyapp")).unwrap();
+
+        let venv_path = tmp.path().join("venv");
+        fs::create_dir_all(venv_path.join("bin")).unwrap();
+
+        let env = HashMap::new();
+        create_python_worker_config(
+            "pyapp", "worker", "python worker.py", 1,
+            &env, &paths, &venv_path, tmp.path(),
+        )?;
+
+        let content = fs::read_to_string(paths.workers_available.join("pyapp-worker-1.toml"))?;
+        // The venv bin path should appear before the system PATH
+        assert!(
+            content.contains("bin"),
+            "Venv bin directory should be in PATH"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_python_worker_config_creates_symlink() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        fs::create_dir_all(paths.log_root.join("pyapp")).unwrap();
+
+        let env = HashMap::new();
+        create_python_worker_config(
+            "pyapp", "worker", "python worker.py", 1,
+            &env, &paths, tmp.path(), tmp.path(),
+        )?;
+
+        let symlink = paths.workers_enabled.join("pyapp-worker-1.toml");
+        assert!(symlink.exists(), "Symlink in workers_enabled should be created");
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_python_workers_no_procfile_is_ok() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        let app_path = tmp.path().join("app");
+        fs::create_dir_all(&app_path).unwrap();
+        fs::create_dir_all(paths.env_root.join("pyapp")).unwrap();
+
+        let env = HashMap::new();
+        create_python_workers("pyapp", &app_path, &env, &paths, tmp.path())?;
+
+        let entries: Vec<_> = fs::read_dir(&paths.workers_available).unwrap().flatten().collect();
+        assert_eq!(entries.len(), 0, "No workers when no Procfile");
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_python_workers_from_procfile() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        let app_path = tmp.path().join("app");
+        fs::create_dir_all(&app_path).unwrap();
+        fs::create_dir_all(paths.env_root.join("pyapp")).unwrap();
+        fs::create_dir_all(paths.log_root.join("pyapp")).unwrap();
+
+        fs::write(app_path.join("Procfile"), "worker: python worker.py\n")?;
+        let env = HashMap::new();
+        create_python_workers("pyapp", &app_path, &env, &paths, tmp.path())?;
+
+        assert!(paths.workers_available.join("pyapp-worker-1.toml").exists());
+        Ok(())
+    }
+
+    #[test]
+    fn test_remove_existing_workers_respects_auto_restart_false() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+
+        let existing = paths.workers_enabled.join("pyapp-web-1.toml");
+        fs::write(&existing, "[worker]\n")?;
+
+        let mut env = HashMap::new();
+        env.insert("RIKU_AUTO_RESTART".to_string(), "false".to_string());
+        remove_existing_workers("pyapp", &paths, &env);
+
+        assert!(existing.exists(), "Config preserved when RIKU_AUTO_RESTART=false");
+        Ok(())
+    }
+
+    #[test]
+    fn test_remove_existing_workers_removes_on_auto_restart() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+
+        let existing = paths.workers_enabled.join("pyapp-web-1.toml");
+        fs::write(&existing, "[worker]\n")?;
+
+        let env = HashMap::new(); // defaults to auto_restart = true
+        remove_existing_workers("pyapp", &paths, &env);
+
+        assert!(!existing.exists(), "Config removed when RIKU_AUTO_RESTART=true");
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_python_workers_with_runner_wraps_command() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        let app_path = tmp.path().join("app");
+        fs::create_dir_all(&app_path).unwrap();
+        fs::create_dir_all(paths.env_root.join("pyapp")).unwrap();
+        fs::create_dir_all(paths.log_root.join("pyapp")).unwrap();
+
+        fs::write(app_path.join("Procfile"), "worker: python worker.py\n")?;
+        let env = HashMap::new();
+        create_python_workers_with_runner("pyapp", &app_path, &env, &paths, "poetry run")?;
+
+        let content = fs::read_to_string(paths.workers_available.join("pyapp-worker-1.toml"))?;
+        assert!(content.contains("poetry run"), "Command should be wrapped with runner");
+        Ok(())
     }
 }

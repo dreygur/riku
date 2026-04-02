@@ -70,3 +70,82 @@ impl ProcessManager {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::supervisor::config::{WorkerConfig, WorkerInfo, WorkerOptions};
+    use crate::supervisor::process::ProcessManager;
+    use std::collections::HashMap;
+    use tempfile::TempDir;
+
+    fn sleep_config(tmp: &TempDir) -> WorkerConfig {
+        let log = tmp.path().join("out.log");
+        WorkerConfig {
+            worker: WorkerInfo {
+                app: "testapp".to_string(),
+                kind: "web".to_string(),
+                command: "sleep 60".to_string(),
+                ordinal: 1,
+            },
+            env: HashMap::new(),
+            options: WorkerOptions {
+                working_dir: tmp.path().to_str().unwrap().to_string(),
+                log_file: log.to_str().unwrap().to_string(),
+                uid: None,
+                gid: None,
+                timeout: 30,
+                // short grace period so the test doesn't wait 30 s
+                grace_period: 1,
+                max_restarts: 3,
+                health_check: None,
+            },
+        }
+    }
+
+    #[test]
+    fn test_stop_app_processes_removes_them_from_manager() {
+        let tmp = TempDir::new().unwrap();
+        let config = sleep_config(&tmp);
+
+        let mut pm = ProcessManager::new().unwrap();
+        pm.spawn_process(&config).expect("spawn should succeed");
+        assert_eq!(pm.get_process_count(), 1);
+
+        pm.stop_app_processes("testapp")
+            .expect("stop_app_processes should not fail");
+
+        assert_eq!(
+            pm.get_process_count(),
+            0,
+            "all processes for 'testapp' should be removed after stop"
+        );
+    }
+
+    #[test]
+    fn test_stop_all_processes_clears_manager() {
+        let tmp = TempDir::new().unwrap();
+        let mut config = sleep_config(&tmp);
+
+        let mut pm = ProcessManager::new().unwrap();
+
+        // Spawn two different workers.
+        pm.spawn_process(&config).expect("spawn 1");
+        config.worker.ordinal = 2;
+        pm.spawn_process(&config).expect("spawn 2");
+        assert_eq!(pm.get_process_count(), 2);
+
+        pm.stop_all_processes().expect("stop_all_processes should not fail");
+        assert_eq!(pm.get_process_count(), 0, "all processes should be removed");
+    }
+
+    #[test]
+    fn test_stop_nonexistent_process_is_noop() {
+        let tmp = TempDir::new().unwrap();
+        let _ = tmp; // keep alive
+
+        let mut pm = ProcessManager::new().unwrap();
+        // Stopping a process that was never registered must not panic or error.
+        pm.stop_app_processes("nonexistent-app")
+            .expect("stopping a nonexistent app should be a silent no-op");
+    }
+}

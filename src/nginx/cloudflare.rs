@@ -104,3 +104,64 @@ fn is_valid_cidr(line: &str) -> bool {
         .all(|c| c.is_ascii_hexdigit() || c == '.' || c == ':' || c == '/');
     valid_chars && (line.contains('.') || line.contains(':')) && !line.contains(' ')
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_valid_cidr_ipv4() {
+        assert!(is_valid_cidr("192.168.1.0/24"));
+    }
+
+    #[test]
+    fn test_is_valid_cidr_ipv4_single() {
+        assert!(is_valid_cidr("10.0.0.1"));
+    }
+
+    #[test]
+    fn test_is_valid_cidr_ipv6() {
+        assert!(is_valid_cidr("2400:cb00::/32"));
+    }
+
+    #[test]
+    fn test_is_valid_cidr_rejects_spaces() {
+        assert!(!is_valid_cidr("192.168.1.0/24 allow all"));
+    }
+
+    #[test]
+    fn test_is_valid_cidr_rejects_semicolons() {
+        assert!(!is_valid_cidr("192.168.1.1; deny all"));
+    }
+
+    #[test]
+    fn test_is_valid_cidr_rejects_empty() {
+        assert!(!is_valid_cidr(""));
+    }
+
+    #[test]
+    fn test_is_valid_cidr_rejects_no_dot_or_colon() {
+        assert!(!is_valid_cidr("12345"));
+    }
+
+    #[test]
+    fn test_is_valid_cidr_rejects_newline_injection() {
+        assert!(!is_valid_cidr("192.168.1.0/24\ndeny all"));
+    }
+
+    #[test]
+    fn test_needs_refresh_returns_true_for_missing_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("nonexistent.conf");
+        assert!(needs_refresh(&path));
+    }
+
+    #[test]
+    fn test_needs_refresh_returns_false_for_fresh_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("cloudflare.conf");
+        std::fs::write(&path, "# fresh").unwrap();
+        // File was just created — should NOT need refresh
+        assert!(!needs_refresh(&path));
+    }
+}

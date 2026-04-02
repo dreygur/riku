@@ -22,7 +22,8 @@ pub(super) fn parse_cron_field(field: &str, min: u32, max: u32) -> Result<Vec<u3
                 let range_parts: Vec<&str> = range.split('-').collect();
                 (range_parts[0].parse()?, range_parts[1].parse()?)
             } else {
-                (range.parse()?, range.parse()?)
+                // "n/step" means start at n, step to max
+                (range.parse()?, max)
             };
 
             for v in (start..=end).step_by(step as usize) {

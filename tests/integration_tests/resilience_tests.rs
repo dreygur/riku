@@ -614,10 +614,12 @@ log_file = "/tmp/test.log"
     fn test_environment_variable_limits() -> Result<()> {
         use std::env;
 
+        // Use test-specific var names to avoid parallel-test interference with
+        // test_resource_limits_from_env which writes the same RIKU_MAX_* vars.
         let cases = [
-            ("RIKU_MAX_MEMORY_MB", "512", 512u64),
-            ("RIKU_MAX_OPEN_FILES", "1024", 1024u64),
-            ("RIKU_MAX_PROCESSES", "64", 64u64),
+            ("RIKU_EVL_MAX_MEMORY_MB", "512", 512u64),
+            ("RIKU_EVL_MAX_OPEN_FILES", "1024", 1024u64),
+            ("RIKU_EVL_MAX_PROCESSES", "64", 64u64),
         ];
 
         for (var, val, expected) in &cases {
@@ -628,10 +630,10 @@ log_file = "/tmp/test.log"
         }
 
         // Zero values are valid (disabling limits)
-        env::set_var("RIKU_MAX_MEMORY_MB", "0");
-        let parsed: u64 = env::var("RIKU_MAX_MEMORY_MB").unwrap().parse().unwrap();
+        env::set_var("RIKU_EVL_MAX_MEMORY_MB", "0");
+        let parsed: u64 = env::var("RIKU_EVL_MAX_MEMORY_MB").unwrap().parse().unwrap();
         assert_eq!(parsed, 0);
-        env::remove_var("RIKU_MAX_MEMORY_MB");
+        env::remove_var("RIKU_EVL_MAX_MEMORY_MB");
 
         Ok(())
     }

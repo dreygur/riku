@@ -86,3 +86,110 @@ pub fn sync_app_repo(app_path: &Path, newrev: Option<&str>) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::Command;
+    use tempfile::TempDir;
+
+    /// Initialize a bare git repo and a working clone, commit one file, and return
+    /// both temp directories and the HEAD sha.
+    fn make_git_repo() -> (TempDir, TempDir, String) {
+        let bare = TempDir::new().unwrap();
+        let work = TempDir::new().unwrap();
+
+        // init bare repo
+        Command::new("git")
+            .args(["init", "--bare", bare.path().to_str().unwrap()])
+            .output()
+            .unwrap();
+
+        // clone into work tree
+        Command::new("git")
+            .args(["clone", bare.path().to_str().unwrap(), work.path().to_str().unwrap()])
+            .output()
+            .unwrap();
+
+        // configure identity so commits work in CI
+        Command::new("git")
+            .args(["-C", work.path().to_str().unwrap(), "config", "user.email", "test@example.com"])
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["-C", work.path().to_str().unwrap(), "config", "user.name", "Test"])
+            .output()
+            .unwrap();
+
+        // create a commit
+        std::fs::write(work.path().join("README"), "hello").unwrap();
+        Command::new("git")
+            .args(["-C", work.path().to_str().unwrap(), "add", "."])
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["-C", work.path().to_str().unwrap(), "commit", "-m", "init"])
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["-C", work.path().to_str().unwrap(), "push", "origin", "HEAD"])
+            .output()
+            .unwrap();
+
+        // get HEAD sha
+        let sha_out = Command::new("git")
+            .args(["-C", work.path().to_str().unwrap(), "rev-parse", "HEAD"])
+            .output()
+            .unwrap();
+        let sha = String::from_utf8(sha_out.stdout).unwrap().trim().to_string();
+
+        (bare, work, sha)
+    }
+
+    #[test]
+    fn test_git_reset_to_valid_rev_succeeds() -> Result<()> {
+        let (_bare, work, sha) = make_git_repo();
+        git_reset(work.path(), &sha)
+    }
+
+    #[test]
+    fn test_git_reset_to_invalid_rev_fails() {
+        let (_bare, work, _sha) = make_git_repo();
+        let result = git_reset(work.path(), "deadbeefdeadbeef");
+        assert!(result.is_err(), "Expected error for invalid rev");
+    }
+
+    #[test]
+    fn test_git_fetch_best_effort_does_not_panic() {
+        let (_bare, work, _sha) = make_git_repo();
+        // git_fetch is best-effort; calling it on a valid repo must not panic
+        git_fetch(work.path());
+    }
+
+    #[test]
+    fn test_sync_app_repo_without_newrev() -> Result<()> {
+        let (_bare, work, _sha) = make_git_repo();
+        // None for newrev: only fetches (best-effort), no reset
+        sync_app_repo(work.path(), None)
+    }
+
+    #[test]
+    fn test_sync_app_repo_with_valid_newrev() -> Result<()> {
+        let (_bare, work, sha) = make_git_repo();
+        sync_app_repo(work.path(), Some(&sha))
+    }
+
+    #[test]
+    fn test_sync_app_repo_with_invalid_newrev_returns_error() {
+        let (_bare, work, _sha) = make_git_repo();
+        let result = sync_app_repo(work.path(), Some("0000000000000000000000000000000000000000"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_git_update_submodules_no_submodules() {
+        // Repo with no submodules: should complete without panic
+        let (_bare, work, _sha) = make_git_repo();
+        git_update_submodules(work.path());
+    }
+}

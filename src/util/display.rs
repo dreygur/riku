@@ -83,3 +83,68 @@ pub fn echo(msg: &str, color: &str) {
         _ => println!("{}", msg),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_table_empty_headers_returns_empty() {
+        let result = format_table(&[], &[], 2);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_format_table_single_column_no_rows() {
+        let result = format_table(&["Name"], &[], 2);
+        assert!(result.contains("Name"));
+        assert!(result.contains("----"));
+    }
+
+    #[test]
+    fn test_format_table_header_separator_present() {
+        let result = format_table(&["App", "Status"], &[], 2);
+        let lines: Vec<&str> = result.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert!(lines[1].contains("---"));
+    }
+
+    #[test]
+    fn test_format_table_with_rows() {
+        let rows = vec![
+            vec!["myapp".to_string(), "running".to_string()],
+            vec!["other".to_string(), "stopped".to_string()],
+        ];
+        let result = format_table(&["App", "Status"], &rows, 2);
+        assert!(result.contains("myapp"));
+        assert!(result.contains("running"));
+        assert!(result.contains("other"));
+        assert!(result.contains("stopped"));
+    }
+
+    #[test]
+    fn test_format_table_column_width_expands_to_longest_cell() {
+        let rows = vec![vec!["a-very-long-app-name".to_string(), "ok".to_string()]];
+        let result = format_table(&["App", "St"], &rows, 2);
+        // "App" column must be at least 20 chars wide (padded)
+        let first_data_line = result.lines().nth(2).unwrap();
+        assert!(first_data_line.starts_with("a-very-long-app-name"));
+    }
+
+    #[test]
+    fn test_format_table_column_spacing_applied() {
+        let rows = vec![vec!["app".to_string(), "ok".to_string()]];
+        let result_2 = format_table(&["App", "St"], &rows, 2);
+        let result_4 = format_table(&["App", "St"], &rows, 4);
+        // Wider spacing means more spaces between columns
+        assert!(result_4.len() > result_2.len());
+    }
+
+    #[test]
+    fn test_format_table_row_with_fewer_cells_than_headers() {
+        // Should not panic when a row has fewer cells than headers
+        let rows = vec![vec!["only-one".to_string()]];
+        let result = format_table(&["App", "Status"], &rows, 2);
+        assert!(result.contains("only-one"));
+    }
+}
