@@ -37,6 +37,7 @@
 
 #[allow(unused_imports)]
 pub mod discovery;
+mod executor;
 pub mod hooks;
 pub mod manager;
 

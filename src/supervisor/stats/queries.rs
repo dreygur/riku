@@ -1,0 +1,117 @@
+//! Read-only query methods for the StatsManager.
+//!
+//! Provides aggregation and reporting over tracked process statistics.
+
+use std::collections::HashMap;
+
+use chrono::Utc;
+
+use super::types::{AppStats, HealthStatus, ProcessStatus};
+use super::manager::StatsManager;
+
+impl StatsManager {
+    /// Get stats for a specific process.
+    #[allow(dead_code)]
+    pub fn get_process_stats(&self, process_id: &str) -> Option<&super::types::ProcessStats> {
+        self.stats.get(process_id)
+    }
+
+    /// Get stats for all processes of an app.
+    #[allow(dead_code)]
+    pub fn get_app_stats(&self, app: &str) -> AppStats {
+        let processes: Vec<super::types::ProcessStats> = self
+            .stats
+            .values()
+            .filter(|s| s.app == app)
+            .cloned()
+            .collect();
+
+        let total_processes = processes.len() as u32;
+        let running_processes = processes
+            .iter()
+            .filter(|p| p.status == ProcessStatus::Running)
+            .count() as u32;
+        let healthy_processes = processes
+            .iter()
+            .filter(|p| p.health_check_status == HealthStatus::Healthy)
+            .count() as u32;
+        let total_restarts = processes.iter().map(|p| p.restart_count).sum();
+        let total_memory_bytes = processes.iter().map(|p| p.memory_bytes).sum();
+        let total_cpu_time_ms = processes.iter().map(|p| p.cpu_time_ms).sum();
+
+        AppStats {
+            app: app.to_string(),
+            total_processes,
+            running_processes,
+            healthy_processes,
+            total_restarts,
+            total_memory_bytes,
+            total_cpu_time_ms,
+            processes,
+            last_updated: Utc::now(),
+        }
+    }
+
+    /// Get stats for all apps.
+    #[allow(dead_code)]
+    pub fn get_all_stats(&self) -> Vec<AppStats> {
+        let mut apps: HashMap<String, AppStats> = HashMap::new();
+
+        for stats in self.stats.values() {
+            let app_stats = apps.entry(stats.app.clone()).or_insert_with(|| AppStats {
+                app: stats.app.clone(),
+                total_processes: 0,
+                running_processes: 0,
+                healthy_processes: 0,
+                total_restarts: 0,
+                total_memory_bytes: 0,
+                total_cpu_time_ms: 0,
+                processes: Vec::new(),
+                last_updated: Utc::now(),
+            });
+
+            app_stats.total_processes += 1;
+            if stats.status == ProcessStatus::Running {
+                app_stats.running_processes += 1;
+            }
+            if stats.health_check_status == HealthStatus::Healthy {
+                app_stats.healthy_processes += 1;
+            }
+            app_stats.total_restarts += stats.restart_count;
+            app_stats.total_memory_bytes += stats.memory_bytes;
+            app_stats.total_cpu_time_ms += stats.cpu_time_ms;
+            app_stats.processes.push(stats.clone());
+        }
+
+        apps.into_values().collect()
+    }
+
+    /// Remove stats for a process.
+    #[allow(dead_code)]
+    pub fn remove_process(&mut self, process_id: &str) {
+        self.stats.remove(process_id);
+        self.start_times.remove(process_id);
+        self.request_counts.remove(process_id);
+    }
+
+    /// Get total memory usage across all processes.
+    #[allow(dead_code)]
+    pub fn total_memory_usage(&self) -> u64 {
+        self.stats.values().map(|s| s.memory_bytes).sum()
+    }
+
+    /// Get total process count.
+    #[allow(dead_code)]
+    pub fn total_processes(&self) -> usize {
+        self.stats.len()
+    }
+
+    /// Get running process count.
+    #[allow(dead_code)]
+    pub fn running_processes(&self) -> usize {
+        self.stats
+            .values()
+            .filter(|s| s.status == ProcessStatus::Running)
+            .count()
+    }
+}

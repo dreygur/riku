@@ -66,7 +66,7 @@ pub fn run_plugin(plugin_name: &str, paths: &RikuPaths, args: &[String]) -> Resu
 
     if !status.success() {
         let code = status.code().unwrap_or_else(|| {
-            eprintln!("Plugin '{}' crashed without exit code", plugin_name);
+            tracing::warn!(plugin = plugin_name, "Plugin crashed without exit code");
             1
         });
         return Err(anyhow::anyhow!(
