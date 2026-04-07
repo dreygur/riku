@@ -42,3 +42,7 @@ harness = false
 lto = true
 strip = true
 codegen-units = 1
+
+[profile.test]
+opt-level = 0
+debug = true

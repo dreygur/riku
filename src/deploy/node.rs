@@ -15,6 +15,10 @@ use crate::util::{echo, validate_node_version};
 use super::node_workers::create_node_workers;
 
 /// Deploy a Node.js application using npm (or an alternate package manager).
+///
+/// If the environment variable `RIKU_SKIP_BUILD` is set (to any value), the
+/// package-installation and Node.js version-install steps are skipped.  This
+/// is intended for tests that run without npm present on the host.
 pub fn deploy_node(
     app: &str,
     app_path: &Path,
@@ -23,9 +27,16 @@ pub fn deploy_node(
 ) -> Result<()> {
     echo(&format!("-----> Deploying Node.js app '{}'", app), "green");
 
-    install_node_version(app, app_path, env, paths)?;
-    isolate_node_modules(app, app_path, env, paths)?;
-    install_dependencies(app_path, env)?;
+    let skip_build = std::env::var("RIKU_SKIP_BUILD").is_ok();
+
+    if !skip_build {
+        install_node_version(app, app_path, env, paths)?;
+        isolate_node_modules(app, app_path, env, paths)?;
+        install_dependencies(app_path, env)?;
+    } else {
+        echo("-----> Skipping build steps (RIKU_SKIP_BUILD set)", "yellow");
+    }
+
     create_node_workers(app, app_path, env, paths)?;
 
     Ok(())

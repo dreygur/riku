@@ -16,6 +16,10 @@ use super::python_workers::{
 };
 
 /// Deploy a Python application using pip and requirements.txt.
+///
+/// If the environment variable `RIKU_SKIP_BUILD` is set (to any value), the
+/// virtualenv creation and pip-install steps are skipped.  This is intended
+/// for tests that run without python3/pip present on the host.
 pub fn deploy_python(
     app: &str,
     app_path: &Path,
@@ -24,32 +28,39 @@ pub fn deploy_python(
 ) -> Result<()> {
     echo(&format!("-----> Deploying Python app '{}'", app), "green");
 
+    let skip_build = std::env::var("RIKU_SKIP_BUILD").is_ok();
+
     let python_version = env.get("PYTHON_VERSION").map(|s| s.as_str()).unwrap_or("3");
     let python_bin = if python_version == "2" { "python2" } else { "python3" };
 
     let venv_path = paths.env_root.join(app).join("venv");
-    if !venv_path.exists() {
-        echo("-----> Creating virtual environment", "green");
-        let status = Command::new(python_bin)
-            .args(["-m", "venv"])
-            .arg(&venv_path)
+
+    if !skip_build {
+        if !venv_path.exists() {
+            echo("-----> Creating virtual environment", "green");
+            let status = Command::new(python_bin)
+                .args(["-m", "venv"])
+                .arg(&venv_path)
+                .current_dir(app_path)
+                .status()?;
+
+            if !status.success() {
+                return Err(anyhow::anyhow!("Failed to create virtual environment"));
+            }
+        }
+
+        echo("-----> Installing dependencies", "green");
+        let pip_path = venv_path.join("bin").join("pip");
+        let status = Command::new(&pip_path)
+            .args(["install", "--upgrade", "-r", "requirements.txt"])
             .current_dir(app_path)
             .status()?;
 
         if !status.success() {
-            return Err(anyhow::anyhow!("Failed to create virtual environment"));
+            return Err(anyhow::anyhow!("Failed to install dependencies"));
         }
-    }
-
-    echo("-----> Installing dependencies", "green");
-    let pip_path = venv_path.join("bin").join("pip");
-    let status = Command::new(&pip_path)
-        .args(["install", "--upgrade", "-r", "requirements.txt"])
-        .current_dir(app_path)
-        .status()?;
-
-    if !status.success() {
-        return Err(anyhow::anyhow!("Failed to install dependencies"));
+    } else {
+        echo("-----> Skipping build steps (RIKU_SKIP_BUILD set)", "yellow");
     }
 
     let mut python_env = env.clone();

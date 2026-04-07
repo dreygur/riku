@@ -1,14 +1,14 @@
 /// End-to-End Deployment Tests
 ///
-/// Tests are split into two categories:
+/// All tests run without requiring npm, pip, or any runtime toolchain.
 ///
-/// 1. **Sub-step tests** (non-ignored) — exercise individual deploy pipeline steps
-///    (git sync, worker config creation, runtime detection, nginx config generation)
-///    without requiring npm, pip, or any runtime toolchain.
+/// - **Sub-step tests** — exercise individual deploy pipeline steps
+///   (git sync, worker config creation, runtime detection, nginx config generation).
 ///
-/// 2. **Full-deploy tests** (marked `#[ignore]`) — call `do_deploy()` end-to-end
-///    and require npm / pip to be installed on the host. Run with:
-///    `cargo test e2e -- --ignored`
+/// - **Full-deploy tests** — call `do_deploy()` end-to-end with `RIKU_SKIP_BUILD=1`
+///   so that package-installation steps are bypassed.  The rest of the pipeline
+///   (git sync, worker config creation, LIVE_ENV writing, supervisor notification)
+///   runs normally.
 
 #[cfg(test)]
 mod tests {
@@ -519,13 +519,15 @@ mod tests {
     }
 
     // =========================================================================
-    // Full-deploy tests — require npm / pip on the host.
-    // Run with: cargo test e2e -- --ignored
+    // Full-deploy tests — call do_deploy() end-to-end with RIKU_SKIP_BUILD=1
+    // so that npm / pip are not required on the host.
     // =========================================================================
 
     #[test]
-    #[ignore = "requires npm installed on host"]
     fn test_full_deploy_node_app() -> Result<()> {
+        // Skip the npm install / nodeenv steps so this test runs without npm.
+        std::env::set_var("RIKU_SKIP_BUILD", "1");
+
         let tmp = TempDir::new()?;
         let paths = make_paths(&tmp);
 
@@ -555,12 +557,15 @@ mod tests {
         // App dir must have the Procfile
         assert!(app_dir.join("Procfile").exists());
 
+        std::env::remove_var("RIKU_SKIP_BUILD");
         Ok(())
     }
 
     #[test]
-    #[ignore = "requires pip / python3 installed on host"]
     fn test_full_deploy_python_app() -> Result<()> {
+        // Skip the venv / pip install steps so this test runs without python3/pip.
+        std::env::set_var("RIKU_SKIP_BUILD", "1");
+
         let tmp = TempDir::new()?;
         let paths = make_paths(&tmp);
 
@@ -586,6 +591,7 @@ mod tests {
         assert!(content.contains("gunicorn"), "config must mention gunicorn");
         assert!(app_dir.join("requirements.txt").exists());
 
+        std::env::remove_var("RIKU_SKIP_BUILD");
         Ok(())
     }
 }
