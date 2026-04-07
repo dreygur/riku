@@ -9,6 +9,7 @@
 //! - [`ssh_keys`]          — SSH authorized_keys management
 //! - [`process_util`]      — free-port allocation, shell command helpers, binary checks
 
+pub mod deploy_logger;
 pub mod display;
 pub mod env;
 pub mod nginx_validation;

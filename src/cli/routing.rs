@@ -92,9 +92,20 @@ pub fn build_plugin_args(command: &Commands) -> Vec<String> {
             args.push(app.clone());
             args.push("destroy".to_string());
         }
-        Commands::Logs { app, process } => {
+        Commands::Logs {
+            app,
+            process,
+            deploy,
+            follow,
+        } => {
             args.push(app.clone());
             args.push("logs".to_string());
+            if *deploy {
+                args.push("--deploy".to_string());
+            }
+            if *follow {
+                args.push("--follow".to_string());
+            }
             if process != "*" {
                 args.push(process.clone());
             }

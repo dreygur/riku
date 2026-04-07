@@ -165,6 +165,8 @@ mod routing_tests {
         let cmd = Commands::Logs {
             app: "myapp".to_string(),
             process: "*".to_string(),
+            deploy: false,
+            follow: false,
         };
         assert_eq!(get_plugin_command(&cmd), Some("logs".to_string()));
     }
@@ -283,6 +285,8 @@ mod routing_tests {
         let cmd = Commands::Logs {
             app: "myapp".to_string(),
             process: "*".to_string(),
+            deploy: false,
+            follow: false,
         };
         let args = build_plugin_args(&cmd);
         // When process is "*", it should not be appended
@@ -295,6 +299,8 @@ mod routing_tests {
         let cmd = Commands::Logs {
             app: "myapp".to_string(),
             process: "web".to_string(),
+            deploy: false,
+            follow: false,
         };
         let args = build_plugin_args(&cmd);
         assert!(args.contains(&"web".to_string()));

@@ -85,7 +85,18 @@ fn main() -> Result<()> {
         }
         Commands::Deploy { app, from } => cli::apps::cmd_deploy(&paths, &app, from.as_deref())?,
         Commands::Destroy { app } => cli::apps::cmd_destroy(&paths, &app)?,
-        Commands::Logs { app, process } => cli::apps::cmd_logs(&paths, &app, &process)?,
+        Commands::Logs {
+            app,
+            process,
+            deploy,
+            follow,
+        } => {
+            if deploy {
+                cli::apps::cmd_deploy_logs(&paths, &app, follow)?;
+            } else {
+                cli::apps::cmd_logs(&paths, &app, &process)?;
+            }
+        }
         Commands::Ps {
             app,
             verbose,

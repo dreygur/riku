@@ -87,13 +87,19 @@ pub enum Commands {
     },
 
     /// Tail app logs
-    #[command(after_help = "Examples:\n  riku logs myapp\n  riku logs myapp web\n  riku logs myapp worker")]
+    #[command(after_help = "Examples:\n  riku logs myapp\n  riku logs myapp web\n  riku logs myapp worker\n  riku logs myapp --deploy\n  riku logs myapp --deploy --follow")]
     Logs {
         /// App name
         app: String,
         /// Process filter (default: all)
         #[arg(default_value = "*")]
         process: String,
+        /// Show the deploy log instead of runtime process logs
+        #[arg(long, short = 'd')]
+        deploy: bool,
+        /// Follow (tail -f) the deploy log live; only valid with --deploy
+        #[arg(long, short = 'f', requires = "deploy")]
+        follow: bool,
     },
 
     /// Manage app processes

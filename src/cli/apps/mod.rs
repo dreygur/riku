@@ -30,6 +30,6 @@ pub use deploy::cmd_deploy;
 pub use destroy::cmd_destroy;
 pub use info::cmd_apps_info;
 pub use list::cmd_apps;
-pub use logs::cmd_logs;
+pub use logs::{cmd_deploy_logs, cmd_logs};
 pub use process::{cmd_ps_all, cmd_ps_scale, cmd_ps_show};
 pub use stats::{cmd_stats_all, cmd_stats_app};

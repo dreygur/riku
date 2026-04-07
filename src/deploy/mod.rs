@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::fs;
 
 use crate::config::RikuPaths;
-use crate::util::{echo, found_app, parse_procfile};
+use crate::util::{deploy_logger::DeployLogger, echo, found_app, parse_procfile};
 
 pub mod clojure;
 pub mod container;
@@ -71,9 +71,18 @@ pub fn do_deploy(
         ));
     }
 
+    // Open deploy log — created/truncated per deploy so it always reflects the latest run.
+    let deploy_log_path = paths.deploy_log_file(app);
+    let mut dlog = DeployLogger::new(&deploy_log_path)?;
+
+    dlog.log(&format!("Deploying app '{}'", app));
     echo(&format!("-----> Deploying app '{}'", app), "green");
 
     // Sync working tree with the pushed revision.
+    dlog.log_raw(&format!(
+        "Syncing repo to {}",
+        newrev.unwrap_or("HEAD")
+    ));
     git_ops::sync_app_repo(&app_path, newrev)?;
 
     // Ensure log directory exists.
@@ -86,6 +95,10 @@ pub fn do_deploy(
     let mut workers = match workers {
         Some(w) if !w.is_empty() => w,
         _ => {
+            dlog.log_error(&format!(
+                "Invalid or missing Procfile for app '{}'. Deploy aborted.",
+                app
+            ));
             return Err(anyhow::anyhow!(
                 "Invalid or missing Procfile for app '{}'. Deploy aborted.",
                 app
@@ -98,6 +111,7 @@ pub fn do_deploy(
 
     // Run preflight command if present.
     if let Some(preflight_cmd) = workers.remove("preflight") {
+        dlog.log("Running preflight command");
         env_setup::run_preflight(&preflight_cmd, &app_path);
     }
 
@@ -111,25 +125,36 @@ pub fn do_deploy(
     // Validate environment variables and print warnings.
     let warnings = crate::util::validate_env_vars(&env);
     crate::util::print_env_warnings(&warnings);
+    for w in &warnings {
+        dlog.log_warn(w);
+    }
 
     // pre-deploy hook (failures abort the deploy).
+    dlog.log_raw("Running pre-deploy hooks");
     hooks::run_pre_deploy(app, &app_path, paths, &env)?;
 
     // Detect runtime (needed for hook context and dispatch).
     let runtime = detect_runtime(&app_path);
     let runtime_name = runtime.as_ref().map(|r| r.to_string());
+    if let Some(ref name) = runtime_name {
+        dlog.log(&format!("Detected runtime: {}", name));
+    }
 
     // pre-build hook (failures abort the deploy).
+    dlog.log_raw("Running pre-build hooks");
     hooks::run_pre_build(app, &app_path, paths, runtime_name.as_deref(), &env)?;
 
     // Dispatch to runtime-specific deployer.
+    dlog.log_raw("Building application");
     dispatch_runtime(app, &app_path, &mut env, paths, &runtime, &workers)?;
 
     // post-build hook (failures abort the deploy).
+    dlog.log_raw("Running post-build hooks");
     hooks::run_post_build(app, &app_path, paths, runtime_name.as_deref(), &env)?;
 
     // Run release command if present.
     if let Some(release_cmd) = workers.get("release") {
+        dlog.log("Running release command");
         env_setup::run_release(release_cmd, &app_path)?;
     }
 
@@ -137,11 +162,14 @@ pub fn do_deploy(
     env_setup::write_live_env(app, paths, &env)?;
 
     // Start the application processes.
+    dlog.log("Starting application processes");
     spawn_app(app, paths)?;
 
     // post-deploy hook (failures are warnings, not fatal).
+    dlog.log_raw("Running post-deploy hooks");
     let _ = hooks::run_post_deploy(app, &app_path, paths, runtime_name.as_deref(), &env);
 
+    dlog.log(&format!("Deploy of '{}' complete", app));
     Ok(())
 }
 

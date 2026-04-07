@@ -9,7 +9,55 @@ use std::thread;
 use std::time::Duration;
 
 use crate::config::RikuPaths;
-use crate::util::{display, exit_if_invalid};
+use crate::util::{display, exit_if_invalid, validate_app_name};
+
+/// Show the persistent deploy log for an app.
+///
+/// When `follow` is true, the log is tailed live (polling every 200 ms) until
+/// Ctrl-C terminates the process. Only the contents written since the file was
+/// last truncated (i.e. the most recent deploy) are shown.
+pub fn cmd_deploy_logs(paths: &RikuPaths, app: &str, follow: bool) -> Result<()> {
+    let app = validate_app_name(app)?;
+    let log_file = paths.deploy_log_file(&app);
+
+    if !log_file.exists() {
+        display::warn(&format!(
+            "No deploy log found for '{}'. Deploy the app first.",
+            app
+        ));
+        return Ok(());
+    }
+
+    display::section(&format!("Deploy log: {}", app));
+
+    if follow {
+        // Print the existing content then poll for new lines.
+        let mut file = fs::File::open(&log_file)?;
+        // Show everything already written.
+        let mut initial = String::new();
+        file.read_to_string(&mut initial)?;
+        for line in initial.lines() {
+            println!("{}", line);
+        }
+        // Tail: keep reading from the current position.
+        loop {
+            let mut buf = String::new();
+            if file.read_to_string(&mut buf).is_ok() && !buf.is_empty() {
+                for line in buf.lines() {
+                    println!("{}", line);
+                }
+            }
+            thread::sleep(Duration::from_millis(200));
+        }
+    } else {
+        let content = fs::read_to_string(&log_file)?;
+        for line in content.lines() {
+            println!("{}", line);
+        }
+    }
+
+    Ok(())
+}
 
 /// Tail app log files using multi_tail.
 pub fn cmd_logs(paths: &RikuPaths, app: &str, process: &str) -> Result<()> {
