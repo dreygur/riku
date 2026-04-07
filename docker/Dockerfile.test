@@ -1,0 +1,29 @@
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    git curl ca-certificates \
+    nginx \
+    nodejs npm \
+    python3 python3-pip python3-venv \
+    build-essential pkg-config libssl-dev \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+WORKDIR /riku-src
+COPY . .
+RUN cargo build --release 2>&1
+
+# Install riku binary to PATH
+RUN cp target/release/riku /usr/local/bin/riku
+
+# Create riku user (dedicated deployment user, like piku)
+RUN useradd -m -s /bin/bash riku
+
+COPY docker/test-entrypoint.sh /test-entrypoint.sh
+RUN chmod +x /test-entrypoint.sh
+
+ENTRYPOINT ["/test-entrypoint.sh"]
