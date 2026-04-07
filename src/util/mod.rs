@@ -18,7 +18,10 @@ pub mod ssh_keys;
 pub mod validation;
 
 // Re-export everything so existing call-sites (`crate::util::echo`, etc.) keep working.
-pub use display::{echo, format_table, print_table, print_table_with_title};
+pub use display::{
+    blank, echo, error, format_table, info, kv, note, print_table, print_table_with_title,
+    section, step, success, warn,
+};
 pub use env::{expandvars, parse_settings, write_config};
 pub use ssh_keys::setup_authorized_keys;
 pub use nginx_validation::{print_env_warnings, validate_env_vars, validate_nginx_cache_config};

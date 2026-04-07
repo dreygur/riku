@@ -9,7 +9,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::config::RikuPaths;
-use crate::util::{echo, exit_if_invalid};
+use crate::util::{display, exit_if_invalid};
 
 /// Tail app log files using multi_tail.
 pub fn cmd_logs(paths: &RikuPaths, app: &str, process: &str) -> Result<()> {
@@ -26,7 +26,7 @@ pub fn cmd_logs(paths: &RikuPaths, app: &str, process: &str) -> Result<()> {
     if !logfiles.is_empty() {
         multi_tail(&logfiles)?;
     } else {
-        echo(&format!("No logs found for app '{}'.", app), "yellow");
+        display::warn(&format!("No logs found for app '{}'.", app));
     }
     Ok(())
 }

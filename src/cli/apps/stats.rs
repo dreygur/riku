@@ -4,7 +4,7 @@ use serde_json;
 use std::fs;
 
 use crate::config::RikuPaths;
-use crate::util::{echo, exit_if_invalid};
+use crate::util::{display, exit_if_invalid};
 
 /// Show stats for all apps.
 pub fn cmd_stats_all(paths: &RikuPaths) -> Result<()> {
@@ -14,8 +14,8 @@ pub fn cmd_stats_all(paths: &RikuPaths) -> Result<()> {
     if stats_file.exists() {
         if let Ok(content) = fs::read_to_string(&stats_file) {
             if let Ok(stats_vec) = serde_json::from_str::<Vec<serde_json::Value>>(&content) {
-                println!("{}", "=== Riku Stats ===".green());
-                println!();
+                display::section("Riku Stats");
+                display::blank();
 
                 for stats in stats_vec {
                     if let Some(app) = stats.get("app").and_then(|v| v.as_str()) {
@@ -37,11 +37,11 @@ pub fn cmd_stats_all(paths: &RikuPaths) -> Result<()> {
                             .unwrap_or(0);
                         let memory_mb = memory_bytes as f64 / 1024.0 / 1024.0;
 
-                        println!("{}", format!("App: {}", app).green());
-                        println!("  Processes: {}/{} running", running_procs, total_procs);
-                        println!("  Healthy: {}/{}", healthy_procs, total_procs);
-                        println!("  Memory: {:.2} MB", memory_mb);
-                        println!();
+                        display::info(&format!("App: {}", app));
+                        display::kv("Processes:", &format!("{}/{} running", running_procs, total_procs));
+                        display::kv("Healthy:", &format!("{}/{}", healthy_procs, total_procs));
+                        display::kv("Memory:", &format!("{:.2} MB", memory_mb));
+                        display::blank();
                     }
                 }
                 return Ok(());
@@ -50,11 +50,11 @@ pub fn cmd_stats_all(paths: &RikuPaths) -> Result<()> {
     }
 
     // Fallback: show basic info from worker configs
-    println!("{}", "=== Deployed Apps ===".green());
-    println!();
+    display::section("Deployed Apps");
+    display::blank();
 
     if !paths.app_root.exists() {
-        echo("No apps deployed.", "yellow");
+        display::warn("No apps deployed.");
         return Ok(());
     }
 
@@ -67,11 +67,11 @@ pub fn cmd_stats_all(paths: &RikuPaths) -> Result<()> {
             .map(|g| g.count())
             .unwrap_or(0);
 
-        println!("{}: {} workers", app_name.green(), worker_count);
+        display::note(&format!("{}: {} workers", app_name.green(), worker_count));
     }
 
-    println!();
-    println!("Note: Detailed stats require supervisor to be running.");
+    display::blank();
+    display::note("Note: Detailed stats require supervisor to be running.");
 
     Ok(())
 }
@@ -89,8 +89,8 @@ pub fn cmd_stats_app(paths: &RikuPaths, app: &str) -> Result<()> {
                 for stats in stats_vec {
                     if let Some(stats_app) = stats.get("app").and_then(|v| v.as_str()) {
                         if stats_app == app {
-                            println!("{}", format!("=== Stats for '{}' ===", app).green());
-                            println!();
+                            display::section(&format!("Stats for '{}'", app));
+                            display::blank();
 
                             if let Some(processes) =
                                 stats.get("processes").and_then(|v| v.as_array())
@@ -147,7 +147,7 @@ pub fn cmd_stats_app(paths: &RikuPaths, app: &str) -> Result<()> {
     }
 
     // Fallback: show basic info
-    println!("{}", format!("=== Processes for '{}' ===", app).green());
+    display::section(&format!("Processes for '{}'", app));
 
     let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", app));
     let worker_configs: Vec<_> = glob::glob(toml_pattern.to_str().unwrap_or(""))
@@ -155,7 +155,7 @@ pub fn cmd_stats_app(paths: &RikuPaths, app: &str) -> Result<()> {
         .unwrap_or_else(|_| Vec::new());
 
     if worker_configs.is_empty() {
-        echo("No running processes found.", "yellow");
+        display::warn("No running processes found.");
         return Ok(());
     }
 

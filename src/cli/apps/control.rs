@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 
 use crate::config::{RikuPaths, RIKU_RAW_SOURCE_URL};
 use crate::supervisor::Supervisor;
-use crate::util::{echo, exit_if_invalid, parse_settings};
+use crate::util::{display, exit_if_invalid, parse_settings};
 
 /// Run a command in the app context with LIVE_ENV loaded.
 pub fn cmd_run(paths: &RikuPaths, app: &str, cmd: &[String]) -> Result<()> {
@@ -40,7 +40,7 @@ pub fn cmd_run(paths: &RikuPaths, app: &str, cmd: &[String]) -> Result<()> {
 pub fn cmd_restart(paths: &RikuPaths, app: &str) -> Result<()> {
     let app = exit_if_invalid(app, &paths.app_root)?;
 
-    echo(&format!("restarting app '{}'...", app), "yellow");
+    display::info(&format!("restarting app '{}'...", app));
     do_stop(paths, &app);
     // Trigger a deploy to restart the app
     let deltas: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
@@ -56,7 +56,7 @@ pub fn cmd_stop(paths: &RikuPaths, app: &str) -> Result<()> {
 
 /// Self-update the binary by downloading latest from RIKU_RAW_SOURCE_URL.
 pub fn cmd_update() -> Result<()> {
-    echo("Updating riku...", "");
+    display::info("Updating riku...");
 
     let output = Command::new("curl")
         .args([
@@ -71,21 +71,15 @@ pub fn cmd_update() -> Result<()> {
 
     let http_code = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if http_code == "200" {
-        echo(
-            "Note: self-update for riku binary is not yet implemented.",
-            "yellow",
-        );
-        echo("The reference source is accessible.", "");
+        display::warn("Note: self-update for riku binary is not yet implemented.");
+        display::note("The reference source is accessible.");
     } else {
-        echo(
-            &format!(
-                "Error updating riku - please check if {} is accessible from this machine.",
-                RIKU_RAW_SOURCE_URL
-            ),
-            "",
-        );
+        display::note(&format!(
+            "Error updating riku - please check if {} is accessible from this machine.",
+            RIKU_RAW_SOURCE_URL
+        ));
     }
-    echo("Done.", "");
+    display::success("Done.");
     Ok(())
 }
 
@@ -100,7 +94,7 @@ pub fn cmd_supervisor(paths: &RikuPaths) -> Result<()> {
 pub fn cmd_hot_reload(paths: &RikuPaths, app: &str) -> Result<()> {
     let app = exit_if_invalid(app, &paths.app_root)?;
 
-    echo(&format!("Hot reloading app '{}'...", app), "green");
+    display::info(&format!("Hot reloading app '{}'...", app));
 
     // Signal the supervisor by updating the mtime of each enabled worker TOML.
     // The supervisor's file watcher (notify) detects the Modify event and reloads the config.
@@ -114,34 +108,22 @@ pub fn cmd_hot_reload(paths: &RikuPaths, app: &str) -> Result<()> {
             match fs::read_to_string(&entry) {
                 Ok(content) => {
                     if let Err(e) = fs::write(&entry, content) {
-                        echo(
-                            &format!("Warning: failed to touch {}: {}", entry.display(), e),
-                            "yellow",
-                        );
+                        display::warn(&format!("Warning: failed to touch {}: {}", entry.display(), e));
                     } else {
                         count += 1;
                     }
                 }
                 Err(e) => {
-                    echo(
-                        &format!("Warning: failed to read {}: {}", entry.display(), e),
-                        "yellow",
-                    );
+                    display::warn(&format!("Warning: failed to read {}: {}", entry.display(), e));
                 }
             }
         }
 
         if count > 0 {
-            echo(
-                &format!("Triggered hot reload for {} worker(s)", count),
-                "green",
-            );
-            echo(
-                "Note: Supervisor must be running for hot reload to take effect.",
-                "yellow",
-            );
+            display::success(&format!("Triggered hot reload for {} worker(s)", count));
+            display::warn("Note: Supervisor must be running for hot reload to take effect.");
         } else {
-            echo("No worker configs found. Is the app deployed?", "yellow");
+            display::warn("No worker configs found. Is the app deployed?");
         }
     }
 
@@ -162,11 +144,11 @@ fn do_stop(paths: &RikuPaths, app: &str) {
     }
 
     if !configs.is_empty() {
-        echo(&format!("Stopping app '{}'...", app), "yellow");
+        display::info(&format!("Stopping app '{}'...", app));
         for c in &configs {
             let _ = fs::remove_file(c);
         }
     } else {
-        echo(&format!("Error: app '{}' not deployed!", app), "red");
+        display::error(&format!("Error: app '{}' not deployed!", app));
     }
 }

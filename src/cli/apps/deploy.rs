@@ -4,7 +4,7 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::config::RikuPaths;
-use crate::util::{echo, exit_if_invalid};
+use crate::util::{display, exit_if_invalid};
 
 /// Deploy an app.
 pub fn cmd_deploy(paths: &RikuPaths, app: &str, from_path: Option<&str>) -> Result<()> {
@@ -47,31 +47,31 @@ fn deploy_from_path(paths: &RikuPaths, app: &str, source: &str) -> Result<()> {
     let source_path = Path::new(source);
 
     if !source_path.exists() {
-        echo(&format!("Error: path '{}' does not exist.", source), "red");
+        display::error(&format!("Error: path '{}' does not exist.", source));
         bail!("Source path does not exist");
     }
 
     if !source_path.is_dir() {
-        echo(&format!("Error: '{}' is not a directory.", source), "red");
+        display::error(&format!("Error: '{}' is not a directory.", source));
         bail!("Source is not a directory");
     }
 
     let procfile = source_path.join("Procfile");
     if !procfile.exists() {
-        echo("Error: Procfile not found in source directory.", "red");
-        echo("A Procfile is required for deployment.", "yellow");
-        echo("Example: echo 'web: npm start' > Procfile", "yellow");
+        display::error("Error: Procfile not found in source directory.");
+        display::warn("A Procfile is required for deployment.");
+        display::warn("Example: echo 'web: npm start' > Procfile");
         bail!("Procfile not found");
     }
 
     let git_dir = source_path.join(".git");
     if !git_dir.exists() {
-        echo("⚠ Warning: source is not a git repository.", "yellow");
-        echo("  Consider initializing git: git init", "yellow");
+        display::warn("Warning: source is not a git repository.");
+        display::warn("  Consider initializing git: git init");
     }
 
     let app_dir = paths.app_root.join(app);
-    echo(&format!("Copying files from '{}'...", source), "green");
+    display::info(&format!("Copying files from '{}'...", source));
 
     // Copy to a temp dir first, then atomic rename
     let tmp_dir = paths.app_root.join(format!(".{}.tmp", app));
@@ -90,10 +90,7 @@ fn deploy_from_path(paths: &RikuPaths, app: &str, source: &str) -> Result<()> {
 
     fs::rename(&tmp_dir, &app_dir)?;
 
-    echo(
-        &format!("✓ Copied {} files", count_files(&app_dir)?),
-        "green",
-    );
+    display::success(&format!("Copied {} files", count_files(&app_dir)?));
 
     Ok(())
 }

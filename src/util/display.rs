@@ -1,4 +1,25 @@
 //! Terminal display utilities: colored output and table formatting.
+//!
+//! ## Standard `after_help` format for CLI commands
+//!
+//! ```text
+//! #[command(after_help = "Examples:\n  riku <cmd> arg1\n  riku <cmd> arg1 --flag")]
+//! ```
+//!
+//! ## Output function guide
+//!
+//! | Function    | Prefix / style          | Stream | Use for                               |
+//! |-------------|-------------------------|--------|---------------------------------------|
+//! | `info`      | `"-----> "` green       | stdout | deployment steps, status              |
+//! | `success`   | `"✓ "` green bold       | stdout | completed actions                     |
+//! | `warn`      | `" !     "` yellow      | stderr | non-fatal issues, hints               |
+//! | `error`     | `" !     "` red bold    | stderr | fatal errors (follow with bail!/Err)  |
+//! | `step`      | `"       "` cyan        | stdout | sub-steps within an operation         |
+//! | `note`      | `"       "` white       | stdout | data / config display                 |
+//! | `section`   | `"=== ... ==="` green bold | stdout | section headers                    |
+//! | `kv`        | `"  key   value"`       | stdout | key-value pairs                       |
+//! | `blank`     | empty line              | stdout | visual separator                      |
+//! | `echo`      | Heroku-style colored    | varies | deploy pipeline (keep existing usage) |
 
 use colored::Colorize;
 
@@ -67,6 +88,51 @@ pub fn print_table_with_title(
     println!("{}", title.green().bold());
     println!();
     print_table(headers, rows, column_spacing);
+}
+
+/// `"-----> msg"` green stdout — deployment steps, status.
+pub fn info(msg: &str) {
+    println!("{} {}", "----->".green(), msg);
+}
+
+/// `"✓ msg"` green bold stdout — completed actions.
+pub fn success(msg: &str) {
+    println!("{} {}", "✓".green().bold(), msg);
+}
+
+/// `" !     msg"` yellow stderr — warnings, non-fatal issues.
+pub fn warn(msg: &str) {
+    eprintln!("{} {}", " !    ".yellow(), msg);
+}
+
+/// `" !     msg"` red bold stderr — errors (follow with `bail!` or `return Err`).
+pub fn error(msg: &str) {
+    eprintln!("{} {}", " !    ".red().bold(), msg);
+}
+
+/// `"       msg"` cyan stdout — sub-steps, indented progress.
+pub fn step(msg: &str) {
+    println!("       {}", msg.cyan());
+}
+
+/// `"       msg"` white stdout — data/config display.
+pub fn note(msg: &str) {
+    println!("       {}", msg.white());
+}
+
+/// `"=== title ==="` green bold stdout — section headers.
+pub fn section(title: &str) {
+    println!("{}", format!("=== {} ===", title).green().bold());
+}
+
+/// `"  key   value"` stdout — key-value pair, key is bold.
+pub fn kv(key: &str, value: &str) {
+    println!("  {:<20} {}", key.bold(), value);
+}
+
+/// Print a blank separator line.
+pub fn blank() {
+    println!();
 }
 
 /// Print colored output with different log levels (Heroku/Piku style).

@@ -1,10 +1,9 @@
 use anyhow::Result;
-use colored::Colorize;
 use std::collections::HashMap;
 use std::fs;
 
 use crate::config::RikuPaths;
-use crate::util::{echo, exit_if_invalid, parse_settings, write_config};
+use crate::util::{display, exit_if_invalid, parse_settings, write_config};
 
 /// Show app configuration (ENV file).
 pub fn cmd_config_show(paths: &RikuPaths, app: &str) -> Result<()> {
@@ -13,12 +12,9 @@ pub fn cmd_config_show(paths: &RikuPaths, app: &str) -> Result<()> {
     let config_file = paths.env_root.join(&app).join("ENV");
     if config_file.exists() {
         let content = fs::read_to_string(&config_file)?;
-        println!("{}", content.trim().white());
+        display::note(content.trim());
     } else {
-        echo(
-            &format!("Warning: app '{}' not deployed, no config found.", app),
-            "yellow",
-        );
+        display::warn(&format!("Warning: app '{}' not deployed, no config found.", app));
     }
     Ok(())
 }
@@ -32,13 +28,10 @@ pub fn cmd_config_get(paths: &RikuPaths, app: &str, key: &str) -> Result<()> {
         let mut env = HashMap::new();
         let settings = parse_settings(&config_file, &mut env)?;
         if let Some(val) = settings.get(key) {
-            println!("{}", val.white());
+            display::note(val);
         }
     } else {
-        echo(
-            &format!("Warning: no active configuration for '{}'", app),
-            "",
-        );
+        display::note(&format!("Warning: no active configuration for '{}'", app));
     }
     Ok(())
 }
@@ -59,10 +52,10 @@ pub fn cmd_config_set(paths: &RikuPaths, app: &str, settings: &[String]) -> Resu
         if let Some(eq_pos) = s.find('=') {
             let k = s[..eq_pos].trim().to_string();
             let v = s[eq_pos + 1..].trim().to_string();
-            println!("{}", format!("Setting {}={} for '{}'", k, v, app).white());
+            display::note(&format!("Setting {}={} for '{}'", k, v, app));
             env.insert(k, v);
         } else {
-            echo(&format!("Error: malformed setting '{}'", s), "red");
+            display::error(&format!("Error: malformed setting '{}'", s));
             return Ok(());
         }
     }
@@ -83,7 +76,7 @@ pub fn cmd_config_unset(paths: &RikuPaths, app: &str, keys: &[String]) -> Result
 
     for s in keys {
         if env.remove(s).is_some() {
-            println!("{}", format!("Unsetting {} for '{}'", s, app).white());
+            display::note(&format!("Unsetting {} for '{}'", s, app));
         }
     }
     write_config(&config_file, &env, "=")?;
@@ -100,12 +93,9 @@ pub fn cmd_config_live(paths: &RikuPaths, app: &str) -> Result<()> {
     let live_config = paths.env_root.join(&app).join("LIVE_ENV");
     if live_config.exists() {
         let content = fs::read_to_string(&live_config)?;
-        println!("{}", content.trim().white());
+        display::note(content.trim());
     } else {
-        echo(
-            &format!("Warning: app '{}' not deployed, no config found.", app),
-            "yellow",
-        );
+        display::warn(&format!("Warning: app '{}' not deployed, no config found.", app));
     }
     Ok(())
 }

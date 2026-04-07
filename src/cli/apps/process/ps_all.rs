@@ -3,14 +3,14 @@ use colored::Colorize;
 use std::fs;
 
 use crate::config::RikuPaths;
-use crate::util::echo;
+use crate::util::display;
 
 /// Show all processes for all apps.
 pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
     let app_root = &paths.app_root;
 
     if !app_root.exists() {
-        echo("No applications deployed.", "yellow");
+        display::warn("No applications deployed.");
         return Ok(());
     }
 
@@ -21,7 +21,7 @@ pub fn cmd_ps_all(paths: &RikuPaths, verbose: bool) -> Result<()> {
         .collect();
 
     if apps.is_empty() {
-        echo("No applications deployed.", "yellow");
+        display::warn("No applications deployed.");
         return Ok(());
     }
 
@@ -67,7 +67,8 @@ fn show_all_verbose(paths: &RikuPaths, apps: &[String]) -> Result<()> {
         }
     }
 
-    crate::util::print_table_with_title("=== All Processes ===", &headers, &rows, 2);
+    display::section("All Processes");
+    crate::util::print_table(&headers, &rows, 2);
 
     println!(
         "Total: {} process(es) across {} app(s)",
@@ -90,13 +91,11 @@ fn show_all_compact(paths: &RikuPaths, apps: &[String]) -> Result<()> {
         ]);
     }
 
-    crate::util::print_table_with_title("=== Deployed Apps ===", &headers, &rows, 2);
+    display::section("Deployed Apps");
+    crate::util::print_table(&headers, &rows, 2);
 
-    println!();
-    echo(
-        "Use 'riku ps <app> --verbose' for detailed process info",
-        "yellow",
-    );
+    display::blank();
+    display::warn("Use 'riku ps <app> --verbose' for detailed process info");
     Ok(())
 }
 
@@ -166,7 +165,7 @@ pub(super) fn collect_worker_configs(paths: &RikuPaths, app: &str) -> Vec<std::p
     let mut configs: Vec<_> = match glob::glob(toml_pattern.to_str().unwrap_or("")) {
         Ok(g) => g.filter_map(|r| r.ok()).collect(),
         Err(e) => {
-            eprintln!("Warning: glob failed for toml worker configs: {}", e);
+            display::warn(&format!("Warning: glob failed for toml worker configs: {}", e));
             Vec::new()
         }
     };
@@ -174,7 +173,7 @@ pub(super) fn collect_worker_configs(paths: &RikuPaths, app: &str) -> Vec<std::p
     let ini_configs: Vec<_> = match glob::glob(ini_pattern.to_str().unwrap_or("")) {
         Ok(g) => g.filter_map(|r| r.ok()).collect(),
         Err(e) => {
-            eprintln!("Warning: glob failed for ini worker configs: {}", e);
+            display::warn(&format!("Warning: glob failed for ini worker configs: {}", e));
             Vec::new()
         }
     };

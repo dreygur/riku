@@ -20,6 +20,7 @@ pub enum AppsCmd {
     },
 
     /// Destroy an application (preserves data/cache)
+    #[command(after_help = "Examples:\n  riku apps destroy myapp")]
     Destroy {
         /// Application name
         name: String,
@@ -83,9 +84,11 @@ pub enum ConfigCmd {
 #[derive(Subcommand, Debug)]
 pub enum StatsCmd {
     /// Show stats for all apps
+    #[command(after_help = "Examples:\n  riku stats all")]
     All,
 
     /// Show stats for a specific app
+    #[command(after_help = "Examples:\n  riku stats app myapp")]
     App {
         /// App name
         app: String,
@@ -96,9 +99,11 @@ pub enum StatsCmd {
 #[derive(Subcommand, Debug)]
 pub enum PluginCmd {
     /// List installed client plugins
+    #[command(after_help = "Examples:\n  riku plugin list")]
     List,
 
     /// Check if a client plugin exists and is executable
+    #[command(after_help = "Examples:\n  riku plugin exists riku-deploy")]
     Exists {
         /// Plugin name
         name: String,
@@ -109,6 +114,7 @@ pub enum PluginCmd {
 #[derive(Subcommand, Debug)]
 pub enum HookCmd {
     /// List all executable server-side hook plugins (~/.riku/plugins/)
+    #[command(after_help = "Examples:\n  riku hook list")]
     List,
 
     /// Check if a server-side hook plugin exists and is executable

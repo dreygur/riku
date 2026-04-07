@@ -5,7 +5,7 @@ use std::fs;
 use std::process::Command;
 
 use crate::config::RikuPaths;
-use crate::util::{echo, parse_settings};
+use crate::util::{display, parse_settings};
 
 /// Show detailed information about an application.
 pub fn cmd_apps_info(paths: &RikuPaths, app: &str) -> Result<()> {
@@ -13,19 +13,19 @@ pub fn cmd_apps_info(paths: &RikuPaths, app: &str) -> Result<()> {
     let app_dir = paths.app_root.join(&app);
 
     if !app_dir.exists() {
-        echo(&format!("Error: app '{}' not found.", app), "red");
+        display::error(&format!("Error: app '{}' not found.", app));
         bail!("App not found");
     }
 
-    println!("{}", format!("=== App: '{}' ===", app).green());
-    println!();
+    display::section(&format!("App: '{}'", app));
+    display::blank();
 
-    println!("App Directory: {}", app_dir.display());
+    display::kv("App Directory:", &app_dir.display().to_string());
 
     let git_dir = paths.git_root.join(format!("{}.git", app));
     if git_dir.exists() {
-        println!("Git Repository: {}", git_dir.display());
-        println!("Git Remote: deploy@your-server:{}", app);
+        display::kv("Git Repository:", &git_dir.display().to_string());
+        display::kv("Git Remote:", &format!("deploy@your-server:{}", app));
     }
 
     print_disk_usage(&app_dir);
@@ -35,17 +35,17 @@ pub fn cmd_apps_info(paths: &RikuPaths, app: &str) -> Result<()> {
 
     let nginx_conf = paths.nginx_root.join(format!("{}.conf", app));
     if nginx_conf.exists() {
-        println!("Nginx Config: {}", nginx_conf.display());
+        display::kv("Nginx Config:", &nginx_conf.display().to_string());
     }
 
     let log_dir = paths.log_root.join(&app);
     if log_dir.exists() {
-        println!("Log Directory: {}", log_dir.display());
+        display::kv("Log Directory:", &log_dir.display().to_string());
     }
 
     let data_dir = paths.data_root.join(&app);
     if data_dir.exists() {
-        println!("Data Directory: {}", data_dir.display());
+        display::kv("Data Directory:", &data_dir.display().to_string());
     }
 
     Ok(())
@@ -56,7 +56,7 @@ fn print_disk_usage(app_dir: &std::path::Path) {
         if let Ok(output) = Command::new("du").args(["-sh", app_dir_str]).output() {
             if let Ok(du_output) = String::from_utf8(output.stdout) {
                 if let Some(size) = du_output.split_whitespace().next() {
-                    println!("Disk Usage: {}", size);
+                    display::kv("Disk Usage:", size);
                 }
             }
         }
@@ -69,11 +69,11 @@ fn print_env_summary(paths: &RikuPaths, app: &str) -> Result<()> {
         let mut env = HashMap::new();
         parse_settings(&env_file, &mut env)?;
         let var_count = env.len();
-        println!("Environment Variables: {} configured", var_count);
+        display::kv("Env Variables:", &format!("{} configured", var_count));
 
         for key in ["NGINX_SERVER_NAME", "NODE_VERSION", "PORT"] {
             if let Some(val) = env.get(key) {
-                println!("  {}: {}", key, val);
+                display::kv(&format!("  {}:", key), val);
             }
         }
     }
@@ -92,7 +92,7 @@ fn print_scaling(paths: &RikuPaths, app: &str) -> Result<()> {
             }
         }
         if !scales.is_empty() {
-            println!("Scaling: {}", scales.join(", "));
+            display::kv("Scaling:", &scales.join(", "));
         }
     }
     Ok(())
@@ -111,11 +111,11 @@ fn print_process_status(paths: &RikuPaths, app: &str) -> Result<()> {
     let worker_count = toml_count + ini_count;
 
     if worker_count > 0 {
-        println!("Status: {} running", "running".green());
-        println!("Workers: {} active", worker_count);
+        display::kv("Status:", &"running".green().to_string());
+        display::kv("Workers:", &format!("{} active", worker_count));
         print_supervisor_stats(paths, app);
     } else {
-        println!("Status: {}", "stopped".yellow());
+        display::kv("Status:", &"stopped".yellow().to_string());
     }
     Ok(())
 }
@@ -131,17 +131,17 @@ fn print_supervisor_stats(paths: &RikuPaths, app: &str) {
                             if let Some(mem) =
                                 app_stats.get("total_memory_bytes").and_then(|v| v.as_u64())
                             {
-                                println!("Memory: {:.2} MB", mem as f64 / 1024.0 / 1024.0);
+                                display::kv("Memory:", &format!("{:.2} MB", mem as f64 / 1024.0 / 1024.0));
                             }
                             if let Some(running) =
                                 app_stats.get("running_processes").and_then(|v| v.as_u64())
                             {
-                                println!("Running Processes: {}", running);
+                                display::kv("Running Processes:", &running.to_string());
                             }
                             if let Some(healthy) =
                                 app_stats.get("healthy_processes").and_then(|v| v.as_u64())
                             {
-                                println!("Healthy Processes: {}", healthy);
+                                display::kv("Healthy Processes:", &healthy.to_string());
                             }
                             break;
                         }

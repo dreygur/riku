@@ -15,6 +15,7 @@ use anyhow::{anyhow, Result};
 
 use discovery::get_client_plugin_path;
 use execute::{execute_plugin, is_executable};
+use crate::util::display;
 
 /// Check for and execute a client plugin if it exists.
 ///
@@ -53,13 +54,14 @@ pub fn try_execute_client_plugin(command: &str, args: &[String]) -> Result<bool>
 pub fn cmd_plugin_list() -> Result<()> {
     let plugins = list_client_plugins()?;
     if plugins.is_empty() {
-        println!("No client plugins installed.");
-        println!("\nInstall plugins by placing executable scripts in:");
-        println!("  ~/.riku/client-plugins/");
+        display::warn("No client plugins installed.");
+        display::blank();
+        display::note("Install plugins by placing executable scripts in:");
+        display::note("  ~/.riku/client-plugins/");
     } else {
-        println!("Available client plugins:");
+        display::section("Available Client Plugins");
         for plugin in plugins {
-            println!("  {}", plugin);
+            display::note(&format!("  {}", plugin));
         }
     }
     Ok(())
@@ -68,10 +70,10 @@ pub fn cmd_plugin_list() -> Result<()> {
 /// Handler for `riku plugin exists <name>`.
 pub fn cmd_plugin_exists(name: &str) -> Result<()> {
     if client_plugin_exists(name)? {
-        println!("Plugin '{}' is installed and executable.", name);
+        display::success(&format!("Plugin '{}' is installed and executable.", name));
         std::process::exit(0);
     } else {
-        println!("Plugin '{}' not found or not executable.", name);
+        display::warn(&format!("Plugin '{}' not found or not executable.", name));
         std::process::exit(1);
     }
 }

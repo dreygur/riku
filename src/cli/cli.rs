@@ -21,6 +21,7 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// List deployed apps
+    #[command(after_help = "Examples:\n  riku apps\n  riku apps create myapp\n  riku apps info myapp\n  riku apps destroy myapp")]
     Apps {
         #[command(subcommand)]
         cmd: Option<AppsCmd>,
@@ -58,7 +59,7 @@ pub enum Commands {
     },
 
     /// Manage app configuration
-    #[command(subcommand)]
+    #[command(subcommand, after_help = "Examples:\n  riku config show myapp\n  riku config set myapp KEY=val\n  riku config get myapp KEY\n  riku config unset myapp KEY\n  riku config live myapp")]
     Config(ConfigCmd),
 
     /// Container export and remote deployment commands
@@ -110,7 +111,7 @@ pub enum Commands {
     },
 
     /// Show process stats and metrics
-    #[command(subcommand)]
+    #[command(subcommand, after_help = "Examples:\n  riku stats all\n  riku stats app myapp")]
     Stats(StatsCmd),
 
     /// Run a command in the app context
@@ -152,9 +153,11 @@ pub enum Commands {
     },
 
     /// Self-update the riku binary
+    #[command(after_help = "Examples:\n  riku update")]
     Update,
 
     /// Start the process supervisor daemon
+    #[command(after_help = "Examples:\n  riku supervisor")]
     Supervisor,
 
     /// Manage client-side plugins (local scripts that extend riku CLI)
