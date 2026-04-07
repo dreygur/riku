@@ -54,7 +54,7 @@ Setup and initialization commands:
 ### `config.rs`
 Configuration management:
 - `RikuPaths` - Struct containing all resolved directory paths
-- `PIKU_RAW_SOURCE_URL` - Raw source URL for fetching the latest script
+- `RIKU_RAW_SOURCE_URL` - Raw source URL for fetching the latest script
 - `UWSGI_LOG_MAXSIZE` - Maximum log size constant
 
 ### `deploy/` Module

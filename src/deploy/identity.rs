@@ -12,7 +12,6 @@ use crate::supervisor::config::create_worker_config;
 use crate::util::{echo, get_free_port};
 
 /// Deploy an identity application (generic deployment).
-#[allow(dead_code)]
 pub fn deploy_identity(
     app: &str,
     app_path: &Path,
@@ -28,7 +27,6 @@ pub fn deploy_identity(
 }
 
 /// Create worker configurations for identity-style deployments.
-#[allow(dead_code)]
 pub fn create_identity_workers(
     app: &str,
     app_path: &Path,
@@ -37,16 +35,16 @@ pub fn create_identity_workers(
 ) -> Result<()> {
     use crate::util::parse_procfile;
 
-    // Handle PIKU_AUTO_RESTART - if false, skip removing existing worker configs
+    // Handle RIKU_AUTO_RESTART - if false, skip removing existing worker configs
     let auto_restart = env
-        .get("PIKU_AUTO_RESTART")
+        .get("RIKU_AUTO_RESTART")
         .map(|v| v.to_lowercase() != "false" && v != "0" && v != "no")
         .unwrap_or(true);
 
     if auto_restart {
         // Remove existing worker configs to trigger restart
         for ext in &["toml", "ini"] {
-            let pattern = paths.workers_enabled.join(format!("{}*.{}", app, ext));
+            let pattern = paths.workers_enabled.join(format!("{}-*.{}", app, ext));
             if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
                 for entry in entries.flatten() {
                     let _ = fs::remove_file(&entry);
@@ -132,12 +130,35 @@ fn create_identity_worker_config(
         let port = get_free_port("127.0.0.1")?;
         worker_env.insert("PORT".to_string(), port.to_string());
 
-        // Create socket file for web processes
+        // Create socket file for web processes (kept for backwards compatibility)
         let socket_path = paths.nginx_root.join(format!("{}.sock", app));
         worker_env.insert(
             "SOCKET".to_string(),
             socket_path.to_string_lossy().to_string(),
         );
+
+        // Set NGINX_PORTMAP to use TCP proxying instead of unix socket
+        worker_env.insert("NGINX_PORTMAP".to_string(), "true".to_string());
+        worker_env.insert("NGINX_INTERNAL_PORT".to_string(), port.to_string());
+        worker_env.insert("NGINX_EXTERNAL_PORT".to_string(), "80".to_string());
+
+        // Write NGINX settings to ENV file for nginx config generation
+        let env_dir = paths.env_root.join(app);
+        fs::create_dir_all(&env_dir)?;
+        let env_file = env_dir.join("ENV");
+
+        let mut env_content = if env_file.exists() {
+            fs::read_to_string(&env_file)?
+        } else {
+            String::new()
+        };
+
+        if !env_content.contains("NGINX_PORTMAP") {
+            env_content.push_str("NGINX_PORTMAP=true\n");
+            env_content.push_str(&format!("NGINX_INTERNAL_PORT={}\n", port));
+            env_content.push_str("NGINX_EXTERNAL_PORT=80\n");
+            fs::write(&env_file, &env_content)?;
+        }
     }
 
     // Create the worker config
@@ -187,7 +208,7 @@ mod tests {
     fn test_create_identity_worker_config() {
         let temp_dir = TempDir::new().unwrap();
         let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".piku"),
+            temp_dir.path().join(".riku"),
             &temp_dir.path().to_path_buf(),
         );
 

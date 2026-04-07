@@ -1,6 +1,8 @@
 server {
   listen              {{ NGINX_IPV4_ADDRESS }}:80;
+{% if NGINX_IPV6_ADDRESS %}
   listen              {{ NGINX_IPV6_ADDRESS }}:80;
+{% endif %}
   server_name         {{ NGINX_SERVER_NAME }};
   root                {{ NGINX_DOCUMENT_ROOT }};
 
@@ -12,4 +14,11 @@ server {
   location / {
     try_files $uri $uri/ =404;
   }
+
+  # Security headers
+  add_header X-Frame-Options "SAMEORIGIN" always;
+  add_header X-Content-Type-Options "nosniff" always;
+  add_header X-XSS-Protection "1; mode=block" always;
+  add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+  add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
 }

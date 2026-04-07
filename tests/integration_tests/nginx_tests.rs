@@ -38,12 +38,6 @@ mod tests {
         Ok((temp_dir, riku_root))
     }
 
-    // Helper to create a basic ENV file
-    fn create_env_file(env_dir: &PathBuf, content: &str) -> Result<()> {
-        fs::write(env_dir.join("ENV"), content)?;
-        Ok(())
-    }
-
     #[test]
     fn test_basic_nginx_config() -> Result<()> {
         let (_temp_dir, riku_root) = setup_riku_env()?;
@@ -162,7 +156,7 @@ server {
 
         let app = "cache-app";
         let nginx_dir = riku_root.join("nginx");
-        let cache_dir = riku_root.join("cache");
+        let _cache_dir = riku_root.join("cache");
 
         let config_content = r#"
 proxy_cache_path /home/deploy/.riku/cache/cache-app levels=1:2 keys_zone=cache_app:100m max_size=1g inactive=60m use_temp_path=off;
@@ -444,7 +438,7 @@ server {{
 
         let app = "ssl-app";
         let nginx_dir = riku_root.join("nginx");
-        let acme_www = riku_root.join("acme-www");
+        let _acme_www = riku_root.join("acme-www");
 
         let config_content = r#"
 server {

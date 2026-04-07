@@ -16,7 +16,7 @@ git commit -m "Initial commit"
 
 # Deploy (replace with your server)
 git remote add riku deploy@your-server:my-go-app
-git push riku master
+git push riku main
 ```
 
 ## Files
@@ -94,6 +94,6 @@ riku restart my-go-app
 
 ## See Also
 
-- [Riku Documentation](../../docs/)
-- [Environment Variables](../../docs/ENV.md)
-- [Go Deployment Guide](../../docs/FAQ.md)
+- [Riku Documentation](../../docs/docs/)
+- [Environment Variables](../../docs/docs/env.md)
+- [Go Deployment Guide](../../docs/docs/faq.md)

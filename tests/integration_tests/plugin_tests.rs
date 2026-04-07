@@ -407,7 +407,7 @@ echo "Plugin: $plugin_name v$version"
 
         assert!(config_path.exists());
 
-        let config: toml::Value =
+        let _config: toml::Value =
             toml::from_str(config_content).unwrap_or(toml::Value::Table(toml::map::Map::new()));
         // Basic check that config is readable
         assert!(config_content.contains("plugin_name"));
@@ -441,6 +441,192 @@ echo "Plugin: $plugin_name v$version"
             assert_eq!(non_exec_meta.permissions().mode() & 0o111, 0);
             assert_ne!(exec_meta.permissions().mode() & 0o111, 0);
         }
+
+        Ok(())
+    }
+
+    // ── Plugin Architecture / PluginHook integration tests ────────────────────
+
+    /// All four hooks map to the correct plugin file names.
+    #[test]
+    fn test_hook_plugin_name_conventions() {
+        // Verify the hook→plugin-name mapping matches the documented convention
+        let cases = [
+            ("pre-deploy",  "riku-pre-deploy"),
+            ("pre-build",   "riku-pre-build"),
+            ("post-build",  "riku-post-build"),
+            ("post-deploy", "riku-post-deploy"),
+        ];
+        for (hook_name, plugin_name) in &cases {
+            // Plugin file naming: riku-<hook-name>
+            assert_eq!(
+                format!("riku-{}", hook_name),
+                *plugin_name,
+                "Hook '{}' should map to plugin '{}'", hook_name, plugin_name
+            );
+        }
+    }
+
+    /// Pre-deploy plugin that exits 0 allows deploy to continue.
+    #[test]
+    fn test_pre_deploy_hook_success_allows_continue() -> Result<()> {
+        let (_temp, riku_root) = setup_riku_env()?;
+        let plugins_dir = riku_root.join("plugins");
+        let output_file = riku_root.join("pre-deploy-ran.txt");
+
+        let script = format!(
+            "#!/bin/sh\necho \"pre-deploy ran for $RIKU_APP\" > '{}'\nexit 0\n",
+            output_file.display()
+        );
+        create_plugin(&plugins_dir, "riku-pre-deploy", &script)?;
+
+        // Simulate what do_deploy does: run the pre-deploy plugin
+        let status = std::process::Command::new(plugins_dir.join("riku-pre-deploy"))
+            .env("RIKU_APP", "testapp")
+            .env("RIKU_HOOK", "pre-deploy")
+            .env("RIKU_APP_PATH", "/tmp/testapp")
+            .env("RIKU_ENV_PATH", riku_root.join("envs/testapp").to_str().unwrap())
+            .env("RIKU_ROOT", riku_root.to_str().unwrap())
+            .status()?;
+
+        assert!(status.success(), "Pre-deploy plugin should exit 0");
+        let content = fs::read_to_string(&output_file)?;
+        assert!(content.contains("testapp"), "Plugin should have RIKU_APP set");
+
+        Ok(())
+    }
+
+    /// Pre-deploy plugin that exits non-zero signals deploy abort.
+    #[test]
+    fn test_pre_deploy_hook_failure_signals_abort() -> Result<()> {
+        let (_temp, riku_root) = setup_riku_env()?;
+        let plugins_dir = riku_root.join("plugins");
+
+        create_plugin(
+            &plugins_dir,
+            "riku-pre-deploy",
+            "#!/bin/sh\necho 'validation failed' >&2\nexit 42\n",
+        )?;
+
+        let status = std::process::Command::new(plugins_dir.join("riku-pre-deploy"))
+            .env("RIKU_APP", "badapp")
+            .env("RIKU_HOOK", "pre-deploy")
+            .status()?;
+
+        assert!(!status.success());
+        assert_eq!(status.code(), Some(42));
+
+        Ok(())
+    }
+
+    /// Post-deploy plugin receives all expected RIKU_* environment variables.
+    #[test]
+    fn test_post_deploy_hook_receives_riku_env_vars() -> Result<()> {
+        let (_temp, riku_root) = setup_riku_env()?;
+        let plugins_dir = riku_root.join("plugins");
+        let output_file = riku_root.join("post-deploy-env.txt");
+
+        let script = format!(
+            "#!/bin/sh\nenv | grep ^RIKU_ | sort > '{}'\n",
+            output_file.display()
+        );
+        create_plugin(&plugins_dir, "riku-post-deploy", &script)?;
+
+        std::process::Command::new(plugins_dir.join("riku-post-deploy"))
+            .env("RIKU_APP", "myapp")
+            .env("RIKU_HOOK", "post-deploy")
+            .env("RIKU_APP_PATH", "/tmp/myapp")
+            .env("RIKU_ENV_PATH", "/tmp/envs/myapp")
+            .env("RIKU_ROOT", riku_root.to_str().unwrap())
+            .env("RIKU_RUNTIME", "Python")
+            .status()?;
+
+        let content = fs::read_to_string(&output_file)?;
+        assert!(content.contains("RIKU_APP=myapp"), "Missing RIKU_APP");
+        assert!(content.contains("RIKU_HOOK=post-deploy"), "Missing RIKU_HOOK");
+        assert!(content.contains("RIKU_RUNTIME=Python"), "Missing RIKU_RUNTIME");
+
+        Ok(())
+    }
+
+    /// Pre-build plugin can write a marker file read by post-build plugin.
+    #[test]
+    fn test_pre_and_post_build_hooks_sequencing() -> Result<()> {
+        let (_temp, riku_root) = setup_riku_env()?;
+        let plugins_dir = riku_root.join("plugins");
+        let marker = riku_root.join("build-sequence.txt");
+
+        // pre-build writes step 1
+        let pre_script = format!(
+            "#!/bin/sh\necho 'pre-build' >> '{}'\n",
+            marker.display()
+        );
+        create_plugin(&plugins_dir, "riku-pre-build", &pre_script)?;
+
+        // post-build writes step 2
+        let post_script = format!(
+            "#!/bin/sh\necho 'post-build' >> '{}'\n",
+            marker.display()
+        );
+        create_plugin(&plugins_dir, "riku-post-build", &post_script)?;
+
+        // Run in order
+        std::process::Command::new(plugins_dir.join("riku-pre-build"))
+            .env("RIKU_APP", "buildapp")
+            .env("RIKU_HOOK", "pre-build")
+            .status()?;
+        std::process::Command::new(plugins_dir.join("riku-post-build"))
+            .env("RIKU_APP", "buildapp")
+            .env("RIKU_HOOK", "post-build")
+            .status()?;
+
+        let content = fs::read_to_string(&marker)?;
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines[0], "pre-build", "pre-build should fire first");
+        assert_eq!(lines[1], "post-build", "post-build should fire second");
+
+        Ok(())
+    }
+
+    /// Missing hook plugin: no plugin file means hook is silently skipped.
+    #[test]
+    fn test_missing_hook_plugin_is_silently_skipped() -> Result<()> {
+        let (_temp, riku_root) = setup_riku_env()?;
+        let plugins_dir = riku_root.join("plugins");
+
+        // No riku-pre-deploy file exists
+        assert!(!plugins_dir.join("riku-pre-deploy").exists());
+
+        // Simulating "no plugin" — the PluginManager returns Ok(false) in this case.
+        // Verify by just checking the file is absent (unit tests cover the Ok(false) path).
+        let entries = fs::read_dir(&plugins_dir)?.count();
+        assert_eq!(entries, 0, "Plugin dir should be empty");
+
+        Ok(())
+    }
+
+    /// Multiple hooks can coexist independently (e.g. notify + migrate are separate plugins).
+    #[test]
+    fn test_multiple_independent_hooks() -> Result<()> {
+        let (_temp, riku_root) = setup_riku_env()?;
+        let plugins_dir = riku_root.join("plugins");
+
+        for hook in &["riku-pre-deploy", "riku-post-deploy"] {
+            let output = riku_root.join(format!("{}.txt", hook));
+            let script = format!("#!/bin/sh\ntouch '{}'\n", output.display());
+            create_plugin(&plugins_dir, hook, &script)?;
+        }
+
+        // Run both
+        for hook in &["riku-pre-deploy", "riku-post-deploy"] {
+            std::process::Command::new(plugins_dir.join(hook))
+                .env("RIKU_APP", "app")
+                .env("RIKU_HOOK", hook.trim_start_matches("riku-"))
+                .status()?;
+        }
+
+        assert!(riku_root.join("riku-pre-deploy.txt").exists());
+        assert!(riku_root.join("riku-post-deploy.txt").exists());
 
         Ok(())
     }

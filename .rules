@@ -32,6 +32,41 @@
    - If validation fails, fix the code being validated—not the validation itself
    - Senior developers solve problems; they don't hide them
 
+8. **Security First** - Before writing any new code, explicitly plan for security:
+   - Identify trust boundaries (user input, external APIs, file paths, env vars)
+   - Validate and sanitize all inputs at the boundary before they enter the system
+   - Apply least-privilege: only request/expose what is strictly needed
+   - Consider injection vectors (command injection, path traversal, template injection)
+   - Document the security model of any new module in its doc comment
+   - Never defer security to "a later pass" — it must be baked in from the first line
+
+9. **Service / Provider / Repository Pattern** - Structure code using clean architecture layers:
+   - **Repository** (`repository.rs` or `repository/`) — raw data access: file I/O, parsing, persistence. No business logic.
+   - **Service** (`service.rs` or `service/`) — business logic and orchestration. Calls repositories, never touches storage directly.
+   - **Provider / CLI** (`cli/`, `plugins/`) — entry points that wire services together and handle user-facing concerns.
+   - Keep each layer ignorant of layers above it. A repository must not know about services; a service must not know about CLI.
+
+10. **Delegate to Sub-Agents** - Split non-trivial tasks into sub-agents to keep the main context clean:
+    - Use the `Explore` agent for any codebase research, multi-file searches, or "how does X work" questions — never pollute main context with exploration results
+    - Use the `general-purpose` agent for self-contained implementation tasks (write code, run tests, fix a bug) that don't need back-and-forth with the user
+    - Use the `Plan` agent to design implementation strategies before writing code
+    - Run independent sub-tasks in parallel (multiple Agent calls in one message)
+    - The main context should only contain decisions, blockers, and final results — not the full output of every search or read
+
+11. **Minimal Context Usage** - Always use the lowest amount of context necessary to complete a task:
+    - Read only the specific lines needed (`offset` + `limit`), not whole files
+    - Search with `Grep`/`Glob` before reading — locate the exact location first, then read only that section
+    - Avoid re-reading files already seen in the same session
+    - Prefer targeted searches over broad exploration; use an Explore agent only when multiple rounds of searching are clearly required
+    - When editing, use `Edit` (sends only the diff) instead of `Write` (sends the whole file)
+    - Ask clarifying questions before researching a vague task — one question upfront is cheaper than reading the wrong files
+
+11. **Small Files, Small Functions** - Files and functions must stay focused and short:
+    - Split any file that grows beyond ~200 lines into sub-modules
+    - Each function does one thing; if it needs a comment to explain what a section does, that section is a new function
+    - If a block of code will be (or already is) used in more than one place, extract it into a named function immediately — no copy-paste
+    - Prefer many small files over one large file; Rust's module system makes this cheap
+
 ## Project Overview
 
 Riku is a complete Rust port of the Piku micro-PaaS, providing Heroku-like git push deployments. It's a single binary written in Rust with no runtime dependencies.
@@ -150,7 +185,25 @@ cargo test --test integration_tests # Integration tests
 - **Supervisor**: Monitors TOML configs in `workers-enabled/`, manages processes
 - **Nginx**: Auto-generates configs based on app type and env vars
 - **Git Hooks**: Post-receive hook triggers deployment
-- **Plugins**: Executable scripts in `~/.riku/plugins/`
+- **Plugins**: Executable scripts in `~/.riku/plugins/` with lifecycle hooks (pre-deploy, pre-build, post-build, post-deploy)
+
+### Layered Architecture (Service / Provider / Repository)
+
+New code must follow this layering. Existing code should be migrated toward it:
+
+```
+cli/          ← Provider layer: CLI commands, argument parsing, user output
+plugins/      ← Provider layer: plugin discovery, hook orchestration
+deploy/       ← Service layer: deployment orchestration, runtime dispatch
+supervisor/   ← Service layer: process management, health checks, metrics
+nginx.rs      ← Service layer: config generation logic
+config.rs     ← Repository layer: path resolution, env var access
+```
+
+**Rules:**
+- Repositories (`config.rs`, file parsers) only read/write data — no logic
+- Services orchestrate logic — no direct user I/O, no `println!` (use `tracing`)
+- Providers (CLI, plugins) wire services, handle user-facing output
 
 See `ARCHITECTURE.md` and `API.md` for detailed documentation.
 

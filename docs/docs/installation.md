@@ -18,7 +18,7 @@ sudo adduser --disabled-password --gecos '' deploy
 sudo su - deploy
 
 # Add your SSH public key
-riku setup ssh ~/.ssh/id_rsa.pub
+cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
 ```
 
 After running `riku init`, the binary will be installed to `~/.local/bin/riku` and you can use `riku` from anywhere.
@@ -46,6 +46,7 @@ There are several ways to install Riku:
 - **Git** (for deployments)
 - **Nginx** (for reverse proxy)
 - **SSH** (for remote access)
+- **python3-venv** (for Python apps)
 
 ### Optional Software
 - **Node.js** (for Node.js apps)
@@ -99,7 +100,7 @@ export RIKU_USER=riku  # Tell riku to use this username
 ### Step 5: Initialize Riku
 
 ```bash
-riku setup init
+riku init
 ```
 
 This creates the directory structure:
@@ -131,11 +132,10 @@ Copy your public key to the server:
 ssh-copy-id deploy@your-server
 ```
 
-Or manually add it:
+Or manually add it on the server:
 
 ```bash
-# On the server
-riku setup ssh ~/.ssh/id_rsa.pub
+cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
 ```
 
 ### Step 7: Verify Installation
@@ -155,7 +155,7 @@ You should see the Riku help message.
 sudo apt update && sudo apt upgrade -y
 
 # Install dependencies
-sudo apt install -y git nginx curl build-essential
+sudo apt install -y git nginx curl build-essential python3-venv python3-full
 
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -273,7 +273,7 @@ echo 'NGINX_SERVER_NAME=test.example.com' > ENV
 git add .
 git commit -m "test"
 git remote add riku deploy@your-server:test-app
-git push riku master
+git push riku main
 ```
 
 ## Upgrading Riku
@@ -357,6 +357,6 @@ sudo nginx -t
 ## Next Steps
 
 After installation:
-1. Read `docs/ENV.md` for environment variable configuration
-2. Check `docs/PLUGINS.md` for extending Riku
+1. Read [Environment Variables](env.md) for environment variable configuration
+2. Check [Plugin System](plugins.md) for extending Riku
 3. Deploy your first app!

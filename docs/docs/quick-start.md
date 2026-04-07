@@ -75,7 +75,7 @@ ssh-keygen -t ed25519 -C "your-email@example.com"
 ssh-copy-id deploy@your-server-ip
 
 # Or manually add it
-riku setup ssh ~/.ssh/id_ed25519.pub
+cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
 ```
 
 ---
@@ -100,7 +100,7 @@ sudo systemctl start nginx
 
 ## Step 6: Deploy Your First App
 
-### Create a Simple App
+### Create a Simple Node.js App
 
 ```bash
 # On your local machine
@@ -141,13 +141,38 @@ echo 'web: node server.js' > Procfile
 
 ### Deploy
 
+**Option 1: Standard (repo in `~/.riku/repos/`)**
 ```bash
 # Add your Riku server as a remote
 git remote add riku deploy@your-server-ip:myapp
 
 # Deploy
 git add . && git commit -m "Initial commit"
-git push riku master
+git push riku main
+```
+
+**Option 2: Custom bare repo location**
+
+You can create your bare git repo anywhere and Riku will automatically symlink it to `~/.riku/repos/`:
+
+```bash
+# On server: create bare repo anywhere
+git init --bare ~/my-projects/myapp.git
+
+# On local: push to custom path
+git remote add riku deploy@your-server-ip:~/my-projects/myapp.git
+git push riku main
+
+# Riku will automatically:
+# 1. Create symlink ~/.riku/repos/myapp.git → ~/my-projects/myapp.git
+# 2. Deploy your app
+```
+
+**Note:** The post-receive hook must pass the repo path. If using a custom hook, include:
+```bash
+#!/bin/bash
+REPO_PATH="$(pwd)"
+cat | RIKU_ROOT="$HOME/.riku" riku git-hook "myapp" "$REPO_PATH"
 ```
 
 ---
@@ -160,6 +185,22 @@ Your app should now be running! Access it at:
 http://your-server-ip
 ```
 
+### How It Works
+
+When you push to Riku:
+
+1. **Git hook triggers** - Post-receive hook extracts code to `~/.riku/apps/`
+2. **Runtime detection** - Riku detects Python, Node.js, Go, etc.
+3. **Dependencies install** - npm install, pip install, etc.
+4. **Nginx config** - Automatically created and symlinked to `/etc/nginx/sites-enabled/`
+5. **Supervisor starts** - If not running, supervisor auto-starts and spawns workers
+6. **App running** - Your app is live!
+
+> **Note:** Riku automatically handles:
+> - Nginx config symlinks (`/etc/nginx/sites-enabled/`)
+> - Supervisor auto-start on first deployment
+> - Custom bare repo locations (symlinked to `~/.riku/repos/`)
+
 ---
 
 ## Next Steps
@@ -167,8 +208,8 @@ http://your-server-ip
 | Task | Command |
 |------|---------|
 | View logs | `riku logs myapp` |
-| Scale workers | `echo "web=4" > SCALING && git push riku master` |
-| Set env vars | `riku config:set myapp KEY=value` |
+| Scale workers | `echo "web=4" > SCALING && git push riku main` |
+| Set env vars | `riku config set myapp KEY=value` |
 | Restart app | `riku restart myapp` |
 | Stop app | `riku stop myapp` |
 
@@ -189,10 +230,10 @@ A record: *.example.com → your-server-ip
 
 ```bash
 # Set domain name
-riku config:set myapp NGINX_SERVER_NAME=example.com
+riku config set myapp NGINX_SERVER_NAME=example.com
 
 # Enable HTTPS (after getting SSL cert)
-riku config:set myapp NGINX_HTTPS_ONLY=true
+riku config set myapp NGINX_HTTPS_ONLY=true
 ```
 
 ---

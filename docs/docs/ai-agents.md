@@ -101,8 +101,8 @@ Configure permissions in `~/.ssh/authorized_keys`:
 
 | Scope | Permissions |
 |-------|-------------|
-| `readonly` | `apps`, `logs`, `ps`, `config:get`, `config:show`, `stats` |
-| `staging` | All readonly + `deploy`, `restart`, `run`, `config:set`, `config:unset` |
+| `readonly` | `apps`, `logs`, `ps`, `config get`, `config show`, `stats` |
+| `staging` | All readonly + `deploy`, `restart`, `run`, `config set`, `config unset` |
 | `production` | Full access including `destroy`, `stop` |
 
 ---

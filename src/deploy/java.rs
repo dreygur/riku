@@ -9,8 +9,10 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::config::RikuPaths;
-use crate::supervisor::config::create_worker_config;
-use crate::util::{echo, get_free_port};
+use crate::deploy::read_scaling_count;
+use crate::setup_web_port;
+use crate::util::echo;
+use crate::write_worker_config;
 
 /// Deploy a Java application using Maven.
 pub fn deploy_java_maven(
@@ -82,6 +84,23 @@ fn create_java_workers(
     env: &HashMap<String, String>,
     paths: &RikuPaths,
 ) -> Result<()> {
+    // Handle RIKU_AUTO_RESTART - if false, skip removing existing worker configs
+    let auto_restart = env
+        .get("RIKU_AUTO_RESTART")
+        .map(|v| v.to_lowercase() != "false" && v != "0" && v != "no")
+        .unwrap_or(true);
+
+    if auto_restart {
+        for ext in &["toml", "ini"] {
+            let pattern = paths.workers_enabled.join(format!("{}-*.{}", app, ext));
+            if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
+                for entry in entries.flatten() {
+                    let _ = fs::remove_file(&entry);
+                }
+            }
+        }
+    }
+
     // Read Procfile to determine processes to run
     let procfile_path = app_path.join("Procfile");
     if !procfile_path.exists() {
@@ -103,33 +122,8 @@ fn create_java_workers(
             let kind = line[..pos].trim();
             let command = line[pos + 1..].trim();
 
-            // Parse scaling info if available
-            let scaling_path = paths.env_root.join(app).join("SCALING");
-            let mut count = 1; // default to 1 instance
+            let count = read_scaling_count(paths, app, kind)?;
 
-            if scaling_path.exists() {
-                let scaling_content = fs::read_to_string(&scaling_path)?;
-                for scale_line in scaling_content.lines() {
-                    let scale_line = scale_line.trim();
-                    if scale_line.is_empty() || scale_line.starts_with('#') {
-                        continue;
-                    }
-
-                    if let Some(scale_pos) = scale_line.find('=') {
-                        let scale_kind = scale_line[..scale_pos].trim();
-                        let scale_count_str = scale_line[scale_pos + 1..].trim();
-
-                        if scale_kind == kind {
-                            if let Ok(scale_count) = scale_count_str.parse::<u32>() {
-                                count = scale_count;
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Create worker configs for each instance
             for i in 1..=count {
                 create_java_worker_config(app, kind, command, i, env, paths, app_path)?;
             }
@@ -149,77 +143,40 @@ fn create_java_worker_config(
     paths: &RikuPaths,
     app_path: &Path,
 ) -> Result<()> {
-    // Prepare environment for the worker
     let mut worker_env = env.clone();
-
-    // Set PORT for web processes
-    if kind == "web" {
-        let port = get_free_port("127.0.0.1")?;
-        worker_env.insert("PORT".to_string(), port.to_string());
-
-        // Update command to include port if it's a web process
-        let _updated_command = if command.contains("-Dserver.port=") || command.contains("--port=")
-        {
-            command.to_string()
-        } else {
-            // If it's a common Java web server, add port binding
-            if command.contains("java")
-                && (command.contains("-jar") || command.contains("spring-boot"))
-            {
-                format!(
-                    "{} -Dserver.port={} -jar {}",
-                    command.split_whitespace().collect::<Vec<_>>()[1..].join(" "),
-                    port,
-                    command.split("-jar").nth(1).unwrap_or("").trim()
-                )
-            } else {
-                command.to_string()
-            }
-        };
-
-        // Create socket file for web processes
-        let socket_path = paths.nginx_root.join(format!("{}.sock", app));
-        worker_env.insert(
-            "SOCKET".to_string(),
-            socket_path.to_string_lossy().to_string(),
-        );
-    }
 
     // Add Java-specific environment variables
     worker_env.insert("JAVA_OPTS".to_string(), "-Xmx512m -Xms256m".to_string());
 
-    // Create the worker config
-    let worker_config = create_worker_config(
+    // Set PORT for web processes and determine final command
+    let final_command = if kind == "web" {
+        let port = setup_web_port!(worker_env, app, paths);
+
+        // Inject -Dserver.port= for Spring-Boot-style jars that don't already pin a port
+        if command.contains("-Dserver.port=") || command.contains("--port=") {
+            command.to_string()
+        } else if command.contains("java")
+            && (command.contains("-jar") || command.contains("spring-boot"))
+        {
+            // Insert -Dserver.port= before the -jar argument
+            let jar_part = command.split("-jar").nth(1).unwrap_or("").trim();
+            let pre_jar = command.split("-jar").next().unwrap_or("").trim();
+            format!("{} -Dserver.port={} -jar {}", pre_jar, port, jar_part)
+        } else {
+            command.to_string()
+        }
+    } else {
+        command.to_string()
+    };
+
+    write_worker_config!(
         app,
         kind,
-        command, // Using the original command parameter
+        &final_command,
         ordinal,
         worker_env,
-        &app_path.to_string_lossy(),
-        &paths
-            .log_root
-            .join(app)
-            .join(format!("{}.{}.log", kind, ordinal))
-            .to_string_lossy(),
-    );
-
-    // Write the worker config to the available directory
-    let config_filename = format!("{}-{}-{}.toml", app, kind, ordinal);
-    let config_path = paths.workers_available.join(&config_filename);
-
-    let config_content = toml::to_string(&worker_config)?;
-    fs::write(&config_path, &config_content)?;
-
-    // Create a symlink to enable the worker
-    let enabled_path = paths.workers_enabled.join(&config_filename);
-    if enabled_path.exists() {
-        fs::remove_file(&enabled_path)?;
-    }
-    std::os::unix::fs::symlink(&config_path, &enabled_path)?;
-
-    echo(
-        &format!("-----> Created worker config: {}", config_filename),
-        "green",
+        app_path,
+        paths
     );
 
     Ok(())
@@ -235,7 +192,7 @@ mod tests {
     fn test_create_java_worker_config() {
         let temp_dir = TempDir::new().unwrap();
         let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".piku"),
+            temp_dir.path().join(".riku"),
             &temp_dir.path().to_path_buf(),
         );
 

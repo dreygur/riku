@@ -49,7 +49,7 @@ web: $(if [ "$RUNTIME" = "static" ]; then echo "static: ."; else echo "$RUNTIME 
 EOF
 
 cat > ENV <<EOF
-PIKU_AUTO_RESTART=true
+RIKU_AUTO_RESTART=true
 BIND_ADDRESS=127.0.0.1
 NGINX_SERVER_NAME=${APP_NAME}.example.com
 EOF
@@ -65,7 +65,7 @@ echo "To deploy:"
 echo "  cd $TEST_DIR"
 echo "  git init && git add . && git commit -m 'test'"
 echo "  git remote add riku deploy@your-server:$APP_NAME"
-echo "  git push riku master"
+echo "  git push riku main"
 echo ""
 echo "To cleanup:"
 echo "  rm -rf $TEST_DIR"

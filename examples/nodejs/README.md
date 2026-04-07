@@ -16,24 +16,24 @@ git commit -m "Initial commit"
 git remote add riku deploy@your-server:nodejs-example
 
 # Deploy
-git push riku master
+git push riku main
 ```
 
 ### 2. Set Environment Variables (Optional)
 
 ```bash
 # Set custom port
-riku config:set nodejs-example PORT=3000
+riku config set nodejs-example PORT=3000
 
 # Set Node environment
-riku config:set nodejs-example NODE_ENV=production
+riku config set nodejs-example NODE_ENV=production
 ```
 
 ### 3. Access Your App
 
 ```bash
 # Get the app URL (if domain is configured)
-riku config:get nodejs-example NGINX_SERVER_NAME
+riku config get nodejs-example NGINX_SERVER_NAME
 
 # Or access via server IP
 curl http://your-server-ip
@@ -87,7 +87,7 @@ Then commit and push:
 echo "web=4" > SCALING
 git add SCALING
 git commit -m "Scale to 4 workers"
-git push riku master
+git push riku main
 ```
 
 ## Project Structure

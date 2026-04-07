@@ -54,6 +54,8 @@ riku destroy myapp
 - Nginx configuration
 - Worker configurations
 
+**Note:** `~/.riku/data/<app>/` and `~/.riku/cache/<app>/` are **preserved** by destroy.
+
 ---
 
 ### `riku logs <app> [process]`
@@ -81,7 +83,7 @@ Restart all processes for an application.
 riku restart myapp
 ```
 
-The supervisor gracefully stops workers and restarts them with zero downtime.
+Gracefully stops workers and restarts them. For zero-downtime rolling restarts, use `riku restart myapp --hot`.
 
 ---
 
@@ -113,12 +115,12 @@ Environment variables from `~/.riku/envs/<app>/ENV` are loaded automatically.
 
 ## Configuration Management
 
-### `riku config <app>`
+### `riku config show <app>`
 
 Show application configuration.
 
 ```bash
-riku config myapp
+riku config show myapp
 ```
 
 **Output:**
@@ -176,10 +178,6 @@ Shows the actual configuration being used by the supervisor, including defaults.
 
 ---
 
-### `riku config show <app>`
-
-Alias for `riku config <app>`.
-
 ---
 
 ## Process Management
@@ -201,12 +199,12 @@ cron:    1/1 running
 
 ---
 
-### `riku ps scale <app> web=N worker=N...`
+### `riku ps <app> --scale web=N worker=N...`
 
 Scale worker processes.
 
 ```bash
-riku ps scale myapp web=4 worker=2
+riku ps myapp --scale web=4 worker=2
 ```
 
 This creates/updates the `SCALING` file and triggers a restart.
@@ -216,43 +214,19 @@ This creates/updates the `SCALING` file and triggers a restart.
 echo "web=4" > SCALING
 echo "worker=2" >> SCALING
 git add SCALING && git commit -m "scale up"
-git push riku master
-```
-
----
-
-### `riku ps restart <app> [process]`
-
-Restart specific processes.
-
-```bash
-# All processes
-riku ps restart myapp
-
-# Specific process type
-riku ps restart myapp web
-```
-
----
-
-### `riku ps stop <app> [process]`
-
-Stop specific processes.
-
-```bash
-riku ps stop myapp worker
+git push riku main
 ```
 
 ---
 
 ## Setup Commands
 
-### `riku setup init`
+### `riku init`
 
-Initialize the Riku directory structure.
+Initialize the Riku directory structure and install the binary.
 
 ```bash
-riku setup init
+riku init
 ```
 
 Creates:
@@ -267,17 +241,7 @@ Creates:
 - `~/.riku/plugins/` - Plugin executables
 - `~/.riku/acme/` - SSL certificates
 
----
-
-### `riku setup ssh <pubkey>`
-
-Add an SSH public key for authentication.
-
-```bash
-riku setup ssh ~/.ssh/id_ed25519.pub
-```
-
-Appends the key to `~/.ssh/authorized_keys` with Riku-specific restrictions.
+Also installs the riku binary to `~/.local/bin/riku` and generates a systemd user service.
 
 ---
 
@@ -343,7 +307,7 @@ riku --version
 
 ### Post-receive Hook
 
-When you `git push riku master`, the post-receive hook:
+When you `git push riku main`, the post-receive hook:
 1. Checks out code to `~/.riku/apps/<app>/`
 2. Detects the runtime
 3. Installs dependencies
@@ -400,11 +364,11 @@ git add . && git commit -m "init"
 
 # Add remote and deploy
 git remote add riku deploy@server:myapp
-git push riku master
+git push riku main
 
 # Configure
 riku config set myapp DATABASE_URL=postgres://localhost/db
-riku ps scale myapp web=2
+riku ps myapp --scale web=2
 
 # Monitor
 riku logs myapp
@@ -427,14 +391,14 @@ riku config get myapp DATABASE_URL
 riku config unset myapp DEBUG
 
 # View all
-riku config myapp
+riku config show myapp
 ```
 
 ### Scale and restart
 
 ```bash
 # Scale up
-riku ps scale myapp web=4 worker=2
+riku ps myapp --scale web=4 worker=2
 
 # Restart after config change
 riku restart myapp

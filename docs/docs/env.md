@@ -7,7 +7,7 @@ Riku uses environment variables to configure application behavior, nginx, and th
 ### Using CLI
 
 ```bash
-riku config:set myapp KEY=value ANOTHER_KEY=value2
+riku config set myapp KEY=value ANOTHER_KEY=value2
 ```
 
 ### Using ENV File
@@ -36,7 +36,7 @@ API_URL=$BASE_URL/api
 ### Auto Restart
 
 ```bash
-PIKU_AUTO_RESTART=true
+RIKU_AUTO_RESTART=true
 ```
 
 - **Default:** `true`
@@ -55,7 +55,7 @@ When set to `false`, you must manually restart with `riku restart <app>`.
 BIND_ADDRESS=127.0.0.1
 ```
 
-- **Default:** `0.0.0.0`
+- **Default:** `127.0.0.1`
 - **Description:** IP address for workers to bind to
 - **Values:** Any valid IP address
 
@@ -81,7 +81,7 @@ NGINX_SERVER_NAME=example.com
 
 **Example:**
 ```bash
-riku config:set myapp NGINX_SERVER_NAME=myapp.example.com
+riku config set myapp NGINX_SERVER_NAME=myapp.example.com
 ```
 
 ### Force HTTPS
@@ -263,7 +263,7 @@ NGINX_CACHE_EXPIRY=86400
 NODE_VERSION=18.17.0
 ```
 
-- **Default:** `18.17.0` (LTS)
+- **Default:** (none — uses system Node.js)
 - **Description:** Node.js version to install via nodeenv
 - **Values:** Any valid Node.js version
 
@@ -287,8 +287,8 @@ NODE_PACKAGE_MANAGER=yarn
 PYTHON_VERSION=3.11.4
 ```
 
-- **Default:** `3.11.4`
-- **Description:** Python version to install via pyenv
+- **Default:** `"3"` (system Python 3)
+- **Description:** Python version to use (passed to `python3 -m venv`)
 - **Values:** Any valid Python 3.x version
 
 ### Package Manager
@@ -390,7 +390,7 @@ ACME_EMAIL=admin@example.com
 ### Show All Variables
 
 ```bash
-riku config myapp
+riku config show myapp
 ```
 
 ### Get Single Variable
@@ -411,7 +411,7 @@ Shows the actual configuration being used by the supervisor.
 
 ## Best Practices
 
-1. **Never commit secrets** - Use `riku config:set` for sensitive values
+1. **Never commit secrets** - Use `riku config set` for sensitive values
 2. **Use meaningful names** - Prefix custom vars with your app name
 3. **Document variables** - Keep a list of required env vars in your README
 4. **Test locally** - Use `.env` files for local development

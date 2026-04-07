@@ -53,7 +53,7 @@
 **A:** Just like Heroku or Piku:
 ```bash
 git remote add riku deploy@your-server:myapp
-git push riku master
+git push riku main
 ```
 
 **Q: How do I scale my app?**
@@ -63,19 +63,19 @@ git push riku master
 echo "web=4" > SCALING
 echo "worker=2" >> SCALING
 git add SCALING && git commit -m "scale"
-git push riku master
+git push riku main
 ```
 
 Or use environment variables:
 ```bash
-riku config:set myapp RIKU_WORKER_PROCESSES="web=4,worker=2"
+riku config set myapp RIKU_WORKER_PROCESSES="web=4,worker=2"
 ```
 
 **Q: How do I set environment variables?**
 
 **A:** Use the config command:
 ```bash
-riku config:set myapp KEY=value ANOTHER_KEY=value2
+riku config set myapp KEY=value ANOTHER_KEY=value2
 ```
 
 Or create an `ENV` file in `~/.riku/envs/myapp/ENV`.
@@ -86,6 +86,34 @@ Or create an `ENV` file in `~/.riku/envs/myapp/ENV`.
 ```bash
 NGINX_INCLUDE_FILE=custom.conf
 ```
+
+**Q: Can I store my bare git repo in a custom location?**
+
+**A:** Yes! Riku automatically symlinks custom repo locations to `~/.riku/repos/`:
+
+```bash
+# On server: create bare repo anywhere
+git init --bare ~/my-projects/myapp.git
+
+# Push to custom path
+git remote add riku deploy@server:~/my-projects/myapp.git
+git push riku main
+
+# Riku creates: ~/.riku/repos/myapp.git → ~/my-projects/myapp.git
+```
+
+**Q: Does Riku auto-start the supervisor?**
+
+**A:** Yes! On first deployment, Riku automatically starts the supervisor daemon if not running. Nginx configs are also automatically symlinked to `/etc/nginx/sites-enabled/`.
+
+**Q: Do I need to install python3-venv for Python apps?**
+
+**A:** Yes, on Debian/Ubuntu servers, install the package:
+```bash
+sudo apt install python3-venv python3-full
+```
+
+This is required for creating Python virtual environments.
 
 ## Troubleshooting
 
@@ -104,7 +132,7 @@ riku logs myapp web
 riku restart myapp
 ```
 
-Or set `PIKU_AUTO_RESTART=false` and restart manually.
+Or set `RIKU_AUTO_RESTART=false` and restart manually.
 
 **Q: Where are logs stored?**
 
@@ -127,7 +155,7 @@ tar -czf backup.tar.gz ~/.riku/apps/myapp
 
 **A:** Set the domain and enable HTTPS redirect:
 ```bash
-riku config:set myapp NGINX_SERVER_NAME=example.com NGINX_HTTPS_ONLY=true
+riku config set myapp NGINX_SERVER_NAME=example.com NGINX_HTTPS_ONLY=true
 ```
 
 Then obtain SSL certificates (ACME support is built-in).
@@ -150,7 +178,7 @@ cron: 0 2 * * * /path/to/script.sh
 
 **Q: Does Riku support zero-downtime deployments?**
 
-**A:** Yes! The supervisor gracefully restarts workers. Set `PIKU_AUTO_RESTART=true` (default) for automatic restarts on deploy.
+**A:** Yes! Use `riku restart myapp --hot` for a rolling zero-downtime restart. Standard `riku restart` does a graceful restart (brief downtime). Set `RIKU_AUTO_RESTART=true` (default) for automatic restarts on deploy.
 
 ## Migration from Piku
 
@@ -173,7 +201,7 @@ cron: 0 2 * * * /path/to/script.sh
 **A:** Riku doesn't use uWSGI. Replace uWSGI-specific env vars with Riku equivalents:
 - `UWSGI_PROCESSES` → Use `SCALING` file or `RIKU_WORKER_PROCESSES`
 - `UWSGI_MAX_REQUESTS` → Not needed (handled by supervisor)
-- `UWSGI_*` → See `docs/ENV.md` for deprecated list
+- `UWSGI_*` → See [docs/docs/env.md](env.md) for the full variable reference
 
 ## Performance
 

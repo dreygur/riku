@@ -5,7 +5,7 @@
 set -e
 
 REMOTE="${1:-}"
-TEST_DIR="/tmp/riku-test-$$"
+TEST_DIR="$(mktemp -d)"
 PASSED=0
 FAILED=0
 
@@ -140,7 +140,7 @@ test_env_vars() {
 
     # Test basic env vars
     cat > "$app_dir/ENV" <<'EOF'
-PIKU_AUTO_RESTART=true
+RIKU_AUTO_RESTART=true
 BIND_ADDRESS=127.0.0.1
 DISABLE_IPV6=true
 RIKU_WORKER_TIMEOUT=3600

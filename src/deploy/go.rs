@@ -9,8 +9,10 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::config::RikuPaths;
-use crate::supervisor::config::create_worker_config;
-use crate::util::{echo, get_free_port};
+use crate::deploy::read_scaling_count;
+use crate::setup_web_port;
+use crate::util::echo;
+use crate::write_worker_config;
 
 /// Deploy a Go application.
 pub fn deploy_go(
@@ -21,17 +23,87 @@ pub fn deploy_go(
 ) -> Result<()> {
     echo(&format!("-----> Deploying Go app '{}'", app), "green");
 
-    // Build the Go application
-    echo("-----> Building Go application", "green");
-    let status = Command::new("go")
-        .arg("build")
-        .arg("-o")
-        .arg(format!("{}_bin", app))
-        .current_dir(app_path)
-        .status()?;
+    // Check for Godeps directory (legacy dep support)
+    let godeps_path = app_path.join("Godeps");
+    let go_path = app_path.join("vendor");
+    let go_mod_path = app_path.join("go.mod");
 
-    if !status.success() {
-        return Err(anyhow::anyhow!("Failed to build Go application"));
+    // If using go modules (go.mod exists)
+    if go_mod_path.exists() {
+        echo("-----> Building Go application (modules)", "green");
+
+        // Set GO15VENDOREXPERIMENT if vendor directory exists
+        let mut go_env = env.clone();
+        if go_path.exists() {
+            go_env.insert("GO15VENDOREXPERIMENT".to_string(), "1".to_string());
+        }
+
+        let status = Command::new("go")
+            .arg("build")
+            .arg("-mod=vendor")
+            .arg("-o")
+            .arg(format!("{}_bin", app))
+            .current_dir(app_path)
+            .envs(go_env.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+            .status()?;
+
+        if !status.success() {
+            // Try without vendor flag if it failed
+            let status = Command::new("go")
+                .arg("build")
+                .arg("-o")
+                .arg(format!("{}_bin", app))
+                .current_dir(app_path)
+                .envs(go_env.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+                .status()?;
+
+            if !status.success() {
+                return Err(anyhow::anyhow!("Failed to build Go application"));
+            }
+        }
+    } else if godeps_path.exists() {
+        // Legacy: using godep
+        echo("-----> Building Go application (godep)", "green");
+
+        // Check if godep is available
+        if which::which("godep").is_ok() {
+            let status = Command::new("godep")
+                .arg("go")
+                .arg("build")
+                .arg("-o")
+                .arg(format!("{}_bin", app))
+                .current_dir(app_path)
+                .status()?;
+
+            if !status.success() {
+                return Err(anyhow::anyhow!("Failed to build Go application with godep"));
+            }
+        } else {
+            echo("-----> godep not found, using standard go build", "yellow");
+            let status = Command::new("go")
+                .arg("build")
+                .arg("-o")
+                .arg(format!("{}_bin", app))
+                .current_dir(app_path)
+                .status()?;
+
+            if !status.success() {
+                return Err(anyhow::anyhow!("Failed to build Go application"));
+            }
+        }
+    } else {
+        // Standard go build
+        echo("-----> Building Go application", "green");
+        let status = Command::new("go")
+            .arg("build")
+            .arg("-o")
+            .arg(format!("{}_bin", app))
+            .current_dir(app_path)
+            .status()?;
+
+        if !status.success() {
+            return Err(anyhow::anyhow!("Failed to build Go application"));
+        }
     }
 
     // Create worker configurations
@@ -47,6 +119,23 @@ fn create_go_workers(
     env: &HashMap<String, String>,
     paths: &RikuPaths,
 ) -> Result<()> {
+    // Handle RIKU_AUTO_RESTART - if false, skip removing existing worker configs
+    let auto_restart = env
+        .get("RIKU_AUTO_RESTART")
+        .map(|v| v.to_lowercase() != "false" && v != "0" && v != "no")
+        .unwrap_or(true);
+
+    if auto_restart {
+        for ext in &["toml", "ini"] {
+            let pattern = paths.workers_enabled.join(format!("{}-*.{}", app, ext));
+            if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
+                for entry in entries.flatten() {
+                    let _ = fs::remove_file(&entry);
+                }
+            }
+        }
+    }
+
     // Read Procfile to determine processes to run
     let procfile_path = app_path.join("Procfile");
     if !procfile_path.exists() {
@@ -68,33 +157,8 @@ fn create_go_workers(
             let kind = line[..pos].trim();
             let command = line[pos + 1..].trim();
 
-            // Parse scaling info if available
-            let scaling_path = paths.env_root.join(app).join("SCALING");
-            let mut count = 1; // default to 1 instance
+            let count = read_scaling_count(paths, app, kind)?;
 
-            if scaling_path.exists() {
-                let scaling_content = fs::read_to_string(&scaling_path)?;
-                for scale_line in scaling_content.lines() {
-                    let scale_line = scale_line.trim();
-                    if scale_line.is_empty() || scale_line.starts_with('#') {
-                        continue;
-                    }
-
-                    if let Some(scale_pos) = scale_line.find('=') {
-                        let scale_kind = scale_line[..scale_pos].trim();
-                        let scale_count_str = scale_line[scale_pos + 1..].trim();
-
-                        if scale_kind == kind {
-                            if let Ok(scale_count) = scale_count_str.parse::<u32>() {
-                                count = scale_count;
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Create worker configs for each instance
             for i in 1..=count {
                 create_go_worker_config(app, kind, command, i, env, paths, app_path)?;
             }
@@ -114,73 +178,35 @@ fn create_go_worker_config(
     paths: &RikuPaths,
     app_path: &Path,
 ) -> Result<()> {
-    // Prepare environment for the worker
     let mut worker_env = env.clone();
 
     // Set PORT for web processes and determine final command
     let final_command = if kind == "web" {
-        let port = get_free_port("127.0.0.1")?;
-        worker_env.insert("PORT".to_string(), port.to_string());
+        let port = setup_web_port!(worker_env, app, paths);
 
-        // Update command to include port if it's a web process
-        let updated_command = if command.contains("--port") || command.contains("PORT=") {
+        // If the binary doesn't already accept a port flag, append -port=
+        if command.contains("--port") || command.contains("PORT=") {
             command.to_string()
+        } else if command.ends_with("_bin") {
+            format!("{} -port={}", command, port)
         } else {
-            // If it's a common Go web server, add port binding
-            if command.ends_with("_bin") {
-                format!("{} -port={}", command, port)
-            } else {
-                command.to_string()
-            }
-        };
-
-        // Create socket file for web processes
-        let socket_path = paths.nginx_root.join(format!("{}.sock", app));
-        worker_env.insert(
-            "SOCKET".to_string(),
-            socket_path.to_string_lossy().to_string(),
-        );
-
-        updated_command
+            command.to_string()
+        }
     } else {
         command.to_string()
     };
 
     // Add Go-specific environment variables
-    worker_env.insert("GOROOT".to_string(), "".to_string()); // Will be picked up from environment
+    worker_env.insert("GOROOT".to_string(), String::new()); // picked up from environment
 
-    // Create the worker config
-    let worker_config = create_worker_config(
+    write_worker_config!(
         app,
         kind,
         &final_command,
         ordinal,
         worker_env,
-        &app_path.to_string_lossy(),
-        &paths
-            .log_root
-            .join(app)
-            .join(format!("{}.{}.log", kind, ordinal))
-            .to_string_lossy(),
-    );
-
-    // Write the worker config to the available directory
-    let config_filename = format!("{}-{}-{}.toml", app, kind, ordinal);
-    let config_path = paths.workers_available.join(&config_filename);
-
-    let config_content = toml::to_string(&worker_config)?;
-    fs::write(&config_path, &config_content)?;
-
-    // Create a symlink to enable the worker
-    let enabled_path = paths.workers_enabled.join(&config_filename);
-    if enabled_path.exists() {
-        fs::remove_file(&enabled_path)?;
-    }
-    std::os::unix::fs::symlink(&config_path, &enabled_path)?;
-
-    echo(
-        &format!("-----> Created worker config: {}", config_filename),
-        "green",
+        app_path,
+        paths
     );
 
     Ok(())
@@ -196,7 +222,7 @@ mod tests {
     fn test_create_go_worker_config() {
         let temp_dir = TempDir::new().unwrap();
         let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".piku"),
+            temp_dir.path().join(".riku"),
             &temp_dir.path().to_path_buf(),
         );
 

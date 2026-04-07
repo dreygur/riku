@@ -1,0 +1,35 @@
+#!/bin/bash
+# riku-pre-deploy — validate required env vars before deploy proceeds.
+#
+# Install: cp riku-pre-deploy ~/.riku/plugins/ && chmod +x ~/.riku/plugins/riku-pre-deploy
+#
+# Exit 0 to allow deploy. Exit non-zero to abort it.
+set -euo pipefail
+
+ENV_FILE="${RIKU_ENV_PATH}/ENV"
+REQUIRED_VARS=("DATABASE_URL" "SECRET_KEY")
+MISSING=()
+
+echo "-----> [pre-deploy] Validating required env vars for '${RIKU_APP}'"
+
+if [[ ! -f "${ENV_FILE}" ]]; then
+    echo "       Warning: ENV file not found at ${ENV_FILE}" >&2
+    exit 0
+fi
+
+for var in "${REQUIRED_VARS[@]}"; do
+    if ! grep -q "^${var}=" "${ENV_FILE}"; then
+        MISSING+=("${var}")
+    fi
+done
+
+if [[ ${#MISSING[@]} -gt 0 ]]; then
+    echo "       Error: missing required env vars:" >&2
+    for v in "${MISSING[@]}"; do
+        echo "         - ${v}" >&2
+    done
+    echo "       Set them with: riku config:set ${RIKU_APP} ${MISSING[0]}=<value>" >&2
+    exit 1
+fi
+
+echo "       All required env vars present."
