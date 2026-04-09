@@ -12,6 +12,7 @@
 pub mod deploy_logger;
 pub mod display;
 pub mod env;
+pub mod fs;
 pub mod nginx_validation;
 pub mod procfile;
 pub mod process_util;
@@ -30,6 +31,7 @@ pub use procfile::parse_procfile;
 pub use process_util::{
     check_requirements, command_output, found_app, get_free_port, validate_node_version,
 };
+pub use fs::{copy_dir_recursive, count_files};
 pub use validation::{
     ensure_path_within, exit_if_invalid, get_boolean, parse_positive_int, sanitize_app_name,
     validate_app_name,

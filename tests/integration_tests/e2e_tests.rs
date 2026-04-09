@@ -594,4 +594,865 @@ mod tests {
         std::env::remove_var("RIKU_SKIP_BUILD");
         Ok(())
     }
+
+    // =========================================================================
+    // Runtime detection — all supported runtimes
+    // =========================================================================
+
+    #[test]
+    fn test_runtime_detection_ruby() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let app_dir = tmp.path().join("app");
+        fs::create_dir_all(&app_dir)?;
+        fs::write(app_dir.join("Gemfile"), "source 'https://rubygems.org'\n")?;
+
+        let runtime = riku::deploy::detect_runtime(&app_dir);
+        assert!(
+            matches!(runtime, Some(riku::deploy::Runtime::Ruby)),
+            "must detect Ruby runtime from Gemfile"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_detection_go_mod() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let app_dir = tmp.path().join("app");
+        fs::create_dir_all(&app_dir)?;
+        fs::write(app_dir.join("go.mod"), "module example.com/myapp\ngo 1.21\n")?;
+
+        let runtime = riku::deploy::detect_runtime(&app_dir);
+        assert!(
+            matches!(runtime, Some(riku::deploy::Runtime::Go)),
+            "must detect Go runtime from go.mod"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_detection_go_source_file() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let app_dir = tmp.path().join("app");
+        fs::create_dir_all(&app_dir)?;
+        fs::write(app_dir.join("main.go"), "package main\nfunc main() {}\n")?;
+
+        let runtime = riku::deploy::detect_runtime(&app_dir);
+        assert!(
+            matches!(runtime, Some(riku::deploy::Runtime::Go)),
+            "must detect Go runtime from .go source file"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_detection_java_maven() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let app_dir = tmp.path().join("app");
+        fs::create_dir_all(&app_dir)?;
+        fs::write(app_dir.join("pom.xml"), "<project></project>")?;
+
+        let runtime = riku::deploy::detect_runtime(&app_dir);
+        assert!(
+            matches!(runtime, Some(riku::deploy::Runtime::JavaMaven)),
+            "must detect JavaMaven runtime from pom.xml"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_detection_java_gradle() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let app_dir = tmp.path().join("app");
+        fs::create_dir_all(&app_dir)?;
+        fs::write(app_dir.join("build.gradle"), "plugins { id 'java' }\n")?;
+
+        let runtime = riku::deploy::detect_runtime(&app_dir);
+        assert!(
+            matches!(runtime, Some(riku::deploy::Runtime::JavaGradle)),
+            "must detect JavaGradle runtime from build.gradle"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_detection_clojure_cli() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let app_dir = tmp.path().join("app");
+        fs::create_dir_all(&app_dir)?;
+        fs::write(app_dir.join("deps.edn"), "{:deps {}}\n")?;
+
+        let runtime = riku::deploy::detect_runtime(&app_dir);
+        assert!(
+            matches!(runtime, Some(riku::deploy::Runtime::ClojureCli)),
+            "must detect ClojureCli runtime from deps.edn"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_detection_clojure_lein() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let app_dir = tmp.path().join("app");
+        fs::create_dir_all(&app_dir)?;
+        fs::write(app_dir.join("project.clj"), "(defproject myapp \"0.1.0\")\n")?;
+
+        let runtime = riku::deploy::detect_runtime(&app_dir);
+        assert!(
+            matches!(runtime, Some(riku::deploy::Runtime::ClojureLein)),
+            "must detect ClojureLein runtime from project.clj"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_detection_container_dockerfile() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let app_dir = tmp.path().join("app");
+        fs::create_dir_all(&app_dir)?;
+        fs::write(app_dir.join("Dockerfile"), "FROM alpine\nCMD [\"sh\"]\n")?;
+
+        let runtime = riku::deploy::detect_runtime(&app_dir);
+        assert!(
+            matches!(runtime, Some(riku::deploy::Runtime::Container)),
+            "must detect Container runtime from Dockerfile"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_detection_container_containerfile() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let app_dir = tmp.path().join("app");
+        fs::create_dir_all(&app_dir)?;
+        fs::write(
+            app_dir.join("Containerfile"),
+            "FROM alpine\nCMD [\"sh\"]\n",
+        )?;
+
+        let runtime = riku::deploy::detect_runtime(&app_dir);
+        assert!(
+            matches!(runtime, Some(riku::deploy::Runtime::Container)),
+            "must detect Container runtime from Containerfile"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_detection_container_compose() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let app_dir = tmp.path().join("app");
+        fs::create_dir_all(&app_dir)?;
+        fs::write(
+            app_dir.join("docker-compose.yml"),
+            "services:\n  web:\n    image: alpine\n",
+        )?;
+
+        let runtime = riku::deploy::detect_runtime(&app_dir);
+        assert!(
+            matches!(runtime, Some(riku::deploy::Runtime::Container)),
+            "must detect Container runtime from docker-compose.yml"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_detection_rust() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let app_dir = tmp.path().join("app");
+        fs::create_dir_all(&app_dir)?;
+        fs::write(app_dir.join("Cargo.toml"), "[package]\nname = \"myapp\"\n")?;
+        fs::write(app_dir.join("rust-toolchain.toml"), "[toolchain]\nchannel = \"stable\"\n")?;
+
+        let runtime = riku::deploy::detect_runtime(&app_dir);
+        assert!(
+            matches!(runtime, Some(riku::deploy::Runtime::Rust)),
+            "must detect Rust runtime from Cargo.toml + rust-toolchain.toml"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_detection_rust_cargo_only_returns_none() -> Result<()> {
+        // Cargo.toml alone (without rust-toolchain.toml) should NOT detect Rust
+        let tmp = TempDir::new()?;
+        let app_dir = tmp.path().join("app");
+        fs::create_dir_all(&app_dir)?;
+        fs::write(app_dir.join("Cargo.toml"), "[package]\nname = \"myapp\"\n")?;
+
+        let runtime = riku::deploy::detect_runtime(&app_dir);
+        assert!(
+            !matches!(runtime, Some(riku::deploy::Runtime::Rust)),
+            "Cargo.toml alone must not detect Rust (requires rust-toolchain.toml too)"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_detection_python_pyproject_fallback() -> Result<()> {
+        // pyproject.toml with no poetry or uv available falls back to Python.
+        // We can't control whether poetry/uv are installed, so we just verify
+        // the result is one of the Python variants.
+        let tmp = TempDir::new()?;
+        let app_dir = tmp.path().join("app");
+        fs::create_dir_all(&app_dir)?;
+        fs::write(
+            app_dir.join("pyproject.toml"),
+            "[tool.poetry]\nname = \"myapp\"\n",
+        )?;
+
+        let runtime = riku::deploy::detect_runtime(&app_dir);
+        assert!(
+            matches!(
+                runtime,
+                Some(
+                    riku::deploy::Runtime::Python
+                        | riku::deploy::Runtime::PythonPoetry
+                        | riku::deploy::Runtime::PythonUv
+                )
+            ),
+            "pyproject.toml must detect a Python variant"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_detection_wsgi() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let app_dir = tmp.path().join("app");
+        fs::create_dir_all(&app_dir)?;
+        fs::write(app_dir.join("Procfile"), "wsgi: myapp.wsgi\n")?;
+        fs::write(app_dir.join("wsgi.py"), "application = None\n")?;
+
+        let runtime = riku::deploy::detect_runtime(&app_dir);
+        assert!(
+            matches!(runtime, Some(riku::deploy::Runtime::Wsgi)),
+            "must detect Wsgi runtime from Procfile wsgi: + wsgi.py"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_detection_php() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let app_dir = tmp.path().join("app");
+        fs::create_dir_all(&app_dir)?;
+        fs::write(app_dir.join("Procfile"), "php: php -S 0.0.0.0:$PORT\n")?;
+
+        let runtime = riku::deploy::detect_runtime(&app_dir);
+        assert!(
+            matches!(runtime, Some(riku::deploy::Runtime::Php)),
+            "must detect Php runtime from Procfile php:"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_detection_none() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let app_dir = tmp.path().join("app");
+        fs::create_dir_all(&app_dir)?;
+        // Write only a README — no recognized marker file
+        fs::write(app_dir.join("README.md"), "# My App\n")?;
+
+        let runtime = riku::deploy::detect_runtime(&app_dir);
+        assert!(runtime.is_none(), "must return None when no runtime markers exist");
+        Ok(())
+    }
+
+    // =========================================================================
+    // Worker config — additional coverage
+    // =========================================================================
+
+    #[test]
+    fn test_worker_config_multiple_process_types() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let app = "multiproc";
+        let app_dir = paths.app_root.join(app);
+        fs::create_dir_all(&app_dir)?;
+        fs::create_dir_all(paths.env_root.join(app))?;
+        fs::create_dir_all(paths.log_root.join(app))?;
+
+        fs::write(
+            app_dir.join("Procfile"),
+            "web: node server.js\nworker: node worker.js\nscheduler: node scheduler.js\n",
+        )?;
+
+        let env = HashMap::new();
+        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths)?;
+
+        assert!(
+            paths.workers_available.join("multiproc-web-1.toml").exists(),
+            "web config must exist"
+        );
+        assert!(
+            paths.workers_available.join("multiproc-worker-1.toml").exists(),
+            "worker config must exist"
+        );
+        assert!(
+            paths.workers_available.join("multiproc-scheduler-1.toml").exists(),
+            "scheduler config must exist"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_worker_config_worker_type_scaling() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let app = "wscaled";
+        let app_dir = paths.app_root.join(app);
+        fs::create_dir_all(&app_dir)?;
+
+        let env_dir = paths.env_root.join(app);
+        fs::create_dir_all(&env_dir)?;
+        fs::create_dir_all(paths.log_root.join(app))?;
+
+        // Scale workers to 3
+        fs::write(env_dir.join("SCALING"), "worker=3\n")?;
+        fs::write(app_dir.join("Procfile"), "worker: python worker.py\n")?;
+
+        let env = HashMap::new();
+        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths)?;
+
+        for i in 1..=3 {
+            assert!(
+                paths
+                    .workers_available
+                    .join(format!("wscaled-worker-{}.toml", i))
+                    .exists(),
+                "worker-{} config must exist",
+                i
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_worker_config_comment_lines_ignored() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let app = "commentapp";
+        let app_dir = paths.app_root.join(app);
+        fs::create_dir_all(&app_dir)?;
+        fs::create_dir_all(paths.env_root.join(app))?;
+        fs::create_dir_all(paths.log_root.join(app))?;
+
+        // Procfile with comments interspersed
+        fs::write(
+            app_dir.join("Procfile"),
+            "# This is a comment\nweb: node server.js\n# Another comment\n",
+        )?;
+
+        let env = HashMap::new();
+        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths)?;
+
+        // Only web config should exist
+        let configs: Vec<_> = fs::read_dir(&paths.workers_available)?
+            .flatten()
+            .collect();
+        assert_eq!(configs.len(), 1, "only one worker config should be created");
+        assert!(
+            paths
+                .workers_available
+                .join("commentapp-web-1.toml")
+                .exists(),
+            "web config must exist"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_worker_config_content_has_correct_command() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let app = "cmdapp";
+        let app_dir = paths.app_root.join(app);
+        fs::create_dir_all(&app_dir)?;
+        fs::create_dir_all(paths.env_root.join(app))?;
+        fs::create_dir_all(paths.log_root.join(app))?;
+
+        fs::write(app_dir.join("Procfile"), "worker: celery -A tasks worker\n")?;
+
+        let env = HashMap::new();
+        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths)?;
+
+        let cfg = paths.workers_available.join("cmdapp-worker-1.toml");
+        let content = fs::read_to_string(&cfg)?;
+        assert!(
+            content.contains("celery"),
+            "worker config must contain the command from Procfile"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_worker_config_no_procfile_returns_ok() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let app = "noprocfile";
+        let app_dir = paths.app_root.join(app);
+        fs::create_dir_all(&app_dir)?;
+        fs::create_dir_all(paths.env_root.join(app))?;
+        fs::create_dir_all(paths.log_root.join(app))?;
+        // Deliberately no Procfile written
+
+        let env = HashMap::new();
+        let result = riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths);
+        assert!(result.is_ok(), "missing Procfile must not return an error");
+
+        // No configs should have been created
+        let configs: Vec<_> = fs::read_dir(&paths.workers_available)?
+            .flatten()
+            .collect();
+        assert_eq!(configs.len(), 0, "no configs should be created without a Procfile");
+        Ok(())
+    }
+
+    // =========================================================================
+    // ENV file parsing — edge cases
+    // =========================================================================
+
+    #[test]
+    fn test_env_file_with_comments_ignored() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let app = "commentenv";
+        let env_dir = paths.env_root.join(app);
+        fs::create_dir_all(&env_dir)?;
+        fs::write(
+            env_dir.join("ENV"),
+            "# This is a comment\nKEY=value\n# Another comment\n",
+        )?;
+
+        let mut env: HashMap<String, String> = HashMap::new();
+        riku::util::parse_settings(&env_dir.join("ENV"), &mut env)?;
+
+        assert_eq!(env.get("KEY"), Some(&"value".to_string()));
+        assert!(!env.contains_key("# This is a comment"), "comment must not be parsed as key");
+        Ok(())
+    }
+
+    #[test]
+    fn test_env_file_with_value_containing_equals() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let app = "eqenv";
+        let env_dir = paths.env_root.join(app);
+        fs::create_dir_all(&env_dir)?;
+        // Value contains = sign (e.g. a base64 encoded value or URL)
+        fs::write(
+            env_dir.join("ENV"),
+            "DATABASE_URL=postgres://user:pass@host/db?ssl=true\n",
+        )?;
+
+        let mut env: HashMap<String, String> = HashMap::new();
+        riku::util::parse_settings(&env_dir.join("ENV"), &mut env)?;
+
+        assert_eq!(
+            env.get("DATABASE_URL"),
+            Some(&"postgres://user:pass@host/db?ssl=true".to_string()),
+            "value with = signs must be preserved"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_env_file_with_empty_value() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let app = "emptyval";
+        let env_dir = paths.env_root.join(app);
+        fs::create_dir_all(&env_dir)?;
+        fs::write(env_dir.join("ENV"), "EMPTY_KEY=\n")?;
+
+        let mut env: HashMap<String, String> = HashMap::new();
+        riku::util::parse_settings(&env_dir.join("ENV"), &mut env)?;
+
+        assert_eq!(
+            env.get("EMPTY_KEY"),
+            Some(&"".to_string()),
+            "empty value must be parsed as empty string"
+        );
+        Ok(())
+    }
+
+    // =========================================================================
+    // Full deploy — additional scenarios
+    // =========================================================================
+
+    #[test]
+    fn test_full_deploy_creates_deploy_log() -> Result<()> {
+        std::env::set_var("RIKU_SKIP_BUILD", "1");
+
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let app = "logapp";
+        let files = &[
+            ("Procfile", "web: node server.js\n"),
+            ("package.json", r#"{"name":"logapp","version":"1.0.0"}"#),
+        ];
+
+        let (bare, _work, sha) = make_git_repo_with_files(files);
+        let _app_dir = setup_app_clone(bare.path(), app, &paths);
+        fs::create_dir_all(paths.env_root.join(app))?;
+        fs::write(paths.env_root.join(app).join("ENV"), "")?;
+        fs::create_dir_all(paths.log_root.join(app))?;
+
+        let deltas: HashMap<String, i64> = HashMap::new();
+        riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
+
+        // Deploy log must be created
+        let deploy_log = paths.deploy_log_file(app);
+        assert!(deploy_log.exists(), "deploy.log must be created by do_deploy");
+
+        let log_content = fs::read_to_string(&deploy_log)?;
+        assert!(
+            log_content.contains("logapp") || log_content.contains("Deploy"),
+            "deploy log must contain app name or deploy entry"
+        );
+
+        std::env::remove_var("RIKU_SKIP_BUILD");
+        Ok(())
+    }
+
+    #[test]
+    fn test_full_deploy_creates_live_env() -> Result<()> {
+        std::env::set_var("RIKU_SKIP_BUILD", "1");
+
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let app = "liveenvapp";
+        let files = &[
+            ("Procfile", "web: node server.js\n"),
+            ("package.json", r#"{"name":"liveenvapp"}"#),
+        ];
+
+        let (bare, _work, sha) = make_git_repo_with_files(files);
+        let _app_dir = setup_app_clone(bare.path(), app, &paths);
+        fs::create_dir_all(paths.env_root.join(app))?;
+        fs::write(paths.env_root.join(app).join("ENV"), "MY_VAR=hello\n")?;
+        fs::create_dir_all(paths.log_root.join(app))?;
+
+        let deltas: HashMap<String, i64> = HashMap::new();
+        riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
+
+        // LIVE_ENV must be written
+        let live_env = paths.env_root.join(app).join("LIVE_ENV");
+        assert!(live_env.exists(), "LIVE_ENV must be created after full deploy");
+
+        let content = fs::read_to_string(&live_env)?;
+        assert!(
+            content.contains("MY_VAR"),
+            "LIVE_ENV must include app-defined env vars"
+        );
+
+        std::env::remove_var("RIKU_SKIP_BUILD");
+        Ok(())
+    }
+
+    #[test]
+    fn test_full_deploy_node_with_scaling() -> Result<()> {
+        std::env::set_var("RIKU_SKIP_BUILD", "1");
+
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let app = "scaleapp";
+        let files = &[
+            ("Procfile", "web: node server.js\nworker: node worker.js\n"),
+            ("package.json", r#"{"name":"scaleapp"}"#),
+        ];
+
+        let (bare, _work, sha) = make_git_repo_with_files(files);
+        let _app_dir = setup_app_clone(bare.path(), app, &paths);
+
+        let env_dir = paths.env_root.join(app);
+        fs::create_dir_all(&env_dir)?;
+        fs::write(env_dir.join("ENV"), "")?;
+        fs::write(env_dir.join("SCALING"), "web=2\nworker=1\n")?;
+        fs::create_dir_all(paths.log_root.join(app))?;
+
+        let deltas: HashMap<String, i64> = HashMap::new();
+        riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
+
+        assert!(
+            paths.workers_available.join("scaleapp-web-1.toml").exists(),
+            "web-1 must exist"
+        );
+        assert!(
+            paths.workers_available.join("scaleapp-web-2.toml").exists(),
+            "web-2 must exist (scaling=2)"
+        );
+        assert!(
+            paths.workers_available.join("scaleapp-worker-1.toml").exists(),
+            "worker-1 must exist"
+        );
+
+        std::env::remove_var("RIKU_SKIP_BUILD");
+        Ok(())
+    }
+
+    #[test]
+    fn test_full_deploy_without_env_file_succeeds() -> Result<()> {
+        std::env::set_var("RIKU_SKIP_BUILD", "1");
+
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let app = "noenvapp";
+        let files = &[
+            ("Procfile", "web: node server.js\n"),
+            ("package.json", r#"{"name":"noenvapp"}"#),
+        ];
+
+        let (bare, _work, sha) = make_git_repo_with_files(files);
+        let _app_dir = setup_app_clone(bare.path(), app, &paths);
+
+        // Create env dir but no ENV file — deploy must still succeed
+        fs::create_dir_all(paths.env_root.join(app))?;
+        fs::create_dir_all(paths.log_root.join(app))?;
+
+        let deltas: HashMap<String, i64> = HashMap::new();
+        let result = riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha));
+        assert!(result.is_ok(), "deploy without ENV file must succeed");
+
+        std::env::remove_var("RIKU_SKIP_BUILD");
+        Ok(())
+    }
+
+    #[test]
+    fn test_full_deploy_python_with_multiple_workers() -> Result<()> {
+        std::env::set_var("RIKU_SKIP_BUILD", "1");
+
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let app = "pyworkers";
+        let files = &[
+            (
+                "Procfile",
+                "web: gunicorn app:application\nworker: celery -A tasks worker\n",
+            ),
+            ("requirements.txt", "gunicorn\ncelery\n"),
+            ("app.py", "application = None"),
+        ];
+
+        let (bare, _work, sha) = make_git_repo_with_files(files);
+        let _app_dir = setup_app_clone(bare.path(), app, &paths);
+        fs::create_dir_all(paths.env_root.join(app))?;
+        fs::write(paths.env_root.join(app).join("ENV"), "")?;
+        fs::create_dir_all(paths.log_root.join(app))?;
+
+        let deltas: HashMap<String, i64> = HashMap::new();
+        riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
+
+        assert!(
+            paths.workers_available.join("pyworkers-web-1.toml").exists(),
+            "web worker config must exist"
+        );
+        assert!(
+            paths
+                .workers_available
+                .join("pyworkers-worker-1.toml")
+                .exists(),
+            "celery worker config must exist"
+        );
+
+        std::env::remove_var("RIKU_SKIP_BUILD");
+        Ok(())
+    }
+
+    // =========================================================================
+    // Error cases — additional coverage
+    // =========================================================================
+
+    #[test]
+    fn test_deploy_app_exists_but_no_procfile_returns_error() -> Result<()> {
+        std::env::set_var("RIKU_SKIP_BUILD", "1");
+
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let app = "noprocapp";
+        let files = &[("package.json", r#"{"name":"noprocapp"}"#)];
+
+        let (bare, _work, sha) = make_git_repo_with_files(files);
+        let _app_dir = setup_app_clone(bare.path(), app, &paths);
+        fs::create_dir_all(paths.env_root.join(app))?;
+        fs::write(paths.env_root.join(app).join("ENV"), "")?;
+        fs::create_dir_all(paths.log_root.join(app))?;
+
+        let deltas: HashMap<String, i64> = HashMap::new();
+        let result = riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha));
+        assert!(result.is_err(), "deploy without Procfile must return Err");
+
+        std::env::remove_var("RIKU_SKIP_BUILD");
+        Ok(())
+    }
+
+    #[test]
+    fn test_deploy_procfile_with_only_comments_returns_error() -> Result<()> {
+        std::env::set_var("RIKU_SKIP_BUILD", "1");
+
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let app = "commentproc";
+        let files = &[
+            ("Procfile", "# web: node server.js\n# This is all commented out\n"),
+            ("package.json", r#"{"name":"commentproc"}"#),
+        ];
+
+        let (bare, _work, sha) = make_git_repo_with_files(files);
+        let _app_dir = setup_app_clone(bare.path(), app, &paths);
+        fs::create_dir_all(paths.env_root.join(app))?;
+        fs::write(paths.env_root.join(app).join("ENV"), "")?;
+        fs::create_dir_all(paths.log_root.join(app))?;
+
+        let deltas: HashMap<String, i64> = HashMap::new();
+        let result = riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha));
+        assert!(
+            result.is_err(),
+            "deploy with comments-only Procfile must return Err"
+        );
+
+        std::env::remove_var("RIKU_SKIP_BUILD");
+        Ok(())
+    }
+
+    // =========================================================================
+    // Git sync — additional scenarios
+    // =========================================================================
+
+    #[test]
+    fn test_git_sync_without_sha_uses_head() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let app = "noshaapp";
+        let files = &[
+            ("Procfile", "web: node server.js\n"),
+            ("package.json", r#"{"name":"noshaapp"}"#),
+        ];
+
+        let (bare, _work, _sha) = make_git_repo_with_files(files);
+        let app_dir = setup_app_clone(bare.path(), app, &paths);
+
+        // Pass None for SHA — should sync to HEAD without error
+        riku::deploy::git_ops::sync_app_repo(&app_dir, None)?;
+
+        assert!(
+            app_dir.join("Procfile").exists(),
+            "Procfile must exist after sync with no sha"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_git_sync_updates_changed_files() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let app = "updateapp";
+        let files = &[
+            ("Procfile", "web: node server.js\n"),
+            ("package.json", r#"{"name":"updateapp","version":"1.0.0"}"#),
+            ("data.txt", "original content\n"),
+        ];
+
+        let (bare, work, _sha) = make_git_repo_with_files(files);
+        let app_dir = setup_app_clone(bare.path(), app, &paths);
+
+        // Update the file in the working tree and push again
+        fs::write(work.path().join("data.txt"), "updated content\n")?;
+        Command::new("git")
+            .args(["-C", work.path().to_str().unwrap(), "add", "."])
+            .output()?;
+        Command::new("git")
+            .args(["-C", work.path().to_str().unwrap(), "commit", "-m", "update"])
+            .output()?;
+        Command::new("git")
+            .args(["-C", work.path().to_str().unwrap(), "push", "origin", "HEAD"])
+            .output()?;
+
+        let new_sha = String::from_utf8(
+            Command::new("git")
+                .args(["-C", work.path().to_str().unwrap(), "rev-parse", "HEAD"])
+                .output()?
+                .stdout,
+        )?
+        .trim()
+        .to_string();
+
+        // Sync to the new sha
+        riku::deploy::git_ops::sync_app_repo(&app_dir, Some(&new_sha))?;
+
+        let content = fs::read_to_string(app_dir.join("data.txt"))?;
+        assert_eq!(
+            content.trim(),
+            "updated content",
+            "git sync must update file to latest committed content"
+        );
+        Ok(())
+    }
+
+    // =========================================================================
+    // Scaling — read_scaling_count public API
+    // =========================================================================
+
+    #[test]
+    fn test_read_scaling_count_default_is_one() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+        fs::create_dir_all(paths.env_root.join("myapp"))?;
+
+        let count = riku::deploy::workers::read_scaling_count(&paths, "myapp", "web")?;
+        assert_eq!(count, 1, "default scaling count must be 1");
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_scaling_count_from_file() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let env_dir = paths.env_root.join("myapp");
+        fs::create_dir_all(&env_dir)?;
+        fs::write(env_dir.join("SCALING"), "web=4\nworker=2\n")?;
+
+        assert_eq!(
+            riku::deploy::workers::read_scaling_count(&paths, "myapp", "web")?,
+            4
+        );
+        assert_eq!(
+            riku::deploy::workers::read_scaling_count(&paths, "myapp", "worker")?,
+            2
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_scaling_count_unknown_kind_defaults_to_one() -> Result<()> {
+        let tmp = TempDir::new()?;
+        let paths = make_paths(&tmp);
+
+        let env_dir = paths.env_root.join("myapp");
+        fs::create_dir_all(&env_dir)?;
+        fs::write(env_dir.join("SCALING"), "web=3\n")?;
+
+        let count = riku::deploy::workers::read_scaling_count(&paths, "myapp", "scheduler")?;
+        assert_eq!(count, 1, "unknown kind must default to 1");
+        Ok(())
+    }
 }

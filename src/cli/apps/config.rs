@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::fs;
 
 use crate::config::RikuPaths;
-use crate::util::{display, exit_if_invalid, parse_settings, write_config};
+use crate::util::{display, exit_if_invalid, parse_settings};
 
 /// Show app configuration (ENV file).
 pub fn cmd_config_show(paths: &RikuPaths, app: &str) -> Result<()> {
@@ -59,10 +59,7 @@ pub fn cmd_config_set(paths: &RikuPaths, app: &str, settings: &[String]) -> Resu
             return Ok(());
         }
     }
-    write_config(&config_file, &env, "=")?;
-    // Trigger a deploy after config change
-    let deltas: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
-    crate::deploy::do_deploy(&app, paths, &deltas, None)?;
+    crate::deploy::env_setup::update_env_and_redeploy(&app, paths, &env)?;
     Ok(())
 }
 
@@ -79,10 +76,7 @@ pub fn cmd_config_unset(paths: &RikuPaths, app: &str, keys: &[String]) -> Result
             display::note(&format!("Unsetting {} for '{}'", s, app));
         }
     }
-    write_config(&config_file, &env, "=")?;
-    // Trigger a deploy after config change
-    let deltas: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
-    crate::deploy::do_deploy(&app, paths, &deltas, None)?;
+    crate::deploy::env_setup::update_env_and_redeploy(&app, paths, &env)?;
     Ok(())
 }
 

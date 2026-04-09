@@ -112,6 +112,17 @@ pub fn write_live_env(app: &str, paths: &RikuPaths, env: &HashMap<String, String
     Ok(())
 }
 
+/// Write updated environment variables to the app's ENV file, then trigger a redeploy.
+///
+/// This is the service-layer entry point for config changes. CLI commands must
+/// call this instead of wiring `write_config` + `do_deploy` themselves.
+pub fn update_env_and_redeploy(app: &str, paths: &crate::config::RikuPaths, env: &HashMap<String, String>) -> Result<()> {
+    let config_file = paths.env_root.join(app).join("ENV");
+    crate::util::write_config(&config_file, env, "=")?;
+    let deltas = HashMap::new();
+    super::do_deploy(app, paths, &deltas, None)
+}
+
 /// Inject WSGI socket variables into `env` and persist them to the ENV file.
 ///
 /// This must happen before `create_identity_workers` so that the nginx

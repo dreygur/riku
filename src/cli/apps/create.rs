@@ -12,8 +12,7 @@ pub fn cmd_apps_create(paths: &RikuPaths, name: &str) -> Result<()> {
     let app = crate::util::validate_app_name(name)?;
 
     if paths.app_root.join(&app).exists() {
-        echo(&format!("Error: app '{}' already exists.", app), "red");
-        return Ok(());
+        anyhow::bail!("app '{}' already exists", app);
     }
 
     // Create app directory

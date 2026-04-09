@@ -51,6 +51,7 @@ pub fn cmd_apps_info(paths: &RikuPaths, app: &str) -> Result<()> {
     Ok(())
 }
 
+/// Print the disk usage of the app directory using `du -sh`.
 fn print_disk_usage(app_dir: &std::path::Path) {
     if let Some(app_dir_str) = app_dir.to_str() {
         if let Ok(output) = Command::new("du").args(["-sh", app_dir_str]).output() {
@@ -63,6 +64,7 @@ fn print_disk_usage(app_dir: &std::path::Path) {
     }
 }
 
+/// Print a summary of the app's ENV file: variable count and key highlights.
 fn print_env_summary(paths: &RikuPaths, app: &str) -> Result<()> {
     let env_file = paths.env_root.join(app).join("ENV");
     if env_file.exists() {
@@ -80,6 +82,7 @@ fn print_env_summary(paths: &RikuPaths, app: &str) -> Result<()> {
     Ok(())
 }
 
+/// Print scaling configuration from the SCALING file, if present.
 fn print_scaling(paths: &RikuPaths, app: &str) -> Result<()> {
     let scaling_file = paths.env_root.join(app).join("SCALING");
     if scaling_file.exists() {
@@ -98,6 +101,7 @@ fn print_scaling(paths: &RikuPaths, app: &str) -> Result<()> {
     Ok(())
 }
 
+/// Print process status: running/stopped and active worker count.
 fn print_process_status(paths: &RikuPaths, app: &str) -> Result<()> {
     let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", app));
     let ini_pattern = paths.workers_enabled.join(format!("{}-*.ini", app));
@@ -120,6 +124,7 @@ fn print_process_status(paths: &RikuPaths, app: &str) -> Result<()> {
     Ok(())
 }
 
+/// Print memory and process stats from the supervisor's `stats.json`, if available.
 fn print_supervisor_stats(paths: &RikuPaths, app: &str) {
     let stats_file = paths.riku_root.join("stats.json");
     if stats_file.exists() {

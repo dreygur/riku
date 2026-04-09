@@ -18,7 +18,7 @@ pub fn cmd_run(paths: &RikuPaths, app: &str, cmd: &[String]) -> Result<()> {
     let app_dir = paths.app_root.join(&app);
 
     if cmd.is_empty() {
-        return Err(anyhow::anyhow!("No command specified for 'riku run'"));
+        anyhow::bail!("no command specified for 'riku run'");
     }
 
     // Exec the binary directly rather than rejoining into `sh -c` to avoid
@@ -146,7 +146,9 @@ fn do_stop(paths: &RikuPaths, app: &str) {
     if !configs.is_empty() {
         display::info(&format!("Stopping app '{}'...", app));
         for c in &configs {
-            let _ = fs::remove_file(c);
+            if let Err(e) = fs::remove_file(c) {
+                tracing::warn!("Could not remove worker config {:?}: {}", c, e);
+            }
         }
     } else {
         display::error(&format!("Error: app '{}' not deployed!", app));

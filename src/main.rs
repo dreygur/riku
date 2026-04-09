@@ -1,6 +1,7 @@
 mod cli;
 mod config;
 mod deploy;
+mod error;
 mod nginx;
 mod plugins;
 mod supervisor;

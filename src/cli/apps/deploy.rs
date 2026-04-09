@@ -4,7 +4,7 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::config::RikuPaths;
-use crate::util::{display, exit_if_invalid};
+use crate::util::{copy_dir_recursive, count_files, display, exit_if_invalid};
 
 /// Deploy an app.
 pub fn cmd_deploy(paths: &RikuPaths, app: &str, from_path: Option<&str>) -> Result<()> {
@@ -95,44 +95,3 @@ fn deploy_from_path(paths: &RikuPaths, app: &str, source: &str) -> Result<()> {
     Ok(())
 }
 
-/// Recursively copy a directory.
-fn copy_dir_recursive(source: &Path, dest: &Path) -> Result<()> {
-    fs::create_dir_all(dest)?;
-
-    for entry in fs::read_dir(source)? {
-        let entry = entry?;
-        let entry_path = entry.path();
-        let dest_path = dest.join(entry.file_name());
-
-        if entry_path.is_dir() {
-            if entry_path
-                .file_name()
-                .map(|n| n == ".git" || n == "node_modules" || n == ".gitignore")
-                .unwrap_or(false)
-            {
-                continue;
-            }
-            copy_dir_recursive(&entry_path, &dest_path)?;
-        } else {
-            fs::copy(&entry_path, &dest_path)?;
-        }
-    }
-
-    Ok(())
-}
-
-/// Count files in a directory.
-fn count_files(dir: &Path) -> Result<usize> {
-    let mut count = 0;
-    if let Ok(entries) = fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                count += count_files(&path)?;
-            } else {
-                count += 1;
-            }
-        }
-    }
-    Ok(count)
-}

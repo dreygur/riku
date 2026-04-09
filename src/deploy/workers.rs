@@ -6,12 +6,20 @@
 use anyhow::Result;
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::config::RikuPaths;
 use crate::util::echo;
 
 pub(crate) use super::scaling::apply_scaling_deltas;
+
+const UWSGI_PROCESSES: &str = "4";
+const UWSGI_THREADS: &str = "4";
+const NGINX_EXTERNAL_PORT: &str = "80";
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
 /// Read the scaling count for a given process kind from the SCALING file.
 ///
@@ -40,207 +48,243 @@ pub fn read_scaling_count(paths: &RikuPaths, app: &str, kind: &str) -> Result<u3
     Ok(1)
 }
 
-/// Generic worker configuration creation for standard runtimes.
-/// This eliminates ~60 lines of duplicated code per runtime.
+/// Create worker configs for every process entry in the app's Procfile.
 ///
 /// Runtimes with special requirements (Python venv, Node version, etc.) can still
-/// use their custom implementations.
+/// use their own implementations. This generic version handles the common case.
 pub fn create_workers_generic(
     app: &str,
     app_path: &Path,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
 ) -> Result<()> {
-    use crate::supervisor::config::create_worker_config;
-    use crate::util::get_free_port;
+    if should_restart(env) {
+        remove_stale_configs(app, paths);
+    }
 
-    // Handle RIKU_AUTO_RESTART - if false, skip removing existing worker configs
-    let auto_restart = env
-        .get("RIKU_AUTO_RESTART")
+    let entries = match parse_procfile(app_path)? {
+        Some(e) => e,
+        None => return Ok(()),
+    };
+
+    for (kind, command) in &entries {
+        let count = read_scaling_count(paths, app, kind)?;
+        for i in 1..=count {
+            let worker_env = build_worker_env(app, kind, command, env, paths)?;
+            write_worker_config(app, app_path, kind, command, i, worker_env, paths)?;
+        }
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Private helpers
+// ---------------------------------------------------------------------------
+
+/// Returns true when `RIKU_AUTO_RESTART` is not explicitly disabled.
+fn should_restart(env: &HashMap<String, String>) -> bool {
+    env.get("RIKU_AUTO_RESTART")
         .map(|v| v.to_lowercase() != "false" && v != "0" && v != "no")
-        .unwrap_or(true);
+        .unwrap_or(true)
+}
 
-    if auto_restart {
-        // Remove existing worker configs to trigger restart
-        for ext in &["toml", "ini"] {
-            // Use "{app}-*" not "{app}*" to avoid matching configs for apps
-            // whose names share a prefix (e.g. "foo" would otherwise delete
-            // configs for "foobar").
-            let pattern = paths.workers_enabled.join(format!("{}-*.{}", app, ext));
-            if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
-                for entry in entries.flatten() {
-                    let _ = fs::remove_file(&entry);
+/// Remove existing worker symlinks from `workers_enabled` to trigger a restart.
+///
+/// Uses `"{app}-*"` not `"{app}*"` to avoid touching configs for apps
+/// whose names share a prefix (e.g. "foo" would otherwise match "foobar").
+fn remove_stale_configs(app: &str, paths: &RikuPaths) {
+    for ext in &["toml", "ini"] {
+        let pattern = paths.workers_enabled.join(format!("{}-*.{}", app, ext));
+        if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
+            for entry in entries.flatten() {
+                if let Err(e) = fs::remove_file(&entry) {
+                    tracing::warn!("Could not remove stale worker config {:?}: {}", entry, e);
                 }
             }
         }
     }
+}
 
-    // Read Procfile to determine processes to run
+/// Parse the Procfile at `app_path/Procfile` into `(kind, command)` pairs.
+///
+/// Returns `None` (and prints a warning) when no Procfile is found.
+/// Comment lines and blank lines are skipped.
+fn parse_procfile(app_path: &Path) -> Result<Option<Vec<(String, String)>>> {
     let procfile_path = app_path.join("Procfile");
     if !procfile_path.exists() {
-        echo(
-            "-----> No Procfile found, skipping process creation",
-            "yellow",
-        );
+        echo("-----> No Procfile found, skipping process creation", "yellow");
+        return Ok(None);
+    }
+
+    let content = fs::read_to_string(&procfile_path)?;
+    let entries = content
+        .lines()
+        .filter_map(parse_procfile_line)
+        .collect();
+
+    Ok(Some(entries))
+}
+
+/// Parse a single Procfile line into `(kind, command)`, or `None` for blank/comment lines.
+fn parse_procfile_line(line: &str) -> Option<(String, String)> {
+    let line = line.trim();
+    if line.is_empty() || line.starts_with('#') {
+        return None;
+    }
+    let pos = line.find(':')?;
+    let kind = line[..pos].trim().to_string();
+    let command = line[pos + 1..].trim().to_string();
+    Some((kind, command))
+}
+
+/// Returns true when `kind` uses a WSGI unix socket (wsgi, jwsgi, rwsgi, php).
+fn is_wsgi_kind(kind: &str) -> bool {
+    matches!(kind, "wsgi" | "jwsgi" | "rwsgi" | "php")
+}
+
+/// Returns true when `kind` needs nginx wiring (web + all wsgi variants).
+fn is_web_facing(kind: &str) -> bool {
+    kind == "web" || is_wsgi_kind(kind)
+}
+
+/// Build the environment map for a single worker instance.
+///
+/// Web-facing processes get PORT/SOCKET injected; wsgi variants get uwsgi vars.
+/// Also persists nginx settings back to the app's ENV file.
+fn build_worker_env(
+    app: &str,
+    kind: &str,
+    command: &str,
+    base_env: &HashMap<String, String>,
+    paths: &RikuPaths,
+) -> Result<HashMap<String, String>> {
+    let mut env = base_env.clone();
+
+    if !is_web_facing(kind) {
+        return Ok(env);
+    }
+
+    let socket_path = paths.nginx_root.join(format!("{}.sock", app));
+
+    if is_wsgi_kind(kind) {
+        configure_wsgi_env(&socket_path, &mut env);
+    } else {
+        configure_web_env(&socket_path, &mut env, paths)?;
+    }
+
+    persist_nginx_env(app, kind, command, &socket_path, &env, paths)?;
+
+    Ok(env)
+}
+
+/// Inject uwsgi unix-socket variables into the environment.
+fn configure_wsgi_env(socket_path: &PathBuf, env: &mut HashMap<String, String>) {
+    env.insert("SOCKET".to_string(), format!("unix://{}", socket_path.to_string_lossy()));
+    env.insert("UWSGI_SOCKET".to_string(), socket_path.to_string_lossy().to_string());
+    env.insert("NGINX_WSGI".to_string(), "true".to_string());
+    env.insert("UWSGI_PROCESSES".to_string(), UWSGI_PROCESSES.to_string());
+    env.insert("UWSGI_THREADS".to_string(), UWSGI_THREADS.to_string());
+}
+
+/// Allocate a free TCP port and inject nginx port-map variables into the environment.
+fn configure_web_env(
+    socket_path: &PathBuf,
+    env: &mut HashMap<String, String>,
+    paths: &RikuPaths,
+) -> Result<()> {
+    use crate::util::get_free_port;
+
+    let port = get_free_port("127.0.0.1")?;
+    env.insert("PORT".to_string(), port.to_string());
+    env.insert("NGINX_PORTMAP".to_string(), "true".to_string());
+    env.insert("NGINX_INTERNAL_PORT".to_string(), port.to_string());
+    env.insert("NGINX_EXTERNAL_PORT".to_string(), NGINX_EXTERNAL_PORT.to_string());
+    env.insert("SOCKET".to_string(), socket_path.to_string_lossy().to_string());
+
+    // Suppress unused warning — paths is used by callers for socket_path resolution
+    let _ = paths;
+
+    Ok(())
+}
+
+/// Write nginx-related variables to the app's ENV file if not already present.
+fn persist_nginx_env(
+    app: &str,
+    kind: &str,
+    _command: &str,
+    socket_path: &PathBuf,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+) -> Result<()> {
+    let env_dir = paths.env_root.join(app);
+    fs::create_dir_all(&env_dir)?;
+    let env_file = env_dir.join("ENV");
+
+    let mut content = if env_file.exists() {
+        fs::read_to_string(&env_file)?
+    } else {
+        String::new()
+    };
+
+    // Only append once — skip if already written by a previous deploy.
+    if content.contains("NGINX_PORTMAP") || content.contains("NGINX_WSGI") {
         return Ok(());
     }
 
-    let procfile_content = fs::read_to_string(&procfile_path)?;
-    for line in procfile_content.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-
-        if let Some(pos) = line.find(':') {
-            let kind = line[..pos].trim();
-            let command = line[pos + 1..].trim();
-
-            // Parse scaling info if available
-            let scaling_path = paths.env_root.join(app).join("SCALING");
-            let mut count = 1; // default to 1 instance
-
-            if scaling_path.exists() {
-                let scaling_content = fs::read_to_string(&scaling_path)?;
-                for scale_line in scaling_content.lines() {
-                    let scale_line = scale_line.trim();
-                    if scale_line.is_empty() || scale_line.starts_with('#') {
-                        continue;
-                    }
-
-                    if let Some(scale_pos) = scale_line.find('=') {
-                        let scale_kind = scale_line[..scale_pos].trim();
-                        let scale_count_str = scale_line[scale_pos + 1..].trim();
-
-                        if scale_kind == kind {
-                            if let Ok(scale_count) = scale_count_str.parse::<u32>() {
-                                count = scale_count;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Create worker configs for each instance
-            for i in 1..=count {
-                // Prepare environment for the worker
-                let mut worker_env = env.clone();
-
-                // Set PORT/WSGI_SOCKET for web/wsgi/jwsgi/rwsgi/php processes
-                // wsgi/jwsgi/rwsgi use unix socket, others use TCP port
-                let final_command = if kind == "web"
-                    || kind == "wsgi"
-                    || kind == "jwsgi"
-                    || kind == "rwsgi"
-                    || kind == "php"
-                {
-                    // Create socket file for wsgi/jwsgi/rwsgi/php (unix socket)
-                    // For plain web, we use TCP port (NGINX_PORTMAP)
-                    let socket_path = paths.nginx_root.join(format!("{}.sock", app));
-
-                    if kind == "wsgi" || kind == "jwsgi" || kind == "rwsgi" || kind == "php" {
-                        // Use unix socket with uwsgi protocol
-                        worker_env.insert(
-                            "SOCKET".to_string(),
-                            format!("unix://{}", socket_path.to_string_lossy()),
-                        );
-                        worker_env.insert(
-                            "UWSGI_SOCKET".to_string(),
-                            socket_path.to_string_lossy().to_string(),
-                        );
-                        worker_env.insert("NGINX_WSGI".to_string(), "true".to_string());
-
-                        // Add uwsgi-specific env vars
-                        worker_env.insert("UWSGI_PROCESSES".to_string(), "4".to_string());
-                        worker_env.insert("UWSGI_THREADS".to_string(), "4".to_string());
-                    } else {
-                        // Plain web uses TCP port
-                        let port = get_free_port("127.0.0.1")?;
-                        worker_env.insert("PORT".to_string(), port.to_string());
-                        worker_env.insert("NGINX_PORTMAP".to_string(), "true".to_string());
-                        worker_env.insert("NGINX_INTERNAL_PORT".to_string(), port.to_string());
-                        worker_env.insert("NGINX_EXTERNAL_PORT".to_string(), "80".to_string());
-                    }
-
-                    // For plain web workers, set the SOCKET env var to the socket path.
-                    // wsgi/jwsgi/rwsgi/php workers already set SOCKET above with the
-                    // uwsgi unix:// prefix, so do not overwrite it here.
-                    if kind != "wsgi" && kind != "jwsgi" && kind != "rwsgi" && kind != "php" {
-                        worker_env.insert(
-                            "SOCKET".to_string(),
-                            socket_path.to_string_lossy().to_string(),
-                        );
-                    }
-
-                    // Write NGINX settings to ENV file
-                    let env_dir = paths.env_root.join(app);
-                    fs::create_dir_all(&env_dir)?;
-                    let env_file = env_dir.join("ENV");
-
-                    let mut env_content = if env_file.exists() {
-                        fs::read_to_string(&env_file)?
-                    } else {
-                        String::new()
-                    };
-
-                    if !env_content.contains("NGINX_PORTMAP") && !env_content.contains("NGINX_WSGI")
-                    {
-                        if kind == "wsgi" || kind == "jwsgi" || kind == "rwsgi" || kind == "php" {
-                            env_content.push_str("NGINX_WSGI=true\n");
-                            env_content
-                                .push_str(&format!("UWSGI_SOCKET={}\n", socket_path.display()));
-                        } else {
-                            let port = worker_env.get("PORT").map(|s| s.as_str()).unwrap_or("8080");
-                            env_content.push_str("NGINX_PORTMAP=true\n");
-                            env_content.push_str(&format!("NGINX_INTERNAL_PORT={}\n", port));
-                            env_content.push_str("NGINX_EXTERNAL_PORT=80\n");
-                        }
-                        fs::write(&env_file, &env_content)?;
-                    }
-
-                    command.to_string()
-                } else {
-                    command.to_string()
-                };
-
-                // Create the worker config
-                let worker_config = create_worker_config(
-                    app,
-                    kind,
-                    &final_command,
-                    i,
-                    worker_env,
-                    &app_path.to_string_lossy(),
-                    &paths
-                        .log_root
-                        .join(app)
-                        .join(format!("{}.{}.log", kind, i))
-                        .to_string_lossy(),
-                );
-
-                // Write the worker config to the available directory
-                let config_filename = format!("{}-{}-{}.toml", app, kind, i);
-                let config_path = paths.workers_available.join(&config_filename);
-
-                let config_content = toml::to_string(&worker_config)?;
-                fs::write(&config_path, &config_content)?;
-
-                // Create a symlink to enable the worker
-                let enabled_path = paths.workers_enabled.join(&config_filename);
-                if enabled_path.exists() {
-                    fs::remove_file(&enabled_path)?;
-                }
-                std::os::unix::fs::symlink(&config_path, &enabled_path)?;
-
-                echo(
-                    &format!("-----> Created worker config: {}", config_filename),
-                    "green",
-                );
-            }
-        }
+    if is_wsgi_kind(kind) {
+        content.push_str("NGINX_WSGI=true\n");
+        content.push_str(&format!("UWSGI_SOCKET={}\n", socket_path.display()));
+    } else {
+        let port = env.get("PORT").map(|s| s.as_str()).unwrap_or("8080");
+        content.push_str("NGINX_PORTMAP=true\n");
+        content.push_str(&format!("NGINX_INTERNAL_PORT={}\n", port));
+        content.push_str(&format!("NGINX_EXTERNAL_PORT={}\n", NGINX_EXTERNAL_PORT));
     }
 
+    fs::write(&env_file, &content)?;
+    Ok(())
+}
+
+/// Write a single worker TOML config to `workers_available` and symlink it into `workers_enabled`.
+fn write_worker_config(
+    app: &str,
+    app_path: &Path,
+    kind: &str,
+    command: &str,
+    index: u32,
+    env: HashMap<String, String>,
+    paths: &RikuPaths,
+) -> Result<()> {
+    use crate::supervisor::config::create_worker_config;
+
+    let log_path = paths
+        .log_root
+        .join(app)
+        .join(format!("{}.{}.log", kind, index));
+
+    let config = create_worker_config(
+        app,
+        kind,
+        command,
+        index,
+        env,
+        &app_path.to_string_lossy(),
+        &log_path.to_string_lossy(),
+    );
+
+    let filename = format!("{}-{}-{}.toml", app, kind, index);
+    let available = paths.workers_available.join(&filename);
+    let enabled = paths.workers_enabled.join(&filename);
+
+    fs::write(&available, toml::to_string(&config)?)?;
+
+    if enabled.exists() {
+        fs::remove_file(&enabled)?;
+    }
+    std::os::unix::fs::symlink(&available, &enabled)?;
+
+    echo(&format!("-----> Created worker config: {}", filename), "green");
     Ok(())
 }
 
@@ -318,7 +362,6 @@ mod tests {
         fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
 
         let env = HashMap::new();
-        // No Procfile — should return Ok without creating configs
         create_workers_generic("myapp", &app_path, &env, &paths)
     }
 
@@ -374,7 +417,6 @@ mod tests {
         let env = HashMap::new();
         create_workers_generic("myapp", &app_path, &env, &paths)?;
 
-        // Only worker config should exist, not one for the comment
         let entries: Vec<_> = fs::read_dir(&paths.workers_available)
             .unwrap()
             .flatten()
@@ -392,7 +434,6 @@ mod tests {
         fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
         fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
 
-        // Pre-create a dummy config in workers_enabled that should be preserved
         let existing = paths.workers_enabled.join("myapp-web-1.toml");
         fs::write(&existing, "[worker]\n")?;
 
@@ -402,7 +443,6 @@ mod tests {
         env.insert("RIKU_AUTO_RESTART".to_string(), "false".to_string());
         create_workers_generic("myapp", &app_path, &env, &paths)?;
 
-        // The pre-existing enabled config should not have been deleted
         assert!(existing.exists(), "existing config should be preserved when RIKU_AUTO_RESTART=false");
         Ok(())
     }

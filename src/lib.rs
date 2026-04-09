@@ -6,6 +6,7 @@
 pub mod cli;
 pub mod config;
 pub mod deploy;
+pub mod error;
 pub mod nginx;
 pub mod plugins;
 pub mod supervisor;

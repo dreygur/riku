@@ -1498,6 +1498,7 @@ dependencies = [
  "shell-words",
  "tempfile",
  "tera",
+ "thiserror",
  "threadpool",
  "toml",
  "tracing",

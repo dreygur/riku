@@ -72,7 +72,9 @@ pub fn cmd_destroy(paths: &RikuPaths, app: &str) -> Result<()> {
             &format!("--> Removing file '{}'", acme_link.display()),
             "yellow",
         );
-        let _ = fs::remove_file(&acme_link);
+        if let Err(e) = fs::remove_file(&acme_link) {
+            tracing::warn!("Could not remove ACME symlink {:?}: {}", acme_link, e);
+        }
     }
 
     // Preserve data and cache directories
