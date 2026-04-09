@@ -20,40 +20,21 @@ use std::collections::HashMap;
 use std::fs;
 
 use crate::config::RikuPaths;
-use crate::util::{deploy_logger::DeployLogger, echo, found_app, parse_procfile};
+use crate::util::{deploy_logger::DeployLogger, echo, parse_procfile};
 
-pub mod clojure;
-pub mod container;
-pub mod container_export;
-pub(self) mod container_workers;
-pub mod container_runtime;
+// Deployment infrastructure modules (kept in binary)
+pub mod container_runtime; // used by `riku container` CLI commands
 pub mod env_setup;
 pub mod git_ops;
-pub mod go;
 pub mod hooks;
-pub mod identity;
-pub mod java;
-pub mod node;
-pub(self) mod node_workers;
-pub mod python;
-pub(self) mod python_workers;
-pub mod ruby;
-pub mod rust;
-pub mod runtime;
 pub mod scaling;
 pub mod supervisor_ctl;
 pub mod workers;
 
-// macros.rs only defines macros — Rust exports them via #[macro_export]
-// so they appear at crate root automatically; no `pub mod macros` needed.
-#[allow(clippy::module_inception)]
-mod macros;
-
-pub use runtime::{detect_runtime, Runtime};
 pub use supervisor_ctl::spawn_app;
 pub use workers::{create_workers_generic, read_scaling_count};
 
-/// Deploy an app by resetting the work directory, detecting runtime, and spawning workers.
+/// Deploy an app: sync repo, detect runtime plugin, build, create workers, start processes.
 pub fn do_deploy(
     app: &str,
     paths: &RikuPaths,
@@ -61,7 +42,6 @@ pub fn do_deploy(
     newrev: Option<&str>,
 ) -> Result<()> {
     let app_path = paths.app_root.join(app);
-    let log_path = paths.log_root.join(app);
 
     if !app_path.exists() {
         return Err(anyhow::anyhow!(
@@ -71,7 +51,6 @@ pub fn do_deploy(
         ));
     }
 
-    // Open deploy log — created/truncated per deploy so it always reflects the latest run.
     let deploy_log_path = paths.deploy_log_file(app);
     let mut dlog = DeployLogger::new(&deploy_log_path)?;
 
@@ -79,20 +58,17 @@ pub fn do_deploy(
     echo(&format!("-----> Deploying app '{}'", app), "green");
 
     // Sync working tree with the pushed revision.
-    dlog.log_raw(&format!(
-        "Syncing repo to {}",
-        newrev.unwrap_or("HEAD")
-    ));
+    dlog.log_raw(&format!("Syncing repo to {}", newrev.unwrap_or("HEAD")));
     git_ops::sync_app_repo(&app_path, newrev)?;
 
     // Ensure log directory exists.
+    let log_path = paths.log_root.join(app);
     if !log_path.exists() {
         fs::create_dir_all(&log_path)?;
     }
 
-    // Parse Procfile.
-    let workers = parse_procfile(&app_path.join("Procfile"));
-    let mut workers = match workers {
+    // Parse Procfile (needed for preflight/release commands and deploy abort guard).
+    let mut workers = match parse_procfile(&app_path.join("Procfile")) {
         Some(w) if !w.is_empty() => w,
         _ => {
             dlog.log_error(&format!(
@@ -107,7 +83,7 @@ pub fn do_deploy(
     };
 
     // Apply scaling deltas if any.
-    let _scaling_counts = workers::apply_scaling_deltas(app, paths, deltas, &workers)?;
+    workers::apply_scaling_deltas(app, paths, deltas, &workers)?;
 
     // Run preflight command if present.
     if let Some(preflight_cmd) = workers.remove("preflight") {
@@ -133,24 +109,51 @@ pub fn do_deploy(
     dlog.log_raw("Running pre-deploy hooks");
     hooks::run_pre_deploy(app, &app_path, paths, &env)?;
 
-    // Detect runtime (needed for hook context and dispatch).
-    let runtime = detect_runtime(&app_path);
-    let runtime_name = runtime.as_ref().map(|r| r.to_string());
-    if let Some(ref name) = runtime_name {
-        dlog.log(&format!("Detected runtime: {}", name));
-    }
+    // Detect runtime plugin.
+    let plugins = crate::plugins::runtime::discover(&paths.plugin_root);
+    let runtime_plugin = crate::plugins::runtime::detect(&plugins, &app_path, &env)?
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No runtime plugin matched '{}'. Run 'riku install-plugins' or set RUNTIME=<name> in the app env.",
+                app
+            )
+        })?;
 
-    // pre-build hook (failures abort the deploy).
-    dlog.log_raw("Running pre-build hooks");
-    hooks::run_pre_build(app, &app_path, paths, runtime_name.as_deref(), &env)?;
+    let runtime_name = runtime_plugin.name.clone();
+    dlog.log(&format!("Detected runtime: {}", runtime_name));
+    echo(&format!("-----> {} app detected.", runtime_name), "green");
 
-    // Dispatch to runtime-specific deployer.
-    dlog.log_raw("Building application");
-    dispatch_runtime(app, &app_path, &mut env, paths, &runtime, &workers)?;
+    // Run plugin build pipeline, collect env and start_cmd before mutating env.
+    let (plugin_env, start_cmd) = {
+        let ctx = crate::plugins::runtime::RuntimeContext {
+            app,
+            app_path: &app_path,
+            env_path: &paths.env_root.join(app),
+            riku_root: &paths.riku_root,
+            app_env: &env,
+        };
 
-    // post-build hook (failures abort the deploy).
+        // pre-build hook (failures abort the deploy).
+        dlog.log_raw("Running pre-build hooks");
+        hooks::run_pre_build(app, &app_path, paths, Some(&runtime_name), &env)?;
+
+        // Build via runtime plugin.
+        dlog.log_raw("Building application");
+        crate::plugins::runtime::build(&runtime_plugin, &ctx)?;
+
+        let plugin_env = crate::plugins::runtime::get_env(&runtime_plugin, &ctx)?;
+        let start_cmd = crate::plugins::runtime::get_start_cmd(&runtime_plugin, &ctx)?;
+
+        (plugin_env, start_cmd)
+        // ctx (and its &env borrow) is dropped here
+    };
+
+    // Merge plugin-provided env vars into the app env.
+    env.extend(plugin_env);
+
+    // post-build hook (failures abort the deploy, sees merged env).
     dlog.log_raw("Running post-build hooks");
-    hooks::run_post_build(app, &app_path, paths, runtime_name.as_deref(), &env)?;
+    hooks::run_post_build(app, &app_path, paths, Some(&runtime_name), &env)?;
 
     // Run release command if present.
     if let Some(release_cmd) = workers.get("release") {
@@ -161,63 +164,17 @@ pub fn do_deploy(
     // Write LIVE_ENV with resolved environment.
     env_setup::write_live_env(app, paths, &env)?;
 
+    // Create supervisor worker configs.
+    create_workers_generic(app, &app_path, &env, paths, start_cmd.as_deref())?;
+
     // Start the application processes.
     dlog.log("Starting application processes");
     spawn_app(app, paths)?;
 
-    // post-deploy hook (failures are warnings, not fatal).
+    // post-deploy hook (non-fatal: failures are warnings only).
     dlog.log_raw("Running post-deploy hooks");
-    let _ = hooks::run_post_deploy(app, &app_path, paths, runtime_name.as_deref(), &env);
+    let _ = hooks::run_post_deploy(app, &app_path, paths, Some(&runtime_name), &env);
 
     dlog.log(&format!("Deploy of '{}' complete", app));
-    Ok(())
-}
-
-/// Dispatch deployment to the appropriate runtime-specific handler.
-fn dispatch_runtime(
-    app: &str,
-    app_path: &std::path::Path,
-    env: &mut HashMap<String, String>,
-    paths: &RikuPaths,
-    runtime: &Option<Runtime>,
-    workers: &HashMap<String, String>,
-) -> Result<()> {
-    match runtime {
-        Some(rt) => {
-            found_app(&rt.to_string());
-            match rt {
-                Runtime::Python => python::deploy_python(app, app_path, env, paths)?,
-                Runtime::PythonPoetry => python::deploy_python_poetry(app, app_path, env, paths)?,
-                Runtime::PythonUv => python::deploy_python_uv(app, app_path, env, paths)?,
-                Runtime::Node => node::deploy_node(app, app_path, env, paths)?,
-                Runtime::Ruby => ruby::deploy_ruby(app, app_path, env, paths)?,
-                Runtime::Go => go::deploy_go(app, app_path, env, paths)?,
-                Runtime::JavaMaven => java::deploy_java_maven(app, app_path, env, paths)?,
-                Runtime::JavaGradle => java::deploy_java_gradle(app, app_path, env, paths)?,
-                Runtime::ClojureCli => clojure::deploy_clojure_cli(app, app_path, env, paths)?,
-                Runtime::ClojureLein => clojure::deploy_clojure_lein(app, app_path, env, paths)?,
-                Runtime::Container => container::deploy_container(app, app_path, env, paths)?,
-                Runtime::Rust => rust::deploy_rust(app, app_path, env, paths)?,
-                Runtime::Wsgi | Runtime::Jwsgi | Runtime::Rwsgi | Runtime::Php => {
-                    env_setup::setup_wsgi_env(app, paths, env)?;
-                    identity::deploy_identity(app, app_path, env, paths)?;
-                }
-                Runtime::Identity => identity::deploy_identity(app, app_path, env, paths)?,
-            }
-        }
-        None => {
-            if workers.contains_key("release") && workers.contains_key("web") {
-                echo("-----> Generic app detected.", "green");
-                found_app(&Runtime::Identity.to_string());
-                identity::create_identity_workers(app, app_path, env, paths)?;
-            } else if workers.contains_key("static") {
-                echo("-----> Static app detected.", "green");
-                found_app(&Runtime::Identity.to_string());
-                identity::create_identity_workers(app, app_path, env, paths)?;
-            } else {
-                echo("-----> Could not detect runtime!", "red");
-            }
-        }
-    }
     Ok(())
 }

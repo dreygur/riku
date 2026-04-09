@@ -32,6 +32,7 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
         // Core commands that shouldn't be overridden
         Commands::Init { .. } => None,
         Commands::Update => None,
+        Commands::InstallPlugins { .. } => None,
         Commands::Supervisor => None,
         Commands::GitHook { .. } => None,
         Commands::GitReceivePack { .. } => None,

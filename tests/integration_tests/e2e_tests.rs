@@ -3,12 +3,13 @@
 /// All tests run without requiring npm, pip, or any runtime toolchain.
 ///
 /// - **Sub-step tests** — exercise individual deploy pipeline steps
-///   (git sync, worker config creation, runtime detection, nginx config generation).
+///   (git sync, worker config creation, plugin detection, nginx config generation).
 ///
-/// - **Full-deploy tests** — call `do_deploy()` end-to-end with `RIKU_SKIP_BUILD=1`
-///   so that package-installation steps are bypassed.  The rest of the pipeline
-///   (git sync, worker config creation, LIVE_ENV writing, supervisor notification)
-///   runs normally.
+/// - **Full-deploy tests** — call `do_deploy()` end-to-end using lightweight mock
+///   plugins (shell scripts) installed into a temp directory. The mock plugins detect
+///   a marker file, perform a no-op build, and emit a start command. The rest of the
+///   pipeline (git sync, worker config creation, LIVE_ENV writing, supervisor
+///   notification) runs normally.
 
 #[cfg(test)]
 mod tests {
@@ -145,6 +146,46 @@ mod tests {
         app_dir
     }
 
+    /// Install a mock runtime plugin that detects apps by checking for `marker_file`.
+    /// `build` exits 0 without doing anything (no npm/pip required in tests).
+    fn install_mock_plugin(
+        paths: &riku::config::RikuPaths,
+        name: &str,
+        marker_file: &str,
+        start_cmd: &str,
+    ) {
+        use std::os::unix::fs::PermissionsExt;
+        let script = format!(
+            r#"#!/usr/bin/env bash
+CMD="${{1:-}}"
+APP_PATH="${{RIKU_APP_PATH:-$(pwd)}}"
+case "$CMD" in
+  detect) [ -f "$APP_PATH/{marker}" ] && exit 0; exit 1 ;;
+  build)  exit 0 ;;
+  env)    echo "RIKU_PLUGIN_ENV_TEST=1" ;;
+  start)  echo "{start}" ;;
+  *)      echo "Unknown: $CMD" >&2; exit 1 ;;
+esac
+"#,
+            marker = marker_file,
+            start = start_cmd,
+        );
+        let dest = paths.plugin_root.join(name);
+        fs::write(&dest, script).expect("write mock plugin");
+        fs::set_permissions(&dest, fs::Permissions::from_mode(0o755))
+            .expect("chmod mock plugin");
+    }
+
+    /// Install a mock plugin that accepts every app unconditionally.
+    fn install_accept_all_plugin(paths: &riku::config::RikuPaths, name: &str) {
+        use std::os::unix::fs::PermissionsExt;
+        let script = "#!/usr/bin/env bash\ncase \"${1:-}\" in detect) exit 0 ;; build) exit 0 ;; env) ;; start) ;; *) exit 1 ;; esac\n";
+        let dest = paths.plugin_root.join(name);
+        fs::write(&dest, script).expect("write accept-all plugin");
+        fs::set_permissions(&dest, fs::Permissions::from_mode(0o755))
+            .expect("chmod accept-all plugin");
+    }
+
     // -------------------------------------------------------------------------
     // Test 1: git sync — Node app
     // -------------------------------------------------------------------------
@@ -211,7 +252,7 @@ mod tests {
 
         let env = HashMap::new();
 
-        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths)?;
+        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         // Both worker configs must exist in workers-available
         let web_cfg = paths.workers_available.join("nodeapp-web-1.toml");
@@ -254,7 +295,7 @@ mod tests {
         fs::write(app_dir.join("requirements.txt"), "gunicorn==20.0.0\n")?;
 
         let env = HashMap::new();
-        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths)?;
+        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         let web_cfg = paths.workers_available.join("pyapp-web-1.toml");
         assert!(web_cfg.exists(), "web worker config must be created");
@@ -300,7 +341,7 @@ mod tests {
 
         // Create worker configs (simulate the deploy step)
         let env: HashMap<String, String> = HashMap::new();
-        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths)?;
+        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         // Write the nginx config to the expected path, simulating what
         // spawn_app → generate_nginx_config would produce.  The naming
@@ -385,41 +426,31 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
-    // Test 7: runtime detection — Node app
+    // Test 7: plugin detection — Node app marker
     // -------------------------------------------------------------------------
 
     #[test]
-    fn test_runtime_detection_node() -> Result<()> {
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        fs::write(app_dir.join("package.json"), r#"{"name":"test"}"#)?;
-
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(
-            matches!(runtime, Some(riku::deploy::Runtime::Node)),
-            "must detect Node runtime from package.json"
+    fn test_runtime_detection_node() {
+        let result = detect_with_mock_plugin(
+            "node",
+            "package.json",
+            &[("package.json", r#"{"name":"test"}"#)],
         );
-        Ok(())
+        assert_eq!(result.as_deref(), Some("node"), "node plugin must match package.json");
     }
 
     // -------------------------------------------------------------------------
-    // Test 8: runtime detection — Python app
+    // Test 8: plugin detection — Python app marker
     // -------------------------------------------------------------------------
 
     #[test]
-    fn test_runtime_detection_python() -> Result<()> {
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        fs::write(app_dir.join("requirements.txt"), "flask\n")?;
-
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(
-            matches!(runtime, Some(riku::deploy::Runtime::Python)),
-            "must detect Python runtime from requirements.txt"
+    fn test_runtime_detection_python() {
+        let result = detect_with_mock_plugin(
+            "python",
+            "requirements.txt",
+            &[("requirements.txt", "flask\n")],
         );
-        Ok(())
+        assert_eq!(result.as_deref(), Some("python"), "python plugin must match requirements.txt");
     }
 
     // -------------------------------------------------------------------------
@@ -481,7 +512,7 @@ mod tests {
         fs::write(app_dir.join("package.json"), r#"{"name":"scaledapp"}"#)?;
 
         let env = HashMap::new();
-        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths)?;
+        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         let cfg1 = paths.workers_available.join("scaledapp-web-1.toml");
         let cfg2 = paths.workers_available.join("scaledapp-web-2.toml");
@@ -519,17 +550,17 @@ mod tests {
     }
 
     // =========================================================================
-    // Full-deploy tests — call do_deploy() end-to-end with RIKU_SKIP_BUILD=1
-    // so that npm / pip are not required on the host.
+    // Full-deploy tests — call do_deploy() end-to-end with mock runtime plugins.
+    // No npm, pip, or other runtime toolchain required on the host.
     // =========================================================================
 
     #[test]
     fn test_full_deploy_node_app() -> Result<()> {
-        // Skip the npm install / nodeenv steps so this test runs without npm.
-        std::env::set_var("RIKU_SKIP_BUILD", "1");
-
         let tmp = TempDir::new()?;
         let paths = make_paths(&tmp);
+
+        // Install a mock node plugin so deploy works without npm.
+        install_mock_plugin(&paths, "node", "package.json", "node server.js");
 
         let app = "testapp";
         let files = &[
@@ -550,24 +581,19 @@ mod tests {
         let deltas: HashMap<String, i64> = HashMap::new();
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
-        // Workers must have been created
         let web_cfg = paths.workers_available.join("testapp-web-1.toml");
         assert!(web_cfg.exists(), "web worker config must exist");
-
-        // App dir must have the Procfile
         assert!(app_dir.join("Procfile").exists());
-
-        std::env::remove_var("RIKU_SKIP_BUILD");
         Ok(())
     }
 
     #[test]
     fn test_full_deploy_python_app() -> Result<()> {
-        // Skip the venv / pip install steps so this test runs without python3/pip.
-        std::env::set_var("RIKU_SKIP_BUILD", "1");
-
         let tmp = TempDir::new()?;
         let paths = make_paths(&tmp);
+
+        // Install a mock python plugin so deploy works without pip.
+        install_mock_plugin(&paths, "python", "requirements.txt", "python app.py");
 
         let app = "testapp";
         let files = &[
@@ -590,272 +616,157 @@ mod tests {
         let content = fs::read_to_string(&web_cfg)?;
         assert!(content.contains("gunicorn"), "config must mention gunicorn");
         assert!(app_dir.join("requirements.txt").exists());
-
-        std::env::remove_var("RIKU_SKIP_BUILD");
         Ok(())
     }
 
     // =========================================================================
-    // Runtime detection — all supported runtimes
+    // Plugin runtime detection — verify plugin-based detect subcommand dispatch
     // =========================================================================
 
-    #[test]
-    fn test_runtime_detection_ruby() -> Result<()> {
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        fs::write(app_dir.join("Gemfile"), "source 'https://rubygems.org'\n")?;
+    /// Helper: create a plugin dir, install a mock plugin for a marker file,
+    /// and return which plugin name was detected.
+    fn detect_with_mock_plugin(
+        plugin_name: &str,
+        marker_file: &str,
+        app_files: &[(&str, &str)],
+    ) -> Option<String> {
+        use std::os::unix::fs::PermissionsExt;
+        let plugin_tmp = TempDir::new().unwrap();
+        let app_tmp = TempDir::new().unwrap();
 
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(
-            matches!(runtime, Some(riku::deploy::Runtime::Ruby)),
-            "must detect Ruby runtime from Gemfile"
+        // Write app files
+        for (name, content) in app_files {
+            fs::write(app_tmp.path().join(name), content).unwrap();
+        }
+
+        // Install mock plugin
+        let script = format!(
+            "#!/usr/bin/env bash\n[ \"${{1:-}}\" = detect ] && [ -f \"$RIKU_APP_PATH/{}\" ] && exit 0; exit 1\n",
+            marker_file
         );
+        let dest = plugin_tmp.path().join(plugin_name);
+        fs::write(&dest, script).unwrap();
+        fs::set_permissions(&dest, fs::Permissions::from_mode(0o755)).unwrap();
+
+        let plugins = riku::plugins::runtime::discover(plugin_tmp.path());
+        let env = HashMap::new();
+        riku::plugins::runtime::detect(&plugins, app_tmp.path(), &env)
+            .unwrap()
+            .map(|p| p.name)
+    }
+
+    #[test]
+    fn test_plugin_detection_node() {
+        let result = detect_with_mock_plugin(
+            "node",
+            "package.json",
+            &[("package.json", r#"{"name":"test"}"#)],
+        );
+        assert_eq!(result.as_deref(), Some("node"));
+    }
+
+    #[test]
+    fn test_plugin_detection_python_requirements() {
+        let result = detect_with_mock_plugin(
+            "python",
+            "requirements.txt",
+            &[("requirements.txt", "flask\n")],
+        );
+        assert_eq!(result.as_deref(), Some("python"));
+    }
+
+    #[test]
+    fn test_plugin_detection_ruby() {
+        let result = detect_with_mock_plugin(
+            "ruby",
+            "Gemfile",
+            &[("Gemfile", "source 'https://rubygems.org'\n")],
+        );
+        assert_eq!(result.as_deref(), Some("ruby"));
+    }
+
+    #[test]
+    fn test_plugin_detection_go() {
+        let result = detect_with_mock_plugin(
+            "go",
+            "go.mod",
+            &[("go.mod", "module example.com/myapp\ngo 1.21\n")],
+        );
+        assert_eq!(result.as_deref(), Some("go"));
+    }
+
+    #[test]
+    fn test_plugin_detection_rust_lang() {
+        let result = detect_with_mock_plugin(
+            "rust-lang",
+            "Cargo.toml",
+            &[("Cargo.toml", "[package]\nname = \"myapp\"\n")],
+        );
+        assert_eq!(result.as_deref(), Some("rust-lang"));
+    }
+
+    #[test]
+    fn test_plugin_detection_returns_none_when_no_plugin_matches() -> Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+        let plugin_tmp = TempDir::new()?;
+        let app_tmp = TempDir::new()?;
+
+        // node plugin but app has no package.json
+        let script = "#!/usr/bin/env bash\n[ \"${1:-}\" = detect ] && [ -f \"$RIKU_APP_PATH/package.json\" ] && exit 0; exit 1\n";
+        let dest = plugin_tmp.path().join("node");
+        fs::write(&dest, script)?;
+        fs::set_permissions(&dest, fs::Permissions::from_mode(0o755))?;
+
+        fs::write(app_tmp.path().join("README.md"), "# no markers\n")?;
+
+        let plugins = riku::plugins::runtime::discover(plugin_tmp.path());
+        let env = HashMap::new();
+        let result = riku::plugins::runtime::detect(&plugins, app_tmp.path(), &env)?;
+        assert!(result.is_none(), "must return None when no plugin matches");
         Ok(())
     }
 
     #[test]
-    fn test_runtime_detection_go_mod() -> Result<()> {
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        fs::write(app_dir.join("go.mod"), "module example.com/myapp\ngo 1.21\n")?;
+    fn test_plugin_detection_alphabetical_first_wins() -> Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+        let plugin_tmp = TempDir::new()?;
+        let app_tmp = TempDir::new()?;
 
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(
-            matches!(runtime, Some(riku::deploy::Runtime::Go)),
-            "must detect Go runtime from go.mod"
-        );
+        // Both plugins accept everything — alphabetically first wins
+        for name in &["beta", "alpha"] {
+            let script = "#!/usr/bin/env bash\n[ \"${1:-}\" = detect ] && exit 0; exit 1\n";
+            let dest = plugin_tmp.path().join(name);
+            fs::write(&dest, script)?;
+            fs::set_permissions(&dest, fs::Permissions::from_mode(0o755))?;
+        }
+
+        let plugins = riku::plugins::runtime::discover(plugin_tmp.path());
+        let env = HashMap::new();
+        let result = riku::plugins::runtime::detect(&plugins, app_tmp.path(), &env)?;
+        assert_eq!(result.unwrap().name, "alpha", "alpha < beta alphabetically");
         Ok(())
     }
 
     #[test]
-    fn test_runtime_detection_go_source_file() -> Result<()> {
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        fs::write(app_dir.join("main.go"), "package main\nfunc main() {}\n")?;
+    fn test_plugin_detection_runtime_env_override() -> Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+        let plugin_tmp = TempDir::new()?;
+        let app_tmp = TempDir::new()?;
 
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(
-            matches!(runtime, Some(riku::deploy::Runtime::Go)),
-            "must detect Go runtime from .go source file"
-        );
-        Ok(())
-    }
+        // Install two plugins: 'node' would match first alphabetically, 'python' also present
+        for name in &["node", "python"] {
+            let script = "#!/usr/bin/env bash\n[ \"${1:-}\" = detect ] && exit 0; exit 1\n";
+            let dest = plugin_tmp.path().join(name);
+            fs::write(&dest, script)?;
+            fs::set_permissions(&dest, fs::Permissions::from_mode(0o755))?;
+        }
 
-    #[test]
-    fn test_runtime_detection_java_maven() -> Result<()> {
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        fs::write(app_dir.join("pom.xml"), "<project></project>")?;
+        let plugins = riku::plugins::runtime::discover(plugin_tmp.path());
+        let mut env = HashMap::new();
+        env.insert("RUNTIME".into(), "python".into());
 
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(
-            matches!(runtime, Some(riku::deploy::Runtime::JavaMaven)),
-            "must detect JavaMaven runtime from pom.xml"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_runtime_detection_java_gradle() -> Result<()> {
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        fs::write(app_dir.join("build.gradle"), "plugins { id 'java' }\n")?;
-
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(
-            matches!(runtime, Some(riku::deploy::Runtime::JavaGradle)),
-            "must detect JavaGradle runtime from build.gradle"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_runtime_detection_clojure_cli() -> Result<()> {
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        fs::write(app_dir.join("deps.edn"), "{:deps {}}\n")?;
-
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(
-            matches!(runtime, Some(riku::deploy::Runtime::ClojureCli)),
-            "must detect ClojureCli runtime from deps.edn"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_runtime_detection_clojure_lein() -> Result<()> {
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        fs::write(app_dir.join("project.clj"), "(defproject myapp \"0.1.0\")\n")?;
-
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(
-            matches!(runtime, Some(riku::deploy::Runtime::ClojureLein)),
-            "must detect ClojureLein runtime from project.clj"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_runtime_detection_container_dockerfile() -> Result<()> {
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        fs::write(app_dir.join("Dockerfile"), "FROM alpine\nCMD [\"sh\"]\n")?;
-
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(
-            matches!(runtime, Some(riku::deploy::Runtime::Container)),
-            "must detect Container runtime from Dockerfile"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_runtime_detection_container_containerfile() -> Result<()> {
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        fs::write(
-            app_dir.join("Containerfile"),
-            "FROM alpine\nCMD [\"sh\"]\n",
-        )?;
-
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(
-            matches!(runtime, Some(riku::deploy::Runtime::Container)),
-            "must detect Container runtime from Containerfile"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_runtime_detection_container_compose() -> Result<()> {
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        fs::write(
-            app_dir.join("docker-compose.yml"),
-            "services:\n  web:\n    image: alpine\n",
-        )?;
-
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(
-            matches!(runtime, Some(riku::deploy::Runtime::Container)),
-            "must detect Container runtime from docker-compose.yml"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_runtime_detection_rust() -> Result<()> {
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        fs::write(app_dir.join("Cargo.toml"), "[package]\nname = \"myapp\"\n")?;
-        fs::write(app_dir.join("rust-toolchain.toml"), "[toolchain]\nchannel = \"stable\"\n")?;
-
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(
-            matches!(runtime, Some(riku::deploy::Runtime::Rust)),
-            "must detect Rust runtime from Cargo.toml + rust-toolchain.toml"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_runtime_detection_rust_cargo_only_returns_none() -> Result<()> {
-        // Cargo.toml alone (without rust-toolchain.toml) should NOT detect Rust
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        fs::write(app_dir.join("Cargo.toml"), "[package]\nname = \"myapp\"\n")?;
-
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(
-            !matches!(runtime, Some(riku::deploy::Runtime::Rust)),
-            "Cargo.toml alone must not detect Rust (requires rust-toolchain.toml too)"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_runtime_detection_python_pyproject_fallback() -> Result<()> {
-        // pyproject.toml with no poetry or uv available falls back to Python.
-        // We can't control whether poetry/uv are installed, so we just verify
-        // the result is one of the Python variants.
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        fs::write(
-            app_dir.join("pyproject.toml"),
-            "[tool.poetry]\nname = \"myapp\"\n",
-        )?;
-
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(
-            matches!(
-                runtime,
-                Some(
-                    riku::deploy::Runtime::Python
-                        | riku::deploy::Runtime::PythonPoetry
-                        | riku::deploy::Runtime::PythonUv
-                )
-            ),
-            "pyproject.toml must detect a Python variant"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_runtime_detection_wsgi() -> Result<()> {
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        fs::write(app_dir.join("Procfile"), "wsgi: myapp.wsgi\n")?;
-        fs::write(app_dir.join("wsgi.py"), "application = None\n")?;
-
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(
-            matches!(runtime, Some(riku::deploy::Runtime::Wsgi)),
-            "must detect Wsgi runtime from Procfile wsgi: + wsgi.py"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_runtime_detection_php() -> Result<()> {
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        fs::write(app_dir.join("Procfile"), "php: php -S 0.0.0.0:$PORT\n")?;
-
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(
-            matches!(runtime, Some(riku::deploy::Runtime::Php)),
-            "must detect Php runtime from Procfile php:"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_runtime_detection_none() -> Result<()> {
-        let tmp = TempDir::new()?;
-        let app_dir = tmp.path().join("app");
-        fs::create_dir_all(&app_dir)?;
-        // Write only a README — no recognized marker file
-        fs::write(app_dir.join("README.md"), "# My App\n")?;
-
-        let runtime = riku::deploy::detect_runtime(&app_dir);
-        assert!(runtime.is_none(), "must return None when no runtime markers exist");
+        let result = riku::plugins::runtime::detect(&plugins, app_tmp.path(), &env)?;
+        assert_eq!(result.unwrap().name, "python", "RUNTIME= override must win");
         Ok(())
     }
 
@@ -880,7 +791,7 @@ mod tests {
         )?;
 
         let env = HashMap::new();
-        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths)?;
+        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         assert!(
             paths.workers_available.join("multiproc-web-1.toml").exists(),
@@ -915,7 +826,7 @@ mod tests {
         fs::write(app_dir.join("Procfile"), "worker: python worker.py\n")?;
 
         let env = HashMap::new();
-        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths)?;
+        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         for i in 1..=3 {
             assert!(
@@ -948,7 +859,7 @@ mod tests {
         )?;
 
         let env = HashMap::new();
-        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths)?;
+        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         // Only web config should exist
         let configs: Vec<_> = fs::read_dir(&paths.workers_available)?
@@ -979,7 +890,7 @@ mod tests {
         fs::write(app_dir.join("Procfile"), "worker: celery -A tasks worker\n")?;
 
         let env = HashMap::new();
-        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths)?;
+        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         let cfg = paths.workers_available.join("cmdapp-worker-1.toml");
         let content = fs::read_to_string(&cfg)?;
@@ -1003,7 +914,7 @@ mod tests {
         // Deliberately no Procfile written
 
         let env = HashMap::new();
-        let result = riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths);
+        let result = riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None);
         assert!(result.is_ok(), "missing Procfile must not return an error");
 
         // No configs should have been created
@@ -1091,10 +1002,9 @@ mod tests {
 
     #[test]
     fn test_full_deploy_creates_deploy_log() -> Result<()> {
-        std::env::set_var("RIKU_SKIP_BUILD", "1");
-
         let tmp = TempDir::new()?;
         let paths = make_paths(&tmp);
+        install_mock_plugin(&paths, "node", "package.json", "node server.js");
 
         let app = "logapp";
         let files = &[
@@ -1111,7 +1021,6 @@ mod tests {
         let deltas: HashMap<String, i64> = HashMap::new();
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
-        // Deploy log must be created
         let deploy_log = paths.deploy_log_file(app);
         assert!(deploy_log.exists(), "deploy.log must be created by do_deploy");
 
@@ -1120,17 +1029,14 @@ mod tests {
             log_content.contains("logapp") || log_content.contains("Deploy"),
             "deploy log must contain app name or deploy entry"
         );
-
-        std::env::remove_var("RIKU_SKIP_BUILD");
         Ok(())
     }
 
     #[test]
     fn test_full_deploy_creates_live_env() -> Result<()> {
-        std::env::set_var("RIKU_SKIP_BUILD", "1");
-
         let tmp = TempDir::new()?;
         let paths = make_paths(&tmp);
+        install_mock_plugin(&paths, "node", "package.json", "node server.js");
 
         let app = "liveenvapp";
         let files = &[
@@ -1157,16 +1063,14 @@ mod tests {
             "LIVE_ENV must include app-defined env vars"
         );
 
-        std::env::remove_var("RIKU_SKIP_BUILD");
         Ok(())
     }
 
     #[test]
     fn test_full_deploy_node_with_scaling() -> Result<()> {
-        std::env::set_var("RIKU_SKIP_BUILD", "1");
-
         let tmp = TempDir::new()?;
         let paths = make_paths(&tmp);
+        install_mock_plugin(&paths, "node", "package.json", "node server.js");
 
         let app = "scaleapp";
         let files = &[
@@ -1199,16 +1103,14 @@ mod tests {
             "worker-1 must exist"
         );
 
-        std::env::remove_var("RIKU_SKIP_BUILD");
         Ok(())
     }
 
     #[test]
     fn test_full_deploy_without_env_file_succeeds() -> Result<()> {
-        std::env::set_var("RIKU_SKIP_BUILD", "1");
-
         let tmp = TempDir::new()?;
         let paths = make_paths(&tmp);
+        install_mock_plugin(&paths, "node", "package.json", "node server.js");
 
         let app = "noenvapp";
         let files = &[
@@ -1227,16 +1129,14 @@ mod tests {
         let result = riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha));
         assert!(result.is_ok(), "deploy without ENV file must succeed");
 
-        std::env::remove_var("RIKU_SKIP_BUILD");
         Ok(())
     }
 
     #[test]
     fn test_full_deploy_python_with_multiple_workers() -> Result<()> {
-        std::env::set_var("RIKU_SKIP_BUILD", "1");
-
         let tmp = TempDir::new()?;
         let paths = make_paths(&tmp);
+        install_mock_plugin(&paths, "python", "requirements.txt", "python app.py");
 
         let app = "pyworkers";
         let files = &[
@@ -1269,7 +1169,6 @@ mod tests {
             "celery worker config must exist"
         );
 
-        std::env::remove_var("RIKU_SKIP_BUILD");
         Ok(())
     }
 
@@ -1279,8 +1178,6 @@ mod tests {
 
     #[test]
     fn test_deploy_app_exists_but_no_procfile_returns_error() -> Result<()> {
-        std::env::set_var("RIKU_SKIP_BUILD", "1");
-
         let tmp = TempDir::new()?;
         let paths = make_paths(&tmp);
 
@@ -1297,14 +1194,11 @@ mod tests {
         let result = riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha));
         assert!(result.is_err(), "deploy without Procfile must return Err");
 
-        std::env::remove_var("RIKU_SKIP_BUILD");
         Ok(())
     }
 
     #[test]
     fn test_deploy_procfile_with_only_comments_returns_error() -> Result<()> {
-        std::env::set_var("RIKU_SKIP_BUILD", "1");
-
         let tmp = TempDir::new()?;
         let paths = make_paths(&tmp);
 
@@ -1327,7 +1221,6 @@ mod tests {
             "deploy with comments-only Procfile must return Err"
         );
 
-        std::env::remove_var("RIKU_SKIP_BUILD");
         Ok(())
     }
 

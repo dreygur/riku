@@ -162,6 +162,17 @@ pub enum Commands {
     #[command(after_help = "Examples:\n  riku update")]
     Update,
 
+    /// Download and install bundled runtime plugins to ~/.riku/plugins/
+    #[command(
+        name = "install-plugins",
+        after_help = "Examples:\n  riku install-plugins\n  riku install-plugins --plugins node,python"
+    )]
+    InstallPlugins {
+        /// Comma-separated list of plugin names to install (default: all)
+        #[arg(long, value_delimiter = ',')]
+        plugins: Vec<String>,
+    },
+
     /// Start the process supervisor daemon
     #[command(after_help = "Examples:\n  riku supervisor")]
     Supervisor,

@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Riku runtime plugin: Ruby
+# Handles apps with a Gemfile.
+set -euo pipefail
+
+CMD="${1:-}"
+APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
+
+case "$CMD" in
+  detect)
+    [ -f "$APP_PATH/Gemfile" ] && exit 0
+    exit 1
+    ;;
+
+  build)
+    cd "$APP_PATH"
+    if command -v bundle >/dev/null 2>&1; then
+      bundle install --without development test
+    else
+      echo "bundler not found — skipping gem install" >&2
+    fi
+    ;;
+
+  env)
+    printf 'RACK_ENV=production\n'
+    printf 'RAILS_ENV=production\n'
+    ;;
+
+  start)
+    APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
+    if [ -f "$APP_PATH/config.ru" ]; then
+      echo "bundle exec rackup config.ru -p \$PORT"
+    else
+      echo "bundle exec ruby app.rb"
+    fi
+    ;;
+
+  *)
+    echo "Unknown subcommand: $CMD" >&2
+    exit 1
+    ;;
+esac

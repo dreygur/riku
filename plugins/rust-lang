@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Riku runtime plugin: Rust
+# Handles apps with Cargo.toml.
+set -euo pipefail
+
+CMD="${1:-}"
+APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
+
+case "$CMD" in
+  detect)
+    [ -f "$APP_PATH/Cargo.toml" ] && exit 0
+    exit 1
+    ;;
+
+  build)
+    cd "$APP_PATH"
+    if command -v cargo >/dev/null 2>&1; then
+      cargo build --release
+    else
+      echo "cargo not found — is Rust installed?" >&2
+      exit 1
+    fi
+    ;;
+
+  env)
+    printf 'RUST_LOG=info\n'
+    ;;
+
+  start)
+    APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
+    # Try to detect binary name from Cargo.toml
+    bin=$(grep -m1 '^name' "$APP_PATH/Cargo.toml" 2>/dev/null | sed 's/.*= *"\(.*\)"/\1/' || true)
+    if [ -n "$bin" ]; then
+      echo "./target/release/$bin"
+    else
+      echo "./target/release/app"
+    fi
+    ;;
+
+  *)
+    echo "Unknown subcommand: $CMD" >&2
+    exit 1
+    ;;
+esac

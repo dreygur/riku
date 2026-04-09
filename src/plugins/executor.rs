@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 /// Read plugin timeout from `RIKU_PLUGIN_TIMEOUT` env var (seconds).
 /// Defaults to 300 seconds (5 minutes).
-pub(super) fn plugin_timeout() -> Duration {
+pub(crate) fn plugin_timeout() -> Duration {
     std::env::var("RIKU_PLUGIN_TIMEOUT")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
@@ -18,7 +18,7 @@ pub(super) fn plugin_timeout() -> Duration {
 
 /// Poll child every 200ms until it exits or the timeout elapses.
 /// Kills the child (and reaps it) on timeout. Returns `true` if timed out.
-pub(super) fn wait_with_timeout(child: &mut std::process::Child, timeout: Duration) -> bool {
+pub(crate) fn wait_with_timeout(child: &mut std::process::Child, timeout: Duration) -> bool {
     let start = Instant::now();
     loop {
         match child.try_wait() {

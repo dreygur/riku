@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Riku runtime plugin: Go
+# Handles apps with go.mod or *.go files.
+set -euo pipefail
+
+CMD="${1:-}"
+APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
+
+case "$CMD" in
+  detect)
+    [ -f "$APP_PATH/go.mod" ] \
+      || find "$APP_PATH" -maxdepth 1 -name "*.go" -quit 2>/dev/null | grep -q . \
+      && exit 0
+    exit 1
+    ;;
+
+  build)
+    cd "$APP_PATH"
+    if [ -f "go.mod" ]; then
+      go mod download
+    fi
+    go build -o app .
+    ;;
+
+  env)
+    printf 'CGO_ENABLED=0\n'
+    ;;
+
+  start)
+    echo "./app"
+    ;;
+
+  *)
+    echo "Unknown subcommand: $CMD" >&2
+    exit 1
+    ;;
+esac

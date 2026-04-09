@@ -50,13 +50,15 @@ pub fn read_scaling_count(paths: &RikuPaths, app: &str, kind: &str) -> Result<u3
 
 /// Create worker configs for every process entry in the app's Procfile.
 ///
-/// Runtimes with special requirements (Python venv, Node version, etc.) can still
-/// use their own implementations. This generic version handles the common case.
+/// `start_cmd` is an optional fallback command supplied by the runtime plugin
+/// via its `start` subcommand. It is used only when a Procfile entry has an
+/// empty command.
 pub fn create_workers_generic(
     app: &str,
     app_path: &Path,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
+    start_cmd: Option<&str>,
 ) -> Result<()> {
     if should_restart(env) {
         remove_stale_configs(app, paths);
@@ -68,10 +70,15 @@ pub fn create_workers_generic(
     };
 
     for (kind, command) in &entries {
+        let effective_cmd = if command.is_empty() {
+            start_cmd.unwrap_or(command.as_str())
+        } else {
+            command.as_str()
+        };
         let count = read_scaling_count(paths, app, kind)?;
         for i in 1..=count {
-            let worker_env = build_worker_env(app, kind, command, env, paths)?;
-            write_worker_config(app, app_path, kind, command, i, worker_env, paths)?;
+            let worker_env = build_worker_env(app, kind, effective_cmd, env, paths)?;
+            write_worker_config(app, app_path, kind, effective_cmd, i, worker_env, paths)?;
         }
     }
 
@@ -362,7 +369,7 @@ mod tests {
         fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
 
         let env = HashMap::new();
-        create_workers_generic("myapp", &app_path, &env, &paths)
+        create_workers_generic("myapp", &app_path, &env, &paths, None)
     }
 
     #[test]
@@ -377,7 +384,7 @@ mod tests {
         fs::write(app_path.join("Procfile"), "worker: python worker.py\n")?;
 
         let env = HashMap::new();
-        create_workers_generic("myapp", &app_path, &env, &paths)?;
+        create_workers_generic("myapp", &app_path, &env, &paths, None)?;
 
         let config_path = paths.workers_available.join("myapp-worker-1.toml");
         assert!(config_path.exists(), "worker config should be created");
@@ -396,7 +403,7 @@ mod tests {
         fs::write(app_path.join("Procfile"), "worker: python worker.py\n")?;
 
         let env = HashMap::new();
-        create_workers_generic("myapp", &app_path, &env, &paths)?;
+        create_workers_generic("myapp", &app_path, &env, &paths, None)?;
 
         let symlink_path = paths.workers_enabled.join("myapp-worker-1.toml");
         assert!(symlink_path.exists(), "symlink in workers_enabled should exist");
@@ -415,7 +422,7 @@ mod tests {
         fs::write(app_path.join("Procfile"), "# comment\nworker: echo hello\n")?;
 
         let env = HashMap::new();
-        create_workers_generic("myapp", &app_path, &env, &paths)?;
+        create_workers_generic("myapp", &app_path, &env, &paths, None)?;
 
         let entries: Vec<_> = fs::read_dir(&paths.workers_available)
             .unwrap()
@@ -441,7 +448,7 @@ mod tests {
 
         let mut env = HashMap::new();
         env.insert("RIKU_AUTO_RESTART".to_string(), "false".to_string());
-        create_workers_generic("myapp", &app_path, &env, &paths)?;
+        create_workers_generic("myapp", &app_path, &env, &paths, None)?;
 
         assert!(existing.exists(), "existing config should be preserved when RIKU_AUTO_RESTART=false");
         Ok(())

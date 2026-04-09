@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Riku runtime plugin: Python
+# Handles apps with requirements.txt, pyproject.toml, or setup.py.
+set -euo pipefail
+
+CMD="${1:-}"
+APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
+VENV_PATH="$APP_PATH/.venv"
+
+case "$CMD" in
+  detect)
+    [ -f "$APP_PATH/requirements.txt" ] \
+      || [ -f "$APP_PATH/pyproject.toml" ] \
+      || [ -f "$APP_PATH/setup.py" ] \
+      && exit 0
+    exit 1
+    ;;
+
+  build)
+    cd "$APP_PATH"
+    # Create virtualenv if it doesn't exist
+    if [ ! -d "$VENV_PATH" ]; then
+      python3 -m venv "$VENV_PATH"
+    fi
+    source "$VENV_PATH/bin/activate"
+
+    if [ -f "pyproject.toml" ] && command -v uv >/dev/null 2>&1; then
+      uv pip install -e ".[prod]" 2>/dev/null \
+        || uv pip install -r requirements.txt 2>/dev/null \
+        || uv pip install . 2>/dev/null \
+        || true
+    elif [ -f "requirements.txt" ]; then
+      pip install -r requirements.txt
+    elif [ -f "pyproject.toml" ]; then
+      pip install -e .
+    elif [ -f "setup.py" ]; then
+      pip install .
+    fi
+    ;;
+
+  env)
+    printf 'VIRTUAL_ENV=%s\n' "$VENV_PATH"
+    printf 'PATH=%s/bin:%s\n' "$VENV_PATH" "$PATH"
+    ;;
+
+  start)
+    echo "python app.py"
+    ;;
+
+  *)
+    echo "Unknown subcommand: $CMD" >&2
+    exit 1
+    ;;
+esac

@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Riku runtime plugin: Node.js
+# Handles apps with a package.json.
+set -euo pipefail
+
+CMD="${1:-}"
+APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
+
+case "$CMD" in
+  detect)
+    [ -f "$APP_PATH/package.json" ] && exit 0
+    exit 1
+    ;;
+
+  build)
+    cd "$APP_PATH"
+    if [ -f "package-lock.json" ]; then
+      npm ci --production
+    else
+      npm install --production
+    fi
+    ;;
+
+  env)
+    printf 'NODE_ENV=production\n'
+    printf 'PATH=%s/node_modules/.bin:%s\n' "$APP_PATH" "$PATH"
+    ;;
+
+  start)
+    APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
+    if [ -f "$APP_PATH/package.json" ]; then
+      # Try to read "main" field from package.json
+      main=$(node -e "try{console.log(require('$APP_PATH/package.json').main||'')}catch(e){}" 2>/dev/null || true)
+      if [ -n "$main" ]; then
+        echo "node $main"
+      else
+        echo "node index.js"
+      fi
+    else
+      echo "node index.js"
+    fi
+    ;;
+
+  *)
+    echo "Unknown subcommand: $CMD" >&2
+    exit 1
+    ;;
+esac

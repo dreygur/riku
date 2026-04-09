@@ -1,0 +1,8 @@
+[package]
+name = "riku-plugin-java"
+version = "0.1.0"
+edition = "2021"
+description = "Riku runtime plugin: Java (Maven and Gradle)"
+
+[dependencies]
+anyhow = "1"

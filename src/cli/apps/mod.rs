@@ -17,6 +17,7 @@ pub mod create;
 pub mod deploy;
 pub mod destroy;
 pub mod info;
+pub mod install_plugins;
 pub mod list;
 pub mod logs;
 pub mod process;
@@ -27,6 +28,7 @@ pub use config::{cmd_config_get, cmd_config_live, cmd_config_set, cmd_config_sho
 pub use control::{cmd_hot_reload, cmd_restart, cmd_run, cmd_stop, cmd_supervisor, cmd_update};
 pub use create::cmd_apps_create;
 pub use deploy::cmd_deploy;
+pub use install_plugins::cmd_install_plugins;
 pub use destroy::cmd_destroy;
 pub use info::cmd_apps_info;
 pub use list::cmd_apps;

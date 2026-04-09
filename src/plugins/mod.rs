@@ -40,6 +40,7 @@ pub mod discovery;
 mod executor;
 pub mod hooks;
 pub mod manager;
+pub mod runtime;
 
 // Re-export the public API (used by CLI plugin commands and external code)
 #[allow(unused_imports)]

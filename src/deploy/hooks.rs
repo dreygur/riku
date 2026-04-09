@@ -210,14 +210,14 @@ mod tests {
     }
 
     #[test]
-    fn test_post_build_failing_plugin_returns_ok() -> Result<()> {
-        // post-build failures are non-fatal (warnings only)
+    fn test_post_build_failing_plugin_aborts() {
+        // post-build failures are fatal — they abort the deploy
         let tmp = TempDir::new().unwrap();
         let paths = make_paths(&tmp);
         write_plugin(&paths, "riku-post-build", "exit 1");
         let env = HashMap::new();
-        // Should not propagate the error
-        run_post_build("myapp", tmp.path(), &paths, Some("Go"), &env)
+        let result = run_post_build("myapp", tmp.path(), &paths, Some("Go"), &env);
+        assert!(result.is_err(), "failing post-build plugin should abort the deploy");
     }
 
     // --- post-deploy ---

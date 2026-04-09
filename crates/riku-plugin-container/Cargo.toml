@@ -1,0 +1,8 @@
+[package]
+name = "riku-plugin-container"
+version = "0.1.0"
+edition = "2021"
+description = "Riku runtime plugin: Container (Docker and Podman)"
+
+[dependencies]
+anyhow = "1"

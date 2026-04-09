@@ -131,6 +131,10 @@ fn main() -> Result<()> {
         Commands::Stop { app } => cli::apps::cmd_stop(&paths, &app)?,
         Commands::Init { no_systemd } => cli::setup::cmd_init(no_systemd)?,
         Commands::Update => cli::apps::cmd_update()?,
+        Commands::InstallPlugins { plugins } => {
+            let only = if plugins.is_empty() { None } else { Some(plugins) };
+            cli::apps::cmd_install_plugins(&paths, only)?
+        }
         Commands::Supervisor => cli::apps::cmd_supervisor(&paths)?,
         Commands::Plugin(cmd) => match cmd {
             PluginCmd::List => cli::client_plugins::cmd_plugin_list()?,

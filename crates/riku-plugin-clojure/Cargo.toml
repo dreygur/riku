@@ -1,0 +1,8 @@
+[package]
+name = "riku-plugin-clojure"
+version = "0.1.0"
+edition = "2021"
+description = "Riku runtime plugin: Clojure (Leiningen and CLI tools)"
+
+[dependencies]
+anyhow = "1"
