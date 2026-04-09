@@ -126,8 +126,10 @@ impl<'a> PluginManager<'a> {
         );
 
         match ctx.hook {
-            PluginHook::PreDeploy | PluginHook::PreBuild => Err(anyhow::anyhow!("{}", msg)),
-            PluginHook::PostBuild | PluginHook::PostDeploy => {
+            PluginHook::PreDeploy | PluginHook::PreBuild | PluginHook::PostBuild => {
+                Err(anyhow::anyhow!("{}", msg))
+            }
+            PluginHook::PostDeploy => {
                 tracing::warn!("{}", msg);
                 Ok(true)
             }
