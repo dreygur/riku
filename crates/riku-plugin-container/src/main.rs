@@ -34,7 +34,11 @@ fn detect(app_path: &Path) -> Result<()> {
 }
 
 fn runtime() -> &'static str {
-    if which("podman") { "podman" } else { "docker" }
+    if which("podman") {
+        "podman"
+    } else {
+        "docker"
+    }
 }
 
 fn which(bin: &str) -> bool {

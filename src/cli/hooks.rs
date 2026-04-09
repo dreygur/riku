@@ -41,7 +41,10 @@ pub fn cmd_hook_check(paths: &RikuPaths, name: &str) -> Result<()> {
         display::kv("Path:", &plugin_path.display().to_string());
         std::process::exit(0);
     } else {
-        display::warn(&format!("Hook plugin '{}' not found or not executable.", name));
+        display::warn(&format!(
+            "Hook plugin '{}' not found or not executable.",
+            name
+        ));
         std::process::exit(1);
     }
 }

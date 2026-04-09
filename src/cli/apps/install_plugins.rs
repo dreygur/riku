@@ -20,8 +20,7 @@ const SHELL_PLUGINS: &[&str] = &["node", "python", "ruby", "go", "rust-lang"];
 const BINARY_PLUGINS: &[&str] = &["java", "clojure", "container"];
 
 /// Base URL for raw plugin script content.
-const PLUGINS_RAW_BASE: &str =
-    "https://raw.githubusercontent.com/dreygur/riku/main/plugins";
+const PLUGINS_RAW_BASE: &str = "https://raw.githubusercontent.com/dreygur/riku/main/plugins";
 
 /// Download and install all bundled runtime plugins to `~/.riku/plugins/`.
 pub fn cmd_install_plugins(paths: &RikuPaths, only: Option<Vec<String>>) -> Result<()> {

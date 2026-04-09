@@ -136,10 +136,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn make_paths(tmp: &TempDir) -> RikuPaths {
-        crate::config::RikuPaths::from_dirs(
-            tmp.path().join(".riku"),
-            &tmp.path().to_path_buf(),
-        )
+        crate::config::RikuPaths::from_dirs(tmp.path().join(".riku"), &tmp.path().to_path_buf())
     }
 
     // --- read_supervisor_pid ---

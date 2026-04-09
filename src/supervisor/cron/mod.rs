@@ -48,7 +48,8 @@ impl CronJob {
     pub fn execute(&self) -> Result<()> {
         tracing::info!(
             "Executing cron job for app '{}': {}",
-            self.app, self.command
+            self.app,
+            self.command
         );
 
         let output = Command::new("sh").arg("-c").arg(&self.command).output()?;

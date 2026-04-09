@@ -33,7 +33,8 @@ impl ProcessManager {
             if process.is_running() {
                 tracing::warn!(
                     "Process {} didn't respond to SIGTERM within {}s, sending SIGKILL",
-                    process_id, grace_period
+                    process_id,
+                    grace_period
                 );
                 process.kill()?;
 
@@ -134,7 +135,8 @@ mod tests {
         pm.spawn_process(&config).expect("spawn 2");
         assert_eq!(pm.get_process_count(), 2);
 
-        pm.stop_all_processes().expect("stop_all_processes should not fail");
+        pm.stop_all_processes()
+            .expect("stop_all_processes should not fail");
         assert_eq!(pm.get_process_count(), 0, "all processes should be removed");
     }
 

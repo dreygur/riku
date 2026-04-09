@@ -63,7 +63,8 @@ mod tests {
     #[test]
     fn test_setup_creates_ssh_dir_and_authorized_keys() {
         with_home(|tmp| {
-            let result = setup_authorized_keys("fingerprint123", "/usr/bin/riku", "ssh-rsa AAAA user@host");
+            let result =
+                setup_authorized_keys("fingerprint123", "/usr/bin/riku", "ssh-rsa AAAA user@host");
             assert!(result.is_ok());
             assert!(tmp.path().join(".ssh").exists());
             assert!(tmp.path().join(".ssh/authorized_keys").exists());
@@ -73,7 +74,8 @@ mod tests {
     #[test]
     fn test_setup_appends_correct_line_format() {
         with_home(|tmp| {
-            setup_authorized_keys("fp42", "/usr/local/bin/riku", "ssh-rsa BBBB test@local").unwrap();
+            setup_authorized_keys("fp42", "/usr/local/bin/riku", "ssh-rsa BBBB test@local")
+                .unwrap();
             let content = fs::read_to_string(tmp.path().join(".ssh/authorized_keys")).unwrap();
             assert!(content.contains("FINGERPRINT=fp42"));
             assert!(content.contains("/usr/local/bin/riku"));

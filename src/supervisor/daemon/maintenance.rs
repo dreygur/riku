@@ -51,5 +51,4 @@ impl Supervisor {
             .write_stats_to_file(&self.stats_file)?;
         Ok(())
     }
-
 }

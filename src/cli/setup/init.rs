@@ -147,4 +147,3 @@ fn setup_systemd_step(paths: &RikuPaths, no_systemd: bool, is_root: bool) -> Res
     }
     Ok(())
 }
-

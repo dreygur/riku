@@ -123,8 +123,7 @@ fn bench_toml_parse(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("batch_configs", n), &n, |b, &n| {
             b.iter(|| {
                 for _ in 0..n {
-                    let _: toml::Value =
-                        toml::from_str(black_box(full_worker_toml())).unwrap();
+                    let _: toml::Value = toml::from_str(black_box(full_worker_toml())).unwrap();
                 }
             })
         });
@@ -145,9 +144,7 @@ fn bench_stats_serialization(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::new("serialize_single_app", procs),
             &json_val,
-            |b, v| {
-                b.iter(|| serde_json::to_string(black_box(v)).unwrap())
-            },
+            |b, v| b.iter(|| serde_json::to_string(black_box(v)).unwrap()),
         );
     }
 
@@ -162,9 +159,7 @@ fn bench_stats_serialization(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::new("serialize_multi_app", app_count),
             &json_val,
-            |b, v| {
-                b.iter(|| serde_json::to_string(black_box(v)).unwrap())
-            },
+            |b, v| b.iter(|| serde_json::to_string(black_box(v)).unwrap()),
         );
     }
 

@@ -140,7 +140,9 @@ fn stem_prefix(path: &String) -> String {
 /// Print the last [`CATCH_UP_LINES`] lines from each file to stdout.
 fn print_catch_up(filenames: &[String], prefixes: &[String], col_width: usize) {
     for (i, f) in filenames.iter().enumerate() {
-        let Ok(file) = fs::File::open(f) else { continue };
+        let Ok(file) = fs::File::open(f) else {
+            continue;
+        };
         let reader = BufReader::new(file);
         #[allow(clippy::lines_filter_map_ok)]
         let lines: VecDeque<String> = reader.lines().filter_map(Result::ok).collect();
@@ -167,11 +169,7 @@ fn open_at_end(filenames: &[String]) -> Result<(Vec<fs::File>, Vec<u64>)> {
 /// Read and print any new data from each open file.
 ///
 /// Returns `true` if at least one file had new content (skip the sleep).
-fn drain_new_lines(
-    files: &mut [fs::File],
-    prefixes: &[String],
-    col_width: usize,
-) -> bool {
+fn drain_new_lines(files: &mut [fs::File], prefixes: &[String], col_width: usize) -> bool {
     let mut had_output = false;
     for (i, file) in files.iter_mut().enumerate() {
         let mut buf = String::new();
@@ -188,7 +186,9 @@ fn drain_new_lines(
 /// Reopen any file whose inode has changed (log rotation).
 fn reopen_rotated(active: &[String], files: &mut [fs::File], inodes: &mut [u64]) {
     for (i, path) in active.iter().enumerate() {
-        let Ok(meta) = fs::metadata(path) else { continue };
+        let Ok(meta) = fs::metadata(path) else {
+            continue;
+        };
         if meta.ino() == inodes[i] {
             continue;
         }
@@ -201,11 +201,7 @@ fn reopen_rotated(active: &[String], files: &mut [fs::File], inodes: &mut [u64])
 }
 
 /// Remove entries for log files that no longer exist on disk.
-fn remove_deleted(
-    active: &mut Vec<String>,
-    files: &mut Vec<fs::File>,
-    inodes: &mut Vec<u64>,
-) {
+fn remove_deleted(active: &mut Vec<String>, files: &mut Vec<fs::File>, inodes: &mut Vec<u64>) {
     let mut i = 0;
     while i < active.len() {
         if Path::new(&active[i]).exists() {

@@ -26,7 +26,9 @@ impl ProcessManager {
                 if process.restart_count >= max_restarts {
                     tracing::error!(
                         "Process {} has crashed {} time(s) (max_restarts={}), giving up",
-                        process_id, process.restart_count, max_restarts
+                        process_id,
+                        process.restart_count,
+                        max_restarts
                     );
                     // Mark as failed in stats and queue for removal so the dead child
                     // entry is dropped (reaping the zombie) and stops polluting logs.
@@ -80,7 +82,8 @@ impl ProcessManager {
                     _ => {
                         tracing::warn!(
                             "Health check for {} failed: {:?}",
-                            process_id, health_status
+                            process_id,
+                            health_status
                         );
                         process.consecutive_health_failures += 1;
 
@@ -88,7 +91,8 @@ impl ProcessManager {
                         if process.consecutive_health_failures >= health_config.retries {
                             tracing::warn!(
                                 "Process {} failed {} consecutive health checks, restarting",
-                                process_id, process.consecutive_health_failures
+                                process_id,
+                                process.consecutive_health_failures
                             );
                             to_restart.push(process_id);
                         }

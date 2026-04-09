@@ -172,7 +172,8 @@ impl ProcessManager {
                     let _ = kill(pid, Signal::SIGKILL);
                     tracing::error!(
                         "Failed to create SpawnedProcess, killed child PID {}: {}",
-                        child_pid, e
+                        child_pid,
+                        e
                     );
                     return Err(e);
                 }
@@ -214,13 +215,12 @@ impl ProcessManager {
 
         Ok(Some((stdout_handle, stderr_handle)))
     }
-
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::supervisor::process::ProcessManager;
     use crate::supervisor::config::{WorkerConfig, WorkerInfo, WorkerOptions};
+    use crate::supervisor::process::ProcessManager;
     use std::collections::HashMap;
     use tempfile::TempDir;
 
@@ -273,7 +273,11 @@ mod tests {
 
         // Allow log-capture threads to drain before asserting count.
         std::thread::sleep(std::time::Duration::from_millis(200));
-        assert_eq!(pm.get_process_count(), 1, "one process should be registered");
+        assert_eq!(
+            pm.get_process_count(),
+            1,
+            "one process should be registered"
+        );
     }
 
     #[test]
@@ -288,11 +292,17 @@ mod tests {
         );
 
         let mut pm = ProcessManager::new().expect("ProcessManager::new should succeed");
-        pm.spawn_process(&config).expect("first spawn should succeed");
+        pm.spawn_process(&config)
+            .expect("first spawn should succeed");
         assert_eq!(pm.get_process_count(), 1);
 
         // Spawning again with the same app/kind/ordinal replaces the old entry.
-        pm.spawn_process(&config).expect("second spawn should succeed");
-        assert_eq!(pm.get_process_count(), 1, "duplicate should replace, not add");
+        pm.spawn_process(&config)
+            .expect("second spawn should succeed");
+        assert_eq!(
+            pm.get_process_count(),
+            1,
+            "duplicate should replace, not add"
+        );
     }
 }

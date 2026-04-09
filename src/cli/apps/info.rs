@@ -136,7 +136,10 @@ fn print_supervisor_stats(paths: &RikuPaths, app: &str) {
                             if let Some(mem) =
                                 app_stats.get("total_memory_bytes").and_then(|v| v.as_u64())
                             {
-                                display::kv("Memory:", &format!("{:.2} MB", mem as f64 / 1024.0 / 1024.0));
+                                display::kv(
+                                    "Memory:",
+                                    &format!("{:.2} MB", mem as f64 / 1024.0 / 1024.0),
+                                );
                             }
                             if let Some(running) =
                                 app_stats.get("running_processes").and_then(|v| v.as_u64())

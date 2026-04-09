@@ -94,4 +94,3 @@ fn deploy_from_path(paths: &RikuPaths, app: &str, source: &str) -> Result<()> {
 
     Ok(())
 }
-

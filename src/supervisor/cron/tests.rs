@@ -1,5 +1,5 @@
-use super::*;
 use super::parser::{calculate_next_run_after, parse_cron_field};
+use super::*;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 // ── validate_cron_expression ────────────────────────────────────────────────
@@ -90,7 +90,11 @@ fn test_next_run_every_minute() {
     let next = calculate_next_run_after("* * * * *", after).unwrap();
     // Should fire one minute later.
     let delta = next.duration_since(after).unwrap();
-    assert_eq!(delta.as_secs(), 60, "every-minute schedule should advance by 60 s");
+    assert_eq!(
+        delta.as_secs(),
+        60,
+        "every-minute schedule should advance by 60 s"
+    );
 }
 
 #[test]
@@ -99,7 +103,11 @@ fn test_next_run_hourly() {
     let next = calculate_next_run_after("0 * * * *", after).unwrap();
     // Next run is 01:00 UTC → 3600 s later.
     let delta = next.duration_since(after).unwrap();
-    assert_eq!(delta.as_secs(), 3600, "hourly schedule should advance by 3600 s from midnight");
+    assert_eq!(
+        delta.as_secs(),
+        3600,
+        "hourly schedule should advance by 3600 s from midnight"
+    );
 }
 
 #[test]
@@ -145,7 +153,9 @@ fn test_cron_job_creation_with_invalid_schedule_fails() {
 #[test]
 fn test_cron_scheduler_add_remove_job() {
     let mut scheduler = CronScheduler::new();
-    scheduler.add_job("myapp", 0, "*/5 * * * *", "echo tick").unwrap();
+    scheduler
+        .add_job("myapp", 0, "*/5 * * * *", "echo tick")
+        .unwrap();
     assert_eq!(scheduler.get_jobs().len(), 1);
 
     scheduler.remove_job("myapp", 0).unwrap();
@@ -155,14 +165,13 @@ fn test_cron_scheduler_add_remove_job() {
 #[test]
 fn test_cron_scheduler_mark_job_run_advances_next_run() {
     let mut scheduler = CronScheduler::new();
-    scheduler.add_job("myapp", 0, "*/5 * * * *", "echo tick").unwrap();
+    scheduler
+        .add_job("myapp", 0, "*/5 * * * *", "echo tick")
+        .unwrap();
 
     let before = scheduler.get_jobs()["myapp-cron-0"].next_run;
     scheduler.mark_job_run("myapp", 0).unwrap();
     let after = scheduler.get_jobs()["myapp-cron-0"].next_run;
 
-    assert!(
-        after > before,
-        "next_run should advance after mark_job_run"
-    );
+    assert!(after > before, "next_run should advance after mark_job_run");
 }

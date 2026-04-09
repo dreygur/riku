@@ -2,9 +2,9 @@
 use anyhow::Result;
 use serde_json::json;
 
-use crate::config::RikuPaths;
 use super::auth::{get_agent_identity, get_agent_scope};
 use super::types::AgentScope;
+use crate::config::RikuPaths;
 
 /// Show agent introduction and permissions
 pub fn cmd_agent_intro(_paths: &RikuPaths) -> Result<()> {

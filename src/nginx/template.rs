@@ -126,7 +126,11 @@ fn install_nginx_symlink(config_file: &Path, app: &str) {
 
     if symlink_path.symlink_metadata().is_ok() {
         if let Err(e) = fs::remove_file(&symlink_path) {
-            tracing::warn!("could not remove old nginx symlink {:?}: {}", symlink_path, e);
+            tracing::warn!(
+                "could not remove old nginx symlink {:?}: {}",
+                symlink_path,
+                e
+            );
         }
     }
 

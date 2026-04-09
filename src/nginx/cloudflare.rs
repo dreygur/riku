@@ -81,11 +81,7 @@ fn build_cloudflare_config() -> Result<String> {
                     if is_valid_cidr(ip) {
                         content.push_str(&format!("allow {};\n", ip));
                     } else {
-                        tracing::warn!(
-                            "skipping invalid Cloudflare {} entry: {:?}",
-                            label,
-                            ip
-                        );
+                        tracing::warn!("skipping invalid Cloudflare {} entry: {:?}", label, ip);
                     }
                 }
             }

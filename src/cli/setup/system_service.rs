@@ -35,7 +35,11 @@ pub fn install_systemd_service(_paths: &RikuPaths) -> Result<()> {
 }
 
 fn resolve_deploy_home(deploy_user: &str) -> String {
-    match Command::new("getent").arg("passwd").arg(deploy_user).output() {
+    match Command::new("getent")
+        .arg("passwd")
+        .arg(deploy_user)
+        .output()
+    {
         Ok(output) if output.status.success() => {
             let line = String::from_utf8_lossy(&output.stdout);
             line.split(':')

@@ -254,10 +254,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn make_paths(tmp: &TempDir) -> crate::config::RikuPaths {
-        let paths = crate::config::RikuPaths::from_dirs(
-            tmp.path().join(".riku"),
-            tmp.path(),
-        );
+        let paths = crate::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
         std::fs::create_dir_all(&paths.nginx_root).unwrap();
         paths
     }
@@ -277,7 +274,11 @@ mod tests {
         assert_eq!(ctx.get("BIND_ADDRESS").unwrap(), "127.0.0.1");
         assert_eq!(ctx.get("NGINX_IPV4_ADDRESS").unwrap(), "0.0.0.0");
         assert_eq!(ctx.get("NGINX_IPV6_ADDRESS").unwrap(), "[::]");
-        assert!(ctx.get("NGINX_SERVER_NAME").unwrap().to_string().contains("myapp"));
+        assert!(ctx
+            .get("NGINX_SERVER_NAME")
+            .unwrap()
+            .to_string()
+            .contains("myapp"));
     }
 
     #[test]
@@ -380,7 +381,10 @@ mod tests {
         std::fs::write(app_path.join("nginx_extra.conf"), "proxy_read_timeout 60;").unwrap();
 
         let mut env = HashMap::new();
-        env.insert("NGINX_INCLUDE_FILE".to_string(), "nginx_extra.conf".to_string());
+        env.insert(
+            "NGINX_INCLUDE_FILE".to_string(),
+            "nginx_extra.conf".to_string(),
+        );
 
         let mut ctx = tera::Context::new();
         insert_include_file(&mut ctx, &env, &app_path);
@@ -397,7 +401,10 @@ mod tests {
 
         let mut env = HashMap::new();
         // Path traversal attempt
-        env.insert("NGINX_INCLUDE_FILE".to_string(), "../secret.conf".to_string());
+        env.insert(
+            "NGINX_INCLUDE_FILE".to_string(),
+            "../secret.conf".to_string(),
+        );
 
         let mut ctx = tera::Context::new();
         insert_include_file(&mut ctx, &env, &app_path);

@@ -38,7 +38,10 @@ pub fn cmd_stats_all(paths: &RikuPaths) -> Result<()> {
                         let memory_mb = memory_bytes as f64 / 1024.0 / 1024.0;
 
                         display::info(&format!("App: {}", app));
-                        display::kv("Processes:", &format!("{}/{} running", running_procs, total_procs));
+                        display::kv(
+                            "Processes:",
+                            &format!("{}/{} running", running_procs, total_procs),
+                        );
                         display::kv("Healthy:", &format!("{}/{}", healthy_procs, total_procs));
                         display::kv("Memory:", &format!("{:.2} MB", memory_mb));
                         display::blank();

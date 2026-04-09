@@ -74,8 +74,7 @@ fn try_add_to_shell_config() -> bool {
             if config_path.exists() {
                 if let Ok(content) = fs::read_to_string(&config_path) {
                     if !content.contains(".local/bin") {
-                        if let Ok(mut file) =
-                            fs::OpenOptions::new().append(true).open(&config_path)
+                        if let Ok(mut file) = fs::OpenOptions::new().append(true).open(&config_path)
                         {
                             let _ = writeln!(
                                 file,

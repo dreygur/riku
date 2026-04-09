@@ -11,7 +11,7 @@ use super::container::ContainerSubCmd;
     name = "riku",
     version,
     about = "riku — the smallest PaaS you've ever seen (Rust edition)",
-    long_about = "riku is a single-binary micro-PaaS that provides Heroku-like git push deployments.\nManage apps, config, processes, and plugins — all from one tool.",
+    long_about = "riku is a single-binary micro-PaaS that provides Heroku-like git push deployments.\nManage apps, config, processes, and plugins — all from one tool."
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -21,7 +21,9 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// List deployed apps
-    #[command(after_help = "Examples:\n  riku apps\n  riku apps create myapp\n  riku apps info myapp\n  riku apps destroy myapp")]
+    #[command(
+        after_help = "Examples:\n  riku apps\n  riku apps create myapp\n  riku apps info myapp\n  riku apps destroy myapp"
+    )]
     Apps {
         #[command(subcommand)]
         cmd: Option<AppsCmd>,
@@ -59,7 +61,10 @@ pub enum Commands {
     },
 
     /// Manage app configuration
-    #[command(subcommand, after_help = "Examples:\n  riku config show myapp\n  riku config set myapp KEY=val\n  riku config get myapp KEY\n  riku config unset myapp KEY\n  riku config live myapp")]
+    #[command(
+        subcommand,
+        after_help = "Examples:\n  riku config show myapp\n  riku config set myapp KEY=val\n  riku config get myapp KEY\n  riku config unset myapp KEY\n  riku config live myapp"
+    )]
     Config(ConfigCmd),
 
     /// Container export and remote deployment commands
@@ -69,7 +74,9 @@ pub enum Commands {
     },
 
     /// Force redeploy of an app
-    #[command(after_help = "Examples:\n  riku deploy myapp\n  riku deploy myapp --from ./local-path")]
+    #[command(
+        after_help = "Examples:\n  riku deploy myapp\n  riku deploy myapp --from ./local-path"
+    )]
     Deploy {
         /// App name
         app: String,
@@ -87,7 +94,9 @@ pub enum Commands {
     },
 
     /// Tail app logs
-    #[command(after_help = "Examples:\n  riku logs myapp\n  riku logs myapp web\n  riku logs myapp worker\n  riku logs myapp --deploy\n  riku logs myapp --deploy --follow")]
+    #[command(
+        after_help = "Examples:\n  riku logs myapp\n  riku logs myapp web\n  riku logs myapp worker\n  riku logs myapp --deploy\n  riku logs myapp --deploy --follow"
+    )]
     Logs {
         /// App name
         app: String,
@@ -103,7 +112,9 @@ pub enum Commands {
     },
 
     /// Manage app processes
-    #[command(after_help = "Examples:\n  riku ps\n  riku ps myapp\n  riku ps myapp --scale web=2 worker=1\n  riku ps myapp --verbose")]
+    #[command(
+        after_help = "Examples:\n  riku ps\n  riku ps myapp\n  riku ps myapp --scale web=2 worker=1\n  riku ps myapp --verbose"
+    )]
     Ps {
         /// Show all processes (default) or specify an app
         #[arg()]
@@ -117,7 +128,10 @@ pub enum Commands {
     },
 
     /// Show process stats and metrics
-    #[command(subcommand, after_help = "Examples:\n  riku stats all\n  riku stats app myapp")]
+    #[command(
+        subcommand,
+        after_help = "Examples:\n  riku stats all\n  riku stats app myapp"
+    )]
     Stats(StatsCmd),
 
     /// Run a command in the app context

@@ -132,7 +132,11 @@ fn main() -> Result<()> {
         Commands::Init { no_systemd } => cli::setup::cmd_init(no_systemd)?,
         Commands::Update => cli::apps::cmd_update()?,
         Commands::InstallPlugins { plugins } => {
-            let only = if plugins.is_empty() { None } else { Some(plugins) };
+            let only = if plugins.is_empty() {
+                None
+            } else {
+                Some(plugins)
+            };
             cli::apps::cmd_install_plugins(&paths, only)?
         }
         Commands::Supervisor => cli::apps::cmd_supervisor(&paths)?,
@@ -154,4 +158,3 @@ fn main() -> Result<()> {
 
     Ok(())
 }
-

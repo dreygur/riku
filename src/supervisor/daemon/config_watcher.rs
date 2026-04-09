@@ -194,7 +194,8 @@ impl Supervisor {
         if let Err(e) = self.process_manager.spawn_process(&worker_config) {
             tracing::error!(
                 "Error spawning process for {}: {}",
-                worker_config.worker.app, e
+                worker_config.worker.app,
+                e
             );
             return Err(e);
         }

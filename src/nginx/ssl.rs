@@ -23,7 +23,9 @@ pub fn ensure_ssl_certificates(
     // Try acme.sh first
     let acme_sh = paths.acme_root.join("acme.sh");
     if acme_sh.exists() {
-        if let Some(issued) = try_acme_certificates(app, domains, paths, &acme_sh, &key_path, &crt_path)? {
+        if let Some(issued) =
+            try_acme_certificates(app, domains, paths, &acme_sh, &key_path, &crt_path)?
+        {
             return Ok(issued);
         }
     }
@@ -73,8 +75,7 @@ fn try_acme_certificates(
                 // Create symlink for ACME_WWW
                 let acme_domain_dir = paths.acme_root.join(domain);
                 if acme_domain_dir.exists() && !paths.acme_www.join(app).exists() {
-                    let _ =
-                        std::os::unix::fs::symlink(&acme_domain_dir, paths.acme_www.join(app));
+                    let _ = std::os::unix::fs::symlink(&acme_domain_dir, paths.acme_www.join(app));
                 }
                 return Ok(Some(true));
             }
@@ -150,10 +151,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn make_paths(tmp: &TempDir) -> crate::config::RikuPaths {
-        let paths = crate::config::RikuPaths::from_dirs(
-            tmp.path().join(".riku"),
-            tmp.path(),
-        );
+        let paths = crate::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
         std::fs::create_dir_all(&paths.nginx_root).unwrap();
         std::fs::create_dir_all(&paths.acme_www).unwrap();
         paths

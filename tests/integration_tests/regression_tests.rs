@@ -21,9 +21,19 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let riku_root = tmp.path().join(".riku");
         for sub in &[
-            "apps", "data", "envs", "repos", "logs", "nginx", "cache",
-            "workers", "workers-available", "workers-enabled", "acme",
-            "acme-www", "plugins",
+            "apps",
+            "data",
+            "envs",
+            "repos",
+            "logs",
+            "nginx",
+            "cache",
+            "workers",
+            "workers-available",
+            "workers-enabled",
+            "acme",
+            "acme-www",
+            "plugins",
         ] {
             fs::create_dir_all(riku_root.join(sub)).unwrap();
         }
@@ -53,7 +63,9 @@ mod tests {
             .trim_end()
             .to_string();
 
-        if sanitized.contains("..") || sanitized.is_empty() || sanitized.trim_matches('.').is_empty()
+        if sanitized.contains("..")
+            || sanitized.is_empty()
+            || sanitized.trim_matches('.').is_empty()
         {
             return String::new();
         }
@@ -82,7 +94,10 @@ mod tests {
         const KEY: &str = "__RIKU_REGRESSION_ENV_ISOLATION__";
 
         std::env::remove_var(KEY);
-        assert!(std::env::var(KEY).is_err(), "key should not exist initially");
+        assert!(
+            std::env::var(KEY).is_err(),
+            "key should not exist initially"
+        );
 
         let handle = std::thread::spawn(|| {
             std::env::set_var(KEY, "child-value");
@@ -128,11 +143,7 @@ mod tests {
             !output.status.success(),
             "pre-deploy plugin that exits 1 must report failure (exit code != 0)"
         );
-        assert_eq!(
-            output.status.code(),
-            Some(1),
-            "exit code must be exactly 1"
-        );
+        assert_eq!(output.status.code(), Some(1), "exit code must be exactly 1");
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(
             stderr.contains("validation failed"),
@@ -157,7 +168,10 @@ mod tests {
             "server { listen 80; server_name cleanup-test-app.local; }\n",
         )
         .unwrap();
-        assert!(config_file.exists(), "config file must exist before removal");
+        assert!(
+            config_file.exists(),
+            "config file must exist before removal"
+        );
 
         // Simulate remove_nginx_config: remove the .conf file.
         if config_file.exists() {
@@ -218,7 +232,9 @@ mod tests {
                     assert!(
                         !safe.contains(*bad_char),
                         "sanitized name {:?} still contains '{}' (input: {:?})",
-                        safe, bad_char, input
+                        safe,
+                        bad_char,
+                        input
                     );
                 }
                 Err(_) => {
@@ -310,7 +326,8 @@ max_restarts = 5
         for expr in &valid {
             assert!(
                 validate_cron_expression_local(expr),
-                "should accept valid cron expression: {:?}", expr
+                "should accept valid cron expression: {:?}",
+                expr
             );
         }
     }
@@ -319,12 +336,27 @@ max_restarts = 5
     fn cron_invalid_six_fields_rejected() {
         // Our local validator requires at least 5 whitespace-separated fields.
         // Expressions with fewer than 5 fields must be rejected.
-        assert!(!validate_cron_expression_local(""), "empty string is invalid");
-        assert!(!validate_cron_expression_local("0 * * *"), "4-field expression is invalid");
-        assert!(!validate_cron_expression_local("0 * *"), "3-field expression is invalid");
-        assert!(!validate_cron_expression_local("invalid"), "single token is invalid");
+        assert!(
+            !validate_cron_expression_local(""),
+            "empty string is invalid"
+        );
+        assert!(
+            !validate_cron_expression_local("0 * * *"),
+            "4-field expression is invalid"
+        );
+        assert!(
+            !validate_cron_expression_local("0 * *"),
+            "3-field expression is invalid"
+        );
+        assert!(
+            !validate_cron_expression_local("invalid"),
+            "single token is invalid"
+        );
         // 5 and 6 field expressions both pass the >= 5 field count check.
-        assert!(validate_cron_expression_local("* * * * *"), "5-field expression must be accepted");
+        assert!(
+            validate_cron_expression_local("* * * * *"),
+            "5-field expression must be accepted"
+        );
     }
 
     // ── extra: worker config file naming convention ───────────────────────────
@@ -345,7 +377,10 @@ max_restarts = 5
         let config_path = workers_enabled.join(&filename);
 
         fs::write(&config_path, "[worker]\napp = \"myapp\"\n").unwrap();
-        assert!(config_path.exists(), "config file must be created with correct name");
+        assert!(
+            config_path.exists(),
+            "config file must be created with correct name"
+        );
 
         // Glob pattern the supervisor uses.
         let pattern = workers_enabled.join("*.toml").to_string_lossy().to_string();

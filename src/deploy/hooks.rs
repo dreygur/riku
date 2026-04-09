@@ -166,7 +166,10 @@ mod tests {
         write_plugin(&paths, "riku-pre-deploy", "exit 1");
         let env = HashMap::new();
         let result = run_pre_deploy("myapp", tmp.path(), &paths, &env);
-        assert!(result.is_err(), "Failing pre-deploy plugin should abort deploy");
+        assert!(
+            result.is_err(),
+            "Failing pre-deploy plugin should abort deploy"
+        );
     }
 
     // --- pre-build ---
@@ -195,7 +198,10 @@ mod tests {
         write_plugin(&paths, "riku-pre-build", "exit 2");
         let env = HashMap::new();
         let result = run_pre_build("myapp", tmp.path(), &paths, None, &env);
-        assert!(result.is_err(), "Failing pre-build plugin should abort deploy");
+        assert!(
+            result.is_err(),
+            "Failing pre-build plugin should abort deploy"
+        );
     }
 
     // --- post-build ---
@@ -216,7 +222,10 @@ mod tests {
         write_plugin(&paths, "riku-post-build", "exit 1");
         let env = HashMap::new();
         let result = run_post_build("myapp", tmp.path(), &paths, Some("Go"), &env);
-        assert!(result.is_err(), "failing post-build plugin should abort the deploy");
+        assert!(
+            result.is_err(),
+            "failing post-build plugin should abort the deploy"
+        );
     }
 
     // --- post-deploy ---
@@ -253,7 +262,11 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let paths = make_paths(&tmp);
         // Write a plugin that exits non-zero unless RIKU_APP is set to the expected value
-        write_plugin(&paths, "riku-post-deploy", "[ \"$RIKU_APP\" = \"testapp\" ] || exit 1");
+        write_plugin(
+            &paths,
+            "riku-post-deploy",
+            "[ \"$RIKU_APP\" = \"testapp\" ] || exit 1",
+        );
         let env = HashMap::new();
         // If the env is injected correctly, the plugin exits 0 → post_deploy returns Ok
         run_post_deploy("testapp", tmp.path(), &paths, None, &env)

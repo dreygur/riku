@@ -120,15 +120,15 @@ fn remove_stale_configs(app: &str, paths: &RikuPaths) {
 fn parse_procfile(app_path: &Path) -> Result<Option<Vec<(String, String)>>> {
     let procfile_path = app_path.join("Procfile");
     if !procfile_path.exists() {
-        echo("-----> No Procfile found, skipping process creation", "yellow");
+        echo(
+            "-----> No Procfile found, skipping process creation",
+            "yellow",
+        );
         return Ok(None);
     }
 
     let content = fs::read_to_string(&procfile_path)?;
-    let entries = content
-        .lines()
-        .filter_map(parse_procfile_line)
-        .collect();
+    let entries = content.lines().filter_map(parse_procfile_line).collect();
 
     Ok(Some(entries))
 }
@@ -187,8 +187,14 @@ fn build_worker_env(
 
 /// Inject uwsgi unix-socket variables into the environment.
 fn configure_wsgi_env(socket_path: &Path, env: &mut HashMap<String, String>) {
-    env.insert("SOCKET".to_string(), format!("unix://{}", socket_path.to_string_lossy()));
-    env.insert("UWSGI_SOCKET".to_string(), socket_path.to_string_lossy().to_string());
+    env.insert(
+        "SOCKET".to_string(),
+        format!("unix://{}", socket_path.to_string_lossy()),
+    );
+    env.insert(
+        "UWSGI_SOCKET".to_string(),
+        socket_path.to_string_lossy().to_string(),
+    );
     env.insert("NGINX_WSGI".to_string(), "true".to_string());
     env.insert("UWSGI_PROCESSES".to_string(), UWSGI_PROCESSES.to_string());
     env.insert("UWSGI_THREADS".to_string(), UWSGI_THREADS.to_string());
@@ -206,8 +212,14 @@ fn configure_web_env(
     env.insert("PORT".to_string(), port.to_string());
     env.insert("NGINX_PORTMAP".to_string(), "true".to_string());
     env.insert("NGINX_INTERNAL_PORT".to_string(), port.to_string());
-    env.insert("NGINX_EXTERNAL_PORT".to_string(), NGINX_EXTERNAL_PORT.to_string());
-    env.insert("SOCKET".to_string(), socket_path.to_string_lossy().to_string());
+    env.insert(
+        "NGINX_EXTERNAL_PORT".to_string(),
+        NGINX_EXTERNAL_PORT.to_string(),
+    );
+    env.insert(
+        "SOCKET".to_string(),
+        socket_path.to_string_lossy().to_string(),
+    );
 
     // Suppress unused warning — paths is used by callers for socket_path resolution
     let _ = paths;
@@ -291,7 +303,10 @@ fn write_worker_config(
     }
     std::os::unix::fs::symlink(&available, &enabled)?;
 
-    echo(&format!("-----> Created worker config: {}", filename), "green");
+    echo(
+        &format!("-----> Created worker config: {}", filename),
+        "green",
+    );
     Ok(())
 }
 
@@ -406,7 +421,10 @@ mod tests {
         create_workers_generic("myapp", &app_path, &env, &paths, None)?;
 
         let symlink_path = paths.workers_enabled.join("myapp-worker-1.toml");
-        assert!(symlink_path.exists(), "symlink in workers_enabled should exist");
+        assert!(
+            symlink_path.exists(),
+            "symlink in workers_enabled should exist"
+        );
         Ok(())
     }
 
@@ -450,7 +468,10 @@ mod tests {
         env.insert("RIKU_AUTO_RESTART".to_string(), "false".to_string());
         create_workers_generic("myapp", &app_path, &env, &paths, None)?;
 
-        assert!(existing.exists(), "existing config should be preserved when RIKU_AUTO_RESTART=false");
+        assert!(
+            existing.exists(),
+            "existing config should be preserved when RIKU_AUTO_RESTART=false"
+        );
         Ok(())
     }
 }

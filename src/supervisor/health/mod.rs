@@ -20,7 +20,9 @@ use std::thread;
 use std::time::{Duration, SystemTime};
 use threadpool::ThreadPool;
 
-use responses::{send_404_response, send_app_metrics_response, send_health_response, send_metrics_response};
+use responses::{
+    send_404_response, send_app_metrics_response, send_health_response, send_metrics_response,
+};
 
 /// Start the health check HTTP server on the specified port.
 ///
@@ -131,4 +133,3 @@ fn handle_request(
 
     Ok(())
 }
-

@@ -146,7 +146,10 @@ fn test_metrics_app_specific_found() {
     // Should not include otherapp in the body
     let body_start = response.find("\r\n\r\n").unwrap_or(0) + 4;
     let body = &response[body_start..];
-    assert!(!body.contains("otherapp"), "Should only return myapp, not otherapp");
+    assert!(
+        !body.contains("otherapp"),
+        "Should only return myapp, not otherapp"
+    );
 
     running.store(false, Ordering::Relaxed);
 }

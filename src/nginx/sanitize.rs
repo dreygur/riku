@@ -56,9 +56,7 @@ mod tests {
 
     #[test]
     fn test_sanitize_nginx_value_rejects_newlines() {
-        assert!(
-            sanitize_nginx_value("NGINX_SERVER_NAME", "example.com\nproxy_pass evil").is_err()
-        );
+        assert!(sanitize_nginx_value("NGINX_SERVER_NAME", "example.com\nproxy_pass evil").is_err());
     }
 
     #[test]

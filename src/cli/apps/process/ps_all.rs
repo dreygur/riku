@@ -165,7 +165,10 @@ pub(super) fn collect_worker_configs(paths: &RikuPaths, app: &str) -> Vec<std::p
     let mut configs: Vec<_> = match glob::glob(toml_pattern.to_str().unwrap_or("")) {
         Ok(g) => g.filter_map(|r| r.ok()).collect(),
         Err(e) => {
-            display::warn(&format!("Warning: glob failed for toml worker configs: {}", e));
+            display::warn(&format!(
+                "Warning: glob failed for toml worker configs: {}",
+                e
+            ));
             Vec::new()
         }
     };
@@ -173,7 +176,10 @@ pub(super) fn collect_worker_configs(paths: &RikuPaths, app: &str) -> Vec<std::p
     let ini_configs: Vec<_> = match glob::glob(ini_pattern.to_str().unwrap_or("")) {
         Ok(g) => g.filter_map(|r| r.ok()).collect(),
         Err(e) => {
-            display::warn(&format!("Warning: glob failed for ini worker configs: {}", e));
+            display::warn(&format!(
+                "Warning: glob failed for ini worker configs: {}",
+                e
+            ));
             Vec::new()
         }
     };

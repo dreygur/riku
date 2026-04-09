@@ -14,7 +14,10 @@ pub fn cmd_config_show(paths: &RikuPaths, app: &str) -> Result<()> {
         let content = fs::read_to_string(&config_file)?;
         display::note(content.trim());
     } else {
-        display::warn(&format!("Warning: app '{}' not deployed, no config found.", app));
+        display::warn(&format!(
+            "Warning: app '{}' not deployed, no config found.",
+            app
+        ));
     }
     Ok(())
 }
@@ -89,7 +92,10 @@ pub fn cmd_config_live(paths: &RikuPaths, app: &str) -> Result<()> {
         let content = fs::read_to_string(&live_config)?;
         display::note(content.trim());
     } else {
-        display::warn(&format!("Warning: app '{}' not deployed, no config found.", app));
+        display::warn(&format!(
+            "Warning: app '{}' not deployed, no config found.",
+            app
+        ));
     }
     Ok(())
 }

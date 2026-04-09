@@ -26,10 +26,8 @@ mod tests {
 
     /// Build a `RikuPaths` rooted inside `tmp` and create all required directories.
     fn make_paths(tmp: &TempDir) -> riku::config::RikuPaths {
-        let paths = riku::config::RikuPaths::from_dirs(
-            tmp.path().join(".riku"),
-            &tmp.path().to_path_buf(),
-        );
+        let paths =
+            riku::config::RikuPaths::from_dirs(tmp.path().join(".riku"), &tmp.path().to_path_buf());
         for dir in &[
             &paths.app_root,
             &paths.env_root,
@@ -53,9 +51,7 @@ mod tests {
     /// Returns `(bare_tmp, work_tmp, head_sha)`.
     /// - The bare repo lives at `bare_tmp.path()`.
     /// - The working tree lives at `work_tmp.path()`.
-    fn make_git_repo_with_files(
-        files: &[(&str, &str)],
-    ) -> (TempDir, TempDir, String) {
+    fn make_git_repo_with_files(files: &[(&str, &str)]) -> (TempDir, TempDir, String) {
         let bare = TempDir::new().expect("bare TempDir");
         let work = TempDir::new().expect("work TempDir");
 
@@ -67,7 +63,11 @@ mod tests {
 
         // Clone into work tree
         Command::new("git")
-            .args(["clone", bare.path().to_str().unwrap(), work.path().to_str().unwrap()])
+            .args([
+                "clone",
+                bare.path().to_str().unwrap(),
+                work.path().to_str().unwrap(),
+            ])
             .output()
             .expect("git clone");
 
@@ -94,7 +94,13 @@ mod tests {
             .output()
             .expect("git commit");
         Command::new("git")
-            .args(["-C", work.path().to_str().unwrap(), "push", "origin", "HEAD"])
+            .args([
+                "-C",
+                work.path().to_str().unwrap(),
+                "push",
+                "origin",
+                "HEAD",
+            ])
             .output()
             .expect("git push");
 
@@ -172,8 +178,7 @@ esac
         );
         let dest = paths.plugin_root.join(name);
         fs::write(&dest, script).expect("write mock plugin");
-        fs::set_permissions(&dest, fs::Permissions::from_mode(0o755))
-            .expect("chmod mock plugin");
+        fs::set_permissions(&dest, fs::Permissions::from_mode(0o755)).expect("chmod mock plugin");
     }
 
     /// Install a mock plugin that accepts every app unconditionally.
@@ -199,10 +204,7 @@ esac
         let app = "nodeapp";
         let files = &[
             ("Procfile", "web: node server.js\nworker: node worker.js\n"),
-            (
-                "package.json",
-                r#"{"name":"testapp","version":"1.0.0"}"#,
-            ),
+            ("package.json", r#"{"name":"testapp","version":"1.0.0"}"#),
             ("server.js", "// server"),
         ];
 
@@ -355,7 +357,11 @@ esac
         fs::write(&nginx_conf, &config_content)?;
 
         // Assert the file exists at the correct path
-        assert!(nginx_conf.exists(), "nginx config must be created at nginx_root/{}.conf", app);
+        assert!(
+            nginx_conf.exists(),
+            "nginx config must be created at nginx_root/{}.conf",
+            app
+        );
 
         let content = fs::read_to_string(&nginx_conf)?;
         assert!(
@@ -378,7 +384,10 @@ esac
         let deltas: HashMap<String, i64> = HashMap::new();
         let result = riku::deploy::do_deploy("no-such-app", &paths, &deltas, None);
 
-        assert!(result.is_err(), "deploy of non-existent app must return Err");
+        assert!(
+            result.is_err(),
+            "deploy of non-existent app must return Err"
+        );
         let msg = format!("{}", result.unwrap_err());
         assert!(
             msg.contains("no-such-app") || msg.contains("not found"),
@@ -437,7 +446,11 @@ esac
             "package.json",
             &[("package.json", r#"{"name":"test"}"#)],
         );
-        assert_eq!(result.as_deref(), Some("node"), "node plugin must match package.json");
+        assert_eq!(
+            result.as_deref(),
+            Some("node"),
+            "node plugin must match package.json"
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -451,7 +464,11 @@ esac
             "requirements.txt",
             &[("requirements.txt", "flask\n")],
         );
-        assert_eq!(result.as_deref(), Some("python"), "python plugin must match requirements.txt");
+        assert_eq!(
+            result.as_deref(),
+            Some("python"),
+            "python plugin must match requirements.txt"
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -535,7 +552,10 @@ esac
         let app = "envapp";
         let env_dir = paths.env_root.join(app);
         fs::create_dir_all(&env_dir)?;
-        fs::write(env_dir.join("ENV"), "PORT=5000\nDATABASE_URL=sqlite:///app.db\n")?;
+        fs::write(
+            env_dir.join("ENV"),
+            "PORT=5000\nDATABASE_URL=sqlite:///app.db\n",
+        )?;
 
         let mut env: HashMap<String, String> = HashMap::new();
         let env_file = env_dir.join("ENV");
@@ -795,15 +815,24 @@ esac
         riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         assert!(
-            paths.workers_available.join("multiproc-web-1.toml").exists(),
+            paths
+                .workers_available
+                .join("multiproc-web-1.toml")
+                .exists(),
             "web config must exist"
         );
         assert!(
-            paths.workers_available.join("multiproc-worker-1.toml").exists(),
+            paths
+                .workers_available
+                .join("multiproc-worker-1.toml")
+                .exists(),
             "worker config must exist"
         );
         assert!(
-            paths.workers_available.join("multiproc-scheduler-1.toml").exists(),
+            paths
+                .workers_available
+                .join("multiproc-scheduler-1.toml")
+                .exists(),
             "scheduler config must exist"
         );
         Ok(())
@@ -863,9 +892,7 @@ esac
         riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         // Only web config should exist
-        let configs: Vec<_> = fs::read_dir(&paths.workers_available)?
-            .flatten()
-            .collect();
+        let configs: Vec<_> = fs::read_dir(&paths.workers_available)?.flatten().collect();
         assert_eq!(configs.len(), 1, "only one worker config should be created");
         assert!(
             paths
@@ -915,14 +942,17 @@ esac
         // Deliberately no Procfile written
 
         let env = HashMap::new();
-        let result = riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None);
+        let result =
+            riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None);
         assert!(result.is_ok(), "missing Procfile must not return an error");
 
         // No configs should have been created
-        let configs: Vec<_> = fs::read_dir(&paths.workers_available)?
-            .flatten()
-            .collect();
-        assert_eq!(configs.len(), 0, "no configs should be created without a Procfile");
+        let configs: Vec<_> = fs::read_dir(&paths.workers_available)?.flatten().collect();
+        assert_eq!(
+            configs.len(),
+            0,
+            "no configs should be created without a Procfile"
+        );
         Ok(())
     }
 
@@ -947,7 +977,10 @@ esac
         riku::util::parse_settings(&env_dir.join("ENV"), &mut env)?;
 
         assert_eq!(env.get("KEY"), Some(&"value".to_string()));
-        assert!(!env.contains_key("# This is a comment"), "comment must not be parsed as key");
+        assert!(
+            !env.contains_key("# This is a comment"),
+            "comment must not be parsed as key"
+        );
         Ok(())
     }
 
@@ -1023,7 +1056,10 @@ esac
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
         let deploy_log = paths.deploy_log_file(app);
-        assert!(deploy_log.exists(), "deploy.log must be created by do_deploy");
+        assert!(
+            deploy_log.exists(),
+            "deploy.log must be created by do_deploy"
+        );
 
         let log_content = fs::read_to_string(&deploy_log)?;
         assert!(
@@ -1056,7 +1092,10 @@ esac
 
         // LIVE_ENV must be written
         let live_env = paths.env_root.join(app).join("LIVE_ENV");
-        assert!(live_env.exists(), "LIVE_ENV must be created after full deploy");
+        assert!(
+            live_env.exists(),
+            "LIVE_ENV must be created after full deploy"
+        );
 
         let content = fs::read_to_string(&live_env)?;
         assert!(
@@ -1100,7 +1139,10 @@ esac
             "web-2 must exist (scaling=2)"
         );
         assert!(
-            paths.workers_available.join("scaleapp-worker-1.toml").exists(),
+            paths
+                .workers_available
+                .join("scaleapp-worker-1.toml")
+                .exists(),
             "worker-1 must exist"
         );
 
@@ -1159,7 +1201,10 @@ esac
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
         assert!(
-            paths.workers_available.join("pyworkers-web-1.toml").exists(),
+            paths
+                .workers_available
+                .join("pyworkers-web-1.toml")
+                .exists(),
             "web worker config must exist"
         );
         assert!(
@@ -1205,7 +1250,10 @@ esac
 
         let app = "commentproc";
         let files = &[
-            ("Procfile", "# web: node server.js\n# This is all commented out\n"),
+            (
+                "Procfile",
+                "# web: node server.js\n# This is all commented out\n",
+            ),
             ("package.json", r#"{"name":"commentproc"}"#),
         ];
 
@@ -1274,10 +1322,22 @@ esac
             .args(["-C", work.path().to_str().unwrap(), "add", "."])
             .output()?;
         Command::new("git")
-            .args(["-C", work.path().to_str().unwrap(), "commit", "-m", "update"])
+            .args([
+                "-C",
+                work.path().to_str().unwrap(),
+                "commit",
+                "-m",
+                "update",
+            ])
             .output()?;
         Command::new("git")
-            .args(["-C", work.path().to_str().unwrap(), "push", "origin", "HEAD"])
+            .args([
+                "-C",
+                work.path().to_str().unwrap(),
+                "push",
+                "origin",
+                "HEAD",
+            ])
             .output()?;
 
         let new_sha = String::from_utf8(

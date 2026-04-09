@@ -116,7 +116,11 @@ pub fn write_live_env(app: &str, paths: &RikuPaths, env: &HashMap<String, String
 ///
 /// This is the service-layer entry point for config changes. CLI commands must
 /// call this instead of wiring `write_config` + `do_deploy` themselves.
-pub fn update_env_and_redeploy(app: &str, paths: &crate::config::RikuPaths, env: &HashMap<String, String>) -> Result<()> {
+pub fn update_env_and_redeploy(
+    app: &str,
+    paths: &crate::config::RikuPaths,
+    env: &HashMap<String, String>,
+) -> Result<()> {
     let config_file = paths.env_root.join(app).join("ENV");
     crate::util::write_config(&config_file, env, "=")?;
     let deltas = HashMap::new();
@@ -128,7 +132,11 @@ pub fn update_env_and_redeploy(app: &str, paths: &crate::config::RikuPaths, env:
 /// This must happen before a WSGI nginx config is generated so that the
 /// config template sees `NGINX_WSGI` and `UWSGI_SOCKET`.
 #[allow(dead_code)]
-pub fn setup_wsgi_env(app: &str, paths: &RikuPaths, env: &mut HashMap<String, String>) -> Result<()> {
+pub fn setup_wsgi_env(
+    app: &str,
+    paths: &RikuPaths,
+    env: &mut HashMap<String, String>,
+) -> Result<()> {
     let socket_path = paths.nginx_root.join(format!("{}.sock", app));
     env.insert("NGINX_WSGI".to_string(), "true".to_string());
     env.insert(
@@ -162,10 +170,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn make_paths(tmp: &TempDir) -> RikuPaths {
-        crate::config::RikuPaths::from_dirs(
-            tmp.path().join(".riku"),
-            &tmp.path().to_path_buf(),
-        )
+        crate::config::RikuPaths::from_dirs(tmp.path().join(".riku"), &tmp.path().to_path_buf())
     }
 
     fn setup_env_dir(paths: &RikuPaths, app: &str) {
@@ -210,7 +215,10 @@ mod tests {
         setup_env_dir(&paths, "myapp");
 
         let mut env = HashMap::new();
-        env.insert("DATABASE_URL".to_string(), "postgres://localhost/db".to_string());
+        env.insert(
+            "DATABASE_URL".to_string(),
+            "postgres://localhost/db".to_string(),
+        );
         write_live_env("myapp", &paths, &env)?;
 
         let content = fs::read_to_string(paths.env_root.join("myapp").join("LIVE_ENV"))?;
@@ -293,7 +301,10 @@ mod tests {
         setup_wsgi_env("wsgiapp", &paths, &mut env)?;
 
         let socket = env.get("UWSGI_SOCKET").expect("UWSGI_SOCKET must be set");
-        assert!(socket.contains("wsgiapp.sock"), "Socket path should contain app name");
+        assert!(
+            socket.contains("wsgiapp.sock"),
+            "Socket path should contain app name"
+        );
         Ok(())
     }
 
@@ -307,7 +318,10 @@ mod tests {
         setup_wsgi_env("wsgiapp", &paths, &mut env)?;
 
         let socket = env.get("SOCKET").expect("SOCKET must be set");
-        assert!(socket.starts_with("unix://"), "SOCKET should have unix:// prefix");
+        assert!(
+            socket.starts_with("unix://"),
+            "SOCKET should have unix:// prefix"
+        );
         Ok(())
     }
 

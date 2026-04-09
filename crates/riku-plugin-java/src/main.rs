@@ -32,7 +32,11 @@ fn build(app_path: &Path) -> Result<()> {
     if app_path.join("pom.xml").exists() {
         run_build(app_path, "mvn", &["package", "-DskipTests", "--batch-mode"])
     } else if app_path.join("build.gradle").exists() {
-        let gradle = if app_path.join("gradlew").exists() { "./gradlew" } else { "gradle" };
+        let gradle = if app_path.join("gradlew").exists() {
+            "./gradlew"
+        } else {
+            "gradle"
+        };
         run_build(app_path, gradle, &["build", "-x", "test"])
     } else {
         bail!("No pom.xml or build.gradle found");

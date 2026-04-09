@@ -62,5 +62,4 @@ impl ProcessManager {
     pub fn stats_mut(&mut self) -> &mut StatsManager {
         &mut self.stats
     }
-
 }

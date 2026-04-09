@@ -452,9 +452,9 @@ echo "Plugin: $plugin_name v$version"
     fn test_hook_plugin_name_conventions() {
         // Verify the hook→plugin-name mapping matches the documented convention
         let cases = [
-            ("pre-deploy",  "riku-pre-deploy"),
-            ("pre-build",   "riku-pre-build"),
-            ("post-build",  "riku-post-build"),
+            ("pre-deploy", "riku-pre-deploy"),
+            ("pre-build", "riku-pre-build"),
+            ("post-build", "riku-post-build"),
             ("post-deploy", "riku-post-deploy"),
         ];
         for (hook_name, plugin_name) in &cases {
@@ -462,7 +462,9 @@ echo "Plugin: $plugin_name v$version"
             assert_eq!(
                 format!("riku-{}", hook_name),
                 *plugin_name,
-                "Hook '{}' should map to plugin '{}'", hook_name, plugin_name
+                "Hook '{}' should map to plugin '{}'",
+                hook_name,
+                plugin_name
             );
         }
     }
@@ -485,13 +487,19 @@ echo "Plugin: $plugin_name v$version"
             .env("RIKU_APP", "testapp")
             .env("RIKU_HOOK", "pre-deploy")
             .env("RIKU_APP_PATH", "/tmp/testapp")
-            .env("RIKU_ENV_PATH", riku_root.join("envs/testapp").to_str().unwrap())
+            .env(
+                "RIKU_ENV_PATH",
+                riku_root.join("envs/testapp").to_str().unwrap(),
+            )
             .env("RIKU_ROOT", riku_root.to_str().unwrap())
             .status()?;
 
         assert!(status.success(), "Pre-deploy plugin should exit 0");
         let content = fs::read_to_string(&output_file)?;
-        assert!(content.contains("testapp"), "Plugin should have RIKU_APP set");
+        assert!(
+            content.contains("testapp"),
+            "Plugin should have RIKU_APP set"
+        );
 
         Ok(())
     }
@@ -543,8 +551,14 @@ echo "Plugin: $plugin_name v$version"
 
         let content = fs::read_to_string(&output_file)?;
         assert!(content.contains("RIKU_APP=myapp"), "Missing RIKU_APP");
-        assert!(content.contains("RIKU_HOOK=post-deploy"), "Missing RIKU_HOOK");
-        assert!(content.contains("RIKU_RUNTIME=Python"), "Missing RIKU_RUNTIME");
+        assert!(
+            content.contains("RIKU_HOOK=post-deploy"),
+            "Missing RIKU_HOOK"
+        );
+        assert!(
+            content.contains("RIKU_RUNTIME=Python"),
+            "Missing RIKU_RUNTIME"
+        );
 
         Ok(())
     }
@@ -557,17 +571,11 @@ echo "Plugin: $plugin_name v$version"
         let marker = riku_root.join("build-sequence.txt");
 
         // pre-build writes step 1
-        let pre_script = format!(
-            "#!/bin/sh\necho 'pre-build' >> '{}'\n",
-            marker.display()
-        );
+        let pre_script = format!("#!/bin/sh\necho 'pre-build' >> '{}'\n", marker.display());
         create_plugin(&plugins_dir, "riku-pre-build", &pre_script)?;
 
         // post-build writes step 2
-        let post_script = format!(
-            "#!/bin/sh\necho 'post-build' >> '{}'\n",
-            marker.display()
-        );
+        let post_script = format!("#!/bin/sh\necho 'post-build' >> '{}'\n", marker.display());
         create_plugin(&plugins_dir, "riku-post-build", &post_script)?;
 
         // Run in order

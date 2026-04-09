@@ -133,7 +133,10 @@ mod tests {
         let workers = make_workers(&["web"]);
 
         let counts = apply_scaling_deltas("myapp", &paths, &deltas, &workers)?;
-        assert_eq!(counts["web"], 3, "baseline 1 (or_insert default) + delta 2 = 3");
+        assert_eq!(
+            counts["web"], 3,
+            "baseline 1 (or_insert default) + delta 2 = 3"
+        );
 
         let scaling_path = paths.env_root.join("myapp").join("SCALING");
         assert!(scaling_path.exists(), "SCALING file should be written");
@@ -193,7 +196,10 @@ mod tests {
         let workers = make_workers(&["web"]);
 
         let counts = apply_scaling_deltas("myapp", &paths, &deltas, &workers)?;
-        assert_eq!(counts["web"], 0, "Should saturate at 0 (no negative workers)");
+        assert_eq!(
+            counts["web"], 0,
+            "Should saturate at 0 (no negative workers)"
+        );
         Ok(())
     }
 
@@ -253,7 +259,10 @@ mod tests {
         let workers = make_workers(&["web"]);
         apply_scaling_deltas("myapp", &paths, &deltas, &workers)?;
 
-        assert!(existing.exists(), "Scaling up should never remove existing configs");
+        assert!(
+            existing.exists(),
+            "Scaling up should never remove existing configs"
+        );
         Ok(())
     }
 }

@@ -107,17 +107,33 @@ mod tests {
 
         // clone into work tree
         Command::new("git")
-            .args(["clone", bare.path().to_str().unwrap(), work.path().to_str().unwrap()])
+            .args([
+                "clone",
+                bare.path().to_str().unwrap(),
+                work.path().to_str().unwrap(),
+            ])
             .output()
             .unwrap();
 
         // configure identity so commits work in CI
         Command::new("git")
-            .args(["-C", work.path().to_str().unwrap(), "config", "user.email", "test@example.com"])
+            .args([
+                "-C",
+                work.path().to_str().unwrap(),
+                "config",
+                "user.email",
+                "test@example.com",
+            ])
             .output()
             .unwrap();
         Command::new("git")
-            .args(["-C", work.path().to_str().unwrap(), "config", "user.name", "Test"])
+            .args([
+                "-C",
+                work.path().to_str().unwrap(),
+                "config",
+                "user.name",
+                "Test",
+            ])
             .output()
             .unwrap();
 
@@ -132,7 +148,13 @@ mod tests {
             .output()
             .unwrap();
         Command::new("git")
-            .args(["-C", work.path().to_str().unwrap(), "push", "origin", "HEAD"])
+            .args([
+                "-C",
+                work.path().to_str().unwrap(),
+                "push",
+                "origin",
+                "HEAD",
+            ])
             .output()
             .unwrap();
 
@@ -141,7 +163,10 @@ mod tests {
             .args(["-C", work.path().to_str().unwrap(), "rev-parse", "HEAD"])
             .output()
             .unwrap();
-        let sha = String::from_utf8(sha_out.stdout).unwrap().trim().to_string();
+        let sha = String::from_utf8(sha_out.stdout)
+            .unwrap()
+            .trim()
+            .to_string();
 
         (bare, work, sha)
     }
@@ -182,7 +207,10 @@ mod tests {
     #[test]
     fn test_sync_app_repo_with_invalid_newrev_returns_error() {
         let (_bare, work, _sha) = make_git_repo();
-        let result = sync_app_repo(work.path(), Some("0000000000000000000000000000000000000000"));
+        let result = sync_app_repo(
+            work.path(),
+            Some("0000000000000000000000000000000000000000"),
+        );
         assert!(result.is_err());
     }
 

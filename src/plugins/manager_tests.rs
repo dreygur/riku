@@ -84,7 +84,11 @@ fn test_pre_deploy_hook_failure_aborts() {
     let paths = setup_paths(&temp);
 
     let plugin_path = paths.plugin_root.join("riku-pre-deploy");
-    fs::write(&plugin_path, "#!/bin/sh\necho 'validation failed' >&2\nexit 1\n").unwrap();
+    fs::write(
+        &plugin_path,
+        "#!/bin/sh\necho 'validation failed' >&2\nexit 1\n",
+    )
+    .unwrap();
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -101,7 +105,10 @@ fn test_pre_deploy_hook_failure_aborts() {
     let ctx = make_ctx("myapp", &hook, &app_path, &env_path, &riku_root, &app_env);
     let result = manager.run_hook(&ctx);
     assert!(result.is_err(), "pre-deploy failure should abort deploy");
-    assert!(result.unwrap_err().to_string().contains("exited with code 1"));
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("exited with code 1"));
 }
 
 #[test]
@@ -126,7 +133,11 @@ fn test_post_deploy_hook_failure_is_warning_not_error() {
 
     let ctx = make_ctx("myapp", &hook, &app_path, &env_path, &riku_root, &app_env);
     let result = manager.run_hook(&ctx);
-    assert!(result.is_ok(), "post-deploy failure should not abort: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "post-deploy failure should not abort: {:?}",
+        result
+    );
 }
 
 #[test]
@@ -158,8 +169,14 @@ fn test_hook_receives_riku_env_vars() {
     manager.run_hook(&ctx).unwrap();
 
     let output = fs::read_to_string(&output_file).unwrap();
-    assert!(output.contains("app=testapp"), "RIKU_APP not passed to plugin");
-    assert!(output.contains("hook=post-build"), "RIKU_HOOK not passed to plugin");
+    assert!(
+        output.contains("app=testapp"),
+        "RIKU_APP not passed to plugin"
+    );
+    assert!(
+        output.contains("hook=post-build"),
+        "RIKU_HOOK not passed to plugin"
+    );
 }
 
 #[test]
@@ -217,6 +234,10 @@ fn test_plugin_stdout_stderr_captured() {
 
     let ctx = make_ctx("myapp", &hook, &app_path, &env_path, &riku_root, &app_env);
     let result = manager.run_hook(&ctx);
-    assert!(result.is_ok(), "Plugin with stdout/stderr should not fail: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Plugin with stdout/stderr should not fail: {:?}",
+        result
+    );
     assert!(result.unwrap(), "Should return true on success");
 }

@@ -158,7 +158,10 @@ fn plugin_accepts(
     let status = child.wait()?;
 
     if timed_out {
-        tracing::warn!(plugin = plugin.name.as_str(), "'detect' timed out — skipping");
+        tracing::warn!(
+            plugin = plugin.name.as_str(),
+            "'detect' timed out — skipping"
+        );
         return Ok(false);
     }
 
@@ -197,7 +200,10 @@ pub fn build(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result<()> {
 /// Run `plugin env` and parse stdout as `KEY=VALUE` lines.
 /// Empty lines and lines beginning with `#` are ignored.
 /// A non-zero exit is logged as a warning but does not abort.
-pub fn get_env(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result<HashMap<String, String>> {
+pub fn get_env(
+    plugin: &RuntimePlugin,
+    ctx: &RuntimeContext<'_>,
+) -> Result<HashMap<String, String>> {
     let output = Command::new(&plugin.path)
         .arg("env")
         .envs(ctx.build_env())
@@ -215,10 +221,7 @@ pub fn get_env(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result<HashM
 }
 
 /// Run `plugin start` and return the first non-empty trimmed line, or `None`.
-pub fn get_start_cmd(
-    plugin: &RuntimePlugin,
-    ctx: &RuntimeContext<'_>,
-) -> Result<Option<String>> {
+pub fn get_start_cmd(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result<Option<String>> {
     let output = Command::new(&plugin.path)
         .arg("start")
         .envs(ctx.build_env())
@@ -383,7 +386,10 @@ mod tests {
     fn parse_env_lines_handles_values_with_equals() {
         let raw = b"URL=http://example.com?foo=bar\nKEY=val\n";
         let env = parse_env_lines(raw).unwrap();
-        assert_eq!(env.get("URL").map(String::as_str), Some("http://example.com?foo=bar"));
+        assert_eq!(
+            env.get("URL").map(String::as_str),
+            Some("http://example.com?foo=bar")
+        );
         assert_eq!(env.get("KEY").map(String::as_str), Some("val"));
     }
 }

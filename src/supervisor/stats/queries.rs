@@ -6,8 +6,8 @@ use std::collections::HashMap;
 
 use chrono::Utc;
 
-use super::types::{AppStats, HealthStatus, ProcessStatus};
 use super::manager::StatsManager;
+use super::types::{AppStats, HealthStatus, ProcessStatus};
 
 impl StatsManager {
     /// Get stats for a specific process.

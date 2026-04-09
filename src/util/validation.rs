@@ -14,7 +14,6 @@ use std::process;
 
 use super::display::echo;
 
-
 /// Verify that a resolved (canonicalized) path stays within an expected root directory.
 /// Returns Ok(()) if the path is within bounds, Err otherwise.
 ///

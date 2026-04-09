@@ -64,7 +64,14 @@ APP_NAME = "{}"
 working_dir = "/tmp/test-app"
 log_file = "/tmp/test-app/{}-{}.log"
 "#,
-            app, kind, command, ordinal, 5000 + ordinal, app, app, kind
+            app,
+            kind,
+            command,
+            ordinal,
+            5000 + ordinal,
+            app,
+            app,
+            kind
         );
 
         fs::write(&config_file, content)?;
@@ -220,10 +227,11 @@ log_file = "/tmp/test.log"
 
         // Invalid (non-numeric) value — parsing should fail
         env::set_var("RIKU_MAX_MEMORY_MB", "not_a_number");
-        let result: std::result::Result<u64, _> = env::var("RIKU_MAX_MEMORY_MB")
-            .unwrap()
-            .parse();
-        assert!(result.is_err(), "non-numeric limit value should fail to parse");
+        let result: std::result::Result<u64, _> = env::var("RIKU_MAX_MEMORY_MB").unwrap().parse();
+        assert!(
+            result.is_err(),
+            "non-numeric limit value should fail to parse"
+        );
 
         env::remove_var("RIKU_MAX_MEMORY_MB");
         env::remove_var("RIKU_MAX_OPEN_FILES");
@@ -279,9 +287,9 @@ log_file = "/tmp/test.log"
             let content = fs::read_to_string(&stats_file)?;
             let parsed: serde_json::Value = serde_json::from_str(&content)?;
             assert_eq!(
-                parsed[0]["processes"][0]["health_check_status"],
-                *status,
-                "Health status mismatch for transition to {}", status
+                parsed[0]["processes"][0]["health_check_status"], *status,
+                "Health status mismatch for transition to {}",
+                status
             );
         }
 
@@ -371,7 +379,11 @@ log_file = "/tmp/test.log"
             if entry.file_name().to_string_lossy().starts_with("multiapp") {
                 let content = fs::read_to_string(entry.path())?;
                 let parsed = toml::from_str::<toml::Value>(&content);
-                assert!(parsed.is_ok(), "Config {:?} should parse as valid TOML", entry.file_name());
+                assert!(
+                    parsed.is_ok(),
+                    "Config {:?} should parse as valid TOML",
+                    entry.file_name()
+                );
             }
         }
 
@@ -411,12 +423,18 @@ log_file = "/tmp/test.log"
                     // Each thread uses its own unique tmp file to avoid races
                     let tmp = path.with_file_name(format!("stats.{}.tmp", i));
                     if let Err(e) = fs::write(&tmp, content.to_string()) {
-                        errors.lock().unwrap().push(format!("thread {}: write error: {}", i, e));
+                        errors
+                            .lock()
+                            .unwrap()
+                            .push(format!("thread {}: write error: {}", i, e));
                         return;
                     }
                     // Atomic rename — last writer wins, but no corruption
                     if let Err(e) = fs::rename(&tmp, &*path) {
-                        errors.lock().unwrap().push(format!("thread {}: rename error: {}", i, e));
+                        errors
+                            .lock()
+                            .unwrap()
+                            .push(format!("thread {}: rename error: {}", i, e));
                     }
                 })
             })
@@ -433,7 +451,10 @@ log_file = "/tmp/test.log"
         // Final file is valid JSON
         let content = fs::read_to_string(&stats_path)?;
         let parsed: std::result::Result<serde_json::Value, _> = serde_json::from_str(&content);
-        assert!(parsed.is_ok(), "Final stats file should be valid JSON after concurrent writes");
+        assert!(
+            parsed.is_ok(),
+            "Final stats file should be valid JSON after concurrent writes"
+        );
 
         Ok(())
     }
@@ -596,8 +617,7 @@ log_file = "/tmp/test.log"
         let long_args = "A".repeat(4096);
         let long_cmd = format!("echo {}", long_args);
 
-        let config_path =
-            create_worker_config(&workers_enabled, "longcmd", "web", 1, &long_cmd)?;
+        let config_path = create_worker_config(&workers_enabled, "longcmd", "web", 1, &long_cmd)?;
 
         // Config should be written and parseable
         let content = fs::read_to_string(&config_path)?;
@@ -625,7 +645,11 @@ log_file = "/tmp/test.log"
         for (var, val, expected) in &cases {
             env::set_var(var, val);
             let parsed: u64 = env::var(var).unwrap().parse().unwrap();
-            assert_eq!(parsed, *expected, "Env var {} should parse to {}", var, expected);
+            assert_eq!(
+                parsed, *expected,
+                "Env var {} should parse to {}",
+                var, expected
+            );
             env::remove_var(var);
         }
 

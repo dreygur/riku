@@ -14,8 +14,8 @@ pub mod display;
 pub mod env;
 pub mod fs;
 pub mod nginx_validation;
-pub mod procfile;
 pub mod process_util;
+pub mod procfile;
 pub mod ssh_keys;
 pub mod validation;
 
@@ -24,7 +24,7 @@ pub use display::{echo, print_table, print_table_with_title};
 pub use env::{parse_settings, write_config};
 pub use fs::{copy_dir_recursive, count_files};
 pub use nginx_validation::{print_env_warnings, validate_env_vars};
-pub use procfile::parse_procfile;
 pub use process_util::get_free_port;
+pub use procfile::parse_procfile;
 pub use ssh_keys::setup_authorized_keys;
 pub use validation::{ensure_path_within, exit_if_invalid, validate_app_name};

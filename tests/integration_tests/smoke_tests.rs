@@ -140,8 +140,8 @@ mod binary_tests {
 
 #[cfg(test)]
 mod routing_tests {
-    use riku::cli::{Commands, ConfigCmd};
     use riku::cli::routing::{build_plugin_args, get_plugin_command};
+    use riku::cli::{Commands, ConfigCmd};
 
     // ── get_plugin_command ────────────────────────────────────────────────────
 
@@ -394,7 +394,10 @@ mod hook_cmd_tests {
         let (_root, paths) = make_paths(&temp);
         // No plugins installed — should return Ok (not panic or error).
         let result = riku::cli::hooks::cmd_hook_list(&paths);
-        assert!(result.is_ok(), "cmd_hook_list with empty dir should return Ok");
+        assert!(
+            result.is_ok(),
+            "cmd_hook_list with empty dir should return Ok"
+        );
     }
 
     // cmd_hook_list — populated plugins dir ------------------------------------

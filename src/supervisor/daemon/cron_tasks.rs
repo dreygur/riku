@@ -65,7 +65,8 @@ impl Supervisor {
                     Ok(out) if out.status.success() => {
                         tracing::info!(
                             "Cron job {} for app '{}' completed successfully",
-                            job_id_clone, app_clone
+                            job_id_clone,
+                            app_clone
                         );
                     }
                     Ok(out) => {
@@ -79,7 +80,9 @@ impl Supervisor {
                     Err(e) => {
                         tracing::error!(
                             "Error executing cron job {} for app '{}': {}",
-                            job_id_clone, app_clone, e
+                            job_id_clone,
+                            app_clone,
+                            e
                         );
                     }
                 }
@@ -90,10 +93,7 @@ impl Supervisor {
             if let Some(idx) = job_id.rsplit('-').next() {
                 if let Ok(index) = idx.parse::<usize>() {
                     if let Err(e) = self.cron_scheduler.mark_job_run(&app, index) {
-                        tracing::error!(
-                            "Failed to update next_run for cron job {}: {}",
-                            job_id, e
-                        );
+                        tracing::error!("Failed to update next_run for cron job {}: {}", job_id, e);
                     }
                 }
             }
@@ -104,10 +104,7 @@ impl Supervisor {
 
     /// Return the working directory and environment variables for an app by
     /// reading the first matching worker config file from workers-enabled/.
-    pub(super) fn get_app_context(
-        &self,
-        app: &str,
-    ) -> (Option<String>, HashMap<String, String>) {
+    pub(super) fn get_app_context(&self, app: &str) -> (Option<String>, HashMap<String, String>) {
         let workers_enabled = self.config_dir.clone();
         let mut env_vars: HashMap<String, String> = HashMap::new();
         let mut working_dir: Option<String> = None;
@@ -177,7 +174,9 @@ impl Supervisor {
                             )?;
                             tracing::info!(
                                 "Loaded cron job for app '{}': {} {}",
-                                app, schedule, actual_command
+                                app,
+                                schedule,
+                                actual_command
                             );
                             cron_index += 1;
                         }

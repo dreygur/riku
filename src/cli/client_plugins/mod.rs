@@ -13,9 +13,9 @@ pub use discovery::{client_plugin_exists, list_client_plugins};
 
 use anyhow::{anyhow, Result};
 
+use crate::util::display;
 use discovery::get_client_plugin_path;
 use execute::{execute_plugin, is_executable};
-use crate::util::display;
 
 /// Check for and execute a client plugin if it exists.
 ///

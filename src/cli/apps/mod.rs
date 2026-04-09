@@ -24,13 +24,15 @@ pub mod process;
 pub mod stats;
 
 // Re-export all public functions so callers can use `cli::apps::cmd_*`
-pub use config::{cmd_config_get, cmd_config_live, cmd_config_set, cmd_config_show, cmd_config_unset};
+pub use config::{
+    cmd_config_get, cmd_config_live, cmd_config_set, cmd_config_show, cmd_config_unset,
+};
 pub use control::{cmd_hot_reload, cmd_restart, cmd_run, cmd_stop, cmd_supervisor, cmd_update};
 pub use create::cmd_apps_create;
 pub use deploy::cmd_deploy;
-pub use install_plugins::cmd_install_plugins;
 pub use destroy::cmd_destroy;
 pub use info::cmd_apps_info;
+pub use install_plugins::cmd_install_plugins;
 pub use list::cmd_apps;
 pub use logs::{cmd_deploy_logs, cmd_logs};
 pub use process::{cmd_ps_all, cmd_ps_scale, cmd_ps_show};

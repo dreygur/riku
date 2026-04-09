@@ -108,13 +108,21 @@ pub fn cmd_hot_reload(paths: &RikuPaths, app: &str) -> Result<()> {
             match fs::read_to_string(&entry) {
                 Ok(content) => {
                     if let Err(e) = fs::write(&entry, content) {
-                        display::warn(&format!("Warning: failed to touch {}: {}", entry.display(), e));
+                        display::warn(&format!(
+                            "Warning: failed to touch {}: {}",
+                            entry.display(),
+                            e
+                        ));
                     } else {
                         count += 1;
                     }
                 }
                 Err(e) => {
-                    display::warn(&format!("Warning: failed to read {}: {}", entry.display(), e));
+                    display::warn(&format!(
+                        "Warning: failed to read {}: {}",
+                        entry.display(),
+                        e
+                    ));
                 }
             }
         }

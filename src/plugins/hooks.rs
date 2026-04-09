@@ -161,7 +161,10 @@ mod tests {
         let riku_root = PathBuf::from("/home/deploy/.riku");
 
         let mut app_env = HashMap::new();
-        app_env.insert("DATABASE_URL".to_string(), "postgres://localhost/mydb".to_string());
+        app_env.insert(
+            "DATABASE_URL".to_string(),
+            "postgres://localhost/mydb".to_string(),
+        );
         app_env.insert("SECRET_KEY".to_string(), "abc123".to_string());
 
         let ctx = HookContext {
@@ -205,7 +208,10 @@ mod tests {
         };
 
         let env = ctx.build_env();
-        assert!(!env.contains_key("RIKU_RUNTIME"), "No RIKU_RUNTIME when unknown");
+        assert!(
+            !env.contains_key("RIKU_RUNTIME"),
+            "No RIKU_RUNTIME when unknown"
+        );
     }
 
     #[test]
