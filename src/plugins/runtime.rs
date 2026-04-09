@@ -237,7 +237,7 @@ pub fn get_start_cmd(
 /// Parse `KEY=VALUE` lines from raw bytes. Lines empty or starting with `#` are skipped.
 fn parse_env_lines(raw: &[u8]) -> Result<HashMap<String, String>> {
     let mut env = HashMap::new();
-    for line in BufReader::new(raw).lines().flatten() {
+    for line in BufReader::new(raw).lines().map_while(Result::ok) {
         let line = line.trim().to_string();
         if line.is_empty() || line.starts_with('#') {
             continue;

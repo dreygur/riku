@@ -15,6 +15,12 @@ pub struct StatsManager {
     pub(super) request_counts: HashMap<String, u64>,
 }
 
+impl Default for StatsManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StatsManager {
     /// Create a new stats manager.
     pub fn new() -> Self {

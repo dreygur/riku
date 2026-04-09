@@ -32,7 +32,7 @@ pub mod supervisor_ctl;
 pub mod workers;
 
 pub use supervisor_ctl::spawn_app;
-pub use workers::{create_workers_generic, read_scaling_count};
+pub use workers::create_workers_generic;
 
 /// Deploy an app: sync repo, detect runtime plugin, build, create workers, start processes.
 pub fn do_deploy(

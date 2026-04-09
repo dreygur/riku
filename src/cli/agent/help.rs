@@ -1,4 +1,4 @@
-/// Per-command help text for the agent CLI interface.
+//! Per-command help text for the agent CLI interface.
 
 use anyhow::Result;
 

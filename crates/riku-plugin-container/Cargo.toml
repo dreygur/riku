@@ -3,6 +3,9 @@ name = "riku-plugin-container"
 version = "0.1.0"
 edition = "2021"
 description = "Riku runtime plugin: Container (Docker and Podman)"
+authors = ["Rakibul Yeasin"]
+repository = "https://github.com/dreygur/riku"
+license = "MIT"
 
 [dependencies]
 anyhow = "1"

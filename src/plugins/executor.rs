@@ -36,12 +36,12 @@ pub(crate) fn wait_with_timeout(child: &mut std::process::Child, timeout: Durati
 /// Emit captured stdout as INFO and stderr as WARN via tracing.
 pub(super) fn emit_plugin_output(child: &mut std::process::Child, plugin_name: &str) {
     if let Some(stdout) = child.stdout.take() {
-        for line in BufReader::new(stdout).lines().flatten() {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             tracing::info!(plugin = plugin_name, "{}", line);
         }
     }
     if let Some(stderr) = child.stderr.take() {
-        for line in BufReader::new(stderr).lines().flatten() {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
             tracing::warn!(plugin = plugin_name, "{}", line);
         }
     }

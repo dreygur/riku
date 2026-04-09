@@ -1,8 +1,8 @@
-/// AI Agent Interface
-///
-/// Provides SSH-based access for AI agents (Claude, Cursor, Copilot, etc.)
-/// to perform deployment and management tasks with proper authentication,
-/// authorization, and audit logging.
+//! AI Agent Interface
+//!
+//! Provides SSH-based access for AI agents (Claude, Cursor, Copilot, etc.)
+//! to perform deployment and management tasks with proper authentication,
+//! authorization, and audit logging.
 
 pub mod auth;
 pub mod commands;

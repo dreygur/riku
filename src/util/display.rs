@@ -110,11 +110,6 @@ pub fn error(msg: &str) {
     eprintln!("{} {}", " !    ".red().bold(), msg);
 }
 
-/// `"       msg"` cyan stdout — sub-steps, indented progress.
-pub fn step(msg: &str) {
-    println!("       {}", msg.cyan());
-}
-
 /// `"       msg"` white stdout — data/config display.
 pub fn note(msg: &str) {
     println!("       {}", msg.white());

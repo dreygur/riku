@@ -3,6 +3,8 @@
 //! Typed errors for the three core domains: deployment, plugins, and nginx.
 //! Utility and setup code may still use `anyhow` for one-off failures.
 
+#![allow(dead_code)]
+
 use std::path::PathBuf;
 use thiserror::Error;
 

@@ -3,6 +3,9 @@ name = "riku-plugin-clojure"
 version = "0.1.0"
 edition = "2021"
 description = "Riku runtime plugin: Clojure (Leiningen and CLI tools)"
+authors = ["Rakibul Yeasin"]
+repository = "https://github.com/dreygur/riku"
+license = "MIT"
 
 [dependencies]
 anyhow = "1"

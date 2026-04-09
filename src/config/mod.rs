@@ -60,11 +60,6 @@ pub struct RikuPaths {
 }
 
 impl RikuPaths {
-    /// Returns the deploy log directory for a given app: `{log_root}/{app}/`.
-    pub fn deploy_log_dir(&self, app: &str) -> PathBuf {
-        self.log_root.join(app)
-    }
-
     /// Returns the deploy log file path for a given app: `{log_root}/{app}/deploy.log`.
     pub fn deploy_log_file(&self, app: &str) -> PathBuf {
         self.log_root.join(app).join("deploy.log")

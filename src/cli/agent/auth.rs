@@ -33,7 +33,7 @@ pub fn get_agent_identity() -> Option<String> {
 pub fn get_agent_scope() -> AgentScope {
     // Try environment variable first (set by SSH forced command)
     if let Ok(scope) = std::env::var("RIKU_AGENT_SCOPE") {
-        return AgentScope::from_str(&scope);
+        return AgentScope::parse(&scope);
     }
 
     // Parse authorized_keys to find scope from command restriction
@@ -57,7 +57,7 @@ fn parse_scope_from_authorized_keys() -> Option<AgentScope> {
                     if let Some(scope_start) = line.find("--scope ") {
                         let scope_str = &line[scope_start + 8..];
                         let scope = scope_str.split_whitespace().next()?;
-                        return Some(AgentScope::from_str(scope));
+                        return Some(AgentScope::parse(scope));
                     }
                 }
             }

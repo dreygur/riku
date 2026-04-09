@@ -125,8 +125,9 @@ pub fn update_env_and_redeploy(app: &str, paths: &crate::config::RikuPaths, env:
 
 /// Inject WSGI socket variables into `env` and persist them to the ENV file.
 ///
-/// This must happen before `create_identity_workers` so that the nginx
+/// This must happen before a WSGI nginx config is generated so that the
 /// config template sees `NGINX_WSGI` and `UWSGI_SOCKET`.
+#[allow(dead_code)]
 pub fn setup_wsgi_env(app: &str, paths: &RikuPaths, env: &mut HashMap<String, String>) -> Result<()> {
     let socket_path = paths.nginx_root.join(format!("{}.sock", app));
     env.insert("NGINX_WSGI".to_string(), "true".to_string());

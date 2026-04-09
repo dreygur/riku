@@ -6,7 +6,7 @@
 use anyhow::Result;
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::config::RikuPaths;
 use crate::util::echo;
@@ -186,7 +186,7 @@ fn build_worker_env(
 }
 
 /// Inject uwsgi unix-socket variables into the environment.
-fn configure_wsgi_env(socket_path: &PathBuf, env: &mut HashMap<String, String>) {
+fn configure_wsgi_env(socket_path: &Path, env: &mut HashMap<String, String>) {
     env.insert("SOCKET".to_string(), format!("unix://{}", socket_path.to_string_lossy()));
     env.insert("UWSGI_SOCKET".to_string(), socket_path.to_string_lossy().to_string());
     env.insert("NGINX_WSGI".to_string(), "true".to_string());
@@ -196,7 +196,7 @@ fn configure_wsgi_env(socket_path: &PathBuf, env: &mut HashMap<String, String>) 
 
 /// Allocate a free TCP port and inject nginx port-map variables into the environment.
 fn configure_web_env(
-    socket_path: &PathBuf,
+    socket_path: &Path,
     env: &mut HashMap<String, String>,
     paths: &RikuPaths,
 ) -> Result<()> {
@@ -220,7 +220,7 @@ fn persist_nginx_env(
     app: &str,
     kind: &str,
     _command: &str,
-    socket_path: &PathBuf,
+    socket_path: &Path,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
 ) -> Result<()> {

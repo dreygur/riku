@@ -168,7 +168,7 @@ fn open_at_end(filenames: &[String]) -> Result<(Vec<fs::File>, Vec<u64>)> {
 ///
 /// Returns `true` if at least one file had new content (skip the sleep).
 fn drain_new_lines(
-    files: &mut Vec<fs::File>,
+    files: &mut [fs::File],
     prefixes: &[String],
     col_width: usize,
 ) -> bool {
@@ -186,7 +186,7 @@ fn drain_new_lines(
 }
 
 /// Reopen any file whose inode has changed (log rotation).
-fn reopen_rotated(active: &[String], files: &mut Vec<fs::File>, inodes: &mut Vec<u64>) {
+fn reopen_rotated(active: &[String], files: &mut [fs::File], inodes: &mut [u64]) {
     for (i, path) in active.iter().enumerate() {
         let Ok(meta) = fs::metadata(path) else { continue };
         if meta.ino() == inodes[i] {

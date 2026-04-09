@@ -42,12 +42,6 @@ pub fn check_requirements(binaries: &[&str]) -> bool {
     results.iter().all(|r| r.is_some())
 }
 
-/// Print "-----> {kind} app detected." in green, return true.
-pub fn found_app(kind: &str) -> bool {
-    echo(&format!("-----> {} app detected.", kind), "green");
-    true
-}
-
 /// Validate a Node.js version string.
 #[allow(dead_code)]
 pub fn validate_node_version(version: &str) -> Result<(), String> {
@@ -88,11 +82,6 @@ mod tests {
         assert!(port2.is_ok());
         assert!(port1.unwrap() > 0);
         assert!(port2.unwrap() > 0);
-    }
-
-    #[test]
-    fn test_found_app_returns_true() {
-        assert!(found_app("Python"));
     }
 
     #[test]

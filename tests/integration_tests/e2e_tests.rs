@@ -177,6 +177,7 @@ esac
     }
 
     /// Install a mock plugin that accepts every app unconditionally.
+    #[allow(dead_code)]
     fn install_accept_all_plugin(paths: &riku::config::RikuPaths, name: &str) {
         use std::os::unix::fs::PermissionsExt;
         let script = "#!/usr/bin/env bash\ncase \"${1:-}\" in detect) exit 0 ;; build) exit 0 ;; env) ;; start) ;; *) exit 1 ;; esac\n";

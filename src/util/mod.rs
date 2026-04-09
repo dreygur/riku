@@ -19,20 +19,12 @@ pub mod process_util;
 pub mod ssh_keys;
 pub mod validation;
 
-// Re-export everything so existing call-sites (`crate::util::echo`, etc.) keep working.
-pub use display::{
-    blank, echo, error, format_table, info, kv, note, print_table, print_table_with_title,
-    section, step, success, warn,
-};
-pub use env::{expandvars, parse_settings, write_config};
-pub use ssh_keys::setup_authorized_keys;
-pub use nginx_validation::{print_env_warnings, validate_env_vars, validate_nginx_cache_config};
-pub use procfile::parse_procfile;
-pub use process_util::{
-    check_requirements, command_output, found_app, get_free_port, validate_node_version,
-};
+// Re-export items used via `crate::util::*` call-sites.
+pub use display::{echo, print_table, print_table_with_title};
+pub use env::{parse_settings, write_config};
 pub use fs::{copy_dir_recursive, count_files};
-pub use validation::{
-    ensure_path_within, exit_if_invalid, get_boolean, parse_positive_int, sanitize_app_name,
-    validate_app_name,
-};
+pub use nginx_validation::{print_env_warnings, validate_env_vars};
+pub use procfile::parse_procfile;
+pub use process_util::get_free_port;
+pub use ssh_keys::setup_authorized_keys;
+pub use validation::{ensure_path_within, exit_if_invalid, validate_app_name};

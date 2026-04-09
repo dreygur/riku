@@ -1,8 +1,8 @@
-/// Per-command agent implementations.
-///
-/// Split into:
-/// - `cmd_app` — apps, deploy, destroy
-/// - `cmd_ops` — config, logs, ps, restart, stop, run, stats
+//! Per-command agent implementations.
+//!
+//! Split into:
+//! - `cmd_app` — apps, deploy, destroy
+//! - `cmd_ops` — config, logs, ps, restart, stop, run, stats
 
 pub(super) mod cmd_app;
 pub(super) mod cmd_config;

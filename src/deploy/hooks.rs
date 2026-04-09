@@ -100,7 +100,6 @@ pub fn run_post_deploy(
 mod tests {
     use super::*;
     use std::fs;
-    use std::os::unix::fs::PermissionsExt;
     use tempfile::TempDir;
 
     /// Build a RikuPaths rooted at `tmp`, creating the standard sub-directories.

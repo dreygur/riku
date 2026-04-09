@@ -219,7 +219,6 @@ impl ProcessManager {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::supervisor::process::ProcessManager;
     use crate::supervisor::config::{WorkerConfig, WorkerInfo, WorkerOptions};
     use std::collections::HashMap;

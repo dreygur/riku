@@ -1,4 +1,4 @@
-/// Global git post-receive hook creation.
+//! Global git post-receive hook creation.
 
 use anyhow::Result;
 use std::fs;

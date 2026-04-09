@@ -2,6 +2,7 @@
 
 pub mod agent;
 pub mod apps;
+#[allow(clippy::module_inception)]
 pub mod cli;
 pub mod client_plugins;
 pub mod cmds;

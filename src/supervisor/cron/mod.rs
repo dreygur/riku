@@ -74,6 +74,7 @@ impl CronJob {
 }
 
 /// Cron scheduler that manages and executes scheduled jobs.
+#[derive(Default)]
 pub struct CronScheduler {
     jobs: HashMap<String, CronJob>, // Key: app-name-cron-index
 }
@@ -81,9 +82,7 @@ pub struct CronScheduler {
 impl CronScheduler {
     /// Create a new cron scheduler.
     pub fn new() -> Self {
-        CronScheduler {
-            jobs: HashMap::new(),
-        }
+        Self::default()
     }
 
     /// Add a cron job to the scheduler.

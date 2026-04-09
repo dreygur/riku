@@ -1,4 +1,4 @@
-/// Setup commands: server initialization, binary installation, systemd, and SSH key management.
+//! Setup commands: server initialization, binary installation, systemd, and SSH key management.
 
 pub mod binary;
 pub mod git_hook;

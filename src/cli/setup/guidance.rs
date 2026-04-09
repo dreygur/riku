@@ -1,4 +1,4 @@
-/// Post-init user-facing output: verification summary and first-app guide.
+//! Post-init user-facing output: verification summary and first-app guide.
 
 use std::env;
 use std::path::PathBuf;
