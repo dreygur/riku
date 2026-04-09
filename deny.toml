@@ -1,20 +1,12 @@
-# cargo-deny configuration for supply chain security
-# https://github.com/EmbarkStudios/cargo-deny
+# cargo-deny configuration
+# https://embarkstudios.github.io/cargo-deny/
 
 [advisories]
-# Deny crates with security vulnerabilities
-db-path = "~/.cargo/advisory-db"
-db-urls = ["https://github.com/rustsec/advisory-db"]
-vulnerability = "deny"
-unmaintained = "workspace"
-yanked = "deny"
-ignore = [
-    # Add specific advisories to ignore here if needed (with justification)
-]
+# Deny crates with known security vulnerabilities unless explicitly ignored.
+ignore = []
 
 [licenses]
-# Ensure all dependencies use acceptable licenses
-unlicensed = "deny"
+# Only allow crates with these licenses.
 allow = [
     "MIT",
     "Apache-2.0",
@@ -26,38 +18,17 @@ allow = [
     "CC0-1.0",
     "0BSD",
 ]
-deny = [
-    "GPL-2.0",
-    "GPL-3.0",
-    "AGPL-3.0",
-]
-copyleft = "warn"
-allow-osi-fsf-free = "neither"
-default = "deny"
+# Confidence threshold for license detection (0.0 - 1.0).
 confidence-threshold = 0.8
 
 [bans]
-# Deny multiple versions of the same crate
+# Warn on multiple versions of the same crate.
 multiple-versions = "warn"
 wildcards = "allow"
 highlight = "all"
-# Deny specific crates
-deny = [
-    # Add crates to ban here
-]
-
-# Skip checking these crates for multiple versions
-skip = [
-    # Build dependencies often have multiple versions
-]
-
-skip-tree = [
-    # Skip entire dependency trees if needed
-]
 
 [sources]
-# Only allow crates from crates.io
+# Only allow crates from crates.io.
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = []
