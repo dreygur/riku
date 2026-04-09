@@ -20,11 +20,11 @@ I encourage users to also check out the original [Piku project](https://github.c
 ## Features
 
 - **Heroku-like deployments**: Deploy applications with `git push`
-- **Multi-language support**: Python, Node.js, Ruby, Go, Java, Clojure, Rust
+- **Plugin-based runtimes**: Python, Node.js, Ruby, Go, Java, Clojure, Rust, containers — all via external plugins; add any language without recompiling
 - **Process supervision**: Built-in Rust supervisor daemon (replaces uWSGI Emperor)
 - **Nginx integration**: Automatic nginx configuration generation with caching support
 - **Scaling**: Horizontal scaling with SCALING file or environment variables
-- **Plugin system**: Extensible functionality through shell-based plugins
+- **Plugin system**: Extensible runtime and lifecycle hooks through shell scripts or binaries
 - **Cron scheduling**: Built-in cron job support via Procfile
 - **Zero-downtime deployments**: Hot reload support via `riku restart --hot`
 - **Environment variables**: Comprehensive env var support for configuration
@@ -216,6 +216,8 @@ git push riku main
 ### Setup and Maintenance
 - `riku init` - Initialize Riku server
 - `riku update` - Update Riku binary
+- `riku install-plugins` - Download and install bundled runtime plugins
+- `riku install-plugins --plugins node,python` - Install specific plugins only
 - `riku supervisor` - Start supervisor (foreground, for debugging)
 
 ## AI Agent Interface
@@ -229,32 +231,54 @@ ssh -i ~/.ssh/agent-key deploy@server "riku agent --intro"
 
 See [AI Agents Documentation](docs/docs/ai-agents.md) for full details.
 
-## Supported Runtimes
+## Runtime Plugins
 
-### Python
-- Requirements: `requirements.txt`
-- Poetry: `pyproject.toml` with Poetry
-- uv: `pyproject.toml` with uv
+Riku detects and builds applications through external runtime plugins in
+`~/.riku/plugins/`. After installation, run:
 
-### Node.js
-- Requirements: `package.json`
+```bash
+riku install-plugins
+```
 
-### Ruby
-- Requirements: `Gemfile`
+### Bundled Plugins
 
-### Go
-- Requirements: `go.mod`, `Godeps`, or `.go` files
+| Plugin | Detects | Build tool |
+|--------|---------|------------|
+| `node` | `package.json` | npm / yarn / pnpm |
+| `python` | `requirements.txt`, `pyproject.toml` | pip / Poetry / uv |
+| `ruby` | `Gemfile` | Bundler |
+| `go` | `go.mod`, `Godeps`, `.go` files | go build |
+| `rust-lang` | `Cargo.toml` + `rust-toolchain.toml` | cargo build |
+| `java` | `pom.xml`, `build.gradle` | Maven / Gradle |
+| `clojure` | `project.clj`, `deps.edn` | Leiningen / Clojure CLI |
+| `container` | `Dockerfile`, `Containerfile`, `docker-compose.yml` | Docker / Podman |
 
-### Java
-- Maven: `pom.xml`
-- Gradle: `build.gradle`
+### Plugin Protocol
 
-### Clojure
-- Tools.deps: `deps.edn`
-- Leiningen: `project.clj`
+Each plugin executable implements four subcommands:
 
-### Rust
-- Requirements: `Cargo.toml` with `rust-toolchain.toml`
+| Subcommand | Action |
+|---|---|
+| `detect` | exit 0 = handles this app, exit 1 = skip |
+| `build` | install dependencies (stdout streamed to deploy log) |
+| `env` | print `KEY=VALUE` lines merged into worker environment |
+| `start` | print default start command (fallback if Procfile has no entry) |
+
+Context is passed via environment variables: `RIKU_APP`, `RIKU_APP_PATH`,
+`RIKU_ENV_PATH`, `RIKU_ROOT`.
+
+### Pinning a Runtime
+
+To skip auto-detection and use a specific plugin:
+
+```bash
+riku config set myapp RUNTIME=node
+```
+
+### Adding a Custom Runtime
+
+Drop any executable into `~/.riku/plugins/` and implement the four subcommands.
+See [Plugin Development](docs/docs/plugins.md) for a full template.
 
 ## Configuration
 
@@ -362,7 +386,17 @@ Riku generates nginx configuration files based on application requirements and e
 
 ## Plugin System
 
-Plugins are executable files placed in `~/.riku/plugins/`. They can be invoked as subcommands to extend Riku's functionality. Plugins are shell scripts or binaries that can interact with the Riku environment and application data.
+Riku has two categories of plugins, both stored in `~/.riku/plugins/`:
+
+**Runtime plugins** — detect and build applications. Named without a `riku-` prefix
+(e.g. `node`, `python`, `my-runtime`). Implement the `detect/build/env/start`
+subcommand protocol described above.
+
+**Lifecycle hook plugins** — run at specific deploy stages. Named with a `riku-`
+prefix (e.g. `riku-pre-deploy`, `riku-post-build`). These are shell scripts or
+binaries invoked automatically during deployment.
+
+See [Plugin Documentation](docs/docs/plugins.md) for full details and examples.
 
 ## Cron Jobs
 

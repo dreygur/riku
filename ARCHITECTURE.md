@@ -53,22 +53,34 @@ Manages all path configurations and system settings:
 
 ### 3. Deployment Engine (`deploy/`)
 
-Handles application deployment and runtime detection:
+Handles application deployment by orchestrating the plugin-based runtime system:
 
-- **Runtime Detection**: Identifies application runtime from marker files
-- **Build Process**: Executes build steps for each runtime
-- **Worker Configuration**: Creates TOML-based worker configurations
-- **Process Spawning**: Generates configurations for supervisor
+- **Plugin Discovery**: Scans `~/.riku/plugins/` for runtime plugin executables
+- **Runtime Detection**: Delegates detection to plugins via `detect` subcommand (exit 0 = match)
+- **Build Dispatch**: Calls `build` on the matched plugin; streams stdout/stderr to deploy log
+- **Environment Merging**: Calls `env` on plugin; merges `KEY=VALUE` output into worker env
+- **Worker Configuration**: Creates TOML-based worker configurations for supervisor
+- **Start Command Fallback**: Uses plugin `start` output if Procfile has no command for a process type
 
-#### Supported Runtimes
-- Python (pip, Poetry, uv)
-- Node.js (npm, yarn)
-- Ruby (Bundler)
-- Go (go modules, godeps)
-- Java (Maven, Gradle)
-- Clojure (tools.deps, Leiningen)
-- Rust (Cargo)
-- Generic (identity-style deployments)
+#### Plugin-Based Runtime Dispatch
+
+Runtime detection resolution:
+1. If `RUNTIME=<name>` is in the app ENV → use that plugin directly
+2. Otherwise → run `detect` on all non-`riku-*` plugins sorted alphabetically; first exit 0 wins
+3. If no plugin matches → deploy fails with a clear error
+
+Plugins receive context via environment variables: `RIKU_APP`, `RIKU_APP_PATH`,
+`RIKU_ENV_PATH`, `RIKU_ROOT`.
+
+#### Bundled Runtime Plugins
+- `node` — Node.js (npm/yarn/pnpm), detects `package.json`
+- `python` — Python (pip/Poetry/uv), detects `requirements.txt` / `pyproject.toml`
+- `ruby` — Ruby (Bundler), detects `Gemfile`
+- `go` — Go (modules/godeps), detects `go.mod` / `Godeps` / `.go` files
+- `rust-lang` — Rust (Cargo), detects `Cargo.toml` + `rust-toolchain.toml`
+- `riku-plugin-java` — Java (Maven/Gradle), detects `pom.xml` / `build.gradle`
+- `riku-plugin-clojure` — Clojure (Lein/deps.edn), detects `project.clj` / `deps.edn`
+- `riku-plugin-container` — Docker/Podman, detects `Dockerfile` / `Containerfile` / `docker-compose.yml`
 
 ### 4. Process Supervisor (`supervisor/`)
 
@@ -103,13 +115,14 @@ Generates nginx configurations for applications:
 - **ACME Integration**: Handles Let's Encrypt certificate challenges
 - **Validation**: Validates generated configurations before applying
 
-### 6. Plugin System (`plugins.rs`)
+### 6. Plugin System (`plugins/`)
 
-Provides extensibility through external executables:
+Provides extensibility through external executables in `~/.riku/plugins/`:
 
-- **Discovery**: Scans `~/.piku/plugins/` for executable files
-- **Execution**: Runs plugins as subcommands
-- **Environment Access**: Provides access to Riku environment and app data
+- **Runtime plugins** (`plugins/runtime.rs`): discover, detect, build, get_env, get_start_cmd — full runtime dispatch used by the deployment engine
+- **Lifecycle hook plugins** (`plugins/manager.rs`): `riku-pre-deploy`, `riku-pre-build`, `riku-post-build`, `riku-post-deploy` — run at deploy lifecycle stages
+- **Execution** (`plugins/executor.rs`): timeout-aware process spawning with environment injection
+- **Naming convention**: runtime plugins are non-`riku-*` executables; lifecycle hooks are `riku-*` executables; both live in the same `plugins/` directory
 
 ### 7. Utility Functions (`util.rs`)
 
@@ -126,12 +139,20 @@ Common utility functions used throughout the system:
 
 1. **Git Hook Trigger**: Git post-receive hook receives new commits
 2. **Code Checkout**: Code is checked out to application directory
-3. **Runtime Detection**: System detects application runtime from marker files
-4. **Build Process**: Appropriate build process is executed
-5. **Worker Config Creation**: TOML configurations are generated
-6. **Supervisor Activation**: Configurations are symlinked to enable directory
-7. **Process Start**: Supervisor detects new configs and starts processes
-8. **Nginx Update**: Nginx configuration is regenerated and reloaded
+3. **Procfile Parsing**: Procfile is parsed; empty/missing Procfile aborts deploy
+4. **ENV Loading**: App environment variables loaded from `~/.riku/envs/<app>/ENV`
+5. **pre-deploy hook**: `riku-pre-deploy` plugin runs (failure aborts deploy)
+6. **Plugin Discovery**: Scan `~/.riku/plugins/` for non-`riku-*` executables
+7. **Runtime Detection**: `RUNTIME=` override or first `detect`-exit-0 plugin wins; no match = error
+8. **pre-build hook**: `riku-pre-build` plugin runs
+9. **Build**: Plugin `build` subcommand runs; output streamed to deploy log
+10. **Env merge**: Plugin `env` output merged into app environment
+11. **post-build hook**: `riku-post-build` plugin runs
+12. **Worker Config Creation**: TOML configurations generated using Procfile + plugin start command
+13. **Supervisor Activation**: Configurations symlinked to `workers-enabled/`
+14. **Process Start**: Supervisor detects new configs and starts processes
+15. **Nginx Update**: Nginx configuration regenerated and reloaded
+16. **post-deploy hook**: `riku-post-deploy` plugin runs
 
 ### Process Management Flow
 
@@ -264,19 +285,20 @@ KEY2=VALUE2
 
 ### Directory Structure
 
-Maintains full compatibility with Piku's directory structure:
-
 ```
-~/.piku/
-├── apps/               # Application code
+~/.riku/
+├── apps/               # Application code (checked-out source)
 ├── data/               # Persistent data
-├── envs/               # Environment variables
-├── repos/              # Git repositories
-├── logs/               # Application logs
+├── envs/               # Environment variables (<app>/ENV, <app>/LIVE_ENV)
+├── repos/              # Git bare repositories
+├── logs/               # App logs (<app>/deploy.log, <app>/web.1.log, …)
 ├── nginx/              # Nginx configurations
-├── workers-available/    # Available worker configs
-├── workers-enabled/      # Active worker configs
-└── plugins/            # Plugin executables
+├── cache/              # Nginx cache files
+├── workers/            # Worker process configurations
+├── workers-available/  # Available worker TOML configs
+├── workers-enabled/    # Enabled worker configs (symlinks)
+├── acme/               # ACME/Let's Encrypt certificates
+└── plugins/            # Plugin executables (runtime + lifecycle hooks)
 ```
 
 ### File Formats

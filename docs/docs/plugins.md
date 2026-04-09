@@ -1,13 +1,138 @@
 # Plugin System
 
-Riku supports two types of plugins to extend functionality:
+Riku supports three categories of plugins, all stored in `~/.riku/plugins/`:
 
-1. **Server-side plugins** - Run on the server, invoked during deployment
-2. **Client-side plugins** - Run locally, coordinate with the server
+1. **Runtime plugins** — detect and build your application (e.g. `node`, `python`)
+2. **Lifecycle hook plugins** — run at deploy stages (e.g. `riku-pre-deploy`)
+3. **Client-side plugins** — run locally, coordinate with the server
 
 ---
 
-## Server-Side Plugins
+## Runtime Plugins
+
+Runtime plugins handle the detect/build/env/start lifecycle for a specific language
+or framework. The core binary contains no hardcoded runtimes; all language support
+comes from plugins.
+
+### Installing Bundled Plugins
+
+```bash
+riku install-plugins                          # all bundled plugins
+riku install-plugins --plugins node,python   # specific plugins only
+```
+
+Bundled plugins available: `node`, `python`, `ruby`, `go`, `rust-lang`, `java`,
+`clojure`, `container`.
+
+### Plugin Protocol
+
+Each runtime plugin is an executable that implements four subcommands:
+
+| Subcommand | Behaviour |
+|---|---|
+| `<plugin> detect` | exit 0 = this plugin handles the app, exit 1 = skip |
+| `<plugin> build` | install dependencies; stdout/stderr streamed to deploy log |
+| `<plugin> env` | print `KEY=VALUE` lines to stdout; merged into worker environment |
+| `<plugin> start` | print default start command; used if Procfile has no entry for a process type |
+
+Context is passed as environment variables:
+
+```
+RIKU_APP          app name
+RIKU_APP_PATH     path to checked-out source code
+RIKU_ENV_PATH     path to app's env directory (~/.riku/envs/<app>)
+RIKU_ROOT         riku root (~/.riku)
+```
+
+### Naming Convention
+
+| Prefix | Category | Example |
+|--------|----------|---------|
+| (none) | Runtime plugin | `node`, `python`, `my-lang` |
+| `riku-` | Lifecycle hook | `riku-pre-deploy`, `riku-post-build` |
+
+### Detection Order
+
+1. If `RUNTIME=<name>` is set in the app ENV → use that plugin, skip detection
+2. Otherwise → run `detect` on all non-`riku-*` plugins sorted alphabetically; first exit 0 wins
+3. If no plugin matches → deploy fails with: `"No runtime plugin matched. Run 'riku install-plugins' or set RUNTIME=<name>."`
+
+### Writing a Custom Runtime Plugin
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+CMD="${1:-}"
+APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
+APP="${RIKU_APP:-app}"
+
+case "$CMD" in
+  detect)
+    # Exit 0 if this plugin handles the app
+    [ -f "$APP_PATH/my-marker.conf" ] && exit 0
+    exit 1
+    ;;
+  build)
+    cd "$APP_PATH"
+    my-build-tool install --production
+    ;;
+  env)
+    echo "MY_RUNTIME=production"
+    echo "PATH=$APP_PATH/bin:$PATH"
+    ;;
+  start)
+    echo "my-runtime server.conf"
+    ;;
+  *)
+    echo "Unknown subcommand: $CMD" >&2
+    exit 1
+    ;;
+esac
+```
+
+Install it:
+
+```bash
+cp my-runtime ~/.riku/plugins/my-runtime
+chmod +x ~/.riku/plugins/my-runtime
+```
+
+### Pinning a Runtime
+
+To skip auto-detection:
+
+```bash
+riku config set myapp RUNTIME=my-runtime
+```
+
+---
+
+## Lifecycle Hook Plugins
+
+Lifecycle hooks are named with a `riku-` prefix and run automatically at deploy stages.
+
+| Hook | Trigger | Failure behaviour |
+|------|---------|-------------------|
+| `riku-pre-deploy` | Before runtime detection | Aborts deploy |
+| `riku-pre-build` | After detection, before build | Aborts deploy |
+| `riku-post-build` | After build, before workers | Non-fatal (logs warning) |
+| `riku-post-deploy` | After workers are up | Non-fatal |
+
+Hooks receive: `RIKU_APP`, `RIKU_APP_PATH`, `RIKU_ENV_PATH`, `RIKU_ROOT`,
+and `RIKU_RUNTIME` (the detected plugin name, if any).
+
+Example notification hook:
+
+```bash
+#!/bin/sh
+# ~/.riku/plugins/riku-post-deploy
+curl -s -X POST "$SLACK_WEBHOOK_URL" \
+  -d "{\"text\": \"Deployed $RIKU_APP\"}" || true
+```
+
+---
+
+## Server-Side Utility Plugins
 
 Server-side plugins are executable scripts or binaries placed in `~/.riku/plugins/`. They can be invoked as subcommands to extend Riku's functionality.
 

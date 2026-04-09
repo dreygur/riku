@@ -5,6 +5,57 @@ All notable changes to Riku will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-04-09
+
+### Plugin-Based Runtime System
+
+This release removes all hardcoded runtime logic from the core binary. Runtime
+detection and building is now fully delegated to external plugins, making the binary
+significantly lighter and allowing any language to be supported without a recompile.
+
+**Binary size impact:** ~3,500 lines of runtime-specific code deleted from the core.
+All 263 unit tests and 191 integration tests continue to pass.
+
+### Breaking Changes
+
+- **Runtime plugins must be installed separately.** Run `riku install-plugins` after
+  upgrading to download the bundled plugins (node, python, ruby, go, rust-lang, java,
+  clojure, container) to `~/.riku/plugins/`. Without plugins, deploys will fail with a
+  clear error message.
+- **`RUNTIME=<name>` ENV var** now pins which plugin handles an app, replacing the old
+  implicit priority system. Example: `riku config set myapp RUNTIME=node`.
+
+### Added
+
+- `src/plugins/runtime.rs` — plugin discovery, detection, build dispatch, env and start command extraction
+- `plugins/node` — bundled Node.js shell script plugin (detects `package.json`)
+- `plugins/python` — bundled Python shell script plugin (detects `requirements.txt`, `pyproject.toml`)
+- `plugins/ruby` — bundled Ruby shell script plugin (detects `Gemfile`)
+- `plugins/go` — bundled Go shell script plugin (detects `go.mod`, `Godeps`, `.go` files)
+- `plugins/rust-lang` — bundled Rust shell script plugin (detects `Cargo.toml` + `rust-toolchain.toml`)
+- `crates/riku-plugin-java` — Rust binary plugin for Java (Maven/Gradle)
+- `crates/riku-plugin-clojure` — Rust binary plugin for Clojure (Lein/deps.edn)
+- `crates/riku-plugin-container` — Rust binary plugin for containers (Docker/Podman, auto-detected)
+- `riku install-plugins` CLI command — downloads bundled plugins from GitHub
+- `riku install-plugins --plugins <list>` — install specific plugins only
+- Cargo workspace: root package + `crates/riku-plugin-*` sub-crates
+
+### Changed
+
+- `src/deploy/mod.rs` — replaced runtime dispatch with plugin-based orchestration
+- `src/deploy/workers.rs` — `create_workers_generic` now accepts `start_cmd: Option<&str>` for plugin-provided fallback command
+- `src/plugins/executor.rs` — `plugin_timeout` and `wait_with_timeout` made `pub(crate)` for use by runtime.rs
+- Integration tests — all full-deploy tests now use lightweight mock plugins; no npm/pip/bundler required on the test host
+
+### Removed
+
+All 16 hardcoded runtime files from `src/deploy/`:
+`python.rs`, `python_workers.rs`, `node.rs`, `node_workers.rs`, `ruby.rs`, `go.rs`,
+`rust.rs`, `java.rs`, `clojure.rs`, `container.rs`, `container_workers.rs`,
+`container_export.rs`, `identity.rs`, `runtime.rs`, `runtime_tests.rs`, `macros.rs`
+
+---
+
 ## [2.2.0] - 2026-02-26
 
 ### Production Hardening Refactor

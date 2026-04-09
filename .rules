@@ -98,35 +98,51 @@ cargo run -- <command>
 
 ```
 riku/
-├── src/                    # Main Rust source code
+├── Cargo.toml              # workspace + root package
+├── src/                    # Main riku binary source
 │   ├── main.rs            # CLI entry point
 │   ├── cli/               # CLI command handlers
+│   │   └── apps/install_plugins.rs  # riku install-plugins
 │   ├── config.rs          # Path & environment configuration
+│   ├── deploy/            # Deployment orchestration (no runtime logic)
+│   ├── plugins/           # Plugin system
+│   │   ├── runtime.rs     # Runtime plugin dispatch (detect/build/env/start)
+│   │   ├── manager.rs     # Lifecycle hook plugins (riku-pre-deploy, etc.)
+│   │   └── executor.rs    # Timeout-aware plugin execution
 │   ├── nginx.rs           # Nginx configuration generation
-│   ├── supervisor.rs      # Process supervisor logic
-│   └── ...
+│   └── supervisor/        # Process supervisor logic
+├── crates/                # Rust binary plugin sub-crates
+│   ├── riku-plugin-java/
+│   ├── riku-plugin-clojure/
+│   └── riku-plugin-container/
+├── plugins/               # Bundled shell script runtime plugins
+│   ├── node
+│   ├── python
+│   ├── ruby
+│   ├── go
+│   └── rust-lang
 ├── tests/
 │   ├── integration_tests/ # Rust integration tests
-│   │   ├── cli_tests.rs
-│   │   ├── supervisor_tests.rs
-│   │   ├── nginx_tests.rs
-│   │   ├── plugin_tests.rs
-│   │   └── e2e_tests.rs
 │   └── deploy/            # Shell-based deployment tests
 ├── templates/             # Tera templates for config generation
-├── benchmarks/            # Performance benchmarks
 └── docs/                  # Documentation
 ```
 
 ## Key Concepts
 
 ### Directory Structure (~/.riku/)
-- `apps/` - Application code
+- `apps/` - Application code (checked-out source)
 - `repos/` - Git bare repositories
 - `envs/` - Environment variables (ENV files)
 - `workers-enabled/` - Active worker configs (TOML)
 - `nginx/` - Nginx configurations
-- `plugins/` - Plugin executables
+- `plugins/` - Plugin executables (runtime + lifecycle hooks)
+
+### Runtime Plugin Protocol
+Plugins in `~/.riku/plugins/` not prefixed with `riku-` are runtime plugins.
+They implement four subcommands via argv[1]: `detect`, `build`, `env`, `start`.
+Context is passed via env vars: `RIKU_APP`, `RIKU_APP_PATH`, `RIKU_ENV_PATH`, `RIKU_ROOT`.
+Detection order: `RUNTIME=<name>` env override → alphabetical first-exit-0 wins → error.
 
 ### Procfile Format
 ```
