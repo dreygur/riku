@@ -77,6 +77,14 @@ export const api = {
       apiFetch<AppStats[]>(`/metrics/apps/${encodeURIComponent(app)}`),
   },
 
+  plugins: {
+    list: () => apiFetch<{ plugins: string[] }>("/plugins"),
+  },
+
+  hooks: {
+    list: () => apiFetch<{ hooks: string[] }>("/hooks"),
+  },
+
   env: {
     list: (app: string) =>
       apiFetch<EnvResponse>(`/env/${encodeURIComponent(app)}`),
@@ -93,4 +101,51 @@ export const api = {
         body: JSON.stringify({ key }),
       }),
   },
+
+  control: {
+    create: (name: string) =>
+      apiFetch<ControlActionResponse>("/control/apps", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      }),
+    deploy: (app: string) =>
+      apiFetch<ControlActionResponse>(
+        `/control/apps/${encodeURIComponent(app)}/deploy`,
+        { method: "POST" },
+      ),
+    restart: (app: string) =>
+      apiFetch<ControlActionResponse>(
+        `/control/apps/${encodeURIComponent(app)}/restart`,
+        { method: "POST" },
+      ),
+    stop: (app: string) =>
+      apiFetch<ControlActionResponse>(
+        `/control/apps/${encodeURIComponent(app)}/stop`,
+        { method: "POST" },
+      ),
+    destroy: (app: string) =>
+      apiFetch<ControlActionResponse>(
+        `/control/apps/${encodeURIComponent(app)}`,
+        { method: "DELETE" },
+      ),
+    installPlugins: (only?: string[]) =>
+      apiFetch<ControlActionResponse>("/control/plugins/install", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(only ? { only } : {}),
+      }),
+    containerExport: (app: string) =>
+      apiFetch<ControlActionResponse & { output?: string }>(
+        `/control/apps/${encodeURIComponent(app)}/container/export`,
+        { method: "POST" },
+      ),
+  },
+};
+
+export type ControlActionResponse = {
+  ok: boolean;
+  app?: string;
+  action?: string;
+  error?: string;
 };

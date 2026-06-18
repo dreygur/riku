@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { handle } from "hono/vercel";
+import { controlRouter } from "@/server/routers/control";
 import { envRouter } from "@/server/routers/env";
 import { supervisorRouter } from "@/server/routers/supervisor";
 
@@ -19,6 +20,7 @@ app.options("*", (c) => new Response(null, { status: 204 }));
 
 app.route("/", supervisorRouter);
 app.route("/", envRouter);
+app.route("/", controlRouter);
 
 export const GET = handle(app);
 export const POST = handle(app);

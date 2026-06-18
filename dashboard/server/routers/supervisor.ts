@@ -89,6 +89,30 @@ supervisorRouter.get("/metrics/apps/:app", async (c) => {
   }
 });
 
+// ── GET /plugins ── Proxy client plugin listing ──
+supervisorRouter.get("/plugins", async (c) => {
+  const result = await safeUpstreamFetch("/plugins");
+  if (!result.ok) return c.json({ plugins: [] });
+
+  try {
+    return c.json(JSON.parse(result.body!));
+  } catch {
+    return c.json({ plugins: [] });
+  }
+});
+
+// ── GET /hooks ── Proxy server-side hook plugin listing ──
+supervisorRouter.get("/hooks", async (c) => {
+  const result = await safeUpstreamFetch("/hooks");
+  if (!result.ok) return c.json({ hooks: [] });
+
+  try {
+    return c.json(JSON.parse(result.body!));
+  } catch {
+    return c.json({ hooks: [] });
+  }
+});
+
 // ── GET /health ── Proxy health check; never returns a 502 ──
 supervisorRouter.get("/health", async (c) => {
   const result = await safeUpstreamFetch("/health");

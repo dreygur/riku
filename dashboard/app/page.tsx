@@ -4,6 +4,8 @@ import * as React from "react";
 import { SupervisorGrid } from "@/components/SupervisorGrid";
 import { TerminalStream } from "@/components/TerminalStream";
 import { EnvEditor } from "@/components/EnvEditor";
+import { AppControls } from "@/components/AppControls";
+import { PluginsPanel } from "@/components/PluginsPanel";
 import { api } from "@/lib/api";
 
 export default function DashboardPage() {
@@ -57,10 +59,16 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      {/* ═══ APP CONTROLS ═══ */}
+      <AppControls app={activeApp} onAppChange={setActiveApp} />
+
       {/* ═══ SUPERVISOR GRID ═══ */}
       <div className="border-b border-primary-burgundy">
         <SupervisorGrid />
       </div>
+
+      {/* ═══ PLUGINS / HOOKS ═══ */}
+      <PluginsPanel />
 
       {/* ═══ BOTTOM PANELS ═══ */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 min-h-0">
@@ -73,14 +81,8 @@ export default function DashboardPage() {
         <div className="flex flex-col min-h-[24rem]">
           <div className="flex items-center gap-2 border-b border-primary-burgundy px-3 py-2 shrink-0">
             <span className="text-xs font-bold tracking-wide uppercase text-foreground-muted">
-              ENV_CFG //
+              ENV_CFG // {activeApp}
             </span>
-            <input
-              type="text"
-              value={activeApp}
-              onChange={(e) => setActiveApp(e.target.value)}
-              className="rounded-none bg-transparent border border-primary-burgundy px-2 py-0.5 text-xs text-foreground-dark outline-none focus:border-accent-orange tabular"
-            />
           </div>
           <EnvEditor app={activeApp} />
         </div>

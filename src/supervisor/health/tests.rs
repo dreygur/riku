@@ -12,7 +12,14 @@ fn start_test_server(
     stats_file: std::path::PathBuf,
 ) -> broadcast::Sender<String> {
     let start_time = SystemTime::now();
-    start_health_server(port, running, start_time, stats_file)
+    // Derive the control token path from the test's own temp dir (stats_file's
+    // parent) rather than the real `$HOME/.riku/`, so tests never read or
+    // write the developer's actual control token file.
+    let control_token_file = stats_file
+        .parent()
+        .expect("stats_file must have a parent dir")
+        .join("control.token");
+    start_health_server(port, running, start_time, stats_file, control_token_file)
         .expect("failed to start test health server")
 }
 

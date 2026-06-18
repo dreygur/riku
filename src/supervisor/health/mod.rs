@@ -6,7 +6,12 @@
 //! - GET /metrics/apps        - Per-app aggregated metrics
 //! - GET /metrics/apps/{app}  - Metrics for a specific app
 //! - GET /metrics/stream      - Server-Sent Events live metrics broadcast
+//! - GET /plugins             - List installed client plugins
+//! - GET /hooks                - List installed server-side hook plugins
 
+mod auth;
+mod control;
+mod plugins;
 mod responses;
 
 #[cfg(test)]
@@ -59,6 +64,7 @@ pub fn start_health_server(
     running: Arc<AtomicBool>,
     start_time: SystemTime,
     stats_file: PathBuf,
+    control_token_file: PathBuf,
 ) -> anyhow::Result<broadcast::Sender<String>> {
     let (broadcast_tx, _) = broadcast::channel::<String>(64);
 
@@ -66,12 +72,17 @@ pub fn start_health_server(
         metrics_broadcast_tx: broadcast_tx.clone(),
     });
 
-    let router = Router::new()
+    let control_token = auth::load_or_create_token(&control_token_file)
+        .map_err(|e| anyhow::anyhow!("failed to load/create control token: {}", e))?;
+
+    let readonly_router = Router::new()
         .route("/health", get(health_handler))
         .route("/metrics", get(metrics_handler))
         .route("/metrics/apps", get(metrics_apps_handler))
         .route("/metrics/apps/:app", get(metrics_app_handler))
         .route("/metrics/stream", get(metrics_stream_handler))
+        .route("/plugins", get(plugins::plugins_handler))
+        .route("/hooks", get(plugins::hooks_handler))
         .with_state(state)
         .layer(axum::extract::Extension(start_time))
         .layer(axum::extract::Extension(stats_file))
@@ -82,11 +93,20 @@ pub fn start_health_server(
                 .allow_headers(tower_http::cors::Any),
         );
 
+    // Mutating routes intentionally carry no CorsLayer — only callers that
+    // already hold the control token (the dashboard's server-side proxy)
+    // are expected to reach them. See `auth` module docs.
+    let router = readonly_router.merge(control::control_router(control_token));
+
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
 
     tracing::info!(
-        "Health server listening on http://{} (/health, /metrics, /metrics/apps, /metrics/apps/{{app}}, /metrics/stream)",
+        "Health server listening on http://{} (/health, /metrics, /metrics/apps, /metrics/apps/{{app}}, /metrics/stream, /control/apps/*)",
         addr
+    );
+    tracing::info!(
+        "Control-plane token: {}",
+        control_token_file.display()
     );
 
     let running_clone = running.clone();
@@ -209,9 +229,15 @@ async fn metrics_stream_handler(
 
     // Lagged subscribers are skipped rather than terminated: a slow tab
     // catches back up on the next tick instead of dropping its connection.
+    //
+    // The broadcast channel carries two kinds of frames: metrics JSON
+    // snapshots, and plain deployment notification strings (e.g.
+    // "[DEPLOYMENT_FAILED - ROLLING_BACK] ...") pushed by the supervisor's
+    // generation orchestrator. Tag them distinctly so clients can tell
+    // a rollback notice from a metrics tick without parsing JSON first.
     let updates = BroadcastStream::new(rx).filter_map(|item| async move {
         match item {
-            Ok(json) => Some(Ok(Event::default().event("metrics-update").data(json))),
+            Ok(payload) => Some(Ok(tag_broadcast_event(payload))),
             Err(tokio_stream::wrappers::errors::BroadcastStreamRecvError::Lagged(n)) => {
                 tracing::warn!("SSE subscriber lagged by {} messages, skipping", n);
                 None
@@ -229,4 +255,15 @@ async fn metrics_stream_handler(
             .interval(Duration::from_secs(15))
             .text("heartbeat"),
     )
+}
+
+/// Tag a raw broadcast payload as either a metrics snapshot or a deployment
+/// notification, based on its content (deployment events are always plain
+/// bracketed strings, never valid JSON arrays).
+fn tag_broadcast_event(payload: String) -> Event {
+    if payload.starts_with("[DEPLOYMENT_") {
+        Event::default().event("deployment-event").data(payload)
+    } else {
+        Event::default().event("metrics-update").data(payload)
+    }
 }

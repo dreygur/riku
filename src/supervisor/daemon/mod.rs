@@ -35,6 +35,7 @@ pub struct Supervisor {
     pub(super) log_rotation_interval: Duration,
     pub(super) stats_file: std::path::PathBuf,
     pub(super) pid_file: std::path::PathBuf,
+    pub(super) control_token_file: std::path::PathBuf,
     pub(super) last_stats_write: std::time::SystemTime,
     pub(super) stats_write_interval: Duration,
     pub(super) cron_scheduler: CronScheduler,
@@ -85,6 +86,7 @@ impl Supervisor {
             self.health_running.clone(),
             self.start_time,
             self.stats_file.clone(),
+            self.control_token_file.clone(),
         ) {
             self.metrics_broadcast_tx = Some(tx);
         } else {
@@ -133,6 +135,22 @@ impl Supervisor {
                 Err(mpsc::RecvTimeoutError::Timeout) => {
                     // Periodic maintenance tasks - check process health
                     self.process_manager.check_processes()?;
+
+                    // Drain canary probe outcomes: promote healthy generations,
+                    // roll back failed ones. Never touches the stable generation
+                    // unless promotion succeeds.
+                    if let Err(e) = self.process_manager.reconcile_generations() {
+                        tracing::error!("Generation reconciliation error: {:?}", e);
+                    }
+
+                    // Forward any rollback/promotion notifications onto the same
+                    // broadcast channel the metrics SSE stream uses. `send` is
+                    // non-blocking for the same reason the stats frame below is.
+                    if let Some(tx) = &self.metrics_broadcast_tx {
+                        for event in self.process_manager.drain_deployment_events() {
+                            let _ = tx.send(event);
+                        }
+                    }
 
                     // Check if it's time for log rotation
                     if self
