@@ -46,7 +46,14 @@ impl Default for ProcessStats {
 }
 
 /// Process status enum.
+///
+/// `rename_all = "snake_case"` keeps the JSON wire format aligned with the
+/// `Display` impl below (and with what dashboard/lib/types.ts's STATUS_MAP
+/// expects) — without it, serde's default PascalCase variant names
+/// ("Running", "Crashed", ...) silently fail every lookup in that map and
+/// every worker renders as "stopped" regardless of its real status.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub enum ProcessStatus {
     Starting,
     Running,
@@ -72,7 +79,12 @@ impl std::fmt::Display for ProcessStatus {
 }
 
 /// Health check status.
+///
+/// `rename_all = "snake_case"` — see `ProcessStatus` doc comment above for
+/// why; dashboard/lib/types.ts's HEALTH_MAP has the same lowercase-key
+/// assumption.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub enum HealthStatus {
     Unknown,
     Healthy,

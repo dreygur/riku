@@ -7,7 +7,7 @@ fn test_default_limits() {
     assert_eq!(limits.max_memory_bytes, Some(512 * 1024 * 1024));
     assert_eq!(limits.max_cpu_seconds, Some(3600));
     assert_eq!(limits.max_open_files, Some(1024));
-    assert_eq!(limits.max_processes, Some(64));
+    assert_eq!(limits.max_processes, None);
     assert_eq!(limits.max_core_file_bytes, Some(0));
 }
 
@@ -19,7 +19,14 @@ fn test_summary() {
     assert!(summary.contains("mem=512MB"));
     assert!(summary.contains("cpu=3600s"));
     assert!(summary.contains("files=1024"));
-    assert!(summary.contains("procs=64"));
+    assert!(!summary.contains("procs="));
+}
+
+#[test]
+fn test_summary_with_max_processes_opted_in() {
+    let mut limits = ResourceLimits::default();
+    limits.max_processes = Some(64);
+    assert!(limits.summary().contains("procs=64"));
 }
 
 #[test]

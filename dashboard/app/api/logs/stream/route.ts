@@ -56,8 +56,23 @@ export async function GET(req: Request) {
           sendChunk();
         });
       } catch {
-        // app log dir doesn't exist yet; client gets nothing until it does
+        // logs/{app}/ doesn't exist yet — typical right after [CREATE],
+        // before the first [DEPLOY] has run. fs.watch() can't watch a
+        // path that doesn't exist, and never retries on its own, so
+        // without the poll fallback below this connection would stay
+        // open and "LIVE" forever while silently never receiving the
+        // first deploy's lines, even after the directory and file get
+        // created moments later.
       }
+
+      // Poll fallback, always running alongside the watcher (not just
+      // when it fails to attach): covers both the missing-directory case
+      // above and the case where fs.watch fires but the directory entry
+      // it reports doesn't trigger a watch on the file itself (e.g. some
+      // editors/filesystems coalesce or miss rapid successive writes).
+      // 250ms keeps "real-time" perception intact without re-reading the
+      // file constantly.
+      const poll = setInterval(sendChunk, 250);
 
       const heartbeat = setInterval(() => {
         if (closed) return;
@@ -67,6 +82,7 @@ export async function GET(req: Request) {
       req.signal.addEventListener("abort", () => {
         closed = true;
         watcher?.close();
+        clearInterval(poll);
         clearInterval(heartbeat);
         controller.close();
       });

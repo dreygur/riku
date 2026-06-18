@@ -5,7 +5,15 @@
 // signal even if a phase fails midway.
 
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
-import { mkdtempSync, mkdirSync, copyFileSync, chmodSync, rmSync, readdirSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  copyFileSync,
+  chmodSync,
+  rmSync,
+  readdirSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import net from "node:net";
@@ -25,6 +33,7 @@ export interface SandboxHandle {
 const RIKU_BINARY = join(__dirname, "..", "..", "..", "..", "target", "release", "riku");
 const DASHBOARD_ROOT = join(__dirname, "..", "..", "..");
 const FIXTURE_APP_DIR = join(__dirname, "..", "fixtures", "test-app");
+const SHELL_PLUGIN_PATH = join(__dirname, "..", "fixtures", "shell-plugin.sh");
 
 /** Directory skeleton matching create_directory_structure() in
  * src/cli/setup/init.rs, minus the bits that require root or interactive
@@ -76,13 +85,27 @@ export function createSandboxRoot(): string {
 
 /** Copy the fixture Procfile/web.sh/Dockerfile into an already-created app
  * directory (created via the real [CREATE] button, so the bare git repo
- * under repos/<app>.git also exists, matching real-world usage). */
+ * under repos/<app>.git also exists, matching real-world usage). Also
+ * installs the `shell` runtime plugin into the sandbox's plugins/ dir and
+ * sets RUNTIME=shell in the app's ENV file — the fixture app is a bare
+ * shell script with no package.json/requirements.txt/etc., so none of the
+ * bundled runtime plugins (node, python, ruby, go, rust-lang) would
+ * `detect` it, and detection would otherwise fail with "No runtime plugin
+ * matched" (see src/plugins/runtime.rs detect()). */
 export function installFixtureApp(rikuRoot: string, appName: string): void {
   const appDir = join(rikuRoot, "apps", appName);
   for (const file of ["Procfile", "web.sh", "Dockerfile"]) {
     copyFileSync(join(FIXTURE_APP_DIR, file), join(appDir, file));
   }
   chmodSync(join(appDir, "web.sh"), 0o755);
+
+  const pluginDest = join(rikuRoot, "plugins", "shell");
+  copyFileSync(SHELL_PLUGIN_PATH, pluginDest);
+  chmodSync(pluginDest, 0o755);
+
+  const envDir = join(rikuRoot, "envs", appName);
+  mkdirSync(envDir, { recursive: true });
+  writeFileSync(join(envDir, "ENV"), "RUNTIME=shell\n");
 }
 
 function spawnTracked(

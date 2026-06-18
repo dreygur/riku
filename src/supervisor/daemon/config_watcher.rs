@@ -249,6 +249,18 @@ impl Supervisor {
             .map(|x| x.0)
             .unwrap_or(without_ordinal);
         self.process_manager.stop_app_processes(app_name)?;
+
+        // `riku stop` removes worker configs but leaves the app's source
+        // directory in place (so a later deploy/restart can recreate
+        // them) — its stats should persist as `[STOPPED]` until then.
+        // `riku destroy` removes the app directory too. Only in the
+        // latter case should the stats entries be purged; otherwise every
+        // destroyed app leaves a permanent ghost row in `/metrics` that
+        // nothing ever clears.
+        let paths = crate::config::RikuPaths::from_env();
+        if !paths.app_root.join(app_name).exists() {
+            self.process_manager.stats_mut().remove_app(app_name);
+        }
         Ok(())
     }
 }

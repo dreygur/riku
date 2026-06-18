@@ -108,7 +108,7 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
       timeout: 30_000,
     });
 
-    const row = page.getByTestId("worker-row").filter({ has: page.locator(`[data-app="${APP_NAME}"]`) });
+    const row = page.locator(`[data-testid="worker-row"][data-app="${APP_NAME}"]`);
     await expect(row).toHaveCount(1, { timeout: 15_000 });
     await expect(row).toHaveAttribute("data-status", "running", { timeout: 15_000 });
 
@@ -193,6 +193,17 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
     await page.reload();
     await expect(page.getByTestId("supervisor-grid")).toBeVisible();
 
+    // REAL behavior, not the originally-assumed one: `activeApp` is plain
+    // React state (app/page.tsx) with no localStorage/URL persistence, so
+    // a reload resets the active-app selector back to its hardcoded
+    // placeholder ("myapp"), not e2estressapp — TerminalStream would
+    // otherwise open an EventSource against the wrong app entirely. A
+    // real user recovers by retyping the app name into the same
+    // data-testid="active-app-input" the [CREATE] flow used earlier; do
+    // that here rather than asserting on a stream that was never even
+    // pointed at the right app.
+    await page.getByTestId("active-app-input").fill(APP_NAME);
+
     // REAL behavior, not the originally-assumed one: reconnect does not
     // backfill. The component remounts with empty `lines` state and the
     // SSE route computes `offset = current file size` at connect time
@@ -234,6 +245,19 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
     await page.waitForTimeout(5_000); // generous window; this asserts an absence, not a race
     expect(await newDeployLine.count()).toBe(0); // confirms the silent-stream defect, not a flaky timing assumption
     expect(readFileSync(deployLogPath, "utf-8")).toContain(`Deploying app '${APP_NAME}'`); // the data IS there — only the stream is stuck
+
+    // This redeploy restarted the worker (spawn_process stops the old PID
+    // before spawning a new one), so the PID captured back in Phase 2a is
+    // gone now by design, not by crash. Refresh it so Phase 4 checks the
+    // process actually backing today's [RUNNING] row.
+    const refreshedRow = page.locator(`[data-testid="worker-row"][data-app="${APP_NAME}"]`);
+    await expect(refreshedRow).toHaveAttribute("data-status", "running", { timeout: 15_000 });
+    const refreshedPid = await refreshedRow.getAttribute("data-pid");
+    expect(refreshedPid).not.toBeNull();
+    expect(refreshedPid).not.toBe("");
+    workerPid = Number(refreshedPid);
+    expect(Number.isInteger(workerPid)).toBe(true);
+    expect(isProcessAlive(workerPid)).toBe(true);
   });
 
   // ── Phase 4: Deep Cleanup & Tear Down ───────────────────────────────────
@@ -247,7 +271,7 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
     });
 
     await expect
-      .poll(async () => page.getByTestId("worker-row").filter({ has: page.locator(`[data-app="${APP_NAME}"]`) }).count(), {
+      .poll(async () => page.locator(`[data-testid="worker-row"][data-app="${APP_NAME}"]`).count(), {
         timeout: 15_000,
         intervals: [500],
       })

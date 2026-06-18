@@ -68,6 +68,14 @@ pub struct IsolationOptions {
     /// CPU accounting period in microseconds.
     #[serde(default = "default_cpu_period_us")]
     pub cpu_period_us: u64,
+    /// Maximum number of tasks (processes/threads) the worker's cgroup may
+    /// contain at once (cgroup v2 `pids.max`). `None` leaves it unlimited.
+    /// This is the correct, per-worker-scoped replacement for
+    /// `RIKU_MAX_PROCESSES`/`RLIMIT_NPROC`, which counts every process
+    /// owned by the real UID system-wide rather than just this worker's
+    /// subtree.
+    #[serde(default)]
+    pub max_pids: Option<u64>,
 }
 
 fn default_cpu_period_us() -> u64 {
@@ -208,6 +216,9 @@ pub fn create_worker_config(
             .get("RIKU_ISOLATION_CPU_PERIOD_US")
             .and_then(|v| v.parse::<u64>().ok())
             .unwrap_or_else(default_cpu_period_us),
+        max_pids: env
+            .get("RIKU_ISOLATION_MAX_PIDS")
+            .and_then(|v| v.parse::<u64>().ok()),
     });
 
     WorkerConfig {

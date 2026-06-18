@@ -70,6 +70,7 @@ impl ProcessManager {
                     memory_max_bytes: opts.max_memory_bytes,
                     cpu_quota_us: opts.cpu_quota_us,
                     cpu_period_us: opts.cpu_period_us,
+                    pids_max: opts.max_pids,
                 },
             )?),
             None => None,

@@ -87,11 +87,26 @@ impl StatsManager {
     }
 
     /// Remove stats for a process.
-    #[allow(dead_code)]
     pub fn remove_process(&mut self, process_id: &str) {
         self.stats.remove(process_id);
         self.start_times.remove(process_id);
         self.request_counts.remove(process_id);
+    }
+
+    /// Remove stats for every process belonging to `app`. For use when the
+    /// app itself is gone (e.g. `riku destroy`), as opposed to merely
+    /// stopped — a stopped app's stats are kept on purpose so the UI still
+    /// shows a `[STOPPED]` row until the next deploy/restart.
+    pub fn remove_app(&mut self, app: &str) {
+        let process_ids: Vec<String> = self
+            .stats
+            .values()
+            .filter(|s| s.app == app)
+            .map(|s| s.process_id.clone())
+            .collect();
+        for process_id in process_ids {
+            self.remove_process(&process_id);
+        }
     }
 
     /// Get total memory usage across all processes.

@@ -27,6 +27,17 @@ pub struct CgroupLimits {
     /// CPU accounting period in microseconds (kernel default and most
     /// common choice is 100000, i.e. 100ms).
     pub cpu_period_us: u64,
+    /// Maximum number of tasks (processes/threads) this worker's cgroup may
+    /// ever contain at once, written to `pids.max`. `None` leaves the
+    /// kernel default (`max`, i.e. unlimited).
+    ///
+    /// This is the correct way to bound a worker's fork count: unlike
+    /// `RLIMIT_NPROC` (see `resource_limits::ResourceLimits`), which counts
+    /// every process owned by the real UID system-wide and so falsely
+    /// trips on an otherwise-healthy worker whenever anything else under
+    /// that UID is also running, `pids.max` is scoped to exactly this
+    /// cgroup's subtree.
+    pub pids_max: Option<u64>,
 }
 
 impl CgroupLimits {
@@ -61,6 +72,9 @@ impl WorkerCgroup {
             write_node(&path, "memory.max", &bytes.to_string())?;
         }
         write_node(&path, "cpu.max", &limits.cpu_max_value())?;
+        if let Some(pids) = limits.pids_max {
+            write_node(&path, "pids.max", &pids.to_string())?;
+        }
 
         Ok(WorkerCgroup { path })
     }

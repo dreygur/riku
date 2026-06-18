@@ -105,6 +105,7 @@ acme/
 
 # Procfile (app-specific, not repo)
 Procfile
+!dashboard/tests/e2e-dashboard/fixtures/test-app/Procfile
 
 # SCALING file (app-specific)
 SCALING
