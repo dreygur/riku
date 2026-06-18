@@ -137,7 +137,14 @@ Common utility functions used throughout the system:
 
 ### Application Deployment Flow
 
-1. **Git Hook Trigger**: Git post-receive hook receives new commits
+1. **Git Hook Trigger**: Git post-receive hook receives new commits. First
+   push for a new app is detected by checking for a `HEAD` file inside the
+   target bare repo (`riku_repo.join("HEAD").exists()` in
+   `src/cli/git/receive_pack.rs`), not by checking whether the repo
+   directory itself exists — a plain directory-existence check is
+   unreliable here because the hooks/ subdirectory created later in the
+   same code path would otherwise make the repo appear to "exist" before
+   `git init --bare` has actually run, silently skipping initialization.
 2. **Code Checkout**: Code is checked out to application directory
 3. **Procfile Parsing**: Procfile is parsed; empty/missing Procfile aborts deploy
 4. **ENV Loading**: App environment variables loaded from `~/.riku/envs/<app>/ENV`
@@ -209,9 +216,30 @@ KEY2=VALUE2
 
 ### Process Isolation
 
-- Applications run as the deploy user
+- Applications run as the deploy user, never as root
 - Limited system access for application processes
 - Resource limits where possible
+
+### Unprivileged Worker / Nginx Interaction Model
+
+- The `riku supervisor` daemon and all spawned application workers run
+  entirely as the unprivileged deploy user (e.g. `riku`) — the daemon is
+  never started as root in a correctly configured deployment.
+- Nginx's master process runs as root by OS package default, which the
+  deploy user cannot signal directly. Riku does not solve this by running
+  itself as root; instead, the deploy user is granted a narrowly-scoped
+  passwordless sudo rule limited to the `nginx` binary itself (config test
+  and reload only — no shell, no other commands), reached through a
+  `nginx` wrapper placed ahead of `/usr/sbin/nginx` in `PATH`. This keeps
+  the supervisor and every application process fully unprivileged while
+  still allowing config reloads to take effect.
+- The per-app nginx vhost symlink directory (`/etc/nginx/sites-enabled/`)
+  is made group-writable by the deploy user rather than granting broader
+  filesystem privileges.
+- See `tests/production_audit/container/sudoers-riku-nginx` and
+  `tests/production_audit/container/nginx-wrapper.sh` for the reference
+  implementation, verified end-to-end in the containerized integration
+  suite (see Testing Strategy below).
 
 ### Input Validation
 
@@ -280,6 +308,29 @@ KEY2=VALUE2
 - Target 80%+ code coverage
 - Property-based testing where appropriate
 - Mock external dependencies for isolation
+
+### Containerized Production Integration Suite
+
+`tests/production_audit/container/run_container_test.sh` builds a real
+target server image (Ubuntu 24.04, sshd, nginx, the compiled `riku`
+binary, bundled runtime plugins), provisions a throwaway SSH keypair,
+boots the container, performs an actual `git push` deploy of a mock app
+over SSH, then drives concurrent HTTP load against the nginx-proxied
+app and collects a structured pass/fail verdict (502/504 count, zombie
+process check, supervisor liveness). It runs with either Docker or
+Podman — the script detects whichever is on `PATH` and uses it
+transparently, no flags needed:
+
+```bash
+./tests/production_audit/container/run_container_test.sh
+```
+
+Latest verified run: 14,530/14,530 requests succeeded (zero 502/504s)
+under 80 concurrent workers for 30s, supervisor remained alive, zero
+zombie processes. See `tests/production_audit/README.md` for the full
+suite (lifecycle stress, fd/leak monitor, chaos signal tests, resource
+limit audit) and `tests/production_audit/container/` for this
+containerized suite specifically.
 
 ## Deployment Compatibility
 

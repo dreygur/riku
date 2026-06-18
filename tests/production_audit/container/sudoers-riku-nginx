@@ -1,0 +1,6 @@
+# Narrow, passwordless sudo rule scoped to exactly one binary: lets the
+# riku user run /usr/sbin/nginx (config test + reload) without a full
+# root shell. Required because nginx's master process runs as root and
+# src/nginx/template.rs's install_nginx_symlink() calls `nginx -s reload`
+# directly with no privilege elevation of its own.
+riku ALL=(root) NOPASSWD: /usr/sbin/nginx

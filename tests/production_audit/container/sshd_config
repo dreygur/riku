@@ -1,0 +1,24 @@
+# sshd_config for the Riku integration-test container.
+# Non-privileged port, key-only auth, forced-command gating handled entirely
+# by authorized_keys (src/util/ssh_keys.rs) — sshd itself just needs to allow
+# pubkey auth and honor the command= restriction, which is default behavior.
+
+Port 2222
+AddressFamily inet
+ListenAddress 0.0.0.0
+
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ed25519_key
+
+PermitRootLogin no
+PubkeyAuthentication yes
+PasswordAuthentication no
+ChallengeResponseAuthentication no
+UsePAM no
+AllowUsers riku
+AllowTcpForwarding no
+X11Forwarding no
+PrintMotd no
+AcceptEnv RIKU_ROOT
+
+Subsystem sftp /usr/lib/openssh/sftp-server

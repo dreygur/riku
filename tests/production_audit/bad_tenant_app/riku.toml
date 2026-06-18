@@ -1,0 +1,39 @@
+# riku.toml — DOCUMENTATION-ONLY FILE, NOT CURRENTLY CONSUMED BY RIKU.
+#
+# IMPORTANT, read before trusting this file for anything:
+# As of this audit, src/supervisor/config/mod.rs's WorkerConfig /
+# WorkerOptions structs have NO per-app resource-limit fields (checked:
+# working_dir, log_file, uid, gid, timeout, grace_period, max_restarts,
+# health_check — no memory/cpu/fd/process ceilings). Resource limits are
+# implemented in src/supervisor/resource_limits/mod.rs as
+# ResourceLimits::from_env(), loaded ONCE at supervisor daemon startup
+# from the SUPERVISOR PROCESS's own environment, and applied identically
+# to every worker it spawns. There is no mechanism today for a per-app
+# override via a file like this one.
+#
+# This file exists purely so the bad-tenant test has a documented,
+# explicit statement of the ceilings it expects to be enforced. The
+# ACTUAL enforcement is configured by exporting these same values as
+# environment variables before starting `riku supervisor` — see
+# start-supervisor.env in this directory, which leak_monitor.sh and the
+# resource-limit portion of this test suite actually source.
+#
+# If a future Riku version adds real per-app TOML limit parsing, update
+# this file's status line below and wire it into spawn.rs's WorkerConfig
+# consumption — until then, treat every value here as intent, not fact.
+
+[limits]
+# Intended ceiling — enforced today only via RIKU_MAX_MEMORY_MB at the
+# supervisor-process level, see start-supervisor.env.
+max_memory_mb = 128
+
+# Intended ceiling — enforced today only via RIKU_MAX_CPU_SECONDS at the
+# supervisor-process level, see start-supervisor.env.
+max_cpu_seconds = 10
+
+max_open_files = 64
+max_processes = 8
+
+[status]
+consumed_by_riku = false
+real_mechanism = "RIKU_MAX_* environment variables on the supervisor process, see resource_limits/mod.rs::from_env()"

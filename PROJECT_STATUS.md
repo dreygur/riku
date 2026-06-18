@@ -4,6 +4,45 @@
 
 ---
 
+## Containerized Production Integration Verification (completed 2026-06-18)
+
+Ran the new containerized integration suite
+(`tests/production_audit/container/run_container_test.sh`) end-to-end
+against a real Ubuntu 24.04 target container (sshd, nginx, riku binary,
+bundled runtime plugins) — not mocked, not unit-tested in isolation.
+
+**Result: PASS.** 14,530/14,530 HTTP requests succeeded (100%, zero
+502/504s) under 80 concurrent workers sustained for 30s, against an app
+deployed live via `git push` over SSH. Supervisor remained alive
+throughout; zero zombie processes detected afterward.
+Latency: p50 19.7ms, p95 423.6ms, p99 1236.7ms (curl-fallback
+measurements; the suite prefers `wrk`/`k6` when available).
+
+Getting this suite green surfaced and fixed one real bug along the way:
+
+- **First-push bare-repo init bug** (`src/cli/git/receive_pack.rs`): the
+  code created the post-receive hook's parent directory before checking
+  whether the bare repo already existed. Since creating that directory
+  made the repo path "exist" as a side effect, the `git init --bare`
+  step was silently skipped on every first push, leaving a directory
+  with a `hooks/` folder but no git internals — `git push` failed with
+  `fatal: '<path>' does not appear to be a git repository`. Fixed by
+  checking for the repo's `HEAD` file specifically and running
+  `git init --bare` before the hook directory is created.
+
+The remaining issues hit while building the test container itself were
+environment/test-asset issues, not product bugs: locked `useradd`
+accounts blocking SSH pubkey auth, nginx vhost `Host` header mismatches
+in the test script, and the unprivileged deploy user needing a scoped
+sudo path to reload root-owned nginx (now documented in
+`ARCHITECTURE.md` under Security Model).
+
+See `tests/production_audit/README.md` and
+`tests/production_audit/container/` for the full suite, including the
+non-containerized lifecycle/leak/chaos/resource-limit scripts.
+
+---
+
 ## Plugin-Based Runtime System (completed 2026-04-09)
 
 ### What Changed

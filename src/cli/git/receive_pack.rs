@@ -18,27 +18,32 @@ pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
     // Ensure symlink is set up for user's bare repo
     ensure_repo_symlink(paths, &app)?;
 
-    let hook_path = paths.git_root.join(&app).join("hooks").join("post-receive");
+    let riku_repo = paths.git_root.join(&app);
 
+    // Check for an actual bare-repo marker (HEAD), not just the directory's
+    // existence. `git init --bare` always creates the target directory
+    // itself, so checking `riku_repo.exists()` after first creating the
+    // hooks/ subdirectory would always be true and `git init --bare` would
+    // never run, leaving a directory with a hooks/ folder but no git
+    // internals (fatal: '<path>' does not appear to be a git repository).
+    if !riku_repo.join("HEAD").exists() {
+        fs::create_dir_all(&paths.git_root)?;
+        let status = Command::new("git")
+            .arg("init")
+            .arg("--quiet")
+            .arg("--bare")
+            .arg(&app)
+            .current_dir(&paths.git_root)
+            .status()?;
+        if !status.success() {
+            echo("Error: git init failed.", "red");
+        }
+    }
+
+    let hook_path = riku_repo.join("hooks").join("post-receive");
     if !hook_path.exists() {
-        // Create hooks directory
         if let Some(parent) = hook_path.parent() {
             fs::create_dir_all(parent)?;
-        }
-
-        // Initialize bare repo at riku's location if it doesn't exist
-        let riku_repo = paths.git_root.join(&app);
-        if !riku_repo.exists() {
-            let status = Command::new("git")
-                .arg("init")
-                .arg("--quiet")
-                .arg("--bare")
-                .arg(&app)
-                .current_dir(&paths.git_root)
-                .status()?;
-            if !status.success() {
-                echo("Error: git init failed.", "red");
-            }
         }
 
         fs::write(&hook_path, POST_RECEIVE_HOOK)?;

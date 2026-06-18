@@ -1,0 +1,2 @@
+# Intentionally empty: stdlib-only app. Presence of this file is what
+# makes plugins/python's detect() claim this app (see plugin source).
