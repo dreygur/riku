@@ -1,16 +1,15 @@
-//! HTTP response helpers for the health check server.
+//! Pure data-building functions for HTTP responses.
+//!
+//! These functions produce JSON data without performing any I/O.
+//! The Axum handlers in `mod.rs` wrap the results in `Json(...)` or error responses.
 
-use std::fs;
-use std::io::Write;
-use std::net::TcpStream;
-use std::path::PathBuf;
+use std::path::Path;
 use std::time::{Duration, SystemTime};
 
-/// Send health check response
-pub(super) fn send_health_response(
-    stream: &mut TcpStream,
-    start_time: SystemTime,
-) -> anyhow::Result<()> {
+/// Build the health check JSON value.
+///
+/// Returns `{"status":"healthy","uptime":<secs>,"version":"<ver>","timestamp":<epoch>}`.
+pub(super) fn build_health_json(start_time: SystemTime) -> serde_json::Value {
     let uptime = start_time
         .elapsed()
         .unwrap_or(Duration::from_secs(0))
@@ -18,148 +17,64 @@ pub(super) fn send_health_response(
 
     let version = env!("CARGO_PKG_VERSION");
 
-    let json = format!(
-        r#"{{"status":"healthy","uptime":{},"version":"{}","timestamp":{}}}"#,
-        uptime,
-        version,
-        SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or(Duration::from_secs(0))
-            .as_secs()
-    );
+    let timestamp = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or(Duration::from_secs(0))
+        .as_secs();
 
-    let response = format!(
-        "HTTP/1.1 200 OK\r\n\
-         Content-Type: application/json\r\n\
-         Content-Length: {}\r\n\
-         Connection: close\r\n\
-         \r\n\
-         {}",
-        json.len(),
-        json
-    );
-
-    stream.write_all(response.as_bytes())?;
-    stream.flush()?;
-
-    Ok(())
+    serde_json::json!({
+        "status": "healthy",
+        "uptime": uptime,
+        "version": version,
+        "timestamp": timestamp
+    })
 }
 
-/// Send metrics response (stats.json content)
-pub(super) fn send_metrics_response(
-    stream: &mut TcpStream,
-    stats_file: &PathBuf,
-) -> anyhow::Result<()> {
-    let json = if stats_file.exists() {
-        fs::read_to_string(stats_file)
+/// Read the raw metrics JSON string from the stats file.
+///
+/// Returns the file contents as a string, or a JSON error object if the file
+/// does not exist or cannot be read.
+pub(super) fn build_metrics_json(stats_file: &Path) -> String {
+    if stats_file.exists() {
+        std::fs::read_to_string(stats_file)
             .unwrap_or_else(|_| r#"{"error":"Failed to read stats"}"#.to_string())
     } else {
         r#"{"error":"Stats not available yet"}"#.to_string()
-    };
-
-    let response = format!(
-        "HTTP/1.1 200 OK\r\n\
-         Content-Type: application/json\r\n\
-         Content-Length: {}\r\n\
-         Connection: close\r\n\
-         \r\n\
-         {}",
-        json.len(),
-        json
-    );
-
-    stream.write_all(response.as_bytes())?;
-    stream.flush()?;
-
-    Ok(())
+    }
 }
 
-/// Send per-app metrics response.
+/// Build per-app metrics JSON string.
 ///
-/// If `app` is `Some`, filters to just that app. If `None`, returns all apps.
-/// Returns 404 JSON if a specific app is not found.
-pub(super) fn send_app_metrics_response(
-    stream: &mut TcpStream,
-    stats_file: &PathBuf,
-    app: Option<&str>,
-) -> anyhow::Result<()> {
+/// If `app` is `Some(name)`, filters to that specific app and returns its
+/// object. If `None`, returns the full array. Returns a JSON error object
+/// if the requested app is not found.
+pub(super) fn build_app_metrics_json(stats_file: &Path, app: Option<&str>) -> String {
     let raw = if stats_file.exists() {
-        fs::read_to_string(stats_file).unwrap_or_else(|_| "[]".to_string())
+        std::fs::read_to_string(stats_file).unwrap_or_else(|_| "[]".to_string())
     } else {
         "[]".to_string()
     };
 
-    // Parse the stats array and filter if needed
-    let json = match serde_json::from_str::<serde_json::Value>(&raw) {
+    let parsed = serde_json::from_str::<serde_json::Value>(&raw);
+
+    match parsed {
         Ok(serde_json::Value::Array(apps)) => {
             if let Some(app_name) = app {
-                // Find the specific app
                 let found = apps
                     .iter()
                     .find(|a| a.get("app").and_then(|v| v.as_str()) == Some(app_name));
                 match found {
                     Some(v) => serde_json::to_string(v)
                         .unwrap_or_else(|_| r#"{"error":"Serialization failed"}"#.to_string()),
-                    None => {
-                        let body = format!(
-                            r#"{{"error":"Not Found","app":"{}","message":"No metrics for this app"}}"#,
-                            app_name
-                        );
-                        let response = format!(
-                            "HTTP/1.1 404 Not Found\r\n\
-                             Content-Type: application/json\r\n\
-                             Content-Length: {}\r\n\
-                             Connection: close\r\n\
-                             \r\n\
-                             {}",
-                            body.len(),
-                            body
-                        );
-                        stream.write_all(response.as_bytes())?;
-                        stream.flush()?;
-                        return Ok(());
-                    }
+                    None => format!(
+                        r#"{{"error":"Not Found","app":"{}","message":"No metrics for this app"}}"#,
+                        app_name
+                    ),
                 }
             } else {
                 raw
             }
         }
         _ => raw,
-    };
-
-    let response = format!(
-        "HTTP/1.1 200 OK\r\n\
-         Content-Type: application/json\r\n\
-         Content-Length: {}\r\n\
-         Connection: close\r\n\
-         \r\n\
-         {}",
-        json.len(),
-        json
-    );
-
-    stream.write_all(response.as_bytes())?;
-    stream.flush()?;
-
-    Ok(())
-}
-
-/// Send 404 response
-pub(super) fn send_404_response(stream: &mut TcpStream) -> anyhow::Result<()> {
-    let body = r#"{"error":"Not Found","message":"Try GET /health or GET /metrics"}"#;
-    let response = format!(
-        "HTTP/1.1 404 Not Found\r\n\
-         Content-Type: application/json\r\n\
-         Content-Length: {}\r\n\
-         Connection: close\r\n\
-         \r\n\
-         {}",
-        body.len(),
-        body
-    );
-
-    stream.write_all(response.as_bytes())?;
-    stream.flush()?;
-
-    Ok(())
+    }
 }

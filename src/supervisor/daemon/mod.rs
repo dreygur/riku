@@ -17,6 +17,7 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::Duration;
 use threadpool::ThreadPool;
+use tokio::sync::broadcast;
 
 use super::{is_running, setup_signal_handlers, RELOAD_COUNTER};
 use crate::supervisor::cron::CronScheduler;
@@ -44,6 +45,9 @@ pub struct Supervisor {
     pub(super) cron_thread_pool: ThreadPool,
     #[allow(dead_code)]
     pub(super) pid_file_lock: Option<fs::File>,
+    /// Broadcast sender for pushing pre-serialized metrics JSON to SSE clients.
+    /// `None` if the health server failed to start.
+    pub(super) metrics_broadcast_tx: Option<broadcast::Sender<String>>,
 }
 
 impl Supervisor {
@@ -76,13 +80,15 @@ impl Supervisor {
             .and_then(|p| p.parse().ok())
             .unwrap_or(9091);
 
-        if let Err(e) = crate::supervisor::health::start_health_server(
+        if let Ok(tx) = crate::supervisor::health::start_health_server(
             health_port,
             self.health_running.clone(),
             self.start_time,
             self.stats_file.clone(),
         ) {
-            tracing::warn!("Failed to start health server: {}", e);
+            self.metrics_broadcast_tx = Some(tx);
+        } else {
+            tracing::warn!("Failed to start health server on port {}", health_port);
         }
 
         // Load existing configurations at startup
@@ -151,6 +157,19 @@ impl Supervisor {
                         if let Err(e) = self.write_stats() {
                             tracing::error!("Failed to write stats: {:?}", e);
                         }
+
+                        if let Some(tx) = &self.metrics_broadcast_tx {
+                            let json = serde_json::to_string(
+                                &self.process_manager.stats().get_all_stats(),
+                            )
+                            .unwrap_or_default();
+                            // `broadcast::Sender::send` never blocks the supervisor hot
+                            // loop: with no subscribers it just errors (ignored here),
+                            // and a full ring buffer overwrites the oldest frame instead
+                            // of waiting on a slow SSE client.
+                            let _ = tx.send(json);
+                        }
+
                         self.last_stats_write = std::time::SystemTime::now();
                     }
 

@@ -40,6 +40,7 @@ ENV
 # Logs
 *.log
 logs/
+!dashboard/app/api/logs/
 
 # Temporary files
 tmp/
@@ -74,6 +75,10 @@ pip-log.txt
 node_modules/
 npm-debug.log
 yarn-error.log
+
+# Next.js / dashboard build output
+.next/
+*.tsbuildinfo
 
 # Certificates
 *.pem

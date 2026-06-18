@@ -1,181 +1,277 @@
-use super::*;
 use std::fs;
-use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
-#[test]
-fn test_health_endpoint() {
-    use tempfile::TempDir;
-    let running = Arc::new(AtomicBool::new(true));
+use super::*;
+
+fn start_test_server(
+    port: u16,
+    running: Arc<AtomicBool>,
+    stats_file: std::path::PathBuf,
+) -> broadcast::Sender<String> {
     let start_time = SystemTime::now();
-    let temp_dir = TempDir::new().unwrap();
-    let stats_file = temp_dir.path().join("stats.json");
+    start_health_server(port, running, start_time, stats_file)
+        .expect("failed to start test health server")
+}
 
-    // Start server on random port
-    let port = 19091; // Test port
-    start_health_server(port, running.clone(), start_time, stats_file).unwrap();
-
-    // Give server time to start
-    thread::sleep(Duration::from_millis(100));
-
-    // Test health endpoint
-    let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
-    stream
-        .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n")
-        .unwrap();
-
-    let mut response = String::new();
-    stream.read_to_string(&mut response).unwrap();
-
-    assert!(response.contains("HTTP/1.1 200 OK"));
-    assert!(response.contains(r#""status":"healthy""#));
-    assert!(response.contains(r#""version":"#));
-    assert!(response.contains(r#""uptime":"#));
-
-    // Stop server
-    running.store(false, Ordering::Relaxed);
+fn wait_for_server(port: u16) {
+    for _ in 0..50 {
+        if std::net::TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok() {
+            return;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    panic!("server on port {} did not start in time", port);
 }
 
 #[test]
-fn test_404_response() {
-    use tempfile::TempDir;
-    let running = Arc::new(AtomicBool::new(true));
-    let start_time = SystemTime::now();
-    let temp_dir = TempDir::new().unwrap();
+fn test_health_endpoint() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
     let stats_file = temp_dir.path().join("stats.json");
-    let port = 19092; // Different port
+    let running = Arc::new(AtomicBool::new(true));
+    let port = 19101;
 
-    start_health_server(port, running.clone(), start_time, stats_file).unwrap();
-    thread::sleep(Duration::from_millis(100));
+    let _tx = start_test_server(port, running.clone(), stats_file);
+    wait_for_server(port);
 
-    let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
-    stream
-        .write_all(b"GET /invalid HTTP/1.1\r\nHost: localhost\r\n\r\n")
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
         .unwrap();
+    let resp = client
+        .get(format!("http://127.0.0.1:{}/health", port))
+        .send()
+        .expect("request failed");
 
-    let mut response = String::new();
-    stream.read_to_string(&mut response).unwrap();
+    assert_eq!(resp.status(), 200);
 
-    assert!(response.contains("HTTP/1.1 404 Not Found"));
-    assert!(response.contains(r#""error":"Not Found""#));
+    let body: serde_json::Value = resp.json().expect("invalid JSON");
+    assert_eq!(body["status"], "healthy");
+    assert!(body["version"].is_string());
+    assert!(body["uptime"].is_number());
+    assert!(body["timestamp"].is_number());
 
-    running.store(false, Ordering::Relaxed);
+    running.store(false, Ordering::SeqCst);
+    thread::sleep(Duration::from_millis(500));
+}
+
+#[test]
+fn test_metrics_endpoint_empty() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let stats_file = temp_dir.path().join("stats.json");
+    let running = Arc::new(AtomicBool::new(true));
+    let port = 19102;
+
+    let _tx = start_test_server(port, running.clone(), stats_file);
+    wait_for_server(port);
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let resp = client
+        .get(format!("http://127.0.0.1:{}/metrics", port))
+        .send()
+        .expect("request failed");
+
+    assert_eq!(resp.status(), 200);
+
+    let body: serde_json::Value = resp.json().expect("invalid JSON");
+    assert!(body.get("error").is_some());
+
+    running.store(false, Ordering::SeqCst);
+    thread::sleep(Duration::from_millis(500));
 }
 
 #[test]
 fn test_metrics_apps_endpoint_empty() {
-    use tempfile::TempDir;
-    let running = Arc::new(AtomicBool::new(true));
-    let start_time = SystemTime::now();
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempfile::TempDir::new().unwrap();
     let stats_file = temp_dir.path().join("stats.json");
-    // Write empty stats array
     fs::write(&stats_file, "[]").unwrap();
-    let port = 19093;
+    let running = Arc::new(AtomicBool::new(true));
+    let port = 19103;
 
-    start_health_server(port, running.clone(), start_time, stats_file).unwrap();
-    thread::sleep(Duration::from_millis(100));
+    let _tx = start_test_server(port, running.clone(), stats_file);
+    wait_for_server(port);
 
-    let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
-    stream
-        .write_all(b"GET /metrics/apps HTTP/1.1\r\nHost: localhost\r\n\r\n")
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
         .unwrap();
+    let resp = client
+        .get(format!("http://127.0.0.1:{}/metrics/apps", port))
+        .send()
+        .expect("request failed");
 
-    let mut response = String::new();
-    stream.read_to_string(&mut response).unwrap();
+    assert_eq!(resp.status(), 200);
 
-    assert!(response.contains("HTTP/1.1 200 OK"));
-    assert!(response.contains("[]"));
+    let body: serde_json::Value = resp.json().expect("invalid JSON");
+    assert!(body.is_array());
+    assert_eq!(body.as_array().unwrap().len(), 0);
 
-    running.store(false, Ordering::Relaxed);
+    running.store(false, Ordering::SeqCst);
+    thread::sleep(Duration::from_millis(500));
 }
 
 #[test]
 fn test_metrics_apps_endpoint_with_data() {
-    use tempfile::TempDir;
-    let running = Arc::new(AtomicBool::new(true));
-    let start_time = SystemTime::now();
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempfile::TempDir::new().unwrap();
     let stats_file = temp_dir.path().join("stats.json");
-    // Write sample stats
     let stats = r#"[{"app":"myapp","total_processes":2,"running_processes":2,"healthy_processes":1,"total_restarts":0,"total_memory_bytes":0,"total_cpu_time_ms":0,"processes":[],"last_updated":"2026-01-01T00:00:00Z"}]"#;
     fs::write(&stats_file, stats).unwrap();
-    let port = 19094;
+    let running = Arc::new(AtomicBool::new(true));
+    let port = 19104;
 
-    start_health_server(port, running.clone(), start_time, stats_file).unwrap();
-    thread::sleep(Duration::from_millis(100));
+    let _tx = start_test_server(port, running.clone(), stats_file);
+    wait_for_server(port);
 
-    // /metrics/apps returns all apps
-    let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
-    stream
-        .write_all(b"GET /metrics/apps HTTP/1.1\r\nHost: localhost\r\n\r\n")
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
         .unwrap();
-    let mut response = String::new();
-    stream.read_to_string(&mut response).unwrap();
-    assert!(response.contains("HTTP/1.1 200 OK"));
-    assert!(response.contains("myapp"));
+    let resp = client
+        .get(format!("http://127.0.0.1:{}/metrics/apps", port))
+        .send()
+        .expect("request failed");
 
-    running.store(false, Ordering::Relaxed);
+    assert_eq!(resp.status(), 200);
+
+    let body: serde_json::Value = resp.json().expect("invalid JSON");
+    assert!(body.is_array());
+    let apps = body.as_array().unwrap();
+    assert_eq!(apps.len(), 1);
+    assert_eq!(apps[0]["app"], "myapp");
+
+    running.store(false, Ordering::SeqCst);
+    thread::sleep(Duration::from_millis(500));
 }
 
 #[test]
 fn test_metrics_app_specific_found() {
-    use tempfile::TempDir;
-    let running = Arc::new(AtomicBool::new(true));
-    let start_time = SystemTime::now();
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempfile::TempDir::new().unwrap();
     let stats_file = temp_dir.path().join("stats.json");
     let stats = r#"[{"app":"myapp","total_processes":1,"running_processes":1,"healthy_processes":1,"total_restarts":0,"total_memory_bytes":0,"total_cpu_time_ms":0,"processes":[],"last_updated":"2026-01-01T00:00:00Z"},{"app":"otherapp","total_processes":1,"running_processes":0,"healthy_processes":0,"total_restarts":0,"total_memory_bytes":0,"total_cpu_time_ms":0,"processes":[],"last_updated":"2026-01-01T00:00:00Z"}]"#;
     fs::write(&stats_file, stats).unwrap();
-    let port = 19095;
+    let running = Arc::new(AtomicBool::new(true));
+    let port = 19105;
 
-    start_health_server(port, running.clone(), start_time, stats_file).unwrap();
-    thread::sleep(Duration::from_millis(100));
+    let _tx = start_test_server(port, running.clone(), stats_file);
+    wait_for_server(port);
 
-    let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
-    stream
-        .write_all(b"GET /metrics/apps/myapp HTTP/1.1\r\nHost: localhost\r\n\r\n")
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
         .unwrap();
-    let mut response = String::new();
-    stream.read_to_string(&mut response).unwrap();
+    let resp = client
+        .get(format!("http://127.0.0.1:{}/metrics/apps/myapp", port))
+        .send()
+        .expect("request failed");
 
-    assert!(response.contains("HTTP/1.1 200 OK"));
-    assert!(response.contains("myapp"));
-    // Should not include otherapp in the body
-    let body_start = response.find("\r\n\r\n").unwrap_or(0) + 4;
-    let body = &response[body_start..];
-    assert!(
-        !body.contains("otherapp"),
-        "Should only return myapp, not otherapp"
-    );
+    let status = resp.status();
+    let body_text = resp.text().unwrap_or_default();
 
-    running.store(false, Ordering::Relaxed);
+    assert_eq!(status, 200, "expected 200, got body: {}", body_text);
+
+    let body: serde_json::Value =
+        serde_json::from_str(&body_text).expect("response is not valid JSON");
+    assert_eq!(body["app"], "myapp");
+    assert!(body.get("total_processes").is_some());
+
+    running.store(false, Ordering::SeqCst);
+    thread::sleep(Duration::from_millis(500));
 }
 
 #[test]
 fn test_metrics_app_specific_not_found() {
-    use tempfile::TempDir;
-    let running = Arc::new(AtomicBool::new(true));
-    let start_time = SystemTime::now();
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempfile::TempDir::new().unwrap();
     let stats_file = temp_dir.path().join("stats.json");
     fs::write(&stats_file, "[]").unwrap();
-    let port = 19096;
+    let running = Arc::new(AtomicBool::new(true));
+    let port = 19106;
 
-    start_health_server(port, running.clone(), start_time, stats_file).unwrap();
-    thread::sleep(Duration::from_millis(100));
+    let _tx = start_test_server(port, running.clone(), stats_file);
+    wait_for_server(port);
 
-    let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
-    stream
-        .write_all(b"GET /metrics/apps/nonexistent HTTP/1.1\r\nHost: localhost\r\n\r\n")
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
         .unwrap();
-    let mut response = String::new();
-    stream.read_to_string(&mut response).unwrap();
+    let resp = client
+        .get(format!(
+            "http://127.0.0.1:{}/metrics/apps/nonexistent",
+            port
+        ))
+        .send()
+        .expect("request failed");
 
-    assert!(response.contains("HTTP/1.1 404 Not Found"));
-    assert!(response.contains("nonexistent"));
+    let status = resp.status();
+    let body_text = resp.text().unwrap_or_default();
 
-    running.store(false, Ordering::Relaxed);
+    assert_eq!(status, 404, "expected 404, got body: {}", body_text);
+
+    let body: serde_json::Value =
+        serde_json::from_str(&body_text).expect("response is not valid JSON");
+    assert_eq!(body["error"], "Not Found");
+
+    running.store(false, Ordering::SeqCst);
+    thread::sleep(Duration::from_millis(500));
+}
+
+#[test]
+fn test_404_response() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let stats_file = temp_dir.path().join("stats.json");
+    let running = Arc::new(AtomicBool::new(true));
+    let port = 19107;
+
+    let _tx = start_test_server(port, running.clone(), stats_file);
+    wait_for_server(port);
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let resp = client
+        .get(format!("http://127.0.0.1:{}/invalid", port))
+        .send()
+        .expect("request failed");
+
+    assert_eq!(resp.status(), 404);
+
+    running.store(false, Ordering::SeqCst);
+    thread::sleep(Duration::from_millis(500));
+}
+
+#[test]
+fn test_metrics_stream_returns_sse_headers() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let stats_file = temp_dir.path().join("stats.json");
+    fs::write(&stats_file, r#"[]"#).unwrap();
+    let running = Arc::new(AtomicBool::new(true));
+    let port = 19108;
+
+    let _tx = start_test_server(port, running.clone(), stats_file);
+    wait_for_server(port);
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(3))
+        .build()
+        .unwrap();
+    let resp = client
+        .get(format!("http://127.0.0.1:{}/metrics/stream", port))
+        .send()
+        .expect("request failed");
+
+    assert_eq!(resp.status(), 200);
+    let content_type = resp.headers().get("content-type").unwrap().to_str().unwrap();
+    assert!(
+        content_type.contains("text/event-stream"),
+        "Expected SSE content type, got: {}",
+        content_type
+    );
+
+    running.store(false, Ordering::SeqCst);
+    thread::sleep(Duration::from_millis(500));
 }

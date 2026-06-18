@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+/*
+ * Slishee brand tokens — CSS-first @theme engine (Tailwind v4).
+ *
+ * Color profile:
+ *   dark bg     #0A0A0A
+ *   light bg    #FAFAFA
+ *   primary     #5C1611  (burgundy)
+ *   accent      #E63B19  (electric orange-red)
+ *
+ * Radius is forced to 0 across the entire system.
+ */
+
+@theme {
+  /* ── Brand palette ── */
+  --color-background-dark: #0A0A0A;
+  --color-background-light: #FAFAFA;
+  --color-primary-burgundy: #5C1611;
+  --color-accent-orange: #E63B19;
+
+  /* ── Semantic surfaces ── */
+  --color-surface-card: #0E0E0E;
+  --color-surface-elevated: #141414;
+
+  /* ── Semantic text ── */
+  --color-foreground-dark: #F5F5F5;
+  --color-foreground-muted: #737373;
+  --color-foreground-dim: #525252;
+
+  /* ── Semantic borders ── */
+  --color-border-subtle: #262626;
+  --color-border-strong: #404040;
+
+  /* ── Status fills (10 % accent wash) ── */
+  --color-status-running: #E63B191A;
+  --color-status-error: #E63B1926;
+
+  /* ── Typography ── */
+  --font-family-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+    Consolas, monospace;
+}
+
+/* ── Dark mode (default) ── */
+.dark {
+  color-scheme: dark;
+}
+
+/* ── Base resets ── */
+*,
+*::before,
+*::after {
+  border-color: var(--color-border-subtle);
+  border-radius: 0 !important;
+}
+
+body {
+  background-color: var(--color-background-dark);
+  color: var(--color-foreground-dark);
+  font-family: var(--font-family-mono);
+  font-feature-settings: "tnum" 1, "zero" 1;
+}
+
+/* ── Utility layer ── */
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
