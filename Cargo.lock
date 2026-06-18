@@ -1614,6 +1614,7 @@ dependencies = [
  "dirs",
  "futures",
  "glob",
+ "libc",
  "nix",
  "notify",
  "once_cell",

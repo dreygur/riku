@@ -8,6 +8,7 @@ use once_cell::sync::Lazy;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Mutex;
 
+pub mod cgroups;
 pub mod config;
 pub mod cron;
 pub mod daemon;

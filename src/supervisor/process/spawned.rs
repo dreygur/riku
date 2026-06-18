@@ -8,6 +8,7 @@ use std::process::Child;
 use std::thread;
 use std::time::Duration;
 
+use crate::supervisor::cgroups::WorkerCgroup;
 use crate::supervisor::config::{HealthCheck, WorkerConfig};
 
 /// Represents a spawned application process with metadata.
@@ -19,16 +20,21 @@ pub struct SpawnedProcess {
     pub last_restart: std::time::Instant,
     pub health_check_config: Option<HealthCheck>,
     pub consecutive_health_failures: u32,
+    /// Present only when the worker opted into cgroup v2 isolation. Used to
+    /// poll for OOM kills and removed once the process has exited.
+    pub cgroup: Option<WorkerCgroup>,
     #[allow(dead_code)]
     log_handles: Option<(File, File)>,
 }
 
 impl SpawnedProcess {
-    /// Create a new SpawnedProcess instance.
-    pub fn new(
+    /// Create a new SpawnedProcess instance, attaching the cgroup that was
+    /// provisioned for it (if isolation is enabled for this worker).
+    pub fn new_with_cgroup(
         child: Child,
         config: WorkerConfig,
         log_handles: Option<(File, File)>,
+        cgroup: Option<WorkerCgroup>,
     ) -> Result<Self> {
         let pid = Pid::from_raw(child.id() as i32);
         let health_check_config = config.options.health_check.clone();
@@ -41,8 +47,15 @@ impl SpawnedProcess {
             last_restart: std::time::Instant::now(),
             health_check_config,
             consecutive_health_failures: 0,
+            cgroup,
             log_handles,
         })
+    }
+
+    /// Cumulative OOM-kill count reported by the worker's cgroup, or `None`
+    /// if isolation isn't enabled for this worker.
+    pub fn oom_kill_count(&self) -> Option<u64> {
+        self.cgroup.as_ref().and_then(|c| c.oom_kill_count())
     }
 
     /// Check if the process is still running.
@@ -95,5 +108,12 @@ impl Drop for SpawnedProcess {
         }
         // Reap the child to avoid zombies
         let _ = self.child.wait();
+
+        // The cgroup must be empty before it can be removed, which is only
+        // guaranteed once the child (and any namespace-isolation shim) has
+        // been reaped above.
+        if let Some(cgroup) = &self.cgroup {
+            let _ = cgroup.cleanup();
+        }
     }
 }

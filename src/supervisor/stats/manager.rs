@@ -75,6 +75,14 @@ impl StatsManager {
         }
     }
 
+    /// Mark a process as killed by the kernel OOM killer (cgroup
+    /// `memory.max` exceeded).
+    pub fn mark_oom_killed(&mut self, process_id: &str) {
+        if let Some(stats) = self.stats.get_mut(process_id) {
+            stats.status = ProcessStatus::OomKilled;
+        }
+    }
+
     /// Mark a process as restarting.
     pub fn mark_restarting(&mut self, process_id: &str) {
         if let Some(stats) = self.stats.get_mut(process_id) {

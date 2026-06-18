@@ -99,6 +99,7 @@ mod tests {
                 grace_period: 1,
                 max_restarts: 3,
                 health_check: None,
+                isolation: None,
             },
         }
     }

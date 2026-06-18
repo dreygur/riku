@@ -26,6 +26,7 @@ fn test_worker_config_serialization() {
             grace_period: default_grace_period(),
             max_restarts: default_max_restarts(),
             health_check: None,
+            isolation: None,
         },
     };
 

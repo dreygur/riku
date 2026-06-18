@@ -53,6 +53,9 @@ pub enum ProcessStatus {
     Stopped,
     Crashed,
     Restarting,
+    /// The worker's cgroup `memory.max` was exceeded and the kernel OOM
+    /// killer terminated it (detected via `memory.events: oom_kill`).
+    OomKilled,
 }
 
 impl std::fmt::Display for ProcessStatus {
@@ -63,6 +66,7 @@ impl std::fmt::Display for ProcessStatus {
             ProcessStatus::Stopped => write!(f, "stopped"),
             ProcessStatus::Crashed => write!(f, "crashed"),
             ProcessStatus::Restarting => write!(f, "restarting"),
+            ProcessStatus::OomKilled => write!(f, "oom_killed"),
         }
     }
 }

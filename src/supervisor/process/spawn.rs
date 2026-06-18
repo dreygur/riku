@@ -9,8 +9,10 @@ use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
 use std::thread;
 
+use crate::supervisor::cgroups::{CgroupLimits, WorkerCgroup};
 use crate::supervisor::config::WorkerConfig;
 
+use super::isolation::NamespaceConfig;
 use super::ProcessManager;
 
 impl ProcessManager {
@@ -58,6 +60,31 @@ impl ProcessManager {
                 .map(|g| g.gid)
         });
 
+        // Provision the worker's cgroup (if isolation is enabled) before
+        // spawning, so the constraints already exist when the worker joins
+        // it from within pre_exec.
+        let cgroup: Option<WorkerCgroup> = match &config.options.isolation {
+            Some(opts) => Some(WorkerCgroup::provision(
+                &process_id,
+                &CgroupLimits {
+                    memory_max_bytes: opts.max_memory_bytes,
+                    cpu_quota_us: opts.cpu_quota_us,
+                    cpu_period_us: opts.cpu_period_us,
+                },
+            )?),
+            None => None,
+        };
+        let cgroup_for_child = cgroup.clone();
+
+        let namespace_config = NamespaceConfig {
+            enabled: config.options.isolation.is_some(),
+            isolated_root: config
+                .options
+                .isolation
+                .as_ref()
+                .map(|opts| std::path::PathBuf::from(&opts.root_dir)),
+        };
+
         // Build the command to run
         let mut cmd = Command::new("sh");
 
@@ -88,8 +115,22 @@ impl ProcessManager {
                         })?;
                     }
 
+                    // Join the cgroup using our own (real, top-level) PID
+                    // before any namespace isolation below, while it still
+                    // matches what the parent sees as `child.id()`.
+                    if let Some(cgroup) = &cgroup_for_child {
+                        cgroup.add_self()?;
+                    }
+
                     // Apply configured resource limits
                     limits.apply()?;
+
+                    // Namespace isolation runs last: on success for the
+                    // PID-namespace branch it either returns Ok(()) in the
+                    // process that's about to exec, or never returns at all
+                    // (the outer process became a signal-forwarding shim
+                    // and already called _exit). See isolation.rs.
+                    namespace_config.apply()?;
 
                     Ok(())
                 });
@@ -157,14 +198,14 @@ impl ProcessManager {
             }
         }
 
-        // Save PID before transferring ownership to SpawnedProcess::new().
-        // This allows us to kill the child if new() fails, preventing zombie processes.
+        // Save PID before transferring ownership to SpawnedProcess::new_with_cgroup().
+        // This allows us to kill the child if it fails, preventing zombie processes.
         let child_pid = child.id();
 
         // Create the SpawnedProcess wrapper.
         // If this fails, kill the child to prevent orphaned processes.
         let spawned_process: super::SpawnedProcess =
-            match super::SpawnedProcess::new(child, config.clone(), log_handles) {
+            match super::SpawnedProcess::new_with_cgroup(child, config.clone(), log_handles, cgroup) {
                 Ok(sp) => sp,
                 Err(e) => {
                     // Kill the child process using the saved PID
@@ -242,6 +283,7 @@ mod tests {
                 grace_period: 2,
                 max_restarts: 3,
                 health_check: None,
+                isolation: None,
             },
         }
     }

@@ -18,6 +18,11 @@ pub struct ProcessInfo {
 }
 
 impl ProcessManager {
+    /// Whether a process slot is currently spawned and tracked.
+    pub fn is_managed(&self, process_id: &str) -> bool {
+        self.processes.contains_key(process_id)
+    }
+
     /// Get a list of all managed processes with their status.
     #[allow(dead_code)]
     pub fn list_processes(&self) -> Vec<ProcessInfo> {
