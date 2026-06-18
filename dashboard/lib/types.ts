@@ -2,9 +2,20 @@
 // real data shapes surfaced by the supervisor, deploy, and nginx subsystems
 // (see src/supervisor/, src/deploy/, src/nginx.rs in the riku source tree).
 
-import type { AppStats, NetworkEntry, ProcessStats } from "@/lib/api";
+import type {
+  AppStats,
+  HealthCheckStatus,
+  NetworkEntry,
+  ProcessStats,
+} from "@/lib/api";
 
-export type ProcessStatus = "running" | "stopped" | "crashed";
+export type ProcessStatus =
+  | "running"
+  | "stopped"
+  | "crashed"
+  | "starting"
+  | "restarting"
+  | "oom_killed";
 
 export type HealthState = "healthy" | "unhealthy" | "unknown";
 
@@ -20,7 +31,19 @@ export interface WorkerInfo {
   cpuTimeMs: number;
   status: ProcessStatus;
   health: HealthState;
+  /** Failure detail when health is "unhealthy" due to a probe error, e.g. "connection refused". */
+  healthDetail: string | null;
   restartCount: number;
+  /** When this process instance was started, or null if never started. */
+  startedAt: string | null;
+  /** When the most recent health probe ran, or null if none yet. */
+  lastHealthCheck: string | null;
+  /** When the process was last restarted, or null if never restarted. */
+  lastRestartAt: string | null;
+  /** Total requests served since this process started. */
+  requestsTotal: number;
+  /** Current request throughput, requests/sec. */
+  requestsPerSecond: number;
 }
 
 /** A single timestamped line from a live deploy log stream. */
@@ -71,23 +94,39 @@ const STATUS_MAP: Record<string, ProcessStatus> = {
   running: "running",
   stopped: "stopped",
   crashed: "crashed",
-  starting: "running",
-  restarting: "running",
+  starting: "starting",
+  restarting: "restarting",
+  oom_killed: "oom_killed",
 };
 
-const HEALTH_MAP: Record<string, HealthState> = {
-  healthy: "healthy",
-  unhealthy: "unhealthy",
-  unknown: "unknown",
-  timeout: "unhealthy",
-  error: "unhealthy",
-};
+/** Unpack the `HealthCheckStatus` wire shape into a coarse UI state plus an
+ * optional human-readable detail (only set for the `{error: "..."}` shape). */
+function mapHealth(raw: HealthCheckStatus): {
+  health: HealthState;
+  detail: string | null;
+} {
+  if (typeof raw === "object" && raw !== null) {
+    return { health: "unhealthy", detail: raw.error };
+  }
+  switch (raw) {
+    case "healthy":
+      return { health: "healthy", detail: null };
+    case "unhealthy":
+      return { health: "unhealthy", detail: null };
+    case "timeout":
+      return { health: "unhealthy", detail: "probe timed out" };
+    case "unknown":
+    default:
+      return { health: "unknown", detail: null };
+  }
+}
 
 /** Flatten all processes across all apps into a single WorkerInfo array. */
 export function mapBackendToWorkers(apps: AppStats[]): WorkerInfo[] {
   const workers: WorkerInfo[] = [];
   for (const app of apps) {
     for (const p of app.processes) {
+      const { health, detail } = mapHealth(p.health_check_status);
       workers.push({
         app: p.app,
         process: `${p.kind}.${p.ordinal}`,
@@ -95,8 +134,14 @@ export function mapBackendToWorkers(apps: AppStats[]): WorkerInfo[] {
         rssBytes: p.memory_bytes,
         cpuTimeMs: p.cpu_time_ms,
         status: STATUS_MAP[p.status] ?? "stopped",
-        health: HEALTH_MAP[p.health_check_status] ?? "unknown",
+        health,
+        healthDetail: detail,
         restartCount: p.restart_count,
+        startedAt: p.started_at,
+        lastHealthCheck: p.last_health_check,
+        lastRestartAt: p.last_restart_at,
+        requestsTotal: p.requests_total,
+        requestsPerSecond: p.requests_per_second,
       });
     }
   }

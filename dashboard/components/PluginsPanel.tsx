@@ -48,15 +48,15 @@ export function PluginsPanel({ className }: PluginsPanelProps) {
   }, [fetchAll]);
 
   return (
-    <div className={`flex flex-col sm:flex-row border-b border-primary-burgundy ${className ?? ""}`}>
+    <div className={`flex flex-col sm:flex-row border-b border-line ${className ?? ""}`}>
       {/* Client plugins */}
-      <div className="flex-1 border-b sm:border-b-0 sm:border-r border-primary-burgundy/30">
-        <div className="flex items-center justify-between px-3 py-2 border-b border-primary-burgundy/30">
-          <span className="text-xs font-bold tracking-wide uppercase text-foreground-muted">
-            CLIENT_PLUGINS //
+      <div className="flex-1 border-b sm:border-b-0 sm:border-r border-line/30">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-line/30">
+          <span className="font-display text-xs font-bold tracking-wide text-foreground-muted">
+            ~/.riku/client-plugins
           </span>
           <span className="text-xs text-foreground-dim tabular">
-            {error ? <span className="text-accent-orange">[{error}]</span> : `${clientPlugins.length} installed`}
+            {error ? <span className="text-accent-red">[{error}]</span> : `${clientPlugins.length} installed`}
           </span>
         </div>
         <div className="px-3 py-2 text-sm">
@@ -76,9 +76,9 @@ export function PluginsPanel({ className }: PluginsPanelProps) {
 
       {/* Server-side hook plugins */}
       <div className="flex-1">
-        <div className="flex items-center justify-between px-3 py-2 border-b border-primary-burgundy/30">
-          <span className="text-xs font-bold tracking-wide uppercase text-foreground-muted">
-            HOOK_PLUGINS //
+        <div className="flex items-center justify-between px-3 py-2 border-b border-line/30">
+          <span className="font-display text-xs font-bold tracking-wide text-foreground-muted">
+            ~/.riku/plugins
           </span>
           <div className="flex items-center gap-2">
             <span className="text-xs text-foreground-dim tabular">
@@ -87,7 +87,7 @@ export function PluginsPanel({ className }: PluginsPanelProps) {
             <button
               onClick={handleInstall}
               disabled={installing}
-              className="rounded-none text-xs font-bold border border-primary-burgundy text-foreground-dark px-2 py-0.5 transition-colors hover:bg-accent-orange hover:text-background-dark hover:border-accent-orange disabled:opacity-40 disabled:cursor-not-allowed"
+              className="rounded-none text-xs font-bold border border-line text-foreground-dark px-2 py-0.5 transition-colors hover:bg-accent-amber hover:text-background-dark hover:border-accent-amber disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {installing ? "[INSTALLING...]" : "[INSTALL RUNTIMES]"}
             </button>

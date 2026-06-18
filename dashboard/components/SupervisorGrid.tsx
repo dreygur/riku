@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   Table,
   TableBody,
@@ -10,33 +11,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { api } from "@/lib/api";
-import {
-  type ProcessStatus,
-  type WorkerInfo,
-  mapBackendToWorkers,
-} from "@/lib/types";
-import { formatBytes, formatCpuTime } from "@/lib/format";
+import { type WorkerInfo, mapBackendToWorkers } from "@/lib/types";
+import { formatAgo, formatBytes, formatCpuTime } from "@/lib/format";
+import { StatusTag } from "@/components/StatusTag";
 
 const POLL_INTERVAL_MS = 5_000;
 
-const STATUS_LABEL: Record<ProcessStatus, string> = {
-  running: "RUNNING",
-  stopped: "STOPPED",
-  crashed: "CRASHED",
-};
-
-const STATUS_STYLE: Record<ProcessStatus, string> = {
-  running: "text-foreground-muted",
-  stopped: "text-foreground-dim",
-  crashed: "text-accent-orange",
-};
-
-function StatusTag({ status }: { status: ProcessStatus }) {
-  return (
-    <span className={`text-xs font-bold ${STATUS_STYLE[status]}`}>
-      [{STATUS_LABEL[status]}]
-    </span>
-  );
+/** Tooltip text surfacing the fields too dense for the grid's columns —
+ * the per-app detail page is where these get their own columns. */
+function workerTooltip(w: WorkerInfo): string {
+  const parts = [
+    `health: ${w.health}${w.healthDetail ? ` (${w.healthDetail})` : ""}`,
+    `started: ${formatAgo(w.startedAt)}`,
+  ];
+  if (w.lastRestartAt) parts.push(`last restart: ${formatAgo(w.lastRestartAt)}`);
+  return parts.join(" | ");
 }
 
 export interface SupervisorGridProps {
@@ -82,13 +71,13 @@ export function SupervisorGrid({
   return (
     <div className={className} data-testid="supervisor-grid">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-primary-burgundy px-3 py-2">
-        <span className="text-xs font-bold tracking-wide uppercase text-foreground-muted">
-          SUPERVISOR_METRICS
+      <div className="flex items-center justify-between border-b border-line px-3 py-2">
+        <span className="font-display text-xs font-bold tracking-wide text-foreground-muted">
+          ~/.riku/workers-enabled
         </span>
         <span data-testid="supervisor-grid-status" className="text-xs text-foreground-muted tabular">
           {error ? (
-            <span className="text-accent-orange">[{error}]</span>
+            <span className="text-accent-red">[{error}]</span>
           ) : lastUpdated ? (
             `updated ${lastUpdated.toLocaleTimeString()}`
           ) : (
@@ -101,7 +90,7 @@ export function SupervisorGrid({
       <div className="overflow-x-auto">
         <Table className="rounded-none text-sm">
           <TableHeader>
-            <TableRow className="rounded-none border-b border-primary-burgundy/30">
+            <TableRow className="rounded-none border-b border-line/30">
               <TableHead className="rounded-none">APP</TableHead>
               <TableHead className="rounded-none">PROC</TableHead>
               <TableHead className="rounded-none text-right">PID</TableHead>
@@ -109,6 +98,7 @@ export function SupervisorGrid({
                 RSS MEMORY
               </TableHead>
               <TableHead className="rounded-none text-right">CPU %</TableHead>
+              <TableHead className="rounded-none text-right">REQ/S</TableHead>
               <TableHead className="rounded-none text-right">
                 RESTARTS
               </TableHead>
@@ -119,7 +109,7 @@ export function SupervisorGrid({
             {sorted.length === 0 ? (
               <TableRow className="rounded-none">
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   className="rounded-none text-center text-foreground-muted py-6"
                 >
                   {error ? `[fetch error: ${error}]` : "no workers supervised"}
@@ -134,10 +124,16 @@ export function SupervisorGrid({
                   data-process={w.process}
                   data-status={w.status}
                   data-pid={w.pid ?? ""}
-                  className="rounded-none border-b border-primary-burgundy/30 last:border-b-0 hover:bg-white/5"
+                  title={workerTooltip(w)}
+                  className="rounded-none border-b border-line/30 last:border-b-0 hover:bg-white/5"
                 >
                   <TableCell className="rounded-none font-bold">
-                    {w.app}
+                    <Link
+                      href={`/apps/${encodeURIComponent(w.app)}`}
+                      className="hover:text-accent-amber hover:underline"
+                    >
+                      {w.app}
+                    </Link>
                   </TableCell>
                   <TableCell className="rounded-none text-foreground-muted">
                     {w.process}
@@ -150,6 +146,9 @@ export function SupervisorGrid({
                   </TableCell>
                   <TableCell className="rounded-none text-right tabular">
                     {formatCpuTime(w.cpuTimeMs)}
+                  </TableCell>
+                  <TableCell className="rounded-none text-right tabular">
+                    {w.requestsPerSecond.toFixed(1)}
                   </TableCell>
                   <TableCell className="rounded-none text-right tabular">
                     {w.restartCount}

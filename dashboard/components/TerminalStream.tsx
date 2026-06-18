@@ -61,19 +61,19 @@ export function TerminalStream({ app, filter, className }: TerminalStreamProps) 
   return (
     <div
       data-testid="terminal-stream"
-      className={`flex flex-col h-full border border-primary-burgundy ${className ?? ""}`}
+      className={`flex flex-col h-full border border-line ${className ?? ""}`}
     >
       {/* Header bar */}
-      <div className="flex items-center justify-between border-b border-primary-burgundy px-3 py-2 shrink-0">
+      <div className="flex items-center justify-between border-b border-line px-3 py-2 shrink-0">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold tracking-wide uppercase text-foreground-muted">
-            LOG_STREAM_BUFFER
+          <span className="font-display text-xs font-bold tracking-wide text-foreground-muted">
+            riku logs --follow
           </span>
           <span
             data-testid="terminal-stream-status"
             data-connected={connected}
             className={`text-xs tabular ${
-              connected ? "text-accent-orange" : "text-foreground-dim"
+              connected ? "text-accent-green" : "text-foreground-dim"
             }`}
           >
             [{connected ? "LIVE" : "OFFLINE"}]
@@ -92,8 +92,8 @@ export function TerminalStream({ app, filter, className }: TerminalStreamProps) 
             }}
             className={`rounded-none text-xs font-bold border px-2 py-0.5 transition-colors ${
               autoScroll
-                ? "border-accent-orange text-accent-orange bg-status-running"
-                : "border-primary-burgundy text-foreground-muted hover:text-foreground-dark hover:bg-primary-burgundy/10"
+                ? "border-accent-amber text-accent-amber bg-status-running"
+                : "border-line text-foreground-muted hover:text-foreground-dark hover:bg-line/10"
             }`}
           >
             [{autoScroll ? "SCROLL:ON" : "SCROLL:OFF"}]
@@ -117,7 +117,7 @@ export function TerminalStream({ app, filter, className }: TerminalStreamProps) 
           ) : (
             filtered.map((line, i) => (
               <div key={i} data-testid="terminal-stream-line" className="hover:bg-white/5">
-                <span className="text-accent-orange/40 mr-2">❯</span>
+                <span className="text-accent-amber/40 mr-2">❯</span>
                 {line}
               </div>
             ))

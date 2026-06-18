@@ -15,16 +15,27 @@ export type AppStats = {
   last_updated: string;
 };
 
+/** The Rust `HealthStatus` enum's `Error(String)` variant serializes as
+ * `{"error": "<message>"}` rather than a plain string (serde's default
+ * external tagging for a tuple variant) — every other variant is a string. */
+export type HealthCheckStatus =
+  | "unknown"
+  | "healthy"
+  | "unhealthy"
+  | "timeout"
+  | { error: string };
+
 export type ProcessStats = {
   process_id: string;
   app: string;
   kind: string;
   ordinal: number;
   pid: number | null;
+  /** Includes "oom_killed" when the kernel OOM killer terminated the worker. */
   status: string;
-  started_at: string;
+  started_at: string | null;
   last_health_check: string | null;
-  health_check_status: string;
+  health_check_status: HealthCheckStatus;
   restart_count: number;
   last_restart_at: string | null;
   cpu_time_ms: number;
@@ -84,8 +95,10 @@ export const api = {
   metrics: {
     get: () => apiFetch<AppStats[]>("/metrics"),
     getApps: () => apiFetch<AppStats[]>("/metrics/apps"),
+    /** Unlike `get`/`getApps`, the backend returns a single object here,
+     * not an array (see src/supervisor/health/mod.rs metrics_app_handler). */
     getApp: (app: string) =>
-      apiFetch<AppStats[]>(`/metrics/apps/${encodeURIComponent(app)}`),
+      apiFetch<AppStats>(`/metrics/apps/${encodeURIComponent(app)}`),
   },
 
   network: {

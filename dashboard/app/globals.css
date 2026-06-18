@@ -1,56 +1,60 @@
 @import "tailwindcss";
 
 /*
- * Slishee brand tokens — CSS-first @theme engine (Tailwind v4).
+ * Riku dashboard tokens — CSS-first @theme engine (Tailwind v4).
  *
- * Color profile:
- *   dark bg     #0A0A0A
- *   light bg    #FAFAFA
- *   primary     #5C1611  (burgundy)
- *   accent      #E63B19  (electric orange-red)
+ * Direction: phosphor-amber terminal panel. Riku supervises real processes
+ * (PIDs, RSS, restarts) and tails real log output — the palette borrows from
+ * the amber/green CRT status monitors this kind of tool has always used,
+ * with three distinct status hues (not one accent overloaded for everything):
+ *   amber  -> interactive / in-progress / focus
+ *   green  -> healthy / running / connected
+ *   red    -> crashed / destructive / expired
  *
- * Radius is forced to 0 across the entire system.
+ * Radius is forced to 0 — the whole UI sits on a fixed-width character grid.
  */
 
 @theme {
-  /* ── Brand palette ── */
-  --color-background-dark: #0A0A0A;
-  --color-background-light: #FAFAFA;
-  --color-primary-burgundy: #5C1611;
-  --color-accent-orange: #E63B19;
+  /* -- Surfaces -- */
+  --color-background-dark: #0a0b08;
+  --color-background-light: #f4f1e6;
+  --color-surface-card: #101109;
+  --color-surface-elevated: #15160e;
 
-  /* ── Semantic surfaces ── */
-  --color-surface-card: #0E0E0E;
-  --color-surface-elevated: #141414;
+  /* -- Structure / hairlines -- */
+  --color-line: #23241a;
+  --color-line-strong: #3a3c28;
 
-  /* ── Semantic text ── */
-  --color-foreground-dark: #F5F5F5;
-  --color-foreground-muted: #737373;
-  --color-foreground-dim: #525252;
+  /* -- Text -- */
+  --color-foreground-dark: #ece7d6;
+  --color-foreground-muted: #8a8d78;
+  --color-foreground-dim: #4f5240;
 
-  /* ── Semantic borders ── */
-  --color-border-subtle: #262626;
-  --color-border-strong: #404040;
+  /* -- Status vocabulary -- */
+  --color-accent-amber: #ffb627;
+  --color-accent-green: #6fcf7e;
+  --color-accent-red: #ff5c5c;
 
-  /* ── Status fills (10 % accent wash) ── */
-  --color-status-running: #E63B191A;
-  --color-status-error: #E63B1926;
+  /* -- Status fills (wash behind active rows/badges) -- */
+  --color-status-running: #6fcf7e1a;
+  --color-status-error: #ff5c5c26;
 
-  /* ── Typography ── */
-  --font-family-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
-    Consolas, monospace;
+  /* -- Typography: each face has one job -- */
+  --font-family-display: var(--font-space-mono), ui-monospace, monospace;
+  --font-family-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --font-family-terminal: var(--font-jetbrains-mono), ui-monospace, monospace;
 }
 
-/* ── Dark mode (default) ── */
+/* -- Dark mode (default) -- */
 .dark {
   color-scheme: dark;
 }
 
-/* ── Base resets ── */
+/* -- Base resets -- */
 *,
 *::before,
 *::after {
-  border-color: var(--color-border-subtle);
+  border-color: var(--color-line);
   border-radius: 0 !important;
 }
 
@@ -61,9 +65,17 @@ body {
   font-feature-settings: "tnum" 1, "zero" 1;
 }
 
-/* ── Utility layer ── */
+/* -- Utility layer -- */
 @layer utilities {
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+
+  .font-display {
+    font-family: var(--font-family-display);
+  }
+
+  .font-terminal {
+    font-family: var(--font-family-terminal);
   }
 }

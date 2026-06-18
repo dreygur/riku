@@ -38,3 +38,24 @@ export function daysUntil(iso: string | null): number | null {
   if (Number.isNaN(target)) return null;
   return Math.ceil((target - Date.now()) / 86_400_000);
 }
+
+/** Pull the port out of an nginx upstream target, e.g. "http://127.0.0.1:5000" -> "5000". */
+export function parseUpstreamPort(upstream: string | null): string | null {
+  if (!upstream) return null;
+  const match = upstream.match(/:(\d+)\/?$/);
+  return match ? match[1] : null;
+}
+
+/** Format an ISO timestamp as elapsed time since now, e.g. "3h12m ago". */
+export function formatAgo(iso: string | null): string {
+  if (!iso) return "--";
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "--";
+  const totalSeconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h${minutes.toString().padStart(2, "0")}m ago`;
+  if (minutes > 0) return `${minutes}m${seconds.toString().padStart(2, "0")}s ago`;
+  return `${seconds}s ago`;
+}

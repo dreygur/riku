@@ -88,8 +88,8 @@ export function EnvEditor({ app, className }: EnvEditorProps) {
     <div className={`flex flex-col h-full ${className ?? ""}`}>
       {/* Error bar */}
       {error && (
-        <div className="border-b border-primary-burgundy px-3 py-1.5 shrink-0">
-          <span className="text-xs text-accent-orange tabular">[{error}]</span>
+        <div className="border-b border-line px-3 py-1.5 shrink-0">
+          <span className="text-xs text-accent-red tabular">[{error}]</span>
         </div>
       )}
 
@@ -97,7 +97,7 @@ export function EnvEditor({ app, className }: EnvEditorProps) {
       <div className="flex-1 overflow-y-auto min-h-0">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-primary-burgundy/30">
+            <tr className="border-b border-line/30">
               <th className="rounded-none text-left px-3 py-2 text-xs font-bold tracking-wide uppercase text-foreground-muted">
                 KEY
               </th>
@@ -130,7 +130,7 @@ export function EnvEditor({ app, className }: EnvEditorProps) {
               vars.map((v) => (
                 <tr
                   key={v.key}
-                  className="border-b border-primary-burgundy/30 last:border-b-0 hover:bg-white/5"
+                  className="border-b border-line/30 last:border-b-0 hover:bg-white/5"
                 >
                   <td className="px-3 py-1.5 font-bold text-foreground-dark whitespace-nowrap">
                     {v.key}
@@ -147,7 +147,7 @@ export function EnvEditor({ app, className }: EnvEditorProps) {
                           if (e.key === "Escape") setEditingKey(null);
                         }}
                         autoFocus
-                        className="rounded-none w-full bg-transparent border border-primary-burgundy px-2 py-0.5 text-sm text-foreground-dark outline-none focus:border-accent-orange tabular"
+                        className="rounded-none w-full bg-transparent border border-line px-2 py-0.5 text-sm text-foreground-dark outline-none focus:border-accent-amber tabular"
                       />
                     ) : (
                       <span
@@ -166,13 +166,13 @@ export function EnvEditor({ app, className }: EnvEditorProps) {
                       <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => handleUpdate(v.key, editValue)}
-                          className="rounded-none text-xs font-bold border border-primary-burgundy text-foreground-dark px-2 py-0.5 hover:bg-accent-orange hover:text-background-dark hover:border-accent-orange transition-colors"
+                          className="rounded-none text-xs font-bold border border-line text-foreground-dark px-2 py-0.5 hover:bg-accent-amber hover:text-background-dark hover:border-accent-amber transition-colors"
                         >
                           [SAVE]
                         </button>
                         <button
                           onClick={() => setEditingKey(null)}
-                          className="rounded-none text-xs font-bold border border-primary-burgundy text-foreground-muted px-2 py-0.5 hover:bg-primary-burgundy/10 hover:text-foreground-dark transition-colors"
+                          className="rounded-none text-xs font-bold border border-line text-foreground-muted px-2 py-0.5 hover:bg-line/10 hover:text-foreground-dark transition-colors"
                         >
                           [ESC]
                         </button>
@@ -184,13 +184,13 @@ export function EnvEditor({ app, className }: EnvEditorProps) {
                             setEditingKey(v.key);
                             setEditValue(v.value);
                           }}
-                          className="rounded-none text-xs font-bold border border-primary-burgundy text-foreground-muted px-2 py-0.5 hover:bg-primary-burgundy/10 hover:text-foreground-dark transition-colors"
+                          className="rounded-none text-xs font-bold border border-line text-foreground-muted px-2 py-0.5 hover:bg-line/10 hover:text-foreground-dark transition-colors"
                         >
                           [EDIT]
                         </button>
                         <button
                           onClick={() => handleDelete(v.key)}
-                          className="rounded-none text-xs font-bold border border-primary-burgundy text-accent-orange px-2 py-0.5 hover:bg-accent-orange hover:text-background-dark hover:border-accent-orange transition-colors"
+                          className="rounded-none text-xs font-bold border border-line text-accent-red px-2 py-0.5 hover:bg-accent-red hover:text-background-dark hover:border-accent-red transition-colors"
                         >
                           [DEL]
                         </button>
@@ -202,7 +202,7 @@ export function EnvEditor({ app, className }: EnvEditorProps) {
             )}
 
             {/* Add row */}
-            <tr className="border-t border-primary-burgundy/30 bg-surface-card">
+            <tr className="border-t border-line/30 bg-surface-card">
               <td className="px-3 py-1.5">
                 <input
                   type="text"
@@ -212,7 +212,7 @@ export function EnvEditor({ app, className }: EnvEditorProps) {
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && newKey.trim()) handleAdd();
                   }}
-                  className="rounded-none w-full bg-transparent border border-primary-burgundy px-2 py-0.5 text-sm text-foreground-dark placeholder:text-foreground-dim outline-none focus:border-accent-orange"
+                  className="rounded-none w-full bg-transparent border border-line px-2 py-0.5 text-sm text-foreground-dark placeholder:text-foreground-dim outline-none focus:border-accent-amber"
                 />
               </td>
               <td className="px-3 py-1.5">
@@ -224,7 +224,7 @@ export function EnvEditor({ app, className }: EnvEditorProps) {
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && newKey.trim()) handleAdd();
                   }}
-                  className="rounded-none w-full bg-transparent border border-primary-burgundy px-2 py-0.5 text-sm text-foreground-dark placeholder:text-foreground-dim outline-none focus:border-accent-orange tabular"
+                  className="rounded-none w-full bg-transparent border border-line px-2 py-0.5 text-sm text-foreground-dark placeholder:text-foreground-dim outline-none focus:border-accent-amber tabular"
                 />
               </td>
               <td className="px-3 py-1.5 text-right">
@@ -233,8 +233,8 @@ export function EnvEditor({ app, className }: EnvEditorProps) {
                   disabled={!newKey.trim() || adding}
                   className={`rounded-none text-xs font-bold border px-2 py-0.5 transition-colors ${
                     newKey.trim() && !adding
-                      ? "border-primary-burgundy text-foreground-dark hover:bg-accent-orange hover:text-background-dark hover:border-accent-orange"
-                      : "border-primary-burgundy/30 text-foreground-dim cursor-not-allowed"
+                      ? "border-line text-foreground-dark hover:bg-accent-amber hover:text-background-dark hover:border-accent-amber"
+                      : "border-line/30 text-foreground-dim cursor-not-allowed"
                   }`}
                 >
                   [ADD]

@@ -2,7 +2,11 @@
 
 import * as React from "react";
 import { api } from "@/lib/api";
-import type { ControlActionResponse } from "@/lib/api";
+import { parseUpstreamPort } from "@/lib/format";
+import { useAppActions } from "@/lib/useAppActions";
+import { AppActionBar } from "@/components/AppActionBar";
+
+const APPS_POLL_INTERVAL_MS = 15_000;
 
 export interface AppControlsProps {
   app: string;
@@ -10,66 +14,43 @@ export interface AppControlsProps {
   className?: string;
 }
 
-type ActionKey =
-  | "create"
-  | "deploy"
-  | "restart"
-  | "stop"
-  | "destroy"
-  | "container_export";
-
-const CONFIRM_MESSAGE: Partial<Record<ActionKey, string>> = {
-  destroy: "Destroy app",
-};
-
 export function AppControls({ app, onAppChange, className }: AppControlsProps) {
-  const [pending, setPending] = React.useState<ActionKey | null>(null);
-  const [message, setMessage] = React.useState<string | null>(null);
-  const [isError, setIsError] = React.useState(false);
   const [newAppName, setNewAppName] = React.useState("");
+  const [knownApps, setKnownApps] = React.useState<string[]>([]);
+  const [port, setPort] = React.useState<string | null>(null);
+  const { pending, message, isError, runAction, report, setPending, setMessage } =
+    useAppActions(app);
 
-  const report = React.useCallback(
-    (
-      action: ActionKey,
-      result: (ControlActionResponse & { output?: string }) | null,
-      err: unknown,
-    ) => {
-      if (err) {
-        setIsError(true);
-        setMessage(err instanceof Error ? err.message : String(err));
-        return;
-      }
-      setIsError(!result?.ok);
-      setMessage(
-        result?.ok
-          ? `[${action.toUpperCase()}] ${result.app ?? app} ok${result.output ? ` -> ${result.output}` : ""}`
-          : `[${action.toUpperCase()}] failed: ${result?.error ?? "unknown error"}`,
-      );
-    },
-    [app],
-  );
-
-  const runAction = React.useCallback(
-    async (
-      action: ActionKey,
-      fn: () => Promise<ControlActionResponse & { output?: string }>,
-    ) => {
-      if (CONFIRM_MESSAGE[action] && !window.confirm(`${CONFIRM_MESSAGE[action]} '${app}'? This cannot be undone.`)) {
-        return;
-      }
-      setPending(action);
-      setMessage(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
       try {
-        const result = await fn();
-        report(action, result, null);
-      } catch (e) {
-        report(action, null, e);
-      } finally {
-        setPending(null);
+        const [stats, network] = await Promise.all([
+          api.metrics.get(),
+          api.network.list(),
+        ]);
+        if (cancelled) return;
+        setKnownApps((prev) => {
+          const names = Array.from(new Set(stats.map((s) => s.app))).sort();
+          return names.length === prev.length &&
+            names.every((n, i) => n === prev[i])
+            ? prev
+            : names;
+        });
+        const entry = network.apps?.find((n) => n.app === app);
+        setPort(parseUpstreamPort(entry?.upstream ?? null));
+      } catch {
+        // Leave the last known app list / port in place; the panels below
+        // already surface connection errors.
       }
-    },
-    [app, report],
-  );
+    };
+    poll();
+    const id = setInterval(poll, APPS_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [app]);
 
   const handleCreate = React.useCallback(async () => {
     const name = newAppName.trim();
@@ -88,17 +69,17 @@ export function AppControls({ app, onAppChange, className }: AppControlsProps) {
     } finally {
       setPending(null);
     }
-  }, [newAppName, onAppChange, report]);
+  }, [newAppName, onAppChange, report, setPending, setMessage]);
 
   const buttonClass =
-    "rounded-none text-xs font-bold border border-primary-burgundy px-2 py-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
+    "rounded-none text-xs font-bold border border-line px-2 py-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
 
   return (
     <div
-      className={`flex flex-wrap items-center gap-2 border-b border-primary-burgundy px-3 py-2 ${className ?? ""}`}
+      className={`flex flex-wrap items-center gap-2 border-b border-line px-3 py-2 ${className ?? ""}`}
     >
-      <span className="text-xs font-bold tracking-wide uppercase text-foreground-muted">
-        APP_CTL //
+      <span className="font-display text-xs font-bold tracking-wide text-foreground-muted">
+        ~/.riku/repos/
       </span>
 
       <input
@@ -106,54 +87,32 @@ export function AppControls({ app, onAppChange, className }: AppControlsProps) {
         data-testid="active-app-input"
         value={app}
         onChange={(e) => onAppChange(e.target.value)}
-        className="rounded-none bg-transparent border border-primary-burgundy px-2 py-0.5 text-xs text-foreground-dark outline-none focus:border-accent-orange tabular w-32"
+        list="known-apps"
+        placeholder="app name"
+        title={knownApps.length > 0 ? `known apps: ${knownApps.join(", ")}` : undefined}
+        className="rounded-none bg-transparent border border-line px-2 py-0.5 text-xs text-foreground-dark outline-none focus:border-accent-amber tabular w-32"
       />
+      <datalist id="known-apps">
+        {knownApps.map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
 
-      <button
-        data-testid="deploy-btn"
-        onClick={() => runAction("deploy", () => api.control.deploy(app))}
-        disabled={pending !== null || !app}
-        className={`${buttonClass} text-foreground-dark hover:bg-accent-orange hover:text-background-dark hover:border-accent-orange`}
+      <span
+        data-testid="active-app-port"
+        className="text-xs tabular text-foreground-muted"
+        title="resolved nginx upstream port for the selected app"
       >
-        {pending === "deploy" ? "[DEPLOYING...]" : "[DEPLOY]"}
-      </button>
+        [PORT {port ?? "--"}]
+      </span>
 
-      <button
-        data-testid="restart-btn"
-        onClick={() => runAction("restart", () => api.control.restart(app))}
-        disabled={pending !== null || !app}
-        className={`${buttonClass} text-foreground-muted hover:bg-primary-burgundy/10 hover:text-foreground-dark`}
-      >
-        {pending === "restart" ? "[RESTARTING...]" : "[RESTART]"}
-      </button>
-
-      <button
-        data-testid="stop-btn"
-        onClick={() => runAction("stop", () => api.control.stop(app))}
-        disabled={pending !== null || !app}
-        className={`${buttonClass} text-foreground-muted hover:bg-primary-burgundy/10 hover:text-foreground-dark`}
-      >
-        {pending === "stop" ? "[STOPPING...]" : "[STOP]"}
-      </button>
-
-      <button
-        data-testid="destroy-btn"
-        onClick={() => runAction("destroy", () => api.control.destroy(app))}
-        disabled={pending !== null || !app}
-        className={`${buttonClass} text-accent-orange hover:bg-accent-orange hover:text-background-dark hover:border-accent-orange`}
-      >
-        {pending === "destroy" ? "[DESTROYING...]" : "[DESTROY]"}
-      </button>
-
-      <button
-        data-testid="export-image-btn"
-        onClick={() => runAction("container_export", () => api.control.containerExport(app))}
-        disabled={pending !== null || !app}
-        title="Builds the app's deployed source as a container image (Docker/Podman) and exports it to a tar archive on the server"
-        className={`${buttonClass} text-foreground-muted hover:bg-primary-burgundy/10 hover:text-foreground-dark`}
-      >
-        {pending === "container_export" ? "[EXPORTING...]" : "[EXPORT IMAGE]"}
-      </button>
+      <AppActionBar
+        app={app}
+        pending={pending}
+        message={message}
+        isError={isError}
+        runAction={runAction}
+      />
 
       <span className="mx-1 text-foreground-dim">|</span>
 
@@ -166,26 +125,16 @@ export function AppControls({ app, onAppChange, className }: AppControlsProps) {
         onKeyDown={(e) => {
           if (e.key === "Enter" && newAppName.trim()) handleCreate();
         }}
-        className="rounded-none bg-transparent border border-primary-burgundy px-2 py-0.5 text-xs text-foreground-dark placeholder:text-foreground-dim outline-none focus:border-accent-orange w-36"
+        className="rounded-none bg-transparent border border-line px-2 py-0.5 text-xs text-foreground-dark placeholder:text-foreground-dim outline-none focus:border-accent-amber w-36"
       />
       <button
         data-testid="create-btn"
         onClick={handleCreate}
         disabled={pending !== null || !newAppName.trim()}
-        className={`${buttonClass} text-foreground-dark hover:bg-accent-orange hover:text-background-dark hover:border-accent-orange`}
+        className={`${buttonClass} text-foreground-dark hover:bg-accent-amber hover:text-background-dark hover:border-accent-amber`}
       >
         {pending === "create" ? "[CREATING...]" : "[CREATE]"}
       </button>
-
-      {message && (
-        <span
-          data-testid="action-status"
-          data-error={isError}
-          className={`text-xs tabular ml-2 ${isError ? "text-accent-orange" : "text-foreground-muted"}`}
-        >
-          {message}
-        </span>
-      )}
     </div>
   );
 }
