@@ -57,6 +57,7 @@ nav:
       - Runtimes: runtimes.md
       - Nginx: nginx.md
       - Supervisor: supervisor.md
+      - Resource Limits: resource-limits.md
       - Plugins: plugins.md
       - AI Agents: ai-agents.md
       - Systemd: systemd.md

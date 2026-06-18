@@ -6,6 +6,7 @@ import { TerminalStream } from "@/components/TerminalStream";
 import { EnvEditor } from "@/components/EnvEditor";
 import { AppControls } from "@/components/AppControls";
 import { PluginsPanel } from "@/components/PluginsPanel";
+import { NetworkPanel } from "@/components/NetworkPanel";
 import { api } from "@/lib/api";
 
 export default function DashboardPage() {
@@ -69,6 +70,9 @@ export default function DashboardPage() {
 
       {/* ═══ PLUGINS / HOOKS ═══ */}
       <PluginsPanel />
+
+      {/* ═══ NETWORK / TLS ═══ */}
+      <NetworkPanel />
 
       {/* ═══ BOTTOM PANELS ═══ */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 min-h-0">

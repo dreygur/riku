@@ -2,7 +2,7 @@
 // real data shapes surfaced by the supervisor, deploy, and nginx subsystems
 // (see src/supervisor/, src/deploy/, src/nginx.rs in the riku source tree).
 
-import type { AppStats, ProcessStats } from "@/lib/api";
+import type { AppStats, NetworkEntry, ProcessStats } from "@/lib/api";
 
 export type ProcessStatus = "running" | "stopped" | "crashed";
 
@@ -29,13 +29,30 @@ export interface DeployLogLine {
   line: string;
 }
 
-/** Per-app network/TLS configuration as generated into nginx config. */
+/**
+ * Per-app network/TLS configuration, read directly from the generated nginx
+ * config and cert files by app/api/network/route.ts (no riku runtime API for
+ * this exists — see that route's comment).
+ */
 export interface NetworkInfo {
   app: string;
-  serverName: string;
-  upstreamPort: number;
-  /** TLS cert expiry, or null when no certificate is provisioned. */
-  tlsExpiresAt: string | null;
+  serverName: string | null;
+  /** Upstream proxy_pass target, e.g. "http://127.0.0.1:5000". */
+  upstream: string | null;
+  /** TLS cert expiry (from the cert itself), or null if unprovisioned. */
+  tlsExpiry: string | null;
+}
+
+/** Identity mapping today, kept as a mapper for parity with the other
+ * backend-shape -> view-model conversions in this file, and so the route's
+ * response shape can drift independently of the dashboard's view-model. */
+export function mapBackendToNetwork(entries: NetworkEntry[]): NetworkInfo[] {
+  return entries.map((e) => ({
+    app: e.app,
+    serverName: e.serverName,
+    upstream: e.upstream,
+    tlsExpiry: e.tlsExpiry,
+  }));
 }
 
 /** A single environment variable row as edited in the env editor. */

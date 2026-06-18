@@ -50,6 +50,17 @@ export type EnvVarEntry = {
   value: string;
 };
 
+export type NetworkEntry = {
+  app: string;
+  serverName: string | null;
+  upstream: string | null;
+  tlsExpiry: string | null;
+};
+
+export type NetworkResponse = {
+  apps: NetworkEntry[];
+};
+
 // ── Typed fetch helpers ──
 
 async function apiFetch<T>(
@@ -75,6 +86,10 @@ export const api = {
     getApps: () => apiFetch<AppStats[]>("/metrics/apps"),
     getApp: (app: string) =>
       apiFetch<AppStats[]>(`/metrics/apps/${encodeURIComponent(app)}`),
+  },
+
+  network: {
+    list: () => apiFetch<NetworkResponse>("/network"),
   },
 
   plugins: {

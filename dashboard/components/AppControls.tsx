@@ -103,12 +103,14 @@ export function AppControls({ app, onAppChange, className }: AppControlsProps) {
 
       <input
         type="text"
+        data-testid="active-app-input"
         value={app}
         onChange={(e) => onAppChange(e.target.value)}
         className="rounded-none bg-transparent border border-primary-burgundy px-2 py-0.5 text-xs text-foreground-dark outline-none focus:border-accent-orange tabular w-32"
       />
 
       <button
+        data-testid="deploy-btn"
         onClick={() => runAction("deploy", () => api.control.deploy(app))}
         disabled={pending !== null || !app}
         className={`${buttonClass} text-foreground-dark hover:bg-accent-orange hover:text-background-dark hover:border-accent-orange`}
@@ -117,6 +119,7 @@ export function AppControls({ app, onAppChange, className }: AppControlsProps) {
       </button>
 
       <button
+        data-testid="restart-btn"
         onClick={() => runAction("restart", () => api.control.restart(app))}
         disabled={pending !== null || !app}
         className={`${buttonClass} text-foreground-muted hover:bg-primary-burgundy/10 hover:text-foreground-dark`}
@@ -125,6 +128,7 @@ export function AppControls({ app, onAppChange, className }: AppControlsProps) {
       </button>
 
       <button
+        data-testid="stop-btn"
         onClick={() => runAction("stop", () => api.control.stop(app))}
         disabled={pending !== null || !app}
         className={`${buttonClass} text-foreground-muted hover:bg-primary-burgundy/10 hover:text-foreground-dark`}
@@ -133,6 +137,7 @@ export function AppControls({ app, onAppChange, className }: AppControlsProps) {
       </button>
 
       <button
+        data-testid="destroy-btn"
         onClick={() => runAction("destroy", () => api.control.destroy(app))}
         disabled={pending !== null || !app}
         className={`${buttonClass} text-accent-orange hover:bg-accent-orange hover:text-background-dark hover:border-accent-orange`}
@@ -141,6 +146,7 @@ export function AppControls({ app, onAppChange, className }: AppControlsProps) {
       </button>
 
       <button
+        data-testid="export-image-btn"
         onClick={() => runAction("container_export", () => api.control.containerExport(app))}
         disabled={pending !== null || !app}
         title="Builds the app's deployed source as a container image (Docker/Podman) and exports it to a tar archive on the server"
@@ -153,6 +159,7 @@ export function AppControls({ app, onAppChange, className }: AppControlsProps) {
 
       <input
         type="text"
+        data-testid="new-app-input"
         placeholder="new app name"
         value={newAppName}
         onChange={(e) => setNewAppName(e.target.value)}
@@ -162,6 +169,7 @@ export function AppControls({ app, onAppChange, className }: AppControlsProps) {
         className="rounded-none bg-transparent border border-primary-burgundy px-2 py-0.5 text-xs text-foreground-dark placeholder:text-foreground-dim outline-none focus:border-accent-orange w-36"
       />
       <button
+        data-testid="create-btn"
         onClick={handleCreate}
         disabled={pending !== null || !newAppName.trim()}
         className={`${buttonClass} text-foreground-dark hover:bg-accent-orange hover:text-background-dark hover:border-accent-orange`}
@@ -170,7 +178,11 @@ export function AppControls({ app, onAppChange, className }: AppControlsProps) {
       </button>
 
       {message && (
-        <span className={`text-xs tabular ml-2 ${isError ? "text-accent-orange" : "text-foreground-muted"}`}>
+        <span
+          data-testid="action-status"
+          data-error={isError}
+          className={`text-xs tabular ml-2 ${isError ? "text-accent-orange" : "text-foreground-muted"}`}
+        >
           {message}
         </span>
       )}

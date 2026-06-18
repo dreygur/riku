@@ -87,15 +87,32 @@ jobs:
       - name: Build release
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Strip binary (native only)
+      - name: Strip binaries (native only)
         if: matrix.target == 'x86_64-unknown-linux-gnu' || matrix.target == 'aarch64-apple-darwin' || matrix.target == 'x86_64-apple-darwin'
-        run: strip target/${{ matrix.target }}/release/riku
+        run: |
+          strip target/${{ matrix.target }}/release/riku
+          strip target/${{ matrix.target }}/release/riku-plugin-java
+          strip target/${{ matrix.target }}/release/riku-plugin-clojure
+          strip target/${{ matrix.target }}/release/riku-plugin-container
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: target/${{ matrix.target }}/release/riku
+          retention-days: 30
+
+      # Binary runtime plugins (downloaded by `riku install-plugins java|clojure|container`,
+      # see src/cli/apps/install_plugins.rs) — uploaded per-target so the CLI can fetch the
+      # right one for the host triple from `releases/latest/download/riku-plugin-<name>-<target>`.
+      - name: Upload plugin artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: riku-plugin-bundle-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/riku-plugin-java
+            target/${{ matrix.target }}/release/riku-plugin-clojure
+            target/${{ matrix.target }}/release/riku-plugin-container
           retention-days: 30
 
   create-release:
@@ -114,18 +131,27 @@ jobs:
         run: |
           cd artifacts
           for dir in */; do
-            cd "$dir"
-            tar -czvf ../${dir%/}.tar.gz riku
-            sha256sum ../${dir%/}.tar.gz > ../${dir%/}.sha256
-            cd ..
+            name="${dir%/}"
+            if [[ "$name" == riku-plugin-bundle-* ]]; then
+              # Binary runtime plugins: ship raw (no tar.gz) so install_plugins.rs
+              # can fetch+chmod them directly, matching the shell-plugin download path.
+              target="${name#riku-plugin-bundle-}"
+              for bin in "$dir"riku-plugin-*; do
+                asset="riku-plugin-$(basename "$bin" | sed 's/^riku-plugin-//')-${target}"
+                cp "$bin" "$asset"
+                sha256sum "$asset" > "$asset.sha256"
+              done
+            else
+              tar -czvf "${name}.tar.gz" -C "$dir" riku
+              sha256sum "${name}.tar.gz" > "${name}.sha256"
+            fi
           done
+          rm -rf */
           ls -la
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            artifacts/*.tar.gz
-            artifacts/*.sha256
+          files: artifacts/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -60,6 +60,7 @@ export function TerminalStream({ app, filter, className }: TerminalStreamProps) 
 
   return (
     <div
+      data-testid="terminal-stream"
       className={`flex flex-col h-full border border-primary-burgundy ${className ?? ""}`}
     >
       {/* Header bar */}
@@ -69,6 +70,8 @@ export function TerminalStream({ app, filter, className }: TerminalStreamProps) 
             LOG_STREAM_BUFFER
           </span>
           <span
+            data-testid="terminal-stream-status"
+            data-connected={connected}
             className={`text-xs tabular ${
               connected ? "text-accent-orange" : "text-foreground-dim"
             }`}
@@ -77,7 +80,7 @@ export function TerminalStream({ app, filter, className }: TerminalStreamProps) 
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-foreground-dim tabular">
+          <span data-testid="terminal-stream-line-count" className="text-xs text-foreground-dim tabular">
             {filtered.length} lines
           </span>
           <button
@@ -113,7 +116,7 @@ export function TerminalStream({ app, filter, className }: TerminalStreamProps) 
             </span>
           ) : (
             filtered.map((line, i) => (
-              <div key={i} className="hover:bg-white/5">
+              <div key={i} data-testid="terminal-stream-line" className="hover:bg-white/5">
                 <span className="text-accent-orange/40 mr-2">❯</span>
                 {line}
               </div>

@@ -80,13 +80,13 @@ export function SupervisorGrid({
   );
 
   return (
-    <div className={className}>
+    <div className={className} data-testid="supervisor-grid">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-primary-burgundy px-3 py-2">
         <span className="text-xs font-bold tracking-wide uppercase text-foreground-muted">
           SUPERVISOR_METRICS
         </span>
-        <span className="text-xs text-foreground-muted tabular">
+        <span data-testid="supervisor-grid-status" className="text-xs text-foreground-muted tabular">
           {error ? (
             <span className="text-accent-orange">[{error}]</span>
           ) : lastUpdated ? (
@@ -129,6 +129,11 @@ export function SupervisorGrid({
               sorted.map((w) => (
                 <TableRow
                   key={`${w.app}:${w.process}`}
+                  data-testid="worker-row"
+                  data-app={w.app}
+                  data-process={w.process}
+                  data-status={w.status}
+                  data-pid={w.pid ?? ""}
                   className="rounded-none border-b border-primary-burgundy/30 last:border-b-0 hover:bg-white/5"
                 >
                   <TableCell className="rounded-none font-bold">
