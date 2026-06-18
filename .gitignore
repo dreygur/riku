@@ -7,6 +7,7 @@ Thumbs.db
 
 # Docker
 tests/e2e/id_ed25519
+tests/demo_env/.keys/
 
 # Rust
 target/
@@ -96,6 +97,8 @@ acme/
 # Nginx (except contrib/)
 *.conf
 !contrib/nginx/*.conf
+!tests/production_audit/container/*.conf
+!tests/demo_env/*.conf
 
 # TOML configs (worker configs are generated)
 *.toml
