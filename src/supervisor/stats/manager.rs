@@ -2,7 +2,6 @@
 
 use chrono::Utc;
 use std::collections::HashMap;
-use std::fs;
 use std::time::Instant;
 
 use super::types::{HealthStatus, ProcessStats, ProcessStatus};
@@ -130,18 +129,14 @@ impl StatsManager {
     }
 
     /// Write stats to a JSON file for CLI consumption.
-    pub fn write_stats_to_file(&self, path: &std::path::Path) -> Result<(), std::io::Error> {
+    ///
+    /// Uses the shared `write_atomic` (temp file + `fsync` + `rename`) so a
+    /// crash or external log-rotation sweep running concurrently never
+    /// observes a half-written `stats.json` — the same guarantee already
+    /// applied to worker TOML, ENV, and nginx config writes.
+    pub fn write_stats_to_file(&self, path: &std::path::Path) -> anyhow::Result<()> {
         let app_stats = self.get_all_stats();
-        let json = serde_json::to_string_pretty(&app_stats)
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
-
-        // Write to temporary file first, then atomically rename
-        // This prevents corruption if supervisor crashes mid-write
-        let temp_path = path.with_extension("tmp");
-        fs::write(&temp_path, json)?;
-
-        // Atomic rename (guaranteed atomic on POSIX systems)
-        fs::rename(&temp_path, path)?;
-        Ok(())
+        let json = serde_json::to_string_pretty(&app_stats)?;
+        crate::util::write_atomic(path, json.as_bytes())
     }
 }

@@ -163,6 +163,7 @@ fn main() -> Result<()> {
             // command or becomes the signal-forwarding shim and `_exit`s.
             supervisor::process::isolation::exec_isolated(std::path::Path::new(&root), &command)?;
         }
+        Commands::DumpState => cli::apps::cmd_dump_state(&paths)?,
     }
 
     Ok(())

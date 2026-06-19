@@ -257,4 +257,13 @@ pub enum Commands {
     /// for the worker's entire lifetime, freezing the whole supervisor.
     #[command(hide = true, name = "__ns-shim")]
     NsShim,
+
+    /// Dump the supervisor's state matrix as JSON (internal — operator
+    /// diagnostics). Reads on-disk state only (`stats.json`, app `ENV`
+    /// files, nginx configs, deploy lock files); never connects to the
+    /// running supervisor process and never blocks. App env vars are
+    /// strictly allowlisted to known routing/port keys before being
+    /// included — secrets never appear in the output.
+    #[command(hide = true, name = "__dump-state")]
+    DumpState,
 }

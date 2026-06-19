@@ -39,6 +39,7 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
         Commands::GitUploadPack { .. } => None,
         Commands::Scp { .. } => None,
         Commands::NsShim => None,
+        Commands::DumpState => None,
     }
 }
 

@@ -27,7 +27,7 @@ pub mod container_runtime; // used by `riku container` CLI commands
 pub mod env_setup;
 pub mod git_ops;
 pub mod hooks;
-mod lock;
+pub(crate) mod lock;
 pub mod scaling;
 pub mod supervisor_ctl;
 pub mod workers;
