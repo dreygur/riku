@@ -86,17 +86,35 @@ impl ProcessManager {
                 .map(|opts| std::path::PathBuf::from(&opts.root_dir)),
         };
 
-        // Build the command to run
-        let mut cmd = Command::new("sh");
+        // When namespace isolation is enabled, exec the `riku __ns-shim`
+        // subcommand instead of the worker command directly: it does the
+        // unshare/fork/exec dance itself, from its own `main`, well after
+        // this `Command::spawn()` has returned. See isolation.rs for why
+        // that fork can't happen inside this process's own `pre_exec`.
+        let mut cmd = if namespace_config.enabled {
+            let shim_exe = std::env::current_exe()?;
+            let mut c = Command::new(shim_exe);
+            c.arg("__ns-shim").env(
+                "RIKU_NS_ROOT",
+                namespace_config
+                    .isolated_root
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("isolation enabled but no root_dir configured"))?,
+            );
+            c.env("RIKU_NS_CMD", &config.worker.command);
+            c
+        } else {
+            let mut c = Command::new("sh");
+            c.arg("-c").arg(&config.worker.command);
+            c
+        };
 
         // Clone resource limits for use in pre_exec closure
         let limits = self.resource_limits.clone();
 
         // Set resource limits to prevent runaway processes (pre_exec is unsafe)
         unsafe {
-            cmd.arg("-c")
-                .arg(&config.worker.command)
-                .current_dir(&config.options.working_dir)
+            cmd.current_dir(&config.options.working_dir)
                 .stdin(Stdio::null())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
@@ -116,22 +134,17 @@ impl ProcessManager {
                         })?;
                     }
 
-                    // Join the cgroup using our own (real, top-level) PID
-                    // before any namespace isolation below, while it still
-                    // matches what the parent sees as `child.id()`.
+                    // Join the cgroup using our own (real, top-level) PID.
+                    // This is the same PID whether we're about to exec the
+                    // worker directly or exec into `__ns-shim` — the cgroup
+                    // membership is inherited across both the shim's own
+                    // fork and its exec of the real worker.
                     if let Some(cgroup) = &cgroup_for_child {
                         cgroup.add_self()?;
                     }
 
                     // Apply configured resource limits
                     limits.apply()?;
-
-                    // Namespace isolation runs last: on success for the
-                    // PID-namespace branch it either returns Ok(()) in the
-                    // process that's about to exec, or never returns at all
-                    // (the outer process became a signal-forwarding shim
-                    // and already called _exit). See isolation.rs.
-                    namespace_config.apply()?;
 
                     Ok(())
                 });
@@ -145,59 +158,22 @@ impl ProcessManager {
         // Spawn the process
         let mut child = cmd.spawn()?;
 
-        // Start log capture threads before creating SpawnedProcess
+        // Take the pipes now (must happen before `child` is moved into
+        // SpawnedProcess below), but don't start the reader threads yet —
+        // they must only run once the wrapper construction below has
+        // actually succeeded, otherwise a construction failure leaves
+        // threads reading from a child we're about to SIGKILL.
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
 
-        if let Some((ref log_file, ref _log_file_mut)) = log_handles {
-            // Capture stdout
-            if let Some(stdout_reader) = stdout {
-                let mut stdout_log = log_file.try_clone()?;
-                thread::spawn(move || {
-                    let reader = BufReader::new(stdout_reader);
-                    for line in reader.lines() {
-                        match line {
-                            Ok(line) => {
-                                let _ = writeln!(stdout_log, "{}", line);
-                                let _ = stdout_log.flush();
-                            }
-                            Err(e) => {
-                                tracing::debug!("Error reading stdout: {}", e);
-                                break;
-                            }
-                        }
-                    }
-                    // Explicitly drop the file handle to ensure it's closed
-                    drop(stdout_log);
-                    tracing::debug!("stdout log capture thread exited");
-                });
+        // Clone the log file handles for the reader threads before handing
+        // the original `log_handles` to SpawnedProcess::new_with_cgroup.
+        let log_handles_for_threads = match &log_handles {
+            Some((stdout_log, stderr_log)) => {
+                Some((stdout_log.try_clone()?, stderr_log.try_clone()?))
             }
-
-            // Capture stderr
-            if let Some(stderr_reader) = stderr {
-                if let Some((_, ref stderr_log)) = log_handles {
-                    let mut stderr_log = stderr_log.try_clone()?;
-                    thread::spawn(move || {
-                        let reader = BufReader::new(stderr_reader);
-                        for line in reader.lines() {
-                            match line {
-                                Ok(line) => {
-                                    let _ = writeln!(stderr_log, "{}", line);
-                                    let _ = stderr_log.flush();
-                                }
-                                Err(e) => {
-                                    tracing::debug!("Error reading stderr: {}", e);
-                                    break;
-                                }
-                            }
-                        }
-                        // Explicitly drop the file handle to ensure it's closed
-                        drop(stderr_log);
-                        tracing::debug!("stderr log capture thread exited");
-                    });
-                }
-            }
-        }
+            None => None,
+        };
 
         // Save PID before transferring ownership to SpawnedProcess::new_with_cgroup().
         // This allows us to kill the child if it fails, preventing zombie processes.
@@ -221,6 +197,53 @@ impl ProcessManager {
                 }
             };
         let pid = spawned_process.pid_as_u32();
+
+        // Now that the wrapper exists, start the log capture threads.
+        if let Some((stdout_log, stderr_log)) = log_handles_for_threads {
+            if let Some(stdout_reader) = stdout {
+                let mut stdout_log = stdout_log;
+                thread::spawn(move || {
+                    let reader = BufReader::new(stdout_reader);
+                    for line in reader.lines() {
+                        match line {
+                            Ok(line) => {
+                                let _ = writeln!(stdout_log, "{}", line);
+                                let _ = stdout_log.flush();
+                            }
+                            Err(e) => {
+                                tracing::debug!("Error reading stdout: {}", e);
+                                break;
+                            }
+                        }
+                    }
+                    // Explicitly drop the file handle to ensure it's closed
+                    drop(stdout_log);
+                    tracing::debug!("stdout log capture thread exited");
+                });
+            }
+
+            if let Some(stderr_reader) = stderr {
+                let mut stderr_log = stderr_log;
+                thread::spawn(move || {
+                    let reader = BufReader::new(stderr_reader);
+                    for line in reader.lines() {
+                        match line {
+                            Ok(line) => {
+                                let _ = writeln!(stderr_log, "{}", line);
+                                let _ = stderr_log.flush();
+                            }
+                            Err(e) => {
+                                tracing::debug!("Error reading stderr: {}", e);
+                                break;
+                            }
+                        }
+                    }
+                    // Explicitly drop the file handle to ensure it's closed
+                    drop(stderr_log);
+                    tracing::debug!("stderr log capture thread exited");
+                });
+            }
+        }
 
         // Register in stats
         self.stats.register_process(

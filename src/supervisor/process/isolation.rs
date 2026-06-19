@@ -1,28 +1,45 @@
 //! Linux namespace isolation for spawned worker processes.
 //!
 //! Applies `CLONE_NEWNS` (mount), `CLONE_NEWNET` (network), and
-//! `CLONE_NEWPID` (process) namespaces to a worker before it execs.
+//! `CLONE_NEWPID` (process) namespaces to a worker, then execs it.
 //!
-//! PID namespace isolation needs special handling: per pid_namespaces(7),
-//! `unshare(CLONE_NEWPID)` does NOT move the caller into the new namespace,
-//! only its *future children*. To give the worker a true private PID
-//! namespace (where it is PID 1 and cannot see or signal anything on the
-//! host), this module forks once more after unshare: the inner fork becomes
-//! PID 1 of the new namespace and is the process that ultimately execs the
-//! target binary. The outer process — the one `ProcessManager` already
-//! tracks via `child.id()` — stays alive only to forward termination
-//! signals to the inner process and relay its exit status, then calls
-//! `_exit` directly so it never reaches `Command`'s own `execve` call.
+//! # Why this isn't done in `pre_exec`
+//!
+//! PID namespace isolation needs a fork after `unshare(CLONE_NEWPID)`: per
+//! pid_namespaces(7), `unshare(CLONE_NEWPID)` does NOT move the caller into
+//! the new namespace, only its *future children*. An earlier version of
+//! this module did that extra fork from inside `Command::pre_exec` — i.e.
+//! between `fork()` and `execve()` in the worker's own spawn — with the
+//! outer (pre_exec) process becoming a signal-forwarding shim that never
+//! called `execve` itself, looping until the inner process exited and then
+//! calling `_exit` directly.
+//!
+//! That deadlocked the supervisor. `std::process::Command::spawn()` detects
+//! a successful `execve` via a `CLOEXEC` self-pipe: the write end stays open
+//! until every process holding it either execs or exits, and `spawn()`
+//! blocks reading that pipe until it closes. The pre_exec shim never exec'd
+//! and only exited once the *worker* did — so `spawn()` didn't return until
+//! the isolated worker's entire lifetime had elapsed, and since
+//! `ProcessManager::spawn_process` runs synchronously on the supervisor's
+//! single-threaded main loop, that froze health checks, log rotation, cron,
+//! and every other app's reload for as long as that one worker ran.
+//!
+//! The fix: do the unshare/fork/exec dance in a real process, not inside
+//! `pre_exec`. `ProcessManager::spawn_process` execs the `riku __ns-shim`
+//! subcommand (see `cli::cli::Commands::NsShim`) instead of the worker
+//! directly when isolation is enabled. `Command::spawn()` returns as soon as
+//! *that* `execve` succeeds — `__ns-shim`'s own `main` is then free to
+//! `unshare`, `fork`, and loop as a signal-forwarding shim on its own time,
+//! with no effect on the supervisor's `Command::spawn()` call, because that
+//! call already returned.
 //!
 //! # Safety / signal-safety note
-//! Unlike `ResourceLimits::apply()`, the mount/pivot_root sequence here does
-//! allocate (path joins, `create_dir_all`). This is the same trade-off made
-//! by every userspace container runtime that sets up a mount namespace from
-//! a post-fork, pre-exec hook (a single-threaded child where the only
-//! request is "don't fork while a thread holds the malloc lock", a
-//! condition already implicit in calling `Command::spawn` at all). It is a
-//! materially different — and lesser — risk than allocating inside an
-//! `extern "C"` signal handler, which this module never does.
+//! The mount/pivot_root sequence here does allocate (path joins,
+//! `create_dir_all`). Unlike the old pre_exec version, `exec_isolated` runs
+//! as a freshly exec'd process's `main`, not between `fork()` and `execve()`
+//! of a process some other code is also forking/threading around — so the
+//! single-threaded-child signal-safety caveat that applied to `pre_exec`
+//! doesn't apply here.
 
 use libc::{c_char, c_int, c_short};
 use nix::mount::{mount, umount2, MntFlags, MsFlags};
@@ -31,14 +48,17 @@ use nix::sys::signal::{sigaction, SaFlags, SigAction, SigHandler, SigSet, Signal
 use nix::sys::wait::{waitpid, WaitStatus};
 use nix::unistd::{fork, pivot_root, ForkResult, Pid};
 use std::io;
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI32, Ordering};
 
-/// Namespace isolation settings for a worker process.
+/// Namespace isolation settings for a worker process. Used by
+/// `spawn_process` to decide whether to exec the worker directly or route
+/// it through `riku __ns-shim` — see module docs for why.
 #[derive(Debug, Clone, Default)]
 pub struct NamespaceConfig {
-    /// Master switch. When false, `apply()` is a no-op and the worker runs
-    /// with the same namespaces as the supervisor (today's behavior).
+    /// Master switch. When false, the worker runs with the same namespaces
+    /// as the supervisor (today's behavior).
     pub enabled: bool,
     /// Directory the worker's mount namespace is rooted at via
     /// `pivot_root`. Must contain everything the worker needs (its app
@@ -52,51 +72,38 @@ pub struct NamespaceConfig {
 /// `0` means "no inner process to forward to yet".
 static INNER_PID: AtomicI32 = AtomicI32::new(0);
 
-impl NamespaceConfig {
-    /// Apply namespace isolation. Must be called from `pre_exec`, i.e.
-    /// after `fork()` but before `execve()`, in the worker's child process.
-    ///
-    /// When `enabled` is true and this call succeeds, it does not return to
-    /// the *original* forked process: that process becomes a
-    /// signal-forwarding shim and terminates via `_exit` once the inner,
-    /// namespaced process exits. Only the inner process's call returns
-    /// `Ok(())`, which lets `Command` proceed to `execve` as normal — so
-    /// from the caller's point of view this either returns `Ok(())` in a
-    /// process about to exec, or the process is already gone.
-    pub fn apply(&self) -> io::Result<()> {
-        if !self.enabled {
-            return Ok(());
+/// Set up namespace isolation rooted at `root` and exec `command` (via
+/// `sh -c`) inside it. Called from the `riku __ns-shim` subcommand handler —
+/// i.e. from a process's own `main`, already past its own `execve`. See
+/// module docs for why this can't run inside the worker's `pre_exec`.
+///
+/// On success this never returns: either the inner process successfully
+/// execs the real worker command, or this process becomes the
+/// signal-forwarding shim and calls `_exit` once that worker exits. It only
+/// returns `Err` if a setup step fails or the final `exec` itself fails.
+pub fn exec_isolated(root: &Path, command: &str) -> io::Result<()> {
+    // CLONE_NEWNS / CLONE_NEWNET move the *calling* process directly
+    // (unlike CLONE_NEWPID, see module docs), so no fork is needed for
+    // these two.
+    unshare(CloneFlags::CLONE_NEWNS | CloneFlags::CLONE_NEWNET).map_err(to_io_err)?;
+
+    bring_up_loopback()?;
+    isolate_mount_namespace(root)?;
+
+    // CLONE_NEWPID only takes effect for children created after this call
+    // returns, so the worker itself must be such a child.
+    unshare(CloneFlags::CLONE_NEWPID).map_err(to_io_err)?;
+
+    match unsafe { fork() }.map_err(to_io_err)? {
+        ForkResult::Child => {
+            // PID 1 of the new namespace. `exec` replaces this process's
+            // image entirely; it only returns here if the exec itself
+            // failed.
+            Err(std::process::Command::new("sh").arg("-c").arg(command).exec())
         }
-
-        let root = self.isolated_root.as_ref().ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "namespace isolation enabled but no isolated_root configured",
-            )
-        })?;
-
-        // CLONE_NEWNS / CLONE_NEWNET move the *calling* process directly
-        // (unlike CLONE_NEWPID, see module docs), so no fork is needed for
-        // these two.
-        unshare(CloneFlags::CLONE_NEWNS | CloneFlags::CLONE_NEWNET).map_err(to_io_err)?;
-
-        bring_up_loopback()?;
-        isolate_mount_namespace(root)?;
-
-        // CLONE_NEWPID only takes effect for children created after this
-        // call returns, so the worker itself must be such a child.
-        unshare(CloneFlags::CLONE_NEWPID).map_err(to_io_err)?;
-
-        match unsafe { fork() }.map_err(to_io_err)? {
-            ForkResult::Child => {
-                // PID 1 of the new namespace. Returning Ok(()) lets
-                // `Command::spawn` proceed to `execve` in this process.
-                Ok(())
-            }
-            ForkResult::Parent { child } => {
-                // Never returns: becomes the signal-forwarding shim.
-                run_signal_forwarding_shim(child);
-            }
+        ForkResult::Parent { child } => {
+            // Never returns: becomes the signal-forwarding shim.
+            run_signal_forwarding_shim(child);
         }
     }
 }

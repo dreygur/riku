@@ -159,7 +159,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let paths = crate::config::RikuPaths::from_dirs(
             temp_dir.path().join(".riku"),
-            &temp_dir.path().to_path_buf(),
+            temp_dir.path(),
         );
         fs::create_dir_all(&paths.plugin_root).unwrap();
         let plugins = list_plugins(&paths).unwrap();
@@ -171,7 +171,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let paths = crate::config::RikuPaths::from_dirs(
             temp_dir.path().join(".riku"),
-            &temp_dir.path().to_path_buf(),
+            temp_dir.path(),
         );
         fs::create_dir_all(&paths.plugin_root).unwrap();
 
@@ -209,7 +209,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let paths = crate::config::RikuPaths::from_dirs(
             temp_dir.path().join(".riku"),
-            &temp_dir.path().to_path_buf(),
+            temp_dir.path(),
         );
         fs::create_dir_all(&paths.plugin_root).unwrap();
         assert!(!plugin_exists("../etc/passwd", &paths));

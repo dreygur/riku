@@ -38,6 +38,7 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
         Commands::GitReceivePack { .. } => None,
         Commands::GitUploadPack { .. } => None,
         Commands::Scp { .. } => None,
+        Commands::NsShim => None,
     }
 }
 

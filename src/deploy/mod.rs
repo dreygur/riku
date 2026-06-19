@@ -27,6 +27,7 @@ pub mod container_runtime; // used by `riku container` CLI commands
 pub mod env_setup;
 pub mod git_ops;
 pub mod hooks;
+mod lock;
 pub mod scaling;
 pub mod supervisor_ctl;
 pub mod workers;
@@ -50,6 +51,12 @@ pub fn do_deploy(
             app_path.display()
         ));
     }
+
+    // Held for the rest of this function: serializes concurrent deploys of
+    // the *same* app (e.g. a second git push landing mid-deploy, or a
+    // dashboard-triggered redeploy racing a git push) without blocking
+    // deploys of other apps. See lock.rs for what breaks without this.
+    let _deploy_lock = lock::acquire(app, paths)?;
 
     let deploy_log_path = paths.deploy_log_file(app);
     let mut dlog = DeployLogger::new(&deploy_log_path)?;

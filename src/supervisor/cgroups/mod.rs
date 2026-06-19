@@ -58,6 +58,48 @@ pub struct WorkerCgroup {
     path: PathBuf,
 }
 
+/// Verify the cgroup v2 root riku provisions worker cgroups under actually
+/// exists and is writable, by creating and removing a throwaway probe
+/// directory under it — the same `create_dir_all` + write pattern
+/// `provision` uses for real workers.
+///
+/// Call this once at supervisor startup so an unmounted cgroup v2
+/// filesystem, or a riku user without write access to its delegated
+/// subtree, surfaces as one clear warning at boot instead of a deploy-time
+/// error deep inside `spawn_process` the first time someone enables
+/// isolation on a worker.
+pub fn verify_root_writable() -> Result<()> {
+    let probe = Path::new(CGROUP_ROOT).join(".riku-startup-probe");
+    fs::create_dir_all(&probe)
+        .with_context(|| format!("cgroup v2 root not writable: {}", probe.display()))?;
+    fs::remove_dir(&probe).ok();
+    Ok(())
+}
+
+/// Render a structured, human-readable startup diagnostic for a
+/// `verify_root_writable` failure: what failed, why it matters, and how to
+/// fix it. Used instead of a one-line warning so operators running in
+/// production don't have to go spelunking in `spawn_process` source to
+/// understand the failure the first time a worker requests isolation.
+pub fn startup_diagnostic(err: &anyhow::Error) -> String {
+    format!(
+        "riku startup diagnostic\n\
+         \x20 component : cgroup v2 resource isolation\n\
+         \x20 check     : write access to {root}\n\
+         \x20 status    : FAILED\n\
+         \x20 detail    : {err}\n\
+         \x20 impact    : any worker with `isolation` enabled in its config will fail to\n\
+         \x20             start the moment it's deployed — the failure surfaces deep in\n\
+         \x20             spawn_process, not here, unless this check catches it first\n\
+         \x20 remedy    : mount cgroup v2 at /sys/fs/cgroup (most modern distros do this by\n\
+         \x20             default) and ensure the riku user has write access to {root},\n\
+         \x20             e.g. by delegating that subtree to it (systemd cgroup delegation\n\
+         \x20             or `chown -R` if running riku as a dedicated user)",
+        root = CGROUP_ROOT,
+        err = err,
+    )
+}
+
 impl WorkerCgroup {
     /// Create (or reuse) the cgroup directory for `process_id` under the
     /// riku cgroup root and write `limits` to it. Call this from the

@@ -3,7 +3,6 @@
 use anyhow::Result;
 use std::collections::HashMap;
 use std::fs;
-use std::io::Write;
 use std::path::Path;
 
 use super::display::echo;
@@ -73,13 +72,14 @@ pub fn parse_settings(
     Ok(env.clone())
 }
 
-/// Write key=value config file.
+/// Write key=value config file atomically (temp file + fsync + rename), so a
+/// crash mid-write never leaves a truncated ENV file for the next reader.
 pub fn write_config(filename: &Path, bag: &HashMap<String, String>, separator: &str) -> Result<()> {
-    let mut file = fs::File::create(filename)?;
+    let mut content = String::new();
     for (k, v) in bag.iter() {
-        writeln!(file, "{}{}{}", k, separator, v)?;
+        content.push_str(&format!("{}{}{}\n", k, separator, v));
     }
-    Ok(())
+    super::fs::write_atomic(filename, content.as_bytes())
 }
 
 #[cfg(test)]
@@ -150,7 +150,7 @@ mod tests {
         let mut f = NamedTempFile::new().unwrap();
         writeln!(f, "# comment").unwrap();
         writeln!(f, "KEY=value").unwrap();
-        writeln!(f, "").unwrap();
+        writeln!(f).unwrap();
         let mut env = HashMap::new();
         let result = parse_settings(f.path(), &mut env).unwrap();
         assert_eq!(result.len(), 1);

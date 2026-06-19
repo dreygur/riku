@@ -154,6 +154,15 @@ fn main() -> Result<()> {
         Commands::GitReceivePack { app } => cli::git::cmd_git_receive_pack(&paths, &app)?,
         Commands::GitUploadPack { app } => cli::git::cmd_git_upload_pack(&paths, &app)?,
         Commands::Scp { args } => cli::scp::cmd_scp(&paths, &args)?,
+        Commands::NsShim => {
+            let root = std::env::var("RIKU_NS_ROOT")
+                .map_err(|_| anyhow::anyhow!("__ns-shim: RIKU_NS_ROOT not set"))?;
+            let command = std::env::var("RIKU_NS_CMD")
+                .map_err(|_| anyhow::anyhow!("__ns-shim: RIKU_NS_CMD not set"))?;
+            // Only returns on failure: success either execs the real worker
+            // command or becomes the signal-forwarding shim and `_exit`s.
+            supervisor::process::isolation::exec_isolated(std::path::Path::new(&root), &command)?;
+        }
     }
 
     Ok(())

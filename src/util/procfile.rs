@@ -140,9 +140,9 @@ mod tests {
     fn test_parse_procfile_comments_and_blanks() {
         let mut f = NamedTempFile::new().unwrap();
         writeln!(f, "# This is a comment").unwrap();
-        writeln!(f, "").unwrap();
+        writeln!(f).unwrap();
         writeln!(f, "web: python app.py").unwrap();
-        writeln!(f, "").unwrap();
+        writeln!(f).unwrap();
         writeln!(f, "# Another comment").unwrap();
         let workers = parse_procfile(f.path()).unwrap();
         assert_eq!(workers.len(), 1);

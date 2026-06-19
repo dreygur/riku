@@ -21,7 +21,7 @@ fn test_generate_nginx_config() {
 
     let paths = crate::config::RikuPaths::from_dirs(
         temp_dir.path().join(".riku"),
-        &temp_dir.path().to_path_buf(),
+        temp_dir.path(),
     );
 
     fs::create_dir_all(&paths.nginx_root).unwrap();
@@ -44,7 +44,7 @@ fn test_nginx_config_with_bind_address() {
 
     let paths = crate::config::RikuPaths::from_dirs(
         temp_dir.path().join(".riku"),
-        &temp_dir.path().to_path_buf(),
+        temp_dir.path(),
     );
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
@@ -65,7 +65,7 @@ fn test_nginx_config_with_ipv4_address() {
 
     let paths = crate::config::RikuPaths::from_dirs(
         temp_dir.path().join(".riku"),
-        &temp_dir.path().to_path_buf(),
+        temp_dir.path(),
     );
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
@@ -87,7 +87,7 @@ fn test_nginx_config_disable_ipv6() {
 
     let paths = crate::config::RikuPaths::from_dirs(
         temp_dir.path().join(".riku"),
-        &temp_dir.path().to_path_buf(),
+        temp_dir.path(),
     );
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
@@ -114,7 +114,7 @@ fn test_nginx_config_with_cache() {
 
     let paths = crate::config::RikuPaths::from_dirs(
         temp_dir.path().join(".riku"),
-        &temp_dir.path().to_path_buf(),
+        temp_dir.path(),
     );
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
@@ -138,7 +138,7 @@ fn test_nginx_config_with_cloudflare_acl() {
 
     let paths = crate::config::RikuPaths::from_dirs(
         temp_dir.path().join(".riku"),
-        &temp_dir.path().to_path_buf(),
+        temp_dir.path(),
     );
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
@@ -160,7 +160,7 @@ fn test_nginx_config_https_only() {
 
     let paths = crate::config::RikuPaths::from_dirs(
         temp_dir.path().join(".riku"),
-        &temp_dir.path().to_path_buf(),
+        temp_dir.path(),
     );
     fs::create_dir_all(&paths.nginx_root).unwrap();
 

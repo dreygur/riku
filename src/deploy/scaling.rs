@@ -105,7 +105,7 @@ mod tests {
     fn make_paths(tmp: &TempDir) -> RikuPaths {
         let paths = crate::config::RikuPaths::from_dirs(
             tmp.path().join(".riku"),
-            &tmp.path().to_path_buf(),
+            tmp.path(),
         );
         fs::create_dir_all(&paths.workers_enabled).unwrap();
         fs::create_dir_all(&paths.env_root).unwrap();

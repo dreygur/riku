@@ -306,12 +306,19 @@ fn write_worker_config(
     let available = paths.workers_available.join(&filename);
     let enabled = paths.workers_enabled.join(&filename);
 
-    fs::write(&available, toml::to_string(&config)?)?;
+    crate::util::write_atomic(&available, toml::to_string(&config)?.as_bytes())?;
 
-    if enabled.exists() {
-        fs::remove_file(&enabled)?;
-    }
-    std::os::unix::fs::symlink(&available, &enabled)?;
+    // Atomic symlink swap: create the new symlink under a temp name, then
+    // `rename` it over `enabled`. A crash or concurrent reader between a
+    // `remove_file` and a fresh `symlink` would otherwise see `enabled`
+    // briefly missing entirely; `rename` guarantees the path always
+    // resolves to either the old or the new symlink, never nothing.
+    let tmp_link = paths
+        .workers_enabled
+        .join(format!(".{}.tmp-{}", filename, std::process::id()));
+    let _ = fs::remove_file(&tmp_link);
+    std::os::unix::fs::symlink(&available, &tmp_link)?;
+    fs::rename(&tmp_link, &enabled)?;
 
     echo(
         &format!("-----> Created worker config: {}", filename),
@@ -328,7 +335,7 @@ mod tests {
     fn make_paths(tmp: &TempDir) -> RikuPaths {
         let paths = crate::config::RikuPaths::from_dirs(
             tmp.path().join(".riku"),
-            &tmp.path().to_path_buf(),
+            tmp.path(),
         );
         fs::create_dir_all(&paths.workers_available).unwrap();
         fs::create_dir_all(&paths.workers_enabled).unwrap();

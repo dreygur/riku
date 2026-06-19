@@ -24,8 +24,10 @@ fn test_summary() {
 
 #[test]
 fn test_summary_with_max_processes_opted_in() {
-    let mut limits = ResourceLimits::default();
-    limits.max_processes = Some(64);
+    let limits = ResourceLimits {
+        max_processes: Some(64),
+        ..ResourceLimits::default()
+    };
     assert!(limits.summary().contains("procs=64"));
 }
 

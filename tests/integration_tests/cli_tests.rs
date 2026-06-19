@@ -1,13 +1,13 @@
-/// Integration tests for CLI commands
-///
-/// These tests verify the functionality of CLI commands
-/// by creating temporary directories and testing actual command execution.
+//! Integration tests for CLI commands
+//!
+//! These tests verify the functionality of CLI commands
+//! by creating temporary directories and testing actual command execution.
 
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use tempfile::TempDir;
 
     // Helper to create a temporary Riku environment
@@ -40,7 +40,7 @@ mod tests {
     }
 
     // Helper to create a test app
-    fn create_test_app(riku_root: &PathBuf, app_name: &str) -> Result<()> {
+    fn create_test_app(riku_root: &Path, app_name: &str) -> Result<()> {
         let app_dir = riku_root.join("apps").join(app_name);
         let env_dir = riku_root.join("envs").join(app_name);
 

@@ -1,7 +1,7 @@
-/// Security-focused integration tests
-///
-/// These tests verify that security boundaries work correctly at the
-/// integration level through file operations and config generation.
+//! Security-focused integration tests
+//!
+//! These tests verify that security boundaries work correctly at the
+//! integration level through file operations and config generation.
 
 #[cfg(test)]
 mod tests {

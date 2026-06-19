@@ -240,4 +240,21 @@ pub enum Commands {
         /// SCP arguments
         args: Vec<String>,
     },
+
+    /// Namespace-isolation shim (internal — exec'd by the supervisor, never
+    /// run directly). Reads `RIKU_NS_ROOT` / `RIKU_NS_CMD` from its
+    /// environment, sets up the worker's mount/network/PID namespaces, and
+    /// execs the real worker command inside them.
+    ///
+    /// This exists as a separate subcommand (rather than namespace setup
+    /// happening inside `pre_exec` before `execve`) so that the fork this
+    /// requires for PID-namespace isolation happens *after* the supervisor's
+    /// `Command::spawn()` has already returned: `pre_exec` runs before the
+    /// CLOEXEC self-pipe `Command` uses to detect successful `execve`
+    /// closes, so forking again in there and never exec'ing in the original
+    /// process — which the old implementation did, to become a
+    /// signal-forwarding shim — left `Command::spawn()` blocked on that pipe
+    /// for the worker's entire lifetime, freezing the whole supervisor.
+    #[command(hide = true, name = "__ns-shim")]
+    NsShim,
 }

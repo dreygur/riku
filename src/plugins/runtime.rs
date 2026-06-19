@@ -23,6 +23,7 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -145,14 +146,17 @@ fn plugin_accepts(
     app_path: &Path,
     app_env: &HashMap<String, String>,
 ) -> Result<bool> {
-    let mut child = Command::new(&plugin.path)
-        .arg("detect")
-        .env("RIKU_APP_PATH", app_path)
-        .envs(app_env)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| anyhow!("Failed to run '{} detect': {}", plugin.name, e))?;
+    let mut child = super::executor::spawn_retrying_etxtbsy(
+        Command::new(&plugin.path)
+            .arg("detect")
+            .env("RIKU_APP_PATH", app_path)
+            .envs(app_env)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            // Own process group so a timeout can killpg() the whole tree.
+            .process_group(0),
+    )
+    .map_err(|e| anyhow!("Failed to run '{} detect': {}", plugin.name, e))?;
 
     let timed_out = wait_with_timeout(&mut child, plugin_timeout());
     let status = child.wait()?;
@@ -173,21 +177,51 @@ fn plugin_accepts(
 pub fn build(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result<()> {
     tracing::info!(plugin = plugin.name.as_str(), "running build");
 
-    let mut child = Command::new(&plugin.path)
-        .arg("build")
+    // The build step (npm install, pip install, cargo build, ...) is the one
+    // part of the deploy pipeline that ran with zero resource limits: worker
+    // processes get cgroup/rlimit constraints in spawn_process, but nothing
+    // bounded the build itself, so a malicious or buggy postinstall script
+    // (or a crafted Cargo.toml/package.json) could exhaust host memory/CPU
+    // before any worker limit ever applied. Apply the same RLIMIT_* ceiling
+    // used for workers here too.
+    let limits = crate::supervisor::resource_limits::ResourceLimits::from_env();
+
+    let mut cmd = Command::new(&plugin.path);
+    cmd.arg("build")
         .envs(ctx.build_env())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
+        // Piped (not inherited) so `tee_output` can retain a stderr tail
+        // for resource-exhaustion classification below, while still
+        // mirroring both streams live to the terminal in real time.
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        // Own process group so a timeout can killpg() the whole tree.
+        .process_group(0);
+    unsafe {
+        cmd.pre_exec(move || limits.apply());
+    }
+    let mut child = super::executor::spawn_retrying_etxtbsy(&mut cmd)
         .map_err(|e| anyhow!("Failed to spawn '{} build': {}", plugin.name, e))?;
 
+    let (tee_handles, stderr_tail) = super::executor::tee_output(&mut child);
     let timed_out = wait_with_timeout(&mut child, plugin_timeout());
     let status = child.wait()?;
+    for h in tee_handles {
+        let _ = h.join();
+    }
 
     if timed_out {
         anyhow::bail!("Build timed out for plugin '{}'", plugin.name);
     }
     if !status.success() {
+        let tail = stderr_tail.lock().unwrap().clone();
+        if let Some(cause) = super::executor::classify_resource_exit(&status, &tail) {
+            return Err(crate::error::DeployError::resource_exhausted(
+                "build",
+                &plugin.name,
+                &cause,
+            )
+            .into());
+        }
         anyhow::bail!(
             "Build failed: plugin '{}' exited with code {}",
             plugin.name,

@@ -61,3 +61,27 @@ fn test_provision_and_cleanup_lifecycle() {
     cgroup.cleanup().expect("cleanup should remove empty cgroup");
     assert!(!cgroup.path.exists());
 }
+
+#[test]
+fn test_startup_diagnostic_is_structured_and_actionable() {
+    let err = anyhow::anyhow!("permission denied");
+    let diagnostic = startup_diagnostic(&err);
+
+    // Structured: every field an operator needs to triage is labeled and
+    // present, not just a bare error string.
+    for field in ["component", "check", "status", "detail", "impact", "remedy"] {
+        assert!(
+            diagnostic.contains(field),
+            "diagnostic missing '{}' field:\n{}",
+            field,
+            diagnostic
+        );
+    }
+
+    // Human-readable: names the actual path and surfaces the underlying error.
+    assert!(diagnostic.contains(CGROUP_ROOT));
+    assert!(diagnostic.contains("permission denied"));
+
+    // Actionable: tells the operator what to do, not just what broke.
+    assert!(diagnostic.to_lowercase().contains("delegat") || diagnostic.to_lowercase().contains("chown"));
+}

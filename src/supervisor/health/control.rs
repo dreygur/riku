@@ -83,10 +83,19 @@ fn run_blocking_command(
         let paths = RikuPaths::from_env();
         match f(&paths, &app) {
             Ok(()) => Ok(Json(json!({"ok": true, "app": app, "action": label}))),
-            Err(e) => Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "app": app, "action": label, "error": e.to_string()})),
-            )),
+            Err(e) => {
+                // A deploy already in progress for this app is a conflict,
+                // not a server failure — surface 409 so callers can retry
+                // instead of treating it like a crash.
+                let status = match e.downcast_ref::<crate::error::DeployError>() {
+                    Some(crate::error::DeployError::DeployInProgress(_)) => StatusCode::CONFLICT,
+                    _ => StatusCode::INTERNAL_SERVER_ERROR,
+                };
+                Err((
+                    status,
+                    Json(json!({"ok": false, "app": app, "action": label, "error": e.to_string()})),
+                ))
+            }
         }
     })
 }

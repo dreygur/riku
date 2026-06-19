@@ -37,7 +37,7 @@
 
 #[allow(unused_imports)]
 pub mod discovery;
-mod executor;
+pub(crate) mod executor;
 pub mod hooks;
 pub mod manager;
 pub mod runtime;
