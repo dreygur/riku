@@ -6,7 +6,11 @@ use crate::config::RikuPaths;
 use crate::util::echo;
 
 /// Create a new application (directory and git repository).
-pub fn cmd_apps_create(paths: &RikuPaths, name: &str) -> Result<()> {
+///
+/// Returns the sanitized app name actually used on disk, which may differ
+/// from `name` (see `validate_app_name`) — callers must use this value for
+/// any follow-up lookups instead of echoing the raw input back.
+pub fn cmd_apps_create(paths: &RikuPaths, name: &str) -> Result<String> {
     use std::os::unix::fs::PermissionsExt;
 
     let app = crate::util::validate_app_name(name)?;
@@ -79,5 +83,5 @@ done
     echo("  git push riku main", "yellow");
     echo("", "");
 
-    Ok(())
+    Ok(app)
 }

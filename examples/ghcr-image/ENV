@@ -1,0 +1,18 @@
+# Riku Environment Configuration for the ghcr-image example
+# See ../../docs/docs/env.md and ../../docs/docs/plugins.md for details.
+
+# =============================================================================
+# Runtime selection — pin to the `ghcr` plugin instead of auto-detecting.
+# =============================================================================
+RUNTIME=ghcr
+
+# Full image reference for the `ghcr` plugin to `docker pull`/`podman pull`
+# on every deploy. Works with any registry your host's docker/podman can
+# already pull from (not just ghcr.io) — set this to whatever your CI
+# pipeline pushes to.
+GHCR_IMAGE=ghcr.io/you/app:latest
+
+# =============================================================================
+# Network settings
+# =============================================================================
+NGINX_SERVER_NAME=app.example.com

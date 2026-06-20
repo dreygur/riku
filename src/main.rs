@@ -69,7 +69,9 @@ fn main() -> Result<()> {
             }
         }
         Commands::Apps { cmd } => match cmd {
-            Some(AppsCmd::Create { name }) => cli::apps::cmd_apps_create(&paths, &name)?,
+            Some(AppsCmd::Create { name }) => {
+                cli::apps::cmd_apps_create(&paths, &name)?;
+            }
             Some(AppsCmd::Info { name }) => cli::apps::cmd_apps_info(&paths, &name)?,
             Some(AppsCmd::Destroy { name }) => cli::apps::cmd_destroy(&paths, &name)?,
             None => cli::apps::cmd_apps(&paths)?,

@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Riku runtime plugin: registry image (GHCR, Docker Hub, or any registry
+# `docker`/`podman` can already pull from).
+#
+# For apps where CI builds and pushes the image (e.g. GitHub Actions ->
+# ghcr.io) instead of riku building it from a local Dockerfile. Set
+# GHCR_IMAGE in the app's ENV to the full image reference; this plugin
+# pulls it fresh on every deploy instead of running `docker build`, so a CI
+# push of a new `:latest` (or any tag) is what `build` actually fetches —
+# no local Docker layer cache to go stale.
+#
+# Authenticating to a private registry (e.g. `docker login ghcr.io`) is the
+# operator's responsibility on the riku host; this plugin only pulls.
+set -euo pipefail
+
+CMD="${1:-}"
+APP="${RIKU_APP:-app}"
+
+runtime() {
+  if command -v podman >/dev/null 2>&1; then
+    echo podman
+  else
+    echo docker
+  fi
+}
+
+case "$CMD" in
+  detect)
+    [ -n "${GHCR_IMAGE:-}" ] && exit 0
+    exit 1
+    ;;
+
+  build)
+    : "${GHCR_IMAGE:?GHCR_IMAGE must be set, e.g. ghcr.io/you/app:latest}"
+    rt="$(runtime)"
+    "$rt" pull "$GHCR_IMAGE"
+    "$rt" tag "$GHCR_IMAGE" "riku-$APP"
+    ;;
+
+  env)
+    printf 'CONTAINER_IMAGE=riku-%s\n' "$APP"
+    printf 'CONTAINER_RUNTIME=%s\n' "$(runtime)"
+    ;;
+
+  start)
+    rt="$(runtime)"
+    echo "$rt run --rm -p \$PORT:\$PORT riku-$APP"
+    ;;
+
+  *)
+    echo "Unknown subcommand: $CMD" >&2
+    exit 1
+    ;;
+esac

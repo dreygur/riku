@@ -1,0 +1,3 @@
+# Empty command -> the `ghcr` plugin's `start` subcommand supplies
+# `docker run --rm -p $PORT:$PORT riku-<app>` (the image pulled in `build`).
+web:

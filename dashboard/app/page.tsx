@@ -7,6 +7,7 @@ import { EnvEditor } from "@/components/EnvEditor";
 import { AppControls } from "@/components/AppControls";
 import { PluginsPanel } from "@/components/PluginsPanel";
 import { NetworkPanel } from "@/components/NetworkPanel";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { api } from "@/lib/api";
 
 const PIPELINE_STAGES = [
@@ -42,7 +43,7 @@ function PipelineRail({ live }: { live: boolean }) {
 }
 
 export default function DashboardPage() {
-  const [activeApp, setActiveApp] = React.useState("myapp");
+  const [activeApp, setActiveApp] = React.useState("");
   const [connStatus, setConnStatus] = React.useState<"ok" | "offline">(
     "offline",
   );
@@ -101,11 +102,14 @@ export default function DashboardPage() {
           <SupervisorGrid />
         </div>
 
-        {/* ═══ PLUGINS / HOOKS ═══ */}
-        <PluginsPanel />
-
-        {/* ═══ NETWORK / TLS ═══ */}
-        <NetworkPanel />
+        {/* ═══ RUNTIME CONFIG (plugins / hooks / nginx) ═══
+            Low-churn relative to the worker grid and logs below, so it's
+            collapsed by default to keep those primary, frequently-checked
+            panels closer to the top of the page. */}
+        <CollapsibleSection title="runtime config (plugins, hooks, nginx routes)" storageKey="runtime-config">
+          <PluginsPanel />
+          <NetworkPanel />
+        </CollapsibleSection>
 
         {/* ═══ BOTTOM PANELS ═══ */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 min-h-0">

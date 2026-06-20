@@ -32,6 +32,7 @@ git push riku main
 | `rust/` | Rust | Rust web server |
 | `python-postgres/` | Python | Django app with PostgreSQL |
 | `client-plugins/` | Plugin | Example Riku plugin |
+| `ghcr-image/` | `ghcr` runtime | Deploy a CI-built image from GHCR (or any registry) instead of building locally |
 
 ## Configuration Files
 

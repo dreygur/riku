@@ -17,7 +17,7 @@ By default, Riku enforces the following limits on all application processes:
 
 | Resource | Limit | Environment Variable | Description |
 |----------|-------|---------------------|-------------|
-| **Memory** | 512 MB | `RIKU_MAX_MEMORY_MB` | Maximum virtual memory (address space) |
+| **Memory** | 512 MB | `RIKU_MAX_MEMORY_MB` | Maximum virtual memory (address space); accepts `unlimited` |
 | **CPU Time** | 3600 seconds | `RIKU_MAX_CPU_SECONDS` | Maximum CPU time before SIGKILL |
 | **Open Files** | 1024 | `RIKU_MAX_OPEN_FILES` | Maximum file descriptors |
 | **Processes** | 64 | `RIKU_MAX_PROCESSES` | Maximum child processes (fork limit) |
@@ -76,6 +76,46 @@ Environment="RIKU_MAX_FILE_SIZE_MB=1024"
 Restart=always
 RestartSec=10s
 ```
+
+**This `Environment=` block only affects already-running *workers*** —
+the supervisor daemon `systemd` spawns. It does **not** affect the `build`
+step of a deploy, which runs inside `riku git-hook` triggered by `git
+push`'s post-receive hook: a separate, short-lived process spawned by the
+SSH session of whoever pushed, not by systemd. See the unlimited-memory
+section below if your build step needs different limits than your workers.
+
+---
+
+## Unlimited Memory for Go-Based Build Tools
+
+`RIKU_MAX_MEMORY_MB` also accepts the literal value `unlimited`, which skips
+applying `RLIMIT_AS` entirely instead of setting some large finite cap.
+
+This exists specifically for plugin `build` steps that shell out to a Go
+binary — `docker`, `podman`, or the `go` toolchain itself (used by the
+bundled `container`, `ghcr`, and `go` runtime plugins). The Go runtime
+reserves a large virtual address space for its heap arena at process
+*startup*, regardless of how much memory the program will actually use, and
+`RLIMIT_AS` caps address space, not resident memory — so no finite limit
+compatible with normal host RAM avoids this. It was confirmed still
+failing (`fatal error: failed to reserve page summary memory`) at 32 GB in
+testing; only `unlimited` reliably works.
+
+```bash
+export RIKU_MAX_MEMORY_MB=unlimited
+```
+
+Set this **in the environment of whatever runs `riku git-hook`/`riku
+deploy`** for the build step to pick it up — typically the `deploy` user's
+SSH session on the riku host (e.g. system-wide via `/etc/environment`, read
+by `pam_env` for SSH logins on most distros), not the `riku supervisor`
+systemd unit, which is a different process tree and only governs already-
+running workers (see the note above). Confirm it took effect by checking
+the deploy log for `Resource limit: max_memory = unlimited` (visible with
+`RUST_LOG=info`).
+
+This only disables the *build*-step memory cap; CPU/file-descriptor/process
+limits and all *worker* limits are unaffected and still enforced normally.
 
 ---
 
@@ -333,10 +373,14 @@ If upgrading from Riku 2.x:
 
 ### Rollback
 
-If resource limits cause issues, temporarily disable by setting very high values:
+If resource limits cause issues, temporarily disable by setting very high
+values (or, for memory specifically when the offending process is a Go
+binary — see [above](#unlimited-memory-for-go-based-build-tools) — use the
+literal `unlimited`, since no finite value actually works for that case):
 
 ```bash
-export RIKU_MAX_MEMORY_MB=16384      # 16 GB (effectively unlimited)
+export RIKU_MAX_MEMORY_MB=16384      # 16 GB — not truly unlimited; Go
+                                      # binaries still fail at this value
 export RIKU_MAX_CPU_SECONDS=86400    # 24 hours
 export RIKU_MAX_OPEN_FILES=65536     # 64K files
 export RIKU_MAX_PROCESSES=1024       # 1K processes

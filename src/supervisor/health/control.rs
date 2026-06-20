@@ -115,6 +115,12 @@ async fn join_blocking(handle: std::thread::JoinHandle<HandlerResult>) -> impl I
 }
 
 /// POST /control/apps — { "name": "myapp" }
+///
+/// `cmd_apps_create` sanitizes `name` (stripping spaces/punctuation — see
+/// `validate_app_name`), so the app actually created on disk can differ
+/// from the request body. The response's "app" field must reflect that
+/// sanitized name, not the raw input, or callers (the dashboard) end up
+/// polling a name that was never created.
 async fn create_app_handler(Json(body): Json<Value>) -> impl IntoResponse {
     let name = match body.get("name").and_then(|v| v.as_str()) {
         Some(n) if !n.is_empty() => n.to_string(),
@@ -127,8 +133,17 @@ async fn create_app_handler(Json(body): Json<Value>) -> impl IntoResponse {
         }
     };
 
-    let handle = run_blocking_command("create", name, |paths, app| {
-        crate::cli::apps::cmd_apps_create(paths, app)
+    let handle = std::thread::spawn(move || {
+        let paths = RikuPaths::from_env();
+        match crate::cli::apps::cmd_apps_create(&paths, &name) {
+            Ok(sanitized) => {
+                Ok(Json(json!({"ok": true, "app": sanitized, "action": "create"})))
+            }
+            Err(e) => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "app": name, "action": "create", "error": e.to_string()})),
+            )),
+        }
     });
     join_blocking(handle).await.into_response()
 }

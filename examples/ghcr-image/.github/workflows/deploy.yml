@@ -1,0 +1,63 @@
+name: build, push to GHCR, and deploy via riku
+
+# Copy this into YOUR app repo (not riku's), alongside the source riku will
+# never see — riku only ever pulls the image this builds, never your code.
+
+on:
+  push:
+    branches: [main]
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}:latest
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE }}
+
+      # The trigger: riku's own deploy mechanism is a `git push` over SSH
+      # (see ../README.md), not an HTTP call — so the last CI step pushes
+      # an empty commit to the riku-trigger repo (examples/ghcr-image's
+      # Procfile/ENV, NOT your app source) using a deploy-only SSH key
+      # stored as the RIKU_DEPLOY_KEY secret. The post-receive hook runs
+      # the `ghcr` plugin's `build` step, which does
+      # `docker pull ghcr.io/you/app:latest` — always the tag just pushed
+      # above, never a stale local build cache.
+      - name: Trigger riku redeploy
+        env:
+          RIKU_DEPLOY_KEY: ${{ secrets.RIKU_DEPLOY_KEY }}
+          RIKU_REMOTE: ${{ secrets.RIKU_REMOTE }} # e.g. deploy@your-server:myapp
+        run: |
+          mkdir -p ~/.ssh
+          echo "$RIKU_DEPLOY_KEY" > ~/.ssh/riku_deploy_key
+          chmod 600 ~/.ssh/riku_deploy_key
+          ssh-keyscan -H "$(echo "$RIKU_REMOTE" | cut -d@ -f2 | cut -d: -f1)" >> ~/.ssh/known_hosts
+
+          git clone "$RIKU_REMOTE" riku-trigger || {
+            # First push: riku-trigger repo doesn't exist on the server yet.
+            mkdir riku-trigger && cd riku-trigger && git init && cd ..
+          }
+          cd riku-trigger
+          git config user.email "ci@example.com"
+          git config user.name "CI"
+          git commit --allow-empty -m "deploy: ${{ github.sha }}"
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/riku_deploy_key -o StrictHostKeyChecking=no" \
+            git push "$RIKU_REMOTE" HEAD:main

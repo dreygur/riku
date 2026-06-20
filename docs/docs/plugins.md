@@ -22,7 +22,7 @@ riku install-plugins --plugins node,python   # specific plugins only
 ```
 
 Bundled plugins available: `node`, `python`, `ruby`, `go`, `rust-lang`, `java`,
-`clojure`, `container`.
+`clojure`, `container`, `ghcr`.
 
 ### Plugin Protocol
 
@@ -104,6 +104,42 @@ To skip auto-detection:
 ```bash
 riku config set myapp RUNTIME=my-runtime
 ```
+
+### The `ghcr` Plugin: CI-Built Images
+
+The `container` plugin builds an image from a local `Dockerfile`/`Containerfile`
+in the app's repo. The `ghcr` plugin is for the opposite case: CI (e.g. GitHub
+Actions) already built and pushed the image to a registry, and riku should
+just `pull` and run it on every deploy instead of building anything itself.
+
+```bash
+riku config set myapp RUNTIME=ghcr
+riku config set myapp GHCR_IMAGE=ghcr.io/you/app:latest
+```
+
+The app's repo only needs a `Procfile` with an empty command so the plugin's
+`start` fallback is used:
+
+```
+web:
+```
+
+On every deploy, `build` runs `docker pull $GHCR_IMAGE` (or `podman`, same
+host-binary auto-detection as `container`) — always fetching the tag fresh
+from the registry, not a cached local build. `GHCR_IMAGE` works with any
+registry your host's `docker`/`podman` can already pull from (GHCR, Docker
+Hub, a private registry you've `docker login`'d to), not just ghcr.io.
+
+**This (and `container`'s `docker build`) needs `RIKU_MAX_MEMORY_MB=unlimited`**
+in the deploy process's environment — `docker`/`podman` are Go binaries, and
+riku's default 512 MB `RLIMIT_AS` build-step cap is far too low for the Go
+runtime's startup address-space reservation (no finite value fixes it; see
+[resource-limits.md](./resource-limits.md#unlimited-memory-for-go-based-build-tools)).
+
+This pairs with a CI pipeline that builds, pushes to the registry, then
+triggers a riku deploy as its last step — see
+[examples/ghcr-image](../../examples/ghcr-image/README.md) for a full
+GitHub Actions example.
 
 ---
 

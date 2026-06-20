@@ -30,13 +30,13 @@ export function AppControls({ app, onAppChange, className }: AppControlsProps) {
           api.network.list(),
         ]);
         if (cancelled) return;
-        setKnownApps((prev) => {
-          const names = Array.from(new Set(stats.map((s) => s.app))).sort();
-          return names.length === prev.length &&
-            names.every((n, i) => n === prev[i])
+        const names = Array.from(new Set(stats.map((s) => s.app))).sort();
+        setKnownApps((prev) =>
+          names.length === prev.length && names.every((n, i) => n === prev[i])
             ? prev
-            : names;
-        });
+            : names,
+        );
+        if (!app && names.length > 0) onAppChange(names[0]);
         const entry = network.apps?.find((n) => n.app === app);
         setPort(parseUpstreamPort(entry?.upstream ?? null));
       } catch {
@@ -50,7 +50,7 @@ export function AppControls({ app, onAppChange, className }: AppControlsProps) {
       cancelled = true;
       clearInterval(id);
     };
-  }, [app]);
+  }, [app, onAppChange]);
 
   const handleCreate = React.useCallback(async () => {
     const name = newAppName.trim();
@@ -61,7 +61,11 @@ export function AppControls({ app, onAppChange, className }: AppControlsProps) {
       const result = await api.control.create(name);
       report("create", result, null);
       if (result.ok) {
-        onAppChange(name);
+        // The backend sanitizes the name (strips spaces/punctuation — see
+        // validate_app_name); switch to whatever it actually created on
+        // disk, not the raw input, or every follow-up lookup for this app
+        // silently misses.
+        onAppChange(result.app ?? name);
         setNewAppName("");
       }
     } catch (e) {

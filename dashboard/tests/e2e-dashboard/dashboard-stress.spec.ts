@@ -15,21 +15,22 @@
 //      it as a worker. Phase 2 is split into a deploy sub-phase (no podman)
 //      and an export sub-phase (real podman, no running container).
 //
-// Two real defects were discovered while grounding Phase 3 against the
-// actual SSE route (app/api/logs/stream/route.ts) and DeployLogger
-// (src/util/deploy_logger.rs), and are asserted as TRUE behavior rather
-// than papered over:
-//   - DeployLogger::new() truncates deploy.log on every new deploy. The SSE
-//     route tracks a monotonically-increasing `offset` per connection with
-//     `if (size <= offset) return`. After a truncation, the new (smaller)
-//     file size is almost always <= the stale offset from before the
-//     truncation, so the stream goes permanently silent for that
-//     connection even though the file is still being written to.
-//   - Reconnecting (e.g. after a page reload) computes `offset = current
-//     file size` at connect time — it never backfills. The UI's `lines`
-//     state is also component-local with no persistence. So a reload does
-//     NOT "catch up with backlogged logs" — it starts from a blank slate
-//     and only shows lines written after the new connection opens.
+// Phase 3 is grounded against the actual SSE route
+// (app/api/logs/stream/route.ts), which tails the app's *process* log
+// files (`logs/{app}/{process}.{index}.log`, e.g. `web.1.log` — written by
+// src/supervisor/process/spawn.rs in append mode) rather than
+// `deploy.log` (a separate, append-only deploy-history file with its own
+// `riku logs --deploy` command; see src/util/deploy_logger.rs). Two
+// behaviors are asserted as TRUE rather than papered over:
+//   - Process logs are opened with O_APPEND and never truncated by a
+//     redeploy/restart (only DeployLogger truncates deploy.log, which this
+//     route doesn't read), so the stream keeps working across redeploys —
+//     verified below rather than assumed.
+//   - Reconnecting (e.g. after a page reload) seeks every tracked file to
+//     EOF at connect time — it never backfills. The UI's `lines` state is
+//     also component-local with no persistence. So a reload does NOT
+//     "catch up with backlogged logs" — it starts from a blank slate and
+//     only shows lines written after the new connection opens.
 
 import { test, expect, chromium, type Browser, type Page } from "@playwright/test";
 import { existsSync, appendFileSync, mkdirSync, readFileSync, statSync } from "node:fs";
@@ -122,8 +123,17 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
     await expect(page.getByTestId("terminal-stream-status")).toHaveAttribute("data-connected", "true", {
       timeout: 15_000,
     });
+    // The SSE route tails the process log (web.1.log), not deploy.log, so
+    // the fixture worker's own output — not the deploy narration — is what
+    // proves the stream picked up this app's real output. Matching on the
+    // repeating "heartbeat" line (not the one-shot FIXTURE_WEB_PID= line)
+    // avoids a race against the route's by-design no-backfill behavior: a
+    // brand-new log file is only discovered on the route's next poll tick
+    // (every 250ms), by which point the single startup line may already
+    // be behind that tick's seek-to-EOF — heartbeats keep coming every
+    // second, so there's always another chance within the timeout.
     await expect(
-      page.getByTestId("terminal-stream-line").filter({ hasText: `Deploying app '${APP_NAME}'` }),
+      page.getByTestId("terminal-stream-line").filter({ hasText: "heartbeat" }).first(),
     ).toBeVisible({ timeout: 15_000 });
   });
 
@@ -154,9 +164,14 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
 
   // ── Phase 3: Hostile Stream Stress, Disconnection, and Truncation ─────
 
-  test("Phase 3: high-volume ordering, disconnect/reconnect, fd leak, truncation defect", async () => {
-    const deployLogPath = join(env.rikuRoot, "logs", APP_NAME, "deploy.log");
-    expect(existsSync(deployLogPath)).toBe(true);
+  test("Phase 3: high-volume ordering, disconnect/reconnect, fd leak, redeploy resilience", async () => {
+    // The fixture's Procfile declares a single `web` process (see
+    // tests/e2e-dashboard/fixtures/test-app/Procfile), so the supervisor
+    // writes its output to web.1.log (src/deploy/workers.rs:
+    // `{kind}.{index}.log`) — this is the file the SSE route now tails,
+    // not deploy.log.
+    const processLogPath = join(env.rikuRoot, "logs", APP_NAME, "web.1.log");
+    expect(existsSync(processLogPath)).toBe(true);
 
     const linesBefore = await page.getByTestId("terminal-stream-line").count();
 
@@ -164,7 +179,7 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
     // connection is live, same direct-append technique already proven by
     // dashboard/scripts/audit-dashboard.ts's auditLogTail phase. ──
     for (let i = 1; i <= STRESS_LINE_COUNT; i++) {
-      appendFileSync(deployLogPath, `STRESS_LINE_${i}\n`);
+      appendFileSync(processLogPath, `STRESS_LINE_${i}\n`);
       if (i % 50 === 0) await new Promise((r) => setTimeout(r, 10));
     }
 
@@ -193,27 +208,25 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
     await page.reload();
     await expect(page.getByTestId("supervisor-grid")).toBeVisible();
 
-    // REAL behavior, not the originally-assumed one: `activeApp` is plain
-    // React state (app/page.tsx) with no localStorage/URL persistence, so
-    // a reload resets the active-app selector back to its hardcoded
-    // placeholder ("myapp"), not e2estressapp — TerminalStream would
-    // otherwise open an EventSource against the wrong app entirely. A
-    // real user recovers by retyping the app name into the same
-    // data-testid="active-app-input" the [CREATE] flow used earlier; do
-    // that here rather than asserting on a stream that was never even
-    // pointed at the right app.
+    // `activeApp` is plain React state (app/page.tsx) with no
+    // localStorage/URL persistence, so a reload resets the active-app
+    // selector to "" — AppControls then auto-selects the first app in
+    // ~/.riku/workers-enabled once its poll lands. With only one app
+    // deployed in this test that's already APP_NAME, but explicitly fill
+    // the input anyway so the assertion below doesn't depend on poll
+    // timing or alphabetical ordering if more apps are ever added here.
     await page.getByTestId("active-app-input").fill(APP_NAME);
 
     // REAL behavior, not the originally-assumed one: reconnect does not
     // backfill. The component remounts with empty `lines` state and the
-    // SSE route computes `offset = current file size` at connect time
+    // SSE route seeks every tracked file to EOF at connect time
     // (app/api/logs/stream/route.ts), so the 500 stress lines above are
     // gone from the UI after reload even though they're still on disk.
     await expect(page.getByTestId("terminal-stream-line")).toHaveCount(0);
-    expect(readFileSync(deployLogPath, "utf-8")).toContain("STRESS_LINE_500"); // proves it's a UI gap, not data loss
+    expect(readFileSync(processLogPath, "utf-8")).toContain("STRESS_LINE_500"); // proves it's a UI gap, not data loss
 
     // Live streaming still works post-reconnect for genuinely new writes.
-    appendFileSync(deployLogPath, "POST_RECONNECT_LINE\n");
+    appendFileSync(processLogPath, "POST_RECONNECT_LINE\n");
     await expect(page.getByTestId("terminal-stream-line").filter({ hasText: "POST_RECONNECT_LINE" })).toBeVisible({
       timeout: 10_000,
     });
@@ -228,23 +241,24 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
       expect(fdAfterReconnect - fdBaseline).toBeLessThanOrEqual(5);
     }
 
-    // ── Discovered defect: DeployLogger truncates deploy.log on every new
-    // deploy, but the now-reconnected SSE stream's `offset` was captured
-    // at the post-reload file size (which includes POST_RECONNECT_LINE).
-    // A second deploy truncates the file back to near-zero, so
-    // `size <= offset` holds forever afterward and the stream goes
-    // silent — even though the file is actively being written to. ──
+    // ── Redeploy resilience: web.1.log is reopened in append mode by
+    // spawn_process on every restart (src/supervisor/process/spawn.rs),
+    // never truncated, and the SSE route re-lists the log directory and
+    // re-stats every tracked file on each tick rather than trusting a
+    // connection-lifetime-stale offset — so the now-reconnected stream
+    // (offset captured post-reload, after POST_RECONNECT_LINE) must keep
+    // receiving new lines straight through a redeploy, not go silent. ──
     await page.getByTestId("deploy-btn").click();
     await expect(page.getByTestId("action-status")).toHaveText(new RegExp(`\\[DEPLOY\\] ${APP_NAME} ok`), {
       timeout: 30_000,
     });
 
-    const newDeployLine = page
-      .getByTestId("terminal-stream-line")
-      .filter({ hasText: `Deploying app '${APP_NAME}'` });
-    await page.waitForTimeout(5_000); // generous window; this asserts an absence, not a race
-    expect(await newDeployLine.count()).toBe(0); // confirms the silent-stream defect, not a flaky timing assumption
-    expect(readFileSync(deployLogPath, "utf-8")).toContain(`Deploying app '${APP_NAME}'`); // the data IS there — only the stream is stuck
+    // The fixture script (web.sh) prints "FIXTURE_WEB_PID=<pid>" once at
+    // startup, so the restarted worker's own startup line is a clean
+    // signal that streaming survived the redeploy rather than going dark.
+    const restartLine = page.getByTestId("terminal-stream-line").filter({ hasText: "FIXTURE_WEB_PID=" });
+    await expect(restartLine).toBeVisible({ timeout: 15_000 });
+    expect(readFileSync(processLogPath, "utf-8")).toContain("FIXTURE_WEB_PID="); // UI and disk agree
 
     // This redeploy restarted the worker (spawn_process stops the old PID
     // before spawning a new one), so the PID captured back in Phase 2a is

@@ -66,7 +66,7 @@ impl ResourceLimits {
     /// Load resource limits from environment variables.
     ///
     /// Environment variables:
-    /// - RIKU_MAX_MEMORY_MB: Maximum memory in MB (default: 512)
+    /// - RIKU_MAX_MEMORY_MB: Maximum memory in MB, or `unlimited` (default: 512)
     /// - RIKU_MAX_CPU_SECONDS: Maximum CPU time in seconds (default: 3600)
     /// - RIKU_MAX_OPEN_FILES: Maximum open files (default: 1024)
     /// - RIKU_MAX_PROCESSES: Maximum processes, RLIMIT_NPROC, UID-wide (default: disabled — see field doc)
@@ -75,9 +75,20 @@ impl ResourceLimits {
     pub fn from_env() -> Self {
         let mut limits = Self::default();
 
-        // Memory limit in MB
+        // Memory limit in MB. `unlimited` disables RLIMIT_AS entirely — Go
+        // binaries (the `go` toolchain itself, and `docker`/`podman`, both
+        // Go-based) reserve a large virtual address space for their heap
+        // arena at runtime startup regardless of actual usage, which counts
+        // against RLIMIT_AS (it caps *address space*, not resident memory).
+        // No finite value compatible with normal host RAM avoids this —
+        // confirmed empirically up to 32 GB still crashing — so a plugin's
+        // `build` step that shells out to a Go binary needs this escape
+        // hatch (set `RIKU_MAX_MEMORY_MB=unlimited` in the app's ENV).
         if let Ok(val) = env::var("RIKU_MAX_MEMORY_MB") {
-            if let Ok(mb) = val.parse::<u64>() {
+            if val.trim().eq_ignore_ascii_case("unlimited") {
+                limits.max_memory_bytes = None;
+                tracing::info!("Resource limit: max_memory = unlimited");
+            } else if let Ok(mb) = val.parse::<u64>() {
                 limits.max_memory_bytes = Some(mb * 1024 * 1024);
                 tracing::info!("Resource limit: max_memory = {} MB", mb);
             }

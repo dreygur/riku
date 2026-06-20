@@ -12,7 +12,7 @@ use crate::config::RikuPaths;
 use crate::util::display;
 
 /// Shell script plugins available in the bundled plugins/ directory of the repo.
-const SHELL_PLUGINS: &[&str] = &["node", "python", "ruby", "go", "rust-lang"];
+const SHELL_PLUGINS: &[&str] = &["node", "python", "ruby", "go", "rust-lang", "ghcr"];
 
 /// Rust binary plugins available as GitHub release assets.
 /// These are downloaded as pre-compiled binaries named `riku-plugin-<name>-<target-triple>`

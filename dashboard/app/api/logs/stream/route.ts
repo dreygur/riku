@@ -1,16 +1,42 @@
 import { watch, type FSWatcher } from "node:fs";
-import { open, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { open, readdir, stat } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { homedir } from "node:os";
 
 export const runtime = "nodejs";
 
 const RIKU_ROOT = process.env.RIKU_ROOT ?? join(homedir(), ".riku");
 
-// riku has no SSE/streaming hook for deploy logs (src/util/deploy_logger.rs
-// only appends to a flat file). We tail logs/{app}/deploy.log ourselves.
-function deployLogPath(app: string): string {
-  return join(RIKU_ROOT, "logs", app, "deploy.log");
+function logDir(app: string): string {
+  return join(RIKU_ROOT, "logs", app);
+}
+
+// Process log files are named `{process}.{index}.log` (e.g. web.1.log,
+// worker.1.log) by src/deploy/workers.rs. deploy.log lives in the same
+// directory but is a separate append-only deploy-history file (see
+// src/util/deploy_logger.rs) with its own `riku logs --deploy` command —
+// `riku logs <app>` (the one this panel is labeled after) tails every
+// *process* log except that one, so we apply the same filter here.
+async function listProcessLogFiles(dir: string): Promise<string[]> {
+  let entries: string[];
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((name) => name.endsWith(".log") && name !== "deploy.log")
+    .sort()
+    .map((name) => join(dir, name));
+}
+
+function stemPrefix(path: string): string {
+  return basename(path, ".log");
+}
+
+interface TrackedFile {
+  offset: number;
+  ino: number;
 }
 
 export async function GET(req: Request) {
@@ -18,41 +44,75 @@ export async function GET(req: Request) {
   if (!app) {
     return new Response("missing ?app= query param", { status: 400 });
   }
-  const file = deployLogPath(app);
+  const dir = logDir(app);
 
   const stream = new ReadableStream({
     async start(controller) {
-      let offset = 0;
-      try {
-        offset = (await stat(file)).size;
-      } catch {
-        // file doesn't exist yet; start at 0 and pick up writes once created
-      }
-
-      let watcher: FSWatcher | null = null;
       let closed = false;
+      const tracked = new Map<string, TrackedFile>();
 
-      const sendChunk = async () => {
-        if (closed) return;
+      const trackNewFile = async (file: string) => {
         try {
-          const { size } = await stat(file);
-          if (size <= offset) return;
-          const handle = await open(file, "r");
-          const buf = Buffer.alloc(size - offset);
-          await handle.read(buf, 0, buf.length, offset);
-          await handle.close();
-          offset = size;
-          for (const line of buf.toString("utf-8").split("\n")) {
-            if (line.length === 0) continue;
-            controller.enqueue(`data: ${JSON.stringify({ line })}\n\n`);
-          }
+          const st = await stat(file);
+          tracked.set(file, { offset: st.size, ino: st.ino });
         } catch {
-          // file briefly missing/rotating; ignore and retry on next event
+          // disappeared between listing and stat'ing; ignore
         }
       };
 
+      // Discover the app's current process log files and seek each to EOF,
+      // mirroring the CLI's open_at_end() (src/cli/apps/logs.rs): a newly
+      // attached stream shows only lines written after it connects.
+      for (const file of await listProcessLogFiles(dir)) {
+        await trackNewFile(file);
+      }
+
+      const sendChunk = async () => {
+        if (closed) return;
+
+        // Re-list on every tick so workers added/removed by a rescale or
+        // redeploy are picked up/dropped without reconnecting the stream.
+        const current = await listProcessLogFiles(dir);
+        for (const file of current) {
+          if (!tracked.has(file)) await trackNewFile(file);
+        }
+        for (const file of [...tracked.keys()]) {
+          if (!current.includes(file)) tracked.delete(file);
+        }
+
+        for (const file of current) {
+          const state = tracked.get(file);
+          if (!state) continue;
+          try {
+            const st = await stat(file);
+            // Inode changed under us (external rotation/truncation):
+            // restart from the top of the new file.
+            if (st.ino !== state.ino) {
+              state.ino = st.ino;
+              state.offset = 0;
+            }
+            if (st.size <= state.offset) continue;
+            const handle = await open(file, "r");
+            const buf = Buffer.alloc(st.size - state.offset);
+            await handle.read(buf, 0, buf.length, state.offset);
+            await handle.close();
+            state.offset = st.size;
+            const prefix = stemPrefix(file);
+            for (const line of buf.toString("utf-8").split("\n")) {
+              if (line.length === 0) continue;
+              controller.enqueue(
+                `data: ${JSON.stringify({ line: `${prefix} | ${line}` })}\n\n`,
+              );
+            }
+          } catch {
+            // file briefly missing/rotating; ignore and retry on next tick
+          }
+        }
+      };
+
+      let watcher: FSWatcher | null = null;
       try {
-        watcher = watch(join(RIKU_ROOT, "logs", app), () => {
+        watcher = watch(dir, () => {
           sendChunk();
         });
       } catch {
