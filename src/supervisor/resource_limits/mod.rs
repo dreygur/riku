@@ -55,8 +55,8 @@ impl Default for ResourceLimits {
             max_memory_bytes: Some(512 * 1024 * 1024),     // 512 MB
             max_cpu_seconds: Some(3600),                   // 1 hour
             max_open_files: Some(1024),                    // 1024 files
-            max_processes: None,                           // see field doc: UID-wide, not per-worker
-            max_core_file_bytes: Some(0),                  // No core dumps
+            max_processes: None, // see field doc: UID-wide, not per-worker
+            max_core_file_bytes: Some(0), // No core dumps
             max_file_size_bytes: Some(1024 * 1024 * 1024), // 1 GB
         }
     }

@@ -40,6 +40,7 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
         Commands::Scp { .. } => None,
         Commands::NsShim => None,
         Commands::DumpState => None,
+        Commands::Setup(_) => None,
     }
 }
 

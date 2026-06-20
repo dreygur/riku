@@ -19,10 +19,56 @@ pub fn setup_ssh_key_interactive(paths: &RikuPaths) -> Result<()> {
     let key_to_add = select_key(found_keys, &ssh_dir)?;
 
     if let Some(key_path) = key_to_add {
-        add_key_to_authorized_keys(paths, &key_path)?;
+        let (scope, apps) = prompt_scope_and_apps()?;
+        add_key_to_authorized_keys(paths, &key_path, scope.as_deref(), apps.as_deref())?;
     }
 
     Ok(())
+}
+
+/// Add an SSH public key to authorized_keys from an explicit path
+/// (non-interactive entry point for `riku setup ssh <pubkey>`).
+pub fn cmd_setup_ssh(
+    paths: &RikuPaths,
+    pubkey_path: &str,
+    scope: Option<&str>,
+    apps: Option<&[String]>,
+) -> Result<()> {
+    let key_path = PathBuf::from(pubkey_path);
+    if !key_path.exists() {
+        anyhow::bail!("SSH public key not found: {}", pubkey_path);
+    }
+    add_key_to_authorized_keys(paths, &key_path, scope, apps)
+}
+
+/// Ask whether to restrict the key, and if so, to which scope tier and apps.
+/// Returns `(None, None)` for unrestricted (full) access.
+fn prompt_scope_and_apps() -> Result<(Option<String>, Option<Vec<String>>)> {
+    print!("      Restrict this key to specific app(s)? [y/N]: ");
+    io::stdout().flush()?;
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    if input.trim().to_lowercase() != "y" {
+        return Ok((None, None));
+    }
+
+    print!("      Scope tier (readonly/staging/production): ");
+    io::stdout().flush()?;
+    let mut scope = String::new();
+    io::stdin().read_line(&mut scope)?;
+    let scope = scope.trim().to_lowercase();
+
+    print!("      App name(s), comma-separated: ");
+    io::stdout().flush()?;
+    let mut apps = String::new();
+    io::stdin().read_line(&mut apps)?;
+    let apps: Vec<String> = apps
+        .split(',')
+        .map(|a| a.trim().to_string())
+        .filter(|a| !a.is_empty())
+        .collect();
+
+    Ok((Some(scope), Some(apps)))
 }
 
 fn find_public_keys(ssh_dir: &std::path::Path) -> Result<Vec<PathBuf>> {
@@ -138,7 +184,12 @@ fn prompt_select_key(found_keys: Vec<PathBuf>) -> Result<Option<PathBuf>> {
     }
 }
 
-fn add_key_to_authorized_keys(paths: &RikuPaths, key_path: &PathBuf) -> Result<()> {
+fn add_key_to_authorized_keys(
+    paths: &RikuPaths,
+    key_path: &PathBuf,
+    scope: Option<&str>,
+    apps: Option<&[String]>,
+) -> Result<()> {
     if !key_path.exists() {
         return Ok(());
     }
@@ -163,9 +214,23 @@ fn add_key_to_authorized_keys(paths: &RikuPaths, key_path: &PathBuf) -> Result<(
     );
 
     let script_path = paths.riku_script.to_string_lossy().to_string();
-    setup_authorized_keys(&fingerprint, &script_path, &pubkey)?;
+    setup_authorized_keys(&fingerprint, &script_path, &pubkey, scope, apps)?;
 
-    echo("      ✓ Key added to authorized_keys", "green");
+    if let Some(scope) = scope {
+        echo(
+            &format!(
+                "      ✓ Key added to authorized_keys (scope: {}, apps: {})",
+                scope,
+                apps.map(|a| a.join(",")).unwrap_or_default()
+            ),
+            "green",
+        );
+    } else {
+        echo(
+            "      ✓ Key added to authorized_keys (full access)",
+            "green",
+        );
+    }
 
     Ok(())
 }

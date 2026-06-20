@@ -26,8 +26,7 @@ mod tests {
 
     /// Build a `RikuPaths` rooted inside `tmp` and create all required directories.
     fn make_paths(tmp: &TempDir) -> riku::config::RikuPaths {
-        let paths =
-            riku::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
+        let paths = riku::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
         for dir in &[
             &paths.app_root,
             &paths.env_root,

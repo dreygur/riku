@@ -46,7 +46,10 @@ impl ProcessManager {
             .get("PORT")
             .and_then(|p| p.parse().ok())
             .ok_or_else(|| {
-                anyhow::anyhow!("cannot probe generation for {}: no PORT env var configured", process_id)
+                anyhow::anyhow!(
+                    "cannot probe generation for {}: no PORT env var configured",
+                    process_id
+                )
             })?;
 
         let health_path = new_config
@@ -65,7 +68,8 @@ impl ProcessManager {
             + 1;
 
         let mut temp_config = new_config;
-        temp_config.worker.ordinal = canonical_ordinal.wrapping_add(CANARY_ORDINAL_OFFSET + next_version);
+        temp_config.worker.ordinal =
+            canonical_ordinal.wrapping_add(CANARY_ORDINAL_OFFSET + next_version);
         let temp_key = format!(
             "{}-{}-{}",
             temp_config.worker.app, temp_config.worker.kind, temp_config.worker.ordinal
@@ -165,7 +169,10 @@ impl ProcessManager {
         // Detect a canary that crashed outright before its probe completed.
         let mut crashed: Vec<(String, u32, String)> = Vec::new();
         for (process_id, gens) in self.generations.iter() {
-            for gen in gens.iter().filter(|g| g.status == GenerationStatus::Probing) {
+            for gen in gens
+                .iter()
+                .filter(|g| g.status == GenerationStatus::Probing)
+            {
                 let still_running = self
                     .processes
                     .get_mut(&gen.temp_key)
@@ -207,7 +214,9 @@ impl ProcessManager {
     /// Promote a probed generation into the canonical process slot,
     /// terminating the previous stable generation it replaces.
     fn promote_generation(&mut self, process_id: &str, version: u32) -> Result<()> {
-        let Some(gens) = self.generations.get_mut(process_id) else { return Ok(()) };
+        let Some(gens) = self.generations.get_mut(process_id) else {
+            return Ok(());
+        };
         let Some(idx) = gens
             .iter()
             .position(|g| g.version == version && g.status == GenerationStatus::Probing)
@@ -249,7 +258,11 @@ impl ProcessManager {
         gens.retain(|g| g.version == version);
         gens[0].status = GenerationStatus::Stable;
 
-        tracing::info!("Promoted {} to generation v{} (stable)", process_id, version);
+        tracing::info!(
+            "Promoted {} to generation v{} (stable)",
+            process_id,
+            version
+        );
         self.deployment_events.push(format!(
             "[DEPLOYMENT_PROMOTED] {process_id} v{version} is now stable"
         ));
@@ -261,8 +274,12 @@ impl ProcessManager {
     /// (still under `process_id` in `self.processes`) is never touched, so
     /// traffic routing never moves off it.
     fn fail_generation(&mut self, process_id: &str, version: u32, reason: &str) {
-        let Some(gens) = self.generations.get_mut(process_id) else { return };
-        let Some(idx) = gens.iter().position(|g| g.version == version) else { return };
+        let Some(gens) = self.generations.get_mut(process_id) else {
+            return;
+        };
+        let Some(idx) = gens.iter().position(|g| g.version == version) else {
+            return;
+        };
         let temp_key = gens[idx].temp_key.clone();
         // Keep the entry as a `Failed` audit record rather than dropping it
         // outright — only the OS process underneath it is torn down.

@@ -2,6 +2,7 @@
 
 pub mod agent;
 pub mod apps;
+pub mod authz;
 #[allow(clippy::module_inception)]
 pub mod cli;
 pub mod client_plugins;
@@ -14,4 +15,4 @@ pub mod scp;
 pub mod setup;
 
 pub use cli::{Cli, Commands};
-pub use cmds::{AppsCmd, ConfigCmd, HookCmd, PluginCmd, StatsCmd};
+pub use cmds::{AppsCmd, ConfigCmd, HookCmd, PluginCmd, SetupCmd, StatsCmd};

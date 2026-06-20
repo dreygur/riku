@@ -58,7 +58,9 @@ fn test_provision_and_cleanup_lifecycle() {
         "32"
     );
 
-    cgroup.cleanup().expect("cleanup should remove empty cgroup");
+    cgroup
+        .cleanup()
+        .expect("cleanup should remove empty cgroup");
     assert!(!cgroup.path.exists());
 }
 
@@ -83,5 +85,8 @@ fn test_startup_diagnostic_is_structured_and_actionable() {
     assert!(diagnostic.contains("permission denied"));
 
     // Actionable: tells the operator what to do, not just what broke.
-    assert!(diagnostic.to_lowercase().contains("delegat") || diagnostic.to_lowercase().contains("chown"));
+    assert!(
+        diagnostic.to_lowercase().contains("delegat")
+            || diagnostic.to_lowercase().contains("chown")
+    );
 }

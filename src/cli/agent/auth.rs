@@ -66,6 +66,30 @@ fn parse_scope_from_authorized_keys() -> Option<AgentScope> {
     None
 }
 
+/// Resolve the access scope for the general CLI authorization gate.
+///
+/// Distinct from `get_agent_scope()` (used only by `riku agent ...`, which
+/// conservatively defaults to `Readonly`): this defaults to `Full` when no
+/// scope is recorded, since that path covers legacy SSH keys provisioned
+/// before per-key scoping existed, and local (non-SSH) admin usage — neither
+/// of which should be silently restricted.
+pub fn resolve_key_scope() -> AgentScope {
+    if let Ok(scope) = std::env::var("RIKU_AGENT_SCOPE") {
+        return AgentScope::parse(&scope);
+    }
+    AgentScope::Full
+}
+
+/// Resolve the per-key app allowlist for the general CLI authorization gate.
+/// `None` means no allowlist was recorded for this key (only meaningful
+/// when paired with `AgentScope::Full`; for any other scope, no allowlist
+/// means no apps are granted).
+pub fn resolve_key_apps() -> Option<Vec<String>> {
+    std::env::var("RIKU_KEY_APPS")
+        .ok()
+        .map(|s| s.split(',').map(|a| a.trim().to_string()).collect())
+}
+
 /// Check rate limit for agent
 pub fn check_rate_limit(agent_id: &str, scope: &AgentScope) -> bool {
     let rate_file = Path::new("/tmp/riku-agent-rates");

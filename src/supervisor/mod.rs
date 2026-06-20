@@ -131,15 +131,14 @@ pub(crate) fn spawn_sighup_listener() {
             };
 
             runtime.block_on(async {
-                let mut stream = match tokio::signal::unix::signal(
-                    tokio::signal::unix::SignalKind::hangup(),
-                ) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        tracing::error!("Failed to install SIGHUP listener: {}", e);
-                        return;
-                    }
-                };
+                let mut stream =
+                    match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup()) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            tracing::error!("Failed to install SIGHUP listener: {}", e);
+                            return;
+                        }
+                    };
 
                 // Handler is registered now (the constructor above
                 // registers synchronously) — let the caller proceed.

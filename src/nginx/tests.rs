@@ -19,10 +19,7 @@ fn test_generate_nginx_config() {
         "myapp.example.com".to_string(),
     );
 
-    let paths = crate::config::RikuPaths::from_dirs(
-        temp_dir.path().join(".riku"),
-        temp_dir.path(),
-    );
+    let paths = crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
 
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
@@ -42,10 +39,7 @@ fn test_nginx_config_with_bind_address() {
     env.insert("BIND_ADDRESS".to_string(), "192.168.1.1".to_string());
     env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
 
-    let paths = crate::config::RikuPaths::from_dirs(
-        temp_dir.path().join(".riku"),
-        temp_dir.path(),
-    );
+    let paths = crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
     let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
@@ -63,10 +57,7 @@ fn test_nginx_config_with_ipv4_address() {
     env.insert("NGINX_IPV4_ADDRESS".to_string(), "192.168.1.1".to_string());
     env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
 
-    let paths = crate::config::RikuPaths::from_dirs(
-        temp_dir.path().join(".riku"),
-        temp_dir.path(),
-    );
+    let paths = crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
     let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
@@ -85,10 +76,7 @@ fn test_nginx_config_disable_ipv6() {
     env.insert("DISABLE_IPV6".to_string(), "true".to_string());
     env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
 
-    let paths = crate::config::RikuPaths::from_dirs(
-        temp_dir.path().join(".riku"),
-        temp_dir.path(),
-    );
+    let paths = crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
     let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
@@ -112,10 +100,7 @@ fn test_nginx_config_with_cache() {
     env.insert("NGINX_CACHE_SIZE".to_string(), "2".to_string());
     env.insert("NGINX_CACHE_TIME".to_string(), "7200".to_string());
 
-    let paths = crate::config::RikuPaths::from_dirs(
-        temp_dir.path().join(".riku"),
-        temp_dir.path(),
-    );
+    let paths = crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
     let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
@@ -136,10 +121,7 @@ fn test_nginx_config_with_cloudflare_acl() {
     env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
     env.insert("NGINX_CLOUDFLARE_ACL".to_string(), "true".to_string());
 
-    let paths = crate::config::RikuPaths::from_dirs(
-        temp_dir.path().join(".riku"),
-        temp_dir.path(),
-    );
+    let paths = crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
     let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
@@ -158,10 +140,7 @@ fn test_nginx_config_https_only() {
     env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
     env.insert("NGINX_HTTPS_ONLY".to_string(), "true".to_string());
 
-    let paths = crate::config::RikuPaths::from_dirs(
-        temp_dir.path().join(".riku"),
-        temp_dir.path(),
-    );
+    let paths = crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
     let _ = generate_nginx_config("myapp", &app_path, &env, &paths);

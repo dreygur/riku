@@ -7,6 +7,10 @@ pub enum AgentScope {
     Readonly,
     Staging,
     Production,
+    /// Unrestricted access: legacy SSH keys with no scope recorded, and
+    /// local (non-SSH) CLI usage. Allows every action, including
+    /// admin-only/infra-level ones no app-scoped tier can reach.
+    Full,
 }
 
 impl AgentScope {
@@ -15,18 +19,28 @@ impl AgentScope {
             "readonly" => AgentScope::Readonly,
             "staging" => AgentScope::Staging,
             "production" => AgentScope::Production,
+            "full" => AgentScope::Full,
             _ => AgentScope::Readonly,
         }
     }
 
     /// Check if scope allows a specific action
     pub fn allows(&self, action: &str) -> bool {
+        if matches!(self, AgentScope::Full) {
+            return true;
+        }
+
         match action {
             "apps" | "logs" | "ps" | "config:get" | "config:show" | "stats" => true,
             "deploy" | "restart" | "run" | "config:set" | "config:unset" => {
                 matches!(self, AgentScope::Staging | AgentScope::Production)
             }
             "destroy" | "stop" => matches!(self, AgentScope::Production),
+            // Admin-only/infra-level actions: not tied to a single app,
+            // so no app-scoped tier (Readonly/Staging/Production) may run
+            // them — only Full, handled by the early return above.
+            "init" | "update" | "install-plugins" | "supervisor" | "plugin" | "hook"
+            | "container" | "git-hook" | "scp" | "ns-shim" | "dump-state" | "setup" => false,
             _ => false,
         }
     }
@@ -37,6 +51,7 @@ impl AgentScope {
             AgentScope::Readonly => 60,
             AgentScope::Staging => 30,
             AgentScope::Production => 20,
+            AgentScope::Full => u32::MAX,
         }
     }
 }

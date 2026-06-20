@@ -27,7 +27,7 @@ use std::time::{Duration, SystemTime};
 use axum::extract::{Extension, Path, State};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, Sse};
-use axum::response::{Json};
+use axum::response::Json;
 use axum::routing::get;
 use axum::Router;
 use futures::stream::{Stream, StreamExt};
@@ -104,10 +104,7 @@ pub fn start_health_server(
         "Health server listening on http://{} (/health, /metrics, /metrics/apps, /metrics/apps/{{app}}, /metrics/stream, /control/apps/*)",
         addr
     );
-    tracing::info!(
-        "Control-plane token: {}",
-        control_token_file.display()
-    );
+    tracing::info!("Control-plane token: {}", control_token_file.display());
 
     let running_clone = running.clone();
 
@@ -145,9 +142,7 @@ pub fn start_health_server(
 // ── Axum Handlers ──────────────────────────────────────────────────────────
 
 /// GET /health — Returns supervisor health status.
-async fn health_handler(
-    Extension(start_time): Extension<SystemTime>,
-) -> Json<serde_json::Value> {
+async fn health_handler(Extension(start_time): Extension<SystemTime>) -> Json<serde_json::Value> {
     Json(build_health_json(start_time))
 }
 

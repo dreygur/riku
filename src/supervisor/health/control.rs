@@ -136,9 +136,9 @@ async fn create_app_handler(Json(body): Json<Value>) -> impl IntoResponse {
     let handle = std::thread::spawn(move || {
         let paths = RikuPaths::from_env();
         match crate::cli::apps::cmd_apps_create(&paths, &name) {
-            Ok(sanitized) => {
-                Ok(Json(json!({"ok": true, "app": sanitized, "action": "create"})))
-            }
+            Ok(sanitized) => Ok(Json(
+                json!({"ok": true, "app": sanitized, "action": "create"}),
+            )),
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({"ok": false, "app": name, "action": "create", "error": e.to_string()})),

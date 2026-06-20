@@ -125,14 +125,17 @@ fn test_concurrent_deploy_lockout() {
         })
         .collect();
 
-    let outcomes: Vec<anyhow::Result<()>> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+    let outcomes: Vec<anyhow::Result<()>> =
+        handles.into_iter().map(|h| h.join().unwrap()).collect();
 
     let successes = outcomes.iter().filter(|r| r.is_ok()).count();
     let lock_conflicts = outcomes
         .iter()
         .filter(|r| {
             matches!(
-                r.as_ref().err().and_then(|e| e.downcast_ref::<DeployError>()),
+                r.as_ref()
+                    .err()
+                    .and_then(|e| e.downcast_ref::<DeployError>()),
                 Some(DeployError::DeployInProgress(_))
             )
         })

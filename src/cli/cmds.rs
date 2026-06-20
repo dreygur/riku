@@ -110,6 +110,28 @@ pub enum PluginCmd {
     },
 }
 
+/// Server setup commands
+#[derive(Subcommand, Debug)]
+pub enum SetupCmd {
+    /// Add an SSH public key to authorized_keys, optionally restricted to a
+    /// scope tier and a set of apps
+    #[command(
+        after_help = "Examples:\n  riku setup ssh ~/.ssh/id_rsa.pub\n  riku setup ssh ~/.ssh/id_rsa.pub --scope readonly --apps myapp\n  riku setup ssh ~/.ssh/id_rsa.pub --scope staging --apps myapp,otherapp"
+    )]
+    Ssh {
+        /// Path to the SSH public key file
+        pubkey: String,
+        /// Restrict this key to a scope tier (readonly, staging, production).
+        /// Omit for unrestricted (full) access.
+        #[arg(long)]
+        scope: Option<String>,
+        /// Comma-separated app names this key may operate on. Required
+        /// (and meaningful) only when --scope is given.
+        #[arg(long, value_delimiter = ',')]
+        apps: Vec<String>,
+    },
+}
+
 /// Server-side lifecycle hook plugin management commands
 #[derive(Subcommand, Debug)]
 pub enum HookCmd {

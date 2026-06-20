@@ -46,7 +46,10 @@ pub(crate) fn acquire(app: &str, paths: &RikuPaths) -> Result<File> {
 }
 
 fn lock_path_for(app: &str, paths: &RikuPaths) -> std::path::PathBuf {
-    paths.riku_root.join("locks").join(format!("{}.deploy.lock", app))
+    paths
+        .riku_root
+        .join("locks")
+        .join(format!("{}.deploy.lock", app))
 }
 
 /// Read-only probe: is `app`'s deploy lock currently held by another

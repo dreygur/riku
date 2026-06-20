@@ -2,7 +2,7 @@
 
 use clap::{Parser, Subcommand};
 
-use super::cmds::{AppsCmd, ConfigCmd, HookCmd, PluginCmd, StatsCmd};
+use super::cmds::{AppsCmd, ConfigCmd, HookCmd, PluginCmd, SetupCmd, StatsCmd};
 use super::container::ContainerSubCmd;
 
 /// riku — the smallest PaaS you've ever seen (Rust edition)
@@ -257,6 +257,10 @@ pub enum Commands {
     /// for the worker's entire lifetime, freezing the whole supervisor.
     #[command(hide = true, name = "__ns-shim")]
     NsShim,
+
+    /// Server setup commands (SSH key management, etc.)
+    #[command(subcommand)]
+    Setup(SetupCmd),
 
     /// Dump the supervisor's state matrix as JSON (internal — operator
     /// diagnostics). Reads on-disk state only (`stats.json`, app `ENV`

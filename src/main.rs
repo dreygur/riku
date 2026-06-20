@@ -38,6 +38,10 @@ fn main() -> Result<()> {
     let args = Cli::parse();
     let paths = RikuPaths::from_env();
 
+    // Authorize the calling key (scope + app allowlist) before anything else
+    // runs — this is the single enforcement point for SSH-key access control.
+    cli::authz::authorize(&args.command)?;
+
     // Check for client plugins first — they can override built-in commands.
     if let Some(plugin_name) = get_plugin_command(&args.command) {
         let plugin_args = build_plugin_args(&args.command);
@@ -166,6 +170,14 @@ fn main() -> Result<()> {
             supervisor::process::isolation::exec_isolated(std::path::Path::new(&root), &command)?;
         }
         Commands::DumpState => cli::apps::cmd_dump_state(&paths)?,
+        Commands::Setup(cli::SetupCmd::Ssh {
+            pubkey,
+            scope,
+            apps,
+        }) => {
+            let apps = if apps.is_empty() { None } else { Some(apps) };
+            cli::setup::ssh::cmd_setup_ssh(&paths, &pubkey, scope.as_deref(), apps.as_deref())?;
+        }
     }
 
     Ok(())

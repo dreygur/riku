@@ -203,23 +203,25 @@ pub fn create_worker_config(
     // Isolation is opt-in: only enabled when RIKU_ISOLATION_ROOT is set,
     // since CLONE_NEWNET cuts the worker off from the host network beyond
     // loopback (see IsolationOptions docs).
-    let isolation = env.get("RIKU_ISOLATION_ROOT").map(|root_dir| IsolationOptions {
-        root_dir: root_dir.clone(),
-        max_memory_bytes: env
-            .get("RIKU_ISOLATION_MAX_MEMORY_MB")
-            .and_then(|v| v.parse::<u64>().ok())
-            .map(|mb| mb * 1024 * 1024),
-        cpu_quota_us: env
-            .get("RIKU_ISOLATION_CPU_QUOTA_US")
-            .and_then(|v| v.parse::<u64>().ok()),
-        cpu_period_us: env
-            .get("RIKU_ISOLATION_CPU_PERIOD_US")
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or_else(default_cpu_period_us),
-        max_pids: env
-            .get("RIKU_ISOLATION_MAX_PIDS")
-            .and_then(|v| v.parse::<u64>().ok()),
-    });
+    let isolation = env
+        .get("RIKU_ISOLATION_ROOT")
+        .map(|root_dir| IsolationOptions {
+            root_dir: root_dir.clone(),
+            max_memory_bytes: env
+                .get("RIKU_ISOLATION_MAX_MEMORY_MB")
+                .and_then(|v| v.parse::<u64>().ok())
+                .map(|mb| mb * 1024 * 1024),
+            cpu_quota_us: env
+                .get("RIKU_ISOLATION_CPU_QUOTA_US")
+                .and_then(|v| v.parse::<u64>().ok()),
+            cpu_period_us: env
+                .get("RIKU_ISOLATION_CPU_PERIOD_US")
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or_else(default_cpu_period_us),
+            max_pids: env
+                .get("RIKU_ISOLATION_MAX_PIDS")
+                .and_then(|v| v.parse::<u64>().ok()),
+        });
 
     WorkerConfig {
         worker: WorkerInfo {

@@ -104,10 +104,7 @@ mod tests {
 
     /// Build a RikuPaths rooted at `tmp`, creating the standard sub-directories.
     fn make_paths(tmp: &TempDir) -> RikuPaths {
-        let paths = crate::config::RikuPaths::from_dirs(
-            tmp.path().join(".riku"),
-            tmp.path(),
-        );
+        let paths = crate::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
         fs::create_dir_all(&paths.plugin_root).unwrap();
         fs::create_dir_all(&paths.env_root).unwrap();
         paths

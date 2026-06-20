@@ -19,11 +19,13 @@ pub fn cmd_agent_intro(_paths: &RikuPaths) -> Result<()> {
             AgentScope::Readonly => vec!["apps", "logs", "ps", "config:get", "config:show", "stats"],
             AgentScope::Staging => vec!["apps", "logs", "ps", "config:get", "config:show", "stats", "deploy", "restart", "run", "config:set", "config:unset"],
             AgentScope::Production => vec!["apps", "logs", "ps", "config:get", "config:show", "stats", "deploy", "destroy", "restart", "stop", "run", "config:set", "config:unset"],
+            AgentScope::Full => vec!["apps", "logs", "ps", "config:get", "config:show", "stats", "deploy", "destroy", "restart", "stop", "run", "config:set", "config:unset", "init", "update", "install-plugins", "supervisor", "plugin", "hook", "container", "git-hook", "scp", "ns-shim", "dump-state", "setup"],
         },
         "scope": match scope {
             AgentScope::Readonly => "readonly",
             AgentScope::Staging => "staging",
             AgentScope::Production => "production",
+            AgentScope::Full => "full",
         },
         "documentation": "https://dreygur.github.io/riku/ai-agents/",
         "hint": "Use 'riku agent --schema' for full command reference",

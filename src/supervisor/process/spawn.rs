@@ -97,10 +97,9 @@ impl ProcessManager {
             let mut c = Command::new(shim_exe);
             c.arg("__ns-shim").env(
                 "RIKU_NS_ROOT",
-                namespace_config
-                    .isolated_root
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("isolation enabled but no root_dir configured"))?,
+                namespace_config.isolated_root.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("isolation enabled but no root_dir configured")
+                })?,
             );
             c.env("RIKU_NS_CMD", &config.worker.command);
             c
@@ -182,21 +181,25 @@ impl ProcessManager {
 
         // Create the SpawnedProcess wrapper.
         // If this fails, kill the child to prevent orphaned processes.
-        let spawned_process: super::SpawnedProcess =
-            match super::SpawnedProcess::new_with_cgroup(child, config.clone(), log_handles, cgroup) {
-                Ok(sp) => sp,
-                Err(e) => {
-                    // Kill the child process using the saved PID
-                    let pid = Pid::from_raw(child_pid as i32);
-                    let _ = kill(pid, Signal::SIGKILL);
-                    tracing::error!(
-                        "Failed to create SpawnedProcess, killed child PID {}: {}",
-                        child_pid,
-                        e
-                    );
-                    return Err(e);
-                }
-            };
+        let spawned_process: super::SpawnedProcess = match super::SpawnedProcess::new_with_cgroup(
+            child,
+            config.clone(),
+            log_handles,
+            cgroup,
+        ) {
+            Ok(sp) => sp,
+            Err(e) => {
+                // Kill the child process using the saved PID
+                let pid = Pid::from_raw(child_pid as i32);
+                let _ = kill(pid, Signal::SIGKILL);
+                tracing::error!(
+                    "Failed to create SpawnedProcess, killed child PID {}: {}",
+                    child_pid,
+                    e
+                );
+                return Err(e);
+            }
+        };
         let pid = spawned_process.pid_as_u32();
 
         // Now that the wrapper exists, start the log capture threads.
