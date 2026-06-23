@@ -32,7 +32,7 @@ pub fn load_or_create_token(token_file: &Path) -> io::Result<String> {
         Err(e) => return Err(e),
     }
 
-    let token = generate_token()?;
+    let token = generate_token();
 
     if let Some(parent) = token_file.parent() {
         fs::create_dir_all(parent)?;
@@ -43,32 +43,29 @@ pub fn load_or_create_token(token_file: &Path) -> io::Result<String> {
     Ok(token)
 }
 
-/// Generate a 256-bit token from the kernel CSPRNG, hex-encoded.
-fn generate_token() -> io::Result<String> {
-    use std::io::Read;
+/// Generate a 256-bit token from the OS CSPRNG, hex-encoded (lowercase).
+fn generate_token() -> String {
+    use rand::rngs::OsRng;
+    use rand::RngCore;
 
     let mut bytes = [0u8; TOKEN_BYTES];
-    fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
-
-    let mut hex = String::with_capacity(TOKEN_BYTES * 2);
-    for b in bytes {
-        hex.push_str(&format!("{:02x}", b));
-    }
-    Ok(hex)
+    OsRng.fill_bytes(&mut bytes);
+    hex::encode(bytes)
 }
 
 /// Constant-time string comparison to avoid leaking token length/prefix
 /// matches through response-time side channels.
 pub fn constant_time_eq(a: &str, b: &str) -> bool {
+    use subtle::ConstantTimeEq;
+
     let (a, b) = (a.as_bytes(), b.as_bytes());
+    // `ct_eq` requires equal-length slices to compare element-wise; a length
+    // mismatch is a definite non-match (and token lengths are fixed), so the
+    // early return leaks nothing secret while avoiding a panic.
     if a.len() != b.len() {
         return false;
     }
-    let mut diff: u8 = 0;
-    for (x, y) in a.iter().zip(b.iter()) {
-        diff |= x ^ y;
-    }
-    diff == 0
+    a.ct_eq(b).into()
 }
 
 #[cfg(test)]
