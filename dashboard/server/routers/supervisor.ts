@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { dashboardToken, isSameOrigin } from "../security";
 
 const RIKU_API = process.env.RIKU_API_URL ?? "http://127.0.0.1:9091";
 const UPSTREAM_TIMEOUT_MS = 5_000;
@@ -51,6 +52,26 @@ async function safeUpstreamFetch(path: string): Promise<{
 }
 
 export const supervisorRouter = new Hono();
+
+// ── GET /csrf ── Deliver the operator token to the dashboard's own JS ──
+//
+// Token-delivery approach (see also server/security.ts): the dashboard is the
+// trusted origin, so its own client JS fetches the operator token here and
+// echoes it in `x-riku-dashboard-token` on mutating calls. This endpoint is
+// gated by the same same-origin check as mutating routes, so a cross-site page
+// cannot read the token (CORS already blocks reading the response body, and the
+// Origin/Sec-Fetch-Site check blocks the request outright). The token is never
+// shipped in the JS bundle and never exposed via NEXT_PUBLIC_*.
+supervisorRouter.get("/csrf", (c) => {
+  if (!isSameOrigin(c)) {
+    return c.json({ ok: false, error: "cross-site origin rejected" }, 403);
+  }
+  const token = dashboardToken();
+  if (!token) {
+    return c.json({ ok: false, error: "dashboard token not configured" }, 503);
+  }
+  return c.json({ token });
+});
 
 // ── GET /metrics ── Proxy to riku native metrics endpoint ──
 supervisorRouter.get("/metrics", async (c) => {

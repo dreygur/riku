@@ -72,13 +72,41 @@ export type NetworkResponse = {
   apps: NetworkEntry[];
 };
 
+// ── CSRF / operator token ──
+//
+// Mutating routes (control/*, env PUT/DELETE) require the operator token in the
+// `x-riku-dashboard-token` header. The token never ships in the JS bundle: the
+// dashboard's own JS fetches it same-origin from `/api/csrf` (which CORS +
+// Origin checks keep unreadable cross-site) and caches it for the page session.
+let tokenPromise: Promise<string | null> | null = null;
+
+async function dashboardToken(): Promise<string | null> {
+  if (!tokenPromise) {
+    tokenPromise = fetch("/api/csrf", { credentials: "same-origin" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: { token?: string } | null) => body?.token ?? null)
+      .catch(() => null);
+  }
+  return tokenPromise;
+}
+
+const MUTATING_METHODS = new Set(["POST", "PUT", "DELETE", "PATCH"]);
+
 // ── Typed fetch helpers ──
 
 async function apiFetch<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const res = await fetch(`/api${path}`, init);
+  const method = (init?.method ?? "GET").toUpperCase();
+  const headers = new Headers(init?.headers);
+
+  if (MUTATING_METHODS.has(method)) {
+    const token = await dashboardToken();
+    if (token) headers.set("x-riku-dashboard-token", token);
+  }
+
+  const res = await fetch(`/api${path}`, { ...init, headers });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const msg = body?.error ?? res.statusText;

@@ -3,6 +3,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { requireMutatingAuth } from "../security";
 
 const ENVS_ROOT = join(homedir(), ".riku", "envs");
 
@@ -34,6 +35,10 @@ async function readVars(file: string): Promise<Record<string, string>> {
 }
 
 export const envRouter = new Hono();
+
+// PUT/DELETE write to ~/.riku/envs/<app>/ENV — gate state-changing methods.
+// GET /env/:app stays read-only and unauthenticated.
+envRouter.on(["PUT", "DELETE"], "/env/*", requireMutatingAuth);
 
 // ── GET /env/:app ── Read env vars as JSON ──
 envRouter.get("/env/:app", async (c) => {

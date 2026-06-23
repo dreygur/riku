@@ -3,6 +3,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { requireMutatingAuth } from "../security";
 
 // Mirrors src/supervisor/health/control.rs — mutating app-lifecycle actions
 // gated by the shared-secret control token. The token never leaves this
@@ -79,6 +80,9 @@ async function controlFetch(
 }
 
 export const controlRouter = new Hono();
+
+// Every control route mutates app lifecycle state — gate the whole group.
+controlRouter.use("/control/*", requireMutatingAuth);
 
 // ── POST /control/apps ── Create a new app — body: { name } ──
 controlRouter.post("/control/apps", async (c) => {
