@@ -30,6 +30,23 @@ Thank you for your interest in contributing to Riku! This document outlines the 
    cargo test
    ```
 
+### Using mise (recommended)
+
+The repo ships a [`mise`](https://mise.jdx.dev) config (`mise.toml`) that pins the
+toolchain and helper tools and codifies every workflow as a task, so that
+`local == CI`. After [installing mise](https://mise.jdx.dev/getting-started.html):
+
+```bash
+mise install          # fetch pinned helper tools (nextest, llvm-cov, audit, deny)
+mise tasks            # list all available tasks
+mise run ci            # run the full pipeline that CI runs
+```
+
+Common tasks: `mise run fmt`, `mise run lint`, `mise run build`,
+`mise run test`, `mise run cov` (coverage), `mise run test:deploy`. Each maps to
+the plain `cargo`/script invocation, so you can always fall back to running those
+directly.
+
 ## Development Workflow
 
 ### Making Changes

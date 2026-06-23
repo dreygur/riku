@@ -1,0 +1,68 @@
+# mise — dev orchestration for Riku.
+#
+# Pins the helper-tool versions and codifies every workflow as a task so that
+# `local == CI == release`. Rust itself is owned by rustup via
+# `rust-toolchain.toml`; mise manages the cargo-installed helpers and the task
+# runner. See KERNEL_PLAN.md §5.
+#
+#   mise install      # fetch the helper tools below (first run compiles them)
+#   mise tasks        # list available tasks
+#   mise run ci        # full pipeline, mirrors .github/workflows/ci.yml
+
+min_version = "2024.1.0"
+
+[tools]
+# Helper tools, version-pinned for reproducibility. Installed via the cargo
+# backend (compiled from source unless cargo-binstall is present).
+"cargo:cargo-nextest" = "latest"
+"cargo:cargo-llvm-cov" = "latest"
+"cargo:cargo-audit" = "latest"
+"cargo:cargo-deny" = "latest"
+
+[tasks.fmt]
+description = "Format all code"
+run = "cargo fmt --all"
+
+[tasks."fmt:check"]
+description = "Check formatting (fails on diff; used by CI)"
+run = "cargo fmt --all -- --check"
+
+[tasks.lint]
+description = "Clippy across all targets with warnings denied"
+run = "cargo clippy --all-targets --all-features -- -D warnings"
+
+[tasks.build]
+description = "Debug build"
+run = "cargo build"
+
+[tasks."build:release"]
+description = "Release build"
+run = "cargo build --release"
+
+[tasks.test]
+description = "Unit + integration tests (nextest)"
+run = "cargo nextest run"
+
+[tasks."test:doc"]
+description = "Doctests (nextest does not run these)"
+run = "cargo test --doc"
+
+[tasks."test:deploy"]
+description = "Shell-based deployment tests"
+run = "./tests/run-all-tests.sh"
+
+[tasks.cov]
+description = "HTML coverage report (target/llvm-cov/html)"
+run = "cargo llvm-cov nextest --html"
+
+[tasks.audit]
+description = "Vulnerability audit of dependencies"
+run = "cargo audit --deny warnings"
+
+[tasks.deny]
+description = "License / ban / advisory checks"
+run = "cargo deny check"
+
+[tasks.ci]
+description = "Full local pipeline — mirrors the CI workflow"
+depends = ["fmt:check", "lint", "build", "test", "test:doc", "audit", "deny"]
