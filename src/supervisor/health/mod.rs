@@ -103,10 +103,7 @@ pub fn start_health_server(
         "Health server listening on http://{} (/health, /metrics, /metrics/apps, /metrics/apps/{{app}}, /metrics/stream, /control/apps/*)",
         addr
     );
-    tracing::info!(
-        "Control-plane token: {}",
-        control_token_file.display()
-    );
+    tracing::info!("Control-plane token: {}", control_token_file.display());
 
     // Bind synchronously *before* spawning the worker thread so that a bind
     // failure (e.g. the port is already in use) is surfaced to the caller as
@@ -188,9 +185,7 @@ fn readonly_cors_layer() -> tower_http::cors::CorsLayer {
 // ── Axum Handlers ──────────────────────────────────────────────────────────
 
 /// GET /health — Returns supervisor health status.
-async fn health_handler(
-    Extension(start_time): Extension<SystemTime>,
-) -> Json<serde_json::Value> {
+async fn health_handler(Extension(start_time): Extension<SystemTime>) -> Json<serde_json::Value> {
     Json(build_health_json(start_time))
 }
 

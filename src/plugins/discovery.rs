@@ -99,10 +99,8 @@ mod tests {
     #[test]
     fn test_list_plugins_empty_directory() {
         let temp_dir = TempDir::new().unwrap();
-        let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".riku"),
-            temp_dir.path(),
-        );
+        let paths =
+            crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
         fs::create_dir_all(&paths.plugin_root).unwrap();
         let plugins = list_plugins(&paths).unwrap();
         assert!(plugins.is_empty());
@@ -111,10 +109,8 @@ mod tests {
     #[test]
     fn test_plugin_exists() {
         let temp_dir = TempDir::new().unwrap();
-        let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".riku"),
-            temp_dir.path(),
-        );
+        let paths =
+            crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
         fs::create_dir_all(&paths.plugin_root).unwrap();
 
         let plugin_path = paths.plugin_root.join("test_plugin");
@@ -149,10 +145,8 @@ mod tests {
     #[test]
     fn test_plugin_exists_rejects_path_traversal() {
         let temp_dir = TempDir::new().unwrap();
-        let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".riku"),
-            temp_dir.path(),
-        );
+        let paths =
+            crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
         fs::create_dir_all(&paths.plugin_root).unwrap();
         assert!(!plugin_exists("../etc/passwd", &paths));
         assert!(!plugin_exists("foo/bar", &paths));

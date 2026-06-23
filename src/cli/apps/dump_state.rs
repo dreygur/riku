@@ -131,8 +131,7 @@ fn build_app_entry(
     let _ = crate::util::parse_settings(&env_file, &mut env_map);
 
     let nginx_config = paths.nginx_root.join(format!("{}.conf", app));
-    let nginx_enabled_symlink =
-        Path::new("/etc/nginx/sites-enabled").join(format!("{}.conf", app));
+    let nginx_enabled_symlink = Path::new("/etc/nginx/sites-enabled").join(format!("{}.conf", app));
 
     let workers = app_stats
         .get(app)
@@ -382,7 +381,11 @@ mod tests {
         let app = "fullapp";
         fs::create_dir_all(paths.app_root.join(app)).unwrap();
         fs::create_dir_all(paths.env_root.join(app)).unwrap();
-        fs::write(paths.env_root.join(app).join("ENV"), "PORT=3000\nSECRET=hide\n").unwrap();
+        fs::write(
+            paths.env_root.join(app).join("ENV"),
+            "PORT=3000\nSECRET=hide\n",
+        )
+        .unwrap();
 
         let dump = build_state_dump(&paths).unwrap();
         let serialized = serde_json::to_string(&dump).unwrap();

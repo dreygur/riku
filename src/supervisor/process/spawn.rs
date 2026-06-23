@@ -97,10 +97,9 @@ impl ProcessManager {
             let mut c = Command::new(shim_exe);
             c.arg("__ns-shim").env(
                 "RIKU_NS_ROOT",
-                namespace_config
-                    .isolated_root
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("isolation enabled but no root_dir configured"))?,
+                namespace_config.isolated_root.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("isolation enabled but no root_dir configured")
+                })?,
             );
             c.env("RIKU_NS_CMD", &config.worker.command);
             c

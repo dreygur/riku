@@ -244,7 +244,10 @@ mod tests {
             .unwrap();
         let cause = classify_resource_exit(&status, "");
         assert!(
-            cause.as_deref().map(|c| c.contains("SIGKILL")).unwrap_or(false),
+            cause
+                .as_deref()
+                .map(|c| c.contains("SIGKILL"))
+                .unwrap_or(false),
             "expected SIGKILL classification, got: {:?}",
             cause
         );
@@ -258,7 +261,10 @@ mod tests {
             .unwrap();
         let cause = classify_resource_exit(&status, "");
         assert!(
-            cause.as_deref().map(|c| c.contains("SIGXCPU")).unwrap_or(false),
+            cause
+                .as_deref()
+                .map(|c| c.contains("SIGXCPU"))
+                .unwrap_or(false),
             "expected SIGXCPU classification, got: {:?}",
             cause
         );
@@ -266,13 +272,13 @@ mod tests {
 
     #[test]
     fn test_classify_resource_exit_detects_allocator_failure_marker() {
-        let status = Command::new("sh")
-            .args(["-c", "exit 2"])
-            .status()
-            .unwrap();
+        let status = Command::new("sh").args(["-c", "exit 2"]).status().unwrap();
         let cause = classify_resource_exit(&status, "xrealloc: cannot allocate 12345 bytes\n");
         assert!(
-            cause.as_deref().map(|c| c.contains("RLIMIT_AS")).unwrap_or(false),
+            cause
+                .as_deref()
+                .map(|c| c.contains("RLIMIT_AS"))
+                .unwrap_or(false),
             "expected RLIMIT_AS classification from allocator marker, got: {:?}",
             cause
         );

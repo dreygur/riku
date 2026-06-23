@@ -272,7 +272,12 @@ fn test_metrics_stream_returns_sse_headers() {
         .expect("request failed");
 
     assert_eq!(resp.status(), 200);
-    let content_type = resp.headers().get("content-type").unwrap().to_str().unwrap();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
     assert!(
         content_type.contains("text/event-stream"),
         "Expected SSE content type, got: {}",

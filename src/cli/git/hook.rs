@@ -213,7 +213,10 @@ mod tests {
         link_external_repo(&paths, "myapp", src.to_str().unwrap()).unwrap();
         let dest = paths.git_root.join("myapp.git");
         assert!(dest.symlink_metadata().unwrap().file_type().is_symlink());
-        assert_eq!(fs::read_link(&dest).unwrap(), fs::canonicalize(&src).unwrap());
+        assert_eq!(
+            fs::read_link(&dest).unwrap(),
+            fs::canonicalize(&src).unwrap()
+        );
     }
 
     #[test]
@@ -223,7 +226,13 @@ mod tests {
         let src = tmp.path().join("myapp");
         fs::create_dir_all(&src).unwrap();
         link_external_repo(&paths, "myapp", src.to_str().unwrap()).unwrap();
-        assert!(paths.git_root.join("myapp.git").symlink_metadata().unwrap().file_type().is_symlink());
+        assert!(paths
+            .git_root
+            .join("myapp.git")
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink());
     }
 
     #[test]

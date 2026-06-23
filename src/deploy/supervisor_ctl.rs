@@ -209,8 +209,8 @@ mod tests {
 
         for malicious_path in [
             String::new(),                              // empty PATH
-            evil_dir.to_string_lossy().to_string(),      // PATH = only the attacker's dir
-            format!("{}:/usr/bin", evil_dir.display()),  // attacker's dir takes priority
+            evil_dir.to_string_lossy().to_string(),     // PATH = only the attacker's dir
+            format!("{}:/usr/bin", evil_dir.display()), // attacker's dir takes priority
         ] {
             with_env_var("PATH", &malicious_path, || {
                 with_env_var("HOME", home_dir.to_str().unwrap(), || {

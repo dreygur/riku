@@ -60,7 +60,10 @@ pub fn generate_nginx_config(
 /// installed/running or the reload command fails, rather than treating a
 /// missing nginx as fatal to whatever triggered the reload.
 pub fn reload_nginx() -> bool {
-    match std::process::Command::new("nginx").args(["-s", "reload"]).output() {
+    match std::process::Command::new("nginx")
+        .args(["-s", "reload"])
+        .output()
+    {
         Ok(out) if out.status.success() => true,
         Ok(out) => {
             tracing::warn!(

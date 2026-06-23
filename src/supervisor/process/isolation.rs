@@ -99,7 +99,10 @@ pub fn exec_isolated(root: &Path, command: &str) -> io::Result<()> {
             // PID 1 of the new namespace. `exec` replaces this process's
             // image entirely; it only returns here if the exec itself
             // failed.
-            Err(std::process::Command::new("sh").arg("-c").arg(command).exec())
+            Err(std::process::Command::new("sh")
+                .arg("-c")
+                .arg(command)
+                .exec())
         }
         ForkResult::Parent { child } => {
             // Never returns: becomes the signal-forwarding shim.
