@@ -106,6 +106,8 @@ acme/
 !rust-toolchain.toml
 !deny.toml
 !mise.toml
+# Plugin bundle manifests (Plugin Protocol v1) are source, not generated.
+!riku-plugin.toml
 
 # Procfile (app-specific, not repo)
 Procfile

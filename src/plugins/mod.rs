@@ -46,11 +46,13 @@ pub mod events;
 pub(crate) mod executor;
 pub mod hooks;
 pub mod manager;
+pub mod manifest;
 pub mod runtime;
 
 // Re-export the public API (used by CLI plugin commands and external code)
 #[allow(unused_imports)]
 pub use discovery::{list_plugins, plugin_exists};
-pub use events::{emit, EventEnvelope, EventName};
+pub use events::{EventBus, EventEnvelope, EventName};
 pub use hooks::{HookContext, PluginHook};
 pub use manager::PluginManager;
+pub use manifest::PluginManifest;

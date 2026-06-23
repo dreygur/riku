@@ -1,11 +1,11 @@
-//! Lifecycle event schema — Plugin Protocol v1 (`PLUGIN_PROTOCOL.md` §7).
+//! Lifecycle event schema and bus — Plugin Protocol v1 (`PLUGIN_PROTOCOL.md` §7).
 //!
-//! The kernel emits typed lifecycle events. This module defines the **schema**
-//! only: the event catalog ([`EventName`]) and the wire [`EventEnvelope`] that
-//! serializes to a single JSON line. Subscriber dispatch (reading plugin
-//! manifests and invoking `on_event`) arrives in a later slice; for now
-//! [`emit`] is a log sink, so emitting at the lifecycle points is a pure,
-//! zero-behavior-change formalization of where events fire.
+//! This module defines the **schema** ([`EventName`], [`EventEnvelope`]) and
+//! re-exports the [`EventBus`], which delivers events to subscribed plugins.
+
+mod bus;
+
+pub use bus::EventBus;
 
 use serde::Serialize;
 
@@ -17,8 +17,8 @@ use super::RIKU_PLUGIN_API;
 /// `PLUGIN_PROTOCOL.md` §7.1 defines the full v1 target catalog (build/deploy
 /// failures, `release.activated`, the `app.*` events). This enum grows one
 /// variant at a time as each event's emit site is wired, so it never carries a
-/// name the kernel does not yet emit. Slice 1 covers the four lifecycle points
-/// that map to the legacy hooks.
+/// name the kernel does not yet emit. The current set covers the four lifecycle
+/// points that map to the legacy hooks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventName {
     DeployRequested,
@@ -83,19 +83,6 @@ impl EventEnvelope {
     /// stdin.
     pub fn to_json_line(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string(self)
-    }
-}
-
-/// Emit a lifecycle event.
-///
-/// Slice 1: a log sink (subscriber dispatch lands with the event bus). Emitting
-/// here is intentionally side-effect-free beyond logging, so wiring it into the
-/// deploy path changes no behavior.
-pub fn emit(envelope: &EventEnvelope) {
-    match envelope.to_json_line() {
-        Ok(line) => tracing::debug!(target: "riku::events", "{line}"),
-        // An envelope that cannot serialize is a bug, not a deploy failure.
-        Err(e) => tracing::warn!(target: "riku::events", "failed to serialize event: {e}"),
     }
 }
 

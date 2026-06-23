@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::config::RikuPaths;
-use crate::plugins::{emit, EventEnvelope, EventName, HookContext, PluginHook, PluginManager};
+use crate::plugins::{EventBus, EventName, HookContext, PluginHook, PluginManager};
 
 fn run_hook(
     hook: &PluginHook,
@@ -19,12 +19,12 @@ fn run_hook(
     app_env: &HashMap<String, String>,
 ) -> Result<()> {
     // Emit the lifecycle event for this stage at the same point the hook fires
-    // (Plugin Protocol v1 §7.1). Currently a log sink — no behavior change.
-    emit(&EventEnvelope::new(
+    // (Plugin Protocol v1 §7.1), delivering it to any subscribed plugins.
+    EventBus::new(paths).publish(
         EventName::from_hook(hook),
         app,
         serde_json::json!({ "hook": hook.hook_name(), "runtime": runtime_name }),
-    ));
+    );
 
     let plugin_manager = PluginManager::new(paths);
     let env_path = paths.env_root.join(app);

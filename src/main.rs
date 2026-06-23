@@ -1,20 +1,16 @@
-mod cli;
-mod config;
-mod deploy;
-mod error;
-mod nginx;
-mod plugins;
-mod supervisor;
-mod util;
+//! `riku` binary entry point. All logic lives in the `riku` library crate; the
+//! bin only parses CLI args and dispatches, so the modules compile once (in the
+//! lib) rather than being recompiled here.
 
 use anyhow::Result;
 use clap::Parser;
 
-use cli::client_plugins;
-use cli::container;
-use cli::routing::{build_plugin_args, get_plugin_command};
-use cli::{AppsCmd, Cli, Commands, ConfigCmd, HookCmd, PluginCmd, StatsCmd};
-use config::RikuPaths;
+use riku::cli::client_plugins;
+use riku::cli::container;
+use riku::cli::routing::{build_plugin_args, get_plugin_command};
+use riku::cli::{AppsCmd, Cli, Commands, ConfigCmd, HookCmd, PluginCmd, StatsCmd};
+use riku::config::RikuPaths;
+use riku::{cli, supervisor};
 
 /// Initialize tracing subscriber for structured logging
 fn init_tracing() {

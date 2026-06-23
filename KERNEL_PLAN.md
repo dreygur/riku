@@ -72,11 +72,12 @@ task, so local == CI. Mirrors today's CI exactly, just one entry point.
 
 ## 6. Refactor Phases (build order)
 
-1. **Contract v1 + event schema** _(proposed first slice)_ — `RIKU_PLUGIN_API=1`,
-   `riku-plugin.toml` manifest parsing, event enum → JSON schema, emit at
-   existing hook points. Foundation; zero behavior change.
-2. **Event bus + notifier seam** — wire subscribe-to-events end-to-end; prove it
-   with an `on_event` webhook/Slack notifier reacting to `deploy.finished`.
+1. **✅ Contract v1 + event schema** — `RIKU_PLUGIN_API=1`, event enum → JSON
+   schema, emitted at the existing hook points. Zero behavior change.
+2. **✅ Event bus + notifier seam** — `riku-plugin.toml` manifest parsing and
+   subscribe-to-events dispatch (`on_event` + JSON on stdin), observe-mode.
+   Example `webhook-notify` notifier under `examples/plugins/`. (gate-mode veto
+   deferred to the trust slice; a gate subscriber runs as observe and says so.)
 3. **Addon seam (Postgres)** — the keystone: provision / bind / unbind, exercises
    lifecycle events + capability declaration + env injection + state.
 4. **Distribution + trust** — marketplace, lockfile, checksum/capability
