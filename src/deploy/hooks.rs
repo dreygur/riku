@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::config::RikuPaths;
-use crate::plugins::{HookContext, PluginHook, PluginManager};
+use crate::plugins::{emit, EventEnvelope, EventName, HookContext, PluginHook, PluginManager};
 
 fn run_hook(
     hook: &PluginHook,
@@ -18,6 +18,14 @@ fn run_hook(
     runtime_name: Option<&str>,
     app_env: &HashMap<String, String>,
 ) -> Result<()> {
+    // Emit the lifecycle event for this stage at the same point the hook fires
+    // (Plugin Protocol v1 §7.1). Currently a log sink — no behavior change.
+    emit(&EventEnvelope::new(
+        EventName::from_hook(hook),
+        app,
+        serde_json::json!({ "hook": hook.hook_name(), "runtime": runtime_name }),
+    ));
+
     let plugin_manager = PluginManager::new(paths);
     let env_path = paths.env_root.join(app);
     let ctx = HookContext {
@@ -104,10 +112,7 @@ mod tests {
 
     /// Build a RikuPaths rooted at `tmp`, creating the standard sub-directories.
     fn make_paths(tmp: &TempDir) -> RikuPaths {
-        let paths = crate::config::RikuPaths::from_dirs(
-            tmp.path().join(".riku"),
-            tmp.path(),
-        );
+        let paths = crate::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
         fs::create_dir_all(&paths.plugin_root).unwrap();
         fs::create_dir_all(&paths.env_root).unwrap();
         paths
