@@ -157,6 +157,46 @@ Honest priority order across both tracks:
 
 ---
 
+## Milestones & Effort
+
+Estimates are for **one experienced Rust developer who already knows this codebase**, at MVP quality (working and tested, not gold-plated). Ranges reflect uncertainty. "Dev-weeks" = full-time-equivalent effort, not calendar time.
+
+> **Calendar conversion:** a solo maintainer working a side-project at roughly part-time (~10 hr/week) runs at about a quarter of full-time, so multiply dev-weeks by ~4 for realistic calendar time.
+
+| Phase | Scope | Dev-weeks | Risk |
+| ----- | ----- | --------- | ---- |
+| 0 — Installer / quickstart | one-line installer, `quickstart`, first-deploy output | 2–3 | low |
+| 1 — Dashboard (read-only) | app list, live log stream, history, env editor, embedded assets | 3–5 | med (live logs) |
+| 2 — Trust & resilience | backups/restore, rollback, zero-downtime cutover, `doctor` | 3–5 | med |
+| E0 — Contract v1 | protocol version, spec, scaffold | 1.5–2 | low |
+| E1 — Plugin types | core dispatch for addon/router/notifier/auth + lifecycle wiring | 4–6 | med (addon ~2 alone) |
+| 3 — Postgres addon | first managed datastore, once E1 lands | 1.5–2 | low |
+| E2 — Marketplace | git fetch, manifest, search, install, lockfile, checksum | 3–5 | med |
+| E2.5 — Trust model | signature verify, capability enforcement | 2–4 | high (enforcement) |
+| E3 — Docs + `plugins doctor` | gallery, validation | 1.5–2 | low |
+| E3 — WASM sandbox | wasmtime + host API + port plugin model | 6–10 | high |
+
+### MVP slice (ship this first)
+
+The smallest set that actually moves adoption: **installer + read-only dashboard + the addon contract + a working Postgres addon.**
+
+- Phases: **0 + 1 + E0 + E1 (addon only) + 3**
+- Effort: **~12–18 dev-weeks ≈ 3–4 months full-time** (≈ 9–12 months part-time).
+- Outcome: a new user installs in one line, deploys via `git push`, sees apps and live logs in a browser, and attaches a managed Postgres. That is the "I'd run my side-project on this" threshold.
+
+### Full roadmap
+
+- **Core (everything except the WASM sandbox):** ~22–34 dev-weeks, plus ~30% for integration/testing/docs → **~30–44 dev-weeks ≈ 7–10 months full-time** (≈ 1.5–2.5 years part-time).
+- **With the WASM sandbox:** add ~2–2.5 months → **~9–12 months full-time** (≈ ~3 years part-time).
+
+### Estimate caveats
+
+- The three high-risk items — dashboard live-log streaming, plugin **capability enforcement** (real Linux sandboxing without containers is genuinely hard — the very thing Riku avoids), and the **WASM sandbox** — carry most of the schedule risk and could each run ~2x over.
+- Estimates assume no major scope creep and a single contributor who knows the code. More contributors help on parallel tracks (DX vs ecosystem) but add coordination cost.
+- Do not plan to "complete the roadmap." Ship the MVP slice, get real users, and let usage reorder E2 / E2.5 / E3. The WASM sandbox is the first thing to defer if time-boxed — build it when ecosystem size actually demands untrusted-author isolation, not before.
+
+---
+
 ## Guiding Principles
 
 - **Do step 1 before everything.** No installer means losing users at minute one, regardless of features.
