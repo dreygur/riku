@@ -11,13 +11,13 @@ use super::types::{AppStats, HealthStatus, ProcessStatus};
 
 impl StatsManager {
     /// Get stats for a specific process.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn get_process_stats(&self, process_id: &str) -> Option<&super::types::ProcessStats> {
         self.stats.get(process_id)
     }
 
     /// Get stats for all processes of an app.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn get_app_stats(&self, app: &str) -> AppStats {
         let processes: Vec<super::types::ProcessStats> = self
             .stats
@@ -53,7 +53,6 @@ impl StatsManager {
     }
 
     /// Get stats for all apps.
-    #[allow(dead_code)]
     pub fn get_all_stats(&self) -> Vec<AppStats> {
         let mut apps: HashMap<String, AppStats> = HashMap::new();
 
@@ -90,7 +89,6 @@ impl StatsManager {
     pub fn remove_process(&mut self, process_id: &str) {
         self.stats.remove(process_id);
         self.start_times.remove(process_id);
-        self.request_counts.remove(process_id);
     }
 
     /// Remove stats for every process belonging to `app`. For use when the
@@ -109,24 +107,9 @@ impl StatsManager {
         }
     }
 
-    /// Get total memory usage across all processes.
-    #[allow(dead_code)]
-    pub fn total_memory_usage(&self) -> u64 {
-        self.stats.values().map(|s| s.memory_bytes).sum()
-    }
-
     /// Get total process count.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn total_processes(&self) -> usize {
         self.stats.len()
-    }
-
-    /// Get running process count.
-    #[allow(dead_code)]
-    pub fn running_processes(&self) -> usize {
-        self.stats
-            .values()
-            .filter(|s| s.status == ProcessStatus::Running)
-            .count()
     }
 }

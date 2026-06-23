@@ -3,7 +3,6 @@
 use anyhow::Result;
 use nix::sys::signal::Signal;
 use nix::unistd::Pid;
-use std::fs::File;
 use std::process::Child;
 use std::thread;
 use std::time::Duration;
@@ -23,8 +22,6 @@ pub struct SpawnedProcess {
     /// Present only when the worker opted into cgroup v2 isolation. Used to
     /// poll for OOM kills and removed once the process has exited.
     pub cgroup: Option<WorkerCgroup>,
-    #[allow(dead_code)]
-    log_handles: Option<(File, File)>,
 }
 
 impl SpawnedProcess {
@@ -33,7 +30,6 @@ impl SpawnedProcess {
     pub fn new_with_cgroup(
         child: Child,
         config: WorkerConfig,
-        log_handles: Option<(File, File)>,
         cgroup: Option<WorkerCgroup>,
     ) -> Result<Self> {
         let pid = Pid::from_raw(child.id() as i32);
@@ -48,7 +44,6 @@ impl SpawnedProcess {
             health_check_config,
             consecutive_health_failures: 0,
             cgroup,
-            log_handles,
         })
     }
 

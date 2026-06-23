@@ -44,6 +44,6 @@ pub mod runtime;
 
 // Re-export the public API (used by CLI plugin commands and external code)
 #[allow(unused_imports)]
-pub use discovery::{list_plugins, plugin_exists, run_plugin};
+pub use discovery::{list_plugins, plugin_exists};
 pub use hooks::{HookContext, PluginHook};
 pub use manager::PluginManager;

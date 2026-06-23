@@ -167,8 +167,9 @@ impl ProcessManager {
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
 
-        // Clone the log file handles for the reader threads before handing
-        // the original `log_handles` to SpawnedProcess::new_with_cgroup.
+        // Clone the log file handles for the reader threads. The reader
+        // threads' cloned descriptors keep the log files open independently,
+        // so the original `log_handles` can be dropped right after this.
         let log_handles_for_threads = match &log_handles {
             Some((stdout_log, stderr_log)) => {
                 Some((stdout_log.try_clone()?, stderr_log.try_clone()?))
@@ -183,7 +184,7 @@ impl ProcessManager {
         // Create the SpawnedProcess wrapper.
         // If this fails, kill the child to prevent orphaned processes.
         let spawned_process: super::SpawnedProcess =
-            match super::SpawnedProcess::new_with_cgroup(child, config.clone(), log_handles, cgroup) {
+            match super::SpawnedProcess::new_with_cgroup(child, config.clone(), cgroup) {
                 Ok(sp) => sp,
                 Err(e) => {
                     // Kill the child process using the saved PID

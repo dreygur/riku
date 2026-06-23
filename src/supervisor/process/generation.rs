@@ -6,9 +6,6 @@
 pub enum GenerationStatus {
     /// Currently serving traffic under the canonical process slot.
     Stable,
-    /// Spawned alongside a stable generation, not yet promoted.
-    #[allow(dead_code)]
-    Canary,
     /// Actively being polled by the health-probe loop.
     Probing,
     /// Failed its probe window or crashed; rolled back.
@@ -21,8 +18,6 @@ pub enum GenerationStatus {
 pub struct AppGeneration {
     pub version: u32,
     pub pids: Vec<u32>,
-    #[allow(dead_code)]
-    pub port: u16,
     pub status: GenerationStatus,
     /// The key this generation's process is stored under in
     /// `ProcessManager::processes` while it is not yet the canonical slot.

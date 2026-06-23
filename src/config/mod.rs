@@ -5,10 +5,6 @@ use std::path::{Path, PathBuf};
 pub const RIKU_RAW_SOURCE_URL: &str =
     "https://raw.githubusercontent.com/dreygur/riku/master/src/main.rs";
 
-/// Default maximum log size for worker log files (in bytes).
-#[allow(dead_code)]
-pub const RIKU_LOG_MAXSIZE: u64 = 1048576;
-
 /// Default worker timeout in seconds (2 hours).
 pub const RIKU_WORKER_TIMEOUT: u64 = 7200;
 
@@ -40,8 +36,6 @@ pub const NGINX_CACHE_CONTROL_DEFAULT: u32 = 3600;
 #[derive(Debug, Clone)]
 pub struct RikuPaths {
     pub riku_root: PathBuf,
-    #[allow(dead_code)]
-    pub riku_bin: PathBuf,
     pub riku_script: PathBuf,
     pub plugin_root: PathBuf,
     pub app_root: PathBuf,
@@ -54,7 +48,6 @@ pub struct RikuPaths {
     pub workers_root: PathBuf,
     pub workers_available: PathBuf,
     pub workers_enabled: PathBuf,
-    #[allow(dead_code)]
     pub acme_root: PathBuf,
     pub acme_www: PathBuf,
 }
@@ -69,7 +62,6 @@ impl RikuPaths {
     ///
     /// This is the core constructor used by both production code and tests.
     pub fn from_dirs(riku_root: PathBuf, home: &Path) -> Self {
-        let riku_bin = home.join("bin");
         let riku_script = env::current_exe().unwrap_or_else(|_| PathBuf::from("riku"));
 
         let acme_root = env::var("ACME_ROOT")
@@ -90,7 +82,6 @@ impl RikuPaths {
             workers_enabled: riku_root.join("workers-enabled"),
             acme_www: riku_root.join("acme"),
             riku_root,
-            riku_bin,
             riku_script,
             acme_root,
         }

@@ -45,12 +45,6 @@ fn custom_root_parameter_works() {
 }
 
 #[test]
-fn riku_bin_is_relative_to_home() {
-    let p = paths_with_root("/whatever", "/home/alice");
-    assert_eq!(p.riku_bin, Path::new("/home/alice/bin"));
-}
-
-#[test]
 fn acme_root_defaults_to_home_acme_sh() {
     // Test that ACME_ROOT defaults to ~/.acme.sh when not set
     // We test the logic directly rather than through from_dirs to avoid parallel test issues
@@ -78,11 +72,6 @@ fn acme_root_respects_env_var() {
         Some(v) => env::set_var("ACME_ROOT", v),
         None => env::remove_var("ACME_ROOT"),
     }
-}
-
-#[test]
-fn riku_log_maxsize_constant() {
-    assert_eq!(RIKU_LOG_MAXSIZE, 1048576);
 }
 
 #[test]

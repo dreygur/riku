@@ -92,7 +92,6 @@ impl ProcessManager {
         gens.push(AppGeneration {
             version: next_version,
             pids: vec![pid],
-            port,
             status: GenerationStatus::Probing,
             temp_key: temp_key.clone(),
             canonical_ordinal,
@@ -294,15 +293,6 @@ impl ProcessManager {
     /// broadcast channel as the metrics SSE stream, non-blockingly.
     pub fn drain_deployment_events(&mut self) -> Vec<String> {
         std::mem::take(&mut self.deployment_events)
-    }
-
-    /// Snapshot of all known generations, keyed by canonical process_id.
-    /// Cheap clone — for callers (e.g. metrics emission) that want to
-    /// iterate the active generation ring without holding a lock on
-    /// `ProcessManager` itself.
-    #[allow(dead_code)]
-    pub fn generation_snapshot(&self) -> std::collections::HashMap<String, Vec<AppGeneration>> {
-        self.generations.clone()
     }
 }
 

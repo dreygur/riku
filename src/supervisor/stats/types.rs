@@ -106,7 +106,6 @@ impl std::fmt::Display for HealthStatus {
 }
 
 /// Aggregated statistics for an application.
-#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AppStats {
     pub app: String,

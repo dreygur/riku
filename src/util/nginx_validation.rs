@@ -11,49 +11,7 @@ use std::collections::HashMap;
 use super::display::echo;
 use super::process_util::validate_node_version;
 
-/// Validate nginx cache configuration.
-#[allow(dead_code)]
-pub fn validate_nginx_cache_config(
-    cache_size: &str,
-    cache_time: &str,
-    cache_expiry: &str,
-) -> Result<(), String> {
-    // Validate cache size (1-100 GB)
-    let size = cache_size.parse::<u32>().map_err(|_| {
-        format!(
-            "Invalid NGINX_CACHE_SIZE: '{}' - must be a number between 1 and 100",
-            cache_size
-        )
-    })?;
-
-    if !(1..=100).contains(&size) {
-        return Err(format!(
-            "Invalid NGINX_CACHE_SIZE: {} - must be between 1 and 100 GB",
-            size
-        ));
-    }
-
-    // Validate cache time (positive integer)
-    cache_time.parse::<u32>().map_err(|_| {
-        format!(
-            "Invalid NGINX_CACHE_TIME: '{}' - must be a positive integer (seconds)",
-            cache_time
-        )
-    })?;
-
-    // Validate cache expiry (positive integer)
-    cache_expiry.parse::<u32>().map_err(|_| {
-        format!(
-            "Invalid NGINX_CACHE_EXPIRY: '{}' - must be a positive integer (seconds)",
-            cache_expiry
-        )
-    })?;
-
-    Ok(())
-}
-
 /// Validate environment variables and return warnings/errors.
-#[allow(dead_code)]
 pub fn validate_env_vars(env: &HashMap<String, String>) -> Vec<String> {
     let mut warnings = Vec::new();
 
@@ -93,7 +51,6 @@ pub fn validate_env_vars(env: &HashMap<String, String>) -> Vec<String> {
 }
 
 /// Print environment variable validation warnings.
-#[allow(dead_code)]
 pub fn print_env_warnings(warnings: &[String]) {
     for warning in warnings {
         echo(warning, "yellow");

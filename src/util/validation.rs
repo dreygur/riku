@@ -100,7 +100,7 @@ pub fn exit_if_invalid(app: &str, app_root: &Path) -> Result<String> {
 }
 
 /// Convert a boolean-ish string to a boolean.
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn get_boolean(value: &str) -> bool {
     matches!(
         value.to_lowercase().as_str(),
@@ -110,7 +110,7 @@ pub fn get_boolean(value: &str) -> bool {
 
 /// Validate and parse a positive integer environment variable.
 /// Returns Ok(value) if valid, or Err with a helpful error message.
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn parse_positive_int(name: &str, value: &str) -> Result<u64, String> {
     value
         .parse::<u64>()

@@ -3,9 +3,12 @@
 use anyhow::Result;
 use regex::Regex;
 use std::net::TcpListener;
+#[cfg(test)]
 use std::process::Command;
+#[cfg(test)]
 use which::which;
 
+#[cfg(test)]
 use super::display::echo;
 
 /// Find a free TCP port (entirely at random) by binding to port 0.
@@ -21,7 +24,7 @@ pub fn get_free_port(address: &str) -> Result<u16> {
 }
 
 /// Run shell command, return stdout. Return empty string on failure.
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn command_output(cmd: &str) -> String {
     match Command::new("sh").arg("-c").arg(cmd).output() {
         Ok(output) => String::from_utf8_lossy(&output.stdout).to_string(),
@@ -30,7 +33,7 @@ pub fn command_output(cmd: &str) -> String {
 }
 
 /// Check all binaries exist via `which`. Print results.
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn check_requirements(binaries: &[&str]) -> bool {
     echo(
         &format!("-----> Checking requirements: {:?}", binaries),
@@ -43,7 +46,6 @@ pub fn check_requirements(binaries: &[&str]) -> bool {
 }
 
 /// Validate a Node.js version string.
-#[allow(dead_code)]
 pub fn validate_node_version(version: &str) -> Result<(), String> {
     let version = version.trim();
 

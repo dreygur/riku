@@ -34,16 +34,6 @@ impl Supervisor {
         Ok(())
     }
 
-    /// Clean up old logs beyond retention policy.
-    #[allow(dead_code)]
-    pub fn cleanup_old_logs(&self) -> Result<()> {
-        if !self.log_root.exists() {
-            return Ok(());
-        }
-
-        self.log_rotator.cleanup_old_logs(&self.log_root)
-    }
-
     /// Write current stats to the stats file.
     pub(super) fn write_stats(&self) -> Result<()> {
         self.process_manager

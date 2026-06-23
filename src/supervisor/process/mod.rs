@@ -4,7 +4,6 @@
 
 pub mod generation;
 pub mod health_check;
-pub mod hot_reload;
 pub mod info;
 pub mod isolation;
 pub mod orchestration;
@@ -69,13 +68,11 @@ impl ProcessManager {
     }
 
     /// Get a reference to the stats manager.
-    #[allow(dead_code)]
     pub fn stats(&self) -> &StatsManager {
         &self.stats
     }
 
     /// Get a mutable reference to the stats manager.
-    #[allow(dead_code)]
     pub fn stats_mut(&mut self) -> &mut StatsManager {
         &mut self.stats
     }

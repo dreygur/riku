@@ -10,8 +10,6 @@ use super::types::{HealthStatus, ProcessStats, ProcessStatus};
 pub struct StatsManager {
     pub(super) stats: HashMap<String, ProcessStats>,
     pub(super) start_times: HashMap<String, Instant>,
-    #[allow(dead_code)]
-    pub(super) request_counts: HashMap<String, u64>,
 }
 
 impl Default for StatsManager {
@@ -26,7 +24,6 @@ impl StatsManager {
         StatsManager {
             stats: HashMap::new(),
             start_times: HashMap::new(),
-            request_counts: HashMap::new(),
         }
     }
 
@@ -105,27 +102,6 @@ impl StatsManager {
             stats.cpu_time_ms = cpu_ms;
             stats.memory_bytes = memory_bytes;
         }
-    }
-
-    /// Increment request count for a process.
-    #[allow(dead_code)]
-    pub fn increment_requests(&mut self, process_id: &str) {
-        if let Some(stats) = self.stats.get_mut(process_id) {
-            stats.requests_total += 1;
-
-            // Calculate requests per second
-            if let Some(start_time) = self.start_times.get(process_id) {
-                let elapsed = start_time.elapsed().as_secs_f64();
-                if elapsed > 0.0 {
-                    stats.requests_per_second = stats.requests_total as f64 / elapsed;
-                }
-            }
-        }
-
-        *self
-            .request_counts
-            .entry(process_id.to_string())
-            .or_insert(0) += 1;
     }
 
     /// Write stats to a JSON file for CLI consumption.

@@ -185,7 +185,7 @@ pub fn update_env_and_redeploy(
 ///
 /// This must happen before a WSGI nginx config is generated so that the
 /// config template sees `NGINX_WSGI` and `UWSGI_SOCKET`.
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn setup_wsgi_env(
     app: &str,
     paths: &RikuPaths,

@@ -60,7 +60,6 @@ pub struct Supervisor {
     pub(super) start_time: std::time::SystemTime,
     pub(super) health_running: Arc<AtomicBool>,
     pub(super) cron_thread_pool: ThreadPool,
-    #[allow(dead_code)]
     pub(super) pid_file_lock: Option<fs::File>,
     /// Broadcast sender for pushing pre-serialized metrics JSON to SSE clients.
     /// `None` if the health server failed to start.
