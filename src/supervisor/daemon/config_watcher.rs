@@ -250,6 +250,11 @@ impl Supervisor {
             .unwrap_or(without_ordinal);
         self.process_manager.stop_app_processes(app_name)?;
 
+        // Cron jobs live in the in-memory scheduler, not the process manager,
+        // so they must be purged here too — otherwise a stopped or destroyed
+        // app's cron entries keep firing forever.
+        self.cron_scheduler.remove_app_jobs(app_name);
+
         // `riku stop` removes worker configs but leaves the app's source
         // directory in place (so a later deploy/restart can recreate
         // them) — its stats should persist as `[STOPPED]` until then.
