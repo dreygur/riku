@@ -31,6 +31,7 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
 
         // Core commands that shouldn't be overridden
         Commands::Init { .. } => None,
+        Commands::Quickstart { .. } => None,
         Commands::Doctor => None,
         Commands::Addon(_) => None,
         Commands::Update => None,

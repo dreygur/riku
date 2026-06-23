@@ -183,5 +183,25 @@ pub fn do_deploy(
     let _ = hooks::run_post_deploy(app, &app_path, paths, Some(&runtime_name), &env);
 
     dlog.log(&format!("Deploy of '{}' complete", app));
+
+    // Make the "it works" moment unmissable for whoever just ran `git push`.
+    echo(&format!("-----> {} deployed!", app), "green");
+    match env.get("NGINX_SERVER_NAME").filter(|d| !d.is_empty()) {
+        Some(domain) => {
+            let https = env
+                .get("NGINX_HTTPS_ONLY")
+                .map(|v| matches!(v.as_str(), "1" | "true" | "yes" | "on"))
+                .unwrap_or(false);
+            let scheme = if https { "https" } else { "http" };
+            echo(&format!("       Live at {}://{}", scheme, domain), "green");
+        }
+        None => echo(
+            &format!(
+                "       Add a domain: riku config set {} NGINX_SERVER_NAME=example.com",
+                app
+            ),
+            "",
+        ),
+    }
     Ok(())
 }

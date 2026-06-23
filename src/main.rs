@@ -126,6 +126,11 @@ fn main() -> Result<()> {
         }
         Commands::Stop { app } => cli::apps::cmd_stop(&paths, &app)?,
         Commands::Init { no_systemd } => cli::setup::cmd_init(no_systemd)?,
+        Commands::Quickstart {
+            name,
+            runtime,
+            remote,
+        } => cli::quickstart::cmd_quickstart(&name, &runtime, remote.as_deref())?,
         Commands::Doctor => cli::doctor::cmd_doctor(&paths)?,
         Commands::Addon(cmd) => match cmd {
             AddonCmd::List => cli::addon::cmd_addon_list(&paths)?,

@@ -172,6 +172,22 @@ pub enum Commands {
         no_systemd: bool,
     },
 
+    /// Scaffold a sample app and print deploy instructions (runs locally)
+    #[command(
+        after_help = "Examples:\n  riku quickstart\n  riku quickstart myapp --runtime node\n  riku quickstart myapp --remote deploy@example.com"
+    )]
+    Quickstart {
+        /// App name (also the directory created)
+        #[arg(default_value = "hello-riku")]
+        name: String,
+        /// Runtime to scaffold: python or node
+        #[arg(long, default_value = "python")]
+        runtime: String,
+        /// Deploy target for the git remote line, e.g. deploy@your-server
+        #[arg(long)]
+        remote: Option<String>,
+    },
+
     /// Diagnose the Riku installation (deps, dirs, systemd, nginx, disk, SSH)
     #[command(after_help = "Examples:\n  riku doctor\n  sudo riku doctor")]
     Doctor,

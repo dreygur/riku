@@ -11,6 +11,7 @@ pub mod container;
 pub mod doctor;
 pub mod git;
 pub mod hooks;
+pub mod quickstart;
 pub mod routing;
 pub mod scp;
 pub mod setup;
