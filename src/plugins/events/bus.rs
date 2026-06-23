@@ -64,31 +64,12 @@ impl<'a> EventBus<'a> {
         }
     }
 
-    /// Find plugin bundles whose manifest subscribes to `event`. Invalid
-    /// manifests are skipped with a warning — one bad bundle never blocks a
-    /// deploy.
+    /// Plugin bundles whose manifest subscribes to `event`.
     fn subscribers_for(&self, event: &str) -> Vec<(PathBuf, PluginManifest)> {
-        let mut out = Vec::new();
-        let read_dir = match std::fs::read_dir(&self.paths.plugin_root) {
-            Ok(rd) => rd,
-            Err(_) => return out,
-        };
-        for entry in read_dir.flatten() {
-            let bundle = entry.path();
-            if !bundle.is_dir() || !bundle.join("riku-plugin.toml").exists() {
-                continue;
-            }
-            match PluginManifest::from_dir(&bundle) {
-                Ok(manifest) if manifest.subscribes_to(event) => out.push((bundle, manifest)),
-                Ok(_) => {}
-                Err(e) => tracing::warn!(
-                    target: "riku::events",
-                    "ignoring invalid plugin bundle {}: {e}",
-                    bundle.display()
-                ),
-            }
-        }
-        out
+        crate::plugins::bundles::find_bundles(&self.paths.plugin_root)
+            .into_iter()
+            .filter(|(_, manifest)| manifest.subscribes_to(event))
+            .collect()
     }
 
     /// Invoke one subscriber with `on_event` and the event JSON on stdin.
