@@ -10,12 +10,39 @@
 //! bound to. An advisory `flock` keyed by app name serializes deploys of the
 //! same app without affecting deploys of different apps.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::fs::{self, File, OpenOptions};
-use std::os::unix::io::AsRawFd;
+use std::io;
+use std::os::unix::io::{AsRawFd, RawFd};
 
 use crate::config::RikuPaths;
 use crate::error::DeployError;
+
+/// Apply a non-blocking `flock` operation, retrying on `EINTR`.
+///
+/// `flock(2)` is interruptible: a signal delivered to the process (e.g.
+/// `SIGCHLD` when an unrelated child process exits) can interrupt the syscall
+/// and make it return `EINTR`. Treating that as "contended" would spuriously
+/// report a lock as held — and, in `acquire`, fail a legitimate deploy — so we
+/// retry on `EINTR` and only report `false` for a genuine would-block.
+///
+/// Returns `Ok(true)` if the operation acquired/changed the lock, `Ok(false)`
+/// if it would block (another holder), or `Err` for any other failure.
+fn try_flock(fd: RawFd, operation: libc::c_int) -> io::Result<bool> {
+    loop {
+        let rc = unsafe { libc::flock(fd, operation) };
+        if rc == 0 {
+            return Ok(true);
+        }
+        let err = io::Error::last_os_error();
+        match err.raw_os_error() {
+            Some(libc::EINTR) => continue,
+            // EAGAIN == EWOULDBLOCK on Linux; this is "another process holds it".
+            Some(libc::EWOULDBLOCK) => return Ok(false),
+            _ => return Err(err),
+        }
+    }
+}
 
 /// Acquire the deploy lock for `app`, non-blocking. Returns the locked file
 /// handle — the lock is held until it is dropped, so callers must keep the
@@ -36,13 +63,13 @@ pub(crate) fn acquire(app: &str, paths: &RikuPaths) -> Result<File> {
 
     // Use libc::flock directly, same as the supervisor's PID-file lock
     // (create_pid_file_with_lock) — portable across Unix systems, no extra
-    // dependency.
-    let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
-    if result != 0 {
-        return Err(DeployError::DeployInProgress(app.to_string()).into());
+    // dependency. EINTR is retried inside try_flock so a stray signal can't
+    // make a legitimate deploy look like a concurrent one.
+    match try_flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) {
+        Ok(true) => Ok(file),
+        Ok(false) => Err(DeployError::DeployInProgress(app.to_string()).into()),
+        Err(e) => Err(e).context("failed to acquire deploy lock"),
     }
-
-    Ok(file)
 }
 
 fn lock_path_for(app: &str, paths: &RikuPaths) -> std::path::PathBuf {
@@ -76,18 +103,20 @@ pub(crate) fn is_locked(app: &str, paths: &RikuPaths) -> bool {
         Err(_) => return false,
     };
 
-    let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
-    if result == 0 {
-        // We got it — nobody else holds it. Release immediately; dropping
-        // `file` closes the fd, which releases the flock too, but we
-        // unlock explicitly first so there's no window where this probe
-        // itself looks like a held lock to a concurrent probe.
-        unsafe {
-            libc::flock(file.as_raw_fd(), libc::LOCK_UN);
+    match try_flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) {
+        Ok(true) => {
+            // We got it — nobody else holds it. Release immediately; dropping
+            // `file` closes the fd, which releases the flock too, but we
+            // unlock explicitly first so there's no window where this probe
+            // itself looks like a held lock to a concurrent probe.
+            let _ = try_flock(file.as_raw_fd(), libc::LOCK_UN);
+            false
         }
-        false
-    } else {
-        true
+        // Genuinely contended → held by someone else.
+        Ok(false) => true,
+        // Can't determine (unexpected error). Under-report "free" — this is a
+        // best-effort monitoring probe that never gates a real deploy.
+        Err(_) => false,
     }
 }
 
@@ -137,8 +166,11 @@ mod tests {
             let _first = acquire("myapp", &paths).expect("first lock should succeed");
         } // dropped here, releasing the flock
 
+        // Poll rather than asserting instantly: a concurrent test in this
+        // process can `fork()` a child that transiently inherits the lock fd
+        // (see `eventually` / `test_is_locked_false_after_release`).
         assert!(
-            acquire("myapp", &paths).is_ok(),
+            eventually(|| acquire("myapp", &paths).is_ok()),
             "lock should be acquirable again once released"
         );
     }
@@ -177,7 +209,33 @@ mod tests {
             let _held = acquire("myapp", &paths).unwrap();
             assert!(is_locked("myapp", &paths));
         }
-        assert!(!is_locked("myapp", &paths));
+        // The lock is released as soon as the holder fd is dropped above.
+        // However, when other tests in this process `fork()` a child while
+        // this fd is briefly open, the child transiently inherits the lock's
+        // open file description (fork copies all fds; O_CLOEXEC only closes it
+        // at the child's `exec`, not at `fork`). For that window the lock can
+        // still be observed as held through the child. It settles to free once
+        // the child execs/exits, so we poll rather than asserting an instant
+        // flip.
+        assert!(
+            eventually(|| !is_locked("myapp", &paths)),
+            "lock should become free after the holder is dropped"
+        );
+    }
+
+    /// Poll a lock predicate until it holds, up to ~10s (returns false on
+    /// timeout). The uncontended case returns on the first iteration; the long
+    /// ceiling only matters when a concurrent test's child is slow to `exec`
+    /// (and thus slow to drop the inherited lock fd) under heavy load. See
+    /// `test_is_locked_false_after_release` for the full rationale.
+    fn eventually(mut pred: impl FnMut() -> bool) -> bool {
+        for _ in 0..200 {
+            if pred() {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        false
     }
 
     #[test]
