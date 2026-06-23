@@ -2,6 +2,7 @@ import { watch, type FSWatcher } from "node:fs";
 import { open, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { validateAppName } from "@/server/validation";
 
 export const runtime = "nodejs";
 
@@ -18,7 +19,11 @@ export async function GET(req: Request) {
   if (!app) {
     return new Response("missing ?app= query param", { status: 400 });
   }
-  const file = deployLogPath(app);
+  const safeApp = validateAppName(app);
+  if (!safeApp) {
+    return new Response("invalid app name", { status: 400 });
+  }
+  const file = deployLogPath(safeApp);
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -52,7 +57,7 @@ export async function GET(req: Request) {
       };
 
       try {
-        watcher = watch(join(RIKU_ROOT, "logs", app), () => {
+        watcher = watch(join(RIKU_ROOT, "logs", safeApp), () => {
           sendChunk();
         });
       } catch {

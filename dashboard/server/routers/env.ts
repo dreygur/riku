@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { requireMutatingAuth } from "../security";
+import { validateAppName } from "../validation";
 
 const ENVS_ROOT = join(homedir(), ".riku", "envs");
 
@@ -36,64 +37,66 @@ async function readVars(file: string): Promise<Record<string, string>> {
 
 export const envRouter = new Hono();
 
-// PUT/DELETE write to ~/.riku/envs/<app>/ENV — gate state-changing methods.
-// GET /env/:app stays read-only and unauthenticated.
-envRouter.on(["PUT", "DELETE"], "/env/*", requireMutatingAuth);
+// GET/PUT/DELETE all touch ~/.riku/envs/<app>/ENV which holds secrets —
+// gate every method behind the operator token.
+envRouter.use("/env/*", requireMutatingAuth);
 
 // ── GET /env/:app ── Read env vars as JSON ──
 envRouter.get("/env/:app", async (c) => {
   const { app: appName } = c.req.param();
-  const file = envFilePath(appName);
+  const safeApp = validateAppName(appName);
+  if (!safeApp) return c.json({ error: "invalid app name" }, 400);
+  const file = envFilePath(safeApp);
 
   try {
     const vars = Object.entries(await readVars(file)).map(([key, value]) => ({
       key,
       value,
     }));
-    return c.json({ app: appName, vars });
+    return c.json({ app: safeApp, vars });
   } catch (e) {
-    return c.json(
-      { error: "failed to read env file", detail: e instanceof Error ? e.message : String(e) },
-      500,
-    );
+    console.error(e);
+    return c.json({ error: "failed to read env file" }, 500);
   }
 });
 
 // ── PUT /env/:app ── Set a single env var (body: { key, value }) ──
 envRouter.put("/env/:app", async (c) => {
   const { app: appName } = c.req.param();
+  const safeApp = validateAppName(appName);
+  if (!safeApp) return c.json({ error: "invalid app name" }, 400);
   const { key, value } = await c.req.json<{ key: string; value: string }>();
 
   if (!key || typeof key !== "string") {
     return c.json({ error: "missing or invalid key" }, 400);
   }
 
-  const file = envFilePath(appName);
+  const file = envFilePath(safeApp);
 
   try {
-    await mkdir(join(ENVS_ROOT, appName), { recursive: true });
+    await mkdir(join(ENVS_ROOT, safeApp), { recursive: true });
     const vars = await readVars(file);
     vars[key] = value ?? "";
     await writeFile(file, serializeEnvFile(vars), "utf-8");
     return c.json({ ok: true });
   } catch (e) {
-    return c.json(
-      { error: "failed to write env file", detail: e instanceof Error ? e.message : String(e) },
-      500,
-    );
+    console.error(e);
+    return c.json({ error: "failed to write env file" }, 500);
   }
 });
 
 // ── DELETE /env/:app ── Delete a single env var (body: { key }) ──
 envRouter.delete("/env/:app", async (c) => {
   const { app: appName } = c.req.param();
+  const safeApp = validateAppName(appName);
+  if (!safeApp) return c.json({ error: "invalid app name" }, 400);
   const { key } = await c.req.json<{ key: string }>();
 
   if (!key || typeof key !== "string") {
     return c.json({ error: "missing or invalid key" }, 400);
   }
 
-  const file = envFilePath(appName);
+  const file = envFilePath(safeApp);
   if (!existsSync(file)) return c.json({ ok: true });
 
   try {
@@ -102,9 +105,7 @@ envRouter.delete("/env/:app", async (c) => {
     await writeFile(file, serializeEnvFile(vars), "utf-8");
     return c.json({ ok: true });
   } catch (e) {
-    return c.json(
-      { error: "failed to delete env var", detail: e instanceof Error ? e.message : String(e) },
-      500,
-    );
+    console.error(e);
+    return c.json({ error: "failed to delete env var" }, 500);
   }
 });

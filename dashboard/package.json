@@ -9,7 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "audit:dashboard": "npx tsx scripts/audit-dashboard.ts",
-    "test:e2e": "playwright test"
+    "test:unit": "playwright test --project=unit",
+    "test:e2e": "playwright test --project=e2e"
   },
   "dependencies": {
     "hono": "^4.7.10",
