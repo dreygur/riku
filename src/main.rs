@@ -10,7 +10,7 @@ use riku::cli::container;
 use riku::cli::routing::{build_plugin_args, get_plugin_command};
 use riku::cli::{AddonCmd, AppsCmd, Cli, Commands, ConfigCmd, HookCmd, PluginCmd, StatsCmd};
 use riku::config::RikuPaths;
-use riku::{cli, supervisor};
+use riku::{cli, dashboard, supervisor};
 
 /// Initialize tracing subscriber for structured logging
 fn init_tracing() {
@@ -132,6 +132,7 @@ fn main() -> Result<()> {
             remote,
         } => cli::quickstart::cmd_quickstart(&name, &runtime, remote.as_deref())?,
         Commands::Doctor => cli::doctor::cmd_doctor(&paths)?,
+        Commands::Dashboard { bind, token } => dashboard::run(&paths, &bind, token)?,
         Commands::Addon(cmd) => match cmd {
             AddonCmd::List => cli::addon::cmd_addon_list(&paths)?,
             AddonCmd::Create { plugin, name } => {

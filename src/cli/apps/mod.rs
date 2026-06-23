@@ -32,7 +32,7 @@ pub use control::{cmd_hot_reload, cmd_restart, cmd_run, cmd_stop, cmd_supervisor
 pub use create::cmd_apps_create;
 pub use deploy::cmd_deploy;
 pub use destroy::cmd_destroy;
-pub use dump_state::cmd_dump_state;
+pub use dump_state::{cmd_dump_state, state_json};
 pub use info::cmd_apps_info;
 pub use install_plugins::cmd_install_plugins;
 pub use list::cmd_apps;

@@ -33,6 +33,7 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
         Commands::Init { .. } => None,
         Commands::Quickstart { .. } => None,
         Commands::Doctor => None,
+        Commands::Dashboard { .. } => None,
         Commands::Addon(_) => None,
         Commands::Update => None,
         Commands::InstallPlugins { .. } => None,

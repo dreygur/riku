@@ -9,7 +9,7 @@
 //! - GET /plugins             - List installed client plugins
 //! - GET /hooks                - List installed server-side hook plugins
 
-mod auth;
+pub mod auth;
 mod control;
 mod plugins;
 mod responses;

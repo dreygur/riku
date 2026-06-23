@@ -95,6 +95,13 @@ pub fn cmd_dump_state(paths: &RikuPaths) -> Result<()> {
     Ok(())
 }
 
+/// The read-only state matrix as a JSON value, for the dashboard API. Reuses
+/// the same secret-safe builder as `cmd_dump_state` (app env is allowlisted to
+/// routing/port keys, so secrets never appear).
+pub fn state_json(paths: &RikuPaths) -> Result<serde_json::Value> {
+    Ok(serde_json::to_value(build_state_dump(paths)?)?)
+}
+
 fn build_state_dump(paths: &RikuPaths) -> Result<StateDump> {
     let app_stats = load_app_stats(paths);
 

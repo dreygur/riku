@@ -192,6 +192,19 @@ pub enum Commands {
     #[command(after_help = "Examples:\n  riku doctor\n  sudo riku doctor")]
     Doctor,
 
+    /// Serve the read-only web dashboard (embedded, single binary)
+    #[command(
+        after_help = "Examples:\n  riku dashboard\n  riku dashboard --bind 127.0.0.1:9000\n  riku dashboard --bind 0.0.0.0:8088 --token <tok>"
+    )]
+    Dashboard {
+        /// Address to bind (host:port)
+        #[arg(long, default_value = "127.0.0.1:8088")]
+        bind: String,
+        /// Require this token on the API (also via RIKU_DASHBOARD_TOKEN)
+        #[arg(long)]
+        token: Option<String>,
+    },
+
     /// Manage addon instances (managed resources: databases, caches, …)
     #[command(
         subcommand,
