@@ -130,6 +130,7 @@ fn main() -> Result<()> {
         }
         Commands::Stop { app } => cli::apps::cmd_stop(&paths, &app)?,
         Commands::Init { no_systemd } => cli::setup::cmd_init(no_systemd)?,
+        Commands::Doctor => cli::doctor::cmd_doctor(&paths)?,
         Commands::Update => cli::apps::cmd_update()?,
         Commands::InstallPlugins { plugins } => {
             let only = if plugins.is_empty() {

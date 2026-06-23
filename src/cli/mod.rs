@@ -7,6 +7,7 @@ pub mod cli;
 pub mod client_plugins;
 pub mod cmds;
 pub mod container;
+pub mod doctor;
 pub mod git;
 pub mod hooks;
 pub mod routing;

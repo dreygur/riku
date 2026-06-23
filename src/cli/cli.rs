@@ -172,6 +172,10 @@ pub enum Commands {
         no_systemd: bool,
     },
 
+    /// Diagnose the Riku installation (deps, dirs, systemd, nginx, disk, SSH)
+    #[command(after_help = "Examples:\n  riku doctor\n  sudo riku doctor")]
+    Doctor,
+
     /// Self-update the riku binary
     #[command(after_help = "Examples:\n  riku update")]
     Update,
