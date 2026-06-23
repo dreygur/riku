@@ -25,13 +25,12 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use axum::extract::{Extension, Path, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderValue, Method, StatusCode};
 use axum::response::sse::{Event, Sse};
-use axum::response::{Json};
+use axum::response::Json;
 use axum::routing::get;
 use axum::Router;
 use futures::stream::{Stream, StreamExt};
-use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -54,6 +53,11 @@ pub struct SharedSupervisorState {
 /// - GET /metrics/apps    - Per-app aggregated metrics
 /// - GET /metrics/apps/:app - Metrics for a specific app
 /// - GET /metrics/stream  - SSE live metrics broadcast
+///
+/// The TCP listener is bound *synchronously* in this function, before the
+/// background thread is spawned, so a bind failure (e.g. the port is already
+/// in use) is propagated to the caller as `Err` rather than panicking a
+/// detached thread after the function has already returned.
 ///
 /// # Returns
 /// * `Ok(broadcast::Sender<String>)` - the broadcast sender the caller uses
@@ -86,12 +90,7 @@ pub fn start_health_server(
         .with_state(state)
         .layer(axum::extract::Extension(start_time))
         .layer(axum::extract::Extension(stats_file))
-        .layer(
-            tower_http::cors::CorsLayer::new()
-                .allow_origin(tower_http::cors::Any)
-                .allow_methods(tower_http::cors::Any)
-                .allow_headers(tower_http::cors::Any),
-        );
+        .layer(readonly_cors_layer());
 
     // Mutating routes intentionally carry no CorsLayer — only callers that
     // already hold the control token (the dashboard's server-side proxy)
@@ -109,6 +108,18 @@ pub fn start_health_server(
         control_token_file.display()
     );
 
+    // Bind synchronously *before* spawning the worker thread so that a bind
+    // failure (e.g. the port is already in use) is surfaced to the caller as
+    // an `Err` instead of panicking a detached thread after we've already
+    // returned `Ok`. The std listener is then converted to a Tokio listener
+    // inside the runtime — that conversion does not re-bind and cannot fail
+    // on an already-bound socket.
+    let std_listener = std::net::TcpListener::bind(addr)
+        .map_err(|e| anyhow::anyhow!("failed to bind health server on {}: {}", addr, e))?;
+    std_listener
+        .set_nonblocking(true)
+        .map_err(|e| anyhow::anyhow!("failed to set health server listener non-blocking: {}", e))?;
+
     let running_clone = running.clone();
 
     std::thread::spawn(move || {
@@ -120,9 +131,13 @@ pub fn start_health_server(
             .expect("failed to create health server Tokio runtime");
 
         rt.block_on(async move {
-            let listener = TcpListener::bind(addr)
-                .await
-                .expect("failed to bind health server TCP listener");
+            let listener = match tokio::net::TcpListener::from_std(std_listener) {
+                Ok(listener) => listener,
+                Err(e) => {
+                    tracing::error!("failed to adopt health server listener: {}", e);
+                    return;
+                }
+            };
 
             let shutdown_signal = async move {
                 while running_clone.load(Ordering::Relaxed) {
@@ -130,16 +145,44 @@ pub fn start_health_server(
                 }
             };
 
-            axum::serve(listener, router)
+            // A serve error *after* a clean graceful-shutdown signal must not
+            // panic this detached thread — log it and let the thread exit.
+            if let Err(e) = axum::serve(listener, router)
                 .with_graceful_shutdown(shutdown_signal)
                 .await
-                .expect("health server crashed");
+            {
+                tracing::error!("health server stopped with error: {}", e);
+            }
         });
 
         tracing::info!("Health server stopped");
     });
 
     Ok(broadcast_tx)
+}
+
+/// CORS policy for the read-only metrics/health routes.
+///
+/// Restricts cross-origin reads to the dashboard origin only (configurable via
+/// `RIKU_DASHBOARD_ORIGIN`, default `http://127.0.0.1:3000`) instead of the
+/// wildcard `Any`. A wildcard origin would let any local web page read app
+/// topology from `/metrics/apps/:app`, enabling a DNS-rebinding leak. Methods
+/// are limited to the GET/OPTIONS these routes actually serve, and only the
+/// `Content-Type` request header is allowed.
+fn readonly_cors_layer() -> tower_http::cors::CorsLayer {
+    const DEFAULT_ORIGIN: &str = "http://127.0.0.1:3000";
+
+    let configured = std::env::var("RIKU_DASHBOARD_ORIGIN").unwrap_or_default();
+    // Fall back to the default on a missing or unparseable origin rather than
+    // panicking the supervisor at startup.
+    let origin = HeaderValue::from_str(configured.trim())
+        .ok()
+        .unwrap_or_else(|| HeaderValue::from_static(DEFAULT_ORIGIN));
+
+    tower_http::cors::CorsLayer::new()
+        .allow_origin(origin)
+        .allow_methods([Method::GET, Method::OPTIONS])
+        .allow_headers([axum::http::header::CONTENT_TYPE])
 }
 
 // ── Axum Handlers ──────────────────────────────────────────────────────────
