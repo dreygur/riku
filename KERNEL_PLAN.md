@@ -78,8 +78,10 @@ task, so local == CI. Mirrors today's CI exactly, just one entry point.
    subscribe-to-events dispatch (`on_event` + JSON on stdin), observe-mode.
    Example `webhook-notify` notifier under `examples/plugins/`. (gate-mode veto
    deferred to the trust slice; a gate subscriber runs as observe and says so.)
-3. **Addon seam (Postgres)** — the keystone: provision / bind / unbind, exercises
-   lifecycle events + capability declaration + env injection + state.
+3. **✅ Addon seam** — the keystone: `provision`/`bind`/`unbind`/`deprovision`/
+   `backup` with instance registry, env injection on bind, and `riku addon` CLI.
+   Example addons under `examples/plugins/`: `sqlite-volume` (no deps) and
+   `postgres`.
 4. **Distribution + trust** — marketplace, lockfile, checksum/capability
    enforcement (per `ROADMAP.md` E2 / E2.5).
 

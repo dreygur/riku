@@ -372,4 +372,37 @@ esac
         svc.provision("fakedb", "db1").unwrap();
         assert_eq!(svc.backup("db1").unwrap().as_deref(), Some("/tmp/db.tar"));
     }
+
+    /// Exercise the real shipped `sqlite-volume` example bundle end-to-end, so
+    /// the example stays a working reference, not just documentation.
+    #[test]
+    fn shipped_sqlite_volume_example_works() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
+        let src =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/plugins/sqlite-volume");
+        let dest = paths.plugin_root.join("sqlite-volume");
+        crate::util::copy_dir_recursive(&src, &dest).unwrap();
+        std::fs::set_permissions(
+            dest.join("bin/addon"),
+            std::fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+
+        let svc = AddonService::new(&paths);
+        svc.provision("sqlite-volume", "mydb").unwrap();
+
+        let keys = svc.bind("mydb", "myapp").unwrap();
+        assert!(keys.contains(&"DATABASE_URL".to_string()));
+        let env = std::fs::read_to_string(paths.env_root.join("myapp/ENV")).unwrap();
+        assert!(env.contains("DATABASE_URL=sqlite:///"), "got: {env}");
+        assert!(env.contains("mydb.db"));
+
+        let artifact = svc.backup("mydb").unwrap().expect("artifact");
+        assert!(std::path::Path::new(&artifact).exists());
+
+        svc.unbind("mydb", "myapp").unwrap();
+        svc.deprovision("mydb").unwrap();
+        assert!(svc.list().is_empty());
+    }
 }

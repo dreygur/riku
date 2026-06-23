@@ -126,3 +126,52 @@ pub enum HookCmd {
         name: String,
     },
 }
+
+/// Addon (managed resource) commands — Plugin Protocol v1 addon seam.
+#[derive(Subcommand, Debug)]
+pub enum AddonCmd {
+    /// List provisioned addon instances
+    #[command(after_help = "Examples:\n  riku addon list")]
+    List,
+
+    /// Provision a new instance of an addon plugin
+    #[command(after_help = "Examples:\n  riku addon create postgres db1")]
+    Create {
+        /// Addon plugin name (e.g. postgres)
+        plugin: String,
+        /// Instance name (unique)
+        name: String,
+    },
+
+    /// Bind an instance to an app, injecting its env
+    #[command(after_help = "Examples:\n  riku addon bind db1 myapp")]
+    Bind {
+        /// Instance name
+        instance: String,
+        /// App name
+        app: String,
+    },
+
+    /// Unbind an instance from an app, removing its env
+    #[command(after_help = "Examples:\n  riku addon unbind db1 myapp")]
+    Unbind {
+        /// Instance name
+        instance: String,
+        /// App name
+        app: String,
+    },
+
+    /// Destroy an instance (must be unbound first)
+    #[command(after_help = "Examples:\n  riku addon destroy db1")]
+    Destroy {
+        /// Instance name
+        instance: String,
+    },
+
+    /// Back up an instance
+    #[command(after_help = "Examples:\n  riku addon backup db1")]
+    Backup {
+        /// Instance name
+        instance: String,
+    },
+}

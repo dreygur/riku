@@ -1,5 +1,6 @@
 //! CLI provider layer — module declarations and public re-exports.
 
+pub mod addon;
 pub mod agent;
 pub mod apps;
 #[allow(clippy::module_inception)]
@@ -15,4 +16,4 @@ pub mod scp;
 pub mod setup;
 
 pub use cli::{Cli, Commands};
-pub use cmds::{AppsCmd, ConfigCmd, HookCmd, PluginCmd, StatsCmd};
+pub use cmds::{AddonCmd, AppsCmd, ConfigCmd, HookCmd, PluginCmd, StatsCmd};

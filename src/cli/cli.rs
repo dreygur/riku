@@ -2,7 +2,7 @@
 
 use clap::{Parser, Subcommand};
 
-use super::cmds::{AppsCmd, ConfigCmd, HookCmd, PluginCmd, StatsCmd};
+use super::cmds::{AddonCmd, AppsCmd, ConfigCmd, HookCmd, PluginCmd, StatsCmd};
 use super::container::ContainerSubCmd;
 
 /// riku — the smallest PaaS you've ever seen (Rust edition)
@@ -175,6 +175,13 @@ pub enum Commands {
     /// Diagnose the Riku installation (deps, dirs, systemd, nginx, disk, SSH)
     #[command(after_help = "Examples:\n  riku doctor\n  sudo riku doctor")]
     Doctor,
+
+    /// Manage addon instances (managed resources: databases, caches, …)
+    #[command(
+        subcommand,
+        after_help = "Examples:\n  riku addon list\n  riku addon create postgres db1\n  riku addon bind db1 myapp"
+    )]
+    Addon(AddonCmd),
 
     /// Self-update the riku binary
     #[command(after_help = "Examples:\n  riku update")]

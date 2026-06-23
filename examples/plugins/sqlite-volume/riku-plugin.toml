@@ -1,0 +1,10 @@
+name        = "sqlite-volume"
+version     = "0.1.0"
+type        = "addon"
+api         = 1
+entry       = "bin/addon"
+description = "A persistent SQLite database file on a managed volume (no external services)."
+author      = "riku"
+
+[capabilities]
+writes = ["data_dir"]

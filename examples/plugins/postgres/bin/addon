@@ -1,0 +1,57 @@
+#!/bin/sh
+# postgres addon — Plugin Protocol v1 (PLUGIN_PROTOCOL.md §6.1).
+#
+# Provisions a database and a login role on a PostgreSQL server reachable via
+# the standard PG* environment variables (defaults to the local socket as an
+# admin/superuser). Requires `psql` on the host, and `pg_dump` for backup.
+#
+# Each verb receives a JSON request on stdin and emits a JSON response on
+# stdout. Context env: RIKU_ADDON_INSTANCE, RIKU_ADDON_DATA_PATH.
+set -eu
+
+verb="${1:-}"
+cat >/dev/null   # this addon derives everything from context env
+
+instance="$RIKU_ADDON_INSTANCE"
+# A safe SQL identifier derived from the instance name.
+ident="riku_$(printf '%s' "$instance" | tr -c 'A-Za-z0-9' '_')"
+creds="$RIKU_ADDON_DATA_PATH/credentials"
+
+admin_psql() { psql -v ON_ERROR_STOP=1 -qtAX "$@"; }
+
+case "$verb" in
+  provision)
+    mkdir -p "$RIKU_ADDON_DATA_PATH"
+    pass="$(LC_ALL=C tr -dc 'a-f0-9' </dev/urandom | head -c 32)"
+    admin_psql -c "CREATE ROLE \"$ident\" LOGIN PASSWORD '$pass';"
+    admin_psql -c "CREATE DATABASE \"$ident\" OWNER \"$ident\";"
+    host="${PGHOST:-localhost}"
+    port="${PGPORT:-5432}"
+    # Persist the connection string for bind (not world-readable).
+    printf 'DATABASE_URL=postgres://%s:%s@%s:%s/%s\n' \
+      "$ident" "$pass" "$host" "$port" "$ident" > "$creds"
+    chmod 600 "$creds"
+    echo '{}'
+    ;;
+  bind)
+    url="$(sed -n 's/^DATABASE_URL=//p' "$creds")"
+    printf '{"env":{"DATABASE_URL":"%s"}}' "$url"
+    ;;
+  unbind)
+    echo '{}'
+    ;;
+  deprovision)
+    admin_psql -c "DROP DATABASE IF EXISTS \"$ident\";"
+    admin_psql -c "DROP ROLE IF EXISTS \"$ident\";"
+    echo '{}'
+    ;;
+  backup)
+    artifact="$RIKU_ADDON_DATA_PATH/backup-$(date +%Y%m%d%H%M%S).sql"
+    pg_dump "$ident" > "$artifact"
+    printf '{"artifact":"%s"}' "$artifact"
+    ;;
+  *)
+    echo "postgres: unknown verb '$verb'" >&2
+    exit 1
+    ;;
+esac

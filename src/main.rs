@@ -8,7 +8,7 @@ use clap::Parser;
 use riku::cli::client_plugins;
 use riku::cli::container;
 use riku::cli::routing::{build_plugin_args, get_plugin_command};
-use riku::cli::{AppsCmd, Cli, Commands, ConfigCmd, HookCmd, PluginCmd, StatsCmd};
+use riku::cli::{AddonCmd, AppsCmd, Cli, Commands, ConfigCmd, HookCmd, PluginCmd, StatsCmd};
 use riku::config::RikuPaths;
 use riku::{cli, supervisor};
 
@@ -127,6 +127,20 @@ fn main() -> Result<()> {
         Commands::Stop { app } => cli::apps::cmd_stop(&paths, &app)?,
         Commands::Init { no_systemd } => cli::setup::cmd_init(no_systemd)?,
         Commands::Doctor => cli::doctor::cmd_doctor(&paths)?,
+        Commands::Addon(cmd) => match cmd {
+            AddonCmd::List => cli::addon::cmd_addon_list(&paths)?,
+            AddonCmd::Create { plugin, name } => {
+                cli::addon::cmd_addon_create(&paths, &plugin, &name)?
+            }
+            AddonCmd::Bind { instance, app } => {
+                cli::addon::cmd_addon_bind(&paths, &instance, &app)?
+            }
+            AddonCmd::Unbind { instance, app } => {
+                cli::addon::cmd_addon_unbind(&paths, &instance, &app)?
+            }
+            AddonCmd::Destroy { instance } => cli::addon::cmd_addon_destroy(&paths, &instance)?,
+            AddonCmd::Backup { instance } => cli::addon::cmd_addon_backup(&paths, &instance)?,
+        },
         Commands::Update => cli::apps::cmd_update()?,
         Commands::InstallPlugins { plugins } => {
             let only = if plugins.is_empty() {

@@ -1,0 +1,11 @@
+name        = "postgres"
+version     = "0.1.0"
+type        = "addon"
+api         = 1
+entry       = "bin/addon"
+description = "Managed PostgreSQL database (requires PostgreSQL + psql on the host)."
+author      = "riku"
+
+[capabilities]
+network = true
+writes  = ["data_dir"]
