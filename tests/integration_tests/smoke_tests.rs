@@ -11,8 +11,10 @@
 ///
 /// The binary must already exist (run `cargo build` before the tests).
 fn riku_bin() -> std::path::PathBuf {
+    // CARGO_MANIFEST_DIR is the `riku` binary package (crates/riku); the shared
+    // workspace target dir is two levels up at the repo root.
     let mut p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    p.push("target/debug/riku");
+    p.push("../../target/debug/riku");
     p
 }
 

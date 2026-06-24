@@ -1742,47 +1742,112 @@ name = "riku"
 version = "3.0.0"
 dependencies = [
  "anyhow",
- "axum",
- "chrono",
  "clap",
- "colored",
  "criterion",
- "croner",
- "dirs",
- "ed25519-dalek",
- "futures",
  "glob",
- "hex",
- "landlock",
- "libc",
- "nix",
- "notify",
- "once_cell",
- "rand",
- "regex",
- "reqwest",
+ "riku-cli",
  "riku-config",
- "serde",
+ "riku-dashboard",
+ "riku-deploy",
+ "riku-error",
+ "riku-nginx",
+ "riku-plugins",
+ "riku-supervisor",
+ "riku-util",
  "serde_json",
- "sha2",
- "shell-words",
- "subtle",
  "tempfile",
- "tera",
- "thiserror 1.0.69",
- "threadpool",
- "tokio",
- "tokio-stream",
  "toml",
- "tower-http 0.5.2",
  "tracing",
  "tracing-subscriber",
  "which",
 ]
 
 [[package]]
+name = "riku-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "colored",
+ "dirs",
+ "glob",
+ "nix",
+ "reqwest",
+ "riku-config",
+ "riku-deploy",
+ "riku-nginx",
+ "riku-plugins",
+ "riku-supervisor",
+ "riku-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+ "tracing",
+ "which",
+]
+
+[[package]]
 name = "riku-config"
 version = "0.1.0"
+
+[[package]]
+name = "riku-dashboard"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "riku-cli",
+ "riku-config",
+ "riku-supervisor",
+ "riku-util",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "riku-deploy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "glob",
+ "libc",
+ "nix",
+ "riku-config",
+ "riku-error",
+ "riku-nginx",
+ "riku-plugins",
+ "riku-supervisor",
+ "riku-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+ "tracing",
+]
+
+[[package]]
+name = "riku-error"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "riku-nginx"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "reqwest",
+ "riku-config",
+ "riku-util",
+ "tempfile",
+ "tera",
+ "tracing",
+]
 
 [[package]]
 name = "riku-plugin-clojure"
@@ -1803,6 +1868,80 @@ name = "riku-plugin-java"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+]
+
+[[package]]
+name = "riku-plugins"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "ed25519-dalek",
+ "hex",
+ "landlock",
+ "libc",
+ "nix",
+ "once_cell",
+ "rand",
+ "reqwest",
+ "riku-config",
+ "riku-error",
+ "riku-util",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "toml",
+ "tracing",
+]
+
+[[package]]
+name = "riku-supervisor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "futures",
+ "hex",
+ "libc",
+ "nix",
+ "notify",
+ "once_cell",
+ "rand",
+ "reqwest",
+ "riku-config",
+ "riku-error",
+ "riku-nginx",
+ "riku-plugins",
+ "riku-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "threadpool",
+ "tokio",
+ "tokio-stream",
+ "toml",
+ "tower-http 0.5.2",
+ "tracing",
+]
+
+[[package]]
+name = "riku-util"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "colored",
+ "croner",
+ "libc",
+ "nix",
+ "once_cell",
+ "regex",
+ "subtle",
+ "tempfile",
+ "tracing",
+ "which",
 ]
 
 [[package]]
@@ -1948,12 +2087,6 @@ checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
 ]
-
-[[package]]
-name = "shell-words"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc6fe69c597f9c37bfeeeeeb33da3530379845f10be461a66d16d03eca2ded77"
 
 [[package]]
 name = "shlex"
