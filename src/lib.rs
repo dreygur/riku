@@ -6,7 +6,7 @@
 pub mod cli;
 pub use riku_config as config;
 pub mod dashboard;
-pub mod deploy;
+pub use riku_deploy as deploy;
 pub use riku_error as error;
 pub use riku_nginx as nginx;
 pub use riku_plugins as plugins;

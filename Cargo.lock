@@ -1762,6 +1762,7 @@ dependencies = [
  "regex",
  "reqwest",
  "riku-config",
+ "riku-deploy",
  "riku-error",
  "riku-nginx",
  "riku-plugins",
@@ -1788,6 +1789,28 @@ dependencies = [
 [[package]]
 name = "riku-config"
 version = "0.1.0"
+
+[[package]]
+name = "riku-deploy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "glob",
+ "libc",
+ "nix",
+ "riku-config",
+ "riku-error",
+ "riku-nginx",
+ "riku-plugins",
+ "riku-supervisor",
+ "riku-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+ "tracing",
+]
 
 [[package]]
 name = "riku-error"

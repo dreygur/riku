@@ -94,7 +94,7 @@ fn lock_path_for(app: &str, paths: &RikuPaths) -> std::path::PathBuf {
 /// can't be opened at all — under-reporting "free" is the safe default for
 /// a monitoring dump, since this is informational only and never gates a
 /// real deploy decision.
-pub(crate) fn is_locked(app: &str, paths: &RikuPaths) -> bool {
+pub fn is_locked(app: &str, paths: &RikuPaths) -> bool {
     let lock_path = lock_path_for(app, paths);
     let file = match OpenOptions::new()
         .create(true)

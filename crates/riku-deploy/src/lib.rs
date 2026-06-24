@@ -22,13 +22,21 @@ use std::fs;
 use crate::config::RikuPaths;
 use crate::util::{deploy_logger::DeployLogger, echo, parse_procfile};
 
+// Dependency crates aliased as their former module names.
+pub(crate) use riku_config as config;
+pub(crate) use riku_error as error;
+pub(crate) use riku_nginx as nginx;
+pub(crate) use riku_plugins as plugins;
+pub(crate) use riku_supervisor as supervisor;
+pub(crate) use riku_util as util;
+
 // Deployment infrastructure modules (kept in binary)
 pub mod backup;
 pub mod container_runtime; // used by `riku container` CLI commands
 pub mod env_setup;
 pub mod git_ops;
 pub mod hooks;
-pub(crate) mod lock;
+pub mod lock;
 pub mod releases;
 pub mod router;
 pub mod scaling;
