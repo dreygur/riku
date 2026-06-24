@@ -188,6 +188,27 @@ pub enum Commands {
         remote: Option<String>,
     },
 
+    /// Back up an app (source + env + volumes + repo) to a tar.gz
+    #[command(
+        after_help = "Examples:\n  riku backup myapp\n  riku backup myapp --out /backups/myapp.tar.gz"
+    )]
+    Backup {
+        /// App name
+        app: String,
+        /// Output path (default: ./<app>-backup-<timestamp>.tar.gz)
+        #[arg(long)]
+        out: Option<String>,
+    },
+
+    /// Restore an app from a backup tar.gz
+    #[command(after_help = "Examples:\n  riku restore myapp ./myapp-backup-20260624.tar.gz")]
+    Restore {
+        /// App name
+        app: String,
+        /// Backup file
+        file: String,
+    },
+
     /// Diagnose the Riku installation (deps, dirs, systemd, nginx, disk, SSH)
     #[command(after_help = "Examples:\n  riku doctor\n  sudo riku doctor")]
     Doctor,

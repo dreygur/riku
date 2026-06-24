@@ -23,6 +23,7 @@ use crate::config::RikuPaths;
 use crate::util::{deploy_logger::DeployLogger, echo, parse_procfile};
 
 // Deployment infrastructure modules (kept in binary)
+pub mod backup;
 pub mod container_runtime; // used by `riku container` CLI commands
 pub mod env_setup;
 pub mod git_ops;

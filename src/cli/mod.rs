@@ -3,6 +3,7 @@
 pub mod addon;
 pub mod agent;
 pub mod apps;
+pub mod backup;
 #[allow(clippy::module_inception)]
 pub mod cli;
 pub mod client_plugins;

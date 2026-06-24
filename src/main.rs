@@ -134,6 +134,8 @@ fn main() -> Result<()> {
             runtime,
             remote,
         } => cli::quickstart::cmd_quickstart(&name, &runtime, remote.as_deref())?,
+        Commands::Backup { app, out } => cli::backup::cmd_backup(&paths, &app, out.as_deref())?,
+        Commands::Restore { app, file } => cli::backup::cmd_restore(&paths, &app, &file)?,
         Commands::Doctor => cli::doctor::cmd_doctor(&paths)?,
         Commands::Dashboard { bind, token } => dashboard::run(&paths, &bind, token)?,
         Commands::Addon(cmd) => match cmd {
