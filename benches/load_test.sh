@@ -182,4 +182,4 @@ fi
 echo ""
 
 echo -e "${GREEN}Load test complete.${NC}"
-echo "Tip: Share your results in benchmarks/results/ — see benchmarks/README.md for the format."
+echo "Tip: Share your results in benches/results/ — see benches/README.md for the format."
