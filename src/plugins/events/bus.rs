@@ -92,6 +92,14 @@ impl<'a> EventBus<'a> {
             // Own process group so a timeout can kill the whole tree.
             .process_group(0);
 
+        // Confine the subscriber to its declared capabilities before launch.
+        let sandbox_paths = crate::plugins::sandbox::SandboxPaths {
+            app_path: Some(self.paths.app_root.join(&envelope.app)),
+            env_path: Some(self.paths.env_root.join(&envelope.app)),
+            ..Default::default()
+        };
+        crate::plugins::sandbox::harden(&mut cmd, &manifest.capabilities, &sandbox_paths);
+
         let mut child = match spawn_retrying_etxtbsy(&mut cmd) {
             Ok(child) => child,
             Err(e) => {

@@ -223,9 +223,22 @@ implementation. These stay in the kernel for v1:
   signed bundle is accepted only if some trusted key verifies it, and otherwise
   **rejected** (not merely warned). Authors use `riku plugins keygen` /
   `riku plugins sign`. The verifying key's name is pinned in the lockfile.
-- Capabilities declared in the manifest, shown on install, enforced where the
-  platform allows.
+- **Capability enforcement.** Capabilities are declared in the manifest, shown
+  on install, and enforced on every manifest-based plugin spawn (addon seam,
+  event subscribers) where the platform allows:
+  - `privileged = false` (default) sets `PR_SET_NO_NEW_PRIVS`, blocking setuid
+    privilege escalation.
+  - `writes = [app_dir|data_dir|env_dir]` confines the plugin's filesystem
+    writes to exactly those directories (plus the system temp dir and `/dev`)
+    via **Landlock**; read/execute stays unrestricted.
+  - `network = false` denies TCP bind/connect via Landlock network rules
+    (kernel ≥6.7). UDP/non-TCP is not yet covered.
+
+  Enforcement is unprivileged and **best-effort**: on a kernel without Landlock
+  the filesystem/network limits degrade to a logged no-op while `no_new_privs`
+  still applies. Legacy manifest-less runtime plugins (§8) are not sandboxed.
 - `gate` mode and `privileged` capability require explicit, elevated trust;
-  third-party marketplaces are opt-in.
+  third-party marketplaces are opt-in. `privileged = true` opts a plugin **out**
+  of the sandbox, so it is the one capability that widens authority.
 - WASM sandboxing for untrusted authors is the long-term answer (`ROADMAP.md`
   E3), not a v1 requirement.
