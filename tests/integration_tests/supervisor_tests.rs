@@ -1,7 +1,6 @@
-//! Integration tests for Supervisor functionality
+//! Integration tests for the supervisor.
 //!
-//! These tests verify the process supervisor, process manager,
-//! cron scheduler, and log rotation functionality.
+//! Covers the process manager, the cron scheduler, and log rotation.
 
 #[cfg(test)]
 pub mod tests {

@@ -1,7 +1,7 @@
-//! Integration tests for Nginx configuration generation
+//! Integration tests for nginx config generation.
 //!
-//! These tests verify the nginx configuration generation
-//! for various deployment scenarios.
+//! Feeds different app setups (domains, SSL, static paths, caching) through the
+//! generator and checks the rendered config is what nginx should see.
 
 #[cfg(test)]
 mod tests {

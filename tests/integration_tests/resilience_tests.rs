@@ -1,7 +1,7 @@
-//! Resilience and chaos engineering tests
+//! Resilience tests — what happens when things go wrong.
 //!
-//! These tests verify that the system handles failure scenarios gracefully,
-//! including resource exhaustion, process crashes, and invalid configurations.
+//! Resource exhaustion, process crashes, and malformed configs: each case
+//! should fail in a contained way instead of taking the supervisor down.
 
 #[cfg(test)]
 mod tests {
