@@ -58,7 +58,9 @@ nav:
       - Nginx: nginx.md
       - Supervisor: supervisor.md
       - Resource Limits: resource-limits.md
-      - Plugins: plugins.md
+      - Plugins (legacy): plugins.md
+      - Plugin Bundles: plugin-bundles.md
+      - Plugin Gallery: plugin-gallery.md
       - AI Agents: ai-agents.md
       - Systemd: systemd.md
   - FAQ: faq.md
