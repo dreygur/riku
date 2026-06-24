@@ -19,6 +19,18 @@ description = "Managed PostgreSQL database and role on the host"
 type        = "addon"
 
 [[plugin]]
+name        = "redis"
+source      = "examples/plugins/redis"
+description = "Managed Redis instance via per-instance ACL users"
+type        = "addon"
+
+[[plugin]]
+name        = "caddy-router"
+source      = "examples/plugins/caddy-router"
+description = "Route apps through Caddy with automatic HTTPS (swaps the built-in nginx router)"
+type        = "router"
+
+[[plugin]]
 name        = "webhook-notify"
 source      = "examples/plugins/webhook-notify"
 description = "POST lifecycle events to a webhook"
