@@ -220,9 +220,53 @@ pub enum PluginsCmd {
     #[command(after_help = "Examples:\n  riku plugins doctor")]
     Doctor,
 
+    /// Generate an Ed25519 signing keypair (for plugin authors)
+    #[command(after_help = "Examples:\n  riku plugins keygen --out mykey")]
+    Keygen {
+        /// Path to write the secret key (public key is printed)
+        #[arg(long, default_value = "riku-plugin.key")]
+        out: String,
+    },
+
+    /// Sign a plugin bundle's entry with a secret key (for plugin authors)
+    #[command(after_help = "Examples:\n  riku plugins sign ./my-plugin --key mykey")]
+    Sign {
+        /// Bundle directory
+        bundle: String,
+        /// Secret key file (from `riku plugins keygen`)
+        #[arg(long)]
+        key: String,
+    },
+
+    /// Manage trusted publisher keys
+    #[command(subcommand)]
+    Trust(TrustCmd),
+
     /// Manage marketplaces (git repos that index plugins)
     #[command(subcommand)]
     Marketplace(MarketplaceCmd),
+}
+
+/// Trusted publisher key commands.
+#[derive(Subcommand, Debug)]
+pub enum TrustCmd {
+    /// Trust a publisher's public key
+    #[command(after_help = "Examples:\n  riku plugins trust add acme <pubkey-hex>")]
+    Add {
+        /// Name for the key
+        name: String,
+        /// Hex Ed25519 public key
+        pubkey: String,
+    },
+
+    /// List trusted publisher keys
+    List,
+
+    /// Remove a trusted publisher key
+    Remove {
+        /// Key name
+        name: String,
+    },
 }
 
 /// Marketplace registration commands.

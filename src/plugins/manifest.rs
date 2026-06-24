@@ -71,6 +71,10 @@ pub struct PluginManifest {
     pub entry: String,
     #[serde(default)]
     pub checksum: Option<String>,
+    /// Optional hex Ed25519 signature over the entry bytes (`PLUGIN_PROTOCOL.md`
+    /// §10). Verified against the operator's trust keyring on install.
+    #[serde(default)]
+    pub signature: Option<String>,
     #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]

@@ -53,6 +53,7 @@ pub mod manager;
 pub mod manifest;
 pub mod marketplace;
 pub mod runtime;
+pub mod signing;
 
 // Re-export the public API (used by CLI plugin commands and external code)
 pub use addon::{AddonService, InstanceRecord};

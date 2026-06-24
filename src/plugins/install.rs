@@ -99,6 +99,24 @@ impl<'a> PluginInstaller<'a> {
             }
         }
 
+        // Signature gate: a signed bundle must verify against a *trusted* key,
+        // otherwise it is rejected (not merely flagged).
+        let signer = match &manifest.signature {
+            Some(signature) => {
+                let bytes = std::fs::read(&entry)?;
+                match crate::plugins::signing::Keyring::new(self.paths)
+                    .verifier_of(&bytes, signature)
+                {
+                    Some(key) => Some(key.name),
+                    None => bail!(
+                        "plugin '{}' is signed but no trusted key verifies it — add the publisher's key with `riku plugins trust add <name> <pubkey>`",
+                        manifest.name
+                    ),
+                }
+            }
+            None => None,
+        };
+
         let dest = self.paths.plugin_root.join(&manifest.name);
         if dest.exists() {
             bail!(
@@ -117,6 +135,7 @@ impl<'a> PluginInstaller<'a> {
             version: manifest.version.clone(),
             checksum: Some(actual),
             author_pinned: manifest.checksum.is_some(),
+            signer,
         })?;
 
         Ok(manifest)
@@ -408,5 +427,44 @@ mod tests {
         let audit = installer.audit();
         assert_eq!(audit[0].status, HealthStatus::Fail);
         assert!(audit[0].detail.contains("changed since install"));
+    }
+
+    #[test]
+    fn signed_bundle_requires_a_trusted_key() {
+        use crate::plugins::signing::{Keypair, Keyring};
+
+        let (tmp, paths) = setup();
+        let src = tmp.path().join("signed");
+        write_bundle(&src, "signed", None);
+
+        // Sign the entry and pin a top-level signature in the manifest.
+        let kp = Keypair::generate();
+        let sig = kp.sign_hex(&std::fs::read(src.join("bin/addon")).unwrap());
+        std::fs::write(
+            src.join("riku-plugin.toml"),
+            format!(
+                "name=\"signed\"\nversion=\"1.0.0\"\ntype=\"addon\"\napi={}\nentry=\"bin/addon\"\nsignature=\"{sig}\"\n",
+                crate::plugins::RIKU_PLUGIN_API
+            ),
+        )
+        .unwrap();
+
+        let installer = PluginInstaller::new(&paths);
+
+        // Signed but the key is not trusted → rejected, nothing installed.
+        let err = installer
+            .install(src.to_str().unwrap())
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("no trusted key"), "got: {err}");
+        assert!(!paths.plugin_root.join("signed").exists());
+
+        // Trust the publisher's key → installs and records the signer.
+        Keyring::new(&paths).add("acme", &kp.public_hex()).unwrap();
+        installer.install(src.to_str().unwrap()).unwrap();
+        assert_eq!(
+            Lockfile::new(&paths).entries()[0].signer.as_deref(),
+            Some("acme")
+        );
     }
 }
