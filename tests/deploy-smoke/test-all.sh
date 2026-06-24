@@ -1,6 +1,6 @@
 #!/bin/bash
 # Test deployment scripts for Riku
-# Usage: ./tests/deploy/test-all.sh [remote]
+# Usage: ./tests/deploy-smoke/test-all.sh [remote]
 
 set -e
 

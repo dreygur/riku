@@ -422,16 +422,16 @@ cargo build
 cargo test
 
 # Run deployment tests
-./tests/deploy/test-all.sh
+./tests/deploy-smoke/test-all.sh
 
 # Quick test with a sample app
-./tests/deploy/quick-test.sh myapp node
+./tests/deploy-smoke/quick-test.sh myapp node
 ```
 
 ### Testing Deployments
 ```bash
 # Create a test app
-./tests/deploy/quick-test.sh test-node node
+./tests/deploy-smoke/quick-test.sh test-node node
 cd /tmp/riku-quick-test-*/
 git init && git add . && git commit -m "test"
 git remote add riku deploy@your-server:test-node

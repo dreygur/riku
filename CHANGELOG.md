@@ -82,7 +82,7 @@ is clean with zero warnings in production code.
 - **Systemd `ReadWritePaths` tilde expansion fixed** — `setup.rs` now writes the
   absolute path to `~/.riku` (resolved at runtime) instead of the literal `~/.riku`
   string, which is not expanded by systemd on all distributions.
-- **Predictable `/tmp` test path removed** — `tests/deploy/test-all.sh` now uses
+- **Predictable `/tmp` test path removed** — `tests/deploy-smoke/test-all.sh` now uses
   `mktemp -d` instead of the PID-based `/tmp/riku-test-$$` path that was vulnerable
   to symlink attacks.
 

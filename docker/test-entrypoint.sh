@@ -26,7 +26,7 @@ run_test() {
 }
 
 # Run all test scripts in lexicographic order
-for script in /riku-src/tests/e2e-docker/[0-9]*.sh; do
+for script in /riku-src/tests/e2e/cases/[0-9]*.sh; do
     [ -f "$script" ] || continue
     name=$(basename "$script" .sh)
     run_test "$name" "$script"

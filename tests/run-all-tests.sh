@@ -90,8 +90,8 @@ run_deployment_tests() {
     print_header "Running Deployment Tests"
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
-    if [ -f "tests/deploy/test-all.sh" ]; then
-        if bash tests/deploy/test-all.sh 2>&1; then
+    if [ -f "tests/deploy-smoke/test-all.sh" ]; then
+        if bash tests/deploy-smoke/test-all.sh 2>&1; then
             log_success "Deployment tests passed"
             PASSED_TESTS=$((PASSED_TESTS + 1))
         else

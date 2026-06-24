@@ -1,6 +1,6 @@
 #!/bin/bash
 # Quick deployment test for a single app
-# Usage: ./tests/deploy/quick-test.sh <app-name> <runtime>
+# Usage: ./tests/deploy-smoke/quick-test.sh <app-name> <runtime>
 
 set -e
 
