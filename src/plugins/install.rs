@@ -147,11 +147,114 @@ impl<'a> PluginInstaller<'a> {
             })
             .collect()
     }
+
+    /// Audit every installed bundle: manifest validity, entry presence, and
+    /// **integrity** — the entry is re-hashed and compared to the lockfile, so
+    /// tampering since install is caught.
+    pub fn audit(&self) -> Vec<PluginHealth> {
+        let locks = Lockfile::new(self.paths).entries();
+        let mut out = Vec::new();
+
+        let Ok(read_dir) = std::fs::read_dir(&self.paths.plugin_root) else {
+            return out;
+        };
+        for entry in read_dir.flatten() {
+            let dir = entry.path();
+            // Only manifest-based bundles; legacy single-file runtimes are skipped.
+            if !dir.is_dir() || !dir.join("riku-plugin.toml").exists() {
+                continue;
+            }
+            let label = dir
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("?")
+                .to_string();
+            out.push(self.audit_bundle(&dir, label, &locks));
+        }
+        out.sort_by(|a, b| a.name.cmp(&b.name));
+        out
+    }
+
+    fn audit_bundle(&self, dir: &Path, label: String, locks: &[LockEntry]) -> PluginHealth {
+        let manifest = match PluginManifest::from_dir(dir) {
+            Ok(m) => m,
+            Err(e) => return PluginHealth::fail(label, format!("invalid manifest: {e}")),
+        };
+
+        let entry = manifest.entry_path(dir);
+        if !entry.is_file() {
+            return PluginHealth::fail(
+                manifest.name,
+                format!("entry '{}' missing", manifest.entry),
+            );
+        }
+
+        match locks
+            .iter()
+            .find(|l| l.name == manifest.name)
+            .and_then(|l| l.checksum.as_ref())
+        {
+            Some(expected) => match checksum_of(&entry) {
+                Ok(actual) if checksum_matches(expected, &actual) => PluginHealth::ok(
+                    manifest.name,
+                    format!("api {} · integrity verified", manifest.api),
+                ),
+                Ok(_) => PluginHealth::fail(
+                    manifest.name,
+                    "entry changed since install (checksum mismatch)".into(),
+                ),
+                Err(e) => PluginHealth::warn(manifest.name, format!("could not hash entry: {e}")),
+            },
+            None => PluginHealth::warn(
+                manifest.name,
+                "installed but not in the lockfile (unmanaged — reinstall via `riku plugins`)"
+                    .into(),
+            ),
+        }
+    }
+}
+
+/// Outcome of auditing one installed plugin.
+pub struct PluginHealth {
+    pub name: String,
+    pub status: HealthStatus,
+    pub detail: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum HealthStatus {
+    Ok,
+    Warn,
+    Fail,
+}
+
+impl PluginHealth {
+    fn ok(name: impl Into<String>, detail: String) -> Self {
+        Self {
+            name: name.into(),
+            status: HealthStatus::Ok,
+            detail,
+        }
+    }
+    fn warn(name: impl Into<String>, detail: String) -> Self {
+        Self {
+            name: name.into(),
+            status: HealthStatus::Warn,
+            detail,
+        }
+    }
+    fn fail(name: impl Into<String>, detail: String) -> Self {
+        Self {
+            name: name.into(),
+            status: HealthStatus::Fail,
+            detail,
+        }
+    }
 }
 
 /// Resolve a git source string to a clone URL. Accepts `github:owner/repo`,
 /// `https://…`, `git@…`, and `…/repo.git`. Returns `None` for non-git sources.
-fn git_url(source: &str) -> Option<String> {
+pub(crate) fn git_url(source: &str) -> Option<String> {
     if let Some(rest) = source.strip_prefix("github:") {
         return Some(format!("https://github.com/{rest}.git"));
     }
@@ -281,5 +384,29 @@ mod tests {
         );
         assert!(git_url("https://example.com/x.git").is_some());
         assert!(git_url("./local/path").is_none());
+    }
+
+    #[test]
+    fn audit_verifies_integrity_and_detects_tampering() {
+        let (tmp, paths) = setup();
+        let src = tmp.path().join("auditme");
+        write_bundle(&src, "auditme", None);
+        let installer = PluginInstaller::new(&paths);
+        installer.install(src.to_str().unwrap()).unwrap();
+
+        // Freshly installed → verified.
+        let audit = installer.audit();
+        assert_eq!(audit.len(), 1);
+        assert_eq!(audit[0].status, HealthStatus::Ok);
+
+        // Tamper with the installed entry → integrity check fails.
+        std::fs::write(
+            paths.plugin_root.join("auditme/bin/addon"),
+            "#!/bin/sh\nevil\n",
+        )
+        .unwrap();
+        let audit = installer.audit();
+        assert_eq!(audit[0].status, HealthStatus::Fail);
+        assert!(audit[0].detail.contains("changed since install"));
     }
 }

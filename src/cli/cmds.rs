@@ -198,4 +198,54 @@ pub enum PluginsCmd {
         /// Plugin name
         name: String,
     },
+
+    /// Search registered marketplaces
+    #[command(after_help = "Examples:\n  riku plugins search postgres")]
+    Search {
+        /// Query (matches name and description; empty lists all)
+        #[arg(default_value = "")]
+        query: String,
+    },
+
+    /// Install a plugin by name from a registered marketplace
+    #[command(
+        after_help = "Examples:\n  riku plugins add postgres\n  riku plugins add postgres@official"
+    )]
+    Add {
+        /// Plugin spec: name or name@marketplace
+        spec: String,
+    },
+
+    /// Validate installed plugin bundles (API compatibility + integrity)
+    #[command(after_help = "Examples:\n  riku plugins doctor")]
+    Doctor,
+
+    /// Manage marketplaces (git repos that index plugins)
+    #[command(subcommand)]
+    Marketplace(MarketplaceCmd),
+}
+
+/// Marketplace registration commands.
+#[derive(Subcommand, Debug)]
+pub enum MarketplaceCmd {
+    /// Register and clone a marketplace
+    #[command(
+        after_help = "Examples:\n  riku plugins marketplace add github:dreygur/riku-marketplace"
+    )]
+    Add {
+        /// Git URL (github:owner/repo, https://…/repo.git)
+        url: String,
+        /// Override the derived marketplace name
+        #[arg(long)]
+        name: Option<String>,
+    },
+
+    /// List registered marketplaces
+    List,
+
+    /// Remove a registered marketplace
+    Remove {
+        /// Marketplace name
+        name: String,
+    },
 }

@@ -51,6 +51,7 @@ pub mod install;
 pub mod lockfile;
 pub mod manager;
 pub mod manifest;
+pub mod marketplace;
 pub mod runtime;
 
 // Re-export the public API (used by CLI plugin commands and external code)
@@ -62,3 +63,4 @@ pub use hooks::{HookContext, PluginHook};
 pub use install::PluginInstaller;
 pub use manager::PluginManager;
 pub use manifest::PluginManifest;
+pub use marketplace::MarketplaceService;
