@@ -55,11 +55,8 @@ impl Supervisor {
                         // Compare with stored modification time
                         if new_modified > *_old_modified {
                             tracing::info!("Config file modified: {}", filename);
-                            if let Err(e) = self.unload_config(&filename) {
-                                tracing::error!("Error unloading config {}: {}", filename, e);
-                            }
-                            if let Err(e) = self.load_config_file(&path, &filename) {
-                                tracing::error!("Error loading config {}: {}", filename, e);
+                            if let Err(e) = self.handle_modified_config(&path, &filename) {
+                                tracing::error!("Error reloading config {}: {}", filename, e);
                             }
                             self.watched_configs.insert(filename, new_modified);
                         }
@@ -130,8 +127,7 @@ impl Supervisor {
                                     if let Some(old_modified) = self.watched_configs.get(filename) {
                                         if new_modified > *old_modified {
                                             tracing::info!("Config file modified: {}", filename);
-                                            self.unload_config(filename)?;
-                                            self.load_config_file(&path, filename)?;
+                                            self.handle_modified_config(&path, filename)?;
                                             self.watched_configs
                                                 .insert(filename.to_string(), new_modified);
                                         }
@@ -162,22 +158,54 @@ impl Supervisor {
         Ok(())
     }
 
+    /// Parse a worker config TOML file without spawning anything.
+    fn parse_worker_config(path: &Path) -> Result<WorkerConfig> {
+        let config_content = fs::read_to_string(path).map_err(|e| {
+            tracing::error!("Error reading config file {}: {}", path.display(), e);
+            e
+        })?;
+        toml::from_str(&config_content).map_err(|e| {
+            tracing::error!("Error parsing config file {}: {}", path.display(), e);
+            e.into()
+        })
+    }
+
+    /// Handle a modified worker config.
+    ///
+    /// If the process is already running and the new config has a health
+    /// check configured, deploy it as a probed canary generation instead of
+    /// tearing the running process down: `deploy_generation` spawns the new
+    /// version alongside the old one and only swaps it in once it passes
+    /// its probe window, with the rollback circuit breaker handling
+    /// failures. Otherwise (no health check, or not currently running)
+    /// fall back to the original unload-then-respawn behavior.
+    pub(super) fn handle_modified_config(&mut self, path: &Path, filename: &str) -> Result<()> {
+        let worker_config = Self::parse_worker_config(path)?;
+
+        if worker_config.worker.kind.starts_with("cron") {
+            return self.load_config_file(path, filename);
+        }
+
+        let process_id = format!(
+            "{}-{}-{}",
+            worker_config.worker.app, worker_config.worker.kind, worker_config.worker.ordinal
+        );
+
+        if worker_config.options.health_check.is_some()
+            && self.process_manager.is_managed(&process_id)
+        {
+            return self
+                .process_manager
+                .deploy_generation(&process_id, worker_config);
+        }
+
+        self.unload_config(filename)?;
+        self.load_config_file(path, filename)
+    }
+
     /// Load and start a configuration from a TOML file.
     pub(super) fn load_config_file(&mut self, path: &Path, _filename: &str) -> Result<()> {
-        let config_content = match fs::read_to_string(path) {
-            Ok(c) => c,
-            Err(e) => {
-                tracing::error!("Error reading config file {}: {}", path.display(), e);
-                return Err(e.into());
-            }
-        };
-        let worker_config: WorkerConfig = match toml::from_str(&config_content) {
-            Ok(c) => c,
-            Err(e) => {
-                tracing::error!("Error parsing config file {}: {}", path.display(), e);
-                return Err(e.into());
-            }
-        };
+        let worker_config = Self::parse_worker_config(path)?;
 
         // If this is a cron worker, load cron jobs from the app's Procfile instead of
         // spawning a persistent process (cron entries are driven by the scheduler).
@@ -221,6 +249,23 @@ impl Supervisor {
             .map(|x| x.0)
             .unwrap_or(without_ordinal);
         self.process_manager.stop_app_processes(app_name)?;
+
+        // Cron jobs live in the in-memory scheduler, not the process manager,
+        // so they must be purged here too — otherwise a stopped or destroyed
+        // app's cron entries keep firing forever.
+        self.cron_scheduler.remove_app_jobs(app_name);
+
+        // `riku stop` removes worker configs but leaves the app's source
+        // directory in place (so a later deploy/restart can recreate
+        // them) — its stats should persist as `[STOPPED]` until then.
+        // `riku destroy` removes the app directory too. Only in the
+        // latter case should the stats entries be purged; otherwise every
+        // destroyed app leaves a permanent ghost row in `/metrics` that
+        // nothing ever clears.
+        let paths = crate::config::RikuPaths::from_env();
+        if !paths.app_root.join(app_name).exists() {
+            self.process_manager.stats_mut().remove_app(app_name);
+        }
         Ok(())
     }
 }

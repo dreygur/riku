@@ -27,6 +27,7 @@ pub mod container_runtime; // used by `riku container` CLI commands
 pub mod env_setup;
 pub mod git_ops;
 pub mod hooks;
+pub(crate) mod lock;
 pub mod scaling;
 pub mod supervisor_ctl;
 pub mod workers;
@@ -50,6 +51,12 @@ pub fn do_deploy(
             app_path.display()
         ));
     }
+
+    // Held for the rest of this function: serializes concurrent deploys of
+    // the *same* app (e.g. a second git push landing mid-deploy, or a
+    // dashboard-triggered redeploy racing a git push) without blocking
+    // deploys of other apps. See lock.rs for what breaks without this.
+    let _deploy_lock = lock::acquire(app, paths)?;
 
     let deploy_log_path = paths.deploy_log_file(app);
     let mut dlog = DeployLogger::new(&deploy_log_path)?;
@@ -176,5 +183,25 @@ pub fn do_deploy(
     let _ = hooks::run_post_deploy(app, &app_path, paths, Some(&runtime_name), &env);
 
     dlog.log(&format!("Deploy of '{}' complete", app));
+
+    // Make the "it works" moment unmissable for whoever just ran `git push`.
+    echo(&format!("-----> {} deployed!", app), "green");
+    match env.get("NGINX_SERVER_NAME").filter(|d| !d.is_empty()) {
+        Some(domain) => {
+            let https = env
+                .get("NGINX_HTTPS_ONLY")
+                .map(|v| matches!(v.as_str(), "1" | "true" | "yes" | "on"))
+                .unwrap_or(false);
+            let scheme = if https { "https" } else { "http" };
+            echo(&format!("       Live at {}://{}", scheme, domain), "green");
+        }
+        None => echo(
+            &format!(
+                "       Add a domain: riku config set {} NGINX_SERVER_NAME=example.com",
+                app
+            ),
+            "",
+        ),
+    }
     Ok(())
 }

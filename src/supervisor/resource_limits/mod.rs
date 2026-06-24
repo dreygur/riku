@@ -24,8 +24,20 @@ pub struct ResourceLimits {
     /// Default: 1024
     pub max_open_files: Option<u64>,
 
-    /// Maximum number of processes (RLIMIT_NPROC)
-    /// Default: 64
+    /// Maximum number of processes (RLIMIT_NPROC).
+    ///
+    /// Disabled (`None`) by default. `RLIMIT_NPROC` counts every process
+    /// owned by the *real UID*, system-wide — not just this worker's
+    /// process tree. Setting it here would falsely crash-loop a perfectly
+    /// healthy worker the moment anything else running as the same UID
+    /// (other workers, a shell, a desktop session) pushes that UID's total
+    /// process count past the limit, and it provides no real per-worker
+    /// isolation even when riku runs as its own dedicated user, since the
+    /// budget is shared across every worker of every app under that UID.
+    /// Operators who still want a UID-wide ceiling can opt back in via
+    /// `RIKU_MAX_PROCESSES`. For real per-worker process-count isolation,
+    /// use `IsolationOptions::max_pids` (cgroup v2 `pids.max`), which is
+    /// scoped to exactly that worker's cgroup subtree.
     pub max_processes: Option<u64>,
 
     /// Maximum size of core files in bytes (RLIMIT_CORE)
@@ -43,8 +55,8 @@ impl Default for ResourceLimits {
             max_memory_bytes: Some(512 * 1024 * 1024),     // 512 MB
             max_cpu_seconds: Some(3600),                   // 1 hour
             max_open_files: Some(1024),                    // 1024 files
-            max_processes: Some(64),                       // 64 processes
-            max_core_file_bytes: Some(0),                  // No core dumps
+            max_processes: None, // see field doc: UID-wide, not per-worker
+            max_core_file_bytes: Some(0), // No core dumps
             max_file_size_bytes: Some(1024 * 1024 * 1024), // 1 GB
         }
     }
@@ -57,7 +69,7 @@ impl ResourceLimits {
     /// - RIKU_MAX_MEMORY_MB: Maximum memory in MB (default: 512)
     /// - RIKU_MAX_CPU_SECONDS: Maximum CPU time in seconds (default: 3600)
     /// - RIKU_MAX_OPEN_FILES: Maximum open files (default: 1024)
-    /// - RIKU_MAX_PROCESSES: Maximum processes (default: 64)
+    /// - RIKU_MAX_PROCESSES: Maximum processes, RLIMIT_NPROC, UID-wide (default: disabled — see field doc)
     /// - RIKU_MAX_FILE_SIZE_MB: Maximum file size in MB (default: 1024)
     /// - RIKU_ENABLE_CORE_DUMPS: Enable core dumps (default: false)
     pub fn from_env() -> Self {

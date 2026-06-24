@@ -1,0 +1,14 @@
+name        = "webhook-notify"
+version     = "0.1.0"
+type        = "notifier"
+api         = 1
+entry       = "bin/on-event"
+description = "POST lifecycle events to a webhook (set WEBHOOK_URL in the app env)."
+author      = "riku"
+
+[capabilities]
+network = true
+
+[events]
+subscribe = ["deploy.requested", "build.finished", "deploy.finished"]
+mode      = "observe"

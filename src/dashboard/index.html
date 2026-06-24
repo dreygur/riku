@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>riku</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: #171a21;
+        --line: #262b36;
+        --fg: #e6e9ef;
+        --muted: #8b93a7;
+        --accent: #5ee0a0;
+        --warn: #f0b86b;
+        --bad: #f06b6b;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      header {
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+        padding: 18px 24px;
+        border-bottom: 1px solid var(--line);
+      }
+      header h1 { margin: 0; font-size: 18px; letter-spacing: 0.5px; }
+      header .meta { color: var(--muted); font-size: 12px; }
+      main { padding: 20px 24px; display: grid; gap: 14px; max-width: 1000px; }
+      .app {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px 16px;
+      }
+      .app h2 { margin: 0 0 4px; font-size: 15px; }
+      .app a { color: var(--accent); text-decoration: none; }
+      .badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+      .badge {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .badge.on { color: var(--accent); border-color: #244; }
+      .badge.warn { color: var(--warn); border-color: #443; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th, td { text-align: left; padding: 4px 8px; border-top: 1px solid var(--line); }
+      th { color: var(--muted); font-weight: 500; }
+      .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+      .run { background: var(--accent); }
+      .stop { background: var(--bad); }
+      .unk { background: var(--muted); }
+      .empty, #error { color: var(--muted); padding: 24px; }
+      #error { color: var(--bad); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>riku</h1>
+      <span class="meta" id="meta">loading…</span>
+    </header>
+    <main id="apps"></main>
+    <div id="error" hidden></div>
+
+    <script>
+      const token = new URLSearchParams(location.search).get("token");
+      const apiUrl = "/api/state" + (token ? "?token=" + encodeURIComponent(token) : "");
+
+      function statusClass(s) {
+        const v = (typeof s === "string" ? s : JSON.stringify(s)).toLowerCase();
+        if (v.includes("run")) return "run";
+        if (v.includes("stop") || v.includes("exit") || v.includes("fail")) return "stop";
+        return "unk";
+      }
+      function statusText(s) {
+        return typeof s === "string" ? s : JSON.stringify(s);
+      }
+      function fmtUptime(secs) {
+        if (secs == null) return "supervisor: unknown";
+        const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
+        return "uptime " + h + "h" + m + "m";
+      }
+
+      function appCard(a) {
+        const el = document.createElement("section");
+        el.className = "app";
+        const domain = a.routing && a.routing.NGINX_SERVER_NAME;
+        const https = a.routing && a.routing.NGINX_HTTPS_ONLY;
+        const title = domain
+          ? `<a href="${https ? "https" : "http"}://${domain}" target="_blank" rel="noopener">${a.app}</a>`
+          : a.app;
+
+        const badges = [];
+        badges.push(`<span class="badge ${a.nginx && a.nginx.enabled ? "on" : ""}">nginx ${a.nginx && a.nginx.enabled ? "enabled" : "off"}</span>`);
+        if (a.deploy_lock === "held") badges.push(`<span class="badge warn">deploying</span>`);
+        if (domain) badges.push(`<span class="badge">${domain}</span>`);
+
+        const workers = (a.workers || [])
+          .map(
+            (w) => `<tr>
+              <td>${w.process_id}</td>
+              <td><span class="dot ${statusClass(w.status)}"></span>${statusText(w.status)}</td>
+              <td>${w.pid ?? "—"}</td>
+              <td>${w.restart_count}</td>
+            </tr>`
+          )
+          .join("");
+
+        el.innerHTML = `<h2>${title}</h2>
+          <div class="badges">${badges.join("")}</div>
+          ${
+            workers
+              ? `<table><thead><tr><th>process</th><th>status</th><th>pid</th><th>restarts</th></tr></thead><tbody>${workers}</tbody></table>`
+              : `<div class="empty">no workers</div>`
+          }`;
+        return el;
+      }
+
+      async function load() {
+        try {
+          const res = await fetch(apiUrl, { headers: { Accept: "application/json" } });
+          if (!res.ok) throw new Error("API " + res.status + " " + (await res.text()));
+          const data = await res.json();
+          document.getElementById("error").hidden = true;
+
+          const meta = document.getElementById("meta");
+          meta.textContent = `v${data.riku_version} · ${fmtUptime(data.supervisor_uptime_seconds)} · ${data.apps.length} app(s) · ${new Date().toLocaleTimeString()}`;
+
+          const main = document.getElementById("apps");
+          main.innerHTML = "";
+          if (!data.apps.length) {
+            main.innerHTML = `<div class="empty">No apps deployed yet. Push one with <code>git push riku main</code>.</div>`;
+          } else {
+            data.apps.forEach((a) => main.appendChild(appCard(a)));
+          }
+        } catch (e) {
+          const err = document.getElementById("error");
+          err.hidden = false;
+          err.textContent = String(e);
+        }
+      }
+
+      load();
+      setInterval(load, 5000);
+    </script>
+  </body>
+</html>

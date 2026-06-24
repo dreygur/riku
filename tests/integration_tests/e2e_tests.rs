@@ -1,15 +1,15 @@
-/// End-to-End Deployment Tests
-///
-/// All tests run without requiring npm, pip, or any runtime toolchain.
-///
-/// - **Sub-step tests** — exercise individual deploy pipeline steps
-///   (git sync, worker config creation, plugin detection, nginx config generation).
-///
-/// - **Full-deploy tests** — call `do_deploy()` end-to-end using lightweight mock
-///   plugins (shell scripts) installed into a temp directory. The mock plugins detect
-///   a marker file, perform a no-op build, and emit a start command. The rest of the
-///   pipeline (git sync, worker config creation, LIVE_ENV writing, supervisor
-///   notification) runs normally.
+//! End-to-End Deployment Tests
+//!
+//! All tests run without requiring npm, pip, or any runtime toolchain.
+//!
+//! - **Sub-step tests** — exercise individual deploy pipeline steps
+//!   (git sync, worker config creation, plugin detection, nginx config generation).
+//!
+//! - **Full-deploy tests** — call `do_deploy()` end-to-end using lightweight mock
+//!   plugins (shell scripts) installed into a temp directory. The mock plugins detect
+//!   a marker file, perform a no-op build, and emit a start command. The rest of the
+//!   pipeline (git sync, worker config creation, LIVE_ENV writing, supervisor
+//!   notification) runs normally.
 
 #[cfg(test)]
 mod tests {
@@ -26,8 +26,7 @@ mod tests {
 
     /// Build a `RikuPaths` rooted inside `tmp` and create all required directories.
     fn make_paths(tmp: &TempDir) -> riku::config::RikuPaths {
-        let paths =
-            riku::config::RikuPaths::from_dirs(tmp.path().join(".riku"), &tmp.path().to_path_buf());
+        let paths = riku::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
         for dir in &[
             &paths.app_root,
             &paths.env_root,

@@ -7,6 +7,7 @@ Thumbs.db
 
 # Docker
 tests/e2e/id_ed25519
+tests/demo_env/.keys/
 
 # Rust
 target/
@@ -40,6 +41,7 @@ ENV
 # Logs
 *.log
 logs/
+!dashboard/app/api/logs/
 
 # Temporary files
 tmp/
@@ -75,6 +77,10 @@ node_modules/
 npm-debug.log
 yarn-error.log
 
+# Next.js / dashboard build output
+.next/
+*.tsbuildinfo
+
 # Certificates
 *.pem
 *.key
@@ -91,15 +97,21 @@ acme/
 # Nginx (except contrib/)
 *.conf
 !contrib/nginx/*.conf
+!tests/production_audit/container/*.conf
+!tests/demo_env/*.conf
 
 # TOML configs (worker configs are generated)
 *.toml
 !Cargo.toml
 !rust-toolchain.toml
 !deny.toml
+!mise.toml
+# Plugin bundle manifests (Plugin Protocol v1) are source, not generated.
+!riku-plugin.toml
 
 # Procfile (app-specific, not repo)
 Procfile
+!dashboard/tests/e2e-dashboard/fixtures/test-app/Procfile
 
 # SCALING file (app-specific)
 SCALING

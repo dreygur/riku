@@ -1,0 +1,21 @@
+#!/bin/sh
+# Riku notifier — Plugin Protocol v1 event subscriber.
+#
+# The kernel invokes this once per subscribed event with the verb `on_event`
+# and the event envelope as a single JSON line on stdin (see PLUGIN_PROTOCOL.md
+# §7). Observe-mode: the exit status is logged but never blocks a deploy.
+#
+# Context env vars: RIKU_PLUGIN_API, RIKU_ROOT, RIKU_APP.
+set -eu
+
+event_json="$(cat)"
+
+if [ -z "${WEBHOOK_URL:-}" ]; then
+  echo "webhook-notify: WEBHOOK_URL not set; skipping" >&2
+  exit 0
+fi
+
+curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data "$event_json" "$WEBHOOK_URL" >/dev/null
+
+echo "webhook-notify: posted event for app=${RIKU_APP:-?} to $WEBHOOK_URL"

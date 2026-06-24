@@ -14,7 +14,7 @@ fn setup_paths(temp: &TempDir) -> RikuPaths {
     fs::create_dir_all(riku_root.join("plugins")).unwrap();
     fs::create_dir_all(riku_root.join("apps")).unwrap();
     fs::create_dir_all(riku_root.join("envs")).unwrap();
-    RikuPaths::from_dirs(riku_root, &temp.path().to_path_buf())
+    RikuPaths::from_dirs(riku_root, temp.path())
 }
 
 fn make_ctx<'a>(

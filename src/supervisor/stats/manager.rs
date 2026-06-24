@@ -2,7 +2,6 @@
 
 use chrono::Utc;
 use std::collections::HashMap;
-use std::fs;
 use std::time::Instant;
 
 use super::types::{HealthStatus, ProcessStats, ProcessStatus};
@@ -11,8 +10,6 @@ use super::types::{HealthStatus, ProcessStats, ProcessStatus};
 pub struct StatsManager {
     pub(super) stats: HashMap<String, ProcessStats>,
     pub(super) start_times: HashMap<String, Instant>,
-    #[allow(dead_code)]
-    pub(super) request_counts: HashMap<String, u64>,
 }
 
 impl Default for StatsManager {
@@ -27,7 +24,6 @@ impl StatsManager {
         StatsManager {
             stats: HashMap::new(),
             start_times: HashMap::new(),
-            request_counts: HashMap::new(),
         }
     }
 
@@ -75,6 +71,14 @@ impl StatsManager {
         }
     }
 
+    /// Mark a process as killed by the kernel OOM killer (cgroup
+    /// `memory.max` exceeded).
+    pub fn mark_oom_killed(&mut self, process_id: &str) {
+        if let Some(stats) = self.stats.get_mut(process_id) {
+            stats.status = ProcessStatus::OomKilled;
+        }
+    }
+
     /// Mark a process as restarting.
     pub fn mark_restarting(&mut self, process_id: &str) {
         if let Some(stats) = self.stats.get_mut(process_id) {
@@ -100,40 +104,15 @@ impl StatsManager {
         }
     }
 
-    /// Increment request count for a process.
-    #[allow(dead_code)]
-    pub fn increment_requests(&mut self, process_id: &str) {
-        if let Some(stats) = self.stats.get_mut(process_id) {
-            stats.requests_total += 1;
-
-            // Calculate requests per second
-            if let Some(start_time) = self.start_times.get(process_id) {
-                let elapsed = start_time.elapsed().as_secs_f64();
-                if elapsed > 0.0 {
-                    stats.requests_per_second = stats.requests_total as f64 / elapsed;
-                }
-            }
-        }
-
-        *self
-            .request_counts
-            .entry(process_id.to_string())
-            .or_insert(0) += 1;
-    }
-
     /// Write stats to a JSON file for CLI consumption.
-    pub fn write_stats_to_file(&self, path: &std::path::Path) -> Result<(), std::io::Error> {
+    ///
+    /// Uses the shared `write_atomic` (temp file + `fsync` + `rename`) so a
+    /// crash or external log-rotation sweep running concurrently never
+    /// observes a half-written `stats.json` — the same guarantee already
+    /// applied to worker TOML, ENV, and nginx config writes.
+    pub fn write_stats_to_file(&self, path: &std::path::Path) -> anyhow::Result<()> {
         let app_stats = self.get_all_stats();
-        let json = serde_json::to_string_pretty(&app_stats)
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
-
-        // Write to temporary file first, then atomically rename
-        // This prevents corruption if supervisor crashes mid-write
-        let temp_path = path.with_extension("tmp");
-        fs::write(&temp_path, json)?;
-
-        // Atomic rename (guaranteed atomic on POSIX systems)
-        fs::rename(&temp_path, path)?;
-        Ok(())
+        let json = serde_json::to_string_pretty(&app_stats)?;
+        crate::util::write_atomic(path, json.as_bytes())
     }
 }

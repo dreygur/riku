@@ -1,0 +1,13 @@
+# Only target/release/riku is ever COPYed into an image — but a flat
+# "target/" ignore here would shadow that explicit COPY too (dockerignore
+# parent excludes win over child negations in some engines), so exclude
+# just the heavy subdirectories that are never referenced by any Dockerfile.
+target/debug/
+target/*/debug/
+.git/
+dashboard/node_modules/
+dashboard/.next/
+dashboard/test-results/
+dashboard/playwright-report/
+node_modules/
+*.log

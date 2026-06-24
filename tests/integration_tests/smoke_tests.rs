@@ -1,9 +1,9 @@
-/// Smoke tests for the Riku CLI command layer.
-///
-/// These tests verify that the binary accepts the right arguments, produces
-/// expected output, and exits with the right code. They exercise the
-/// `routing.rs` and `hooks.rs` modules through both binary invocation
-/// and direct unit tests.
+//! Smoke tests for the Riku CLI command layer.
+//!
+//! These tests verify that the binary accepts the right arguments, produces
+//! expected output, and exits with the right code. They exercise the
+//! `routing.rs` and `hooks.rs` modules through both binary invocation
+//! and direct unit tests.
 
 // ── Binary invocation helpers ────────────────────────────────────────────────
 
@@ -345,7 +345,7 @@ mod routing_tests {
 #[cfg(test)]
 mod hook_cmd_tests {
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use tempfile::TempDir;
 
     use riku::config::RikuPaths;
@@ -375,7 +375,7 @@ mod hook_cmd_tests {
     }
 
     /// Create an executable script at `dir/name`.
-    fn create_executable(dir: &PathBuf, name: &str) -> PathBuf {
+    fn create_executable(dir: &Path, name: &str) -> PathBuf {
         let p = dir.join(name);
         fs::write(&p, "#!/bin/sh\necho hello\n").unwrap();
         #[cfg(unix)]

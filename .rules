@@ -259,5 +259,5 @@ journalctl -u riku-nginx
 
 - [API Documentation](API.md)
 - [Architecture Design](ARCHITECTURE.md)
-- [Systemd Integration](SYSTEMD.md)
+- [Systemd Integration](docs/docs/systemd.md)
 - [Contributing Guide](CONTRIBUTING.md)

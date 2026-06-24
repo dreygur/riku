@@ -1,7 +1,7 @@
-/// Resilience and chaos engineering tests
-///
-/// These tests verify that the system handles failure scenarios gracefully,
-/// including resource exhaustion, process crashes, and invalid configurations.
+//! Resilience and chaos engineering tests
+//!
+//! These tests verify that the system handles failure scenarios gracefully,
+//! including resource exhaustion, process crashes, and invalid configurations.
 
 #[cfg(test)]
 mod tests {
@@ -41,7 +41,7 @@ mod tests {
 
     // Helper to create a valid worker config TOML
     fn create_worker_config(
-        workers_dir: &std::path::PathBuf,
+        workers_dir: &std::path::Path,
         app: &str,
         kind: &str,
         ordinal: u32,

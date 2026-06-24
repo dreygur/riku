@@ -1,12 +1,12 @@
-/// Integration tests for Plugin System
-///
-/// These tests verify the plugin discovery, execution, and management functionality.
+//! Integration tests for Plugin System
+//!
+//! These tests verify the plugin discovery, execution, and management functionality.
 
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use tempfile::TempDir;
 
     // Helper to create a temporary Riku environment
@@ -38,7 +38,7 @@ mod tests {
     }
 
     // Helper to create a plugin script
-    fn create_plugin(plugins_dir: &PathBuf, name: &str, content: &str) -> Result<PathBuf> {
+    fn create_plugin(plugins_dir: &Path, name: &str, content: &str) -> Result<PathBuf> {
         let plugin_path = plugins_dir.join(name);
         fs::write(&plugin_path, content)?;
 

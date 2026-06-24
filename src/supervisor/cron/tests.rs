@@ -1,5 +1,6 @@
-use super::parser::{calculate_next_run_after, parse_cron_field};
+use super::parser::calculate_next_run_after;
 use super::*;
+use chrono::{Datelike, Timelike, Weekday};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 // ── validate_cron_expression ────────────────────────────────────────────────
@@ -29,51 +30,17 @@ fn test_validate_cron_expression_invalid_too_few_fields() {
     assert!(!validate_cron_expression("0 0 1 12")); // only 4 fields
 }
 
-// ── parse_cron_field ────────────────────────────────────────────────────────
-
 #[test]
-fn test_parse_cron_field_wildcard() {
-    let vals = parse_cron_field("*", 0, 4).unwrap();
-    assert_eq!(vals, vec![0, 1, 2, 3, 4]);
+fn test_validate_cron_expression_rejects_out_of_range() {
+    assert!(!validate_cron_expression("60 * * * *")); // minute 60
+    assert!(!validate_cron_expression("0 24 * * *")); // hour 24
+    assert!(!validate_cron_expression("0 0 * * 8")); // weekday 8
 }
 
 #[test]
-fn test_parse_cron_field_single_value() {
-    let vals = parse_cron_field("5", 0, 59).unwrap();
-    assert_eq!(vals, vec![5]);
-}
-
-#[test]
-fn test_parse_cron_field_range() {
-    let vals = parse_cron_field("1-3", 0, 59).unwrap();
-    assert_eq!(vals, vec![1, 2, 3]);
-}
-
-#[test]
-fn test_parse_cron_field_step() {
-    let vals = parse_cron_field("*/10", 0, 59).unwrap();
-    assert_eq!(vals, vec![0, 10, 20, 30, 40, 50]);
-}
-
-#[test]
-fn test_parse_cron_field_list() {
-    let mut vals = parse_cron_field("1,3,5", 0, 59).unwrap();
-    vals.sort();
-    assert_eq!(vals, vec![1, 3, 5]);
-}
-
-#[test]
-fn test_parse_cron_field_step_from_value() {
-    // "5/15" means start at 5, step by 15 → 5, 20, 35, 50
-    let vals = parse_cron_field("5/15", 0, 59).unwrap();
-    assert_eq!(vals, vec![5, 20, 35, 50]);
-}
-
-#[test]
-fn test_parse_cron_field_range_with_step() {
-    // "10-40/10" means 10..40 step 10 → 10, 20, 30, 40
-    let vals = parse_cron_field("10-40/10", 0, 59).unwrap();
-    assert_eq!(vals, vec![10, 20, 30, 40]);
+fn test_validate_cron_expression_rejects_impossible_schedule() {
+    // February never has a 30th — the schedule can never fire.
+    assert!(!validate_cron_expression("0 0 30 2 *"));
 }
 
 // ── calculate_next_run_after ────────────────────────────────────────────────
@@ -82,6 +49,12 @@ fn test_parse_cron_field_range_with_step() {
 /// 2024-01-01 00:00:00 UTC (Monday) → unix epoch 1704067200
 fn fixed_epoch_monday_midnight() -> SystemTime {
     UNIX_EPOCH + Duration::from_secs(1704067200)
+}
+
+/// Convert a `SystemTime` next-run back into a UTC `DateTime` for assertions.
+fn as_utc(time: SystemTime) -> chrono::DateTime<chrono::Utc> {
+    let secs = time.duration_since(UNIX_EPOCH).unwrap().as_secs();
+    chrono::DateTime::from_timestamp(secs as i64, 0).unwrap()
 }
 
 #[test]
@@ -124,6 +97,55 @@ fn test_next_run_short_expression_returns_error() {
     assert!(result.is_err(), "4-field cron expression should return Err");
 }
 
+// ── B1: day-of-week restriction must be honoured ─────────────────────────────
+
+#[test]
+fn test_next_run_monday_only_fires_on_monday() {
+    // `0 9 * * 1` = 09:00 UTC on Mondays. With the old OR-on-wildcard bug this
+    // fired every day; the engine must now land on an actual Monday.
+    // Start from Tuesday 2024-01-02 00:00 UTC so the very next day is NOT the
+    // target weekday — proving non-Mondays are skipped.
+    let tuesday = UNIX_EPOCH + Duration::from_secs(1704153600); // 2024-01-02 00:00 UTC (Tue)
+    let next = calculate_next_run_after("0 9 * * 1", tuesday).unwrap();
+    let dt = as_utc(next);
+
+    assert_eq!(
+        dt.weekday(),
+        Weekday::Mon,
+        "0 9 * * 1 must fire on a Monday, got {dt}"
+    );
+    assert_eq!(dt.hour(), 9, "must fire at 09:00 UTC");
+    assert_eq!(dt.minute(), 0);
+    // From Tuesday the next Monday is 2024-01-08.
+    assert_eq!(dt.day(), 8, "next Monday after 2024-01-02 is the 8th");
+}
+
+// ── B4: unsatisfiable schedule must error, not silently fall back ────────────
+
+#[test]
+fn test_next_run_impossible_schedule_returns_error() {
+    let after = fixed_epoch_monday_midnight();
+    // Feb 30th never exists.
+    let result = calculate_next_run_after("0 0 30 2 *", after);
+    assert!(
+        result.is_err(),
+        "impossible schedule must return Err, not a fallback time"
+    );
+}
+
+// Range/list schedule the OLD Procfile regex would have rejected.
+#[test]
+fn test_next_run_weekday_range() {
+    // 2024-01-06 00:00 UTC is a Saturday; the next Mon–Fri 09:00 slot is
+    // Monday 2024-01-08 09:00 UTC.
+    let saturday = UNIX_EPOCH + Duration::from_secs(1704499200);
+    let next = calculate_next_run_after("0 9 * * 1-5", saturday).unwrap();
+    let dt = as_utc(next);
+    assert_eq!(dt.weekday(), Weekday::Mon);
+    assert_eq!(dt.day(), 8);
+    assert_eq!(dt.hour(), 9);
+}
+
 // ── CronJob ─────────────────────────────────────────────────────────────────
 
 #[test]
@@ -156,10 +178,18 @@ fn test_cron_scheduler_add_remove_job() {
     scheduler
         .add_job("myapp", 0, "*/5 * * * *", "echo tick")
         .unwrap();
-    assert_eq!(scheduler.get_jobs().len(), 1);
+    scheduler
+        .add_job("myapp", 1, "0 9 * * *", "echo daily")
+        .unwrap();
+    scheduler
+        .add_job("other", 0, "*/5 * * * *", "echo other")
+        .unwrap();
+    assert_eq!(scheduler.get_jobs().len(), 3);
 
-    scheduler.remove_job("myapp", 0).unwrap();
-    assert_eq!(scheduler.get_jobs().len(), 0);
+    // remove_app_jobs purges every job for the app, leaving other apps intact.
+    scheduler.remove_app_jobs("myapp");
+    assert_eq!(scheduler.get_jobs().len(), 1);
+    assert!(scheduler.get_jobs().contains_key("other-cron-0"));
 }
 
 #[test]

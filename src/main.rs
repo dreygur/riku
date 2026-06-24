@@ -1,20 +1,18 @@
-mod cli;
-mod config;
-mod deploy;
-mod error;
-mod nginx;
-mod plugins;
-mod supervisor;
-mod util;
+//! `riku` binary entry point. All logic lives in the `riku` library crate; the
+//! bin only parses CLI args and dispatches, so the modules compile once (in the
+//! lib) rather than being recompiled here.
 
 use anyhow::Result;
 use clap::Parser;
 
-use cli::client_plugins;
-use cli::container;
-use cli::routing::{build_plugin_args, get_plugin_command};
-use cli::{AppsCmd, Cli, Commands, ConfigCmd, HookCmd, PluginCmd, StatsCmd};
-use config::RikuPaths;
+use riku::cli::client_plugins;
+use riku::cli::container;
+use riku::cli::routing::{build_plugin_args, get_plugin_command};
+use riku::cli::{
+    AddonCmd, AppsCmd, Cli, Commands, ConfigCmd, HookCmd, PluginCmd, PluginsCmd, StatsCmd,
+};
+use riku::config::RikuPaths;
+use riku::{cli, dashboard, supervisor};
 
 /// Initialize tracing subscriber for structured logging
 fn init_tracing() {
@@ -130,6 +128,27 @@ fn main() -> Result<()> {
         }
         Commands::Stop { app } => cli::apps::cmd_stop(&paths, &app)?,
         Commands::Init { no_systemd } => cli::setup::cmd_init(no_systemd)?,
+        Commands::Quickstart {
+            name,
+            runtime,
+            remote,
+        } => cli::quickstart::cmd_quickstart(&name, &runtime, remote.as_deref())?,
+        Commands::Doctor => cli::doctor::cmd_doctor(&paths)?,
+        Commands::Dashboard { bind, token } => dashboard::run(&paths, &bind, token)?,
+        Commands::Addon(cmd) => match cmd {
+            AddonCmd::List => cli::addon::cmd_addon_list(&paths)?,
+            AddonCmd::Create { plugin, name } => {
+                cli::addon::cmd_addon_create(&paths, &plugin, &name)?
+            }
+            AddonCmd::Bind { instance, app } => {
+                cli::addon::cmd_addon_bind(&paths, &instance, &app)?
+            }
+            AddonCmd::Unbind { instance, app } => {
+                cli::addon::cmd_addon_unbind(&paths, &instance, &app)?
+            }
+            AddonCmd::Destroy { instance } => cli::addon::cmd_addon_destroy(&paths, &instance)?,
+            AddonCmd::Backup { instance } => cli::addon::cmd_addon_backup(&paths, &instance)?,
+        },
         Commands::Update => cli::apps::cmd_update()?,
         Commands::InstallPlugins { plugins } => {
             let only = if plugins.is_empty() {
@@ -144,6 +163,11 @@ fn main() -> Result<()> {
             PluginCmd::List => cli::client_plugins::cmd_plugin_list()?,
             PluginCmd::Exists { name } => cli::client_plugins::cmd_plugin_exists(&name)?,
         },
+        Commands::Plugins(cmd) => match cmd {
+            PluginsCmd::Install { source } => cli::plugins::cmd_plugins_install(&paths, &source)?,
+            PluginsCmd::List => cli::plugins::cmd_plugins_list(&paths)?,
+            PluginsCmd::Remove { name } => cli::plugins::cmd_plugins_remove(&paths, &name)?,
+        },
         Commands::Hook(cmd) => match cmd {
             HookCmd::List => cli::hooks::cmd_hook_list(&paths)?,
             HookCmd::Check { name } => cli::hooks::cmd_hook_check(&paths, &name)?,
@@ -154,6 +178,16 @@ fn main() -> Result<()> {
         Commands::GitReceivePack { app } => cli::git::cmd_git_receive_pack(&paths, &app)?,
         Commands::GitUploadPack { app } => cli::git::cmd_git_upload_pack(&paths, &app)?,
         Commands::Scp { args } => cli::scp::cmd_scp(&paths, &args)?,
+        Commands::NsShim => {
+            let root = std::env::var("RIKU_NS_ROOT")
+                .map_err(|_| anyhow::anyhow!("__ns-shim: RIKU_NS_ROOT not set"))?;
+            let command = std::env::var("RIKU_NS_CMD")
+                .map_err(|_| anyhow::anyhow!("__ns-shim: RIKU_NS_CMD not set"))?;
+            // Only returns on failure: success either execs the real worker
+            // command or becomes the signal-forwarding shim and `_exit`s.
+            supervisor::process::isolation::exec_isolated(std::path::Path::new(&root), &command)?;
+        }
+        Commands::DumpState => cli::apps::cmd_dump_state(&paths)?,
     }
 
     Ok(())

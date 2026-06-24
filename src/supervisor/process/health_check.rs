@@ -14,12 +14,42 @@ impl ProcessManager {
         let mut to_restart = Vec::new();
         let mut health_checks: Vec<(String, HealthCheck)> = Vec::new();
 
+        // Generations under active probing are owned exclusively by the
+        // orchestrator (`reconcile_generations` + the probe thread's circuit
+        // breaker) — skip them here so the two restart paths never race.
+        let probing_keys: std::collections::HashSet<String> = self
+            .generations
+            .values()
+            .flatten()
+            .filter(|g| g.status == super::generation::GenerationStatus::Probing)
+            .map(|g| g.temp_key.clone())
+            .collect();
+
         // First pass: check processes and collect health check configs
         for (process_id, process) in self.processes.iter_mut() {
+            if probing_keys.contains(process_id) {
+                continue;
+            }
+
             // Check if process is still running
             if !process.is_running() {
-                tracing::warn!("Process {} has crashed", process_id);
-                self.stats.mark_crashed(process_id);
+                // A nonzero cgroup oom_kill counter means the kernel OOM
+                // killer (not a normal crash) ended this process: surface
+                // that distinction in stats rather than reporting Crashed.
+                match process.oom_kill_count() {
+                    Some(count) if count > 0 => {
+                        tracing::warn!(
+                            "Process {} was OOM-killed by the kernel (oom_kill={})",
+                            process_id,
+                            count
+                        );
+                        self.stats.mark_oom_killed(process_id);
+                    }
+                    _ => {
+                        tracing::warn!("Process {} has crashed", process_id);
+                        self.stats.mark_crashed(process_id);
+                    }
+                }
 
                 // Enforce max_restarts: stop trying once the limit is hit.
                 let max_restarts = process.config.options.max_restarts;

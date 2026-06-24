@@ -1,12 +1,12 @@
-/// Regression tests for previously identified bugs and security requirements.
-///
-/// Each test is named after the defect it guards against.  They run fully
-/// isolated (no shared mutable global state) and use `tempfile::TempDir` for
-/// any filesystem operations.
-///
-/// NOTE: The integration test binary is standalone (the crate has no `lib`
-/// target), so all helpers are reimplemented here rather than imported from
-/// the crate.
+//! Regression tests for previously identified bugs and security requirements.
+//!
+//! Each test is named after the defect it guards against.  They run fully
+//! isolated (no shared mutable global state) and use `tempfile::TempDir` for
+//! any filesystem operations.
+//!
+//! NOTE: The integration test binary is standalone (the crate has no `lib`
+//! target), so all helpers are reimplemented here rather than imported from
+//! the crate.
 
 #[cfg(test)]
 mod tests {

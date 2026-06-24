@@ -35,7 +35,6 @@ fn test_rotate_log() {
     let rotator = LogRotator::new(LogRotationConfig {
         max_size: 0, // Force rotation
         retention_count: 3,
-        compress: false,
     });
 
     rotator.rotate(&log_path).unwrap();

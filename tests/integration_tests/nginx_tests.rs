@@ -1,7 +1,7 @@
-/// Integration tests for Nginx configuration generation
-///
-/// These tests verify the nginx configuration generation
-/// for various deployment scenarios.
+//! Integration tests for Nginx configuration generation
+//!
+//! These tests verify the nginx configuration generation
+//! for various deployment scenarios.
 
 #[cfg(test)]
 mod tests {
@@ -400,7 +400,7 @@ server {
         let (_temp_dir, riku_root) = setup_riku_env()?;
 
         let nginx_dir = riku_root.join("nginx");
-        let apps = vec!["app1", "app2", "app3"];
+        let apps = ["app1", "app2", "app3"];
 
         for (i, app) in apps.iter().enumerate() {
             let port = 5000 + i;
@@ -424,7 +424,7 @@ server {{
 
         let configs: Vec<_> = fs::read_dir(&nginx_dir)?
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |ext| ext == "conf"))
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "conf"))
             .collect();
 
         assert_eq!(configs.len(), 3);

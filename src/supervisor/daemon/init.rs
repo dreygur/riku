@@ -30,6 +30,7 @@ impl Supervisor {
             .unwrap_or_else(|| std::path::PathBuf::from("."));
         let stats_file = riku_root.join("stats.json");
         let pid_file = riku_root.join("supervisor.pid");
+        let control_token_file = riku_root.join("control.token");
 
         Ok(Supervisor {
             config_dir,
@@ -38,18 +39,20 @@ impl Supervisor {
             log_rotator: LogRotator::new(LogRotationConfig::default()),
             log_root,
             last_log_rotation: std::time::SystemTime::now(),
-            log_rotation_interval: Duration::from_secs(300), // Check every 5 minutes
+            log_rotation_interval: Duration::from_secs(300),
             stats_file,
             pid_file,
+            control_token_file,
             last_stats_write: std::time::SystemTime::now(),
-            stats_write_interval: Duration::from_secs(5), // Write stats every 5 seconds
+            stats_write_interval: Duration::from_secs(5),
             cron_scheduler: CronScheduler::new(),
             last_cron_check: std::time::SystemTime::now(),
-            cron_check_interval: Duration::from_secs(10), // Check cron jobs every 10 seconds
+            cron_check_interval: Duration::from_secs(10),
             start_time: std::time::SystemTime::now(),
             health_running: Arc::new(AtomicBool::new(true)),
-            cron_thread_pool: ThreadPool::new(10), // Max 10 concurrent cron jobs
-            pid_file_lock: None,                   // Will be set when PID file is created
+            cron_thread_pool: ThreadPool::new(10),
+            pid_file_lock: None,
+            metrics_broadcast_tx: None,
         })
     }
 

@@ -35,15 +35,30 @@
 //! | `post-build`   | `riku-post-build`   | After build, before workers start  |
 //! | `post-deploy`  | `riku-post-deploy`  | After workers are started          |
 
+/// The plugin protocol version this kernel implements. Set in every plugin
+/// invocation's environment as `RIKU_PLUGIN_API` and stamped into every event
+/// envelope. See `PLUGIN_PROTOCOL.md` §2.
+pub const RIKU_PLUGIN_API: u32 = 1;
+
+pub mod addon;
+pub mod bundles;
 #[allow(unused_imports)]
 pub mod discovery;
-mod executor;
+pub mod events;
+pub(crate) mod executor;
 pub mod hooks;
+pub mod install;
+pub mod lockfile;
 pub mod manager;
+pub mod manifest;
 pub mod runtime;
 
 // Re-export the public API (used by CLI plugin commands and external code)
+pub use addon::{AddonService, InstanceRecord};
 #[allow(unused_imports)]
-pub use discovery::{list_plugins, plugin_exists, run_plugin};
+pub use discovery::{list_plugins, plugin_exists};
+pub use events::{EventBus, EventEnvelope, EventName};
 pub use hooks::{HookContext, PluginHook};
+pub use install::PluginInstaller;
 pub use manager::PluginManager;
+pub use manifest::PluginManifest;

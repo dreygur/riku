@@ -137,6 +137,11 @@ impl Supervisor {
 
     /// Load cron jobs from an app's Procfile.
     pub fn load_cron_jobs(&mut self, app: &str, procfile_path: &Path) -> Result<()> {
+        // Drop any previously-loaded cron jobs for this app first, so that a
+        // Procfile edit that removes or renumbers cron entries does not leave
+        // stale jobs firing on the old schedule.
+        self.cron_scheduler.remove_app_jobs(app);
+
         if !procfile_path.exists() {
             return Ok(());
         }

@@ -227,7 +227,19 @@ fn configure_web_env(
     Ok(())
 }
 
-/// Write nginx-related variables to the app's ENV file if not already present.
+/// Write nginx-related variables to the app's ENV file, refreshing them on
+/// every deploy.
+///
+/// `configure_web_env`/`configure_wsgi_env` allocate a fresh ephemeral port
+/// (or socket) on every single deploy, not just the first — so the values
+/// persisted here (read back by `spawn_app`'s `generate_nginx_config` call)
+/// must always be overwritten to match, never just "written once". A
+/// previous version of this function skipped the whole write whenever the
+/// ENV file already contained `NGINX_PORTMAP`/`NGINX_WSGI` from an earlier
+/// deploy, which left `NGINX_INTERNAL_PORT` pinned to that first deploy's
+/// port forever: every redeploy after the first would spawn the worker on
+/// a new port while nginx kept proxying to the old, now-dead one — a
+/// guaranteed 502 on the very next deploy of any web app.
 fn persist_nginx_env(
     app: &str,
     kind: &str,
@@ -240,28 +252,26 @@ fn persist_nginx_env(
     fs::create_dir_all(&env_dir)?;
     let env_file = env_dir.join("ENV");
 
-    let mut content = if env_file.exists() {
-        fs::read_to_string(&env_file)?
-    } else {
-        String::new()
-    };
-
-    // Only append once — skip if already written by a previous deploy.
-    if content.contains("NGINX_PORTMAP") || content.contains("NGINX_WSGI") {
-        return Ok(());
-    }
+    let mut persisted: HashMap<String, String> = HashMap::new();
+    crate::util::parse_settings(&env_file, &mut persisted)?;
 
     if is_wsgi_kind(kind) {
-        content.push_str("NGINX_WSGI=true\n");
-        content.push_str(&format!("UWSGI_SOCKET={}\n", socket_path.display()));
+        persisted.insert("NGINX_WSGI".to_string(), "true".to_string());
+        persisted.insert(
+            "UWSGI_SOCKET".to_string(),
+            socket_path.to_string_lossy().to_string(),
+        );
     } else {
         let port = env.get("PORT").map(|s| s.as_str()).unwrap_or("8080");
-        content.push_str("NGINX_PORTMAP=true\n");
-        content.push_str(&format!("NGINX_INTERNAL_PORT={}\n", port));
-        content.push_str(&format!("NGINX_EXTERNAL_PORT={}\n", NGINX_EXTERNAL_PORT));
+        persisted.insert("NGINX_PORTMAP".to_string(), "true".to_string());
+        persisted.insert("NGINX_INTERNAL_PORT".to_string(), port.to_string());
+        persisted.insert(
+            "NGINX_EXTERNAL_PORT".to_string(),
+            NGINX_EXTERNAL_PORT.to_string(),
+        );
     }
 
-    fs::write(&env_file, &content)?;
+    crate::util::write_config(&env_file, &persisted, "=")?;
     Ok(())
 }
 
@@ -296,12 +306,19 @@ fn write_worker_config(
     let available = paths.workers_available.join(&filename);
     let enabled = paths.workers_enabled.join(&filename);
 
-    fs::write(&available, toml::to_string(&config)?)?;
+    crate::util::write_atomic(&available, toml::to_string(&config)?.as_bytes())?;
 
-    if enabled.exists() {
-        fs::remove_file(&enabled)?;
-    }
-    std::os::unix::fs::symlink(&available, &enabled)?;
+    // Atomic symlink swap: create the new symlink under a temp name, then
+    // `rename` it over `enabled`. A crash or concurrent reader between a
+    // `remove_file` and a fresh `symlink` would otherwise see `enabled`
+    // briefly missing entirely; `rename` guarantees the path always
+    // resolves to either the old or the new symlink, never nothing.
+    let tmp_link = paths
+        .workers_enabled
+        .join(format!(".{}.tmp-{}", filename, std::process::id()));
+    let _ = fs::remove_file(&tmp_link);
+    std::os::unix::fs::symlink(&available, &tmp_link)?;
+    fs::rename(&tmp_link, &enabled)?;
 
     echo(
         &format!("-----> Created worker config: {}", filename),
@@ -316,10 +333,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn make_paths(tmp: &TempDir) -> RikuPaths {
-        let paths = crate::config::RikuPaths::from_dirs(
-            tmp.path().join(".riku"),
-            &tmp.path().to_path_buf(),
-        );
+        let paths = crate::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
         fs::create_dir_all(&paths.workers_available).unwrap();
         fs::create_dir_all(&paths.workers_enabled).unwrap();
         fs::create_dir_all(&paths.nginx_root).unwrap();
@@ -472,6 +486,58 @@ mod tests {
             existing.exists(),
             "existing config should be preserved when RIKU_AUTO_RESTART=false"
         );
+        Ok(())
+    }
+
+    /// Regression test for the stale-NGINX_INTERNAL_PORT bug: every deploy
+    /// allocates a fresh ephemeral port for a `web` worker, so the ENV
+    /// file's NGINX_INTERNAL_PORT (read back by `spawn_app`'s nginx config
+    /// generation) must track the latest deploy's port, not just the
+    /// first one ever persisted.
+    #[test]
+    fn test_redeploy_refreshes_persisted_nginx_internal_port() -> anyhow::Result<()> {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        let app_path = tmp.path().join("app");
+        fs::create_dir_all(&app_path).unwrap();
+        fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
+        fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+        fs::write(app_path.join("Procfile"), "web: python app.py\n")?;
+
+        let env = HashMap::new();
+        create_workers_generic("myapp", &app_path, &env, &paths, None)?;
+
+        let env_file = paths.env_root.join("myapp").join("ENV");
+        let mut persisted = HashMap::new();
+        crate::util::parse_settings(&env_file, &mut persisted)?;
+        let first_port = persisted
+            .get("NGINX_INTERNAL_PORT")
+            .expect("first deploy should persist NGINX_INTERNAL_PORT")
+            .clone();
+
+        // Second deploy ("redeploy"): a fresh port gets allocated.
+        create_workers_generic("myapp", &app_path, &env, &paths, None)?;
+
+        let worker_toml = fs::read_to_string(paths.workers_available.join("myapp-web-1.toml"))?;
+        let actual_port = worker_toml
+            .lines()
+            .find_map(|l| l.strip_prefix("PORT = \""))
+            .and_then(|rest| rest.strip_suffix('"'))
+            .expect("worker config should contain a PORT value")
+            .to_string();
+
+        let mut persisted_after = HashMap::new();
+        crate::util::parse_settings(&env_file, &mut persisted_after)?;
+        let second_port = persisted_after
+            .get("NGINX_INTERNAL_PORT")
+            .expect("redeploy should still have NGINX_INTERNAL_PORT")
+            .clone();
+
+        assert_eq!(
+            second_port, actual_port,
+            "persisted NGINX_INTERNAL_PORT must match the worker actually spawned by the redeploy, not a stale port from the first deploy"
+        );
+        let _ = first_port; // not asserted equal/different: ports are random, could coincidentally collide
         Ok(())
     }
 }

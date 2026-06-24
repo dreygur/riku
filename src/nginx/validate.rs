@@ -24,7 +24,6 @@ impl Drop for TempFile {
 }
 
 /// Validate nginx configuration file.
-#[allow(dead_code)]
 pub(super) fn validate_nginx_config(config_file: &Path) -> Result<()> {
     use std::process::Command;
 

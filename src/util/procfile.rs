@@ -2,6 +2,13 @@
 //!
 //! Parses Heroku-style Procfile entries, validates cron expressions,
 //! and enforces the rule that WSGI workers supersede plain web workers.
+//!
+//! Cron entries use the **5-field Unix cron** format
+//! (`minute hour day-of-month month day-of-week`) followed by the command to
+//! run. Schedules are validated by the supervisor's cron engine
+//! ([`crate::supervisor::cron::validate_cron_expression`]) so there is exactly
+//! one definition of what a valid schedule is, and they are interpreted in
+//! **UTC** at run time (see that module for the time-zone contract).
 
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -10,16 +17,25 @@ use std::fs;
 use std::path::Path;
 
 use super::display::echo;
-
-/// Cron regexp matching five time fields followed by a command.
-const CRON_REGEXP: &str = r"^((?:(?:\*/)?\d+)|\*) ((?:(?:\*/)?\d+)|\*) ((?:(?:\*/)?\d+)|\*) ((?:(?:\*/)?\d+)|\*) ((?:(?:\*/)?\d+)|\*) (.*)$";
-
-/// Pre-compiled cron regex for performance.
-pub(crate) static CRON_RE: Lazy<Regex> = Lazy::new(|| Regex::new(CRON_REGEXP).unwrap());
+use crate::supervisor::cron::validate_cron_expression;
 
 /// Pre-compiled environment variable expansion regex (also used by `env.rs`).
 pub(crate) static ENVVAR_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\$(\w+|\{([^}]*)\})").unwrap());
+
+/// Validate the cron portion of a Procfile `cron` entry.
+///
+/// The command is `<5 schedule fields> <command…>`; only the leading schedule
+/// is validated, using the shared supervisor cron engine. Returns `false` when
+/// there are fewer than five fields or the schedule is malformed/unsatisfiable.
+fn is_valid_cron_command(command: &str) -> bool {
+    let fields: Vec<&str> = command.split_whitespace().collect();
+    if fields.len() < 5 {
+        return false;
+    }
+    let schedule = fields[..5].join(" ");
+    validate_cron_expression(&schedule)
+}
 
 /// Parse a Heroku-style Procfile. Skip comments/blanks. Validate cron entries.
 /// WSGI trumps web workers. Returns None if file missing.
@@ -40,47 +56,19 @@ pub fn parse_procfile(filename: &Path) -> Option<HashMap<String, String>> {
             let kind = line[..colon_pos].trim().to_string();
             let command = line[colon_pos + 1..].trim().to_string();
 
-            // Check for cron patterns
-            if kind.starts_with("cron") {
-                // Cron field upper bounds: minute(0-59), hour(0-23), day(1-31), month(1-12), weekday(0-6)
-                let limits = [59, 23, 31, 12, 6];
-                if let Some(caps) = CRON_RE.captures(&command) {
-                    let mut valid = true;
-                    for i in 0..limits.len() {
-                        let field = &caps[i + 1];
-                        let num_str = field.replace("*/", "").replace('*', "1");
-                        match num_str.parse::<u32>() {
-                            Ok(n) if n > limits[i] => {
-                                valid = false;
-                                break;
-                            }
-                            Err(_) => {
-                                valid = false;
-                                break;
-                            }
-                            _ => {}
-                        }
-                    }
-                    if !valid {
-                        echo(
-                            &format!(
-                                "Warning: misformatted Procfile entry '{}' at line {}",
-                                line, line_number
-                            ),
-                            "yellow",
-                        );
-                        continue;
-                    }
-                } else {
-                    echo(
-                        &format!(
-                            "Warning: misformatted Procfile entry '{}' at line {}",
-                            line, line_number
-                        ),
-                        "yellow",
-                    );
-                    continue;
-                }
+            // Validate cron entries through the shared supervisor cron engine
+            // so the Procfile and the scheduler agree on what is valid (ranges,
+            // lists, steps are all accepted; out-of-range and unsatisfiable
+            // schedules are rejected).
+            if kind.starts_with("cron") && !is_valid_cron_command(&command) {
+                echo(
+                    &format!(
+                        "Warning: misformatted Procfile entry '{}' at line {}",
+                        line, line_number
+                    ),
+                    "yellow",
+                );
+                continue;
             }
 
             if workers.contains_key(&kind) {
@@ -140,9 +128,9 @@ mod tests {
     fn test_parse_procfile_comments_and_blanks() {
         let mut f = NamedTempFile::new().unwrap();
         writeln!(f, "# This is a comment").unwrap();
-        writeln!(f, "").unwrap();
+        writeln!(f).unwrap();
         writeln!(f, "web: python app.py").unwrap();
-        writeln!(f, "").unwrap();
+        writeln!(f).unwrap();
         writeln!(f, "# Another comment").unwrap();
         let workers = parse_procfile(f.path()).unwrap();
         assert_eq!(workers.len(), 1);
@@ -190,11 +178,23 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_procfile_cron_rejects_weekday_7() {
+    fn test_parse_procfile_cron_rejects_weekday_8() {
+        // Standard Unix cron allows weekday 0-7 (0 and 7 both Sunday); 8 is
+        // out of range and must be rejected by the shared engine.
+        let mut f = NamedTempFile::new().unwrap();
+        writeln!(f, "cron: 0 0 * * 8 /usr/bin/task").unwrap();
+        let workers = parse_procfile(f.path()).unwrap();
+        assert!(!workers.contains_key("cron"));
+    }
+
+    #[test]
+    fn test_parse_procfile_cron_accepts_weekday_7_sunday() {
+        // 7 is a legal alias for Sunday in Unix cron — the old regex-based
+        // validator wrongly rejected it; the engine accepts it.
         let mut f = NamedTempFile::new().unwrap();
         writeln!(f, "cron: 0 0 * * 7 /usr/bin/task").unwrap();
         let workers = parse_procfile(f.path()).unwrap();
-        assert!(!workers.contains_key("cron"));
+        assert!(workers.contains_key("cron"));
     }
 
     #[test]
@@ -203,6 +203,17 @@ mod tests {
         writeln!(f, "cron: 59 23 31 12 6 /usr/bin/task").unwrap();
         let workers = parse_procfile(f.path()).unwrap();
         assert!(workers.contains_key("cron"));
+    }
+
+    #[test]
+    fn test_parse_procfile_cron_accepts_ranges_and_lists() {
+        // The old CRON_REGEXP rejected ranges/lists; the engine accepts them.
+        let mut f = NamedTempFile::new().unwrap();
+        writeln!(f, "cron: 0 9 * * 1-5 /usr/bin/weekday-task").unwrap();
+        writeln!(f, "cron2: 0,15,30,45 * * * * /usr/bin/quarter-hour").unwrap();
+        let workers = parse_procfile(f.path()).unwrap();
+        assert!(workers.contains_key("cron"));
+        assert!(workers.contains_key("cron2"));
     }
 
     #[test]

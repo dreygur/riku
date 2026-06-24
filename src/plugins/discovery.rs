@@ -5,7 +5,6 @@
 
 use anyhow::Result;
 use std::fs;
-use std::process::Command;
 
 use crate::config::RikuPaths;
 
@@ -24,63 +23,7 @@ pub(crate) fn validate_plugin_name(plugin_name: &str) -> Result<()> {
     Ok(())
 }
 
-/// Discover and execute a named plugin from the plugins directory.
-///
-/// The plugin is run with the provided arguments and inherits stdout/stderr.
-/// Returns an error if the plugin is not found, not executable, or exits non-zero.
-#[allow(dead_code)]
-pub fn run_plugin(plugin_name: &str, paths: &RikuPaths, args: &[String]) -> Result<()> {
-    validate_plugin_name(plugin_name)?;
-    let plugin_path = paths.plugin_root.join(plugin_name);
-
-    if !plugin_path.exists() {
-        return Err(anyhow::anyhow!("Plugin '{}' not found", plugin_name));
-    }
-
-    // Check if the plugin is executable
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let metadata = fs::metadata(&plugin_path)?;
-        let permissions = metadata.permissions();
-        if permissions.mode() & 0o111 == 0 {
-            // Make it executable if it's not already
-            fs::set_permissions(
-                &plugin_path,
-                fs::Permissions::from_mode(permissions.mode() | 0o111),
-            )?;
-        }
-    }
-
-    // Execute the plugin with the provided arguments
-    let status = match Command::new(&plugin_path).args(args).status() {
-        Ok(s) => s,
-        Err(e) => {
-            return Err(anyhow::anyhow!(
-                "Failed to execute plugin '{}': {}",
-                plugin_name,
-                e
-            ));
-        }
-    };
-
-    if !status.success() {
-        let code = status.code().unwrap_or_else(|| {
-            tracing::warn!(plugin = plugin_name, "Plugin crashed without exit code");
-            1
-        });
-        return Err(anyhow::anyhow!(
-            "Plugin '{}' exited with code {}",
-            plugin_name,
-            code
-        ));
-    }
-
-    Ok(())
-}
-
 /// Scan the plugins directory and return a list of available plugins.
-#[allow(dead_code)]
 pub fn list_plugins(paths: &RikuPaths) -> Result<Vec<String>> {
     let mut plugins = Vec::new();
 
@@ -120,7 +63,6 @@ pub fn list_plugins(paths: &RikuPaths) -> Result<Vec<String>> {
 }
 
 /// Check if a plugin exists and is executable.
-#[allow(dead_code)]
 pub fn plugin_exists(plugin_name: &str, paths: &RikuPaths) -> bool {
     if validate_plugin_name(plugin_name).is_err() {
         return false;
@@ -157,10 +99,8 @@ mod tests {
     #[test]
     fn test_list_plugins_empty_directory() {
         let temp_dir = TempDir::new().unwrap();
-        let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".riku"),
-            &temp_dir.path().to_path_buf(),
-        );
+        let paths =
+            crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
         fs::create_dir_all(&paths.plugin_root).unwrap();
         let plugins = list_plugins(&paths).unwrap();
         assert!(plugins.is_empty());
@@ -169,10 +109,8 @@ mod tests {
     #[test]
     fn test_plugin_exists() {
         let temp_dir = TempDir::new().unwrap();
-        let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".riku"),
-            &temp_dir.path().to_path_buf(),
-        );
+        let paths =
+            crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
         fs::create_dir_all(&paths.plugin_root).unwrap();
 
         let plugin_path = paths.plugin_root.join("test_plugin");
@@ -207,10 +145,8 @@ mod tests {
     #[test]
     fn test_plugin_exists_rejects_path_traversal() {
         let temp_dir = TempDir::new().unwrap();
-        let paths = crate::config::RikuPaths::from_dirs(
-            temp_dir.path().join(".riku"),
-            &temp_dir.path().to_path_buf(),
-        );
+        let paths =
+            crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
         fs::create_dir_all(&paths.plugin_root).unwrap();
         assert!(!plugin_exists("../etc/passwd", &paths));
         assert!(!plugin_exists("foo/bar", &paths));

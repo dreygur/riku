@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use std::fs;
+use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 
 use crate::config::RikuPaths;
@@ -82,12 +83,16 @@ impl<'a> PluginManager<'a> {
             "Running plugin hook"
         );
 
-        let mut child = Command::new(&plugin_path)
-            .envs(&env)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| anyhow::anyhow!("Failed to spawn hook plugin '{}': {}", plugin_name, e))?;
+        let mut child = super::executor::spawn_retrying_etxtbsy(
+            Command::new(&plugin_path)
+                .envs(&env)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                // Own process group so a timeout can killpg() the whole tree —
+                // hooks are arbitrary scripts that may background work.
+                .process_group(0),
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to spawn hook plugin '{}': {}", plugin_name, e))?;
 
         let timed_out = wait_with_timeout(&mut child, timeout);
 

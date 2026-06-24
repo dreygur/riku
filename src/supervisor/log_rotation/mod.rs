@@ -17,9 +17,6 @@ pub struct LogRotationConfig {
     pub max_size: u64,
     /// Number of rotated logs to keep (default: 5)
     pub retention_count: u32,
-    /// Compress rotated logs (default: false)
-    #[allow(dead_code)]
-    pub compress: bool,
 }
 
 impl Default for LogRotationConfig {
@@ -27,7 +24,6 @@ impl Default for LogRotationConfig {
         LogRotationConfig {
             max_size: 10 * 1024 * 1024, // 10MB
             retention_count: 5,
-            compress: false,
         }
     }
 }
@@ -44,7 +40,7 @@ impl LogRotator {
     }
 
     /// Create a log rotator with default configuration.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn with_defaults() -> Self {
         LogRotator {
             config: LogRotationConfig::default(),
@@ -132,50 +128,13 @@ impl LogRotator {
 
         Ok(())
     }
-
-    /// Clean up old logs beyond retention policy.
-    pub fn cleanup_old_logs(&self, log_root: &Path) -> Result<()> {
-        for entry in fs::read_dir(log_root)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.is_file() {
-                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                    // Check if this is a rotated log file (e.g., app.log.5)
-                    if let Some(last_dot) = file_name.rfind('.') {
-                        if let Ok(num) = file_name[last_dot + 1..].parse::<u32>() {
-                            if num > self.config.retention_count {
-                                let _ = fs::remove_file(&path);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
 }
 
 /// Get log file size in bytes.
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn get_log_size(log_path: &Path) -> Result<u64> {
     if !log_path.exists() {
         return Ok(0);
     }
     Ok(fs::metadata(log_path)?.len())
-}
-
-/// Get log file age in seconds (time elapsed since last modification).
-#[allow(dead_code)]
-pub fn get_log_age(log_path: &Path) -> Result<u64> {
-    if !log_path.exists() {
-        return Ok(0);
-    }
-
-    let metadata = fs::metadata(log_path)?;
-    let modified = metadata.modified()?;
-    // elapsed() returns the duration since `modified`; if the clock went
-    // backwards we fall back to 0 rather than panicking.
-    Ok(modified.elapsed().unwrap_or_default().as_secs())
 }

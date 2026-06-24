@@ -20,7 +20,7 @@ pub(super) fn use_custom_nginx_config(
 ) -> Result<()> {
     let config_content = fs::read_to_string(custom_path)?;
     let config_file = paths.nginx_root.join(format!("{}.conf", app));
-    fs::write(&config_file, &config_content)?;
+    crate::util::write_atomic(&config_file, config_content.as_bytes())?;
     validate_nginx_config(&config_file)?;
     crate::util::echo(
         &format!("-----> Custom nginx config installed for '{}'", app),
@@ -45,7 +45,7 @@ pub(super) fn generate_nginx_config_from_template(
 
     let config_content = tera.render(template_name, &context)?;
     let config_file = paths.nginx_root.join(format!("{}.conf", app));
-    fs::write(&config_file, &config_content)?;
+    crate::util::write_atomic(&config_file, config_content.as_bytes())?;
     validate_nginx_config(&config_file)?;
 
     install_nginx_symlink(&config_file, app);
@@ -137,19 +137,7 @@ fn install_nginx_symlink(config_file: &Path, app: &str) {
     if let Err(e) = std::os::unix::fs::symlink(config_file, &symlink_path) {
         tracing::warn!("could not create nginx symlink {:?}: {}", symlink_path, e);
     } else {
-        match std::process::Command::new("nginx")
-            .args(["-s", "reload"])
-            .output()
-        {
-            Ok(out) if !out.status.success() => {
-                tracing::warn!(
-                    "nginx reload failed: {}",
-                    String::from_utf8_lossy(&out.stderr).trim()
-                );
-            }
-            Err(e) => tracing::warn!("could not reload nginx: {}", e),
-            _ => {}
-        }
+        super::reload_nginx();
     }
 }
 

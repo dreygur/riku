@@ -1,13 +1,13 @@
-/// Integration tests for Supervisor functionality
-///
-/// These tests verify the process supervisor, process manager,
-/// cron scheduler, and log rotation functionality.
+//! Integration tests for Supervisor functionality
+//!
+//! These tests verify the process supervisor, process manager,
+//! cron scheduler, and log rotation functionality.
 
 #[cfg(test)]
 pub mod tests {
     use anyhow::Result;
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use tempfile::TempDir;
 
     // Helper to create a temporary Riku environment
@@ -40,7 +40,7 @@ pub mod tests {
 
     // Helper to create a worker config TOML
     pub fn create_worker_config(
-        workers_dir: &PathBuf,
+        workers_dir: &Path,
         app: &str,
         kind: &str,
         ordinal: u32,

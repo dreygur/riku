@@ -2,7 +2,7 @@
 
 use clap::{Parser, Subcommand};
 
-use super::cmds::{AppsCmd, ConfigCmd, HookCmd, PluginCmd, StatsCmd};
+use super::cmds::{AddonCmd, AppsCmd, ConfigCmd, HookCmd, PluginCmd, PluginsCmd, StatsCmd};
 use super::container::ContainerSubCmd;
 
 /// riku — the smallest PaaS you've ever seen (Rust edition)
@@ -172,6 +172,46 @@ pub enum Commands {
         no_systemd: bool,
     },
 
+    /// Scaffold a sample app and print deploy instructions (runs locally)
+    #[command(
+        after_help = "Examples:\n  riku quickstart\n  riku quickstart myapp --runtime node\n  riku quickstart myapp --remote deploy@example.com"
+    )]
+    Quickstart {
+        /// App name (also the directory created)
+        #[arg(default_value = "hello-riku")]
+        name: String,
+        /// Runtime to scaffold: python or node
+        #[arg(long, default_value = "python")]
+        runtime: String,
+        /// Deploy target for the git remote line, e.g. deploy@your-server
+        #[arg(long)]
+        remote: Option<String>,
+    },
+
+    /// Diagnose the Riku installation (deps, dirs, systemd, nginx, disk, SSH)
+    #[command(after_help = "Examples:\n  riku doctor\n  sudo riku doctor")]
+    Doctor,
+
+    /// Serve the read-only web dashboard (embedded, single binary)
+    #[command(
+        after_help = "Examples:\n  riku dashboard\n  riku dashboard --bind 127.0.0.1:9000\n  riku dashboard --bind 0.0.0.0:8088 --token <tok>"
+    )]
+    Dashboard {
+        /// Address to bind (host:port)
+        #[arg(long, default_value = "127.0.0.1:8088")]
+        bind: String,
+        /// Require this token on the API (also via RIKU_DASHBOARD_TOKEN)
+        #[arg(long)]
+        token: Option<String>,
+    },
+
+    /// Manage addon instances (managed resources: databases, caches, …)
+    #[command(
+        subcommand,
+        after_help = "Examples:\n  riku addon list\n  riku addon create postgres db1\n  riku addon bind db1 myapp"
+    )]
+    Addon(AddonCmd),
+
     /// Self-update the riku binary
     #[command(after_help = "Examples:\n  riku update")]
     Update,
@@ -198,6 +238,13 @@ pub enum Commands {
         after_help = "Examples:\n  riku plugin list\n  riku plugin exists riku-deploy"
     )]
     Plugin(PluginCmd),
+
+    /// Install/list/remove manifest-based plugin bundles (addons, notifiers, …)
+    #[command(
+        subcommand,
+        after_help = "Examples:\n  riku plugins install ./examples/plugins/postgres\n  riku plugins list\n  riku plugins remove postgres"
+    )]
+    Plugins(PluginsCmd),
 
     /// Manage server-side lifecycle hook plugins
     #[command(
@@ -240,4 +287,30 @@ pub enum Commands {
         /// SCP arguments
         args: Vec<String>,
     },
+
+    /// Namespace-isolation shim (internal — exec'd by the supervisor, never
+    /// run directly). Reads `RIKU_NS_ROOT` / `RIKU_NS_CMD` from its
+    /// environment, sets up the worker's mount/network/PID namespaces, and
+    /// execs the real worker command inside them.
+    ///
+    /// This exists as a separate subcommand (rather than namespace setup
+    /// happening inside `pre_exec` before `execve`) so that the fork this
+    /// requires for PID-namespace isolation happens *after* the supervisor's
+    /// `Command::spawn()` has already returned: `pre_exec` runs before the
+    /// CLOEXEC self-pipe `Command` uses to detect successful `execve`
+    /// closes, so forking again in there and never exec'ing in the original
+    /// process — which the old implementation did, to become a
+    /// signal-forwarding shim — left `Command::spawn()` blocked on that pipe
+    /// for the worker's entire lifetime, freezing the whole supervisor.
+    #[command(hide = true, name = "__ns-shim")]
+    NsShim,
+
+    /// Dump the supervisor's state matrix as JSON (internal — operator
+    /// diagnostics). Reads on-disk state only (`stats.json`, app `ENV`
+    /// files, nginx configs, deploy lock files); never connects to the
+    /// running supervisor process and never blocks. App env vars are
+    /// strictly allowlisted to known routing/port keys before being
+    /// included — secrets never appear in the output.
+    #[command(hide = true, name = "__dump-state")]
+    DumpState,
 }

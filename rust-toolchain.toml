@@ -1,0 +1,6 @@
+# Pin the toolchain channel so local == CI (which uses dtolnay@stable) ==
+# release. Tracking `stable` keeps parity with the CI workflow without forcing a
+# second, separately-named toolchain install; bumping is a reviewable change.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]

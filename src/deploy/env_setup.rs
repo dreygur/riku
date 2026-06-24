@@ -3,58 +3,112 @@
 use anyhow::Result;
 use std::collections::HashMap;
 use std::fs;
+use std::os::unix::process::CommandExt;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use crate::config::RikuPaths;
+use crate::error::DeployError;
+use crate::plugins::executor::{classify_resource_exit, exit_code_for, tee_output};
+use crate::supervisor::resource_limits::ResourceLimits;
 use crate::util::echo;
 
 /// Run the Procfile `preflight` command (if present).
 ///
 /// Exits the process with the command's exit code on failure, matching
-/// the behaviour expected by the PaaS deploy pipeline.
+/// the behaviour expected by the PaaS deploy pipeline. If the command was
+/// terminated by an enforced resource limit (OOM-killed, RLIMIT_CPU, or its
+/// own allocator hitting RLIMIT_AS) prints a structured diagnostic instead
+/// of a bare exit code.
 pub fn run_preflight(preflight_cmd: &str, app_path: &Path) {
     echo("-----> Running preflight.", "green");
-    let status = Command::new("sh")
-        .arg("-c")
+    let limits = ResourceLimits::from_env();
+
+    let mut cmd = Command::new("sh");
+    cmd.arg("-c")
         .arg(preflight_cmd)
         .current_dir(app_path)
-        .status();
+        // Piped (not inherited) so a resource-exhaustion failure can be
+        // classified from the captured stderr tail, while tee_output still
+        // mirrors both streams live to the terminal.
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    unsafe {
+        cmd.pre_exec(move || limits.apply());
+    }
 
-    match status {
-        Ok(s) if s.success() => {}
-        Ok(s) => {
-            let code = s.code().unwrap_or(1);
-            echo(
-                &format!(
-                    "-----> Exiting due to preflight command error value: {}",
-                    code
-                ),
-                "",
-            );
-            std::process::exit(code);
-        }
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
         Err(e) => {
             echo(&format!("-----> preflight command error: {}", e), "red");
             std::process::exit(1);
         }
+    };
+    let (tee_handles, stderr_tail) = tee_output(&mut child);
+    let status = match child.wait() {
+        Ok(s) => s,
+        Err(e) => {
+            echo(&format!("-----> preflight command error: {}", e), "red");
+            std::process::exit(1);
+        }
+    };
+    for h in tee_handles {
+        let _ = h.join();
     }
+
+    if status.success() {
+        return;
+    }
+
+    let tail = stderr_tail.lock().unwrap().clone();
+    if let Some(cause) = classify_resource_exit(&status, &tail) {
+        echo(
+            &DeployError::resource_exhausted("preflight", preflight_cmd, &cause).to_string(),
+            "red",
+        );
+        std::process::exit(exit_code_for(&status));
+    }
+
+    let code = exit_code_for(&status);
+    echo(
+        &format!(
+            "-----> Exiting due to preflight command error value: {}",
+            code
+        ),
+        "",
+    );
+    std::process::exit(code);
 }
 
 /// Run the Procfile `release` command (if present).
 ///
-/// Exits the process with the command's exit code on failure.
+/// Exits the process with the command's exit code on failure. If the
+/// command was terminated by an enforced resource limit (OOM-killed,
+/// RLIMIT_CPU, or its own allocator hitting RLIMIT_AS) prints a structured
+/// diagnostic instead of a bare exit code.
 pub fn run_release(release_cmd: &str, app_path: &Path) -> Result<()> {
     echo("-----> Releasing", "green");
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg(release_cmd)
-        .current_dir(app_path)
-        .output()?;
+    let limits = ResourceLimits::from_env();
+    let output = unsafe {
+        Command::new("sh")
+            .arg("-c")
+            .arg(release_cmd)
+            .current_dir(app_path)
+            .pre_exec(move || limits.apply())
+            .output()?
+    };
 
     if !output.status.success() {
-        let code = output.status.code().unwrap_or(1);
         let stderr = String::from_utf8_lossy(&output.stderr);
+        if let Some(cause) = classify_resource_exit(&output.status, &stderr) {
+            echo(
+                &DeployError::resource_exhausted("release", release_cmd, &cause).to_string(),
+                "red",
+            );
+            std::process::exit(exit_code_for(&output.status));
+        }
+
+        let code = exit_code_for(&output.status);
         echo(
             &format!(
                 "Error: Release command failed with exit code {}: {}",
@@ -131,7 +185,7 @@ pub fn update_env_and_redeploy(
 ///
 /// This must happen before a WSGI nginx config is generated so that the
 /// config template sees `NGINX_WSGI` and `UWSGI_SOCKET`.
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn setup_wsgi_env(
     app: &str,
     paths: &RikuPaths,
@@ -170,7 +224,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn make_paths(tmp: &TempDir) -> RikuPaths {
-        crate::config::RikuPaths::from_dirs(tmp.path().join(".riku"), &tmp.path().to_path_buf())
+        crate::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path())
     }
 
     fn setup_env_dir(paths: &RikuPaths, app: &str) {

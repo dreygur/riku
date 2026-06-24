@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+/*
+ * Riku dashboard tokens — CSS-first @theme engine (Tailwind v4).
+ *
+ * Direction: phosphor-amber terminal panel. Riku supervises real processes
+ * (PIDs, RSS, restarts) and tails real log output — the palette borrows from
+ * the amber/green CRT status monitors this kind of tool has always used,
+ * with three distinct status hues (not one accent overloaded for everything):
+ *   amber  -> interactive / in-progress / focus
+ *   green  -> healthy / running / connected
+ *   red    -> crashed / destructive / expired
+ *
+ * Radius is forced to 0 — the whole UI sits on a fixed-width character grid.
+ */
+
+@theme {
+  /* -- Surfaces -- */
+  --color-background-dark: #0a0b08;
+  --color-background-light: #f4f1e6;
+  --color-surface-card: #101109;
+  --color-surface-elevated: #15160e;
+
+  /* -- Structure / hairlines -- */
+  --color-line: #23241a;
+  --color-line-strong: #3a3c28;
+
+  /* -- Text -- */
+  --color-foreground-dark: #ece7d6;
+  --color-foreground-muted: #8a8d78;
+  --color-foreground-dim: #4f5240;
+
+  /* -- Status vocabulary -- */
+  --color-accent-amber: #ffb627;
+  --color-accent-green: #6fcf7e;
+  --color-accent-red: #ff5c5c;
+
+  /* -- Status fills (wash behind active rows/badges) -- */
+  --color-status-running: #6fcf7e1a;
+  --color-status-error: #ff5c5c26;
+
+  /* -- Typography: each face has one job -- */
+  --font-family-display: var(--font-space-mono), ui-monospace, monospace;
+  --font-family-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --font-family-terminal: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+/* -- Dark mode (default) -- */
+.dark {
+  color-scheme: dark;
+}
+
+/* -- Base resets -- */
+*,
+*::before,
+*::after {
+  border-color: var(--color-line);
+  border-radius: 0 !important;
+}
+
+body {
+  background-color: var(--color-background-dark);
+  color: var(--color-foreground-dark);
+  font-family: var(--font-family-mono);
+  font-feature-settings: "tnum" 1, "zero" 1;
+}
+
+/* -- Utility layer -- */
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .font-display {
+    font-family: var(--font-family-display);
+  }
+
+  .font-terminal {
+    font-family: var(--font-family-terminal);
+  }
+}

@@ -1,0 +1,41 @@
+#!/bin/sh
+# sqlite-volume addon — Plugin Protocol v1 (PLUGIN_PROTOCOL.md §6.1).
+#
+# Provides a persistent SQLite database file on a managed volume, with no
+# external services — ideal for the single-box identity. Each verb receives a
+# JSON request on stdin and emits a JSON response on stdout.
+#
+# Context env: RIKU_ADDON_INSTANCE, RIKU_ADDON_DATA_PATH, and RIKU_APP on
+# bind/unbind.
+set -eu
+
+verb="${1:-}"
+cat >/dev/null   # this addon does not read the request body
+
+db_file="$RIKU_ADDON_DATA_PATH/$RIKU_ADDON_INSTANCE.db"
+
+case "$verb" in
+  provision)
+    mkdir -p "$RIKU_ADDON_DATA_PATH"
+    touch "$db_file"
+    echo '{}'
+    ;;
+  bind)
+    # Inject a DATABASE_URL pointing at the managed SQLite file.
+    printf '{"env":{"DATABASE_URL":"sqlite:///%s","SQLITE_PATH":"%s"}}' "$db_file" "$db_file"
+    ;;
+  unbind|deprovision)
+    # Nothing to undo: bind injected only env (removed by the kernel), and the
+    # kernel deletes the data dir on deprovision.
+    echo '{}'
+    ;;
+  backup)
+    artifact="$RIKU_ADDON_DATA_PATH/backup-$(date +%Y%m%d%H%M%S).db"
+    cp "$db_file" "$artifact"
+    printf '{"artifact":"%s"}' "$artifact"
+    ;;
+  *)
+    echo "sqlite-volume: unknown verb '$verb'" >&2
+    exit 1
+    ;;
+esac

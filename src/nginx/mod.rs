@@ -52,6 +52,33 @@ pub fn generate_nginx_config(
     generate_nginx_config_from_template(app, app_path, env, paths)
 }
 
+/// Ask the running nginx master process to reload its configuration
+/// (`nginx -s reload`) — a graceful reload that finishes in-flight
+/// connections on old worker processes while new connections pick up the
+/// refreshed config, never dropping active traffic the way a restart
+/// would. Best-effort: returns `false` (and logs a warning) if nginx isn't
+/// installed/running or the reload command fails, rather than treating a
+/// missing nginx as fatal to whatever triggered the reload.
+pub fn reload_nginx() -> bool {
+    match std::process::Command::new("nginx")
+        .args(["-s", "reload"])
+        .output()
+    {
+        Ok(out) if out.status.success() => true,
+        Ok(out) => {
+            tracing::warn!(
+                "nginx reload failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+            false
+        }
+        Err(e) => {
+            tracing::warn!("could not reload nginx: {}", e);
+            false
+        }
+    }
+}
+
 /// Remove nginx configuration for an app.
 pub fn remove_nginx_config(app: &str, paths: &crate::config::RikuPaths) -> Result<()> {
     let config_file = paths.nginx_root.join(format!("{}.conf", app));
@@ -65,11 +92,7 @@ pub fn remove_nginx_config(app: &str, paths: &crate::config::RikuPaths) -> Resul
         let symlink_path = nginx_sites_enabled.join(format!("{}.conf", app));
         if symlink_path.exists() {
             let _ = fs::remove_file(&symlink_path);
-            // Reload nginx to apply changes
-            let _ = std::process::Command::new("nginx")
-                .arg("-s")
-                .arg("reload")
-                .output();
+            reload_nginx();
         }
     }
 
@@ -100,7 +123,7 @@ pub fn generate_acme_nginx_config(paths: &crate::config::RikuPaths) -> Result<()
     let config_content = tera.render("acme.conf.tera", &context)?;
 
     let config_file = paths.nginx_root.join("acme.conf");
-    fs::write(&config_file, config_content)?;
+    crate::util::write_atomic(&config_file, config_content.as_bytes())?;
 
     validate_nginx_config(&config_file)?;
 

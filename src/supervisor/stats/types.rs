@@ -46,13 +46,23 @@ impl Default for ProcessStats {
 }
 
 /// Process status enum.
+///
+/// `rename_all = "snake_case"` keeps the JSON wire format aligned with the
+/// `Display` impl below (and with what dashboard/lib/types.ts's STATUS_MAP
+/// expects) — without it, serde's default PascalCase variant names
+/// ("Running", "Crashed", ...) silently fail every lookup in that map and
+/// every worker renders as "stopped" regardless of its real status.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub enum ProcessStatus {
     Starting,
     Running,
     Stopped,
     Crashed,
     Restarting,
+    /// The worker's cgroup `memory.max` was exceeded and the kernel OOM
+    /// killer terminated it (detected via `memory.events: oom_kill`).
+    OomKilled,
 }
 
 impl std::fmt::Display for ProcessStatus {
@@ -63,12 +73,18 @@ impl std::fmt::Display for ProcessStatus {
             ProcessStatus::Stopped => write!(f, "stopped"),
             ProcessStatus::Crashed => write!(f, "crashed"),
             ProcessStatus::Restarting => write!(f, "restarting"),
+            ProcessStatus::OomKilled => write!(f, "oom_killed"),
         }
     }
 }
 
 /// Health check status.
+///
+/// `rename_all = "snake_case"` — see `ProcessStatus` doc comment above for
+/// why; dashboard/lib/types.ts's HEALTH_MAP has the same lowercase-key
+/// assumption.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub enum HealthStatus {
     Unknown,
     Healthy,
@@ -90,7 +106,6 @@ impl std::fmt::Display for HealthStatus {
 }
 
 /// Aggregated statistics for an application.
-#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AppStats {
     pub app: String,

@@ -9,7 +9,7 @@ pub mod types;
 
 pub use manager::StatsManager;
 pub use resources::get_process_resources;
-pub use types::{HealthStatus, ProcessStatus};
+pub use types::{AppStats, HealthStatus, ProcessStatus};
 
 #[cfg(test)]
 mod tests {

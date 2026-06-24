@@ -24,6 +24,7 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
 
         // Plugin/Hook commands — don't recursively check for plugins
         Commands::Plugin(_) => None,
+        Commands::Plugins(_) => None,
         Commands::Hook(_) => None,
 
         // Agent command - don't check for plugins
@@ -31,6 +32,10 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
 
         // Core commands that shouldn't be overridden
         Commands::Init { .. } => None,
+        Commands::Quickstart { .. } => None,
+        Commands::Doctor => None,
+        Commands::Dashboard { .. } => None,
+        Commands::Addon(_) => None,
         Commands::Update => None,
         Commands::InstallPlugins { .. } => None,
         Commands::Supervisor => None,
@@ -38,6 +43,8 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
         Commands::GitReceivePack { .. } => None,
         Commands::GitUploadPack { .. } => None,
         Commands::Scp { .. } => None,
+        Commands::NsShim => None,
+        Commands::DumpState => None,
     }
 }
 
