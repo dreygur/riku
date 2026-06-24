@@ -38,12 +38,12 @@ pub fn cmd_destroy(paths: &RikuPaths, app: &str) -> Result<()> {
         }
     }
 
-    // Remove nginx configuration and associated files
+    // Remove the app from the active router (built-in nginx, or a router plugin)
     echo(
-        &format!("--> Removing nginx config for '{}'", app),
+        &format!("--> Removing router config for '{}'", app),
         "yellow",
     );
-    crate::nginx::remove_nginx_config(&app, paths)?;
+    crate::deploy::router::remove(&app, paths)?;
 
     // Remove ACME certs if they exist
     let acme_link = paths.acme_www.join(&app);

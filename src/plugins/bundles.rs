@@ -35,6 +35,13 @@ pub fn find_addon(plugin_root: &Path, name: &str) -> Option<(PathBuf, PluginMani
         .find(|(_, m)| m.plugin_type == PluginType::Addon && m.name == name)
 }
 
+/// The router bundle providing `name`, if installed.
+pub fn find_router(plugin_root: &Path, name: &str) -> Option<(PathBuf, PluginManifest)> {
+    find_bundles(plugin_root)
+        .into_iter()
+        .find(|(_, m)| m.plugin_type == PluginType::Router && m.name == name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -63,6 +70,19 @@ mod tests {
         // A notifier with the same lookup name is not an addon match.
         assert!(find_addon(tmp.path(), "slack").is_none());
         assert!(find_addon(tmp.path(), "missing").is_none());
+    }
+
+    #[test]
+    fn finds_router_by_name_and_type() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_bundle(tmp.path(), "caddy", "router");
+        write_bundle(tmp.path(), "postgres", "addon");
+
+        assert!(find_router(tmp.path(), "caddy").is_some());
+        // An addon is not a router match, and vice versa.
+        assert!(find_router(tmp.path(), "postgres").is_none());
+        assert!(find_addon(tmp.path(), "caddy").is_none());
+        assert!(find_router(tmp.path(), "missing").is_none());
     }
 
     #[test]
