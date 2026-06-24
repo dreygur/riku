@@ -1,6 +1,8 @@
 //! `riku plugins` provider layer — install/list/remove manifest-based plugin
 //! bundles via [`PluginInstaller`]. Handles user-facing output only.
 
+mod scaffold;
+
 use anyhow::Result;
 
 use crate::config::RikuPaths;
@@ -112,12 +114,13 @@ pub fn cmd_plugins_search(paths: &RikuPaths, query: &str) -> Result<()> {
 
 /// `riku plugins add <name|name@marketplace>`
 pub fn cmd_plugins_add(paths: &RikuPaths, spec: &str) -> Result<()> {
-    let (name, market) = parse_spec(spec)?;
+    let (name, market, version) = parse_spec(spec)?;
     display::info(&format!(
-        "Resolving '{name}'{}...",
-        market.map(|m| format!(" from '{m}'")).unwrap_or_default()
+        "Resolving '{name}'{}{}...",
+        market.map(|m| format!(" from '{m}'")).unwrap_or_default(),
+        version.map(|v| format!(" at '{v}'")).unwrap_or_default()
     ));
-    let manifest = MarketplaceService::new(paths).install_named(name, market)?;
+    let manifest = MarketplaceService::new(paths).install_named(name, market, version)?;
     display::success(&format!(
         "Installed {} v{}",
         manifest.name, manifest.version
@@ -151,16 +154,17 @@ pub fn cmd_plugins_doctor(paths: &RikuPaths) -> Result<()> {
     Ok(())
 }
 
-/// Parse `name`, `name@marketplace`. Rejects an (unsupported) version segment.
-fn parse_spec(spec: &str) -> Result<(&str, Option<&str>)> {
+/// Parse `name[@marketplace[@version]]` into its parts (empty segments → None).
+fn parse_spec(spec: &str) -> Result<(&str, Option<&str>, Option<&str>)> {
     let mut parts = spec.split('@');
     let name = parts.next().filter(|s| !s.is_empty());
-    let market = parts.next();
+    let market = parts.next().filter(|s| !s.is_empty());
+    let version = parts.next().filter(|s| !s.is_empty());
     if parts.next().is_some() {
-        anyhow::bail!("version pinning ('name@market@version') is not yet supported");
+        anyhow::bail!("invalid spec '{spec}' (expected name[@marketplace[@version]])");
     }
     match name {
-        Some(name) => Ok((name, market)),
+        Some(name) => Ok((name, market, version)),
         None => anyhow::bail!("empty plugin name in '{spec}'"),
     }
 }
@@ -196,6 +200,46 @@ pub fn cmd_marketplace_list(paths: &RikuPaths) -> Result<()> {
 pub fn cmd_marketplace_remove(paths: &RikuPaths, name: &str) -> Result<()> {
     MarketplaceService::new(paths).remove(name)?;
     display::success(&format!("Removed marketplace '{name}'."));
+    Ok(())
+}
+
+/// `riku plugins scaffold <name> --type <type>`
+pub fn cmd_plugins_scaffold(name: &str, plugin_type: &str, dir: Option<&str>) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let name = crate::util::validate_app_name(name)?;
+    let seam = scaffold::SeamType::parse(plugin_type)?;
+
+    let base = dir.map(std::path::PathBuf::from).unwrap_or_default();
+    let bundle = base.join(&name);
+    if bundle.exists() {
+        anyhow::bail!(
+            "'{}' already exists — choose another name or path",
+            bundle.display()
+        );
+    }
+
+    std::fs::create_dir_all(bundle.join("bin"))?;
+    std::fs::write(bundle.join("riku-plugin.toml"), seam.manifest(&name))?;
+    let entry = bundle.join("bin").join(&name);
+    std::fs::write(&entry, seam.entry_script(&name))?;
+    std::fs::set_permissions(&entry, std::fs::Permissions::from_mode(0o755))?;
+    std::fs::write(
+        bundle.join("README.md"),
+        format!("# {name}\n\nA Riku {plugin_type} plugin. Edit `bin/{name}`, then:\n\n    riku plugins install ./{name}\n"),
+    )?;
+
+    display::success(&format!(
+        "Scaffolded {plugin_type} plugin in ./{}",
+        bundle.display()
+    ));
+    display::note(&format!(
+        "Edit bin/{name}, then: riku plugins install ./{}",
+        bundle.display()
+    ));
+    display::note(
+        "Sign it for distribution: riku plugins keygen && riku plugins sign ./<dir> --key <file>",
+    );
     Ok(())
 }
 
@@ -299,13 +343,22 @@ mod tests {
     use super::parse_spec;
 
     #[test]
-    fn parses_name_and_marketplace() {
-        assert_eq!(parse_spec("postgres").unwrap(), ("postgres", None));
+    fn parses_name_marketplace_and_version() {
+        assert_eq!(parse_spec("postgres").unwrap(), ("postgres", None, None));
         assert_eq!(
             parse_spec("postgres@official").unwrap(),
-            ("postgres", Some("official"))
+            ("postgres", Some("official"), None)
         );
-        assert!(parse_spec("a@b@c").is_err());
+        assert_eq!(
+            parse_spec("postgres@official@v1.2.0").unwrap(),
+            ("postgres", Some("official"), Some("v1.2.0"))
+        );
+        // Empty marketplace, pinned version: name@@version.
+        assert_eq!(
+            parse_spec("postgres@@v1.2.0").unwrap(),
+            ("postgres", None, Some("v1.2.0"))
+        );
+        assert!(parse_spec("a@b@c@d").is_err());
         assert!(parse_spec("").is_err());
     }
 }

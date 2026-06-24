@@ -166,6 +166,11 @@ fn main() -> Result<()> {
         },
         Commands::Plugins(cmd) => match cmd {
             PluginsCmd::Install { source } => cli::plugins::cmd_plugins_install(&paths, &source)?,
+            PluginsCmd::Scaffold {
+                name,
+                plugin_type,
+                dir,
+            } => cli::plugins::cmd_plugins_scaffold(&name, &plugin_type, dir.as_deref())?,
             PluginsCmd::List => cli::plugins::cmd_plugins_list(&paths)?,
             PluginsCmd::Remove { name } => cli::plugins::cmd_plugins_remove(&paths, &name)?,
             PluginsCmd::Search { query } => cli::plugins::cmd_plugins_search(&paths, &query)?,

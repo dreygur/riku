@@ -138,11 +138,17 @@ impl<'a> MarketplaceService<'a> {
         }
     }
 
-    /// Resolve `name[@market]` through the index and install it.
-    pub fn install_named(&self, name: &str, market: Option<&str>) -> Result<PluginManifest> {
+    /// Resolve `name[@market]` through the index and install it, optionally
+    /// pinning a `version` (a git tag/branch on the plugin's source repo).
+    pub fn install_named(
+        &self,
+        name: &str,
+        market: Option<&str>,
+        version: Option<&str>,
+    ) -> Result<PluginManifest> {
         let (market_name, entry) = self.resolve(name, market)?;
         let source = self.installable_source(&market_name, &entry);
-        PluginInstaller::new(self.paths).install(&source)
+        PluginInstaller::new(self.paths).install_with_ref(&source, version)
     }
 
     /// A bundle `source` from the index is either a git URL / absolute path
