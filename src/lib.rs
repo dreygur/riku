@@ -4,7 +4,7 @@
 // All modules listed here mirror the `mod` declarations in `main.rs`.
 
 pub mod cli;
-pub mod config;
+pub use riku_config as config;
 pub mod dashboard;
 pub mod deploy;
 pub mod error;
