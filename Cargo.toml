@@ -1,6 +1,7 @@
 [workspace]
 members = [
     ".",
+    "crates/riku-config",
     "crates/riku-plugin-java",
     "crates/riku-plugin-clojure",
     "crates/riku-plugin-container",
@@ -20,6 +21,7 @@ keywords = ["paas", "deployment", "git", "supervisor", "nginx"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+riku-config = { path = "crates/riku-config" }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 thiserror = "1"

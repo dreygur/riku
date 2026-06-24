@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # entrypoint.sh — container init for the persistent riku demo environment.
 #
-# Same boot sequence as ../production_audit/container/entrypoint.sh (see
+# Same boot sequence as ../stress/container/entrypoint.sh (see
 # that file for the detailed rationale on SSH key import order, the
 # forced-command SSH setup, and the plugin-bundling reasoning), plus one
 # more service: the Next.js/Hono dashboard, started on 127.0.0.1:3100 and

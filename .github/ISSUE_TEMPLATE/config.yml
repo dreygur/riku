@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/dreygur/riku/discussions
+    about: Ask how-to questions and discuss ideas here rather than opening an issue.
+  - name: Security report
+    url: https://github.com/dreygur/riku/security/policy
+    about: Please report security vulnerabilities privately — see SECURITY.md.

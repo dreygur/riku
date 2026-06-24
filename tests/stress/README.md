@@ -50,7 +50,7 @@ generation/reload → live HTTP traffic — against an actual container, not
 mocks. Works with either Docker or Podman (auto-detected).
 
 ```bash
-./tests/production_audit/container/run_container_test.sh
+./tests/stress/container/run_container_test.sh
 ```
 
 **Latest verified run (2026-06-18): PASS.** 14,530/14,530 requests
@@ -72,25 +72,24 @@ Files:
   image → provision SSH keypair → run container → drive traffic →
   collect logs → verdict.
 
-Getting this suite green found one real product bug, since fixed: see
-`PROJECT_STATUS.md`'s "Containerized Production Integration
-Verification" entry for the first-push bare-repo init bug in
-`src/cli/git/receive_pack.rs`.
+Getting this suite green found one real product bug, since fixed: the
+first-push bare-repo init bug in `src/cli/git/receive_pack.rs` (see the git
+history for that fix).
 
 ## Running (non-containerized suite)
 
 ```bash
 # normal lifecycle/leak/chaos tests
 riku supervisor &
-./tests/production_audit/run_all.sh
+./tests/stress/run_all.sh
 
 # resource-limit tests need the supervisor started with the bad-tenant
 # ceilings active instead:
-set -a; source ./tests/production_audit/bad_tenant_app/start-supervisor.env; set +a
+set -a; source ./tests/stress/bad_tenant_app/start-supervisor.env; set +a
 riku supervisor &
-./tests/production_audit/resource_limit_audit.sh badtenant mem
-./tests/production_audit/resource_limit_audit.sh badtenant cpu
+./tests/stress/resource_limit_audit.sh badtenant mem
+./tests/stress/resource_limit_audit.sh badtenant cpu
 ```
 
-Results land in `tests/production_audit/results/` (created on first run,
+Results land in `tests/stress/results/` (created on first run,
 gitignored is your call — not added here).

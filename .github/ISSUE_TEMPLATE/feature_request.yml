@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest an idea or improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the use case or pain point first — not just the solution.
+      placeholder: I want to …, but today Riku …
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like Riku to do? A CLI sketch or example helps.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Plugins, workarounds, or other approaches you've thought about.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Fit with Riku's scope
+      description: Riku is a single-binary, single-box, no-Docker PaaS (see ROADMAP.md "Out of Scope").
+      options:
+        - label: This keeps Riku to one box and one binary (not cluster/multi-server orchestration).

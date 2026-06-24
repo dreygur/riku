@@ -236,8 +236,8 @@ KEY2=VALUE2
 - The per-app nginx vhost symlink directory (`/etc/nginx/sites-enabled/`)
   is made group-writable by the deploy user rather than granting broader
   filesystem privileges.
-- See `tests/production_audit/container/sudoers-riku-nginx` and
-  `tests/production_audit/container/nginx-wrapper.sh` for the reference
+- See `tests/stress/container/sudoers-riku-nginx` and
+  `tests/stress/container/nginx-wrapper.sh` for the reference
   implementation, verified end-to-end in the containerized integration
   suite (see Testing Strategy below).
 
@@ -311,7 +311,7 @@ KEY2=VALUE2
 
 ### Containerized Production Integration Suite
 
-`tests/production_audit/container/run_container_test.sh` builds a real
+`tests/stress/container/run_container_test.sh` builds a real
 target server image (Ubuntu 24.04, sshd, nginx, the compiled `riku`
 binary, bundled runtime plugins), provisions a throwaway SSH keypair,
 boots the container, performs an actual `git push` deploy of a mock app
@@ -322,14 +322,14 @@ Podman — the script detects whichever is on `PATH` and uses it
 transparently, no flags needed:
 
 ```bash
-./tests/production_audit/container/run_container_test.sh
+./tests/stress/container/run_container_test.sh
 ```
 
 Latest verified run: 14,530/14,530 requests succeeded (zero 502/504s)
 under 80 concurrent workers for 30s, supervisor remained alive, zero
-zombie processes. See `tests/production_audit/README.md` for the full
+zombie processes. See `tests/stress/README.md` for the full
 suite (lifecycle stress, fd/leak monitor, chaos signal tests, resource
-limit audit) and `tests/production_audit/container/` for this
+limit audit) and `tests/stress/container/` for this
 containerized suite specifically.
 
 ## Deployment Compatibility

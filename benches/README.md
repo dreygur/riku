@@ -51,7 +51,7 @@ I encourage users to share their benchmark results! Please submit:
 2. **Workload description** (number of apps, traffic, etc.)
 3. **Measured values** (memory, CPU, startup time)
 
-Create a markdown file in `benchmarks/results/` with your findings.
+Create a markdown file in `benches/results/` with your findings.
 
 ### Example Result Format
 

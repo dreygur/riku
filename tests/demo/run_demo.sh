@@ -7,7 +7,7 @@
 # are cached) and replaces the container, so it always reflects whatever's
 # currently checked out.
 #
-# Unlike tests/production_audit/container/run_container_test.sh, this
+# Unlike tests/stress/container/run_container_test.sh, this
 # script does NOT stop the container when it exits — it's meant to be left
 # running so you can open the URLs it prints in your actual browser. Use
 # stop_demo.sh when you're done.
@@ -102,7 +102,7 @@ export GIT_SSH_COMMAND="ssh ${SSH_OPTS[*]}"
 for app in "${APPS[@]}"; do
     log "--- step 5: deploying example app '$app' ---"
     WORK_DIR="$(mktemp -d "/tmp/riku_demo_${app}.XXXXXX")"
-    cp -r "$SCRIPT_DIR/../production_audit/container/test_web_app/." "$WORK_DIR/"
+    cp -r "$SCRIPT_DIR/../stress/container/test_web_app/." "$WORK_DIR/"
     (
         cd "$WORK_DIR"
         git init -q -b main
