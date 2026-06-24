@@ -151,7 +151,7 @@ impl<'a> PluginInstaller<'a> {
 
 /// Resolve a git source string to a clone URL. Accepts `github:owner/repo`,
 /// `https://…`, `git@…`, and `…/repo.git`. Returns `None` for non-git sources.
-fn git_url(source: &str) -> Option<String> {
+pub(crate) fn git_url(source: &str) -> Option<String> {
     if let Some(rest) = source.strip_prefix("github:") {
         return Some(format!("https://github.com/{rest}.git"));
     }
