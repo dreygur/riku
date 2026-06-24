@@ -81,6 +81,11 @@ yarn-error.log
 .next/
 *.tsbuildinfo
 
+# Playwright (dashboard e2e) outputs
+test-results/
+playwright-report/
+.last-run.json
+
 # Certificates
 *.pem
 *.key
