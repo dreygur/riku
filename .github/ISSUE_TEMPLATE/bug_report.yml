@@ -1,0 +1,46 @@
+name: Bug report
+description: Something isn't working the way it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to file a bug. Please fill in what you can.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, and what you expected instead.
+      placeholder: When I run `riku deploy myapp`, …
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. `riku init`
+        2. `git push riku main`
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Deploy log, `riku logs <app>`, or `riku doctor` output. This is automatically formatted as code.
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: Riku version
+      description: Output of `riku --version`.
+      placeholder: "3.0.0"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS / distro
+      placeholder: Ubuntu 24.04 / Debian 12 / Arch
+    validations:
+      required: true
