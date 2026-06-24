@@ -1,7 +1,7 @@
-//! Integration tests for CLI commands
+//! Integration tests for the CLI commands.
 //!
-//! These tests verify the functionality of CLI commands
-//! by creating temporary directories and testing actual command execution.
+//! Each test runs a real command against a throwaway `~/.riku` built in a
+//! tempdir, so they exercise actual file I/O rather than mocks.
 
 #[cfg(test)]
 mod tests {

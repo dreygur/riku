@@ -1,6 +1,7 @@
-//! Integration tests for Plugin System
+//! Integration tests for the plugin system.
 //!
-//! These tests verify the plugin discovery, execution, and management functionality.
+//! Covers discovery (what gets found in `~/.riku/plugins/`), execution of the
+//! runtime verbs, and bundle management.
 
 #[cfg(test)]
 mod tests {
