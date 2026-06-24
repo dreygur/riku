@@ -1761,6 +1761,7 @@ dependencies = [
  "rand",
  "regex",
  "reqwest",
+ "riku-config",
  "serde",
  "serde_json",
  "sha2",
@@ -1778,6 +1779,10 @@ dependencies = [
  "tracing-subscriber",
  "which",
 ]
+
+[[package]]
+name = "riku-config"
+version = "0.1.0"
 
 [[package]]
 name = "riku-plugin-clojure"

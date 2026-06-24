@@ -1,0 +1,10 @@
+[package]
+name = "riku-config"
+version = "0.1.0"
+edition = "2021"
+description = "Riku path & environment configuration (repository layer)"
+authors = ["Rakibul Yeasin"]
+repository = "https://github.com/dreygur/riku"
+license = "MIT"
+
+[dependencies]
