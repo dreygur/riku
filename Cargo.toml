@@ -53,6 +53,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"
 tower-http = { version = "0.5", features = ["cors"] }
 futures = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
+landlock = "0.4.5"
 
 [dev-dependencies]
 tempfile = "3"

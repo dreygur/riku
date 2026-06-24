@@ -47,11 +47,20 @@ pub fn run_verb(call: VerbCall<'_>) -> Result<serde_json::Value> {
         .stderr(Stdio::piped())
         .process_group(0);
 
+    let mut sandbox_paths = crate::plugins::sandbox::SandboxPaths {
+        data_path: Some(call.data_path.to_path_buf()),
+        ..Default::default()
+    };
     if let Some(app) = call.app {
         cmd.env("RIKU_APP", app)
             .env("RIKU_APP_PATH", call.paths.app_root.join(app))
             .env("RIKU_ENV_PATH", call.paths.env_root.join(app));
+        sandbox_paths.app_path = Some(call.paths.app_root.join(app));
+        sandbox_paths.env_path = Some(call.paths.env_root.join(app));
     }
+
+    // Confine the addon to its declared capabilities before launch.
+    crate::plugins::sandbox::harden(&mut cmd, &call.manifest.capabilities, &sandbox_paths);
 
     let mut child = spawn_retrying_etxtbsy(&mut cmd)
         .with_context(|| format!("spawning addon '{}'", call.manifest.name))?;

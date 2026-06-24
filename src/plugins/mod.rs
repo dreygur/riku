@@ -54,6 +54,7 @@ pub mod manifest;
 pub mod marketplace;
 pub mod router;
 pub mod runtime;
+pub mod sandbox;
 pub mod signing;
 
 // Re-export the public API (used by CLI plugin commands and external code)
