@@ -140,12 +140,16 @@ Exposes apps to the network. **Singleton** — exactly one router is active,
 chosen by config (`RIKU_ROUTER=nginx|caddy|…`, default `nginx`). Today's built-in
 nginx generation is the default router; the seam lets it be swapped.
 
-| Verb        | Input (stdin JSON)                                   | Output         |
-| ----------- | ---------------------------------------------------- | -------------- |
-| `configure` | `{app, domains, upstream_port, https, …}`            | writes config  |
-| `reload`    | —                                                    | reloads router |
+| Verb          | Input (stdin JSON)                                 | Output           |
+| ------------- | -------------------------------------------------- | ---------------- |
+| `configure`   | `{app, domains, upstream_port, https, …}`          | writes config    |
+| `unconfigure` | —                                                  | drops app config |
+| `reload`      | —                                                  | reloads router   |
 
-Owns its config directory. Env: `RIKU_APP`, `RIKU_ROOT`.
+Owns its config directory. Env: `RIKU_APP` (for `configure`/`unconfigure`),
+`RIKU_ROOT`. `unconfigure` was added within API v1; the kernel treats a
+non-zero exit as "not implemented" and falls back to a plain `reload`, so older
+routers keep working.
 
 ## 7. Event bus _(new)_
 

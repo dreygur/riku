@@ -87,17 +87,24 @@ pub fn configure(
 
 /// Remove `app` from the active router.
 ///
-/// nginx removal is built-in. API v1 defines no per-app teardown verb for
-/// router plugins (`PLUGIN_PROTOCOL.md` §6.2 has only `configure`/`reload`), so
-/// for a plugin router this issues a best-effort `reload`: the app's source and
-/// `ENV` are already gone by the time destroy reaches the router, and the
-/// plugin is expected to reconcile orphaned upstreams on reload.
+/// nginx removal is built-in. For a plugin router this dispatches `unconfigure`
+/// (the app's config is keyed by `RIKU_APP`, which is still available even
+/// though the app's `ENV` is already gone by destroy time) then `reload`.
+///
+/// `unconfigure` is **best-effort**: it was added within API v1, so a plugin
+/// predating it may not implement the verb and will exit non-zero — in that
+/// case the following `reload` lets the plugin reconcile the orphaned upstream
+/// on its own. See `PLUGIN_PROTOCOL.md` §6.2.
 pub fn remove(app: &str, paths: &RikuPaths) -> Result<()> {
     let router_name = active_router();
     if router_name == DEFAULT_ROUTER {
         return crate::nginx::remove_nginx_config(app, paths);
     }
     if let Some((bundle, manifest)) = bundles::find_router(&paths.plugin_root, &router_name) {
+        if let Err(e) = router::run_verb(paths, &bundle, &manifest, "unconfigure", Some(app), None)
+        {
+            tracing::warn!(router = %router_name, "unconfigure failed, relying on reload: {e}");
+        }
         router::run_verb(paths, &bundle, &manifest, "reload", None, None)?;
     }
     Ok(())
