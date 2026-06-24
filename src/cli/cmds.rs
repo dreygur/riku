@@ -216,6 +216,10 @@ pub enum PluginsCmd {
         spec: String,
     },
 
+    /// Validate installed plugin bundles (API compatibility + integrity)
+    #[command(after_help = "Examples:\n  riku plugins doctor")]
+    Doctor,
+
     /// Manage marketplaces (git repos that index plugins)
     #[command(subcommand)]
     Marketplace(MarketplaceCmd),

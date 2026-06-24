@@ -170,6 +170,7 @@ fn main() -> Result<()> {
             PluginsCmd::Remove { name } => cli::plugins::cmd_plugins_remove(&paths, &name)?,
             PluginsCmd::Search { query } => cli::plugins::cmd_plugins_search(&paths, &query)?,
             PluginsCmd::Add { spec } => cli::plugins::cmd_plugins_add(&paths, &spec)?,
+            PluginsCmd::Doctor => cli::plugins::cmd_plugins_doctor(&paths)?,
             PluginsCmd::Marketplace(cmd) => match cmd {
                 MarketplaceCmd::Add { url, name } => {
                     cli::plugins::cmd_marketplace_add(&paths, &url, name.as_deref())?

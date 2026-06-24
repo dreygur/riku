@@ -4,8 +4,30 @@
 use anyhow::Result;
 
 use crate::config::RikuPaths;
-use crate::plugins::{MarketplaceService, PluginInstaller};
+use crate::plugins::install::HealthStatus;
+use crate::plugins::{MarketplaceService, PluginInstaller, PluginManifest};
 use crate::util::display;
+
+/// Print the capabilities a plugin's manifest declares, so the operator sees
+/// what they are granting (informed consent, Android-permission style).
+fn print_capabilities(manifest: &PluginManifest) {
+    let caps = &manifest.capabilities;
+    let mut requested = Vec::new();
+    if caps.network {
+        requested.push("network".to_string());
+    }
+    if !caps.writes.is_empty() {
+        requested.push(format!("writes {:?}", caps.writes));
+    }
+    if caps.privileged {
+        requested.push("privileged".to_string());
+    }
+    if requested.is_empty() {
+        display::note("Capabilities: none declared.");
+    } else {
+        display::warn(&format!("Capabilities granted: {}", requested.join(", ")));
+    }
+}
 
 /// `riku plugins install <source>`
 pub fn cmd_plugins_install(paths: &RikuPaths, source: &str) -> Result<()> {
@@ -20,6 +42,7 @@ pub fn cmd_plugins_install(paths: &RikuPaths, source: &str) -> Result<()> {
     } else {
         display::warn("No checksum pinned in the manifest — installed unverified.");
     }
+    print_capabilities(&manifest);
     Ok(())
 }
 
@@ -93,6 +116,31 @@ pub fn cmd_plugins_add(paths: &RikuPaths, spec: &str) -> Result<()> {
     ));
     if manifest.checksum.is_none() {
         display::warn("No checksum pinned in the manifest — installed unverified.");
+    }
+    print_capabilities(&manifest);
+    Ok(())
+}
+
+/// `riku plugins doctor` — validate installed bundles (api + integrity).
+pub fn cmd_plugins_doctor(paths: &RikuPaths) -> Result<()> {
+    let results = PluginInstaller::new(paths).audit();
+    if results.is_empty() {
+        display::note("No plugin bundles installed.");
+        return Ok(());
+    }
+    let mut failures = 0;
+    for r in &results {
+        match r.status {
+            HealthStatus::Ok => display::success(&format!("{} — {}", r.name, r.detail)),
+            HealthStatus::Warn => display::warn(&format!("{} — {}", r.name, r.detail)),
+            HealthStatus::Fail => {
+                failures += 1;
+                display::error(&format!("{} — {}", r.name, r.detail));
+            }
+        }
+    }
+    if failures > 0 {
+        std::process::exit(1);
     }
     Ok(())
 }
