@@ -12,6 +12,7 @@
 //! - A `Host` allowlist rejects non-loopback Host headers to blunt DNS-rebinding
 //!   from a browser. Mutating actions (later) will add CSRF on top.
 
+mod mutations;
 mod routes;
 
 use std::net::{IpAddr, SocketAddr};
@@ -53,10 +54,10 @@ pub fn run(paths: &RikuPaths, bind: &str, token: Option<String>) -> Result<()> {
 
     display::info(&format!("Dashboard listening on http://{addr}"));
     if state.token.is_some() {
-        display::note("API requires a token (Authorization: Bearer <token> or ?token=).");
+        display::note("Token set: API requires it, and restart/stop/redeploy actions are enabled.");
     } else {
         display::note(
-            "Read-only, loopback-only, no token. Tunnel with: ssh -L 8088:localhost:8088 <host>",
+            "Read-only, loopback-only, no token (actions disabled). Tunnel with: ssh -L 8088:localhost:8088 <host>",
         );
     }
 
