@@ -1,455 +1,215 @@
-# Riku - The Rust Port of Piku
+# Riku
 
-Riku is a complete Rust port of the popular [Piku](https://github.com/piku/piku) micro-PaaS. I built Riku to provide Heroku-like git push deployments while maintaining full compatibility with the Piku ecosystem.
+**Git-push deployments on a single small box — one Rust binary, no Docker required.**
 
-**Credit & Acknowledgments:**
+[![CI](https://github.com/dreygur/riku/actions/workflows/ci.yml/badge.svg)](https://github.com/dreygur/riku/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/dreygur/riku?sort=semver)](https://github.com/dreygur/riku/releases)
+[![Made with Rust](https://img.shields.io/badge/made%20with-Rust-orange.svg)](https://www.rust-lang.org/)
 
-Riku stands on the shoulders of giants. I want to acknowledge and thank:
+Riku gives you a Heroku-style workflow on hardware you already own — a VPS, an old
+laptop, a Raspberry Pi. You `git push`, Riku detects the language, builds it, runs
+it under a supervisor, and wires up nginx. That's it. No control plane, no cluster,
+no container runtime to babysit.
 
-- **The Piku Team** - For creating the original Piku micro-PaaS that inspired this project. Riku implements the same concepts and workflows that made Piku great.
-- **Piku Contributors** - All the developers who contributed to Piku over the years, establishing the patterns and features that Riku implements.
-- **The Community** - For proving that simple, lightweight PaaS solutions have real value.
-
-Riku is not a replacement for Piku, but rather an alternative implementation that:
-- Uses Rust for better performance and zero runtime dependencies
-- Maintains compatibility with Piku's directory structure and workflows
-- Builds upon the excellent design decisions made by the Piku team
-
-I encourage users to also check out the original [Piku project](https://github.com/piku/piku) and support both projects based on their needs.
-
-## Features
-
-- **Heroku-like deployments**: Deploy applications with `git push`
-- **Plugin-based runtimes**: Python, Node.js, Ruby, Go, Java, Clojure, Rust, containers — all via external plugins; add any language without recompiling
-- **Process supervision**: Built-in Rust supervisor daemon (replaces uWSGI Emperor)
-- **Nginx integration**: Automatic nginx configuration generation with caching support
-- **Scaling**: Horizontal scaling with SCALING file or environment variables
-- **Plugin system**: Extensible runtime and lifecycle hooks through shell scripts or binaries
-- **Cron scheduling**: Built-in cron job support via Procfile
-- **Zero-downtime deployments**: Hot reload support via `riku restart --hot`
-- **Environment variables**: Comprehensive env var support for configuration
-- **Static site hosting**: Serve static files directly via nginx
-- **SSL/HTTPS**: Automatic HTTPS redirect and SSL certificate support
-- **AI Agent Interface**: SSH-based automation for AI agents (Claude, Cursor, Copilot)
-
-## System Requirements
-
-### Minimum Requirements
-- **CPU**: 1 core (500 MHz+)
-- **RAM**: 256 MB (512 MB recommended)
-- **Storage**: 50 MB for Riku + app dependencies
-- **OS**: Linux (Debian/Ubuntu/RHEL/Arch)
-
-### Expected Resource Usage
-
-> **Note**: Actual resource usage varies based on workload, number of apps, and traffic. The values below are estimates based on typical deployments.
-
-#### Memory Footprint (Estimated)
-
-| Component | Typical Range |
-|-----------|---------------|
-| Riku supervisor | 10-30 MB |
-| Riku binary | ~8 MB |
-| Per app process | 10-200 MB |
-| Nginx | 5-15 MB |
-
-**Total base usage**: ~30-60 MB (without apps)
-
-#### Storage Usage
-
-| Component | Typical Size |
-|-----------|--------------|
-| Riku binary | ~8 MB |
-| System files | ~2 MB |
-| Per app (code) | 1-100 MB |
-| Per app (dependencies) | 10-500 MB |
-| Logs (per app) | 10-100 MB |
-
-### Why Choose Riku?
-
-- **No Python dependency** - Single static binary
-- **Smaller footprint** - Rust compilation vs Python interpreter
-- **Faster startup** - Compiled binary vs interpreted code
-- **Type safety** - Catch errors at compile time
-- **Memory efficient** - No garbage collection overhead
-
-> **Want to benchmark?** I encourage users to run their own benchmarks. See the `benches/` directory for testing scripts. (TODO: Add benchmarking tools)
-
-## Installation
-
-### Quick Install (Recommended)
+It's a Rust reimplementation of [Piku](https://github.com/piku/piku), keeping that
+project's directory layout and workflow while shipping as a single static binary
+with no runtime dependencies.
 
 ```bash
-# Download the latest release
+# on your server
+curl -LO https://github.com/dreygur/riku/releases/latest/download/riku-linux-amd64.tar.gz
+tar -xzf riku-linux-amd64.tar.gz && sudo ./riku init
+
+# on your laptop
+git remote add riku deploy@your-server:myapp
+git push riku main      # 👈 that's the deploy
+```
+
+## What it does
+
+- **`git push` to deploy** — language detected, built, supervised, and routed automatically.
+- **Many languages, no recompile** — Python, Node, Ruby, Go, Rust, Java, Clojure, and containers, each as an installable runtime plugin.
+- **Built-in process supervisor** — health checks, restarts, scaling, and cron, written in Rust (no uWSGI Emperor).
+- **Zero-downtime deploys** — new processes are health-gated before old ones are retired.
+- **Rollback & backups** — `riku rollback`, `riku backup`/`riku restore`.
+- **Managed datastores as plugins** — attach Postgres, Redis, or a SQLite volume with `riku addon`; the connection string is injected into your app's env.
+- **A plugin ecosystem** — a versioned plugin protocol, a git-native marketplace, signed bundles, and capability sandboxing (Landlock) for plugins you install.
+- **Swappable router** — nginx by default; drop in a Caddy/Traefik router plugin without touching core.
+- **Embedded dashboard** — `riku dashboard` serves a status UI straight from the binary, no Node runtime on the host.
+- **`riku doctor`** — diagnoses nginx, systemd, permissions, disk, and certs when something's off.
+
+## Requirements
+
+- Linux (Debian/Ubuntu/RHEL/Arch)
+- 1 CPU core, 256 MB RAM, ~50 MB disk for Riku itself
+
+Base footprint is roughly 30–60 MB before you deploy anything (supervisor + binary +
+nginx). Per-app memory is up to your apps. If you want numbers for your own hardware,
+the scripts in [`benches/`](benches/) measure it rather than guess.
+
+## Install
+
+### From a release (recommended)
+
+```bash
 curl -LO https://github.com/dreygur/riku/releases/latest/download/riku-linux-amd64.tar.gz
 tar -xzf riku-linux-amd64.tar.gz
 chmod +x riku
-
-# Initialize as root (auto-installs everything)
 sudo ./riku init
 ```
 
-When running `riku init` as root, it automatically:
-- Installs riku binary to `~/.local/bin`
-- Creates systemd service (starts on boot)
-- Starts supervisor daemon
-- Enables nginx auto-reload
+Running `riku init` as root installs the binary to `~/.local/bin`, creates a systemd
+service that starts on boot, launches the supervisor, and enables nginx auto-reload.
+Deploying as a user other than `deploy`? Pass `sudo RIKU_USER=myuser ./riku init`.
 
-**Custom username:** If not using `deploy`, set `RIKU_USER`:
-```bash
-sudo RIKU_USER=myuser ./riku init
-```
-
-### Build from Source
+### From source
 
 ```bash
-# Clone the repository
 git clone https://github.com/dreygur/riku.git
 cd riku
-
-# Build the Rust binary
 cargo build --release
-
-# Initialize (auto-installs to ~/.local/bin)
 ./target/release/riku init
 ```
 
-After running `riku init`, the binary will be available at `~/.local/bin/riku`.
+## Quick start
 
-## Quick Start
+**1. Set up the server.** Create a deploy user and initialize:
 
-### Server Setup
-
-1. Create a deploy user:
 ```bash
-sudo adduser deploy
-sudo su - deploy
-```
-
-2. Initialize Riku:
-```bash
+sudo adduser deploy && sudo su - deploy
 riku init
+ssh-copy-id deploy@your-server      # add your SSH key
 ```
 
-This will:
-- Install riku to `~/.local/bin/riku`
-- Create systemd service (starts on boot)
-- Start supervisor daemon
-- Configure nginx
+**2. Deploy an app.** Add a `Procfile`, commit, and push:
 
-3. Add your SSH public key:
-```bash
-# Copy your local SSH key to server
-ssh-copy-id deploy@your-server
-
-# Or manually add key
-cat ~/.ssh/id_ed25519.pub | ssh deploy@your-server "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
-```
-
-### Application Deployment
-
-1. Create a new application directory:
-```bash
-mkdir myapp
-cd myapp
-git init
-```
-
-2. Add your application code and create a Procfile:
 ```
 web: gunicorn app:app
 worker: python worker.py
 ```
 
-Or for Node.js:
-```
-web: node server.js
-```
-
-3. Push to deploy:
 ```bash
-git add .
-git commit -m "Initial commit"
+git init && git add . && git commit -m "first deploy"
 git remote add riku deploy@your-server:myapp
 git push riku main
 ```
 
-### Custom Bare Repo Location
+In a hurry? `riku quickstart` scaffolds a sample app and prints the exact
+`git remote add` line to copy.
 
-You can create your bare git repo anywhere and Riku will automatically symlink it to `~/.riku/repos/`:
-
-```bash
-# On server: create bare repo anywhere
-git init --bare ~/my-projects/myapp.git
-
-# Push to custom path
-git remote add riku deploy@server:~/my-projects/myapp.git
-git push riku main
-
-# Riku creates: ~/.riku/repos/myapp.git → ~/my-projects/myapp.git
-```
+> You can keep a bare repo anywhere on the server — `git init --bare ~/projects/myapp.git`,
+> push to it, and Riku symlinks it into `~/.riku/repos/` for you.
 
 ## Commands
 
-### Application Management
-- `riku apps` - List deployed applications
-- `riku deploy <app>` - Force redeploy an application
-- `riku destroy <app>` - Remove an application (preserves `~/.riku/data/<app>/` and `~/.riku/cache/<app>/`)
-- `riku logs <app> [process]` - View application logs
-- `riku restart <app>` - Restart an application
-- `riku stop <app>` - Stop an application
+| | |
+|---|---|
+| `riku apps` / `riku deploy <app>` / `riku destroy <app>` | list, redeploy, remove apps |
+| `riku logs <app> [proc]` / `riku restart <app>` / `riku stop <app>` | runtime control |
+| `riku ps <app> [--scale web=2 worker=1]` | inspect / scale processes |
+| `riku config show\|get\|set\|unset\|live <app>` | manage environment |
+| `riku run <app> <cmd…>` | run a command in the app's context |
+| `riku rollback <app> [--to <sha>\|--list]` | roll back to a previous release |
+| `riku backup <app>` / `riku restore <app> <file>` | snapshot / restore |
+| `riku addon list\|create\|bind\|unbind\|backup\|destroy` | managed datastores |
+| `riku plugins …` | install/search/scaffold/sign plugins (see below) |
+| `riku dashboard [--bind … --token …]` | serve the web dashboard |
+| `riku doctor` | diagnose the host |
+| `riku init` / `riku update` / `riku supervisor` | setup & maintenance |
 
-### Configuration Management
-- `riku config show <app>` - Show application configuration
-- `riku config get <app> <key>` - Get a specific configuration value
-- `riku config set <app> KEY=VALUE...` - Set configuration values
-- `riku config unset <app> KEY...` - Remove configuration values
-- `riku config live <app>` - Show live running configuration
+## Runtime plugins
 
-### Process Management
-- `riku ps <app>` - Show process counts
-- `riku ps <app> --scale web=2 worker=1` - Scale processes
-
-### Running Commands
-- `riku run <app> command...` - Execute commands in app context
-
-### Setup and Maintenance
-- `riku init` - Initialize Riku server
-- `riku update` - Update Riku binary
-- `riku install-plugins` - Download and install bundled runtime plugins
-- `riku install-plugins --plugins node,python` - Install specific plugins only
-- `riku supervisor` - Start supervisor (foreground, for debugging)
-
-## AI Agent Interface
-
-Riku provides an SSH-based interface for AI agents (Claude, Cursor, Copilot) to automate deployments.
-
-```bash
-# Quick test
-ssh -i ~/.ssh/agent-key deploy@server "riku agent --intro"
-```
-
-See [AI Agents Documentation](docs/docs/ai-agents.md) for full details.
-
-## Runtime Plugins
-
-Riku detects and builds applications through external runtime plugins in
-`~/.riku/plugins/`. After installation, run:
-
-```bash
-riku install-plugins
-```
-
-### Bundled Plugins
+Riku builds apps through runtime plugins in `~/.riku/plugins/`. Install the bundled
+set with `riku install-plugins` (or pick some: `riku install-plugins --plugins node,python`).
 
 | Plugin | Detects | Build tool |
 |--------|---------|------------|
 | `node` | `package.json` | npm / yarn / pnpm |
 | `python` | `requirements.txt`, `pyproject.toml` | pip / Poetry / uv |
 | `ruby` | `Gemfile` | Bundler |
-| `go` | `go.mod`, `Godeps`, `.go` files | go build |
-| `rust-lang` | `Cargo.toml` + `rust-toolchain.toml` | cargo build |
+| `go` | `go.mod`, `.go` files | go build |
+| `rust-lang` | `Cargo.toml` | cargo build |
 | `java` | `pom.xml`, `build.gradle` | Maven / Gradle |
 | `clojure` | `project.clj`, `deps.edn` | Leiningen / Clojure CLI |
-| `container` | `Dockerfile`, `Containerfile`, `docker-compose.yml` | Docker / Podman |
+| `container` | `Dockerfile`, `docker-compose.yml` | Docker / Podman |
 
-### Plugin Protocol
+Detection runs in order — set `RUNTIME=node` to skip it. To add your own language,
+drop an executable into `~/.riku/plugins/` implementing four subcommands:
 
-Each plugin executable implements four subcommands:
-
-| Subcommand | Action |
+| Subcommand | Does |
 |---|---|
-| `detect` | exit 0 = handles this app, exit 1 = skip |
-| `build` | install dependencies (stdout streamed to deploy log) |
-| `env` | print `KEY=VALUE` lines merged into worker environment |
-| `start` | print default start command (fallback if Procfile has no entry) |
+| `detect` | exit 0 if it handles this app, non-zero to skip |
+| `build` | install dependencies (stdout streams to the deploy log) |
+| `env` | print `KEY=VALUE` lines merged into the app environment |
+| `start` | print the default start command |
 
-Context is passed via environment variables: `RIKU_APP`, `RIKU_APP_PATH`,
-`RIKU_ENV_PATH`, `RIKU_ROOT`.
+Context arrives via `RIKU_APP`, `RIKU_APP_PATH`, `RIKU_ENV_PATH`, `RIKU_ROOT`. The
+full contract is in [`PLUGIN_PROTOCOL.md`](PLUGIN_PROTOCOL.md).
 
-### Pinning a Runtime
+## Plugins & addons
 
-To skip auto-detection and use a specific plugin:
+Beyond runtimes, Riku has a manifest-based plugin system with a versioned protocol,
+a git-native marketplace, and a server-side trust model:
 
 ```bash
-riku config set myapp RUNTIME=node
+riku plugins marketplace add github:dreygur/riku   # this repo is a marketplace
+riku plugins search postgres
+riku plugins add postgres                            # checksum + signature verified
+riku plugins scaffold my-addon --type addon          # start your own
 ```
 
-### Adding a Custom Runtime
-
-Drop any executable into `~/.riku/plugins/` and implement the four subcommands.
-See [Plugin Development](docs/docs/plugins.md) for a full template.
+Installed plugins are pinned in a lockfile, can carry Ed25519 author signatures, and
+run under capability sandboxing (filesystem/network limits via Landlock) based on
+what their manifest declares. Managed datastores ship this way — see
+[`examples/plugins/`](examples/plugins/) for working postgres, redis, sqlite-volume,
+caddy-router, and webhook-notify bundles.
 
 ## Configuration
 
-### Procfile
-Define processes in `Procfile`:
-```
-web: gunicorn app:app
-worker: python worker.py
-cron: 0 2 * * * /path/to/script.sh
-```
+Per-app settings live in an `ENV` file (`riku config set` writes it). A few common ones:
 
-For Node.js:
-```
-web: node server.js
-```
-
-### Scaling
-Control process counts in `SCALING`:
-```
-web=2
-worker=4
-```
-
-### Environment Variables
-Set environment in `ENV` file in the app's environment directory.
-
-## Architecture
-
-### Directory Structure
-```
-~/.riku/
-├── apps/              # Application code
-├── data/              # Persistent data
-├── envs/              # Environment variables
-├── repos/             # Git repositories
-├── logs/              # Application logs
-├── nginx/             # Nginx configurations
-├── cache/             # Nginx cache files
-├── workers/           # Worker process configurations
-├── workers-available/ # Available worker configs
-├── workers-enabled/   # Enabled worker configs (symlinks)
-├── acme/              # ACME/Let's Encrypt certificates
-└── plugins/           # Plugin executables
-```
-
-### Process Management
-The supervisor daemon monitors TOML configuration files in `workers-enabled/` and manages the corresponding processes. When configurations are added, modified, or removed, the supervisor starts, stops, or restarts processes accordingly.
-
-### Environment Variables
-
-Riku supports comprehensive environment variable configuration via the `ENV` file in `~/.riku/envs/<app>/ENV`:
-
-#### Runtime Settings
 ```bash
-RIKU_AUTO_RESTART=true      # Auto-restart workers on deploy (default: true)
+NGINX_SERVER_NAME=example.com   # domain
+NGINX_HTTPS_ONLY=true           # force HTTPS
+NODE_VERSION=20.11.0            # pin a runtime version
+RIKU_WORKER_TIMEOUT=3600        # kill unresponsive workers
+RIKU_ROUTER=caddy               # use a router plugin instead of nginx
 ```
 
-#### Node.js Settings
-```bash
-NODE_VERSION=18.17.0        # Install specific Node.js version via nodeenv
-NODE_PACKAGE_MANAGER=yarn   # Use yarn or pnpm instead of npm
-```
+See [`docs/docs/env.md`](docs/docs/env.md) for the full reference, and `Procfile`
+for `web:` / `worker:` / `cron:` process definitions.
 
-#### Network Settings
-```bash
-BIND_ADDRESS=127.0.0.1      # IP address for workers to bind
-DISABLE_IPV6=true           # Disable IPv6 in nginx
-```
+## How it works
 
-#### Worker Management
-```bash
-RIKU_WORKER_TIMEOUT=3600       # Kill unresponsive workers after N seconds
-RIKU_WORKER_GRACE_PERIOD=60    # Graceful shutdown period in seconds
-RIKU_MAX_RESTARTS=10           # Max restart attempts before marking as failed
-```
-
-#### Nginx Settings
-```bash
-NGINX_SERVER_NAME=example.com          # Domain name for your app
-NGINX_HTTPS_ONLY=true                  # Redirect HTTP to HTTPS
-NGINX_STATIC_PATHS=/static:public      # Serve static files directly
-NGINX_INCLUDE_FILE=custom.conf         # Include custom nginx config
-NGINX_ALLOW_GIT_FOLDERS=false          # Allow access to .git folders
-NGINX_CATCH_ALL=index.html             # Catch-all for SPA routing
-NGINX_CLOUDFLARE_ACL=true              # Restrict to Cloudflare IPs
-```
-
-#### Nginx Caching
-```bash
-NGINX_CACHE_PREFIXES=/api,/images      # URL prefixes to cache
-NGINX_CACHE_SIZE=1                     # Cache size in GB
-NGINX_CACHE_TIME=3600                  # Cache validity (seconds)
-NGINX_CACHE_EXPIRY=86400               # Cache expiry (seconds)
-```
-
-#### ACME/SSL
-```bash
-ACME_ROOT_CA=letsencrypt.org           # Certificate authority
-```
-
-> **Note:** Riku uses a custom supervisor; uWSGI variables from the original Piku are not applicable. See [docs/docs/env.md](docs/docs/env.md) for the full variable reference.
-
-### Nginx Integration
-Riku generates nginx configuration files based on application requirements and environment variables, supporting various deployment scenarios including HTTP, HTTPS, static file serving, and reverse proxy configurations.
-
-## Plugin System
-
-Riku has two categories of plugins, both stored in `~/.riku/plugins/`:
-
-**Runtime plugins** — detect and build applications. Named without a `riku-` prefix
-(e.g. `node`, `python`, `my-runtime`). Implement the `detect/build/env/start`
-subcommand protocol described above.
-
-**Lifecycle hook plugins** — run at specific deploy stages. Named with a `riku-`
-prefix (e.g. `riku-pre-deploy`, `riku-post-build`). These are shell scripts or
-binaries invoked automatically during deployment.
-
-See [Plugin Documentation](docs/docs/plugins.md) for full details and examples.
-
-## Cron Jobs
-
-Cron jobs can be defined in the Procfile using the `cron` prefix:
-```
-cron: 0 2 * * * /path/to/script.sh
-```
-
-These are managed by the supervisor's cron scheduler.
+Everything lives under `~/.riku/` — `apps/` (source), `envs/` (config), `repos/`
+(bare git), `logs/`, `nginx/`, `plugins/`, `data/`. A `git push` triggers a
+post-receive hook that checks out the code, runs the matching runtime plugin to
+build it, writes worker configs, and signals the supervisor. The supervisor watches
+those configs and starts/stops/restarts processes to match, health-gating new
+generations before cutover. nginx config is generated per app (or handed to a router
+plugin). For the design in depth, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Development
 
-### Building from Source
 ```bash
-git clone https://github.com/dreygur/riku.git
-cd riku
+git clone https://github.com/dreygur/riku.git && cd riku
 cargo build
-```
-
-### Running Tests
-```bash
-# Run all tests
 cargo test
-
-# Run deployment tests
-./tests/deploy-smoke/test-all.sh
-
-# Quick test with a sample app
-./tests/deploy-smoke/quick-test.sh myapp node
+cargo clippy && cargo fmt
 ```
 
-### Testing Deployments
-```bash
-# Create a test app
-./tests/deploy-smoke/quick-test.sh test-node node
-cd /tmp/riku-quick-test-*/
-git init && git add . && git commit -m "test"
-git remote add riku deploy@your-server:test-node
-git push riku main
-```
-
-### Contributing
-1. Fork the repository
-2. Create a feature branch
-3. Add your feature or fix
-4. Add tests if applicable
-5. Ensure `cargo test` and `cargo clippy` pass
-6. Submit a pull request
+Contributions welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md) and the
+[Code of Conduct](CODE_OF_CONDUCT.md). The short version: fork, branch, make sure
+`cargo test` and `cargo clippy` pass, open a PR.
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT — see [`LICENSE`](LICENSE).
 
-## Support
+## Credits
 
-For support, please open an issue in the GitHub repository.
+Riku owes everything to [Piku](https://github.com/piku/piku) and the people behind
+it: the original micro-PaaS whose concepts, workflows, and directory layout Riku
+reimplements in Rust. It's an alternative implementation, not a replacement — if
+Piku fits your needs, use Piku. Either way, support both.
