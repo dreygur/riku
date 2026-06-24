@@ -28,6 +28,7 @@ pub mod env_setup;
 pub mod git_ops;
 pub mod hooks;
 pub(crate) mod lock;
+pub mod releases;
 pub mod scaling;
 pub mod supervisor_ctl;
 pub mod workers;
@@ -184,6 +185,13 @@ pub fn do_deploy(
 
     dlog.log(&format!("Deploy of '{}' complete", app));
 
+    // Record the deployed revision for `riku rollback` (best-effort).
+    if let Some(sha) = git_ops::head_sha(&app_path) {
+        if let Err(e) = releases::ReleaseLog::new(paths).record(app, &sha) {
+            tracing::warn!("could not record release for '{}': {}", app, e);
+        }
+    }
+
     // Make the "it works" moment unmissable for whoever just ran `git push`.
     echo(&format!("-----> {} deployed!", app), "green");
     match env.get("NGINX_SERVER_NAME").filter(|d| !d.is_empty()) {
@@ -204,4 +212,20 @@ pub fn do_deploy(
         ),
     }
     Ok(())
+}
+
+/// Roll an app back to a previous release by redeploying a prior commit. With
+/// no `to`, targets the most recent release before the current one.
+pub fn rollback(app: &str, paths: &RikuPaths, to: Option<&str>) -> Result<()> {
+    let target = match to {
+        Some(sha) => sha.to_string(),
+        None => releases::ReleaseLog::new(paths)
+            .previous(app)
+            .ok_or_else(|| {
+                anyhow::anyhow!("no previous release recorded for '{}' to roll back to", app)
+            })?,
+    };
+    let short: String = target.chars().take(12).collect();
+    echo(&format!("Rolling back '{}' to {}", app, short), "green");
+    do_deploy(app, paths, &HashMap::new(), Some(&target))
 }

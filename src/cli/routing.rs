@@ -20,6 +20,7 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
         Commands::Run { .. } => Some("run".to_string()),
         Commands::Restart { .. } => Some("restart".to_string()),
         Commands::Stop { .. } => Some("stop".to_string()),
+        Commands::Rollback { .. } => None,
         Commands::Container { .. } => Some("container".to_string()),
 
         // Plugin/Hook commands — don't recursively check for plugins

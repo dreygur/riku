@@ -164,6 +164,21 @@ pub enum Commands {
         app: String,
     },
 
+    /// Roll an app back to a previous release
+    #[command(
+        after_help = "Examples:\n  riku rollback myapp\n  riku rollback myapp --to <sha>\n  riku rollback myapp --list"
+    )]
+    Rollback {
+        /// App name
+        app: String,
+        /// Roll back to a specific commit SHA (default: the previous release)
+        #[arg(long)]
+        to: Option<String>,
+        /// List the release history instead of rolling back
+        #[arg(long)]
+        list: bool,
+    },
+
     /// Initialize Riku server (directories + systemd + SSH)
     #[command(after_help = "Examples:\n  riku init\n  riku init --no-systemd")]
     Init {
