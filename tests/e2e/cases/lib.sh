@@ -26,6 +26,15 @@ setup_app() {
         "$RIKU_ROOT/plugins" \
         "$RIKU_ROOT/data/${app}"
 
+    # Seed the bundled runtime plugins so detection works in the isolated root
+    # (no network install). Path is overridable; defaults to the repo copy
+    # baked into the test image at /riku-src/plugins.
+    local bundled="${RIKU_BUNDLED_PLUGINS:-/riku-src/plugins}"
+    if [ -d "$bundled" ]; then
+        cp -r "$bundled"/* "$RIKU_ROOT/plugins/" 2>/dev/null || true
+        chmod +x "$RIKU_ROOT/plugins/"* 2>/dev/null || true
+    fi
+
     # Initialise the bare git repo
     git init --bare "$RIKU_ROOT/repos/${app}.git" --quiet
 
