@@ -12,6 +12,12 @@
 //! - A `Host` allowlist rejects non-loopback Host headers to blunt DNS-rebinding
 //!   from a browser. Mutating actions (later) will add CSRF on top.
 
+// Dependency crates aliased as their former module names.
+pub(crate) use riku_cli as cli;
+pub(crate) use riku_config as config;
+pub(crate) use riku_supervisor as supervisor;
+pub(crate) use riku_util as util;
+
 mod mutations;
 mod routes;
 

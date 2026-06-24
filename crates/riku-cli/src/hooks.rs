@@ -3,8 +3,8 @@
 use anyhow::Result;
 
 use crate::config::RikuPaths;
-use crate::plugins;
-use crate::plugins::discovery;
+use riku_plugins as plugins;
+use riku_plugins::discovery;
 use crate::util::display;
 
 /// List all executable server-side hook plugins installed in ~/.riku/plugins/.

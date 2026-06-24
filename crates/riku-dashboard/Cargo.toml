@@ -1,0 +1,19 @@
+[package]
+name = "riku-dashboard"
+version = "0.1.0"
+edition = "2021"
+description = "Riku embedded read-only web dashboard"
+authors = ["Rakibul Yeasin"]
+repository = "https://github.com/dreygur/riku"
+license = "MIT"
+
+[dependencies]
+riku-config = { path = "../riku-config" }
+riku-util = { path = "../riku-util" }
+riku-supervisor = { path = "../riku-supervisor" }
+riku-cli = { path = "../riku-cli" }
+anyhow = "1"
+axum = "0.7"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+serde_json = "1"
+tracing = "0.1"

@@ -7,7 +7,7 @@ use serde_json::json;
 use crate::config::RikuPaths;
 use crate::util::exit_if_invalid;
 
-use crate::cli::agent::types::AgentResponse;
+use crate::agent::types::AgentResponse;
 
 pub fn cmd_agent_config_get(paths: &RikuPaths, app: &str, key: &str) -> AgentResponse {
     let app = match exit_if_invalid(app, &paths.app_root) {

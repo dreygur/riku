@@ -1,5 +1,12 @@
 //! CLI provider layer — module declarations and public re-exports.
 
+// Dependency crates aliased as their former module names.
+pub(crate) use riku_config as config;
+pub(crate) use riku_deploy as deploy;
+pub(crate) use riku_nginx as nginx;
+pub(crate) use riku_supervisor as supervisor;
+pub(crate) use riku_util as util;
+
 pub mod addon;
 pub mod agent;
 pub mod apps;

@@ -36,9 +36,9 @@ fn is_bare_repo() -> bool {
 /// Deploy from a bare repo by extracting files and setting up auto-deploy hook.
 fn deploy_from_bare_repo(paths: &RikuPaths, app: &str) -> Result<()> {
     let bare_repo = std::env::current_dir()?;
-    crate::cli::git::ensure_repo_symlink(paths, app)?;
-    crate::cli::git::extract_bare_repo_to_app(&bare_repo, app, paths)?;
-    crate::cli::git::setup_post_receive_hook(&bare_repo, app)?;
+    crate::git::ensure_repo_symlink(paths, app)?;
+    crate::git::extract_bare_repo_to_app(&bare_repo, app, paths)?;
+    crate::git::setup_post_receive_hook(&bare_repo, app)?;
     Ok(())
 }
 

@@ -6,7 +6,7 @@ use serde_json::json;
 
 use crate::config::RikuPaths;
 
-use crate::cli::agent::types::AgentResponse;
+use crate::agent::types::AgentResponse;
 
 pub fn cmd_agent_apps(paths: &RikuPaths) -> AgentResponse {
     let app_root = &paths.app_root;
@@ -60,7 +60,7 @@ pub fn cmd_agent_deploy(paths: &RikuPaths, app: &str) -> AgentResponse {
             .as_secs()
     );
 
-    match crate::cli::apps::cmd_deploy(paths, app, None) {
+    match crate::apps::cmd_deploy(paths, app, None) {
         Ok(_) => AgentResponse::success(json!({
             "job_id": job_id,
             "status": "completed",
@@ -97,7 +97,7 @@ pub fn cmd_agent_destroy_confirm(paths: &RikuPaths, app: &str, token: &str) -> A
         if content.starts_with(&format!("destroy:{}:", app)) {
             let _ = fs::remove_file(&token_file);
 
-            match crate::cli::apps::cmd_destroy(paths, app) {
+            match crate::apps::cmd_destroy(paths, app) {
                 Ok(_) => AgentResponse::success(json!({
                     "message": format!("Application '{}' destroyed successfully", app)
                 })),

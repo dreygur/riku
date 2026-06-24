@@ -1761,7 +1761,9 @@ dependencies = [
  "rand",
  "regex",
  "reqwest",
+ "riku-cli",
  "riku-config",
+ "riku-dashboard",
  "riku-deploy",
  "riku-error",
  "riku-nginx",
@@ -1787,8 +1789,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "riku-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "colored",
+ "dirs",
+ "glob",
+ "nix",
+ "reqwest",
+ "riku-config",
+ "riku-deploy",
+ "riku-nginx",
+ "riku-plugins",
+ "riku-supervisor",
+ "riku-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+ "tracing",
+ "which",
+]
+
+[[package]]
 name = "riku-config"
 version = "0.1.0"
+
+[[package]]
+name = "riku-dashboard"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "riku-cli",
+ "riku-config",
+ "riku-supervisor",
+ "riku-util",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "riku-deploy"

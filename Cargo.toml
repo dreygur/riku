@@ -8,6 +8,8 @@ members = [
     "crates/riku-plugins",
     "crates/riku-supervisor",
     "crates/riku-deploy",
+    "crates/riku-cli",
+    "crates/riku-dashboard",
     "crates/riku-plugin-java",
     "crates/riku-plugin-clojure",
     "crates/riku-plugin-container",
@@ -34,6 +36,8 @@ riku-error = { path = "crates/riku-error" }
 riku-plugins = { path = "crates/riku-plugins" }
 riku-supervisor = { path = "crates/riku-supervisor" }
 riku-deploy = { path = "crates/riku-deploy" }
+riku-cli = { path = "crates/riku-cli" }
+riku-dashboard = { path = "crates/riku-dashboard" }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 thiserror = "1"

@@ -4,7 +4,7 @@
 use anyhow::Result;
 
 use crate::config::RikuPaths;
-use crate::plugins::AddonService;
+use riku_plugins::AddonService;
 use crate::util::display;
 
 /// `riku addon list`

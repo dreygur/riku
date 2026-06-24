@@ -50,7 +50,7 @@ fn try_flock(fd: RawFd, operation: libc::c_int) -> io::Result<bool> {
 ///
 /// Returns `Err(DeployError::DeployInProgress)` if another deploy for this
 /// app already holds the lock.
-pub(crate) fn acquire(app: &str, paths: &RikuPaths) -> Result<File> {
+pub fn acquire(app: &str, paths: &RikuPaths) -> Result<File> {
     let lock_dir = paths.riku_root.join("locks");
     fs::create_dir_all(&lock_dir)?;
     let lock_path = lock_dir.join(format!("{}.deploy.lock", app));

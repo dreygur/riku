@@ -18,27 +18,27 @@ pub struct CliControlActions;
 
 impl ControlActions for CliControlActions {
     fn create_app(&self, paths: &RikuPaths, app: &str) -> Result<()> {
-        crate::cli::apps::cmd_apps_create(paths, app)
+        crate::apps::cmd_apps_create(paths, app)
     }
     fn deploy(&self, paths: &RikuPaths, app: &str) -> Result<()> {
-        crate::cli::apps::cmd_deploy(paths, app, None)
+        crate::apps::cmd_deploy(paths, app, None)
     }
     fn restart(&self, paths: &RikuPaths, app: &str) -> Result<()> {
-        crate::cli::apps::cmd_restart(paths, app)
+        crate::apps::cmd_restart(paths, app)
     }
     fn stop(&self, paths: &RikuPaths, app: &str) -> Result<()> {
-        crate::cli::apps::cmd_stop(paths, app)
+        crate::apps::cmd_stop(paths, app)
     }
     fn destroy(&self, paths: &RikuPaths, app: &str) -> Result<()> {
-        crate::cli::apps::cmd_destroy(paths, app)
+        crate::apps::cmd_destroy(paths, app)
     }
     fn install_plugins(&self, paths: &RikuPaths, only: Option<Vec<String>>) -> Result<()> {
-        crate::cli::apps::cmd_install_plugins(paths, only)
+        crate::apps::cmd_install_plugins(paths, only)
     }
     fn container_export(&self, app: &str, context: &Path, output: &Path) -> Result<()> {
         crate::deploy::container_runtime::build_and_export(app, context, output)
     }
     fn list_client_plugins(&self) -> Result<Vec<String>> {
-        crate::cli::client_plugins::list_client_plugins()
+        crate::client_plugins::list_client_plugins()
     }
 }

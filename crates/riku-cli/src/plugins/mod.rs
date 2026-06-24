@@ -6,8 +6,8 @@ mod scaffold;
 use anyhow::Result;
 
 use crate::config::RikuPaths;
-use crate::plugins::install::HealthStatus;
-use crate::plugins::{MarketplaceService, PluginInstaller, PluginManifest};
+use riku_plugins::install::HealthStatus;
+use riku_plugins::{MarketplaceService, PluginInstaller, PluginManifest};
 use crate::util::display;
 
 /// Print the capabilities a plugin's manifest declares, so the operator sees
@@ -245,7 +245,7 @@ pub fn cmd_plugins_scaffold(name: &str, plugin_type: &str, dir: Option<&str>) ->
 
 /// `riku plugins keygen --out <file>`
 pub fn cmd_plugins_keygen(out: &str) -> Result<()> {
-    use crate::plugins::signing::Keypair;
+    use riku_plugins::signing::Keypair;
     use std::os::unix::fs::PermissionsExt;
 
     let path = std::path::Path::new(out);
@@ -265,11 +265,11 @@ pub fn cmd_plugins_keygen(out: &str) -> Result<()> {
 
 /// `riku plugins sign <bundle> --key <file>`
 pub fn cmd_plugins_sign(bundle: &str, key_file: &str) -> Result<()> {
-    use crate::plugins::signing::Keypair;
+    use riku_plugins::signing::Keypair;
 
     let kp = Keypair::from_secret_hex(&std::fs::read_to_string(key_file)?)?;
     let dir = std::path::Path::new(bundle);
-    let manifest = crate::plugins::PluginManifest::from_dir(dir)?;
+    let manifest = riku_plugins::PluginManifest::from_dir(dir)?;
     let entry = manifest.entry_path(dir);
     let signature = kp.sign_hex(&std::fs::read(&entry)?);
 
@@ -309,14 +309,14 @@ fn write_manifest_signature(dir: &std::path::Path, signature: &str) -> Result<()
 
 /// `riku plugins trust add <name> <pubkey>`
 pub fn cmd_trust_add(paths: &RikuPaths, name: &str, pubkey: &str) -> Result<()> {
-    crate::plugins::signing::Keyring::new(paths).add(name, pubkey)?;
+    riku_plugins::signing::Keyring::new(paths).add(name, pubkey)?;
     display::success(&format!("Trusted publisher key '{name}'."));
     Ok(())
 }
 
 /// `riku plugins trust list`
 pub fn cmd_trust_list(paths: &RikuPaths) -> Result<()> {
-    let keys = crate::plugins::signing::Keyring::new(paths).list();
+    let keys = riku_plugins::signing::Keyring::new(paths).list();
     if keys.is_empty() {
         display::note("No trusted keys. Add one: riku plugins trust add <name> <pubkey>");
         return Ok(());
@@ -331,7 +331,7 @@ pub fn cmd_trust_list(paths: &RikuPaths) -> Result<()> {
 
 /// `riku plugins trust remove <name>`
 pub fn cmd_trust_remove(paths: &RikuPaths, name: &str) -> Result<()> {
-    if !crate::plugins::signing::Keyring::new(paths).remove(name)? {
+    if !riku_plugins::signing::Keyring::new(paths).remove(name)? {
         anyhow::bail!("no trusted key named '{name}'");
     }
     display::success(&format!("Removed trusted key '{name}'."));
