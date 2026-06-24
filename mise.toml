@@ -3,7 +3,7 @@
 # Pins the helper-tool versions and codifies every workflow as a task so that
 # `local == CI == release`. Rust itself is owned by rustup via
 # `rust-toolchain.toml`; mise manages the cargo-installed helpers and the task
-# runner. See KERNEL_PLAN.md §5.
+# runner.
 #
 #   mise install      # fetch the helper tools below (first run compiles them)
 #   mise tasks        # list available tasks

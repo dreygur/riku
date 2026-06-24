@@ -72,10 +72,9 @@ Files:
   image → provision SSH keypair → run container → drive traffic →
   collect logs → verdict.
 
-Getting this suite green found one real product bug, since fixed: see
-`PROJECT_STATUS.md`'s "Containerized Production Integration
-Verification" entry for the first-push bare-repo init bug in
-`src/cli/git/receive_pack.rs`.
+Getting this suite green found one real product bug, since fixed: the
+first-push bare-repo init bug in `src/cli/git/receive_pack.rs` (see the git
+history for that fix).
 
 ## Running (non-containerized suite)
 
