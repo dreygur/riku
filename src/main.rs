@@ -8,7 +8,9 @@ use clap::Parser;
 use riku::cli::client_plugins;
 use riku::cli::container;
 use riku::cli::routing::{build_plugin_args, get_plugin_command};
-use riku::cli::{AddonCmd, AppsCmd, Cli, Commands, ConfigCmd, HookCmd, PluginCmd, StatsCmd};
+use riku::cli::{
+    AddonCmd, AppsCmd, Cli, Commands, ConfigCmd, HookCmd, PluginCmd, PluginsCmd, StatsCmd,
+};
 use riku::config::RikuPaths;
 use riku::{cli, dashboard, supervisor};
 
@@ -160,6 +162,11 @@ fn main() -> Result<()> {
         Commands::Plugin(cmd) => match cmd {
             PluginCmd::List => cli::client_plugins::cmd_plugin_list()?,
             PluginCmd::Exists { name } => cli::client_plugins::cmd_plugin_exists(&name)?,
+        },
+        Commands::Plugins(cmd) => match cmd {
+            PluginsCmd::Install { source } => cli::plugins::cmd_plugins_install(&paths, &source)?,
+            PluginsCmd::List => cli::plugins::cmd_plugins_list(&paths)?,
+            PluginsCmd::Remove { name } => cli::plugins::cmd_plugins_remove(&paths, &name)?,
         },
         Commands::Hook(cmd) => match cmd {
             HookCmd::List => cli::hooks::cmd_hook_list(&paths)?,

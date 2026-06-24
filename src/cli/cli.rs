@@ -2,7 +2,7 @@
 
 use clap::{Parser, Subcommand};
 
-use super::cmds::{AddonCmd, AppsCmd, ConfigCmd, HookCmd, PluginCmd, StatsCmd};
+use super::cmds::{AddonCmd, AppsCmd, ConfigCmd, HookCmd, PluginCmd, PluginsCmd, StatsCmd};
 use super::container::ContainerSubCmd;
 
 /// riku — the smallest PaaS you've ever seen (Rust edition)
@@ -238,6 +238,13 @@ pub enum Commands {
         after_help = "Examples:\n  riku plugin list\n  riku plugin exists riku-deploy"
     )]
     Plugin(PluginCmd),
+
+    /// Install/list/remove manifest-based plugin bundles (addons, notifiers, …)
+    #[command(
+        subcommand,
+        after_help = "Examples:\n  riku plugins install ./examples/plugins/postgres\n  riku plugins list\n  riku plugins remove postgres"
+    )]
+    Plugins(PluginsCmd),
 
     /// Manage server-side lifecycle hook plugins
     #[command(

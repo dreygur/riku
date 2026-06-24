@@ -24,6 +24,7 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
 
         // Plugin/Hook commands — don't recursively check for plugins
         Commands::Plugin(_) => None,
+        Commands::Plugins(_) => None,
         Commands::Hook(_) => None,
 
         // Agent command - don't check for plugins

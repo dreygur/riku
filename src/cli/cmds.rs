@@ -175,3 +175,27 @@ pub enum AddonCmd {
         instance: String,
     },
 }
+
+/// Plugin bundle management (manifest-based bundles, ROADMAP E2).
+#[derive(Subcommand, Debug)]
+pub enum PluginsCmd {
+    /// Install a plugin bundle from a local path or git URL
+    #[command(
+        after_help = "Examples:\n  riku plugins install ./examples/plugins/postgres\n  riku plugins install github:riku-plugins/redis"
+    )]
+    Install {
+        /// Local directory or git URL (github:owner/repo, https://…/repo.git)
+        source: String,
+    },
+
+    /// List installed plugin bundles
+    #[command(after_help = "Examples:\n  riku plugins list")]
+    List,
+
+    /// Remove an installed plugin bundle
+    #[command(after_help = "Examples:\n  riku plugins remove postgres")]
+    Remove {
+        /// Plugin name
+        name: String,
+    },
+}

@@ -11,10 +11,11 @@ pub mod container;
 pub mod doctor;
 pub mod git;
 pub mod hooks;
+pub mod plugins;
 pub mod quickstart;
 pub mod routing;
 pub mod scp;
 pub mod setup;
 
 pub use cli::{Cli, Commands};
-pub use cmds::{AddonCmd, AppsCmd, ConfigCmd, HookCmd, PluginCmd, StatsCmd};
+pub use cmds::{AddonCmd, AppsCmd, ConfigCmd, HookCmd, PluginCmd, PluginsCmd, StatsCmd};
