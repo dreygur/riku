@@ -1762,6 +1762,7 @@ dependencies = [
  "regex",
  "reqwest",
  "riku-config",
+ "riku-nginx",
  "riku-util",
  "serde",
  "serde_json",
@@ -1784,6 +1785,19 @@ dependencies = [
 [[package]]
 name = "riku-config"
 version = "0.1.0"
+
+[[package]]
+name = "riku-nginx"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "reqwest",
+ "riku-config",
+ "riku-util",
+ "tempfile",
+ "tera",
+ "tracing",
+]
 
 [[package]]
 name = "riku-plugin-clojure"

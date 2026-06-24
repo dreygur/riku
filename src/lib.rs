@@ -8,7 +8,7 @@ pub use riku_config as config;
 pub mod dashboard;
 pub mod deploy;
 pub mod error;
-pub mod nginx;
+pub use riku_nginx as nginx;
 pub mod plugins;
 pub mod supervisor;
 pub use riku_util as util;

@@ -1,0 +1,19 @@
+[package]
+name = "riku-nginx"
+version = "0.1.0"
+edition = "2021"
+description = "Riku nginx configuration generation (service layer)"
+authors = ["Rakibul Yeasin"]
+repository = "https://github.com/dreygur/riku"
+license = "MIT"
+
+[dependencies]
+riku-config = { path = "../riku-config" }
+riku-util = { path = "../riku-util" }
+anyhow = "1"
+tera = "1"
+tracing = "0.1"
+reqwest = { version = "0.12", features = ["blocking", "json"], default-features = false }
+
+[dev-dependencies]
+tempfile = "3"

@@ -58,39 +58,39 @@ fn register_templates(tera: &mut tera::Tera) -> Result<()> {
     let templates = [
         (
             "nginx.conf.tera",
-            include_str!("../../templates/nginx.conf.tera"),
+            include_str!("../../../templates/nginx.conf.tera"),
         ),
         (
             "nginx_https_only.conf.tera",
-            include_str!("../../templates/nginx_https_only.conf.tera"),
+            include_str!("../../../templates/nginx_https_only.conf.tera"),
         ),
         (
             "nginx_common.conf.tera",
-            include_str!("../../templates/nginx_common.conf.tera"),
+            include_str!("../../../templates/nginx_common.conf.tera"),
         ),
         (
             "nginx_portmap.conf.tera",
-            include_str!("../../templates/nginx_portmap.conf.tera"),
+            include_str!("../../../templates/nginx_portmap.conf.tera"),
         ),
         (
             "nginx_acme_firstrun.conf.tera",
-            include_str!("../../templates/nginx_acme_firstrun.conf.tera"),
+            include_str!("../../../templates/nginx_acme_firstrun.conf.tera"),
         ),
         (
             "nginx_static.conf.tera",
-            include_str!("../../templates/nginx_static.conf.tera"),
+            include_str!("../../../templates/nginx_static.conf.tera"),
         ),
         (
             "nginx_cache.conf.tera",
-            include_str!("../../templates/nginx_cache.conf.tera"),
+            include_str!("../../../templates/nginx_cache.conf.tera"),
         ),
         (
             "nginx_proxy.conf.tera",
-            include_str!("../../templates/nginx_proxy.conf.tera"),
+            include_str!("../../../templates/nginx_proxy.conf.tera"),
         ),
         (
             "nginx_wsgi.conf.tera",
-            include_str!("../../templates/nginx_wsgi.conf.tera"),
+            include_str!("../../../templates/nginx_wsgi.conf.tera"),
         ),
     ];
 

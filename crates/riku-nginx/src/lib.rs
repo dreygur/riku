@@ -3,6 +3,11 @@
 //! Generates nginx configuration files from templates using the tera templating engine.
 //! Handles custom configs, ACME challenge configs, SSL certificates, and Cloudflare ACLs.
 
+// Dependency crates aliased as their former module names so internal
+// `crate::config::` / `crate::util::` paths resolve unchanged.
+pub(crate) use riku_config as config;
+pub(crate) use riku_util as util;
+
 mod cloudflare;
 mod context;
 mod sanitize;
@@ -112,7 +117,7 @@ pub fn generate_acme_nginx_config(paths: &crate::config::RikuPaths) -> Result<()
     let mut tera = tera::Tera::default();
     tera.add_raw_template(
         "acme.conf.tera",
-        include_str!("../../templates/nginx_acme_firstrun.conf.tera"),
+        include_str!("../../../templates/nginx_acme_firstrun.conf.tera"),
     )?;
 
     let mut context = tera::Context::new();
