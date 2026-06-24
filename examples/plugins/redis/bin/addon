@@ -1,0 +1,65 @@
+#!/bin/sh
+# redis addon — Plugin Protocol v1 (PLUGIN_PROTOCOL.md §6.1).
+#
+# Provisions an isolated Redis tenant by creating a per-instance ACL user
+# (Redis ≥6) scoped to its own key namespace `<ident>:*`. The admin connection
+# is the standard local Redis (override with REDISHOST/REDISPORT, and
+# REDISCLI_AUTH for an admin password). Requires `redis-cli` on the host.
+#
+# Each verb receives a JSON request on stdin and emits a JSON response on
+# stdout. Context env: RIKU_ADDON_INSTANCE, RIKU_ADDON_DATA_PATH.
+set -eu
+
+verb="${1:-}"
+cat >/dev/null   # this addon derives everything from context env
+
+instance="$RIKU_ADDON_INSTANCE"
+# A safe ACL username derived from the instance name; also the key prefix.
+ident="riku_$(printf '%s' "$instance" | tr -c 'A-Za-z0-9' '_')"
+creds="$RIKU_ADDON_DATA_PATH/credentials"
+
+host="${REDISHOST:-localhost}"
+port="${REDISPORT:-6379}"
+admin_redis() { redis-cli -h "$host" -p "$port" "$@"; }
+
+case "$verb" in
+  provision)
+    mkdir -p "$RIKU_ADDON_DATA_PATH"
+    pass="$(LC_ALL=C tr -dc 'a-f0-9' </dev/urandom | head -c 32)"
+    # Tenant user: enabled, password, confined to its own key namespace, all
+    # commands allowed within that namespace.
+    admin_redis ACL SETUSER "$ident" on ">$pass" "~$ident:*" "+@all" >/dev/null
+    admin_redis ACL SAVE >/dev/null 2>&1 || true
+    # Persist the connection string for bind (not world-readable). Keys live
+    # under the `<ident>:` prefix — apps must namespace their keys accordingly.
+    printf 'REDIS_URL=redis://%s:%s@%s:%s/0\n' \
+      "$ident" "$pass" "$host" "$port" > "$creds"
+    printf 'REDIS_KEY_PREFIX=%s:\n' "$ident" >> "$creds"
+    chmod 600 "$creds"
+    echo '{}'
+    ;;
+  bind)
+    url="$(sed -n 's/^REDIS_URL=//p' "$creds")"
+    prefix="$(sed -n 's/^REDIS_KEY_PREFIX=//p' "$creds")"
+    printf '{"env":{"REDIS_URL":"%s","REDIS_KEY_PREFIX":"%s"}}' "$url" "$prefix"
+    ;;
+  unbind)
+    echo '{}'
+    ;;
+  deprovision)
+    admin_redis ACL DELUSER "$ident" >/dev/null 2>&1 || true
+    admin_redis ACL SAVE >/dev/null 2>&1 || true
+    echo '{}'
+    ;;
+  backup)
+    artifact="$RIKU_ADDON_DATA_PATH/backup-$(date +%Y%m%d%H%M%S).rdb"
+    # --rdb dumps the whole keyspace (Redis has no per-user export); restore is
+    # operator-driven. See README for the isolation caveat.
+    admin_redis --rdb "$artifact" >/dev/null
+    printf '{"artifact":"%s"}' "$artifact"
+    ;;
+  *)
+    echo "redis: unknown verb '$verb'" >&2
+    exit 1
+    ;;
+esac

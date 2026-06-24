@@ -1,0 +1,11 @@
+name        = "redis"
+version     = "0.1.0"
+type        = "addon"
+api         = 1
+entry       = "bin/addon"
+description = "Managed Redis instance via per-instance ACL users (requires Redis ≥6 + redis-cli on the host)."
+author      = "riku"
+
+[capabilities]
+network = true
+writes  = ["data_dir"]
