@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Builds run under RLIMIT_AS (default 512MB). node/v8 reserves multiple GB of
-# *virtual* address space at startup and aborts under a tight RLIMIT_AS, so the
-# e2e suite raises the build memory ceiling. This is test-environment config
-# only — it does not change riku's production default.
-export RIKU_MAX_MEMORY_MB="${RIKU_MAX_MEMORY_MB:-4096}"
-
 PASS=0
 FAIL=0
 ERRORS=()

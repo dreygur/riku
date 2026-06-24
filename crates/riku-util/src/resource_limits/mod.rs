@@ -66,16 +66,28 @@ impl ResourceLimits {
     /// Load resource limits from environment variables.
     ///
     /// Environment variables:
-    /// - RIKU_MAX_MEMORY_MB: Maximum memory in MB (default: 512)
+    /// - RIKU_MAX_MEMORY_MB: RLIMIT_AS ceiling in MB (default: unset — see below)
     /// - RIKU_MAX_CPU_SECONDS: Maximum CPU time in seconds (default: 3600)
     /// - RIKU_MAX_OPEN_FILES: Maximum open files (default: 1024)
     /// - RIKU_MAX_PROCESSES: Maximum processes, RLIMIT_NPROC, UID-wide (default: disabled — see field doc)
     /// - RIKU_MAX_FILE_SIZE_MB: Maximum file size in MB (default: 1024)
     /// - RIKU_ENABLE_CORE_DUMPS: Enable core dumps (default: false)
+    ///
+    /// **Memory is opt-in.** `RLIMIT_AS` caps *virtual* address space, but
+    /// language runtimes (node/v8, the JVM) reserve multiple GB of virtual
+    /// memory at startup and abort under a tight cap — so applying a default
+    /// `RLIMIT_AS` makes node/JVM builds and workers unrunnable. Resident
+    /// memory for isolated workers is bounded by the cgroup `memory.max`
+    /// instead (see `cgroups`). `RLIMIT_AS` is therefore enforced only when the
+    /// operator explicitly sets `RIKU_MAX_MEMORY_MB`.
     pub fn from_env() -> Self {
-        let mut limits = Self::default();
+        // Memory (RLIMIT_AS) is opt-in: no virtual-address cap unless the
+        // operator asks for one. See the doc comment above for why.
+        let mut limits = Self {
+            max_memory_bytes: None,
+            ..Self::default()
+        };
 
-        // Memory limit in MB
         if let Ok(val) = env::var("RIKU_MAX_MEMORY_MB") {
             if let Ok(mb) = val.parse::<u64>() {
                 limits.max_memory_bytes = Some(mb * 1024 * 1024);
