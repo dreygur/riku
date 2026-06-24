@@ -9,7 +9,7 @@ use super::container::ContainerSubCmd;
 #[derive(Parser, Debug)]
 #[command(
     name = "riku",
-    version,
+    version = "3.0.0",
     about = "riku — the smallest PaaS you've ever seen (Rust edition)",
     long_about = "riku is a single-binary micro-PaaS that provides Heroku-like git push deployments.\nManage apps, config, processes, and plugins — all from one tool."
 )]

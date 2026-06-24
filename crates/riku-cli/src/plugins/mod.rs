@@ -6,9 +6,9 @@ mod scaffold;
 use anyhow::Result;
 
 use crate::config::RikuPaths;
+use crate::util::display;
 use riku_plugins::install::HealthStatus;
 use riku_plugins::{MarketplaceService, PluginInstaller, PluginManifest};
-use crate::util::display;
 
 /// Print the capabilities a plugin's manifest declares, so the operator sees
 /// what they are granting (informed consent, Android-permission style).

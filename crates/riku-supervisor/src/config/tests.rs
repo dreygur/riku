@@ -115,10 +115,7 @@ fn test_create_worker_config_default_riku_vars() {
         config.options.grace_period,
         riku_config::RIKU_WORKER_GRACE_PERIOD
     );
-    assert_eq!(
-        config.options.max_restarts,
-        riku_config::RIKU_MAX_RESTARTS
-    );
+    assert_eq!(config.options.max_restarts, riku_config::RIKU_MAX_RESTARTS);
 }
 
 #[test]
@@ -139,10 +136,7 @@ fn test_create_worker_config_invalid_riku_vars() {
 
     // Should fall back to defaults when parsing fails
     assert_eq!(config.options.timeout, riku_config::RIKU_WORKER_TIMEOUT);
-    assert_eq!(
-        config.options.max_restarts,
-        riku_config::RIKU_MAX_RESTARTS
-    );
+    assert_eq!(config.options.max_restarts, riku_config::RIKU_MAX_RESTARTS);
 }
 
 #[test]

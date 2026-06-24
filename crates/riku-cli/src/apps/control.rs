@@ -86,8 +86,9 @@ pub fn cmd_update() -> Result<()> {
 /// Start the supervisor daemon.
 /// Note: For production use, use 'riku supervisor --daemon' or systemd service.
 pub fn cmd_supervisor(paths: &RikuPaths) -> Result<()> {
-    let mut supervisor = Supervisor::new(paths.workers_enabled.clone())?
-        .with_actions(std::sync::Arc::new(crate::control_actions::CliControlActions));
+    let mut supervisor = Supervisor::new(paths.workers_enabled.clone())?.with_actions(
+        std::sync::Arc::new(crate::control_actions::CliControlActions),
+    );
     supervisor.run()
 }
 

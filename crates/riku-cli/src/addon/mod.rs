@@ -4,8 +4,8 @@
 use anyhow::Result;
 
 use crate::config::RikuPaths;
-use riku_plugins::AddonService;
 use crate::util::display;
+use riku_plugins::AddonService;
 
 /// `riku addon list`
 pub fn cmd_addon_list(paths: &RikuPaths) -> Result<()> {

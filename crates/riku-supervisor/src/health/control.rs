@@ -151,8 +151,9 @@ async fn restart_handler(
     Extension(actions): Extension<SharedActions>,
     Path(app): Path<String>,
 ) -> impl IntoResponse {
-    let handle =
-        run_blocking_command("restart", app, move |paths, app| actions.restart(paths, app));
+    let handle = run_blocking_command("restart", app, move |paths, app| {
+        actions.restart(paths, app)
+    });
     join_blocking(handle).await.into_response()
 }
 
@@ -170,8 +171,9 @@ async fn destroy_handler(
     Extension(actions): Extension<SharedActions>,
     Path(app): Path<String>,
 ) -> impl IntoResponse {
-    let handle =
-        run_blocking_command("destroy", app, move |paths, app| actions.destroy(paths, app));
+    let handle = run_blocking_command("destroy", app, move |paths, app| {
+        actions.destroy(paths, app)
+    });
     join_blocking(handle).await.into_response()
 }
 

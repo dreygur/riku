@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    ".",
+    "crates/riku",
     "crates/riku-config",
     "crates/riku-util",
     "crates/riku-error",
@@ -15,93 +15,6 @@ members = [
     "crates/riku-plugin-container",
 ]
 resolver = "2"
-
-[package]
-name = "riku"
-version = "3.0.0"
-edition = "2021"
-description = "Production-ready PaaS for multi-tenant deployments — in Rust"
-authors = ["Rakibul Yeasin"]
-repository = "https://github.com/dreygur/riku"
-homepage = "https://github.com/dreygur/riku"
-license = "MIT"
-keywords = ["paas", "deployment", "git", "supervisor", "nginx"]
-categories = ["command-line-utilities", "development-tools"]
-
-[dependencies]
-riku-config = { path = "crates/riku-config" }
-riku-util = { path = "crates/riku-util" }
-riku-nginx = { path = "crates/riku-nginx" }
-riku-error = { path = "crates/riku-error" }
-riku-plugins = { path = "crates/riku-plugins" }
-riku-supervisor = { path = "crates/riku-supervisor" }
-riku-deploy = { path = "crates/riku-deploy" }
-riku-cli = { path = "crates/riku-cli" }
-riku-dashboard = { path = "crates/riku-dashboard" }
-clap = { version = "4", features = ["derive"] }
-anyhow = "1"
-thiserror = "1"
-tera = "1"
-serde = { version = "1", features = ["derive"] }
-toml = "0.8"
-nix = { version = "0.29", features = ["signal", "process", "user", "fs", "resource", "sched", "mount"] }
-libc = "0.2"
-notify = "8"
-regex = "1"
-colored = "2"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-which = "7"
-glob = "0.3"
-dirs = "5"
-once_cell = "1"
-reqwest = { version = "0.12", features = ["blocking", "json"], default-features = false }
-serde_json = "1"
-chrono = { version = "0.4", features = ["serde"] }
-croner = "2"
-rand = "0.8"
-subtle = "2"
-sha2 = "0.10"
-ed25519-dalek = { version = "2", features = ["rand_core"] }
-hex = "0.4"
-shell-words = "1"
-threadpool = "1"
-axum = "0.7"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "signal"] }
-tower-http = { version = "0.5", features = ["cors"] }
-futures = "0.3"
-tokio-stream = { version = "0.1", features = ["sync"] }
-landlock = "0.4.5"
-
-[dev-dependencies]
-tempfile = "3"
-criterion = { version = "0.5", features = ["html_reports"] }
-
-# Hardening lints for systems-programming footguns. Denied (not just
-# warned) so `cargo clippy -- -D warnings` — and any CI gate that runs it —
-# fails the build instead of a human having to notice the warning.
-[lints.clippy]
-# A dropped `std::process::Child` whose exit status is never collected
-# leaves a zombie in the process table. This crate forks/spawns workers,
-# plugins, and hook processes throughout (supervisor/process, plugins/*,
-# deploy/*) — exactly the surface where this class of bug bit before
-# (`SpawnedProcess::Drop` and `wait_with_timeout` both exist specifically to
-# always reap). Denying this lint makes "forgot to wait()" a compile error
-# instead of a leak someone notices in `ps` weeks later.
-zombie_processes = "deny"
-# `mem::forget`/`Box::leak` on a value that owns an fd, child handle, or
-# cgroup handle silently skips its `Drop` cleanup (closing fds, killing
-# processes, removing cgroup dirs) — the same class of resource leak the
-# zombie-process lint above targets, generalized to any `Drop` type.
-mem_forget = "deny"
-
-[[test]]
-name = "integration_tests"
-path = "tests/integration_tests/mod.rs"
-
-[[bench]]
-name = "core_benchmarks"
-harness = false
 
 [profile.release]
 lto = true

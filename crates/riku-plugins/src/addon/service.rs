@@ -14,8 +14,8 @@ use std::path::PathBuf;
 
 use anyhow::{anyhow, bail, Result};
 
-use crate::config::RikuPaths;
 use crate::bundles;
+use crate::config::RikuPaths;
 use crate::manifest::PluginManifest;
 
 use super::dispatch::{run_verb, VerbCall};

@@ -1,0 +1,47 @@
+[package]
+name = "riku"
+version = "3.0.0"
+edition = "2021"
+description = "Production-ready PaaS for multi-tenant deployments — in Rust"
+authors = ["Rakibul Yeasin"]
+repository = "https://github.com/dreygur/riku"
+homepage = "https://github.com/dreygur/riku"
+license = "MIT"
+keywords = ["paas", "deployment", "git", "supervisor", "nginx"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+riku-config = { path = "../riku-config" }
+riku-util = { path = "../riku-util" }
+riku-error = { path = "../riku-error" }
+riku-nginx = { path = "../riku-nginx" }
+riku-plugins = { path = "../riku-plugins" }
+riku-supervisor = { path = "../riku-supervisor" }
+riku-deploy = { path = "../riku-deploy" }
+riku-cli = { path = "../riku-cli" }
+riku-dashboard = { path = "../riku-dashboard" }
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[dev-dependencies]
+tempfile = "3"
+criterion = { version = "0.5", features = ["html_reports"] }
+serde_json = "1"
+toml = "0.8"
+glob = "0.3"
+which = "7"
+
+[lints.clippy]
+zombie_processes = "deny"
+mem_forget = "deny"
+
+[[test]]
+name = "integration_tests"
+path = "../../tests/integration_tests/mod.rs"
+
+[[bench]]
+name = "core_benchmarks"
+path = "../../benches/core_benchmarks.rs"
+harness = false
