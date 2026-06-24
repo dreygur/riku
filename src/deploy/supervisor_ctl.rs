@@ -122,11 +122,10 @@ pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
         crate::util::parse_settings(&env_file, &mut env)?;
     }
 
-    // Generate nginx configuration
-    let nginx_result = crate::nginx::generate_nginx_config(app, &app_path, &env, paths);
-    if let Err(e) = nginx_result {
+    // Configure the active router (built-in nginx, or a router plugin)
+    if let Err(e) = crate::deploy::router::configure(app, &app_path, &env, paths) {
         echo(
-            &format!("Warning: Failed to generate nginx config: {}", e),
+            &format!("Warning: Failed to configure router: {}", e),
             "yellow",
         );
     }

@@ -52,6 +52,7 @@ pub mod lockfile;
 pub mod manager;
 pub mod manifest;
 pub mod marketplace;
+pub mod router;
 pub mod runtime;
 pub mod signing;
 

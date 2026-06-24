@@ -1,0 +1,58 @@
+#!/bin/sh
+# caddy router — Plugin Protocol v1 (PLUGIN_PROTOCOL.md §6.2).
+#
+# Exposes apps through Caddy, which handles automatic HTTPS. Requires `caddy`
+# and `jq` on the host.
+#
+# Verbs:
+#   configure  reads {app,domains,upstream_port,https} as one JSON line on
+#              stdin and writes a per-app site file under
+#              $RIKU_ROOT/caddy/sites/<app>.caddy
+#   reload     reloads the running caddy with the generated Caddyfile
+#
+# Context env: RIKU_ROOT (always present), RIKU_APP (configure). Logs go to
+# stderr; this seam has no stdout contract.
+set -eu
+
+verb="${1:-}"
+root="${RIKU_ROOT:?RIKU_ROOT not set}"
+caddy_dir="$root/caddy"
+sites_dir="$caddy_dir/sites"
+caddyfile="$caddy_dir/Caddyfile"
+
+ensure_layout() {
+  mkdir -p "$sites_dir"
+  # The top-level Caddyfile imports every per-app site file.
+  if [ ! -f "$caddyfile" ]; then
+    printf 'import sites/*.caddy\n' >"$caddyfile"
+  fi
+}
+
+case "$verb" in
+  configure)
+    ensure_layout
+    req="$(cat)"
+    app="$(printf '%s' "$req" | jq -r '.app')"
+    port="$(printf '%s' "$req" | jq -r '.upstream_port')"
+    https="$(printf '%s' "$req" | jq -r '.https')"
+    # Space-separated host matcher; an empty list serves plain HTTP on :80.
+    domains="$(printf '%s' "$req" | jq -r '.domains | join(" ")')"
+    [ -n "$domains" ] || domains=":80"
+
+    site="$sites_dir/$app.caddy"
+    {
+      printf '%s {\n' "$domains"
+      printf '\treverse_proxy 127.0.0.1:%s\n' "$port"
+      printf '}\n'
+    } >"$site"
+    printf 'caddy: wrote %s (https=%s)\n' "$site" "$https" >&2
+    ;;
+  reload)
+    ensure_layout
+    caddy reload --config "$caddyfile" --adapter caddyfile >&2
+    ;;
+  *)
+    printf 'caddy: unknown verb: %s\n' "$verb" >&2
+    exit 1
+    ;;
+esac

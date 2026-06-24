@@ -1,0 +1,11 @@
+name        = "caddy"
+version     = "0.1.0"
+type        = "router"
+api         = 1
+entry       = "bin/router"
+description = "Route apps through Caddy with automatic HTTPS (requires caddy on the host)."
+author      = "riku"
+
+[capabilities]
+network = true
+writes  = ["data_dir"]

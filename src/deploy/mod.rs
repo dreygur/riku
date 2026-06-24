@@ -30,6 +30,7 @@ pub mod git_ops;
 pub mod hooks;
 pub(crate) mod lock;
 pub mod releases;
+pub mod router;
 pub mod scaling;
 pub mod supervisor_ctl;
 pub mod workers;
