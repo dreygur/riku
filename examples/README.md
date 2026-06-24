@@ -92,7 +92,7 @@ You can test examples before deploying:
 
 ```bash
 # Run the test script
-../tests/deploy/quick-test.sh test-node node
+../tests/deploy-smoke/quick-test.sh test-node node
 
 # Or run manually
 cd nodejs-wisp
