@@ -18,6 +18,7 @@ pub(crate) fn router(state: DashboardState) -> Router {
         .route("/", get(index))
         .route("/healthz", get(healthz))
         .route("/api/state", get(api_state))
+        .merge(super::mutations::router())
         .with_state(state)
 }
 

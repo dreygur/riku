@@ -59,6 +59,20 @@
       .unk { background: var(--muted); }
       .empty, #error { color: var(--muted); padding: 24px; }
       #error { color: var(--bad); }
+      .actions { display: flex; gap: 8px; margin-top: 12px; }
+      .btn {
+        font: inherit;
+        font-size: 12px;
+        color: var(--fg);
+        background: #1f2430;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 4px 12px;
+        cursor: pointer;
+      }
+      .btn:hover { border-color: var(--accent); }
+      .btn.danger:hover { border-color: var(--bad); color: var(--bad); }
+      .btn:disabled { opacity: 0.5; cursor: default; }
     </style>
   </head>
   <body>
@@ -113,14 +127,45 @@
           )
           .join("");
 
+        const actions = token
+          ? `<div class="actions">
+               <button class="btn" data-act="restart" data-app="${a.app}">restart</button>
+               <button class="btn" data-act="redeploy" data-app="${a.app}">redeploy</button>
+               <button class="btn danger" data-act="stop" data-app="${a.app}">stop</button>
+             </div>`
+          : "";
+
         el.innerHTML = `<h2>${title}</h2>
           <div class="badges">${badges.join("")}</div>
           ${
             workers
               ? `<table><thead><tr><th>process</th><th>status</th><th>pid</th><th>restarts</th></tr></thead><tbody>${workers}</tbody></table>`
               : `<div class="empty">no workers</div>`
-          }`;
+          }
+          ${actions}`;
+        el.querySelectorAll(".btn").forEach((b) =>
+          b.addEventListener("click", () => act(b.dataset.app, b.dataset.act, b))
+        );
         return el;
+      }
+
+      async function act(app, action, btn) {
+        if (!confirm(`${action} ${app}?`)) return;
+        btn.disabled = true;
+        const original = btn.textContent;
+        btn.textContent = action + "…";
+        try {
+          const res = await fetch(`/api/apps/${encodeURIComponent(app)}/${action}`, {
+            method: "POST",
+            headers: { Authorization: "Bearer " + token },
+          });
+          if (!res.ok) throw new Error(res.status + " " + (await res.text()));
+          await load();
+        } catch (e) {
+          alert(`${action} failed: ${e}`);
+          btn.disabled = false;
+          btn.textContent = original;
+        }
       }
 
       async function load() {
