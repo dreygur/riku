@@ -6,7 +6,7 @@ use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 
 use crate::config::RikuPaths;
-use crate::plugins::hooks::{HookContext, PluginHook};
+use crate::hooks::{HookContext, PluginHook};
 
 use super::executor::{emit_plugin_output, plugin_timeout, wait_with_timeout};
 
@@ -45,7 +45,7 @@ impl<'a> PluginManager<'a> {
         let plugin_name = ctx.hook.plugin_name();
 
         // Validate name before path construction
-        if crate::plugins::discovery::validate_plugin_name(plugin_name).is_err() {
+        if crate::discovery::validate_plugin_name(plugin_name).is_err() {
             return Ok(false);
         }
 

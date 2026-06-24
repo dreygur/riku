@@ -16,11 +16,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::config::RikuPaths;
-use crate::plugins::executor::{
+use crate::executor::{
     emit_plugin_output, plugin_timeout, spawn_retrying_etxtbsy, wait_with_timeout,
 };
-use crate::plugins::manifest::{PluginManifest, SubscribeMode};
-use crate::plugins::RIKU_PLUGIN_API;
+use crate::manifest::{PluginManifest, SubscribeMode};
+use crate::RIKU_PLUGIN_API;
 
 use super::{EventEnvelope, EventName};
 
@@ -66,7 +66,7 @@ impl<'a> EventBus<'a> {
 
     /// Plugin bundles whose manifest subscribes to `event`.
     fn subscribers_for(&self, event: &str) -> Vec<(PathBuf, PluginManifest)> {
-        crate::plugins::bundles::find_bundles(&self.paths.plugin_root)
+        crate::bundles::find_bundles(&self.paths.plugin_root)
             .into_iter()
             .filter(|(_, manifest)| manifest.subscribes_to(event))
             .collect()
@@ -93,12 +93,12 @@ impl<'a> EventBus<'a> {
             .process_group(0);
 
         // Confine the subscriber to its declared capabilities before launch.
-        let sandbox_paths = crate::plugins::sandbox::SandboxPaths {
+        let sandbox_paths = crate::sandbox::SandboxPaths {
             app_path: Some(self.paths.app_root.join(&envelope.app)),
             env_path: Some(self.paths.env_root.join(&envelope.app)),
             ..Default::default()
         };
-        crate::plugins::sandbox::harden(&mut cmd, &manifest.capabilities, &sandbox_paths);
+        crate::sandbox::harden(&mut cmd, &manifest.capabilities, &sandbox_paths);
 
         let mut child = match spawn_retrying_etxtbsy(&mut cmd) {
             Ok(child) => child,

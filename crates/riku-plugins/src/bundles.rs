@@ -53,7 +53,7 @@ mod tests {
             dir.join("riku-plugin.toml"),
             format!(
                 "name=\"{name}\"\nversion=\"1\"\ntype=\"{ptype}\"\napi={}\nentry=\"bin/x\"\n",
-                crate::plugins::RIKU_PLUGIN_API
+                crate::RIKU_PLUGIN_API
             ),
         )
         .unwrap();

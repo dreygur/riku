@@ -12,8 +12,8 @@ use std::process::Command;
 use anyhow::{anyhow, bail, Context, Result};
 
 use crate::config::RikuPaths;
-use crate::plugins::install::{git_url, PluginInstaller};
-use crate::plugins::manifest::PluginManifest;
+use crate::install::{git_url, PluginInstaller};
+use crate::manifest::PluginManifest;
 
 pub use index::MarketplaceEntry;
 pub use registry::MarketplaceRecord;

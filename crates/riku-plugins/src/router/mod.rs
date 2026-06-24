@@ -4,7 +4,7 @@
 //! `RIKU_ROUTER` config (default `nginx`, the built-in generator). This module
 //! is the raw verb dispatch to a router *plugin*; the nginx-vs-plugin decision
 //! and the per-app request shaping live in the deploy-layer orchestrator
-//! [`crate::deploy::router`].
+//! the deploy-layer router orchestrator.
 
 mod dispatch;
 

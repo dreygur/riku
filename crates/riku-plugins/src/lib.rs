@@ -40,12 +40,18 @@
 /// envelope. See `PLUGIN_PROTOCOL.md` §2.
 pub const RIKU_PLUGIN_API: u32 = 1;
 
+// Dependency crates aliased as their former module names so internal
+// `crate::config::` / `crate::util::` / `crate::error::` paths resolve.
+pub(crate) use riku_config as config;
+pub(crate) use riku_error as error;
+pub(crate) use riku_util as util;
+
 pub mod addon;
 pub mod bundles;
 #[allow(unused_imports)]
 pub mod discovery;
 pub mod events;
-pub(crate) mod executor;
+pub mod executor;
 pub mod hooks;
 pub mod install;
 pub mod lockfile;

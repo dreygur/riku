@@ -15,8 +15,8 @@ use std::path::PathBuf;
 use anyhow::{anyhow, bail, Result};
 
 use crate::config::RikuPaths;
-use crate::plugins::bundles;
-use crate::plugins::manifest::PluginManifest;
+use crate::bundles;
+use crate::manifest::PluginManifest;
 
 use super::dispatch::{run_verb, VerbCall};
 use super::state::{InstanceRecord, InstanceStore};
@@ -297,7 +297,7 @@ esac
             bundle.join("riku-plugin.toml"),
             format!(
                 "name=\"fakedb\"\nversion=\"1\"\ntype=\"addon\"\napi={}\nentry=\"bin/addon\"\n",
-                crate::plugins::RIKU_PLUGIN_API
+                crate::RIKU_PLUGIN_API
             ),
         )
         .unwrap();

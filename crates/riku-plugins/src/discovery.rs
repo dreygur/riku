@@ -9,7 +9,7 @@ use std::fs;
 use crate::config::RikuPaths;
 
 /// Validate plugin name does not contain path separators or traversal sequences.
-pub(crate) fn validate_plugin_name(plugin_name: &str) -> Result<()> {
+pub fn validate_plugin_name(plugin_name: &str) -> Result<()> {
     if plugin_name.contains('/')
         || plugin_name.contains('\\')
         || plugin_name.contains("..")

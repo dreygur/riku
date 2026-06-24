@@ -6,8 +6,8 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 
 use crate::config::RikuPaths;
-use crate::plugins::hooks::{HookContext, PluginHook};
-use crate::plugins::manager::PluginManager;
+use crate::hooks::{HookContext, PluginHook};
+use crate::manager::PluginManager;
 
 fn setup_paths(temp: &TempDir) -> RikuPaths {
     let riku_root = temp.path().join(".riku");

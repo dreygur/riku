@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 /// Read plugin timeout from `RIKU_PLUGIN_TIMEOUT` env var (seconds).
 /// Defaults to 300 seconds (5 minutes).
-pub(crate) fn plugin_timeout() -> Duration {
+pub fn plugin_timeout() -> Duration {
     std::env::var("RIKU_PLUGIN_TIMEOUT")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
@@ -39,7 +39,7 @@ pub(crate) fn plugin_timeout() -> Duration {
 /// actually is — without masking a real, persistent `ETXTBSY` (e.g. an
 /// actual concurrent writer), which will still fail after the retry budget
 /// is exhausted.
-pub(crate) fn spawn_retrying_etxtbsy(cmd: &mut Command) -> std::io::Result<Child> {
+pub fn spawn_retrying_etxtbsy(cmd: &mut Command) -> std::io::Result<Child> {
     const MAX_ATTEMPTS: u32 = 5;
     const INITIAL_BACKOFF: Duration = Duration::from_millis(5);
 
@@ -74,7 +74,7 @@ const STDERR_TAIL_CAP: usize = 4096;
 /// Callers must `child.wait()` (or `wait_with_timeout`) and then join the
 /// returned handles before reading the tail buffer, so they don't race the
 /// reader threads still draining the pipes.
-pub(crate) fn tee_output(child: &mut Child) -> (Vec<JoinHandle<()>>, Arc<Mutex<String>>) {
+pub fn tee_output(child: &mut Child) -> (Vec<JoinHandle<()>>, Arc<Mutex<String>>) {
     let tail = Arc::new(Mutex::new(String::new()));
     let mut handles = Vec::new();
 
@@ -119,7 +119,7 @@ pub(crate) fn tee_output(child: &mut Child) -> (Vec<JoinHandle<()>>, Arc<Mutex<S
 ///   `tee_output`-captured stderr tail.
 ///
 /// Returns `None` when neither pattern matches.
-pub(crate) fn classify_resource_exit(status: &ExitStatus, stderr_tail: &str) -> Option<String> {
+pub fn classify_resource_exit(status: &ExitStatus, stderr_tail: &str) -> Option<String> {
     #[cfg(unix)]
     {
         use std::os::unix::process::ExitStatusExt;
@@ -164,7 +164,7 @@ pub(crate) fn classify_resource_exit(status: &ExitStatus, stderr_tail: &str) -> 
 /// The shell-convention exit code for a finished child: its real exit code
 /// if it has one, or `128 + signal` if it was killed by a signal (the same
 /// convention `sh`/`bash` use), or `1` if neither is available.
-pub(crate) fn exit_code_for(status: &ExitStatus) -> i32 {
+pub fn exit_code_for(status: &ExitStatus) -> i32 {
     if let Some(code) = status.code() {
         return code;
     }
@@ -180,7 +180,7 @@ pub(crate) fn exit_code_for(status: &ExitStatus) -> i32 {
 
 /// Poll child every 200ms until it exits or the timeout elapses.
 /// Kills the child (and reaps it) on timeout. Returns `true` if timed out.
-pub(crate) fn wait_with_timeout(child: &mut std::process::Child, timeout: Duration) -> bool {
+pub fn wait_with_timeout(child: &mut std::process::Child, timeout: Duration) -> bool {
     let start = Instant::now();
     loop {
         match child.try_wait() {

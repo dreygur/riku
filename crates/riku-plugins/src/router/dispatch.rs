@@ -15,9 +15,9 @@ use std::process::{Command, Stdio};
 use anyhow::{bail, Context, Result};
 
 use crate::config::RikuPaths;
-use crate::plugins::executor::{plugin_timeout, spawn_retrying_etxtbsy, wait_with_timeout};
-use crate::plugins::manifest::PluginManifest;
-use crate::plugins::RIKU_PLUGIN_API;
+use crate::executor::{plugin_timeout, spawn_retrying_etxtbsy, wait_with_timeout};
+use crate::manifest::PluginManifest;
+use crate::RIKU_PLUGIN_API;
 
 /// Invoke a router verb. `input` is written as one JSON line on stdin when
 /// present (`configure`); `reload` passes `None`. App context env is set when

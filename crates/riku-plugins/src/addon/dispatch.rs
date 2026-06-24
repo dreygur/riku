@@ -15,9 +15,9 @@ use std::sync::{Arc, Mutex};
 use anyhow::{bail, Context, Result};
 
 use crate::config::RikuPaths;
-use crate::plugins::executor::{plugin_timeout, spawn_retrying_etxtbsy, wait_with_timeout};
-use crate::plugins::manifest::PluginManifest;
-use crate::plugins::RIKU_PLUGIN_API;
+use crate::executor::{plugin_timeout, spawn_retrying_etxtbsy, wait_with_timeout};
+use crate::manifest::PluginManifest;
+use crate::RIKU_PLUGIN_API;
 
 /// Everything an addon verb invocation needs.
 pub struct VerbCall<'a> {
@@ -47,7 +47,7 @@ pub fn run_verb(call: VerbCall<'_>) -> Result<serde_json::Value> {
         .stderr(Stdio::piped())
         .process_group(0);
 
-    let mut sandbox_paths = crate::plugins::sandbox::SandboxPaths {
+    let mut sandbox_paths = crate::sandbox::SandboxPaths {
         data_path: Some(call.data_path.to_path_buf()),
         ..Default::default()
     };
@@ -60,7 +60,7 @@ pub fn run_verb(call: VerbCall<'_>) -> Result<serde_json::Value> {
     }
 
     // Confine the addon to its declared capabilities before launch.
-    crate::plugins::sandbox::harden(&mut cmd, &call.manifest.capabilities, &sandbox_paths);
+    crate::sandbox::harden(&mut cmd, &call.manifest.capabilities, &sandbox_paths);
 
     let mut child = spawn_retrying_etxtbsy(&mut cmd)
         .with_context(|| format!("spawning addon '{}'", call.manifest.name))?;

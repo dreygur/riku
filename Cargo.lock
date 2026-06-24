@@ -1762,7 +1762,9 @@ dependencies = [
  "regex",
  "reqwest",
  "riku-config",
+ "riku-error",
  "riku-nginx",
+ "riku-plugins",
  "riku-util",
  "serde",
  "serde_json",
@@ -1785,6 +1787,13 @@ dependencies = [
 [[package]]
 name = "riku-config"
 version = "0.1.0"
+
+[[package]]
+name = "riku-error"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+]
 
 [[package]]
 name = "riku-nginx"
@@ -1818,6 +1827,31 @@ name = "riku-plugin-java"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+]
+
+[[package]]
+name = "riku-plugins"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "ed25519-dalek",
+ "hex",
+ "landlock",
+ "libc",
+ "nix",
+ "once_cell",
+ "rand",
+ "reqwest",
+ "riku-config",
+ "riku-error",
+ "riku-util",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "toml",
+ "tracing",
 ]
 
 [[package]]

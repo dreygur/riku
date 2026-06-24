@@ -8,7 +8,7 @@ use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::Command;
 
-use crate::plugins::manifest::Capabilities;
+use crate::manifest::Capabilities;
 
 use super::paths::{Resolved, SandboxPaths};
 

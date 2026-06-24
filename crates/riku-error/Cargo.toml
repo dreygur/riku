@@ -1,0 +1,11 @@
+[package]
+name = "riku-error"
+version = "0.1.0"
+edition = "2021"
+description = "Riku error types"
+authors = ["Rakibul Yeasin"]
+repository = "https://github.com/dreygur/riku"
+license = "MIT"
+
+[dependencies]
+thiserror = "1"

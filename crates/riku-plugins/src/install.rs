@@ -30,7 +30,7 @@ pub fn checksum_of(path: &Path) -> Result<String> {
 
 fn checksum_matches(expected: &str, actual: &str) -> bool {
     let norm = |s: &str| s.trim().trim_start_matches("sha256:").to_ascii_lowercase();
-    crate::supervisor::health::auth::constant_time_eq(&norm(expected), &norm(actual))
+    crate::util::secure::constant_time_eq(&norm(expected), &norm(actual))
 }
 
 /// Installs and removes plugin bundles.
@@ -125,7 +125,7 @@ impl<'a> PluginInstaller<'a> {
         let signer = match &manifest.signature {
             Some(signature) => {
                 let bytes = std::fs::read(&entry)?;
-                match crate::plugins::signing::Keyring::new(self.paths)
+                match crate::signing::Keyring::new(self.paths)
                     .verifier_of(&bytes, signature)
                 {
                     Some(key) => Some(key.name),
@@ -340,7 +340,7 @@ mod tests {
             dir.join("riku-plugin.toml"),
             format!(
                 "name=\"{name}\"\nversion=\"1.0.0\"\ntype=\"addon\"\napi={}\nentry=\"bin/addon\"\n{cs}",
-                crate::plugins::RIKU_PLUGIN_API
+                crate::RIKU_PLUGIN_API
             ),
         )
         .unwrap();
@@ -452,7 +452,7 @@ mod tests {
 
     #[test]
     fn signed_bundle_requires_a_trusted_key() {
-        use crate::plugins::signing::{Keypair, Keyring};
+        use crate::signing::{Keypair, Keyring};
 
         let (tmp, paths) = setup();
         let src = tmp.path().join("signed");
@@ -465,7 +465,7 @@ mod tests {
             src.join("riku-plugin.toml"),
             format!(
                 "name=\"signed\"\nversion=\"1.0.0\"\ntype=\"addon\"\napi={}\nentry=\"bin/addon\"\nsignature=\"{sig}\"\n",
-                crate::plugins::RIKU_PLUGIN_API
+                crate::RIKU_PLUGIN_API
             ),
         )
         .unwrap();

@@ -184,7 +184,7 @@ pub fn build(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result<()> {
     // (or a crafted Cargo.toml/package.json) could exhaust host memory/CPU
     // before any worker limit ever applied. Apply the same RLIMIT_* ceiling
     // used for workers here too.
-    let limits = crate::supervisor::resource_limits::ResourceLimits::from_env();
+    let limits = crate::util::resource_limits::ResourceLimits::from_env();
 
     let mut cmd = Command::new(&plugin.path);
     cmd.arg("build")

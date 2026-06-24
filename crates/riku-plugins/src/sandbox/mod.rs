@@ -31,7 +31,7 @@ pub use paths::SandboxPaths;
 
 use std::process::Command;
 
-use crate::plugins::manifest::Capabilities;
+use crate::manifest::Capabilities;
 
 /// Convenience: build the [`Sandbox`] for `caps`/`paths` and attach it to `cmd`.
 /// Call this on every manifest-based plugin spawn, right before launching.
