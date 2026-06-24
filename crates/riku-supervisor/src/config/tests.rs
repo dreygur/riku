@@ -110,14 +110,14 @@ fn test_create_worker_config_default_riku_vars() {
     );
 
     // Should use defaults from config constants
-    assert_eq!(config.options.timeout, crate::config::RIKU_WORKER_TIMEOUT);
+    assert_eq!(config.options.timeout, riku_config::RIKU_WORKER_TIMEOUT);
     assert_eq!(
         config.options.grace_period,
-        crate::config::RIKU_WORKER_GRACE_PERIOD
+        riku_config::RIKU_WORKER_GRACE_PERIOD
     );
     assert_eq!(
         config.options.max_restarts,
-        crate::config::RIKU_MAX_RESTARTS
+        riku_config::RIKU_MAX_RESTARTS
     );
 }
 
@@ -138,10 +138,10 @@ fn test_create_worker_config_invalid_riku_vars() {
     );
 
     // Should fall back to defaults when parsing fails
-    assert_eq!(config.options.timeout, crate::config::RIKU_WORKER_TIMEOUT);
+    assert_eq!(config.options.timeout, riku_config::RIKU_WORKER_TIMEOUT);
     assert_eq!(
         config.options.max_restarts,
-        crate::config::RIKU_MAX_RESTARTS
+        riku_config::RIKU_MAX_RESTARTS
     );
 }
 

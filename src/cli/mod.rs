@@ -9,6 +9,7 @@ pub mod cli;
 pub mod client_plugins;
 pub mod cmds;
 pub mod container;
+pub mod control_actions;
 pub mod doctor;
 pub mod git;
 pub mod hooks;

@@ -379,8 +379,10 @@ esac
     fn shipped_sqlite_volume_example_works() {
         let tmp = tempfile::tempdir().unwrap();
         let paths = RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
-        let src =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/plugins/sqlite-volume");
+        // CARGO_MANIFEST_DIR is this crate (crates/riku-plugins); the example
+        // bundles live at the workspace root, two levels up.
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/plugins/sqlite-volume");
         let dest = paths.plugin_root.join("sqlite-volume");
         crate::util::copy_dir_recursive(&src, &dest).unwrap();
         std::fs::set_permissions(

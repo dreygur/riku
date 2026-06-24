@@ -3,12 +3,12 @@
 //! Every route here changes on-disk app state or running processes, so each
 //! request must carry `Authorization: Bearer <control_token_file contents>`
 //! (see [`super::auth`]). Handlers reuse the existing CLI command functions
-//! in `crate::cli::apps` rather than re-implementing the logic, so behavior
+//! through the injected `ControlActions` trait rather than re-implementing it, so behavior
 //! stays identical to running `riku <cmd>` directly.
 
 use std::sync::Arc;
 
-use axum::extract::{Path, Request, State};
+use axum::extract::{Extension, Path, Request, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Json};
@@ -16,7 +16,8 @@ use axum::routing::{delete, post};
 use axum::Router;
 use serde_json::{json, Value};
 
-use crate::config::RikuPaths;
+use super::actions::SharedActions;
+use riku_config::RikuPaths;
 
 #[derive(Clone)]
 pub struct ControlState {
@@ -115,7 +116,10 @@ async fn join_blocking(handle: std::thread::JoinHandle<HandlerResult>) -> impl I
 }
 
 /// POST /control/apps — { "name": "myapp" }
-async fn create_app_handler(Json(body): Json<Value>) -> impl IntoResponse {
+async fn create_app_handler(
+    Extension(actions): Extension<SharedActions>,
+    Json(body): Json<Value>,
+) -> impl IntoResponse {
     let name = match body.get("name").and_then(|v| v.as_str()) {
         Some(n) if !n.is_empty() => n.to_string(),
         _ => {
@@ -127,46 +131,55 @@ async fn create_app_handler(Json(body): Json<Value>) -> impl IntoResponse {
         }
     };
 
-    let handle = run_blocking_command("create", name, |paths, app| {
-        crate::cli::apps::cmd_apps_create(paths, app)
+    let handle = run_blocking_command("create", name, move |paths, app| {
+        actions.create_app(paths, app)
     });
     join_blocking(handle).await.into_response()
 }
 
 /// POST /control/apps/:app/deploy
-async fn deploy_handler(Path(app): Path<String>) -> impl IntoResponse {
-    let handle = run_blocking_command("deploy", app, |paths, app| {
-        crate::cli::apps::cmd_deploy(paths, app, None)
-    });
+async fn deploy_handler(
+    Extension(actions): Extension<SharedActions>,
+    Path(app): Path<String>,
+) -> impl IntoResponse {
+    let handle = run_blocking_command("deploy", app, move |paths, app| actions.deploy(paths, app));
     join_blocking(handle).await.into_response()
 }
 
 /// POST /control/apps/:app/restart
-async fn restart_handler(Path(app): Path<String>) -> impl IntoResponse {
-    let handle = run_blocking_command("restart", app, |paths, app| {
-        crate::cli::apps::cmd_restart(paths, app)
-    });
+async fn restart_handler(
+    Extension(actions): Extension<SharedActions>,
+    Path(app): Path<String>,
+) -> impl IntoResponse {
+    let handle =
+        run_blocking_command("restart", app, move |paths, app| actions.restart(paths, app));
     join_blocking(handle).await.into_response()
 }
 
 /// POST /control/apps/:app/stop
-async fn stop_handler(Path(app): Path<String>) -> impl IntoResponse {
-    let handle = run_blocking_command("stop", app, |paths, app| {
-        crate::cli::apps::cmd_stop(paths, app)
-    });
+async fn stop_handler(
+    Extension(actions): Extension<SharedActions>,
+    Path(app): Path<String>,
+) -> impl IntoResponse {
+    let handle = run_blocking_command("stop", app, move |paths, app| actions.stop(paths, app));
     join_blocking(handle).await.into_response()
 }
 
 /// DELETE /control/apps/:app
-async fn destroy_handler(Path(app): Path<String>) -> impl IntoResponse {
-    let handle = run_blocking_command("destroy", app, |paths, app| {
-        crate::cli::apps::cmd_destroy(paths, app)
-    });
+async fn destroy_handler(
+    Extension(actions): Extension<SharedActions>,
+    Path(app): Path<String>,
+) -> impl IntoResponse {
+    let handle =
+        run_blocking_command("destroy", app, move |paths, app| actions.destroy(paths, app));
     join_blocking(handle).await.into_response()
 }
 
 /// POST /control/plugins/install — { "only": ["node", "python"] } (omit for all bundled runtimes)
-async fn install_plugins_handler(body: Option<Json<Value>>) -> impl IntoResponse {
+async fn install_plugins_handler(
+    Extension(actions): Extension<SharedActions>,
+    body: Option<Json<Value>>,
+) -> impl IntoResponse {
     let only: Option<Vec<String>> = body
         .as_ref()
         .and_then(|b| b.get("only"))
@@ -179,7 +192,7 @@ async fn install_plugins_handler(body: Option<Json<Value>>) -> impl IntoResponse
 
     let handle = std::thread::spawn(move || -> HandlerResult {
         let paths = RikuPaths::from_env();
-        match crate::cli::apps::cmd_install_plugins(&paths, only) {
+        match actions.install_plugins(&paths, only) {
             Ok(()) => Ok(Json(json!({"ok": true, "action": "install-plugins"}))),
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -198,7 +211,10 @@ async fn install_plugins_handler(body: Option<Json<Value>>) -> impl IntoResponse
 /// validated app name — never taken from the request — so this can't be
 /// used to build an arbitrary host directory or write outside riku's data
 /// root.
-async fn container_export_handler(Path(app): Path<String>) -> impl IntoResponse {
+async fn container_export_handler(
+    Extension(actions): Extension<SharedActions>,
+    Path(app): Path<String>,
+) -> impl IntoResponse {
     let handle = std::thread::spawn(move || -> HandlerResult {
         let paths = RikuPaths::from_env();
 
@@ -229,7 +245,7 @@ async fn container_export_handler(Path(app): Path<String>) -> impl IntoResponse 
         }
 
         let output = export_dir.join(format!("{}.tar", app));
-        match crate::deploy::container_runtime::build_and_export(&app, &context, &output) {
+        match actions.container_export(&app, &context, &output) {
             Ok(()) => Ok(Json(json!({
                 "ok": true,
                 "app": app,

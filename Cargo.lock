@@ -1765,6 +1765,7 @@ dependencies = [
  "riku-error",
  "riku-nginx",
  "riku-plugins",
+ "riku-supervisor",
  "riku-util",
  "serde",
  "serde_json",
@@ -1851,6 +1852,37 @@ dependencies = [
  "sha2",
  "tempfile",
  "toml",
+ "tracing",
+]
+
+[[package]]
+name = "riku-supervisor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "futures",
+ "hex",
+ "libc",
+ "nix",
+ "notify",
+ "once_cell",
+ "rand",
+ "reqwest",
+ "riku-config",
+ "riku-error",
+ "riku-nginx",
+ "riku-plugins",
+ "riku-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "threadpool",
+ "tokio",
+ "tokio-stream",
+ "toml",
+ "tower-http 0.5.2",
  "tracing",
 ]
 

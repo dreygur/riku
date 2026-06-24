@@ -102,8 +102,8 @@ impl ProcessManager {
 
 #[cfg(test)]
 mod tests {
-    use crate::supervisor::config::{WorkerConfig, WorkerInfo, WorkerOptions};
-    use crate::supervisor::process::ProcessManager;
+    use crate::config::{WorkerConfig, WorkerInfo, WorkerOptions};
+    use crate::process::ProcessManager;
     use std::collections::HashMap;
     use tempfile::TempDir;
 

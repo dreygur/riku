@@ -3,8 +3,8 @@
 use anyhow::Result;
 use std::time::Duration;
 
-use crate::supervisor::config::HealthCheck;
-use crate::supervisor::stats::{get_process_resources, HealthStatus};
+use crate::config::HealthCheck;
+use crate::stats::{get_process_resources, HealthStatus};
 
 use super::ProcessManager;
 

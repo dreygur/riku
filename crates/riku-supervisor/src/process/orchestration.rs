@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::supervisor::config::WorkerConfig;
+use crate::config::WorkerConfig;
 
 use super::generation::{AppGeneration, GenerationStatus, ProbeOutcome};
 use super::ProcessManager;

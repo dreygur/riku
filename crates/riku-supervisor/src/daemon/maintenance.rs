@@ -3,7 +3,7 @@
 use anyhow::Result;
 use std::fs;
 
-use crate::supervisor::daemon::Supervisor;
+use crate::daemon::Supervisor;
 
 impl Supervisor {
     /// Rotate logs for all applications.

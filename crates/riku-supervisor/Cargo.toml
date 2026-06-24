@@ -1,0 +1,37 @@
+[package]
+name = "riku-supervisor"
+version = "0.1.0"
+edition = "2021"
+description = "Riku process supervisor: lifecycle, health, metrics, cron, log rotation"
+authors = ["Rakibul Yeasin"]
+repository = "https://github.com/dreygur/riku"
+license = "MIT"
+
+[dependencies]
+riku-config = { path = "../riku-config" }
+riku-util = { path = "../riku-util" }
+riku-error = { path = "../riku-error" }
+riku-nginx = { path = "../riku-nginx" }
+riku-plugins = { path = "../riku-plugins" }
+anyhow = "1"
+once_cell = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+nix = { version = "0.29", features = ["signal", "process", "user", "fs", "resource", "sched", "mount"] }
+libc = "0.2"
+notify = "8"
+rand = "0.8"
+threadpool = "1"
+tracing = "0.1"
+axum = "0.7"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "signal"] }
+tower-http = { version = "0.5", features = ["cors"] }
+toml = "0.8"
+hex = "0.4"
+reqwest = { version = "0.12", features = ["blocking", "json"], default-features = false }
+futures = "0.3"
+tokio-stream = { version = "0.1", features = ["sync"] }
+
+[dev-dependencies]
+tempfile = "3"

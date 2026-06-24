@@ -10,8 +10,8 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::supervisor::cgroups::{CgroupLimits, WorkerCgroup};
-use crate::supervisor::config::WorkerConfig;
+use crate::cgroups::{CgroupLimits, WorkerCgroup};
+use crate::config::WorkerConfig;
 
 use super::isolation::NamespaceConfig;
 use super::ProcessManager;
@@ -372,8 +372,8 @@ fn run_log_capture_thread(
 #[cfg(test)]
 mod tests {
     use super::{reopen_if_rotated, run_log_capture_thread};
-    use crate::supervisor::config::{WorkerConfig, WorkerInfo, WorkerOptions};
-    use crate::supervisor::process::ProcessManager;
+    use crate::config::{WorkerConfig, WorkerInfo, WorkerOptions};
+    use crate::process::ProcessManager;
     use std::collections::HashMap;
     use std::fs::{self, OpenOptions};
     use std::io::{Read, Write};

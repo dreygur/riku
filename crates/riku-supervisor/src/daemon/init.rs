@@ -8,9 +8,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use threadpool::ThreadPool;
 
-use crate::supervisor::cron::CronScheduler;
-use crate::supervisor::log_rotation::{LogRotationConfig, LogRotator};
-use crate::supervisor::process::ProcessManager;
+use crate::cron::CronScheduler;
+use crate::log_rotation::{LogRotationConfig, LogRotator};
+use crate::process::ProcessManager;
 
 use super::Supervisor;
 
@@ -53,7 +53,15 @@ impl Supervisor {
             cron_thread_pool: ThreadPool::new(10),
             pid_file_lock: None,
             metrics_broadcast_tx: None,
+            actions: std::sync::Arc::new(crate::health::NoopControlActions),
         })
+    }
+
+    /// Inject the control-plane action implementation (provided by the binary).
+    /// Without this, control routes report the control plane as unavailable.
+    pub fn with_actions(mut self, actions: crate::health::SharedActions) -> Self {
+        self.actions = actions;
+        self
     }
 
     /// Create PID file with exclusive lock to prevent multiple supervisors.

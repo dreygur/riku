@@ -18,8 +18,8 @@ pub use spawned::SpawnedProcess;
 use anyhow::Result;
 use std::collections::HashMap;
 
-use crate::supervisor::resource_limits::ResourceLimits;
-use crate::supervisor::stats::StatsManager;
+use crate::resource_limits::ResourceLimits;
+use crate::stats::StatsManager;
 use orchestration::{new_probe_results, ProbeResults};
 
 /// Manages the lifecycle of application processes.

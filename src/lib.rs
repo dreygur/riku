@@ -10,5 +10,5 @@ pub mod deploy;
 pub use riku_error as error;
 pub use riku_nginx as nginx;
 pub use riku_plugins as plugins;
-pub mod supervisor;
+pub use riku_supervisor as supervisor;
 pub use riku_util as util;

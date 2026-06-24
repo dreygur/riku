@@ -112,15 +112,15 @@ fn default_health_check_retries() -> u32 {
 }
 
 fn default_timeout() -> u64 {
-    crate::config::RIKU_WORKER_TIMEOUT
+    riku_config::RIKU_WORKER_TIMEOUT
 }
 
 fn default_grace_period() -> u64 {
-    crate::config::RIKU_WORKER_GRACE_PERIOD
+    riku_config::RIKU_WORKER_GRACE_PERIOD
 }
 
 fn default_max_restarts() -> u32 {
-    crate::config::RIKU_MAX_RESTARTS
+    riku_config::RIKU_MAX_RESTARTS
 }
 
 impl Default for WorkerConfig {

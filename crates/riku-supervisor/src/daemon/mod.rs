@@ -20,9 +20,9 @@ use threadpool::ThreadPool;
 use tokio::sync::broadcast;
 
 use super::{is_running, setup_signal_handlers, RELOAD_COUNTER};
-use crate::supervisor::cron::CronScheduler;
-use crate::supervisor::log_rotation::LogRotator;
-use crate::supervisor::process::ProcessManager;
+use crate::cron::CronScheduler;
+use crate::log_rotation::LogRotator;
+use crate::process::ProcessManager;
 
 /// Whether the supervisor should treat startup diagnostics as production
 /// incidents (escalate to `error` + stderr) rather than dev-environment
@@ -64,6 +64,9 @@ pub struct Supervisor {
     /// Broadcast sender for pushing pre-serialized metrics JSON to SSE clients.
     /// `None` if the health server failed to start.
     pub(super) metrics_broadcast_tx: Option<broadcast::Sender<String>>,
+    /// Control-plane action implementation injected by the binary; defaults to
+    /// a no-op so the supervisor crate stays independent of `cli`/`deploy`.
+    pub(super) actions: crate::health::SharedActions,
 }
 
 impl Supervisor {
@@ -95,15 +98,15 @@ impl Supervisor {
         // (synchronous) main loop's thread directly, just increments
         // RELOAD_COUNTER, which the loop below already polls every
         // iteration regardless of where the increment came from.
-        crate::supervisor::spawn_sighup_listener();
+        crate::spawn_sighup_listener();
 
         // Best-effort check that cgroup v2 isolation, if any worker opts
         // into it, will actually work. Non-fatal: isolation is opt-in per
         // worker, so a riku deployment that never uses it should still run.
         // Without this check the first failure surfaces deep inside
         // spawn_process the moment someone enables isolation.
-        if let Err(e) = crate::supervisor::cgroups::verify_root_writable() {
-            let diagnostic = crate::supervisor::cgroups::startup_diagnostic(&e);
+        if let Err(e) = crate::cgroups::verify_root_writable() {
+            let diagnostic = crate::cgroups::startup_diagnostic(&e);
             if is_production_mode() {
                 // Production deployments shouldn't have to go digging
                 // through `RUST_LOG=debug` output to find this: escalate to
@@ -125,12 +128,13 @@ impl Supervisor {
             .and_then(|p| p.parse().ok())
             .unwrap_or(9091);
 
-        if let Ok(tx) = crate::supervisor::health::start_health_server(
+        if let Ok(tx) = crate::health::start_health_server(
             health_port,
             self.health_running.clone(),
             self.start_time,
             self.stats_file.clone(),
             self.control_token_file.clone(),
+            self.actions.clone(),
         ) {
             self.metrics_broadcast_tx = Some(tx);
         } else {
@@ -288,7 +292,7 @@ impl Supervisor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::supervisor::config::create_worker_config;
+    use crate::config::create_worker_config;
     use std::collections::HashMap;
     use tempfile::TempDir;
 
@@ -348,7 +352,7 @@ mod tests {
         // Start the real async listener under test, then fire an actual
         // SIGHUP at this process — exercising real kernel signal delivery
         // end to end, not a synthetic counter bump.
-        crate::supervisor::spawn_sighup_listener();
+        crate::spawn_sighup_listener();
         RELOAD_COUNTER.store(0, Ordering::SeqCst);
 
         nix::sys::signal::kill(nix::unistd::Pid::this(), nix::sys::signal::Signal::SIGHUP)

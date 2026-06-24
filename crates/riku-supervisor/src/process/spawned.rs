@@ -7,8 +7,8 @@ use std::process::Child;
 use std::thread;
 use std::time::Duration;
 
-use crate::supervisor::cgroups::WorkerCgroup;
-use crate::supervisor::config::{HealthCheck, WorkerConfig};
+use crate::cgroups::WorkerCgroup;
+use crate::config::{HealthCheck, WorkerConfig};
 
 /// Represents a spawned application process with metadata.
 pub struct SpawnedProcess {

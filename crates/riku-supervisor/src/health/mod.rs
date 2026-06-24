@@ -9,10 +9,13 @@
 //! - GET /plugins             - List installed client plugins
 //! - GET /hooks                - List installed server-side hook plugins
 
+pub mod actions;
 pub mod auth;
 mod control;
 mod plugins;
 mod responses;
+
+pub use actions::{ControlActions, NoopControlActions, SharedActions};
 
 #[cfg(test)]
 mod tests;
@@ -69,6 +72,7 @@ pub fn start_health_server(
     start_time: SystemTime,
     stats_file: PathBuf,
     control_token_file: PathBuf,
+    actions: SharedActions,
 ) -> anyhow::Result<broadcast::Sender<String>> {
     let (broadcast_tx, _) = broadcast::channel::<String>(64);
 
@@ -95,7 +99,9 @@ pub fn start_health_server(
     // Mutating routes intentionally carry no CorsLayer — only callers that
     // already hold the control token (the dashboard's server-side proxy)
     // are expected to reach them. See `auth` module docs.
-    let router = readonly_router.merge(control::control_router(control_token));
+    let router = readonly_router
+        .merge(control::control_router(control_token))
+        .layer(axum::extract::Extension(actions));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
 

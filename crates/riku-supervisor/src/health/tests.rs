@@ -19,8 +19,15 @@ fn start_test_server(
         .parent()
         .expect("stats_file must have a parent dir")
         .join("control.token");
-    start_health_server(port, running, start_time, stats_file, control_token_file)
-        .expect("failed to start test health server")
+    start_health_server(
+        port,
+        running,
+        start_time,
+        stats_file,
+        control_token_file,
+        std::sync::Arc::new(super::NoopControlActions),
+    )
+    .expect("failed to start test health server")
 }
 
 fn wait_for_server(port: u16) {

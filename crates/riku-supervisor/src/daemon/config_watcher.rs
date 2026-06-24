@@ -6,9 +6,9 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use crate::supervisor::config::WorkerConfig;
-use crate::supervisor::daemon::Supervisor;
-use crate::supervisor::CONFIG_RELOAD_LOCK;
+use crate::config::WorkerConfig;
+use crate::daemon::Supervisor;
+use crate::CONFIG_RELOAD_LOCK;
 
 impl Supervisor {
     /// Reload all configurations - stop removed configs, start new/modified ones.
@@ -262,7 +262,7 @@ impl Supervisor {
         // latter case should the stats entries be purged; otherwise every
         // destroyed app leaves a permanent ghost row in `/metrics` that
         // nothing ever clears.
-        let paths = crate::config::RikuPaths::from_env();
+        let paths = riku_config::RikuPaths::from_env();
         if !paths.app_root.join(app_name).exists() {
             self.process_manager.stats_mut().remove_app(app_name);
         }

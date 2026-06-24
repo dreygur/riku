@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use crate::supervisor::config::WorkerConfig;
-use crate::supervisor::daemon::Supervisor;
+use crate::config::WorkerConfig;
+use crate::daemon::Supervisor;
 
 impl Supervisor {
     /// Check and execute cron jobs that are due.
@@ -170,7 +170,7 @@ impl Supervisor {
                         let schedule = parts[..5].join(" ");
                         let actual_command = parts[5..].join(" ");
 
-                        if crate::supervisor::cron::validate_cron_expression(&schedule) {
+                        if crate::cron::validate_cron_expression(&schedule) {
                             self.cron_scheduler.add_job(
                                 app,
                                 cron_index,

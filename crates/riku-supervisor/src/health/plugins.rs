@@ -1,18 +1,22 @@
 //! Read-only plugin/hook discovery routes.
 //!
 //! Surfaces the same data as `riku plugin list` and `riku hook list`,
-//! reusing the existing discovery functions in `crate::cli::client_plugins`
+//! via the injected control-plane actions
 //! and `crate::plugins` so the dashboard never drifts from CLI behavior.
 
+use axum::extract::Extension;
 use axum::http::StatusCode;
 use axum::response::Json;
 use serde_json::{json, Value};
 
-use crate::config::RikuPaths;
+use super::actions::SharedActions;
+use riku_config::RikuPaths;
 
 /// GET /plugins — client-side plugins (`~/.riku/client-plugins/`).
-pub(super) async fn plugins_handler() -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    match crate::cli::client_plugins::list_client_plugins() {
+pub(super) async fn plugins_handler(
+    Extension(actions): Extension<SharedActions>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    match actions.list_client_plugins() {
         Ok(plugins) => Ok(Json(json!({ "plugins": plugins }))),
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
