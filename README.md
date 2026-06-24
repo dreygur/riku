@@ -73,7 +73,7 @@ I encourage users to also check out the original [Piku project](https://github.c
 - **Type safety** - Catch errors at compile time
 - **Memory efficient** - No garbage collection overhead
 
-> **Want to benchmark?** I encourage users to run their own benchmarks. See the `benchmarks/` directory for testing scripts. (TODO: Add benchmarking tools)
+> **Want to benchmark?** I encourage users to run their own benchmarks. See the `benches/` directory for testing scripts. (TODO: Add benchmarking tools)
 
 ## Installation
 

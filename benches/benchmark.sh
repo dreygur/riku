@@ -93,8 +93,8 @@ echo ""
 
 echo "=== Share Your Results ==="
 echo "We encourage you to share your benchmark results!"
-echo "Create a file in benchmarks/results/ with your findings."
-echo "See benchmarks/README.md for the format."
+echo "Create a file in benches/results/ with your findings."
+echo "See benches/README.md for the format."
 echo ""
 
 echo -e "${GREEN}Benchmarking complete!${NC}"

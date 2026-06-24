@@ -1,7 +1,7 @@
 # Riku Plugin Protocol v1
 
 > **Status:** design spec for `RIKU_PLUGIN_API = 1`. This is the stable contract
-> the kernel/seam refactor (see `KERNEL_PLAN.md`) is built against. Sections
+> the kernel/seam refactor is built against. Sections
 > marked _(exists)_ describe current behavior being formalized; _(new)_ marks
 > additions. The contract is intentionally small — see §9 on what is *not* a
 > seam.
