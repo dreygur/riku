@@ -217,6 +217,12 @@ implementation. These stay in the kernel for v1:
 ## 10. Security summary
 
 - Checksum verified on install; manifest mismatch is rejected.
+- **Author signatures (optional).** The manifest may carry a hex `signature` —
+  an Ed25519 signature over the entry executable's bytes. The operator trusts
+  publisher keys with `riku plugins trust add <name> <pubkey>`; on install a
+  signed bundle is accepted only if some trusted key verifies it, and otherwise
+  **rejected** (not merely warned). Authors use `riku plugins keygen` /
+  `riku plugins sign`. The verifying key's name is pinned in the lockfile.
 - Capabilities declared in the manifest, shown on install, enforced where the
   platform allows.
 - `gate` mode and `privileged` capability require explicit, elevated trust;

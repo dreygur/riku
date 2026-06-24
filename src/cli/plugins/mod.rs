@@ -37,13 +37,21 @@ pub fn cmd_plugins_install(paths: &RikuPaths, source: &str) -> Result<()> {
         "Installed {} v{} ({:?})",
         manifest.name, manifest.version, manifest.plugin_type
     ));
-    if manifest.checksum.is_some() {
-        display::note("Checksum verified.");
-    } else {
-        display::warn("No checksum pinned in the manifest — installed unverified.");
-    }
+    report_trust(&manifest);
     print_capabilities(&manifest);
     Ok(())
+}
+
+/// Report how trustworthy the installed bundle is: a verified signature is the
+/// strongest, then a pinned checksum, then nothing.
+fn report_trust(manifest: &PluginManifest) {
+    if manifest.signature.is_some() {
+        display::note("Signature verified by a trusted publisher.");
+    } else if manifest.checksum.is_some() {
+        display::note("Checksum verified.");
+    } else {
+        display::warn("No signature or checksum in the manifest — installed unverified.");
+    }
 }
 
 /// `riku plugins list`
@@ -114,9 +122,7 @@ pub fn cmd_plugins_add(paths: &RikuPaths, spec: &str) -> Result<()> {
         "Installed {} v{}",
         manifest.name, manifest.version
     ));
-    if manifest.checksum.is_none() {
-        display::warn("No checksum pinned in the manifest — installed unverified.");
-    }
+    report_trust(&manifest);
     print_capabilities(&manifest);
     Ok(())
 }
@@ -190,6 +196,101 @@ pub fn cmd_marketplace_list(paths: &RikuPaths) -> Result<()> {
 pub fn cmd_marketplace_remove(paths: &RikuPaths, name: &str) -> Result<()> {
     MarketplaceService::new(paths).remove(name)?;
     display::success(&format!("Removed marketplace '{name}'."));
+    Ok(())
+}
+
+/// `riku plugins keygen --out <file>`
+pub fn cmd_plugins_keygen(out: &str) -> Result<()> {
+    use crate::plugins::signing::Keypair;
+    use std::os::unix::fs::PermissionsExt;
+
+    let path = std::path::Path::new(out);
+    if path.exists() {
+        anyhow::bail!("'{out}' already exists — choose another --out path");
+    }
+    let kp = Keypair::generate();
+    std::fs::write(path, format!("{}\n", kp.secret_hex()))?;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+
+    display::success(&format!("Secret key written to {out} (keep it private)."));
+    display::section("Public key (share this so servers can trust you)");
+    println!("  {}", kp.public_hex());
+    display::note("Trust it on a server with: riku plugins trust add <name> <pubkey>");
+    Ok(())
+}
+
+/// `riku plugins sign <bundle> --key <file>`
+pub fn cmd_plugins_sign(bundle: &str, key_file: &str) -> Result<()> {
+    use crate::plugins::signing::Keypair;
+
+    let kp = Keypair::from_secret_hex(&std::fs::read_to_string(key_file)?)?;
+    let dir = std::path::Path::new(bundle);
+    let manifest = crate::plugins::PluginManifest::from_dir(dir)?;
+    let entry = manifest.entry_path(dir);
+    let signature = kp.sign_hex(&std::fs::read(&entry)?);
+
+    write_manifest_signature(dir, &signature)?;
+    display::success(&format!("Signed {} ({})", manifest.name, manifest.entry));
+    Ok(())
+}
+
+/// Set the top-level `signature = "..."` key in a bundle's manifest. The line
+/// is inserted among the top-level keys (before the first `[table]`), never
+/// appended at the end where TOML would nest it inside the last table.
+fn write_manifest_signature(dir: &std::path::Path, signature: &str) -> Result<()> {
+    let path = dir.join("riku-plugin.toml");
+    let existing = std::fs::read_to_string(&path)?;
+    let sig_line = format!("signature = \"{signature}\"\n");
+
+    let mut out = String::new();
+    let mut inserted = false;
+    for line in existing.lines() {
+        // Drop any prior signature line, wherever it sat.
+        if line.trim_start().starts_with("signature") {
+            continue;
+        }
+        // Insert before the first table header so it stays top-level.
+        if !inserted && line.trim_start().starts_with('[') {
+            out.push_str(&sig_line);
+            inserted = true;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    if !inserted {
+        out.push_str(&sig_line);
+    }
+    crate::util::write_atomic(&path, out.as_bytes())
+}
+
+/// `riku plugins trust add <name> <pubkey>`
+pub fn cmd_trust_add(paths: &RikuPaths, name: &str, pubkey: &str) -> Result<()> {
+    crate::plugins::signing::Keyring::new(paths).add(name, pubkey)?;
+    display::success(&format!("Trusted publisher key '{name}'."));
+    Ok(())
+}
+
+/// `riku plugins trust list`
+pub fn cmd_trust_list(paths: &RikuPaths) -> Result<()> {
+    let keys = crate::plugins::signing::Keyring::new(paths).list();
+    if keys.is_empty() {
+        display::note("No trusted keys. Add one: riku plugins trust add <name> <pubkey>");
+        return Ok(());
+    }
+    let rows: Vec<Vec<String>> = keys
+        .iter()
+        .map(|k| vec![k.name.clone(), k.pubkey.clone()])
+        .collect();
+    display::print_table(&["NAME", "PUBLIC KEY"], &rows, 2);
+    Ok(())
+}
+
+/// `riku plugins trust remove <name>`
+pub fn cmd_trust_remove(paths: &RikuPaths, name: &str) -> Result<()> {
+    if !crate::plugins::signing::Keyring::new(paths).remove(name)? {
+        anyhow::bail!("no trusted key named '{name}'");
+    }
+    display::success(&format!("Removed trusted key '{name}'."));
     Ok(())
 }
 

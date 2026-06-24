@@ -10,7 +10,7 @@ use riku::cli::container;
 use riku::cli::routing::{build_plugin_args, get_plugin_command};
 use riku::cli::{
     AddonCmd, AppsCmd, Cli, Commands, ConfigCmd, HookCmd, MarketplaceCmd, PluginCmd, PluginsCmd,
-    StatsCmd,
+    StatsCmd, TrustCmd,
 };
 use riku::config::RikuPaths;
 use riku::{cli, dashboard, supervisor};
@@ -171,6 +171,15 @@ fn main() -> Result<()> {
             PluginsCmd::Search { query } => cli::plugins::cmd_plugins_search(&paths, &query)?,
             PluginsCmd::Add { spec } => cli::plugins::cmd_plugins_add(&paths, &spec)?,
             PluginsCmd::Doctor => cli::plugins::cmd_plugins_doctor(&paths)?,
+            PluginsCmd::Keygen { out } => cli::plugins::cmd_plugins_keygen(&out)?,
+            PluginsCmd::Sign { bundle, key } => cli::plugins::cmd_plugins_sign(&bundle, &key)?,
+            PluginsCmd::Trust(cmd) => match cmd {
+                TrustCmd::Add { name, pubkey } => {
+                    cli::plugins::cmd_trust_add(&paths, &name, &pubkey)?
+                }
+                TrustCmd::List => cli::plugins::cmd_trust_list(&paths)?,
+                TrustCmd::Remove { name } => cli::plugins::cmd_trust_remove(&paths, &name)?,
+            },
             PluginsCmd::Marketplace(cmd) => match cmd {
                 MarketplaceCmd::Add { url, name } => {
                     cli::plugins::cmd_marketplace_add(&paths, &url, name.as_deref())?

@@ -20,4 +20,5 @@ pub mod setup;
 pub use cli::{Cli, Commands};
 pub use cmds::{
     AddonCmd, AppsCmd, ConfigCmd, HookCmd, MarketplaceCmd, PluginCmd, PluginsCmd, StatsCmd,
+    TrustCmd,
 };

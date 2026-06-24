@@ -26,6 +26,10 @@ pub struct LockEntry {
     /// (author-attested), versus a digest we merely recorded.
     #[serde(default)]
     pub author_pinned: bool,
+    /// The trusted key name whose Ed25519 signature verified this bundle on
+    /// install, if it was signed by a trusted publisher.
+    #[serde(default)]
+    pub signer: Option<String>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -103,6 +107,7 @@ mod tests {
             version: "1.0.0".to_string(),
             checksum: Some("sha256:abc".to_string()),
             author_pinned: false,
+            signer: None,
         }
     }
 
