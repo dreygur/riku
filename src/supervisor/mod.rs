@@ -11,12 +11,12 @@ use std::time::Duration;
 
 pub mod cgroups;
 pub mod config;
-pub mod cron;
+pub use crate::util::cron;
 pub mod daemon;
 pub mod health;
 pub mod log_rotation;
 pub mod process;
-pub mod resource_limits;
+pub use crate::util::resource_limits;
 pub mod stats;
 
 pub use daemon::Supervisor;

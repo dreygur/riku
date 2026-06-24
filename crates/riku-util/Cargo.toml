@@ -1,0 +1,24 @@
+[package]
+name = "riku-util"
+version = "0.1.0"
+edition = "2021"
+description = "Riku shared utilities: fs, env, procfile, cron parsing, resource limits"
+authors = ["Rakibul Yeasin"]
+repository = "https://github.com/dreygur/riku"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
+croner = "2"
+libc = "0.2"
+nix = { version = "0.29", features = ["resource"] }
+once_cell = "1"
+regex = "1"
+colored = "2"
+tracing = "0.1"
+subtle = "2"
+which = "7"
+
+[dev-dependencies]
+tempfile = "3"

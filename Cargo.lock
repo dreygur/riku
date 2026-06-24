@@ -1762,6 +1762,7 @@ dependencies = [
  "regex",
  "reqwest",
  "riku-config",
+ "riku-util",
  "serde",
  "serde_json",
  "sha2",
@@ -1803,6 +1804,24 @@ name = "riku-plugin-java"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+]
+
+[[package]]
+name = "riku-util"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "colored",
+ "croner",
+ "libc",
+ "nix",
+ "once_cell",
+ "regex",
+ "subtle",
+ "tempfile",
+ "tracing",
+ "which",
 ]
 
 [[package]]

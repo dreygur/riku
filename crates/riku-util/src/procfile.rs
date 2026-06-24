@@ -17,7 +17,7 @@ use std::fs;
 use std::path::Path;
 
 use super::display::echo;
-use crate::supervisor::cron::validate_cron_expression;
+use crate::cron::validate_cron_expression;
 
 /// Pre-compiled environment variable expansion regex (also used by `env.rs`).
 pub(crate) static ENVVAR_RE: Lazy<Regex> =

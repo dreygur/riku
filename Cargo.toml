@@ -22,6 +22,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 riku-config = { path = "crates/riku-config" }
+riku-util = { path = "crates/riku-util" }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 thiserror = "1"

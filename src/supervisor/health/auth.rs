@@ -53,20 +53,9 @@ fn generate_token() -> String {
     hex::encode(bytes)
 }
 
-/// Constant-time string comparison to avoid leaking token length/prefix
-/// matches through response-time side channels.
-pub fn constant_time_eq(a: &str, b: &str) -> bool {
-    use subtle::ConstantTimeEq;
-
-    let (a, b) = (a.as_bytes(), b.as_bytes());
-    // `ct_eq` requires equal-length slices to compare element-wise; a length
-    // mismatch is a definite non-match (and token lengths are fixed), so the
-    // early return leaks nothing secret while avoiding a panic.
-    if a.len() != b.len() {
-        return false;
-    }
-    a.ct_eq(b).into()
-}
+/// Constant-time string comparison, re-exported from the shared util crate so
+/// existing `health::auth::constant_time_eq` call-sites keep working.
+pub use crate::util::secure::constant_time_eq;
 
 #[cfg(test)]
 mod tests {

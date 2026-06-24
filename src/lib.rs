@@ -11,4 +11,4 @@ pub mod error;
 pub mod nginx;
 pub mod plugins;
 pub mod supervisor;
-pub mod util;
+pub use riku_util as util;
