@@ -128,6 +128,9 @@ fn main() -> Result<()> {
             }
         }
         Commands::Stop { app } => cli::apps::cmd_stop(&paths, &app)?,
+        Commands::Rollback { app, to, list } => {
+            cli::apps::cmd_rollback(&paths, &app, to.as_deref(), list)?
+        }
         Commands::Init { no_systemd } => cli::setup::cmd_init(no_systemd)?,
         Commands::Quickstart {
             name,

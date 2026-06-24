@@ -6,6 +6,19 @@ use std::process::Command;
 
 use crate::util::echo;
 
+/// The current HEAD commit SHA of the app's working tree, if resolvable.
+pub fn head_sha(app_path: &Path) -> Option<String> {
+    let out = Command::new("git")
+        .args(["-C", app_path.to_str()?, "rev-parse", "HEAD"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let sha = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (!sha.is_empty()).then_some(sha)
+}
+
 /// Fetch from origin (best-effort; logs a warning on failure).
 pub fn git_fetch(app_path: &Path) {
     let result = Command::new("git")
