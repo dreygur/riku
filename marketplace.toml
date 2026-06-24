@@ -1,0 +1,25 @@
+# Official Riku plugin marketplace — this repository is itself a marketplace.
+#
+# Register it on a server with:
+#   riku plugins marketplace add github:dreygur/riku
+# Then discover and install:
+#   riku plugins search postgres
+#   riku plugins add sqlite-volume
+
+[[plugin]]
+name        = "sqlite-volume"
+source      = "examples/plugins/sqlite-volume"
+description = "Persistent SQLite database file on a managed volume (no external services)"
+type        = "addon"
+
+[[plugin]]
+name        = "postgres"
+source      = "examples/plugins/postgres"
+description = "Managed PostgreSQL database and role on the host"
+type        = "addon"
+
+[[plugin]]
+name        = "webhook-notify"
+source      = "examples/plugins/webhook-notify"
+description = "POST lifecycle events to a webhook"
+type        = "notifier"

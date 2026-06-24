@@ -46,17 +46,30 @@ impl<'a> PluginInstaller<'a> {
     /// Install from `source` (a local directory or a git URL). Returns the
     /// installed manifest.
     pub fn install(&self, source: &str) -> Result<PluginManifest> {
+        self.install_with_ref(source, None)
+    }
+
+    /// Install, optionally pinning a git `ref` (tag/branch) for git sources.
+    pub fn install_with_ref(&self, source: &str, git_ref: Option<&str>) -> Result<PluginManifest> {
         let local = Path::new(source);
         if local.is_dir() {
+            if git_ref.is_some() {
+                bail!("version pinning is only supported for git sources, not local paths");
+            }
             return self.install_from_dir(local, source);
         }
         if let Some(url) = git_url(source) {
-            return self.install_from_git(&url, source);
+            return self.install_from_git(&url, source, git_ref);
         }
         bail!("source '{source}' is not a local directory or a git URL (try ./path or https://…/repo.git)");
     }
 
-    fn install_from_git(&self, url: &str, source: &str) -> Result<PluginManifest> {
+    fn install_from_git(
+        &self,
+        url: &str,
+        source: &str,
+        git_ref: Option<&str>,
+    ) -> Result<PluginManifest> {
         std::fs::create_dir_all(self.paths.cache_root.as_path())?;
         let tmp = self
             .paths
@@ -65,13 +78,21 @@ impl<'a> PluginInstaller<'a> {
         let _ = std::fs::remove_dir_all(&tmp);
 
         let cloned = (|| {
-            let status = Command::new("git")
-                .args(["clone", "--depth", "1", "--quiet", url])
+            let mut cmd = Command::new("git");
+            cmd.args(["clone", "--depth", "1", "--quiet"]);
+            if let Some(reference) = git_ref {
+                cmd.args(["--branch", reference]);
+            }
+            let status = cmd
+                .arg(url)
                 .arg(&tmp)
                 .status()
                 .context("running git clone")?;
             if !status.success() {
-                bail!("git clone of '{url}' failed");
+                bail!(
+                    "git clone of '{url}'{} failed",
+                    git_ref.map(|r| format!(" at '{r}'")).unwrap_or_default()
+                );
             }
             self.install_from_dir(&tmp, source)
         })();

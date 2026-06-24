@@ -108,6 +108,8 @@ acme/
 !mise.toml
 # Plugin bundle manifests (Plugin Protocol v1) are source, not generated.
 !riku-plugin.toml
+# The repo's own plugin marketplace index.
+!marketplace.toml
 
 # Procfile (app-specific, not repo)
 Procfile

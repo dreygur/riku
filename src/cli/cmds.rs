@@ -188,6 +188,21 @@ pub enum PluginsCmd {
         source: String,
     },
 
+    /// Scaffold a new plugin bundle skeleton (for plugin authors)
+    #[command(
+        after_help = "Examples:\n  riku plugins scaffold my-addon\n  riku plugins scaffold my-notifier --type notifier"
+    )]
+    Scaffold {
+        /// Plugin name (also the directory created)
+        name: String,
+        /// Seam type: runtime, addon, or notifier
+        #[arg(long = "type", default_value = "addon")]
+        plugin_type: String,
+        /// Parent directory to create the bundle in (default: current dir)
+        #[arg(long)]
+        dir: Option<String>,
+    },
+
     /// List installed plugin bundles
     #[command(after_help = "Examples:\n  riku plugins list")]
     List,
