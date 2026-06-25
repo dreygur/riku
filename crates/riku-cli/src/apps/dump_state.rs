@@ -86,6 +86,8 @@ struct WorkerStateEntry {
     pid: Option<u32>,
     status: ProcessStatus,
     restart_count: u32,
+    memory_bytes: u64,
+    cpu_time_ms: u64,
 }
 
 /// Dump the current supervisor state matrix as pretty-printed JSON to stdout.
@@ -122,7 +124,10 @@ fn build_state_dump(paths: &RikuPaths) -> Result<StateDump> {
 
     Ok(StateDump {
         generated_at: unix_timestamp_now(),
-        riku_version: env!("CARGO_PKG_VERSION"),
+        // Product version, kept in step with the CLI's `--version` (the
+        // riku-cli sub-crate's own CARGO_PKG_VERSION is 0.1.0, not the product
+        // version, since the workspace split).
+        riku_version: "3.0.0",
         supervisor_uptime_seconds: supervisor_uptime_seconds(paths),
         apps,
     })
@@ -153,6 +158,8 @@ fn build_app_entry(
                     pid: p.pid,
                     status: p.status.clone(),
                     restart_count: p.restart_count,
+                    memory_bytes: p.memory_bytes,
+                    cpu_time_ms: p.cpu_time_ms,
                 })
                 .collect()
         })
