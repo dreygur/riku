@@ -14,10 +14,12 @@
 
 // Dependency crates aliased as their former module names.
 pub(crate) use riku_cli as cli;
+pub(crate) use riku_deploy as deploy;
 pub(crate) use riku_config as config;
 pub(crate) use riku_supervisor as supervisor;
 pub(crate) use riku_util as util;
 
+mod logs;
 mod mutations;
 mod routes;
 

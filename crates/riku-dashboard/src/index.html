@@ -1,199 +1,391 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>riku</title>
-    <style>
-      :root {
-        --bg: #0f1115;
-        --panel: #171a21;
-        --line: #262b36;
-        --fg: #e6e9ef;
-        --muted: #8b93a7;
-        --accent: #5ee0a0;
-        --warn: #f0b86b;
-        --bad: #f06b6b;
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--fg);
-        font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      }
-      header {
-        display: flex;
-        align-items: baseline;
-        gap: 14px;
-        padding: 18px 24px;
-        border-bottom: 1px solid var(--line);
-      }
-      header h1 { margin: 0; font-size: 18px; letter-spacing: 0.5px; }
-      header .meta { color: var(--muted); font-size: 12px; }
-      main { padding: 20px 24px; display: grid; gap: 14px; max-width: 1000px; }
-      .app {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 14px 16px;
-      }
-      .app h2 { margin: 0 0 4px; font-size: 15px; }
-      .app a { color: var(--accent); text-decoration: none; }
-      .badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
-      .badge {
-        font-size: 11px;
-        padding: 2px 8px;
-        border-radius: 999px;
-        border: 1px solid var(--line);
-        color: var(--muted);
-      }
-      .badge.on { color: var(--accent); border-color: #244; }
-      .badge.warn { color: var(--warn); border-color: #443; }
-      table { width: 100%; border-collapse: collapse; font-size: 13px; }
-      th, td { text-align: left; padding: 4px 8px; border-top: 1px solid var(--line); }
-      th { color: var(--muted); font-weight: 500; }
-      .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-      .run { background: var(--accent); }
-      .stop { background: var(--bad); }
-      .unk { background: var(--muted); }
-      .empty, #error { color: var(--muted); padding: 24px; }
-      #error { color: var(--bad); }
-      .actions { display: flex; gap: 8px; margin-top: 12px; }
-      .btn {
-        font: inherit;
-        font-size: 12px;
-        color: var(--fg);
-        background: #1f2430;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        padding: 4px 12px;
-        cursor: pointer;
-      }
-      .btn:hover { border-color: var(--accent); }
-      .btn.danger:hover { border-color: var(--bad); color: var(--bad); }
-      .btn:disabled { opacity: 0.5; cursor: default; }
-    </style>
-  </head>
-  <body>
-    <header>
-      <h1>riku</h1>
-      <span class="meta" id="meta">loading…</span>
-    </header>
-    <main id="apps"></main>
-    <div id="error" hidden></div>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>riku</title>
+<style>
+  :root {
+    --bg: #0d0f12;
+    --panel: #15181d;
+    --panel-2: #1a1e24;
+    --line: #242a33;
+    --text: #c8ced6;
+    --dim: #6b7480;
+    --faint: #444c57;
+    --alive: #3fd07f;
+    --warn: #e8b54a;
+    --danger: #f25f5c;
+    --info: #5b9dd9;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Menlo", "Consolas", monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: var(--mono); }
+  .label {
+    font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--dim); font-weight: 600;
+  }
 
-    <script>
-      const token = new URLSearchParams(location.search).get("token");
-      const apiUrl = "/api/state" + (token ? "?token=" + encodeURIComponent(token) : "");
+  /* ---- top bar ---- */
+  header {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; align-items: center; gap: 20px;
+    padding: 14px 22px;
+    background: rgba(13,15,18,.86); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { font-family: var(--mono); font-weight: 700; font-size: 19px; letter-spacing: -.01em; }
+  .brand .cursor { color: var(--alive); animation: blink 1.1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .readout { font-family: var(--mono); font-size: 12px; color: var(--dim); }
+  .readout b { color: var(--text); font-weight: 600; }
+  .spacer { flex: 1; }
+  .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--alive); animation: ping 2.4s ease-out infinite; }
+  @keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(63,208,127,.45);} 70%,100% { box-shadow: 0 0 0 7px rgba(63,208,127,0);} }
+  input.token {
+    font-family: var(--mono); font-size: 12px;
+    background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    padding: 6px 9px; border-radius: 6px; width: 150px; outline: none;
+  }
+  input.token:focus { border-color: var(--faint); }
 
-      function statusClass(s) {
-        const v = (typeof s === "string" ? s : JSON.stringify(s)).toLowerCase();
-        if (v.includes("run")) return "run";
-        if (v.includes("stop") || v.includes("exit") || v.includes("fail")) return "stop";
-        return "unk";
-      }
-      function statusText(s) {
-        return typeof s === "string" ? s : JSON.stringify(s);
-      }
-      function fmtUptime(secs) {
-        if (secs == null) return "supervisor: unknown";
-        const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
-        return "uptime " + h + "h" + m + "m";
-      }
+  /* ---- layout ---- */
+  main { max-width: 1080px; margin: 0 auto; padding: 26px 22px 120px; }
 
-      function appCard(a) {
-        const el = document.createElement("section");
-        el.className = "app";
-        const domain = a.routing && a.routing.NGINX_SERVER_NAME;
-        const https = a.routing && a.routing.NGINX_HTTPS_ONLY;
-        const title = domain
-          ? `<a href="${https ? "https" : "http"}://${domain}" target="_blank" rel="noopener">${a.app}</a>`
-          : a.app;
+  .strip {
+    border: 1px solid var(--line); border-radius: 10px;
+    background: linear-gradient(180deg, var(--panel) 0%, #131619 100%);
+    margin-bottom: 16px; overflow: hidden;
+  }
+  .strip-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 15px 18px 13px; }
+  .app-name { font-family: var(--mono); font-weight: 700; font-size: 16px; }
+  .chips { display: flex; gap: 7px; flex-wrap: wrap; }
+  .chip {
+    font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    border: 1px solid var(--line); color: var(--dim); white-space: nowrap;
+  }
+  .chip.dom { color: var(--info); border-color: rgba(91,157,217,.3); }
+  .chip.on { color: var(--alive); border-color: rgba(63,208,127,.3); }
+  .chip.busy { color: var(--warn); border-color: rgba(232,181,74,.35); }
 
-        const badges = [];
-        badges.push(`<span class="badge ${a.nginx && a.nginx.enabled ? "on" : ""}">nginx ${a.nginx && a.nginx.enabled ? "enabled" : "off"}</span>`);
-        if (a.deploy_lock === "held") badges.push(`<span class="badge warn">deploying</span>`);
-        if (domain) badges.push(`<span class="badge">${domain}</span>`);
+  /* ---- worker readouts ---- */
+  .workers { border-top: 1px solid var(--line); }
+  .wk {
+    display: grid;
+    grid-template-columns: 16px 150px 1fr 1fr 64px;
+    align-items: center; gap: 14px;
+    padding: 10px 18px; border-bottom: 1px solid rgba(36,42,51,.5);
+    font-family: var(--mono); font-size: 12.5px;
+  }
+  .wk:last-child { border-bottom: 0; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); }
+  .dot.alive { background: var(--alive); animation: hb 2s ease-in-out infinite; }
+  .dot.warn { background: var(--warn); }
+  .dot.dead { background: var(--danger); }
+  @keyframes hb { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+  .wk .who b { color: var(--text); } .wk .who span { color: var(--dim); }
+  .wk .meta { color: var(--dim); }
+  .bar { position: relative; height: 5px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
+  .bar > i { position: absolute; inset: 0 100% 0 0; background: var(--info); transition: right .4s; }
+  .barwrap { display: grid; grid-template-columns: 30px 1fr 58px; gap: 7px; align-items: center; }
+  .barwrap .label { font-size: 9.5px; }
+  .barwrap .val { text-align: right; color: var(--dim); font-size: 11.5px; }
+  .restarts { text-align: right; color: var(--dim); }
+  .restarts.hot { color: var(--warn); }
 
-        const workers = (a.workers || [])
-          .map(
-            (w) => `<tr>
-              <td>${w.process_id}</td>
-              <td><span class="dot ${statusClass(w.status)}"></span>${statusText(w.status)}</td>
-              <td>${w.pid ?? "—"}</td>
-              <td>${w.restart_count}</td>
-            </tr>`
-          )
-          .join("");
+  /* ---- actions ---- */
+  .bar-actions {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 12px 18px; border-top: 1px solid var(--line); background: rgba(0,0,0,.12);
+  }
+  button.btn {
+    font-family: var(--sans); font-size: 12.5px; font-weight: 500;
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--line); border-radius: 7px; padding: 6px 12px; cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  button.btn:hover { border-color: var(--faint); background: #20252c; }
+  button.btn:disabled { opacity: .4; cursor: not-allowed; }
+  button.btn.danger:hover { border-color: rgba(242,95,92,.5); color: var(--danger); }
+  button.btn.go { border-color: rgba(63,208,127,.3); }
+  .scaler { display: inline-flex; align-items: center; gap: 6px; }
+  .scaler input { width: 46px; font-family: var(--mono); font-size: 12px; text-align: center;
+    background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 5px; }
+  select.rel {
+    font-family: var(--mono); font-size: 11.5px; background: var(--panel); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 5px 6px; max-width: 160px;
+  }
+  .gap { flex: 1; }
 
-        const actions = token
-          ? `<div class="actions">
-               <button class="btn" data-act="restart" data-app="${a.app}">restart</button>
-               <button class="btn" data-act="redeploy" data-app="${a.app}">redeploy</button>
-               <button class="btn danger" data-act="stop" data-app="${a.app}">stop</button>
-             </div>`
-          : "";
+  .empty { text-align: center; color: var(--dim); padding: 70px 20px; }
+  .empty code { font-family: var(--mono); color: var(--alive); background: var(--panel); padding: 2px 7px; border-radius: 5px; }
 
-        el.innerHTML = `<h2>${title}</h2>
-          <div class="badges">${badges.join("")}</div>
-          ${
-            workers
-              ? `<table><thead><tr><th>process</th><th>status</th><th>pid</th><th>restarts</th></tr></thead><tbody>${workers}</tbody></table>`
-              : `<div class="empty">no workers</div>`
-          }
-          ${actions}`;
-        el.querySelectorAll(".btn").forEach((b) =>
-          b.addEventListener("click", () => act(b.dataset.app, b.dataset.act, b))
-        );
-        return el;
-      }
+  /* ---- console drawer ---- */
+  .drawer {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    height: 46vh; transform: translateY(100%); transition: transform .26s cubic-bezier(.2,.8,.2,1);
+    background: #0a0c0e; border-top: 1px solid var(--line);
+    display: flex; flex-direction: column;
+  }
+  .drawer.open { transform: translateY(0); }
+  .drawer-head { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid var(--line); }
+  .drawer-head .label { color: var(--text); }
+  .console { flex: 1; overflow-y: auto; padding: 10px 16px; font-family: var(--mono); font-size: 12px; line-height: 1.55; }
+  .console .ln { white-space: pre-wrap; word-break: break-word; }
+  .console .tag { color: var(--faint); margin-right: 10px; user-select: none; }
+  .x { margin-left: auto; cursor: pointer; color: var(--dim); border: 1px solid var(--line); border-radius: 6px; padding: 3px 9px; }
+  .x:hover { color: var(--text); }
 
-      async function act(app, action, btn) {
-        if (!confirm(`${action} ${app}?`)) return;
-        btn.disabled = true;
-        const original = btn.textContent;
-        btn.textContent = action + "…";
-        try {
-          const res = await fetch(`/api/apps/${encodeURIComponent(app)}/${action}`, {
-            method: "POST",
-            headers: { Authorization: "Bearer " + token },
-          });
-          if (!res.ok) throw new Error(res.status + " " + (await res.text()));
-          await load();
-        } catch (e) {
-          alert(`${action} failed: ${e}`);
-          btn.disabled = false;
-          btn.textContent = original;
+  /* ---- toasts ---- */
+  #toasts { position: fixed; right: 18px; bottom: 18px; z-index: 40; display: flex; flex-direction: column; gap: 8px; }
+  .toast {
+    font-family: var(--mono); font-size: 12.5px; padding: 9px 13px; border-radius: 8px;
+    background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    animation: rise .2s ease-out;
+  }
+  .toast.ok { border-color: rgba(63,208,127,.4); }
+  .toast.err { border-color: rgba(242,95,92,.5); color: #ffd9d8; }
+  @keyframes rise { from { transform: translateY(6px); opacity: 0; } }
+
+  @media (max-width: 620px) {
+    .wk { grid-template-columns: 14px 1fr; gap: 8px; }
+    .wk .pidcol, .wk .barwrap { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pulse, .dot.alive, .brand .cursor { animation: none; }
+    .drawer { transition: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">riku<span class="cursor">&#9612;</span></div>
+  <div class="readout" id="readout">connecting&hellip;</div>
+  <div class="spacer"></div>
+  <div class="pulse" id="pulse" title="live"></div>
+  <input class="token" id="token" type="password" placeholder="control token" autocomplete="off" spellcheck="false" />
+</header>
+
+<main id="main"><div class="empty">Reading the supervisor&hellip;</div></main>
+
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <span class="label" id="drawerTitle">logs</span>
+    <span class="x" id="drawerClose">close</span>
+  </div>
+  <div class="console" id="console"></div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+(function () {
+  const $ = (s, r) => (r || document).querySelector(s);
+  const url = new URL(location.href);
+  const tokenInput = $("#token");
+  tokenInput.value = url.searchParams.get("token") || localStorage.getItem("riku_token") || "";
+  tokenInput.addEventListener("change", () => localStorage.setItem("riku_token", tokenInput.value.trim()));
+  const tok = () => tokenInput.value.trim();
+  const q = () => (tok() ? "?token=" + encodeURIComponent(tok()) : "");
+  const escapeHtml = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+  const fmtBytes = (b) => {
+    if (!b) return "0";
+    const u = ["B", "K", "M", "G"]; let i = 0; let n = b;
+    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+    return (n >= 100 || i === 0 ? Math.round(n) : n.toFixed(1)) + u[i];
+  };
+  const fmtDur = (s) => {
+    s = Math.max(0, s | 0);
+    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    if (d) return d + "d" + h + "h"; if (h) return h + "h" + m + "m"; return m + "m";
+  };
+  const stateOf = (s) => {
+    s = (s || "").toLowerCase();
+    if (s === "running") return ["alive", "running"];
+    if (s === "starting" || s === "restarting") return ["warn", s];
+    if (s === "crashed" || s === "oom_killed") return ["dead", s === "oom_killed" ? "oom-killed" : "crashed"];
+    return ["", s || "stopped"];
+  };
+  const cap = (s) => s[0].toUpperCase() + s.slice(1);
+
+  async function act(app, path, opts) {
+    if (!tok()) { toast("Set the control token first.", "err"); return false; }
+    try {
+      const res = await fetch(`/api/apps/${encodeURIComponent(app)}/${path}`, Object.assign({
+        method: "POST",
+        headers: { Authorization: "Bearer " + tok(), "Content-Type": "application/json" },
+      }, opts || {}));
+      if (res.ok) return true;
+      toast(`${path}: ${(await res.text()) || res.status}`, "err");
+    } catch (e) { toast(`${path}: ${e.message}`, "err"); }
+    return false;
+  }
+
+  // ---- live logs ----
+  const drawer = $("#drawer"), consoleEl = $("#console");
+  let es = null;
+  function openLogs(app) {
+    closeLogs();
+    $("#drawerTitle").textContent = "logs · " + app;
+    consoleEl.innerHTML = "";
+    drawer.classList.add("open");
+    es = new EventSource(`/api/apps/${encodeURIComponent(app)}/logs${q()}`);
+    es.addEventListener("log", (ev) => {
+      const tab = ev.data.indexOf("\t");
+      const tag = tab > 0 ? ev.data.slice(0, tab) : "";
+      const line = tab > 0 ? ev.data.slice(tab + 1) : ev.data;
+      const atBottom = consoleEl.scrollHeight - consoleEl.scrollTop - consoleEl.clientHeight < 40;
+      const div = document.createElement("div");
+      div.className = "ln";
+      div.innerHTML = `<span class="tag">${escapeHtml(tag)}</span>${escapeHtml(line)}`;
+      consoleEl.appendChild(div);
+      while (consoleEl.childNodes.length > 2000) consoleEl.removeChild(consoleEl.firstChild);
+      if (atBottom) consoleEl.scrollTop = consoleEl.scrollHeight;
+    });
+    es.onerror = () => {};
+  }
+  function closeLogs() { if (es) { es.close(); es = null; } drawer.classList.remove("open"); }
+  $("#drawerClose").addEventListener("click", closeLogs);
+
+  // ---- render ----
+  const main = $("#main");
+  const webCount = (ws) => ws.filter((w) => w.kind === "web").length || 1;
+
+  function render(data) {
+    $("#readout").innerHTML = `<b>v${escapeHtml(data.riku_version)}</b> · up ${fmtDur(data.supervisor_uptime_seconds)} · <b>${data.apps.length}</b> app${data.apps.length === 1 ? "" : "s"}`;
+    if (!data.apps.length) {
+      main.innerHTML = `<div class="empty">No apps deployed yet.<br><br>Push one: <code>git push riku main</code></div>`;
+      return;
+    }
+    main.innerHTML = "";
+    for (const a of data.apps) main.appendChild(strip(a));
+  }
+
+  function strip(a) {
+    const el = document.createElement("section");
+    el.className = "strip";
+    const domain = a.routing && a.routing.NGINX_SERVER_NAME;
+    const https = a.routing && a.routing.NGINX_HTTPS_ONLY;
+    const busy = (a.deploy_lock || "").toLowerCase() === "held";
+
+    const chips = [];
+    if (domain) chips.push(`<span class="chip dom">${https ? "https://" : "http://"}${escapeHtml(domain)}</span>`);
+    const nx = a.nginx || {};
+    chips.push(`<span class="chip ${nx.enabled ? "on" : ""}">nginx ${nx.enabled ? "live" : nx.config_exists ? "staged" : "off"}</span>`);
+    if (busy) chips.push(`<span class="chip busy">deploying&hellip;</span>`);
+
+    const workers = (a.workers || []).slice().sort((x, y) => (x.kind + x.ordinal).localeCompare(y.kind + y.ordinal));
+    const rows = workers.length ? workers.map((w) => {
+      const [cls, txt] = stateOf(w.status);
+      const memPct = Math.min(100, (w.memory_bytes || 0) / (256 * 1024 * 1024) * 100);
+      return `<div class="wk">
+        <span class="dot ${cls}" title="${escapeHtml(txt)}"></span>
+        <span class="who"><b>${escapeHtml(w.kind)}.${w.ordinal}</b> <span>${escapeHtml(txt)}</span></span>
+        <span class="barwrap"><span class="label">mem</span><span class="bar"><i style="right:${100 - memPct}%"></i></span><span class="val">${fmtBytes(w.memory_bytes)}</span></span>
+        <span class="meta pidcol">${w.pid ? "pid " + w.pid : "&mdash;"} · cpu ${Math.round((w.cpu_time_ms || 0) / 1000)}s</span>
+        <span class="restarts ${w.restart_count > 0 ? "hot" : ""}">&#8635;${w.restart_count}</span>
+      </div>`;
+    }).join("") : `<div class="wk"><span></span><span class="meta">no workers running</span></div>`;
+
+    el.innerHTML = `
+      <div class="strip-head">
+        <span class="app-name">${escapeHtml(a.app)}</span>
+        <div class="chips">${chips.join("")}</div>
+      </div>
+      <div class="workers">${rows}</div>
+      <div class="bar-actions">
+        <button class="btn" data-do="logs">logs</button>
+        <button class="btn" data-do="restart" ${busy ? "disabled" : ""}>restart</button>
+        <button class="btn go" data-do="redeploy" ${busy ? "disabled" : ""}>redeploy</button>
+        <span class="scaler">
+          <span class="label">scale web</span>
+          <input type="number" min="0" max="32" value="${webCount(workers)}" data-scale />
+          <button class="btn" data-do="scale">set</button>
+        </span>
+        <span class="gap"></span>
+        <select class="rel" data-rel><option value="">roll back to&hellip;</option></select>
+        <button class="btn" data-do="rollback">go</button>
+        <button class="btn danger" data-do="stop" ${busy ? "disabled" : ""}>stop</button>
+      </div>`;
+
+    wire(el, a.app);
+    loadReleases(el, a.app);
+    return el;
+  }
+
+  function wire(el, app) {
+    el.querySelectorAll("[data-do]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const what = btn.dataset.do;
+        if (what === "logs") return openLogs(app);
+        if (what === "scale") {
+          const n = parseInt(el.querySelector("[data-scale]").value, 10);
+          if (await act(app, "scale", { body: JSON.stringify({ web: isNaN(n) ? 1 : n }) })) { toast(`Scaling ${app} web to ${n}.`, "ok"); soon(); }
+          return;
         }
-      }
-
-      async function load() {
-        try {
-          const res = await fetch(apiUrl, { headers: { Accept: "application/json" } });
-          if (!res.ok) throw new Error("API " + res.status + " " + (await res.text()));
-          const data = await res.json();
-          document.getElementById("error").hidden = true;
-
-          const meta = document.getElementById("meta");
-          meta.textContent = `v${data.riku_version} · ${fmtUptime(data.supervisor_uptime_seconds)} · ${data.apps.length} app(s) · ${new Date().toLocaleTimeString()}`;
-
-          const main = document.getElementById("apps");
-          main.innerHTML = "";
-          if (!data.apps.length) {
-            main.innerHTML = `<div class="empty">No apps deployed yet. Push one with <code>git push riku main</code>.</div>`;
-          } else {
-            data.apps.forEach((a) => main.appendChild(appCard(a)));
-          }
-        } catch (e) {
-          const err = document.getElementById("error");
-          err.hidden = false;
-          err.textContent = String(e);
+        if (what === "rollback") {
+          const to = el.querySelector("[data-rel]").value;
+          if (await act(app, "rollback", { body: JSON.stringify(to ? { to } : {}) })) { toast(`Rolling back ${app}.`, "ok"); soon(); }
+          return;
         }
-      }
+        if (what === "stop" && !confirm(`Stop ${app}? Its workers will be shut down.`)) return;
+        if (await act(app, what, {})) { toast(`${cap(what)} ${app}.`, "ok"); soon(); }
+      });
+    });
+  }
 
-      load();
-      setInterval(load, 5000);
-    </script>
-  </body>
+  async function loadReleases(el, app) {
+    try {
+      const res = await fetch(`/api/apps/${encodeURIComponent(app)}/releases${q()}`, { headers: { Accept: "application/json" } });
+      if (!res.ok) return;
+      const rels = await res.json();
+      const sel = el.querySelector("[data-rel]");
+      rels.slice(0, 20).forEach((r) => {
+        const o = document.createElement("option");
+        o.value = r.sha;
+        o.textContent = r.sha.slice(0, 8) + " · " + new Date(r.ts * 1000).toLocaleString();
+        sel.appendChild(o);
+      });
+    } catch (_) {}
+  }
+
+  function toast(msg, kind) {
+    const t = document.createElement("div");
+    t.className = "toast " + (kind || "");
+    t.textContent = msg;
+    $("#toasts").appendChild(t);
+    setTimeout(() => t.remove(), 4200);
+  }
+
+  // ---- poll ----
+  async function load() {
+    try {
+      const res = await fetch("/api/state" + q(), { headers: { Accept: "application/json" } });
+      if (res.status === 401) { $("#readout").textContent = "token required"; return; }
+      if (!res.ok) throw new Error(res.status);
+      $("#pulse").style.opacity = "1";
+      render(await res.json());
+    } catch (e) {
+      $("#pulse").style.opacity = ".2";
+      $("#readout").textContent = "supervisor unreachable — retrying";
+    }
+  }
+  const soon = () => setTimeout(load, 600);
+  load();
+  setInterval(load, 4000);
+  tokenInput.addEventListener("change", load);
+})();
+</script>
+</body>
 </html>

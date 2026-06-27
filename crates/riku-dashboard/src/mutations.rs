@@ -22,6 +22,8 @@ pub(crate) fn router() -> Router<DashboardState> {
         .route("/api/apps/:app/restart", post(restart))
         .route("/api/apps/:app/stop", post(stop))
         .route("/api/apps/:app/redeploy", post(redeploy))
+        .route("/api/apps/:app/scale", post(scale))
+        .route("/api/apps/:app/rollback", post(rollback))
 }
 
 async fn restart(state: State<DashboardState>, headers: HeaderMap, app: Path<String>) -> Response {
@@ -43,6 +45,79 @@ async fn redeploy(state: State<DashboardState>, headers: HeaderMap, app: Path<St
         crate::cli::apps::cmd_deploy(paths, app, None)
     })
     .await
+}
+
+/// POST /api/apps/:app/scale — body `{"web":2,"worker":1}` (kind → count).
+async fn scale(
+    State(state): State<DashboardState>,
+    headers: HeaderMap,
+    Path(app): Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> Response {
+    if let Some(denied) = authorize_mutation(&state, &headers) {
+        return denied;
+    }
+    let app = match crate::util::validate_app_name(&app) {
+        Ok(a) => a,
+        Err(_) => return (StatusCode::BAD_REQUEST, "invalid app name").into_response(),
+    };
+    // Translate the JSON object into the CLI's `kind=count` settings.
+    let settings: Vec<String> = body
+        .as_object()
+        .map(|m| {
+            m.iter()
+                .filter_map(|(k, v)| v.as_u64().map(|n| format!("{k}={n}")))
+                .collect()
+        })
+        .unwrap_or_default();
+    if settings.is_empty() {
+        return (StatusCode::BAD_REQUEST, "no scale settings provided").into_response();
+    }
+
+    let paths = state.paths.clone();
+    let result =
+        tokio::task::spawn_blocking(move || crate::cli::apps::cmd_ps_scale(&paths, &app, &settings))
+            .await;
+    finish(result, "scale")
+}
+
+/// POST /api/apps/:app/rollback — body `{"to":"<sha>"}` (omit `to` for previous).
+async fn rollback(
+    State(state): State<DashboardState>,
+    headers: HeaderMap,
+    Path(app): Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> Response {
+    if let Some(denied) = authorize_mutation(&state, &headers) {
+        return denied;
+    }
+    let app = match crate::util::validate_app_name(&app) {
+        Ok(a) => a,
+        Err(_) => return (StatusCode::BAD_REQUEST, "invalid app name").into_response(),
+    };
+    let to = body
+        .get("to")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+
+    let paths = state.paths.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        crate::deploy::rollback(&app, &paths, to.as_deref())
+    })
+    .await;
+    finish(result, "rollback")
+}
+
+/// Shape a `spawn_blocking` result into the standard action response.
+fn finish(
+    result: Result<anyhow::Result<()>, tokio::task::JoinError>,
+    name: &'static str,
+) -> Response {
+    match result {
+        Ok(Ok(())) => Json(serde_json::json!({ "ok": true, "action": name })).into_response(),
+        Ok(Err(e)) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("task failed: {e}")).into_response(),
+    }
 }
 
 /// Authorize, validate the app name, and run `action` on a blocking task.
