@@ -69,6 +69,21 @@ export interface PluginsList {
   bundles: PluginBundle[];
 }
 
+export interface MarketplaceSource {
+  name: string;
+  url: string;
+}
+export interface MarketplaceHit {
+  marketplace: string;
+  name: string;
+  source: string;
+  description: string | null;
+}
+export interface TrustKey {
+  name: string;
+  pubkey: string;
+}
+
 export const domainOf = (a: AppState) => a.routing?.NGINX_SERVER_NAME;
 export const httpsOf = (a: AppState) => Boolean(a.routing?.NGINX_HTTPS_ONLY);
 export const isBusy = (a: AppState) => (a.deploy_lock || "").toLowerCase() === "held";

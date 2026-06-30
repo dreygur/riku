@@ -24,6 +24,7 @@ mod addons;
 mod appcfg;
 mod installed;
 mod logs;
+mod market;
 mod mutations;
 mod routes;
 mod system;

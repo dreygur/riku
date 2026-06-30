@@ -5,6 +5,9 @@ import type {
   DoctorCheck,
   AddonInstance,
   PluginsList,
+  MarketplaceSource,
+  MarketplaceHit,
+  TrustKey,
 } from "./types";
 
 const base = "/api/riku";
@@ -31,6 +34,15 @@ export const api = {
   doctor: () => get<DoctorCheck[]>("doctor"),
   addons: () => get<AddonInstance[]>("addons"),
   plugins: () => get<PluginsList>("plugins"),
+  marketSources: () => get<MarketplaceSource[]>("marketplace"),
+  marketSearch: (q: string) => get<MarketplaceHit[]>(`marketplace/search?q=${encodeURIComponent(q)}`),
+  marketAdd: (url: string, name?: string) => send("marketplace", "POST", name ? { url, name } : { url }),
+  marketRemove: (name: string) => send(`marketplace/${name}`, "DELETE"),
+  pluginInstall: (source: string) => send("plugins/install", "POST", { source }),
+  pluginRemove: (name: string) => send(`plugins/${name}`, "DELETE"),
+  trust: () => get<TrustKey[]>("trust"),
+  trustAdd: (name: string, pubkey: string) => send("trust", "POST", { name, pubkey }),
+  trustRemove: (name: string) => send(`trust/${name}`, "DELETE"),
 
   restart: (app: string) => send(`apps/${app}/restart`, "POST"),
   stop: (app: string) => send(`apps/${app}/stop`, "POST"),

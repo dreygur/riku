@@ -29,6 +29,19 @@ pub(crate) fn router(state: DashboardState) -> Router {
         .route("/api/apps/:app/backup", post(super::system::backup_app))
         .route("/api/doctor", get(super::system::doctor))
         .route("/api/plugins", get(super::installed::list))
+        .route("/api/plugins/install", post(super::market::install))
+        .route("/api/plugins/:name", axum::routing::delete(super::market::remove_plugin))
+        .route(
+            "/api/marketplace",
+            get(super::market::list_sources).post(super::market::add_source),
+        )
+        .route("/api/marketplace/search", get(super::market::search))
+        .route("/api/marketplace/:name", axum::routing::delete(super::market::remove_source))
+        .route(
+            "/api/trust",
+            get(super::market::list_keys).post(super::market::add_key),
+        )
+        .route("/api/trust/:name", axum::routing::delete(super::market::remove_key))
         // addons (managed datastores)
         .route(
             "/api/addons",
