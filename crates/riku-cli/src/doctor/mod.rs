@@ -9,7 +9,7 @@
 //! Exit code: `0` when nothing failed (warnings allowed), `1` when any check
 //! has [`Status::Fail`], so it composes in CI and provisioning scripts.
 
-mod checks;
+pub mod checks;
 
 use anyhow::Result;
 use colored::Colorize;

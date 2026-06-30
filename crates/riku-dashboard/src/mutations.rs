@@ -109,7 +109,7 @@ async fn rollback(
 }
 
 /// Shape a `spawn_blocking` result into the standard action response.
-fn finish(
+pub(crate) fn finish(
     result: Result<anyhow::Result<()>, tokio::task::JoinError>,
     name: &'static str,
 ) -> Response {
@@ -151,7 +151,7 @@ async fn run_action(
 }
 
 /// Require the configured token in the `Authorization: Bearer` header.
-fn authorize_mutation(state: &DashboardState, headers: &HeaderMap) -> Option<Response> {
+pub(crate) fn authorize_mutation(state: &DashboardState, headers: &HeaderMap) -> Option<Response> {
     let Some(expected) = &state.token else {
         return Some(
             (

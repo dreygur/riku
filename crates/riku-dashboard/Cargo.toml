@@ -13,6 +13,7 @@ riku-util = { path = "../riku-util" }
 riku-supervisor = { path = "../riku-supervisor" }
 riku-cli = { path = "../riku-cli" }
 riku-deploy = { path = "../riku-deploy" }
+riku-plugins = { path = "../riku-plugins" }
 anyhow = "1"
 axum = "0.7"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "fs", "io-util", "sync"] }

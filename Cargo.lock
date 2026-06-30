@@ -1801,6 +1801,7 @@ dependencies = [
  "riku-cli",
  "riku-config",
  "riku-deploy",
+ "riku-plugins",
  "riku-supervisor",
  "riku-util",
  "serde",
