@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use axum::extract::{Query, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Json, Response};
-use axum::routing::get;
+use axum::routing::{delete, get, post};
 use axum::Router;
 
 use super::DashboardState;
@@ -20,6 +20,37 @@ pub(crate) fn router(state: DashboardState) -> Router {
         .route("/api/state", get(api_state))
         .route("/api/apps/:app/releases", get(api_releases))
         .route("/api/apps/:app/logs", get(super::logs::stream))
+        // env editor
+        .route(
+            "/api/apps/:app/env",
+            get(super::appcfg::get_env).post(super::appcfg::edit_env),
+        )
+        // app backup + diagnostics
+        .route("/api/apps/:app/backup", post(super::system::backup_app))
+        .route("/api/doctor", get(super::system::doctor))
+        .route("/api/plugins", get(super::installed::list))
+        .route("/api/plugins/install", post(super::market::install))
+        .route("/api/plugins/:name", axum::routing::delete(super::market::remove_plugin))
+        .route(
+            "/api/marketplace",
+            get(super::market::list_sources).post(super::market::add_source),
+        )
+        .route("/api/marketplace/search", get(super::market::search))
+        .route("/api/marketplace/:name", axum::routing::delete(super::market::remove_source))
+        .route(
+            "/api/trust",
+            get(super::market::list_keys).post(super::market::add_key),
+        )
+        .route("/api/trust/:name", axum::routing::delete(super::market::remove_key))
+        // addons (managed datastores)
+        .route(
+            "/api/addons",
+            get(super::addons::list).post(super::addons::create),
+        )
+        .route("/api/addons/:instance", delete(super::addons::deprovision))
+        .route("/api/addons/:instance/bind", post(super::addons::bind))
+        .route("/api/addons/:instance/unbind", post(super::addons::unbind))
+        .route("/api/addons/:instance/backup", post(super::addons::backup))
         .merge(super::mutations::router())
         .with_state(state)
 }

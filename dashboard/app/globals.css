@@ -1,81 +1,138 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
 
 /*
- * Riku dashboard tokens — CSS-first @theme engine (Tailwind v4).
+ * Riku dashboard — dark "machine readout" theme.
  *
- * Direction: phosphor-amber terminal panel. Riku supervises real processes
- * (PIDs, RSS, restarts) and tails real log output — the palette borrows from
- * the amber/green CRT status monitors this kind of tool has always used,
- * with three distinct status hues (not one accent overloaded for everything):
- *   amber  -> interactive / in-progress / focus
- *   green  -> healthy / running / connected
- *   red    -> crashed / destructive / expired
- *
- * Radius is forced to 0 — the whole UI sits on a fixed-width character grid.
+ * One accent (signal green) that only means alive / action. Status hues
+ * (warn / danger / info) appear only where they carry meaning. Monospace for
+ * machine data; sans for chrome. Radius is forced to 0 everywhere — sharp
+ * corners are the spine of the look.
  */
 
-@theme {
-  /* -- Surfaces -- */
-  --color-background-dark: #0a0b08;
-  --color-background-light: #f4f1e6;
-  --color-surface-card: #101109;
-  --color-surface-elevated: #15160e;
-
-  /* -- Structure / hairlines -- */
-  --color-line: #23241a;
-  --color-line-strong: #3a3c28;
-
-  /* -- Text -- */
-  --color-foreground-dark: #ece7d6;
-  --color-foreground-muted: #8a8d78;
-  --color-foreground-dim: #4f5240;
-
-  /* -- Status vocabulary -- */
-  --color-accent-amber: #ffb627;
-  --color-accent-green: #6fcf7e;
-  --color-accent-red: #ff5c5c;
-
-  /* -- Status fills (wash behind active rows/badges) -- */
-  --color-status-running: #6fcf7e1a;
-  --color-status-error: #ff5c5c26;
-
-  /* -- Typography: each face has one job -- */
-  --font-family-display: var(--font-space-mono), ui-monospace, monospace;
-  --font-family-mono: var(--font-plex-mono), ui-monospace, monospace;
-  --font-family-terminal: var(--font-jetbrains-mono), ui-monospace, monospace;
-}
-
-/* -- Dark mode (default) -- */
+:root,
 .dark {
   color-scheme: dark;
+
+  --radius: 0px;
+
+  --background: #0d0f12;
+  --foreground: #c8ced6;
+
+  --card: #15181d;
+  --card-foreground: #c8ced6;
+  --popover: #15181d;
+  --popover-foreground: #c8ced6;
+
+  --primary: #3fd07f;
+  --primary-foreground: #06130c;
+
+  --secondary: #1a1e24;
+  --secondary-foreground: #c8ced6;
+
+  --muted: #1a1e24;
+  --muted-foreground: #6b7480;
+
+  --accent: #1f242c;
+  --accent-foreground: #e8edf2;
+
+  --destructive: #f25f5c;
+  --destructive-foreground: #1a0606;
+
+  --border: #242a33;
+  --input: #242a33;
+  --ring: #3fd07f;
+
+  --warn: #e8b54a;
+  --info: #5b9dd9;
+
+  --chart-1: #3fd07f;
+  --chart-2: #5b9dd9;
+  --chart-3: #e8b54a;
+  --chart-4: #b48ee8;
+  --chart-5: #f25f5c;
+
+  --sidebar: #101216;
+  --sidebar-foreground: #c8ced6;
+  --sidebar-primary: #3fd07f;
+  --sidebar-primary-foreground: #06130c;
+  --sidebar-accent: #1a1e24;
+  --sidebar-accent-foreground: #e8edf2;
+  --sidebar-border: #242a33;
+  --sidebar-ring: #3fd07f;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 }
 
-/* -- Base resets -- */
-*,
-*::before,
-*::after {
-  border-color: var(--color-line);
-  border-radius: 0 !important;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-warn: var(--warn);
+  --color-info: var(--info);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
 }
 
-body {
-  background-color: var(--color-background-dark);
-  color: var(--color-foreground-dark);
-  font-family: var(--font-family-mono);
-  font-feature-settings: "tnum" 1, "zero" 1;
-}
-
-/* -- Utility layer -- */
-@layer utilities {
-  .tabular {
-    font-variant-numeric: tabular-nums;
+@layer base {
+  * {
+    @apply border-border;
+    border-radius: 0 !important;
   }
-
-  .font-display {
-    font-family: var(--font-family-display);
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
   }
-
-  .font-terminal {
-    font-family: var(--font-family-terminal);
+  .mono {
+    font-family: var(--font-mono);
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
   }
 }
