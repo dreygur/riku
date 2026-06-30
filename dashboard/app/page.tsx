@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AppCard } from "@/components/riku/app-card";
+import { Reveal } from "@/components/riku/reveal";
 import { api } from "@/lib/api";
 import type { RikuState } from "@/lib/types";
 
@@ -44,8 +45,10 @@ export default function Overview() {
 
   return (
     <div className="space-y-4">
-      {state.apps.map((a) => (
-        <AppCard key={a.app} app={a} onChanged={load} />
+      {state.apps.map((a, i) => (
+        <Reveal key={a.app} i={i}>
+          <AppCard app={a} onChanged={load} />
+        </Reveal>
       ))}
     </div>
   );

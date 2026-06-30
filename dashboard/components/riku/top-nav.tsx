@@ -72,6 +72,13 @@ export function TopNav() {
       </div>
 
       <div className="flex-1" />
+      <button
+        onClick={() => window.dispatchEvent(new Event("riku-open-command"))}
+        className="border border-border px-2 py-1 font-mono text-[11px] text-muted-foreground hover:text-foreground"
+        title="command palette"
+      >
+        ⌘K
+      </button>
       <span
         className={cn(
           "h-1.5 w-1.5",
