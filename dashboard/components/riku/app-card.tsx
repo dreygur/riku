@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,7 +52,12 @@ export function AppCard({ app, onChanged }: { app: AppState; onChanged: () => vo
     <section className="border border-border bg-card">
       {/* header */}
       <div className="flex flex-wrap items-center gap-3 px-4 pt-4 pb-3">
-        <h2 className="font-mono text-base font-bold">{app.app}</h2>
+        <Link
+          href={`/apps/${app.app}`}
+          className="font-mono text-base font-bold hover:text-[#3fd07f]"
+        >
+          {app.app}
+        </Link>
         {domain && (
           <span className="border border-info/30 px-2 py-0.5 font-mono text-[11px] text-info">
             {https ? "https://" : "http://"}

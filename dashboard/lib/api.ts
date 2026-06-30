@@ -41,6 +41,15 @@ export const api = {
     send(`apps/${app}/env`, "POST", { set, unset }),
   backup: (app: string) => send(`apps/${app}/backup`, "POST"),
 
+  // addons (managed datastores)
+  addonCreate: (plugin: string, instance: string) =>
+    send("addons", "POST", { plugin, instance }),
+  addonBind: (instance: string, app: string) => send(`addons/${instance}/bind`, "POST", { app }),
+  addonUnbind: (instance: string, app: string) =>
+    send(`addons/${instance}/unbind`, "POST", { app }),
+  addonBackup: (instance: string) => send(`addons/${instance}/backup`, "POST"),
+  addonDestroy: (instance: string) => send(`addons/${instance}`, "DELETE"),
+
   // SSE stream URL (consumed by EventSource)
   logsUrl: (app: string) => `${base}/apps/${app}/logs`,
 };
