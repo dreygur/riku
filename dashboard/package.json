@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "audit:dashboard": "npx tsx scripts/audit-dashboard.ts",
+    "audit:dashboard": "nubx tsx scripts/audit-dashboard.ts",
     "test:unit": "playwright test --project=unit",
     "test:e2e": "playwright test --project=e2e"
   },
@@ -37,5 +37,16 @@
     "@types/react-dom": "19.2.3",
     "tailwindcss": "^4.3.1",
     "typescript": "^5.8.3"
+  },
+  "packageManager": "nub@0.2.10",
+  "devEngines": {
+    "packageManager": {
+      "name": "nub",
+      "version": "^0.2.10",
+      "onFail": "warn"
+    }
+  },
+  "allowBuilds": {
+    "sharp": true
   }
 }

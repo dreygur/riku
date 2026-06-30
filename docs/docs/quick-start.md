@@ -191,7 +191,7 @@ When you push to Riku:
 
 1. **Git hook triggers** - Post-receive hook extracts code to `~/.riku/apps/`
 2. **Runtime detection** - Riku detects Python, Node.js, Go, etc.
-3. **Dependencies install** - npm install, pip install, etc.
+3. **Dependencies install** - nub install (Node), pip install (Python), etc.
 4. **Nginx config** - Automatically created and symlinked to `/etc/nginx/sites-enabled/`
 5. **Supervisor starts** - If not running, supervisor auto-starts and spawns workers
 6. **App running** - Your app is live!

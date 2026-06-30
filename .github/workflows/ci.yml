@@ -47,6 +47,30 @@ jobs:
       - name: Build release
         run: mise run build:release
 
+  dashboard:
+    name: Dashboard (nub)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      # Replaces actions/setup-node — installs nub (and Node) and caches the store.
+      - name: Install nub
+        uses: nubjs/setup-nub@v0
+        with:
+          cache-dependency-path: dashboard/lock.yaml
+
+      - name: Install dependencies
+        run: nub install --frozen-lockfile
+
+      - name: Type-check
+        run: nub run typecheck
+
+      - name: Build
+        run: nub run build
+
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest

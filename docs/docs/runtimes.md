@@ -113,22 +113,19 @@ web: npm start
 web: node server.js
 ```
 
-### Package Managers
+### Package Manager
 
-**npm (default):**
-```bash
-riku config set myapp NODE_PACKAGE_MANAGER=npm
-```
+Riku builds Node apps with [nub](https://nubjs.com) — a single Rust binary that
+reads `npm`, `pnpm`, and `bun` lockfiles directly, so there is no package
+manager to choose. Commit a lockfile and Riku installs from it:
 
-**yarn:**
-```bash
-riku config set myapp NODE_PACKAGE_MANAGER=yarn
-```
+- Lockfile present (`package-lock.json`, `pnpm-lock.yaml`, `lock.yaml`, or
+  `bun.lock`) → `nub ci --prod` (clean, frozen install).
+- No lockfile → `nub install --prod`.
 
-**pnpm:**
-```bash
-riku config set myapp NODE_PACKAGE_MANAGER=pnpm
-```
+If the server doesn't have nub, Riku falls back to `npm` (`npm ci` /
+`npm install`) so existing deployments keep working. Install the faster path
+with `npm install -g @nubjs/nub`.
 
 ### Environment Variables
 

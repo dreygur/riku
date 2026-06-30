@@ -269,13 +269,10 @@ NODE_VERSION=18.17.0
 
 ### Node Package Manager
 
-```bash
-NODE_PACKAGE_MANAGER=yarn
-```
-
-- **Default:** `npm`
-- **Description:** Package manager to use for installing dependencies
-- **Values:** `npm` | `yarn` | `pnpm`
+Riku builds Node apps with [nub](https://nubjs.com), which auto-detects the
+lockfile in your repo (`npm`, `pnpm`, or `bun`) — there is no package-manager
+setting to configure. Commit a lockfile to pin your dependency versions. See
+[Runtimes → Node.js](runtimes.md) for details.
 
 ---
 

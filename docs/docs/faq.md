@@ -37,7 +37,7 @@
 
 **A:** Riku supports:
 - Python (requirements.txt, Poetry, uv)
-- Node.js (npm, yarn, pnpm)
+- Node.js (built with nub — reads npm/pnpm/bun lockfiles)
 - Ruby (Gemfile)
 - Go (modules, Godeps)
 - Java (Maven, Gradle)

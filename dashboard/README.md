@@ -40,11 +40,26 @@ Bind the server to loopback so the dashboard is not reachable from other hosts:
 RIKU_DASHBOARD_TOKEN=$(openssl rand -hex 32) next start -H 127.0.0.1
 ```
 
+## Tooling
+
+This project uses [nub](https://nubjs.com) as its package manager (declared via
+`packageManager` in `package.json`; the lockfile is `lock.yaml`). Install it once:
+
+```bash
+npm install -g @nubjs/nub   # or: brew install nubjs/tap/nub, mise use -g nub
+```
+
+Then install dependencies:
+
+```bash
+nub install                 # nub ci / nub install --frozen-lockfile in CI
+```
+
 ## Scripts
 
 ```bash
-npm run dev         # next dev --turbopack
-npm run build       # next build
-npm run typecheck   # tsc --noEmit
-npm run test:e2e    # playwright test
+nub run dev         # next dev --turbopack
+nub run build       # next build
+nub run typecheck   # tsc --noEmit
+nub run test:e2e    # playwright test
 ```

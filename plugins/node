@@ -14,7 +14,20 @@ case "$CMD" in
 
   build)
     cd "$APP_PATH"
-    if [ -f "package-lock.json" ]; then
+    # Prefer nub: a single Rust binary that reads npm/pnpm/bun lockfiles
+    # directly (https://nubjs.com). Fall back to npm so servers that have
+    # not installed nub yet still deploy.
+    if command -v nub >/dev/null 2>&1; then
+      has_lock=0
+      for lock in package-lock.json pnpm-lock.yaml lock.yaml bun.lock; do
+        [ -f "$lock" ] && has_lock=1
+      done
+      if [ "$has_lock" -eq 1 ]; then
+        nub ci --prod
+      else
+        nub install --prod
+      fi
+    elif [ -f "package-lock.json" ]; then
       npm ci --production
     else
       npm install --production

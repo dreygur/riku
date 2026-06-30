@@ -102,15 +102,19 @@ nodejs/
 
 ## Local Development
 
+This example uses [nub](https://nubjs.com) as its package manager
+(`packageManager` in `package.json`, lockfile `lock.yaml`). Install nub with
+`npm install -g @nubjs/nub`, then:
+
 ```bash
 # Install dependencies
-npm install
+nub install
 
 # Run locally
-npm start
+nub start
 
 # Run with custom port
-PORT=3001 npm start
+PORT=3001 nub start
 ```
 
 ## Features Demonstrated

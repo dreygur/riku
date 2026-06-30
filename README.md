@@ -125,7 +125,7 @@ set with `riku install-plugins` (or pick some: `riku install-plugins --plugins n
 
 | Plugin | Detects | Build tool |
 |--------|---------|------------|
-| `node` | `package.json` | npm / yarn / pnpm |
+| `node` | `package.json` | nub (npm / pnpm / bun lockfiles) |
 | `python` | `requirements.txt`, `pyproject.toml` | pip / Poetry / uv |
 | `ruby` | `Gemfile` | Bundler |
 | `go` | `go.mod`, `.go` files | go build |

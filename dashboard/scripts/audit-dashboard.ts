@@ -15,8 +15,7 @@
  * Phase 2 connects there directly instead of pretending a passthrough
  * exists at /api/metrics.
  *
- * Run with Bun:  bun run scripts/audit-dashboard.ts
- * Run with Node: npx tsx scripts/audit-dashboard.ts
+ * Run with nub:  nubx tsx scripts/audit-dashboard.ts
  */
 
 import { appendFile, mkdir } from "node:fs/promises";

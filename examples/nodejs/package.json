@@ -19,5 +19,13 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "packageManager": "nub@0.2.10",
+  "devEngines": {
+    "packageManager": {
+      "name": "nub",
+      "version": "^0.2.10",
+      "onFail": "warn"
+    }
   }
 }

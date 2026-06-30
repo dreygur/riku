@@ -105,7 +105,7 @@ Execute a command in the application's environment.
 
 ```bash
 riku run myapp python manage.py migrate
-riku run myapp npm run build
+riku run myapp nub run build
 riku run myapp bash
 ```
 
