@@ -62,9 +62,7 @@ pub(crate) async fn stream(
                 }
             }
         }
-        let _ = tx
-            .send(Ok(Event::default().comment("streaming")))
-            .await;
+        let _ = tx.send(Ok(Event::default().comment("streaming"))).await;
 
         loop {
             // Discover newly created log files too.
@@ -99,7 +97,9 @@ pub(crate) async fn stream(
                             .to_string();
                         for line in buf.lines() {
                             if tx
-                                .send(Ok(Event::default().event("log").data(format!("{tag}\t{line}"))))
+                                .send(Ok(Event::default()
+                                    .event("log")
+                                    .data(format!("{tag}\t{line}"))))
                                 .await
                                 .is_err()
                             {

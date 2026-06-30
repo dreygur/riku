@@ -44,16 +44,18 @@ pub(crate) async fn doctor(
         all.push(checks::disk(&paths));
         all.push(checks::ssh_access());
         all.into_iter()
-            .map(|c| {
-                json!({ "name": c.name, "status": status_str(c.status), "detail": c.detail })
-            })
+            .map(|c| json!({ "name": c.name, "status": status_str(c.status), "detail": c.detail }))
             .collect::<Vec<_>>()
     })
     .await;
 
     match out {
         Ok(checks) => Json(checks).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("task failed: {e}")).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("task failed: {e}"),
+        )
+            .into_response(),
     }
 }
 
@@ -80,6 +82,10 @@ pub(crate) async fn backup_app(
             Json(json!({ "ok": true, "artifact": path.display().to_string() })).into_response()
         }
         Ok(Err(e)) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("task failed: {e}")).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("task failed: {e}"),
+        )
+            .into_response(),
     }
 }

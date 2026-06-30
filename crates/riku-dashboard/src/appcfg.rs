@@ -63,8 +63,7 @@ pub(crate) async fn edit_env(
     let paths = state.paths.clone();
     let result = tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
         if !body.set.is_empty() {
-            let settings: Vec<String> =
-                body.set.iter().map(|(k, v)| format!("{k}={v}")).collect();
+            let settings: Vec<String> = body.set.iter().map(|(k, v)| format!("{k}={v}")).collect();
             crate::cli::apps::cmd_config_set(&paths, &app, &settings)?;
         }
         if !body.unset.is_empty() {

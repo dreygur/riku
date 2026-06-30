@@ -137,6 +137,10 @@ where
     match tokio::task::spawn_blocking(move || f(&paths)).await {
         Ok(Ok(v)) => Json(v).into_response(),
         Ok(Err(e)) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("task failed: {e}")).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("task failed: {e}"),
+        )
+            .into_response(),
     }
 }

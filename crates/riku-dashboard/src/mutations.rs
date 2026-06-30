@@ -75,9 +75,10 @@ async fn scale(
     }
 
     let paths = state.paths.clone();
-    let result =
-        tokio::task::spawn_blocking(move || crate::cli::apps::cmd_ps_scale(&paths, &app, &settings))
-            .await;
+    let result = tokio::task::spawn_blocking(move || {
+        crate::cli::apps::cmd_ps_scale(&paths, &app, &settings)
+    })
+    .await;
     finish(result, "scale")
 }
 
@@ -95,16 +96,12 @@ async fn rollback(
         Ok(a) => a,
         Err(_) => return (StatusCode::BAD_REQUEST, "invalid app name").into_response(),
     };
-    let to = body
-        .get("to")
-        .and_then(|v| v.as_str())
-        .map(str::to_string);
+    let to = body.get("to").and_then(|v| v.as_str()).map(str::to_string);
 
     let paths = state.paths.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        crate::deploy::rollback(&app, &paths, to.as_deref())
-    })
-    .await;
+    let result =
+        tokio::task::spawn_blocking(move || crate::deploy::rollback(&app, &paths, to.as_deref()))
+            .await;
     finish(result, "rollback")
 }
 
@@ -116,7 +113,11 @@ pub(crate) fn finish(
     match result {
         Ok(Ok(())) => Json(serde_json::json!({ "ok": true, "action": name })).into_response(),
         Ok(Err(e)) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("task failed: {e}")).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("task failed: {e}"),
+        )
+            .into_response(),
     }
 }
 
