@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="Riku">
+  <defs>
+    <linearGradient id="riku-g" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5b9dd9"/>
+      <stop offset="1" stop-color="#3fd07f"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="52" height="52" rx="14" fill="url(#riku-g)"/>
+  <path d="M22 44V20h11.5c5 0 8.5 3 8.5 7.6 0 3.4-1.9 5.9-4.9 7l5.4 9.4h-6.3l-4.6-8.5H27.4V44H22zm5.4-13h5.3c2.3 0 3.7-1.2 3.7-3.2s-1.4-3.2-3.7-3.2h-5.3V31z" fill="#fff"/>
+</svg>

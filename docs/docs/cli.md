@@ -219,7 +219,103 @@ git push riku main
 
 ---
 
+## Releases & Resilience
+
+### `riku rollback <app>`
+
+Roll an app back to a previous release. See [Rollback](rollback.md).
+
+```bash
+riku rollback myapp            # previous release
+riku rollback myapp --to <sha> # a specific commit SHA
+riku rollback myapp --list     # list release history instead
+```
+
+| Option | Description |
+|--------|-------------|
+| `--to <TO>` | Roll back to a specific commit SHA (default: previous release) |
+| `--list` | List the release history instead of rolling back |
+
+---
+
+### `riku backup <app>`
+
+Back up an app (source + env + volumes + repo) to a `.tar.gz`. See
+[Backup & Restore](backup-restore.md).
+
+```bash
+riku backup myapp
+riku backup myapp --out /backups/myapp.tar.gz
+```
+
+| Option | Description |
+|--------|-------------|
+| `--out <OUT>` | Output path (default: `./<app>-backup-<timestamp>.tar.gz`) |
+
+---
+
+### `riku restore <app> <file>`
+
+Restore an app from a backup tar.gz.
+
+```bash
+riku restore myapp ./myapp-backup-20260624.tar.gz
+```
+
+---
+
+## Addons
+
+Manage addon instances (managed databases, caches, …). See [Addons](addons.md).
+
+```bash
+riku addon list                    # List provisioned instances
+riku addon create <PLUGIN> <NAME>  # Provision a new instance
+riku addon bind <INSTANCE> <APP>   # Bind an instance to an app
+riku addon unbind <INSTANCE> <APP> # Unbind an instance from an app
+riku addon destroy <INSTANCE>      # Destroy an instance (unbind first)
+riku addon backup <INSTANCE>       # Back up an instance
+```
+
+---
+
+## Plugins & Marketplace
+
+Install/list/remove manifest-based plugin bundles and manage marketplaces. See
+[Marketplace](marketplace.md).
+
+```bash
+riku plugins search <query>        # Search registered marketplaces
+riku plugins add <name[@market]>   # Install a plugin by name
+riku plugins install <path|url>    # Install from a local path or git URL
+riku plugins list                  # List installed bundles
+riku plugins remove <name>         # Remove an installed bundle
+riku plugins doctor                # Validate API compatibility + integrity
+riku plugins marketplace add <src> # Register and clone a marketplace
+riku plugins trust list            # Manage trusted publisher keys
+```
+
+---
+
 ## Setup Commands
+
+### `riku quickstart [name]`
+
+Scaffold a sample app locally and print deploy instructions. Runs on your
+machine, not the server.
+
+```bash
+riku quickstart
+riku quickstart myapp --runtime node
+riku quickstart myapp --remote deploy@example.com
+```
+
+| Option | Description |
+|--------|-------------|
+| `--runtime <RUNTIME>` | Runtime to scaffold: `python` or `node` (default: `python`) |
+| `--remote <REMOTE>` | Deploy target for the git remote line, e.g. `deploy@your-server` |
+
+---
 
 ### `riku init`
 
@@ -266,6 +362,48 @@ The supervisor:
 ```bash
 systemctl --user enable riku
 systemctl --user start riku
+```
+
+---
+
+### `riku doctor`
+
+Diagnose the installation (deps, dirs, systemd, nginx, disk, SSH). See
+[Doctor](doctor.md).
+
+```bash
+riku doctor
+sudo riku doctor   # most complete report
+```
+
+---
+
+### `riku dashboard`
+
+Serve the read-only web dashboard (embedded, single binary). See
+[Dashboard](dashboard.md).
+
+```bash
+riku dashboard
+riku dashboard --bind 0.0.0.0:8088 --token <tok>
+```
+
+| Option | Description |
+|--------|-------------|
+| `--bind <BIND>` | Address to bind (`host:port`). Default: `127.0.0.1:8088` |
+| `--token <TOKEN>` | Require this token on the API (also via `RIKU_DASHBOARD_TOKEN`) |
+
+---
+
+### `riku container <command>`
+
+Container export and remote deployment (auto-detects Docker/Podman).
+
+```bash
+riku container export                       # Build + export image to a tar archive
+riku container deploy-remote -a myapp -r user@host  # Build, transfer, deploy
+riku container deploy-archive               # Deploy an exported tar archive to remote
+riku container check-remote                 # Check remote for Docker/Podman
 ```
 
 ---

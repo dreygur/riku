@@ -1,228 +1,167 @@
-# Riku - The Smallest PaaS
+---
+hide:
+  - navigation
+  - toc
+---
 
-**The smallest PaaS you've ever seen (Rust edition)**
+<div class="riku-hero" markdown>
 
-Riku is a complete Rust port of the [Piku](https://github.com/piku/piku) micro-PaaS, providing Heroku-like git push deployments to small servers.
+<p class="riku-eyebrow">single binary <span class="dot">·</span> no docker <span class="dot">·</span> written in rust</p>
 
-[![Build Status](https://github.com/dreygur/riku/actions/workflows/rust-ci.yml/badge.svg)](https://github.com/dreygur/riku/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Rust Version](https://img.shields.io/badge/rust-1.70+-blue.svg)](https://rustup.rs/)
+# Deploy with <span class="grad">git push</span>.<br>On a box you own.
+
+<p class="tagline">Riku is the smallest PaaS you've ever seen — one Rust binary that turns a small server into a Heroku-style deploy target. No runtime, no daemons you didn't ask for.</p>
+
+<div class="riku-cta" markdown>
+[Get started](quick-start.md){ .md-button .md-button--primary }
+[Install](installation.md){ .md-button }
+[GitHub](https://github.com/dreygur/riku){ .md-button }
+</div>
+
+<div class="riku-term">
+  <div class="riku-term__bar"><i></i><i></i><i></i><span>deploy@your-server</span></div>
+<pre><code><span class="l"><span class="p">$</span> <span class="cmd">git push riku main</span></span><span class="l"><span class="k">-----&gt;</span> Receiving push for <span class="cmd">myapp</span></span><span class="l"><span class="k">-----&gt;</span> Detecting runtime: <span class="cmd">node</span></span><span class="l"><span class="k">-----&gt;</span> Installing dependencies <span class="dim">(npm ci)</span></span><span class="l"><span class="k">-----&gt;</span> Launching <span class="cmd">web.1</span> under supervisor</span><span class="l"><span class="k">-----&gt;</span> Writing nginx config <span class="dim">+ TLS</span></span><span class="l"><span class="ok">=====&gt;</span> Deployed <span class="url">https://myapp.example.com</span> <span class="cur"></span></span></code></pre>
+</div>
+
+</div>
+
+<div class="grid cards" markdown>
+
+-   :material-rocket-launch:{ .lg .middle } **Git push to deploy**
+
+    ---
+
+    Push your code and Riku builds, configures, and runs it — exactly like Heroku, on a box you own.
+
+    [:octicons-arrow-right-24: Quick Start](quick-start.md)
+
+-   :material-language-rust:{ .lg .middle } **Single binary, no runtime**
+
+    ---
+
+    One ~30 MB binary. No Docker required, no Python runtime, no daemons you didn't ask for.
+
+    [:octicons-arrow-right-24: Installation](installation.md)
+
+-   :material-database:{ .lg .middle } **Managed addons**
+
+    ---
+
+    Attach Postgres, Redis, or SQLite to an app with two commands. Addons ship as plugins.
+
+    [:octicons-arrow-right-24: Addons](addons.md)
+
+-   :material-backup-restore:{ .lg .middle } **Backup, restore & rollback**
+
+    ---
+
+    Snapshot an app to a tarball, restore it anywhere, and roll back to any previous release.
+
+    [:octicons-arrow-right-24: Backup & Restore](backup-restore.md)
+
+-   :material-view-dashboard:{ .lg .middle } **Embedded dashboard**
+
+    ---
+
+    A read-only web UI is baked into the binary — app list, live logs, and history.
+
+    [:octicons-arrow-right-24: Dashboard](dashboard.md)
+
+-   :material-puzzle:{ .lg .middle } **Plugins & marketplace**
+
+    ---
+
+    Extend Riku with runtime, addon, router, and notifier plugins — installable by name.
+
+    [:octicons-arrow-right-24: Marketplace](marketplace.md)
+
+</div>
 
 ---
 
-## Quick Start
+## Deploy in three steps
 
-### 1. Install Riku
+=== "1. Initialize the server"
 
-```bash
-# Install Rust (if not already installed)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Clone and build Riku
-git clone https://github.com/dreygur/riku.git
-cd riku
-cargo build --release
-sudo cp target/release/riku /usr/local/bin/
-```
-
-### 2. Initialize Your Server
-
-```bash
-# Create deploy user
-sudo adduser --disabled-password --gecos '' deploy
-sudo su - deploy
-
-# Initialize Riku
-riku init
-
-# Add your SSH key
-riku setup ssh ~/.ssh/id_rsa.pub
-```
-
-### 3. Deploy Your First App
-
-```bash
-# Create your app
-mkdir myapp && cd myapp
-git init
-
-# Create a simple Node.js app
-echo '{"name":"test","scripts":{"start":"node server.js"}}' > package.json
-echo 'console.log("Hello from port", process.env.PORT)' > server.js
-echo 'web: node server.js' > Procfile
-
-# Deploy
-git add . && git commit -m "Initial commit"
-git remote add riku deploy@your-server:myapp
-git push riku main
-```
-
----
-
-## Features
-
-| Feature | Description |
-|---------|-------------|
-| **Git Push Deploy** | Deploy with `git push` - just like Heroku |
-| **Multi-Language** | Python, Node.js, Ruby, Go, Java, Clojure, Rust |
-| **Process Supervisor** | Custom Rust supervisor (no uWSGI needed) |
-| **Auto Scaling** | Scale workers with `SCALING` file |
-| **Nginx Integration** | Automatic config generation |
-| **SSL/HTTPS** | Built-in ACME support |
-| **Plugin System** | Extend with server & client plugins |
-| **Cron Jobs** | Schedule tasks in Procfile |
-| **Zero Downtime** | Graceful restarts & rolling deploys |
-
----
-
-## Resource Usage
-
-| Component | Memory | Storage |
-|-----------|--------|---------|
-| Riku Supervisor | 10-30 MB | ~8 MB |
-| Per App Process | 10-200 MB | 10-500 MB |
-| Nginx | 5-15 MB | ~5 MB |
-
-**Minimum Requirements:**
-- CPU: 1 core (500 MHz+)
-- RAM: 256 MB (512 MB recommended)
-- Storage: 50 MB + app dependencies
-
----
-
-## Documentation
-
-| Section | Description |
-|---------|-------------|
-| [Quick Start](quick-start.md) | Deploy your first app in 5 minutes |
-| [Installation](installation.md) | Install Riku on your server |
-| [CLI Reference](cli.md) | All Riku commands |
-| [Environment Variables](env.md) | Configuration reference |
-| [Runtimes](runtimes.md) | Supported languages |
-| [Nginx](nginx.md) | Web server configuration |
-| [Supervisor](supervisor.md) | Process management |
-| [Plugins](plugins.md) | Extend functionality |
-| [AI Agents](ai-agents.md) | SSH-based AI automation |
-| [Systemd](systemd.md) | Systemd integration |
-| [FAQ](faq.md) | Common questions |
-
----
-
-## Supported Runtimes
-
-=== "Python"
     ```bash
-    # requirements.txt
-    flask>=2.0.0
-    
-    # Procfile
-    web: gunicorn app:app
+    # On your server, as the deploy user
+    riku init
+    riku setup ssh ~/.ssh/id_rsa.pub
     ```
 
-=== "Node.js"
+=== "2. Add a Procfile to your app"
+
     ```bash
-    # package.json
-    {
-      "scripts": {
-        "start": "node server.js"
-      }
-    }
-    
     # Procfile
     web: node server.js
     ```
 
-=== "Go"
+=== "3. Push"
+
     ```bash
-    # go.mod
-    module example.com/myapp
-    
-    # Procfile
-    web: ./server
+    git remote add riku deploy@your-server:myapp
+    git push riku main
     ```
 
-=== "Ruby"
-    ```bash
-    # Gemfile
-    source 'https://rubygems.org'
-    gem 'puma'
-    
-    # Procfile
-    web: bundle exec puma
-    ```
-
-=== "Rust"
-    ```bash
-    # Cargo.toml
-    [package]
-    name = "myapp"
-    
-    # Procfile
-    web: ./target/release/myapp
-    ```
-
----
-
-## Architecture
-
-```
-┌─────────────┐    ┌──────────────┐    ┌─────────────┐
-│ Git Client  │───▶│ Riku Server  │───▶│   Apps      │
-│             │    │              │    │             │
-│ git push    │    │  Supervisor  │    │  Managed by │
-│ deployments │    │  (Rust)      │    │  Supervisor │
-└─────────────┘    │              │    │             │
-                   │  Nginx       │    └─────────────┘
-                   │  (Reverse    │
-                   │   Proxy)     │
-                   └──────────────┘
-```
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! Here's how you can help:
-
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/my-feature`)
-3. **Make** your changes
-4. **Add** tests for new features
-5. **Run** `cargo test` and `cargo clippy`
-6. **Submit** a pull request
-
-See [CONTRIBUTING.md](https://github.com/dreygur/riku/blob/main/CONTRIBUTING.md) for detailed guidelines.
-
----
-
-## 📜 License
-
-Riku is released under the [MIT License](https://opensource.org/licenses/MIT).
-
----
-
-## Links
-
-- **GitHub Repository**: [github.com/dreygur/riku](https://github.com/dreygur/riku)
-- **Original Piku**: [github.com/piku/piku](https://github.com/piku/piku)
-- **Rust Documentation**: [doc.rust-lang.org](https://doc.rust-lang.org/)
-- **Report Issues**: [GitHub Issues](https://github.com/dreygur/riku/issues)
+Riku detects the runtime, installs dependencies, starts the process under its
+supervisor, and wires up nginx. That's the whole loop.
 
 ---
 
 ## Why Riku?
 
-| Riku (Rust) | Original Piku (Python) |
-|-------------|------------------------|
-| Single binary | Requires Python runtime |
-| No runtime dependencies | Python 3 required |
-| Memory safe | Garbage collected |
-| Compile-time errors | Runtime errors |
-| ~30 MB memory footprint | ~100+ MB footprint |
-| Fast startup | Slower startup |
+| | Riku (Rust) | Original Piku (Python) |
+|---|-------------|------------------------|
+| Distribution | Single binary | Requires Python runtime |
+| Dependencies | None at runtime | Python 3 required |
+| Memory safety | Compile-time guarantees | Garbage collected |
+| Footprint | ~30 MB | ~100+ MB |
+| Startup | Fast | Slower |
 
-**Riku stands on the shoulders of giants.** We thank the Piku team for creating the original micro-PaaS that inspired this Rust port.
+Riku is a complete Rust port of [Piku](https://github.com/piku/piku) and competes
+with Piku, Dokku, and CapRover — winning on the single-binary, no-Docker story.
+It runs on one small box: 1 core, 256 MB RAM is enough.
+
+!!! tip "Stands on the shoulders of giants"
+    Thanks to the Piku team for creating the original micro-PaaS that inspired
+    this port.
 
 ---
 
-*Ready to deploy? Check out the [Quick Start Guide](quick-start.md)!*
+## Supported runtimes
+
+=== "Python"
+    ```bash
+    # requirements.txt + Procfile
+    web: gunicorn app:app
+    ```
+
+=== "Node.js"
+    ```bash
+    # package.json + Procfile
+    web: node server.js
+    ```
+
+=== "Go"
+    ```bash
+    # go.mod + Procfile
+    web: ./server
+    ```
+
+=== "Ruby"
+    ```bash
+    # Gemfile + Procfile
+    web: bundle exec puma
+    ```
+
+=== "Rust"
+    ```bash
+    # Cargo.toml + Procfile
+    web: ./target/release/myapp
+    ```
+
+Java, Clojure, and containers are supported too — see [Runtimes](runtimes.md).
+
+---
+
+[Ready? Deploy your first app :material-arrow-right:](quick-start.md){ .md-button .md-button--primary }

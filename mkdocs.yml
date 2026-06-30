@@ -15,35 +15,44 @@ site_dir: docs/site
 theme:
   name: material
   palette:
-    # Palette toggle for light mode
-    - scheme: default
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    # Palette toggle for dark mode
+    # Dark is the hard default (listed first); toggle reveals light mode.
     - scheme: slate
-      primary: indigo
-      accent: indigo
+      primary: black
+      accent: deep purple
       toggle:
-        icon: material/brightness-4
+        icon: material/weather-sunny
         name: Switch to light mode
+    - scheme: default
+      primary: black
+      accent: deep purple
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+  # Match the dashboard: system sans for UI, JetBrains Mono for code
+  # (JetBrains Mono is loaded via stylesheets/extra.css).
+  font: false
+  icon:
+    repo: fontawesome/brands/github
   features:
+    - navigation.instant
+    - navigation.instant.progress
     - navigation.tabs
     - navigation.tabs.sticky
     - navigation.sections
-    - navigation.expand
     - navigation.top
     - navigation.indexes
+    - navigation.footer
+    - toc.follow
     - search.suggest
     - search.highlight
+    - search.share
     - content.tabs.link
-    - content.code.annotation
+    - content.code.annotate
     - content.code.copy
+    - content.tooltips
   language: en
   logo: img/logo.svg
-  favicon: img/favicon.ico
+  favicon: img/favicon.svg
 
 # Custom navigation
 nav:
@@ -51,6 +60,13 @@ nav:
   - Getting Started:
       - Quick Start: quick-start.md
       - Installation: installation.md
+  - Guides:
+      - Addons: addons.md
+      - Backup & Restore: backup-restore.md
+      - Rollback: rollback.md
+      - Dashboard: dashboard.md
+      - Doctor: doctor.md
+      - Marketplace: marketplace.md
   - Reference:
       - CLI: cli.md
       - Environment Variables: env.md
@@ -70,6 +86,7 @@ nav:
 markdown_extensions:
   - admonition
   - attr_list
+  - md_in_html
   - def_list
   - footnotes
   - meta
@@ -121,9 +138,25 @@ plugins:
   - minify:
       minify_html: true
 
+# Custom styling
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/dreygur/riku
+      name: Riku on GitHub
+  generator: false
+
+copyright: >
+  Made with Rust 🦀 — Riku is MIT licensed.
+
 # Validation
 validation:
   omitted_files: warn
   absolute_links: warn
   unrecognized_links: warn
   anchors: warn
+  nav:
+    omitted_files: info

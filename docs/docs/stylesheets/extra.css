@@ -1,0 +1,326 @@
+/* ============================================================
+   Riku docs — matched to the embedded dashboard theme
+   (crates/riku-dashboard/src/index.html).
+   Cool near-black monitoring palette, mono labels, flat panels,
+   status-color accents (green=alive, blue=info, amber=warn).
+   Signature: the git-push deploy terminal.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+/* ---------------- Tokens (from the dashboard) ---------------- */
+:root {
+  --riku-bg:      #0d0f12;
+  --riku-panel:   #15181d;
+  --riku-panel-2: #1a1e24;
+  --riku-line:    #242a33;
+  --riku-line-2:  #2f3743;
+  --riku-text:    #c8ced6;
+  --riku-dim:     #6b7480;
+  --riku-faint:   #444c57;
+  --riku-alive:   #3fd07f;  /* green  */
+  --riku-info:    #5b9dd9;  /* blue   */
+  --riku-warn:    #e8b54a;  /* amber  */
+  --riku-danger:  #f25f5c;  /* red    */
+  --riku-violet:  #b48ee8;  /* purple */
+  --riku-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --riku-sans:    ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color:        var(--riku-bg);
+  --md-default-fg-color:        var(--riku-text);
+  --md-default-fg-color--light: var(--riku-dim);
+  --md-default-fg-color--lightest: var(--riku-line);
+  --md-primary-fg-color:        var(--riku-bg);
+  --md-accent-fg-color:         var(--riku-info);
+  --md-typeset-a-color:         var(--riku-info);
+  --md-code-bg-color:           var(--riku-panel-2);
+  --md-code-fg-color:           var(--riku-text);
+  --md-text-font-family:        var(--riku-sans);
+  --md-code-font-family:        var(--riku-mono);
+}
+
+[data-md-color-scheme="default"] {
+  --md-accent-fg-color: var(--riku-info);
+  --md-typeset-a-color: #2b6cb0;
+}
+
+body, .md-typeset { font-family: var(--riku-sans); }
+
+/* ---------------- No rounding, anywhere ---------------- */
+*, *::before, *::after { border-radius: 0 !important; }
+
+/* ---------------- Headings ---------------- */
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  font-family: var(--riku-sans);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: #e6eaef;
+}
+.md-typeset h2 {
+  margin-top: 2.6em;
+  padding-top: 1.4rem;
+  border-top: 1px solid var(--riku-line);
+}
+
+/* ---------------- Header: dashboard top-bar ---------------- */
+.md-header {
+  background: rgba(13, 15, 18, 0.8);
+  backdrop-filter: saturate(140%) blur(12px);
+  -webkit-backdrop-filter: saturate(140%) blur(12px);
+  border-bottom: 1px solid var(--riku-line);
+  box-shadow: none;
+}
+.md-header__title { font-weight: 600; letter-spacing: -0.01em; }
+/* Keep the site title fixed; don't swap-in the page title on scroll
+   (the cross-fade left "Riku" and the page name briefly overlapping). */
+.md-header__topic { opacity: 1 !important; transform: none !important; }
+.md-header__topic[data-md-component="header-topic"] { display: none; }
+.md-tabs { background: transparent; border-bottom: 1px solid var(--riku-line); }
+.md-tabs__link { opacity: 0.66; }
+.md-tabs__link--active, .md-tabs__link:hover { opacity: 1; }
+
+/* ============================================================
+   HERO
+   ============================================================ */
+.riku-hero {
+  margin: -1.2rem -0.8rem 0;
+  padding: 4.2rem 1.2rem 1rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.riku-hero::before {
+  content: "";
+  position: absolute;
+  inset: -40% 0 auto 0;
+  height: 520px;
+  background:
+    radial-gradient(680px 300px at 50% 0%, rgba(91, 157, 217, 0.16), transparent 70%),
+    radial-gradient(520px 260px at 68% 8%, rgba(63, 208, 127, 0.08), transparent 70%);
+  pointer-events: none;
+}
+
+.riku-eyebrow {
+  font-family: var(--riku-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--riku-dim);
+  font-weight: 600;
+  margin-bottom: 1.3rem;
+}
+.riku-eyebrow .dot { color: var(--riku-info); padding: 0 0.45em; }
+
+.md-typeset .riku-hero h1 {
+  font-size: clamp(2.5rem, 5.6vw, 3.9rem);
+  font-weight: 700;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  margin: 0 0 0.7rem;
+  color: #eef2f6;
+}
+.riku-hero h1 .grad {
+  background: linear-gradient(100deg, var(--riku-info), var(--riku-alive));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.riku-hero .tagline {
+  font-size: 1.14rem;
+  line-height: 1.6;
+  color: var(--riku-dim);
+  max-width: 40rem;
+  margin: 0 auto 1.7rem;
+}
+
+.riku-cta { display: inline-flex; gap: 0.7rem; flex-wrap: wrap; justify-content: center; }
+.md-typeset .riku-cta .md-button {
+  font-family: var(--riku-mono);
+  font-size: 0.82rem;
+  font-weight: 500;
+  border-radius: 8px;
+  padding: 0.5rem 1.15rem;
+  border: 1px solid var(--riku-line-2);
+  color: var(--riku-text);
+  background: var(--riku-panel);
+  transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+.md-typeset .riku-cta .md-button:hover {
+  transform: translateY(-2px);
+  border-color: var(--riku-info);
+  background: var(--riku-panel-2);
+}
+.md-typeset .riku-cta .md-button--primary {
+  background: var(--riku-info);
+  border-color: var(--riku-info);
+  color: #08121c;
+  font-weight: 700;
+}
+.md-typeset .riku-cta .md-button--primary:hover {
+  background: #6fb0e6;
+  border-color: #6fb0e6;
+  box-shadow: 0 10px 30px -12px rgba(91, 157, 217, 0.6);
+}
+
+/* ---------------- Terminal (the signature) ---------------- */
+.riku-term {
+  max-width: 46rem;
+  margin: 3rem auto 0;
+  text-align: left;
+  background: var(--riku-panel);
+  border: 1px solid var(--riku-line);
+  border-radius: 12px;
+  box-shadow: 0 28px 70px -34px rgba(0, 0, 0, 0.9);
+  overflow: hidden;
+}
+.riku-term__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 0.9rem;
+  background: var(--riku-panel-2);
+  border-bottom: 1px solid var(--riku-line);
+}
+.riku-term__bar i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.riku-term__bar i:nth-child(1) { background: var(--riku-danger); }
+.riku-term__bar i:nth-child(2) { background: var(--riku-warn); }
+.riku-term__bar i:nth-child(3) { background: var(--riku-alive); }
+.riku-term__bar span {
+  margin-left: 0.6rem;
+  font-family: var(--riku-mono);
+  font-size: 0.74rem;
+  color: var(--riku-dim);
+}
+.riku-term .md-clipboard { display: none; }
+.riku-term pre {
+  margin: 0;
+  padding: 1.1rem 1.3rem 1.4rem;
+  font-family: var(--riku-mono);
+  font-size: 0.84rem;
+  line-height: 1.85;
+  color: var(--riku-text);
+  white-space: pre-wrap;
+  background: var(--riku-panel);
+}
+.riku-term .l { display: block; opacity: 0; animation: riku-line 0.01s ease forwards; }
+.riku-term .p   { color: var(--riku-info); }        /* prompt $ */
+.riku-term .cmd { color: #eef2f6; }                 /* typed command */
+.riku-term .k   { color: var(--riku-info); }        /* -----> build arrows */
+.riku-term .dim { color: var(--riku-dim); }
+.riku-term .ok  { color: var(--riku-alive); }       /* =====> success */
+.riku-term .url { color: var(--riku-info); text-decoration: underline; }
+.riku-term .cur {
+  display: inline-block; width: 0.55em; height: 1.05em;
+  vertical-align: -0.18em; background: var(--riku-alive);
+  animation: riku-blink 1.05s steps(1) infinite;
+}
+
+.riku-term .l:nth-child(1) { animation-delay: 0.15s; }
+.riku-term .l:nth-child(2) { animation-delay: 0.55s; }
+.riku-term .l:nth-child(3) { animation-delay: 1.05s; }
+.riku-term .l:nth-child(4) { animation-delay: 1.55s; }
+.riku-term .l:nth-child(5) { animation-delay: 2.05s; }
+.riku-term .l:nth-child(6) { animation-delay: 2.55s; }
+.riku-term .l:nth-child(7) { animation-delay: 3.1s; }
+
+@keyframes riku-line { to { opacity: 1; } }
+@keyframes riku-blink { 50% { opacity: 0; } }
+
+/* ============================================================
+   FEATURE CARDS — flat dashboard panels
+   ============================================================ */
+.md-typeset .grid.cards > ul > li,
+.md-typeset .grid > .card {
+  background: var(--riku-panel);
+  border: 1px solid var(--riku-line);
+  border-radius: 12px;
+  padding: 1.3rem 1.3rem 1.1rem;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.md-typeset .grid.cards > ul > li:hover,
+.md-typeset .grid > .card:hover {
+  transform: translateY(-3px);
+  border-color: var(--riku-info);
+  background: var(--riku-panel-2);
+}
+.md-typeset .grid.cards .twemoji,
+.md-typeset .grid.cards svg { color: var(--riku-info); }
+.md-typeset .grid.cards > ul > li > hr {
+  margin: 0.7rem 0; border: 0; border-top: 1px solid var(--riku-line);
+}
+
+/* ============================================================
+   CONTENT POLISH
+   ============================================================ */
+.md-typeset .highlight,
+.md-typeset pre > code { border-radius: 9px; }
+.md-typeset .highlight { border: 1px solid var(--riku-line); }
+.md-typeset code { border-radius: 4px; font-family: var(--riku-mono); }
+
+.md-typeset table:not([class]) {
+  border: 1px solid var(--riku-line);
+  border-radius: 9px;
+  overflow: hidden;
+}
+.md-typeset table:not([class]) th {
+  background: var(--riku-panel-2);
+  font-weight: 600;
+  color: #e6eaef;
+}
+
+.md-nav__link--active { color: var(--riku-info) !important; font-weight: 600; }
+
+/* Keep long content tabs (e.g. the "three steps") from pushing the page
+   wide on narrow screens — scroll the label strip instead. */
+.md-typeset .tabbed-set { overflow: hidden; }
+.md-typeset .tabbed-labels { overflow-x: auto; scrollbar-width: none; }
+.md-typeset .tabbed-labels::-webkit-scrollbar { display: none; }
+
+/* Admonition tint to match status colors */
+.md-typeset .admonition.tip,
+.md-typeset details.tip { border-left-color: var(--riku-alive); }
+.md-typeset .admonition.warning,
+.md-typeset details.warning { border-left-color: var(--riku-warn); }
+
+/* ---------------- Accessibility ---------------- */
+@media (prefers-reduced-motion: reduce) {
+  .riku-term .l { opacity: 1; animation: none; }
+  .riku-term .cur { animation: none; }
+  .md-typeset .grid.cards > ul > li:hover,
+  .md-typeset .riku-cta .md-button:hover { transform: none; }
+}
+
+/* Tablet / small laptop */
+@media screen and (max-width: 59.9em) {
+  .riku-hero { padding: 3.2rem 1rem 1rem; }
+  .md-typeset .riku-hero h1 { font-size: clamp(2.1rem, 7vw, 3rem); }
+  .riku-term { margin-top: 2.2rem; }
+}
+
+/* Phones */
+@media screen and (max-width: 44.9em) {
+  .riku-hero { padding: 2.6rem 0.6rem 0.5rem; }
+  .riku-eyebrow { font-size: 0.62rem; letter-spacing: 0.12em; line-height: 1.8; }
+  .riku-eyebrow .dot { padding: 0 0.3em; }
+  .md-typeset .riku-hero h1 { font-size: 2rem; letter-spacing: -0.02em; }
+  .riku-hero .tagline { font-size: 1rem; }
+  .riku-cta { gap: 0.5rem; width: 100%; }
+  .md-typeset .riku-cta .md-button { flex: 1 1 auto; text-align: center; }
+  .riku-term { margin-top: 1.8rem; }
+  .riku-term pre { font-size: 0.72rem; padding: 0.9rem 1rem 1.1rem; line-height: 1.7; }
+  .riku-term__bar span { font-size: 0.68rem; }
+  .md-typeset .grid.cards > ul > li,
+  .md-typeset .grid > .card { padding: 1.1rem; }
+  .md-typeset h2 { margin-top: 2em; }
+}
+
+/* Very small phones */
+@media screen and (max-width: 22em) {
+  .md-typeset .riku-hero h1 { font-size: 1.7rem; }
+  .riku-term pre { font-size: 0.66rem; }
+}
