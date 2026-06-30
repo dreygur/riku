@@ -9,6 +9,8 @@ import type { RikuState } from "@/lib/types";
 
 const links = [
   { href: "/", label: "overview" },
+  { href: "/metrics", label: "metrics" },
+  { href: "/plugins", label: "plugins" },
   { href: "/addons", label: "addons" },
   { href: "/doctor", label: "doctor" },
 ];

@@ -22,6 +22,7 @@ pub(crate) use riku_util as util;
 
 mod addons;
 mod appcfg;
+mod installed;
 mod logs;
 mod mutations;
 mod routes;

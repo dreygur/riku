@@ -57,6 +57,18 @@ export interface AddonInstance {
   bindings: Record<string, string[]>;
 }
 
+export interface PluginBundle {
+  name: string;
+  version: string;
+  type: string;
+  description: string | null;
+}
+export interface PluginsList {
+  runtimes: string[];
+  hooks: string[];
+  bundles: PluginBundle[];
+}
+
 export const domainOf = (a: AppState) => a.routing?.NGINX_SERVER_NAME;
 export const httpsOf = (a: AppState) => Boolean(a.routing?.NGINX_HTTPS_ONLY);
 export const isBusy = (a: AppState) => (a.deploy_lock || "").toLowerCase() === "held";

@@ -4,6 +4,7 @@ import type {
   Release,
   DoctorCheck,
   AddonInstance,
+  PluginsList,
 } from "./types";
 
 const base = "/api/riku";
@@ -29,6 +30,7 @@ export const api = {
   env: (app: string) => get<Record<string, string>>(`apps/${app}/env`),
   doctor: () => get<DoctorCheck[]>("doctor"),
   addons: () => get<AddonInstance[]>("addons"),
+  plugins: () => get<PluginsList>("plugins"),
 
   restart: (app: string) => send(`apps/${app}/restart`, "POST"),
   stop: (app: string) => send(`apps/${app}/stop`, "POST"),
