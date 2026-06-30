@@ -177,13 +177,13 @@ fn plugin_accepts(
 pub fn build(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result<()> {
     tracing::info!(plugin = plugin.name.as_str(), "running build");
 
-    // The build step (npm install, pip install, cargo build, ...) is the one
-    // part of the deploy pipeline that ran with zero resource limits: worker
-    // processes get cgroup/rlimit constraints in spawn_process, but nothing
-    // bounded the build itself, so a malicious or buggy postinstall script
-    // (or a crafted Cargo.toml/package.json) could exhaust host memory/CPU
-    // before any worker limit ever applied. Apply the same RLIMIT_* ceiling
-    // used for workers here too.
+    // The build step (npm install, pip install, cargo build, ...) is bounded by
+    // the same RLIMIT_* ceilings as workers (CPU time, open files, file size,
+    // core dumps) plus the build timeout, so a malicious or buggy postinstall
+    // script can't run unbounded. The memory ceiling (RLIMIT_AS) is opt-in
+    // (`RIKU_MAX_MEMORY_MB`): a default virtual-address cap aborts node/v8 and
+    // JVM builds, which reserve multiple GB of virtual memory at startup. See
+    // `ResourceLimits::from_env`.
     let limits = crate::util::resource_limits::ResourceLimits::from_env();
 
     let mut cmd = Command::new(&plugin.path);

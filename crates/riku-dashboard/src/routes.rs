@@ -18,6 +18,8 @@ pub(crate) fn router(state: DashboardState) -> Router {
         .route("/", get(index))
         .route("/healthz", get(healthz))
         .route("/api/state", get(api_state))
+        .route("/api/apps/:app/releases", get(api_releases))
+        .route("/api/apps/:app/logs", get(super::logs::stream))
         .merge(super::mutations::router())
         .with_state(state)
 }
@@ -44,9 +46,31 @@ async fn api_state(
     }
 }
 
+/// GET /api/apps/:app/releases — recorded deploy history (for the rollback UI).
+async fn api_releases(
+    State(state): State<DashboardState>,
+    headers: HeaderMap,
+    axum::extract::Path(app): axum::extract::Path<String>,
+    Query(query): Query<HashMap<String, String>>,
+) -> Response {
+    if let Some(denied) = authorize(&state, &headers, &query) {
+        return denied;
+    }
+    let app = match crate::util::validate_app_name(&app) {
+        Ok(a) => a,
+        Err(e) => return (StatusCode::BAD_REQUEST, e.to_string()).into_response(),
+    };
+    let releases: Vec<_> = crate::deploy::releases::ReleaseLog::new(&state.paths)
+        .list(&app)
+        .into_iter()
+        .map(|r| serde_json::json!({ "ts": r.ts, "sha": r.sha }))
+        .collect();
+    Json(releases).into_response()
+}
+
 /// Enforce the Host allowlist (DNS-rebinding guard) and the API token. Returns
 /// `Some(response)` to deny, `None` to allow.
-fn authorize(
+pub(crate) fn authorize(
     state: &DashboardState,
     headers: &HeaderMap,
     query: &HashMap<String, String>,

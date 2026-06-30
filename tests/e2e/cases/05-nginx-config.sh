@@ -16,6 +16,9 @@ EOF
 cat > "$src/server.js" << 'EOF'
 require('http').createServer((req,res)=>res.end('ok')).listen(process.env.PORT||5000);
 EOF
+cat > "$src/package.json" << 'EOF'
+{"name":"testapp","version":"1.0.0","private":true}
+EOF
 
 RIKU_SKIP_BUILD=1 push_app "$APP" "$src"
 

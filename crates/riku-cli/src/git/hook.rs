@@ -134,6 +134,14 @@ fn link_external_repo(paths: &RikuPaths, app: &str, actual_repo: &str) -> Result
 
     let riku_repo = paths.git_root.join(&expected_name);
 
+    // If the pushed repo is already AT the canonical location (the common case:
+    // a bare repo created directly under repos/<app>.git), it is correctly
+    // placed and there is nothing to symlink. Without this, the guard below
+    // would refuse it for being a real directory rather than a symlink.
+    if riku_repo.canonicalize().ok().as_deref() == Some(resolved.as_path()) {
+        return Ok(());
+    }
+
     // Use symlink_metadata so we detect (and never clobber) a real dir/file even
     // when a dangling symlink is present.
     if let Ok(meta) = riku_repo.symlink_metadata() {
