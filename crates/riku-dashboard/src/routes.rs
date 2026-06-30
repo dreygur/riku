@@ -28,6 +28,7 @@ pub(crate) fn router(state: DashboardState) -> Router {
         // app backup + diagnostics
         .route("/api/apps/:app/backup", post(super::system::backup_app))
         .route("/api/doctor", get(super::system::doctor))
+        .route("/api/plugins", get(super::installed::list))
         // addons (managed datastores)
         .route(
             "/api/addons",

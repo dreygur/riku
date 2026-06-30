@@ -1,207 +1,79 @@
-// All requests go through the Next.js API proxy at /api/*,
-// which forwards to the riku supervisor on the server side.
+// Client API — all calls go through the same-origin /api/riku proxy.
+import type {
+  RikuState,
+  Release,
+  DoctorCheck,
+  AddonInstance,
+  PluginsList,
+} from "./types";
 
-// ── Backend response types (mirror the Rust supervisor health server) ──
+const base = "/api/riku";
 
-export type AppStats = {
-  app: string;
-  total_processes: number;
-  running_processes: number;
-  healthy_processes: number;
-  total_restarts: number;
-  total_memory_bytes: number;
-  total_cpu_time_ms: number;
-  processes: ProcessStats[];
-  last_updated: string;
-};
-
-/** The Rust `HealthStatus` enum's `Error(String)` variant serializes as
- * `{"error": "<message>"}` rather than a plain string (serde's default
- * external tagging for a tuple variant) — every other variant is a string. */
-export type HealthCheckStatus =
-  | "unknown"
-  | "healthy"
-  | "unhealthy"
-  | "timeout"
-  | { error: string };
-
-export type ProcessStats = {
-  process_id: string;
-  app: string;
-  kind: string;
-  ordinal: number;
-  pid: number | null;
-  /** Includes "oom_killed" when the kernel OOM killer terminated the worker. */
-  status: string;
-  started_at: string | null;
-  last_health_check: string | null;
-  health_check_status: HealthCheckStatus;
-  restart_count: number;
-  last_restart_at: string | null;
-  cpu_time_ms: number;
-  memory_bytes: number;
-  requests_total: number;
-  requests_per_second: number;
-};
-
-export type HealthResponse = {
-  status: string;
-  uptime: number;
-  version: string;
-  timestamp: number;
-};
-
-export type EnvResponse = {
-  app: string;
-  vars: EnvVarEntry[];
-};
-
-export type EnvVarEntry = {
-  key: string;
-  value: string;
-};
-
-export type NetworkEntry = {
-  app: string;
-  serverName: string | null;
-  upstream: string | null;
-  tlsExpiry: string | null;
-};
-
-export type NetworkResponse = {
-  apps: NetworkEntry[];
-};
-
-// ── CSRF / operator token ──
-//
-// Mutating routes (control/*, env PUT/DELETE) require the operator token in the
-// `x-riku-dashboard-token` header. The token never ships in the JS bundle: the
-// dashboard's own JS fetches it same-origin from `/api/csrf` (which CORS +
-// Origin checks keep unreadable cross-site) and caches it for the page session.
-let tokenPromise: Promise<string | null> | null = null;
-
-async function dashboardToken(): Promise<string | null> {
-  if (!tokenPromise) {
-    tokenPromise = fetch("/api/csrf", { credentials: "same-origin" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((body: { token?: string } | null) => body?.token ?? null)
-      .catch(() => null);
-  }
-  return tokenPromise;
-}
-
-const MUTATING_METHODS = new Set(["POST", "PUT", "DELETE", "PATCH"]);
-
-// ── Typed fetch helpers ──
-
-async function apiFetch<T>(
-  path: string,
-  init?: RequestInit,
-): Promise<T> {
-  const method = (init?.method ?? "GET").toUpperCase();
-  const headers = new Headers(init?.headers);
-
-  if (MUTATING_METHODS.has(method)) {
-    const token = await dashboardToken();
-    if (token) headers.set("x-riku-dashboard-token", token);
-  }
-
-  const res = await fetch(`/api${path}`, { ...init, headers });
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    const msg = body?.error ?? res.statusText;
-    throw new Error(`HTTP ${res.status}: ${msg}`);
-  }
+async function get<T>(path: string): Promise<T> {
+  const res = await fetch(`${base}/${path}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
   return res.json() as Promise<T>;
 }
 
+async function send(path: string, method: string, body?: unknown): Promise<void> {
+  const res = await fetch(`${base}/${path}`, {
+    method,
+    headers: { "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error((await res.text()) || `${res.status}`);
+}
+
 export const api = {
-  health: {
-    get: () => apiFetch<HealthResponse>("/health"),
-  },
+  state: () => get<RikuState>("state"),
+  releases: (app: string) => get<Release[]>(`apps/${app}/releases`),
+  env: (app: string) => get<Record<string, string>>(`apps/${app}/env`),
+  doctor: () => get<DoctorCheck[]>("doctor"),
+  addons: () => get<AddonInstance[]>("addons"),
+  plugins: () => get<PluginsList>("plugins"),
 
-  metrics: {
-    get: () => apiFetch<AppStats[]>("/metrics"),
-    getApps: () => apiFetch<AppStats[]>("/metrics/apps"),
-    /** Unlike `get`/`getApps`, the backend returns a single object here,
-     * not an array (see src/supervisor/health/mod.rs metrics_app_handler). */
-    getApp: (app: string) =>
-      apiFetch<AppStats>(`/metrics/apps/${encodeURIComponent(app)}`),
-  },
+  restart: (app: string) => send(`apps/${app}/restart`, "POST"),
+  stop: (app: string) => send(`apps/${app}/stop`, "POST"),
+  redeploy: (app: string) => send(`apps/${app}/redeploy`, "POST"),
+  scale: (app: string, kinds: Record<string, number>) =>
+    send(`apps/${app}/scale`, "POST", kinds),
+  rollback: (app: string, to?: string) =>
+    send(`apps/${app}/rollback`, "POST", to ? { to } : {}),
+  setEnv: (app: string, set: Record<string, string>, unset: string[] = []) =>
+    send(`apps/${app}/env`, "POST", { set, unset }),
+  backup: (app: string) => send(`apps/${app}/backup`, "POST"),
 
-  network: {
-    list: () => apiFetch<NetworkResponse>("/network"),
-  },
+  // addons (managed datastores)
+  addonCreate: (plugin: string, instance: string) =>
+    send("addons", "POST", { plugin, instance }),
+  addonBind: (instance: string, app: string) => send(`addons/${instance}/bind`, "POST", { app }),
+  addonUnbind: (instance: string, app: string) =>
+    send(`addons/${instance}/unbind`, "POST", { app }),
+  addonBackup: (instance: string) => send(`addons/${instance}/backup`, "POST"),
+  addonDestroy: (instance: string) => send(`addons/${instance}`, "DELETE"),
 
-  plugins: {
-    list: () => apiFetch<{ plugins: string[] }>("/plugins"),
-  },
-
-  hooks: {
-    list: () => apiFetch<{ hooks: string[] }>("/hooks"),
-  },
-
-  env: {
-    list: (app: string) =>
-      apiFetch<EnvResponse>(`/env/${encodeURIComponent(app)}`),
-    set: (app: string, key: string, value: string) =>
-      apiFetch<{ ok: boolean }>(`/env/${encodeURIComponent(app)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key, value }),
-      }),
-    delete: (app: string, key: string) =>
-      apiFetch<{ ok: boolean }>(`/env/${encodeURIComponent(app)}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key }),
-      }),
-  },
-
-  control: {
-    create: (name: string) =>
-      apiFetch<ControlActionResponse>("/control/apps", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      }),
-    deploy: (app: string) =>
-      apiFetch<ControlActionResponse>(
-        `/control/apps/${encodeURIComponent(app)}/deploy`,
-        { method: "POST" },
-      ),
-    restart: (app: string) =>
-      apiFetch<ControlActionResponse>(
-        `/control/apps/${encodeURIComponent(app)}/restart`,
-        { method: "POST" },
-      ),
-    stop: (app: string) =>
-      apiFetch<ControlActionResponse>(
-        `/control/apps/${encodeURIComponent(app)}/stop`,
-        { method: "POST" },
-      ),
-    destroy: (app: string) =>
-      apiFetch<ControlActionResponse>(
-        `/control/apps/${encodeURIComponent(app)}`,
-        { method: "DELETE" },
-      ),
-    installPlugins: (only?: string[]) =>
-      apiFetch<ControlActionResponse>("/control/plugins/install", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(only ? { only } : {}),
-      }),
-    containerExport: (app: string) =>
-      apiFetch<ControlActionResponse & { output?: string }>(
-        `/control/apps/${encodeURIComponent(app)}/container/export`,
-        { method: "POST" },
-      ),
-  },
+  // SSE stream URL (consumed by EventSource)
+  logsUrl: (app: string) => `${base}/apps/${app}/logs`,
 };
 
-export type ControlActionResponse = {
-  ok: boolean;
-  app?: string;
-  action?: string;
-  error?: string;
+export const fmtBytes = (b: number) => {
+  if (!b) return "0";
+  const u = ["B", "K", "M", "G"];
+  let i = 0;
+  let n = b;
+  while (n >= 1024 && i < u.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return (n >= 100 || i === 0 ? Math.round(n) : n.toFixed(1)) + u[i];
+};
+
+export const fmtDur = (s: number) => {
+  s = Math.max(0, s | 0);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d) return `${d}d${h}h`;
+  if (h) return `${h}h${m}m`;
+  return `${m}m`;
 };
