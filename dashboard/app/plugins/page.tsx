@@ -70,13 +70,16 @@ export default function PluginsPage() {
       <Section title="bundles" count={data.bundles.length}>
         <div className="divide-y divide-border/50">
           {data.bundles.map((b) => (
-            <div key={b.name} className="flex items-center gap-3 px-4 py-3 font-mono text-xs">
+            <div
+              key={b.name}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 font-mono text-xs"
+            >
               <span className="font-bold">{b.name}</span>
               <span className="text-muted-foreground">{b.version}</span>
               <span className="border border-info/30 px-2 py-0.5 text-[11px] text-info">
                 {b.type}
               </span>
-              <span className="text-muted-foreground">{b.description}</span>
+              <span className="min-w-0 break-words text-muted-foreground">{b.description}</span>
             </div>
           ))}
         </div>

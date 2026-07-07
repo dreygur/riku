@@ -1,8 +1,8 @@
 //! Single-service image update for compose-based apps.
 //!
-//! Used by the GHCR webhook to pull and recreate one compose service without
-//! running a full [`crate::do_deploy`] — no hooks, no Procfile parsing, no
-//! worker respawn, just the one container.
+//! Used by the supervisor's periodic image-watch check to pull and recreate
+//! one compose service without running a full [`crate::do_deploy`] — no
+//! hooks, no Procfile parsing, no worker respawn, just the one container.
 
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
@@ -13,15 +13,11 @@ use crate::lock;
 /// Pull a fresh image for `service` and recreate just that compose service.
 ///
 /// Serializes against a concurrent [`crate::do_deploy`] of the same app via
-/// the existing per-app deploy lock, so a webhook hit can't race a git push.
+/// the existing per-app deploy lock, so a periodic check can't race a git push.
 pub fn pull_service(app: &str, paths: &RikuPaths, service: &str) -> Result<()> {
     let app_path = paths.app_root.join(app);
     if !app_path.exists() {
-        return Err(anyhow!(
-            "App '{}' not found at {}",
-            app,
-            app_path.display()
-        ));
+        return Err(anyhow!("App '{}' not found at {}", app, app_path.display()));
     }
 
     let _deploy_lock = lock::acquire(app, paths)?;

@@ -1,18 +1,23 @@
 "use client";
 
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { AppCard } from "@/components/riku/app-card";
 import { EnvEditor } from "@/components/riku/env-editor";
 import { Button } from "@/components/ui/button";
+import { confirmDialog } from "@/components/riku/confirm-dialog";
 import { api } from "@/lib/api";
+import { usePendingRun } from "@/lib/use-pending-run";
 import type { AppState } from "@/lib/types";
 
 export default function AppDetail({ params }: { params: Promise<{ app: string }> }) {
   const { app } = use(params);
   const [state, setState] = useState<AppState | null>(null);
   const [missing, setMissing] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const restoreInput = useRef<HTMLInputElement>(null);
+  const { isPending, run } = usePendingRun();
 
   const load = useCallback(async () => {
     try {
@@ -48,7 +53,7 @@ export default function AppDetail({ params }: { params: Promise<{ app: string }>
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Link href="/" className="font-mono text-xs text-muted-foreground hover:text-foreground">
           ‹ overview
         </Link>
@@ -57,15 +62,43 @@ export default function AppDetail({ params }: { params: Promise<{ app: string }>
         <Button
           size="sm"
           variant="secondary"
-          onClick={() =>
-            api
-              .backup(state.app)
-              .then(() => toast.success(`Backed up ${state.app}`))
-              .catch((e) => toast.error(`Backup failed: ${e.message}`))
-          }
+          disabled={isPending("backup")}
+          onClick={() => run("backup", `Backed up ${state.app}`, () => api.backup(state.app))}
         >
-          back up app
+          {isPending("backup") ? "backing up…" : "back up app"}
         </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={restoring}
+          onClick={() => restoreInput.current?.click()}
+        >
+          {restoring ? "restoring…" : "restore from file"}
+        </Button>
+        <input
+          ref={restoreInput}
+          type="file"
+          accept=".gz,.tar.gz,application/gzip"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (!file) return;
+            const ok = await confirmDialog(
+              `Restore ${state.app} from "${file.name}"? This overwrites the app's current source, env, and data.`,
+            );
+            if (!ok) return;
+            setRestoring(true);
+            api
+              .restore(state.app, file)
+              .then(() => {
+                toast.success(`Restored ${state.app} — redeploy or restart to bring it up`);
+                load();
+              })
+              .catch((err) => toast.error(`Restore failed: ${err.message}`))
+              .finally(() => setRestoring(false));
+          }}
+        />
       </div>
 
       <AppCard app={state} onChanged={load} />

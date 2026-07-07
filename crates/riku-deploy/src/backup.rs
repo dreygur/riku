@@ -71,11 +71,16 @@ impl<'a> BackupService<'a> {
     }
 
     /// Restore an app from a `tar.gz`, after validating every archive member.
+    ///
+    /// Serialized against a concurrent `do_deploy` (or another restore) of
+    /// the same app via the same per-app deploy lock `do_deploy` uses — both
+    /// mutate `apps/<app>`, `envs/<app>`, and `data/<app>` in place.
     pub fn restore(&self, app: &str, archive: &Path) -> Result<()> {
         let app = validate_app_name(app)?;
         if !archive.is_file() {
             bail!("backup file '{}' not found", archive.display());
         }
+        let _deploy_lock = crate::lock::acquire(&app, self.paths)?;
 
         let listing = Command::new("tar")
             .arg("-tzf")

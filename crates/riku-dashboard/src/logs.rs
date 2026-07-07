@@ -1,9 +1,11 @@
 //! Live log streaming over Server-Sent Events.
 //!
 //! Tails every `*.log` under `{log_root}/{app}/` (deploy log + per-worker
-//! stdout/stderr) and pushes new lines to the browser as they're written. Each
-//! file is followed from its current end, polled on a short interval; a client
-//! disconnect drops the channel and the tailer task exits on its next send.
+//! stdout/stderr) and pushes new lines to the browser as they're written.
+//! Each file is followed from a short distance back from its current end (a
+//! small backlog so the viewer isn't blank on a quiet app), polled on a short
+//! interval; a client disconnect drops the channel and the tailer task exits
+//! on its next send.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -49,16 +51,22 @@ pub(crate) async fn stream(
     let dir = state.paths.log_root.join(&app);
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<Event, std::convert::Infallible>>(256);
 
+    // Per-file read offset; start each file this far back from its current
+    // end, so opening the sheet immediately shows recent context instead of
+    // "waiting for output" until the app happens to log something new. The
+    // main loop below (which reads from `offset` to the file's current
+    // length) picks up this backlog on its very first pass, no separate
+    // codepath needed.
+    const BACKLOG_BYTES: u64 = 16 * 1024;
+
     tokio::spawn(async move {
-        // Per-file read offset; start each file at its current end so we stream
-        // only new output, not the whole history.
         let mut offsets: HashMap<PathBuf, u64> = HashMap::new();
         if let Ok(rd) = std::fs::read_dir(&dir) {
             for e in rd.flatten() {
                 let p = e.path();
                 if p.extension().and_then(|x| x.to_str()) == Some("log") {
                     let len = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
-                    offsets.insert(p, len);
+                    offsets.insert(p, len.saturating_sub(BACKLOG_BYTES));
                 }
             }
         }

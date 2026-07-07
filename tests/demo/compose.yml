@@ -1,0 +1,42 @@
+# Persistent, browsable riku sandbox: one container running the real riku
+# supervisor, the real dashboard, real nginx, and sshd, with 5 demo apps
+# (tests/demo/apps/*) deployed automatically at boot.
+#
+# Prerequisite (not doable inside this compose file): a release riku binary
+# must already exist at target/release/riku, since the Dockerfile COPYs it
+# in rather than compiling it (compiling the whole workspace inside a fresh
+# Rust builder stage on every build would be far slower than reusing your
+# existing target/ dir). From the repo root:
+#
+#   cargo build --release
+#   docker compose -f tests/demo/compose.yml up --build
+#
+# Then open:
+#   http://dashboard.localhost:8080   (dashboard)
+#   http://hello-node.localhost:8080
+#   http://hello-python.localhost:8080
+#   http://hello-ruby.localhost:8080
+#   http://hello-go.localhost:8080
+#   http://hello-worker.localhost:8080
+#
+# *.localhost resolves to 127.0.0.1 on its own on virtually every modern
+# OS/browser — no /etc/hosts edit needed.
+#
+# git remote for redeploying any app directly, or pushing a new one:
+#   ssh -p 2222 riku@127.0.0.1 ...   (see README.md for the one-time SSH key setup)
+services:
+  riku:
+    build:
+      context: ../..
+      dockerfile: tests/demo/Dockerfile
+      args:
+        RIKU_BINARY: target/release/riku
+    ports:
+      - "127.0.0.1:8080:80"
+      - "127.0.0.1:2222:2222"
+    # A bootstrap SSH public key dropped here (before first boot) is
+    # imported into riku's authorized_keys automatically, so you can push
+    # more apps or redeploy the demo ones yourself over SSH afterward.
+    # Entirely optional — the 5 demo apps deploy without it.
+    volumes:
+      - ./.ssh-bootstrap:/home/riku/.ssh-bootstrap:ro

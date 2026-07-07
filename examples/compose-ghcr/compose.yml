@@ -1,0 +1,7 @@
+services:
+  web:
+    # Replace GHCR_USERNAME below with your own GitHub username/org before
+    # building and pushing (see README.md in this directory).
+    image: ghcr.io/GHCR_USERNAME/riku-compose-demo:latest
+    ports:
+      - "8080:8080"

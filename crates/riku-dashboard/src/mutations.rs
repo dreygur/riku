@@ -12,7 +12,7 @@
 use axum::extract::{Path, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Json, Response};
-use axum::routing::post;
+use axum::routing::{delete, post};
 use axum::Router;
 
 use super::DashboardState;
@@ -24,6 +24,14 @@ pub(crate) fn router() -> Router<DashboardState> {
         .route("/api/apps/:app/redeploy", post(redeploy))
         .route("/api/apps/:app/scale", post(scale))
         .route("/api/apps/:app/rollback", post(rollback))
+        .route(
+            "/api/apps/:app/workers/:kind/:ordinal/restart",
+            post(restart_worker),
+        )
+        .route(
+            "/api/apps/:app/workers/:kind/:ordinal",
+            delete(delete_worker),
+        )
 }
 
 async fn restart(state: State<DashboardState>, headers: HeaderMap, app: Path<String>) -> Response {
@@ -103,6 +111,49 @@ async fn rollback(
         tokio::task::spawn_blocking(move || crate::deploy::rollback(&app, &paths, to.as_deref()))
             .await;
     finish(result, "rollback")
+}
+
+/// POST /api/apps/:app/workers/:kind/:ordinal/restart — restart exactly one
+/// worker ordinal (e.g. just `web.3`), leaving its siblings untouched.
+async fn restart_worker(
+    State(state): State<DashboardState>,
+    headers: HeaderMap,
+    Path((app, kind, ordinal)): Path<(String, String, String)>,
+) -> Response {
+    if let Some(denied) = authorize_mutation(&state, &headers) {
+        return denied;
+    }
+    let Ok(ordinal) = ordinal.parse::<u32>() else {
+        return (StatusCode::BAD_REQUEST, "invalid ordinal").into_response();
+    };
+    let paths = state.paths.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        crate::deploy::worker_control::restart_worker(&app, &paths, &kind, ordinal)
+    })
+    .await;
+    finish(result, "restart_worker")
+}
+
+/// DELETE /api/apps/:app/workers/:kind/:ordinal — remove exactly one worker
+/// ordinal's config, stopping it without touching siblings (equivalent to
+/// scaling down by exactly one).
+async fn delete_worker(
+    State(state): State<DashboardState>,
+    headers: HeaderMap,
+    Path((app, kind, ordinal)): Path<(String, String, String)>,
+) -> Response {
+    if let Some(denied) = authorize_mutation(&state, &headers) {
+        return denied;
+    }
+    let Ok(ordinal) = ordinal.parse::<u32>() else {
+        return (StatusCode::BAD_REQUEST, "invalid ordinal").into_response();
+    };
+    let paths = state.paths.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        crate::deploy::worker_control::delete_worker(&app, &paths, &kind, ordinal)
+    })
+    .await;
+    finish(result, "delete_worker")
 }
 
 /// Shape a `spawn_blocking` result into the standard action response.

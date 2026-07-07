@@ -2,11 +2,15 @@
 
 use std::collections::HashMap;
 
-use axum::extract::{Query, State};
+use axum::extract::{DefaultBodyLimit, Query, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Json, Response};
 use axum::routing::{delete, get, post};
 use axum::Router;
+
+/// Backup archives routinely exceed axum's default 2 MB body-read limit;
+/// raise it for the restore upload only, not the whole router.
+const RESTORE_MAX_BYTES: usize = 2 * 1024 * 1024 * 1024;
 
 use super::DashboardState;
 
@@ -25,8 +29,12 @@ pub(crate) fn router(state: DashboardState) -> Router {
             "/api/apps/:app/env",
             get(super::appcfg::get_env).post(super::appcfg::edit_env),
         )
-        // app backup + diagnostics
+        // app backup + restore + diagnostics
         .route("/api/apps/:app/backup", post(super::system::backup_app))
+        .route(
+            "/api/apps/:app/restore",
+            post(super::system::restore_app).route_layer(DefaultBodyLimit::max(RESTORE_MAX_BYTES)),
+        )
         .route("/api/doctor", get(super::system::doctor))
         .route("/api/plugins", get(super::installed::list))
         .route("/api/plugins/install", post(super::market::install))

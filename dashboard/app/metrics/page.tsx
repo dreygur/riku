@@ -54,7 +54,7 @@ export default function MetricsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
         <h1 className="font-mono text-sm tracking-widest text-muted-foreground uppercase">
           live metrics
         </h1>
@@ -76,24 +76,24 @@ export default function MetricsPage() {
               return (
                 <div
                   key={w.process_id}
-                  className="grid grid-cols-[140px_1fr_1fr] items-center gap-6 border-b border-border/50 px-4 py-3 font-mono text-xs last:border-b-0"
+                  className="flex flex-col gap-2 border-b border-border/50 px-4 py-3 font-mono text-xs last:border-b-0 sm:grid sm:grid-cols-[140px_1fr_1fr] sm:items-center sm:gap-6"
                 >
                   <span className="font-bold">
                     {w.kind}.{w.ordinal}
                   </span>
-                  <span className="flex items-center gap-3">
-                    <span className="w-8 text-[10px] tracking-wider text-muted-foreground uppercase">
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="w-8 shrink-0 text-[10px] tracking-wider text-muted-foreground uppercase">
                       mem
                     </span>
                     <Sparkline data={h.mem} stroke="#5b9dd9" />
-                    <span className="text-muted-foreground">{fmtBytes(w.memory_bytes)}</span>
+                    <span className="shrink-0 text-muted-foreground">{fmtBytes(w.memory_bytes)}</span>
                   </span>
-                  <span className="flex items-center gap-3">
-                    <span className="w-8 text-[10px] tracking-wider text-muted-foreground uppercase">
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="w-8 shrink-0 text-[10px] tracking-wider text-muted-foreground uppercase">
                       cpu
                     </span>
                     <Sparkline data={h.cpu} stroke="#e8b54a" />
-                    <span className="text-muted-foreground">
+                    <span className="shrink-0 text-muted-foreground">
                       {h.cpu.length ? `${h.cpu[h.cpu.length - 1]}ms/s` : "—"}
                     </span>
                   </span>

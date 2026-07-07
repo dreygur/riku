@@ -42,6 +42,7 @@ pub mod router;
 pub mod scaling;
 pub mod service_update;
 pub mod supervisor_ctl;
+pub mod worker_control;
 pub mod workers;
 
 pub use supervisor_ctl::spawn_app;

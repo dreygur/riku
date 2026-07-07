@@ -1,0 +1,3 @@
+source "https://rubygems.org"
+# No gems needed (see app.rb) -- this file exists only so riku's Ruby
+# runtime plugin detects this as a Ruby app.

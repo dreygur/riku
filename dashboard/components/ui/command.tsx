@@ -59,7 +59,11 @@ function CommandDialog({
         )}
         showCloseButton={showCloseButton}
       >
-        {children}
+        {/* CommandInput/CommandList are cmdk primitives that read from the
+            cmdk store `<Command>` provides via context -- without this
+            wrapper they call methods on an undefined store (crashes with
+            "Cannot read properties of undefined (reading 'subscribe')"). */}
+        <Command className="[&_[cmdk-group-heading]]:px-2">{children}</Command>
       </DialogContent>
     </Dialog>
   )

@@ -133,6 +133,15 @@ fn build_state_dump(paths: &RikuPaths) -> Result<StateDump> {
     })
 }
 
+/// Whether `{app}-{kind}-{ordinal}.toml` is still enabled — i.e. this worker
+/// is part of the app's current scale, not a leftover from a higher one.
+fn worker_config_exists(paths: &RikuPaths, app: &str, kind: &str, ordinal: u32) -> bool {
+    paths
+        .workers_enabled
+        .join(format!("{app}-{kind}-{ordinal}.toml"))
+        .exists()
+}
+
 fn build_app_entry(
     app: &str,
     paths: &RikuPaths,
@@ -151,6 +160,18 @@ fn build_app_entry(
             stats
                 .processes
                 .iter()
+                // Stats persist forever (see unload_config's doc comment on why
+                // riku never purges a stopped worker's history) so a scaled-down
+                // ordinal (e.g. web.5 after `scale web=1`) leaves a permanent
+                // "stopped" ghost row with nothing behind it to restart or
+                // inspect. Hide exactly that case: no worker config left AND not
+                // actually running. A *running* entry with no config is kept
+                // visible regardless — that combination shouldn't happen, and
+                // hiding it would bury a real inconsistency instead of surfacing it.
+                .filter(|p| {
+                    p.status == ProcessStatus::Running
+                        || worker_config_exists(paths, app, &p.kind, p.ordinal)
+                })
                 .map(|p| WorkerStateEntry {
                     process_id: p.process_id.clone(),
                     kind: p.kind.clone(),

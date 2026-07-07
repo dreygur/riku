@@ -147,7 +147,11 @@ fn build(app_path: &Path, app: &str, env_path: Option<&Path>) -> Result<()> {
         let (program, base_args) = compose_cmd();
         let status = Command::new(program)
             .args(&base_args)
-            .args(["-f", &compose.file_name().unwrap().to_string_lossy(), "pull"])
+            .args([
+                "-f",
+                &compose.file_name().unwrap().to_string_lossy(),
+                "pull",
+            ])
             .current_dir(app_path)
             .status()?;
         if !status.success() {
@@ -209,7 +213,8 @@ fn print_start(app_path: &Path, app: &str) -> Result<()> {
 }
 
 /// Pull and recreate a single compose service, without touching the rest of
-/// the stack. Used by the GHCR webhook to apply a freshly pushed image.
+/// the stack. Used by the supervisor's periodic image-watch check to apply
+/// a freshly pushed image.
 fn pull_service(app_path: &Path, service: &str, env_path: Option<&Path>) -> Result<()> {
     let Some(compose) = compose_file(app_path) else {
         bail!("No compose file found in {}", app_path.display());
@@ -308,8 +313,11 @@ mod tests {
     #[test]
     fn read_env_file_parses_ghcr_credentials() {
         let dir = temp_app_dir();
-        fs::write(dir.join("ENV"), "GHCR_USERNAME=octocat\nGHCR_TOKEN=ghp_abc123\n# comment\n\n")
-            .unwrap();
+        fs::write(
+            dir.join("ENV"),
+            "GHCR_USERNAME=octocat\nGHCR_TOKEN=ghp_abc123\n# comment\n\n",
+        )
+        .unwrap();
 
         let vars = read_env_file(Some(&dir));
         assert_eq!(vars.get("GHCR_USERNAME").unwrap(), "octocat");

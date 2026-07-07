@@ -19,7 +19,14 @@ case "$CMD" in
     if [ -f "go.mod" ]; then
       go mod download
     fi
-    go build -o app .
+    # -buildvcs=false: the app dir is a fresh clone made by the deploy hook
+    # itself (git_ops::sync_app_repo), whose own subprocess environment can
+    # carry inherited GIT_* vars (e.g. GIT_DIR) from git's own hook
+    # invocation. Go's automatic VCS stamping shells out to git and can fail
+    # against that inherited state (exit 128, "error obtaining VCS status")
+    # even though the clone itself is perfectly valid -- there is no build
+    # provenance value in stamping a riku deploy's throwaway working copy.
+    go build -buildvcs=false -o app .
     ;;
 
   env)

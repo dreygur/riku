@@ -15,7 +15,7 @@ riku-cli = { path = "../riku-cli" }
 riku-deploy = { path = "../riku-deploy" }
 riku-plugins = { path = "../riku-plugins" }
 anyhow = "1"
-axum = "0.7"
+axum = { version = "0.7", features = ["multipart"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "fs", "io-util", "sync"] }
 tokio-stream = "0.1"
 serde = { version = "1", features = ["derive"] }

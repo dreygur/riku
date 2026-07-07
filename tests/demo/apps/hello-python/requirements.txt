@@ -1,0 +1,2 @@
+# stdlib only -- empty on purpose so venv creation + pip install stay instant
+# and offline-safe inside the sandbox.

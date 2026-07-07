@@ -120,7 +120,7 @@ reads `npm`, `pnpm`, and `bun` lockfiles directly, so there is no package
 manager to choose. Commit a lockfile and Riku installs from it:
 
 - Lockfile present (`package-lock.json`, `pnpm-lock.yaml`, `lock.yaml`, or
-  `bun.lock`) → `nub ci --prod` (clean, frozen install).
+  `bun.lock`) → `nub install --frozen-lockfile --prod` (fails on lockfile drift).
 - No lockfile → `nub install --prod`.
 
 If the server doesn't have nub, Riku falls back to `npm` (`npm ci` /

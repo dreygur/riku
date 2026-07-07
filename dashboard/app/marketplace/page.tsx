@@ -5,7 +5,24 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
+import { usePendingRun } from "@/lib/use-pending-run";
 import type { MarketplaceSource, MarketplaceHit, TrustKey } from "@/lib/types";
+
+function Field({
+  label,
+  ...props
+}: React.ComponentProps<typeof Input> & { label: string }) {
+  return (
+    <span className="inline-flex flex-col gap-1">
+      <span className="text-[10px] tracking-wider text-muted-foreground uppercase">
+        {label}
+      </span>
+      <Input {...props} />
+    </span>
+  );
+}
+
+const DEFAULT_SOURCE = "github:dreygur/riku";
 
 export default function MarketplacePage() {
   const [sources, setSources] = useState<MarketplaceSource[]>([]);
@@ -15,6 +32,7 @@ export default function MarketplacePage() {
   const [url, setUrl] = useState("");
   const [keyName, setKeyName] = useState("");
   const [keyVal, setKeyVal] = useState("");
+  const { isPending, run: runPending } = usePendingRun();
 
   const load = useCallback(() => {
     api.marketSources().then(setSources).catch(() => setSources([]));
@@ -22,15 +40,18 @@ export default function MarketplacePage() {
   }, []);
   useEffect(load, [load]);
 
-  async function run(label: string, fn: () => Promise<void>) {
-    try {
+  function run(key: string, label: string, fn: () => Promise<void>) {
+    runPending(key, label, async () => {
       await fn();
-      toast.success(label);
       load();
-    } catch (e) {
-      toast.error(`${label} failed: ${(e as Error).message}`);
-    }
+    });
   }
+
+  const addSource = (value: string) =>
+    run("add-source", `Added ${value}`, async () => {
+      await api.marketAdd(value);
+      setUrl("");
+    });
 
   const search = async () => {
     try {
@@ -48,13 +69,13 @@ export default function MarketplacePage() {
 
       {/* search + install */}
       <section className="border border-border bg-card">
-        <div className="flex items-center gap-2 border-b border-border p-3">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && search()}
             placeholder="search plugins across sources…"
-            className="h-8 flex-1 font-mono text-xs"
+            className="h-7 min-w-40 flex-1 font-mono text-xs"
           />
           <Button size="sm" variant="secondary" onClick={search}>
             search
@@ -68,106 +89,138 @@ export default function MarketplacePage() {
           <p className="px-4 py-4 font-mono text-xs text-muted-foreground">no matches.</p>
         ) : (
           <div className="divide-y divide-border/50">
-            {hits.map((h) => (
-              <div key={`${h.marketplace}/${h.name}`} className="flex items-center gap-3 px-4 py-3 font-mono text-xs">
-                <span className="font-bold">{h.name}</span>
-                <span className="text-muted-foreground">@{h.marketplace}</span>
-                <span className="text-muted-foreground">{h.description}</span>
-                <span className="flex-1" />
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="border-[#3fd07f]/30"
-                  onClick={() => run(`Installed ${h.name}`, () => api.pluginInstall(h.source))}
+            {hits.map((h) => {
+              const installKey = `install-${h.marketplace}/${h.name}`;
+              return (
+                <div
+                  key={`${h.marketplace}/${h.name}`}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 font-mono text-xs"
                 >
-                  install
-                </Button>
-              </div>
-            ))}
+                  <span className="font-bold">{h.name}</span>
+                  <span className="text-muted-foreground">@{h.marketplace}</span>
+                  <span className="min-w-0 break-words text-muted-foreground">{h.description}</span>
+                  <span className="flex-1" />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="border-[#3fd07f]/30"
+                    disabled={isPending(installKey)}
+                    onClick={() =>
+                      run(installKey, `Installed ${h.name}`, () => api.pluginInstall(h.source))
+                    }
+                  >
+                    {isPending(installKey) ? "installing…" : "install"}
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
 
       {/* sources */}
       <section className="border border-border bg-card">
-        <div className="flex items-center gap-2 border-b border-border p-3">
-          <span className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
+        <div className="flex flex-col gap-2 border-b border-border p-3 sm:flex-row sm:items-end">
+          <span className="font-mono text-xs tracking-widest text-muted-foreground uppercase sm:self-center">
             sources
           </span>
-          <span className="flex-1" />
-          <Input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="github:owner/repo"
-            className="h-8 w-64 font-mono text-xs"
-          />
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={!url}
-            onClick={() => run(`Added source`, async () => { await api.marketAdd(url); setUrl(""); })}
-          >
-            add source
-          </Button>
+          <span className="hidden flex-1 sm:block" />
+          <div className="flex items-end gap-2">
+            <Field
+              label="source"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="github:owner/repo"
+              className="h-7 w-full font-mono text-xs sm:w-56"
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              className="shrink-0"
+              disabled={!url || isPending("add-source")}
+              onClick={() => addSource(url)}
+            >
+              {isPending("add-source") ? "adding…" : "add source"}
+            </Button>
+          </div>
         </div>
         {sources.length === 0 ? (
           <p className="px-4 py-4 font-mono text-xs text-muted-foreground">
-            No sources. The repo itself is a marketplace: add{" "}
-            <code className="text-[#3fd07f]">github:dreygur/riku</code>.
+            No sources. The repo itself is a marketplace:{" "}
+            <button
+              type="button"
+              className="text-[#3fd07f] underline underline-offset-2 hover:text-[#3fd07f]/80"
+              disabled={isPending("add-source")}
+              onClick={() => addSource(DEFAULT_SOURCE)}
+            >
+              add {DEFAULT_SOURCE}
+            </button>
+            .
           </p>
         ) : (
           <div className="divide-y divide-border/50">
-            {sources.map((s) => (
-              <div key={s.name} className="flex items-center gap-3 px-4 py-3 font-mono text-xs">
-                <span className="font-bold">{s.name}</span>
-                <span className="text-muted-foreground">{s.url}</span>
-                <span className="flex-1" />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-muted-foreground hover:text-destructive"
-                  onClick={() => run(`Removed ${s.name}`, () => api.marketRemove(s.name))}
+            {sources.map((s) => {
+              const removeKey = `remove-source-${s.name}`;
+              return (
+                <div
+                  key={s.name}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 font-mono text-xs"
                 >
-                  remove
-                </Button>
-              </div>
-            ))}
+                  <span className="font-bold">{s.name}</span>
+                  <span className="min-w-0 break-words text-muted-foreground">{s.url}</span>
+                  <span className="flex-1" />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-muted-foreground hover:text-destructive"
+                    disabled={isPending(removeKey)}
+                    onClick={() =>
+                      run(removeKey, `Removed ${s.name}`, () => api.marketRemove(s.name))
+                    }
+                  >
+                    {isPending(removeKey) ? "removing…" : "remove"}
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
 
       {/* trust keyring */}
       <section className="border border-border bg-card">
-        <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
-          <span className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
+        <div className="flex flex-wrap items-end gap-2 border-b border-border p-3">
+          <span className="self-center font-mono text-xs tracking-widest text-muted-foreground uppercase">
             trust keyring
           </span>
           <span className="flex-1" />
-          <Input
+          <Field
+            label="author"
             value={keyName}
             onChange={(e) => setKeyName(e.target.value)}
-            placeholder="author"
-            className="h-8 w-32 font-mono text-xs"
+            placeholder="name"
+            className="h-7 w-full font-mono text-xs sm:w-28"
           />
-          <Input
+          <Field
+            label="ed25519 pubkey"
             value={keyVal}
             onChange={(e) => setKeyVal(e.target.value)}
-            placeholder="ed25519 pubkey (hex)"
-            className="h-8 w-72 font-mono text-xs"
+            placeholder="hex"
+            className="h-7 w-full font-mono text-xs sm:w-56"
           />
           <Button
             size="sm"
             variant="secondary"
-            disabled={!keyName || !keyVal}
+            disabled={!keyName || !keyVal || isPending("trust")}
             onClick={() =>
-              run(`Trusted ${keyName}`, async () => {
+              run("trust", `Trusted ${keyName}`, async () => {
                 await api.trustAdd(keyName, keyVal);
                 setKeyName("");
                 setKeyVal("");
               })
             }
           >
-            trust
+            {isPending("trust") ? "trusting…" : "trust"}
           </Button>
         </div>
         {keys.length === 0 ? (
@@ -176,21 +229,27 @@ export default function MarketplacePage() {
           </p>
         ) : (
           <div className="divide-y divide-border/50">
-            {keys.map((k) => (
-              <div key={k.name} className="flex items-center gap-3 px-4 py-3 font-mono text-xs">
-                <span className="font-bold">{k.name}</span>
-                <span className="truncate text-muted-foreground">{k.pubkey}</span>
-                <span className="flex-1" />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-muted-foreground hover:text-destructive"
-                  onClick={() => run(`Untrusted ${k.name}`, () => api.trustRemove(k.name))}
-                >
-                  remove
-                </Button>
-              </div>
-            ))}
+            {keys.map((k) => {
+              const untrustKey = `untrust-${k.name}`;
+              return (
+                <div key={k.name} className="flex items-center gap-3 px-4 py-3 font-mono text-xs">
+                  <span className="font-bold">{k.name}</span>
+                  <span className="truncate text-muted-foreground">{k.pubkey}</span>
+                  <span className="flex-1" />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-muted-foreground hover:text-destructive"
+                    disabled={isPending(untrustKey)}
+                    onClick={() =>
+                      run(untrustKey, `Untrusted ${k.name}`, () => api.trustRemove(k.name))
+                    }
+                  >
+                    {isPending(untrustKey) ? "removing…" : "remove"}
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

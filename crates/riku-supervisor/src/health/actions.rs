@@ -26,7 +26,8 @@ pub trait ControlActions: Send + Sync {
     fn container_export(&self, app: &str, context: &Path, output: &Path) -> Result<()>;
     fn list_client_plugins(&self) -> Result<Vec<String>>;
     /// Pull a fresh image and recreate a single compose service, without a
-    /// full redeploy. Used by the GHCR webhook.
+    /// full redeploy. Used by the daemon's periodic image-watch check
+    /// (see `daemon::image_watch`).
     fn pull_service(&self, paths: &RikuPaths, app: &str, service: &str) -> Result<()>;
 }
 

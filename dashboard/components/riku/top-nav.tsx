@@ -3,9 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { MenuIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, fmtDur } from "@/lib/api";
 import type { RikuState } from "@/lib/types";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 const links = [
   { href: "/", label: "overview" },
@@ -16,10 +23,23 @@ const links = [
   { href: "/doctor", label: "doctor" },
 ];
 
+function StatusText({ state }: { state: RikuState | null }) {
+  if (!state) return <>connecting…</>;
+  return (
+    <>
+      <span className="text-foreground">v{state.riku_version}</span> · up{" "}
+      {fmtDur(state.supervisor_uptime_seconds)} ·{" "}
+      <span className="text-foreground">{state.apps.length}</span> app
+      {state.apps.length === 1 ? "" : "s"}
+    </>
+  );
+}
+
 export function TopNav() {
   const path = usePathname();
   const [state, setState] = useState<RikuState | null>(null);
   const [live, setLive] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     const load = () =>
@@ -35,60 +55,77 @@ export function TopNav() {
     return () => clearInterval(t);
   }, []);
 
+  const navLink = (l: (typeof links)[number], onClick?: () => void) => {
+    const active = l.href === "/" ? path === "/" : path.startsWith(l.href);
+    return (
+      <Link
+        key={l.href}
+        href={l.href}
+        onClick={onClick}
+        className={cn(
+          "px-2.5 py-1 font-mono text-xs tracking-wide uppercase transition-colors",
+          active ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+        )}
+      >
+        {l.label}
+      </Link>
+    );
+  };
+
   return (
-    <header className="sticky top-0 z-20 flex items-center gap-6 border-b border-border bg-background/85 px-5 py-3 backdrop-blur">
+    <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background/85 px-3 py-3 backdrop-blur sm:gap-6 sm:px-5">
+      <button
+        className="text-muted-foreground hover:text-foreground md:hidden"
+        onClick={() => setMobileOpen(true)}
+        aria-label="open menu"
+      >
+        <MenuIcon className="size-5" />
+      </button>
+
       <Link href="/" className="font-mono text-lg font-bold">
         riku<span className="text-[#3fd07f] motion-safe:animate-pulse">▌</span>
       </Link>
 
-      <nav className="flex items-center gap-1">
-        {links.map((l) => {
-          const active = l.href === "/" ? path === "/" : path.startsWith(l.href);
-          return (
-            <Link
-              key={l.href}
-              href={l.href}
-              className={cn(
-                "px-2.5 py-1 font-mono text-xs tracking-wide uppercase transition-colors",
-                active
-                  ? "bg-secondary text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {l.label}
-            </Link>
-          );
-        })}
+      <nav className="hidden items-center gap-1 md:flex">
+        {links.map((l) => navLink(l))}
       </nav>
 
-      <div className="font-mono text-xs text-muted-foreground">
-        {state ? (
-          <>
-            <span className="text-foreground">v{state.riku_version}</span> · up{" "}
-            {fmtDur(state.supervisor_uptime_seconds)} ·{" "}
-            <span className="text-foreground">{state.apps.length}</span> app
-            {state.apps.length === 1 ? "" : "s"}
-          </>
-        ) : (
-          "connecting…"
-        )}
+      <div className="hidden font-mono text-xs text-muted-foreground md:block">
+        <StatusText state={state} />
       </div>
 
       <div className="flex-1" />
       <button
         onClick={() => window.dispatchEvent(new Event("riku-open-command"))}
-        className="border border-border px-2 py-1 font-mono text-[11px] text-muted-foreground hover:text-foreground"
+        className="flex h-7 shrink-0 items-center gap-0.5 border border-border px-2.5 font-mono text-[11px] text-muted-foreground hover:text-foreground"
         title="command palette"
       >
-        ⌘K
+        <span>⌘</span>
+        <span>K</span>
       </button>
       <span
         className={cn(
-          "h-1.5 w-1.5",
+          "h-1.5 w-1.5 shrink-0",
           live ? "bg-[#3fd07f] motion-safe:animate-pulse" : "bg-muted-foreground/40",
         )}
         title={live ? "live" : "offline"}
       />
+
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent side="left" className="w-64 border-r border-border bg-background p-0">
+          <SheetHeader className="border-b border-border px-4 py-3">
+            <SheetTitle className="font-mono text-base font-bold">
+              riku<span className="text-[#3fd07f]">▌</span>
+            </SheetTitle>
+          </SheetHeader>
+          <nav className="flex flex-col gap-1 p-2">
+            {links.map((l) => navLink(l, () => setMobileOpen(false)))}
+          </nav>
+          <div className="border-t border-border px-4 py-3 font-mono text-xs text-muted-foreground">
+            <StatusText state={state} />
+          </div>
+        </SheetContent>
+      </Sheet>
     </header>
   );
 }

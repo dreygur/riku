@@ -8,6 +8,7 @@ Thumbs.db
 # Docker
 tests/e2e/id_ed25519
 tests/demo/.keys/
+tests/demo/.ssh-bootstrap/
 
 # Rust
 target/

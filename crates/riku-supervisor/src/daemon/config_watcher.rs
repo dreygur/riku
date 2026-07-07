@@ -231,29 +231,42 @@ impl Supervisor {
     }
 
     /// Stop and remove a configuration.
+    ///
+    /// Stops exactly the one process this config file described — NOT every
+    /// process belonging to the app. A single worker config can be removed
+    /// on its own (scaling one ordinal down, or a per-instance delete from
+    /// the dashboard), and this used to tear down every sibling ordinal too
+    /// (via `stop_app_processes`), turning e.g. "scale web from 5 to 3" into
+    /// a brief full outage until the following recreate step respawned
+    /// 1..3 again. `riku stop`/`riku destroy` still stop everything: they
+    /// remove *all* of an app's config files, so this runs once per file and
+    /// the net effect is unchanged for that case.
     pub(super) fn unload_config(&mut self, filename: &str) -> Result<()> {
-        // Worker config filenames are <app>-<kind>-<ordinal>.toml.
-        // stop_app_processes() matches processes whose ID starts with "<app>-",
-        // so we must pass only the app name, not the full stem.
-        //
-        // The app name itself may contain hyphens (e.g. "my-app"), so we
-        // reconstruct it by stripping both the known suffix pattern "-<kind>-<ordinal>"
-        // and the ".toml" extension.  We do this by splitting off the last two
-        // dash-delimited components (ordinal, then kind).
-        let stem = filename.strip_suffix(".toml").unwrap_or(filename);
+        // Worker config filenames are <app>-<kind>-<ordinal>.toml, which is
+        // exactly the process_id format `stop_process_by_id` expects.
+        let process_id = filename.strip_suffix(".toml").unwrap_or(filename);
         // Strip "-<ordinal>" (last component)
-        let without_ordinal = stem.rsplit_once('-').map(|x| x.0).unwrap_or(stem);
-        // Strip "-<kind>" (now last component)
-        let app_name = without_ordinal
+        let without_ordinal = process_id
             .rsplit_once('-')
             .map(|x| x.0)
-            .unwrap_or(without_ordinal);
-        self.process_manager.stop_app_processes(app_name)?;
+            .unwrap_or(process_id);
+        // Strip "-<kind>" (now last component) — the app name itself may
+        // contain hyphens (e.g. "my-app"), hence stripping from the right.
+        let (app_name, kind) = without_ordinal
+            .rsplit_once('-')
+            .unwrap_or((without_ordinal, ""));
 
-        // Cron jobs live in the in-memory scheduler, not the process manager,
-        // so they must be purged here too — otherwise a stopped or destroyed
-        // app's cron entries keep firing forever.
-        self.cron_scheduler.remove_app_jobs(app_name);
+        if kind.starts_with("cron") {
+            // Cron jobs live in the in-memory scheduler, not the process
+            // manager. There's no scaling concept for cron workers (always
+            // ordinal 1), so removing a cron config always means "this
+            // app's cron entries changed or it's stopping" — purging all of
+            // the app's jobs here is correct, not over-eager like the
+            // process case would be.
+            self.cron_scheduler.remove_app_jobs(app_name);
+        } else {
+            self.process_manager.stop_process_by_id(process_id)?;
+        }
 
         // `riku stop` removes worker configs but leaves the app's source
         // directory in place (so a later deploy/restart can recreate
@@ -265,6 +278,7 @@ impl Supervisor {
         let paths = riku_config::RikuPaths::from_env();
         if !paths.app_root.join(app_name).exists() {
             self.process_manager.stats_mut().remove_app(app_name);
+            self.cron_scheduler.remove_app_jobs(app_name);
         }
         Ok(())
     }

@@ -21,9 +21,18 @@ export function Sparkline({
     .join(" ");
   const areaPts = `0,${height} ${pts} ${width},${height}`;
   return (
-    <svg width={width} height={height} className="block" aria-hidden>
+    // `width`/`height` size the internal point coordinates only; the element
+    // itself scales to its container via viewBox + w-full, so this doesn't
+    // hard-overflow a narrow row the way a fixed pixel `width` attribute did.
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      className="block w-full min-w-0"
+      style={{ height }}
+      aria-hidden
+    >
       <polygon points={areaPts} fill={stroke} fillOpacity={0.12} />
-      <polyline points={pts} fill="none" stroke={stroke} strokeWidth={1.5} />
+      <polyline points={pts} fill="none" stroke={stroke} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }

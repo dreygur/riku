@@ -19,10 +19,16 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
   const headers: Record<string, string> = {};
   if (TOKEN) headers["authorization"] = `Bearer ${TOKEN}`;
 
-  const init: RequestInit = { method: req.method, headers };
+  const init: RequestInit & { duplex?: "half" } = { method: req.method, headers };
   if (req.method !== "GET" && req.method !== "HEAD") {
-    headers["content-type"] = "application/json";
-    init.body = await req.text();
+    // Forward the original content-type: most calls are JSON, but uploads
+    // (e.g. the restore endpoint's tar.gz) are multipart/form-data —
+    // rewriting that to application/json would corrupt the multipart
+    // boundary and the file. Stream the body through rather than buffering
+    // it as text, so a large backup archive isn't held fully in memory here.
+    headers["content-type"] = req.headers.get("content-type") ?? "application/json";
+    init.body = req.body;
+    init.duplex = "half";
   }
 
   let upstream: Response;

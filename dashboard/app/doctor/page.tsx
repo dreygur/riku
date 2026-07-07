@@ -35,7 +35,7 @@ export default function DoctorPage() {
 
   return (
     <div>
-      <div className="mb-5 flex items-center gap-4">
+      <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2">
         <h1 className="font-mono text-sm tracking-widest text-muted-foreground uppercase">
           system diagnostics
         </h1>
@@ -61,11 +61,13 @@ export default function DoctorPage() {
           checks.map((c) => (
             <div
               key={c.name}
-              className="grid grid-cols-[16px_140px_1fr] items-start gap-3 border-b border-border/50 px-4 py-3 font-mono text-xs last:border-b-0"
+              className="flex flex-col gap-1 border-b border-border/50 px-4 py-3 font-mono text-xs last:border-b-0 sm:grid sm:grid-cols-[16px_140px_1fr] sm:items-start sm:gap-3"
             >
-              <StatusDot kind={dotFor(c.status)} className="mt-0.5" />
-              <span className="font-bold text-foreground">{c.name}</span>
-              <span className="text-muted-foreground">{c.detail}</span>
+              <span className="flex items-center gap-2 sm:contents">
+                <StatusDot kind={dotFor(c.status)} className="sm:mt-0.5" />
+                <span className="font-bold text-foreground">{c.name}</span>
+              </span>
+              <span className="min-w-0 break-words text-muted-foreground">{c.detail}</span>
             </div>
           ))
         )}

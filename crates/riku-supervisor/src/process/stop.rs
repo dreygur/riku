@@ -8,7 +8,7 @@ use super::ProcessManager;
 
 impl ProcessManager {
     /// Stop a specific process by its ID.
-    pub(super) fn stop_process_by_id(&mut self, process_id: &str) -> Result<()> {
+    pub(crate) fn stop_process_by_id(&mut self, process_id: &str) -> Result<()> {
         if let Some(mut process) = self.processes.remove(process_id) {
             self.stats.mark_stopped(process_id);
             Self::stop_owned_process(process_id, &mut process)?;

@@ -51,9 +51,19 @@ export const api = {
     send(`apps/${app}/scale`, "POST", kinds),
   rollback: (app: string, to?: string) =>
     send(`apps/${app}/rollback`, "POST", to ? { to } : {}),
+  restartWorker: (app: string, kind: string, ordinal: number) =>
+    send(`apps/${app}/workers/${kind}/${ordinal}/restart`, "POST"),
+  deleteWorker: (app: string, kind: string, ordinal: number) =>
+    send(`apps/${app}/workers/${kind}/${ordinal}`, "DELETE"),
   setEnv: (app: string, set: Record<string, string>, unset: string[] = []) =>
     send(`apps/${app}/env`, "POST", { set, unset }),
   backup: (app: string) => send(`apps/${app}/backup`, "POST"),
+  restore: async (app: string, file: File): Promise<void> => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${base}/apps/${app}/restore`, { method: "POST", body: form });
+    if (!res.ok) throw new Error((await res.text()) || `${res.status}`);
+  },
 
   // addons (managed datastores)
   addonCreate: (plugin: string, instance: string) =>

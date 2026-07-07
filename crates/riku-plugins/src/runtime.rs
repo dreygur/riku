@@ -232,7 +232,8 @@ pub fn build(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result<()> {
 }
 
 /// Run `plugin pull-service <service>`, streaming output live. Used by the
-/// GHCR webhook to refresh one compose service without a full deploy.
+/// supervisor's periodic image-watch check to refresh one compose service
+/// without a full deploy.
 pub fn pull_service(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>, service: &str) -> Result<()> {
     tracing::info!(
         plugin = plugin.name.as_str(),

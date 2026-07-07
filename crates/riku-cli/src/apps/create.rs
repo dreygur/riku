@@ -42,20 +42,24 @@ pub fn cmd_apps_create(paths: &RikuPaths, name: &str) -> Result<()> {
     fs::create_dir_all(&hooks_dir)?;
 
     let post_receive = hooks_dir.join("post-receive");
+    // `riku git-hook` reads the "oldrev newrev refname" lines git feeds this
+    // hook directly from its OWN stdin (one iteration per updated ref — see
+    // cmd_git_hook). Do not `read` them first: a `while read ...; do ... ;
+    // done` wrapper here would consume that input itself, leaving `riku
+    // git-hook` nothing to read (immediate EOF, zero iterations, silent
+    // no-op deploy) for the common case of a single-ref push. Stdin must
+    // reach the child completely unconsumed.
     let hook_script = format!(
         r#"#!/bin/bash
 # Riku post-receive hook for app: {}
-
-while read oldrev newrev refname; do
-    RIKU_BIN="$HOME/.local/bin/riku"
-    if [ -x "$RIKU_BIN" ]; then
-        # Get the actual repo path
-        REPO_PATH="$(pwd)"
-        "$RIKU_BIN" git-hook "{}" "$REPO_PATH"
-    else
-        echo " !     Riku binary not found at $RIKU_BIN"
-    fi
-done
+RIKU_BIN="$HOME/.local/bin/riku"
+if [ -x "$RIKU_BIN" ]; then
+    REPO_PATH="$(pwd)"
+    exec "$RIKU_BIN" git-hook "{}" "$REPO_PATH"
+else
+    echo " !     Riku binary not found at $RIKU_BIN" >&2
+    exit 1
+fi
 "#,
         app, app
     );

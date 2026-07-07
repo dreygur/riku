@@ -1,0 +1,6 @@
+{
+  "name": "hello-node",
+  "version": "1.0.0",
+  "private": true,
+  "description": "riku sandbox demo app (Node.js runtime)"
+}

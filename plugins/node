@@ -23,7 +23,10 @@ case "$CMD" in
         [ -f "$lock" ] && has_lock=1
       done
       if [ "$has_lock" -eq 1 ]; then
-        nub ci --prod
+        # `nub ci` has no --prod/-P flag (unlike `nub install`) -- use
+        # `install --frozen-lockfile` instead for the same "fail on lockfile
+        # drift" guarantee plus production-only deps.
+        nub install --frozen-lockfile --prod
       else
         nub install --prod
       fi
