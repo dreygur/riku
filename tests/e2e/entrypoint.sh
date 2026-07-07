@@ -1,5 +1,4 @@
 #!/bin/bash
-export PATH="/root:/root/.local/bin:$PATH"
 
 # Start nginx
 /usr/sbin/nginx

@@ -18,7 +18,7 @@ RUN sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd
 
 # Copy statically linked riku binary
 COPY target/x86_64-unknown-linux-musl/release/riku /root/riku
-RUN chmod +x /root/riku
+RUN chmod +x /root/riku && cp /root/riku /usr/local/bin/riku
 
 # Initialize riku and add to PATH
 RUN /root/riku init --no-systemd || true

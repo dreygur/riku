@@ -41,6 +41,10 @@ mem_forget = "deny"
 name = "integration_tests"
 path = "../../tests/integration_tests/mod.rs"
 
+[[test]]
+name = "stress_tests"
+path = "../../tests/stress_tests.rs"
+
 [[bench]]
 name = "core_benchmarks"
 path = "../../benches/core_benchmarks.rs"

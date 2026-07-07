@@ -65,30 +65,54 @@ pub fn install_riku_binary() -> Result<()> {
 }
 
 /// Attempt to add ~/.local/bin to shell config files; returns true if added.
+///
+/// Writes to `.profile` (sourced for login shells and SSH sessions) and
+/// `.bashrc`/`.zshrc` (sourced for interactive terminals) so `riku` is on
+/// PATH regardless of how the shell is started.
 fn try_add_to_shell_config() -> bool {
-    let shell_configs = [".bashrc", ".zshrc", ".profile"];
+    let line = "\n# Add Riku to PATH\nexport PATH=\"$HOME/.local/bin:$PATH\"\n";
+    let mut added = false;
 
     if let Ok(home) = env::var("HOME") {
-        for config in &shell_configs {
+        // .profile — sourced for login shells and non-interactive SSH
+        // command execution. This is the critical one for remote usage.
+        let profile = PathBuf::from(&home).join(".profile");
+        added |= append_once(&profile, line, true);
+
+        // .bashrc / .zshrc — sourced for interactive terminal sessions.
+        for config in &[".bashrc", ".zshrc"] {
             let config_path = PathBuf::from(&home).join(config);
-            if config_path.exists() {
-                if let Ok(content) = fs::read_to_string(&config_path) {
-                    if !content.contains(".local/bin") {
-                        if let Ok(mut file) = fs::OpenOptions::new().append(true).open(&config_path)
-                        {
-                            let _ = writeln!(
-                                file,
-                                "\n# Add Riku to PATH\nexport PATH=\"$HOME/.local/bin:$PATH\""
-                            );
-                            echo(&format!("✓ Added PATH export to ~/{}", config), "");
-                            return true;
-                        }
-                    }
-                }
-            }
+            append_once(&config_path, line, false);
         }
     }
 
+    if added {
+        echo("✓ Added PATH export to ~/.profile", "");
+    }
+
+    added
+}
+
+/// Append `line` to `path` unless it already contains `.local/bin`.
+/// If `create` is false, does nothing when `path` doesn't exist.
+/// Returns true if the file was written to.
+fn append_once(path: &Path, line: &str, create: bool) -> bool {
+    if !path.exists() && !create {
+        return false;
+    }
+    if let Ok(content) = fs::read_to_string(path) {
+        if content.contains(".local/bin") {
+            return false;
+        }
+    }
+    if let Ok(mut file) = fs::OpenOptions::new()
+        .create(create)
+        .append(true)
+        .open(path)
+    {
+        let _ = writeln!(file, "{}", line);
+        return true;
+    }
     false
 }
 

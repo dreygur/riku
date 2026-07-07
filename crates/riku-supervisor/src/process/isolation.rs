@@ -138,13 +138,13 @@ fn bring_up_loopback() -> io::Result<()> {
     }
 
     let result = (|| -> io::Result<()> {
-        if unsafe { libc::ioctl(sock, libc::SIOCGIFFLAGS, &mut req) } < 0 {
+        if unsafe { libc::ioctl(sock, libc::SIOCGIFFLAGS as _, &mut req) } < 0 {
             return Err(io::Error::last_os_error());
         }
 
         req.ifr_flags |= libc::IFF_UP as c_short;
 
-        if unsafe { libc::ioctl(sock, libc::SIOCSIFFLAGS, &req) } < 0 {
+        if unsafe { libc::ioctl(sock, libc::SIOCSIFFLAGS as _, &req) } < 0 {
             return Err(io::Error::last_os_error());
         }
 
