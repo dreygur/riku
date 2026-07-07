@@ -77,12 +77,12 @@ fn try_add_to_shell_config() -> bool {
         // .profile — sourced for login shells and non-interactive SSH
         // command execution. This is the critical one for remote usage.
         let profile = PathBuf::from(&home).join(".profile");
-        added |= append_once(&profile, line);
+        added |= append_once(&profile, line, true);
 
         // .bashrc / .zshrc — sourced for interactive terminal sessions.
         for config in &[".bashrc", ".zshrc"] {
             let config_path = PathBuf::from(&home).join(config);
-            append_once(&config_path, line);
+            append_once(&config_path, line, false);
         }
     }
 
@@ -93,10 +93,11 @@ fn try_add_to_shell_config() -> bool {
     added
 }
 
-/// Append `line` to `path` if the file exists and doesn't already contain
-/// `.local/bin`. Returns true if the file was modified.
-fn append_once(path: &Path, line: &str) -> bool {
-    if !path.exists() {
+/// Append `line` to `path` unless it already contains `.local/bin`.
+/// If `create` is false, does nothing when `path` doesn't exist.
+/// Returns true if the file was written to.
+fn append_once(path: &Path, line: &str, create: bool) -> bool {
+    if !path.exists() && !create {
         return false;
     }
     if let Ok(content) = fs::read_to_string(path) {
@@ -104,7 +105,11 @@ fn append_once(path: &Path, line: &str) -> bool {
             return false;
         }
     }
-    if let Ok(mut file) = fs::OpenOptions::new().append(true).open(path) {
+    if let Ok(mut file) = fs::OpenOptions::new()
+        .create(create)
+        .append(true)
+        .open(path)
+    {
         let _ = writeln!(file, "{}", line);
         return true;
     }
