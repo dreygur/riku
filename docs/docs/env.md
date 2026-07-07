@@ -300,6 +300,53 @@ PYTHON_PACKAGE_MANAGER=poetry
 
 ---
 
+## Container / Compose Settings
+
+See [Runtimes → Container](runtimes.md#container) for how detection, builds,
+and auto-updates work end to end.
+
+### GHCR Username
+
+```bash
+GHCR_USERNAME=your-username
+```
+
+- **Default:** (none)
+- **Description:** Username for `docker login ghcr.io`, run before pulling a compose app's images
+- **Values:** Any GitHub username
+
+Required together with `GHCR_TOKEN` only for private GHCR images; omit both for public images.
+
+### GHCR Token
+
+```bash
+GHCR_TOKEN=ghp_xxxxxxxxxxxx
+```
+
+- **Default:** (none)
+- **Description:** Token (classic PAT with `read:packages`, or `GITHUB_TOKEN` in Actions) for `docker login ghcr.io`
+- **Values:** Any valid GHCR-scoped token
+
+**Example:**
+```bash
+riku config set myapp GHCR_USERNAME=octocat GHCR_TOKEN=ghp_xxx
+```
+
+### Watched Services
+
+```bash
+RIKU_WATCH_SERVICES=web,worker
+```
+
+- **Default:** (none — auto-update disabled)
+- **Description:** Compose services to periodically re-pull and recreate on a new registry image, without a `git push`
+- **Values:** Comma-separated compose service names
+
+Checked every 60 seconds. Only meaningful for compose apps (see
+[Runtimes → Container](runtimes.md#container)); ignored otherwise.
+
+---
+
 ## SSL/ACME Settings
 
 ### ACME Root CA

@@ -423,6 +423,88 @@ async fn main() -> std::io::Result<()> {
 
 ---
 
+## Container
+
+### Detection
+
+Riku detects container apps by the presence of a `Dockerfile`, `Containerfile`,
+or a compose file (`compose.yaml`, `compose.yml`, `docker-compose.yaml`,
+`docker-compose.yml`, checked in that order). It auto-detects whether Docker or
+Podman is installed and uses whichever is available (Podman preferred if both
+are present).
+
+### Dockerfile / Containerfile apps
+
+A single-container app builds an image from the repo and runs it directly:
+
+```dockerfile
+FROM node:22-slim
+COPY . /app
+WORKDIR /app
+RUN npm ci --production
+CMD ["node", "server.js"]
+```
+
+Riku builds the image (`docker build` / `podman build`) and runs it with
+`docker run --rm -p $PORT:$PORT <image>`.
+
+### Compose apps
+
+A compose file describes one or more pre-built images to run — no local
+`Dockerfile` needed:
+
+```yaml
+# compose.yml
+services:
+  web:
+    image: ghcr.io/your-org/your-app:latest
+    ports:
+      - "8080:8080"
+  worker:
+    image: ghcr.io/your-org/your-app-worker:latest
+```
+
+For a compose app, `riku deploy` logs in to the configured registry (see
+[GHCR authentication](#ghcr-authentication) below), runs `compose pull`, and
+starts the stack with `compose up` — supervised as a single riku process, the
+same way any other app's `web` process is.
+
+### GHCR authentication
+
+If `GHCR_USERNAME` and `GHCR_TOKEN` are set in the app's env, riku logs in to
+`ghcr.io` before pulling:
+
+```bash
+riku config set myapp GHCR_USERNAME=your-username GHCR_TOKEN=ghp_xxx
+```
+
+Omit these for public images — pulls work without authentication. Docker Hub
+and other registries referenced in the compose file are pulled as configured
+in the compose file itself; riku does not manage credentials for them.
+
+### Auto-updating on a new image push
+
+Riku doesn't require a `git push` to notice a new image. Set
+`RIKU_WATCH_SERVICES` to the comma-separated list of compose services you want
+kept in sync with their registry tag:
+
+```bash
+riku config set myapp RIKU_WATCH_SERVICES=web,worker
+```
+
+The supervisor re-checks every 60 seconds: it re-pulls each listed service and
+recreates it if the image actually changed. Both steps are safe to run
+repeatedly — `compose pull` skips unchanged layers, and `compose up -d` only
+recreates a service whose resolved image differs — so an unwatched or
+unchanged app costs nothing extra. This is outbound-only (riku polls the
+registry; nothing needs to reach riku from the internet), so it works
+regardless of what's fronting your apps — nginx, Caddy, or nothing at all.
+
+See [Environment Variables](env.md#container-compose-settings) for the full
+variable reference.
+
+---
+
 ## Static Sites
 
 ### Detection

@@ -25,6 +25,9 @@ pub trait ControlActions: Send + Sync {
     fn install_plugins(&self, paths: &RikuPaths, only: Option<Vec<String>>) -> Result<()>;
     fn container_export(&self, app: &str, context: &Path, output: &Path) -> Result<()>;
     fn list_client_plugins(&self) -> Result<Vec<String>>;
+    /// Pull a fresh image and recreate a single compose service, without a
+    /// full redeploy. Used by the GHCR webhook.
+    fn pull_service(&self, paths: &RikuPaths, app: &str, service: &str) -> Result<()>;
 }
 
 /// Default used when no implementation is injected (tests, or a supervisor
@@ -61,6 +64,9 @@ impl ControlActions for NoopControlActions {
         Err(Self::unavailable())
     }
     fn list_client_plugins(&self) -> Result<Vec<String>> {
+        Err(Self::unavailable())
+    }
+    fn pull_service(&self, _: &RikuPaths, _: &str, _: &str) -> Result<()> {
         Err(Self::unavailable())
     }
 }

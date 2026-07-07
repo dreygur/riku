@@ -48,6 +48,8 @@ impl Supervisor {
             cron_scheduler: CronScheduler::new(),
             last_cron_check: std::time::SystemTime::now(),
             cron_check_interval: Duration::from_secs(10),
+            last_image_watch_check: std::time::SystemTime::now(),
+            image_watch_interval: Duration::from_secs(60),
             start_time: std::time::SystemTime::now(),
             health_running: Arc::new(AtomicBool::new(true)),
             cron_thread_pool: ThreadPool::new(10),

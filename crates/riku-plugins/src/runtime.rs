@@ -231,6 +231,46 @@ pub fn build(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result<()> {
     Ok(())
 }
 
+/// Run `plugin pull-service <service>`, streaming output live. Used by the
+/// GHCR webhook to refresh one compose service without a full deploy.
+pub fn pull_service(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>, service: &str) -> Result<()> {
+    tracing::info!(
+        plugin = plugin.name.as_str(),
+        service,
+        "running pull-service"
+    );
+
+    let mut cmd = Command::new(&plugin.path);
+    cmd.arg("pull-service")
+        .arg(service)
+        .envs(ctx.build_env())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        // Own process group so a timeout can killpg() the whole tree.
+        .process_group(0);
+    let mut child = super::executor::spawn_retrying_etxtbsy(&mut cmd)
+        .map_err(|e| anyhow!("Failed to spawn '{} pull-service': {}", plugin.name, e))?;
+
+    let (tee_handles, _stderr_tail) = super::executor::tee_output(&mut child);
+    let timed_out = wait_with_timeout(&mut child, plugin_timeout());
+    let status = child.wait()?;
+    for h in tee_handles {
+        let _ = h.join();
+    }
+
+    if timed_out {
+        anyhow::bail!("pull-service timed out for plugin '{}'", plugin.name);
+    }
+    if !status.success() {
+        anyhow::bail!(
+            "pull-service failed: plugin '{}' exited with code {}",
+            plugin.name,
+            status.code().unwrap_or(-1)
+        );
+    }
+    Ok(())
+}
+
 /// Run `plugin env` and parse stdout as `KEY=VALUE` lines.
 /// Empty lines and lines beginning with `#` are ignored.
 /// A non-zero exit is logged as a warning but does not abort.

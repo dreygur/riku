@@ -5,6 +5,7 @@
 
 pub mod config_watcher;
 pub mod cron_tasks;
+pub mod image_watch;
 pub mod init;
 pub mod maintenance;
 
@@ -57,6 +58,8 @@ pub struct Supervisor {
     pub(super) cron_scheduler: CronScheduler,
     pub(super) last_cron_check: std::time::SystemTime,
     pub(super) cron_check_interval: Duration,
+    pub(super) last_image_watch_check: std::time::SystemTime,
+    pub(super) image_watch_interval: Duration,
     pub(super) start_time: std::time::SystemTime,
     pub(super) health_running: Arc<AtomicBool>,
     pub(super) cron_thread_pool: ThreadPool,
@@ -261,6 +264,19 @@ impl Supervisor {
                             tracing::error!("Cron job check error: {:?}", e);
                         }
                         self.last_cron_check = std::time::SystemTime::now();
+                    }
+
+                    // Check if it's time to re-pull watched compose images
+                    if self
+                        .last_image_watch_check
+                        .elapsed()
+                        .unwrap_or(Duration::from_secs(0))
+                        >= self.image_watch_interval
+                    {
+                        if let Err(e) = self.check_watched_images() {
+                            tracing::error!("Watched image check error: {:?}", e);
+                        }
+                        self.last_image_watch_check = std::time::SystemTime::now();
                     }
                 }
                 Err(e) => {
