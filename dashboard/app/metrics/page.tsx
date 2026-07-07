@@ -54,7 +54,7 @@ export default function MetricsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
         <h1 className="font-mono text-sm tracking-widest text-muted-foreground uppercase">
           live metrics
         </h1>

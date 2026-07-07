@@ -189,39 +189,42 @@ export default function MarketplacePage() {
 
       {/* trust keyring */}
       <section className="border border-border bg-card">
-        <div className="flex flex-wrap items-end gap-2 border-b border-border p-3">
-          <span className="self-center font-mono text-xs tracking-widest text-muted-foreground uppercase">
+        <div className="flex flex-col gap-2 border-b border-border p-3 sm:flex-row sm:items-end">
+          <span className="font-mono text-xs tracking-widest text-muted-foreground uppercase sm:self-center">
             trust keyring
           </span>
-          <span className="flex-1" />
-          <Field
-            label="author"
-            value={keyName}
-            onChange={(e) => setKeyName(e.target.value)}
-            placeholder="name"
-            className="h-7 w-full font-mono text-xs sm:w-28"
-          />
-          <Field
-            label="ed25519 pubkey"
-            value={keyVal}
-            onChange={(e) => setKeyVal(e.target.value)}
-            placeholder="hex"
-            className="h-7 w-full font-mono text-xs sm:w-56"
-          />
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={!keyName || !keyVal || isPending("trust")}
-            onClick={() =>
-              run("trust", `Trusted ${keyName}`, async () => {
-                await api.trustAdd(keyName, keyVal);
-                setKeyName("");
-                setKeyVal("");
-              })
-            }
-          >
-            {isPending("trust") ? "trusting…" : "trust"}
-          </Button>
+          <span className="hidden flex-1 sm:block" />
+          <div className="flex flex-wrap items-end gap-2">
+            <Field
+              label="author"
+              value={keyName}
+              onChange={(e) => setKeyName(e.target.value)}
+              placeholder="name"
+              className="h-7 w-full font-mono text-xs sm:w-28"
+            />
+            <Field
+              label="ed25519 pubkey"
+              value={keyVal}
+              onChange={(e) => setKeyVal(e.target.value)}
+              placeholder="hex"
+              className="h-7 w-full font-mono text-xs sm:w-56"
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              className="shrink-0"
+              disabled={!keyName || !keyVal || isPending("trust")}
+              onClick={() =>
+                run("trust", `Trusted ${keyName}`, async () => {
+                  await api.trustAdd(keyName, keyVal);
+                  setKeyName("");
+                  setKeyVal("");
+                })
+              }
+            >
+              {isPending("trust") ? "trusting…" : "trust"}
+            </Button>
+          </div>
         </div>
         {keys.length === 0 ? (
           <p className="px-4 py-4 font-mono text-xs text-muted-foreground">

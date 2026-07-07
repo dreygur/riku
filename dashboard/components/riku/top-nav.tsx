@@ -100,7 +100,10 @@ export function TopNav() {
         className="flex h-7 shrink-0 items-center gap-0.5 border border-border px-2.5 font-mono text-[11px] text-muted-foreground hover:text-foreground"
         title="command palette"
       >
-        <span>⌘</span>
+        {/* The ⌘ glyph renders noticeably smaller than a letter at the same
+            font-size in most monospace fonts -- bump it up to visually
+            balance against K instead of looking like an afterthought. */}
+        <span className="text-sm leading-none">⌘</span>
         <span>K</span>
       </button>
       <span

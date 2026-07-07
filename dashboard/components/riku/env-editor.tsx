@@ -71,33 +71,34 @@ export function EnvEditor({ app }: { app: string }) {
           </p>
         )}
         {rows.map((row, i) => (
-          <div
-            key={i}
-            className="flex flex-col gap-1.5 px-3 py-2 sm:flex-row sm:items-center sm:gap-2"
-          >
-            <Input
-              value={row.key}
-              onChange={(e) => setRow(i, { key: e.target.value })}
-              placeholder="KEY"
-              className="h-7 w-full font-mono text-xs sm:w-64"
-            />
-            <span className="hidden text-muted-foreground sm:inline">=</span>
-            <div className="flex flex-1 items-center gap-2">
+          <div key={i} className="flex items-center gap-2 px-3 py-2">
+            {/* KEY and VALUE stack full-width (and so equal-width) on mobile,
+                go inline at sm+ -- the delete button lives outside this
+                group entirely so it stays vertically centered against the
+                whole block instead of only against VALUE's row. */}
+            <div className="flex flex-1 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+              <Input
+                value={row.key}
+                onChange={(e) => setRow(i, { key: e.target.value })}
+                placeholder="KEY"
+                className="h-7 w-full font-mono text-xs sm:w-64"
+              />
+              <span className="hidden text-muted-foreground sm:inline">=</span>
               <Input
                 value={row.value}
                 onChange={(e) => setRow(i, { value: e.target.value })}
                 placeholder="value"
-                className="h-7 flex-1 font-mono text-xs"
+                className="h-7 w-full font-mono text-xs sm:flex-1"
               />
-              <Button
-                size="sm"
-                variant="ghost"
-                className="shrink-0 text-muted-foreground hover:text-destructive"
-                onClick={() => setRows((r) => r.filter((_, j) => j !== i))}
-              >
-                ✕
-              </Button>
             </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="shrink-0 text-muted-foreground hover:text-destructive"
+              onClick={() => setRows((r) => r.filter((_, j) => j !== i))}
+            >
+              ✕
+            </Button>
           </div>
         ))}
       </div>

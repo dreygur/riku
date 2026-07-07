@@ -54,14 +54,14 @@ export default function AddonsPage() {
             value={plugin}
             onChange={(e) => setPlugin(e.target.value)}
             placeholder="e.g. postgres"
-            className="h-7 w-40 font-mono text-xs"
+            className="h-7 w-full font-mono text-xs sm:w-40"
           />
           <Field
             label="instance name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. db1"
-            className="h-7 w-40 font-mono text-xs"
+            className="h-7 w-full font-mono text-xs sm:w-40"
           />
           <Button
             size="sm"
@@ -144,7 +144,7 @@ export default function AddonsPage() {
                     setBindApp((m) => ({ ...m, [inst.instance]: e.target.value }))
                   }
                   placeholder="myapp"
-                  className="h-7 w-40 font-mono text-xs"
+                  className="h-7 w-full font-mono text-xs sm:w-40"
                 />
                 <Button
                   size="sm"
