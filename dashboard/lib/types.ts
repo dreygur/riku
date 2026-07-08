@@ -57,16 +57,32 @@ export interface AddonInstance {
   bindings: Record<string, string[]>;
 }
 
+export interface PluginUi {
+  nav_label: string;
+}
 export interface PluginBundle {
   name: string;
   version: string;
   type: string;
   description: string | null;
+  ui: PluginUi | null;
 }
 export interface PluginsList {
   runtimes: string[];
   hooks: string[];
   bundles: PluginBundle[];
+}
+
+export interface PanelField {
+  label: string;
+  value: string;
+}
+export interface PanelSection {
+  title: string;
+  fields: PanelField[];
+}
+export interface UiPanel {
+  sections: PanelSection[];
 }
 
 export interface MarketplaceSource {

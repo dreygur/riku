@@ -8,6 +8,7 @@ import type {
   MarketplaceSource,
   MarketplaceHit,
   TrustKey,
+  UiPanel,
 } from "./types";
 
 const base = "/api/riku";
@@ -34,6 +35,7 @@ export const api = {
   doctor: () => get<DoctorCheck[]>("doctor"),
   addons: () => get<AddonInstance[]>("addons"),
   plugins: () => get<PluginsList>("plugins"),
+  pluginUi: (name: string) => get<UiPanel>(`plugins/${name}/ui`),
   marketSources: () => get<MarketplaceSource[]>("marketplace"),
   marketSearch: (q: string) => get<MarketplaceHit[]>(`marketplace/search?q=${encodeURIComponent(q)}`),
   marketAdd: (url: string, name?: string) => send("marketplace", "POST", name ? { url, name } : { url }),

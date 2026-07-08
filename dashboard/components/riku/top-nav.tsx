@@ -40,6 +40,7 @@ export function TopNav() {
   const [state, setState] = useState<RikuState | null>(null);
   const [live, setLive] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [pluginLinks, setPluginLinks] = useState<{ href: string; label: string }[]>([]);
 
   useEffect(() => {
     const load = () =>
@@ -55,7 +56,24 @@ export function TopNav() {
     return () => clearInterval(t);
   }, []);
 
-  const navLink = (l: (typeof links)[number], onClick?: () => void) => {
+  // Plugin-declared nav entries change only on install/remove, not worth
+  // polling every 5s alongside supervisor state — fetch once on mount.
+  useEffect(() => {
+    api
+      .plugins()
+      .then((data) => {
+        setPluginLinks(
+          data.bundles
+            .filter((b) => b.ui?.nav_label)
+            .map((b) => ({ href: `/plugins/${b.name}`, label: b.ui!.nav_label })),
+        );
+      })
+      .catch(() => setPluginLinks([]));
+  }, []);
+
+  const allLinks = [...links, ...pluginLinks];
+
+  const navLink = (l: { href: string; label: string }, onClick?: () => void) => {
     const active = l.href === "/" ? path === "/" : path.startsWith(l.href);
     return (
       <Link
@@ -89,7 +107,7 @@ export function TopNav() {
       </Link>
 
       <nav className="hidden items-center gap-1 md:flex">
-        {links.map((l) => navLink(l))}
+        {allLinks.map((l) => navLink(l))}
       </nav>
 
       <div className="hidden font-mono text-xs text-muted-foreground md:block">
@@ -135,7 +153,7 @@ export function TopNav() {
             </SheetTitle>
           </SheetHeader>
           <nav className="flex flex-col gap-1 p-2">
-            {links.map((l) => navLink(l, () => setMobileOpen(false)))}
+            {allLinks.map((l) => navLink(l, () => setMobileOpen(false)))}
           </nav>
           <div className="border-t border-border px-4 py-3 font-mono text-xs text-muted-foreground">
             <StatusText state={state} />

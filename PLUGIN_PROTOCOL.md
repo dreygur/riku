@@ -83,6 +83,9 @@ uninstall   = true               # is affected
 [filters]                        # present iff the plugin registers filters (§7.3)
 subscribe   = ["nginx.include_content"]
 priority    = 0                  # chain order, lower first (default 0)
+
+[ui]                              # present iff the plugin has a dashboard panel (§7.5)
+nav_label   = "My Plugin"        # nav label; Next.js dashboard only
 ```
 
 `type` is the *category*. `runtime`/`addon`/`router` bind the plugin to a
@@ -295,6 +298,30 @@ namespace:
 - Delivery, priority ordering, and `observe`/`gate` modes are otherwise
   identical to kernel events (§7.1–§7.2) — a custom event is just a
   differently-sourced instance of the same envelope.
+
+### 7.5 UI panels _(new — Next.js dashboard only)_
+
+A plugin declares `[ui] nav_label = "My Plugin"` to contribute a page to the
+Next.js browser dashboard (`dashboard/` — not the embedded single-binary
+one). The dashboard dispatches verb `ui_panel` (no meaningful stdin, `{}`)
+and expects **structured JSON only, never HTML/JS**:
+
+```json
+{"sections": [{"title": "Status", "fields": [{"label": "Queue depth", "value": "12"}]}]}
+```
+
+This is the scope-limiter that closes off injection risk: a plugin can only
+supply labels and values, which the dashboard renders with its own
+components (plain text nodes — nothing a plugin returns is ever interpreted
+as markup or executed). There is deliberately no verb for a plugin-defined
+*action* (a button that calls back into the plugin) in this version — v1 is
+read-only display.
+
+Same "must degrade safely" contract as filters (§7.3): a non-zero exit,
+timeout, spawn failure, or malformed response logs a warning and returns an
+**empty panel**, never breaks the dashboard. `GET /api/plugins` lists
+`ui.nav_label` for any plugin that declared it; the dashboard's nav bar and
+`GET /api/plugins/:name/ui` route are built from that.
 
 ## 8. Backward compatibility
 

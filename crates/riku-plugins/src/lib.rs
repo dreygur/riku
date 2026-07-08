@@ -64,6 +64,7 @@ pub mod router;
 pub mod runtime;
 pub mod sandbox;
 pub mod signing;
+pub mod ui;
 
 // Re-export the public API (used by CLI plugin commands and external code)
 pub use addon::{AddonService, InstanceRecord};
@@ -76,3 +77,4 @@ pub use install::PluginInstaller;
 pub use manager::PluginManager;
 pub use manifest::PluginManifest;
 pub use marketplace::MarketplaceService;
+pub use ui::{run_ui_panel, PanelField, PanelSection, UiPanelResponse};

@@ -42,6 +42,14 @@ pub fn find_router(plugin_root: &Path, name: &str) -> Option<(PathBuf, PluginMan
         .find(|(_, m)| m.plugin_type == PluginType::Router && m.name == name)
 }
 
+/// Any installed plugin bundle named `name`, regardless of `type` — used by
+/// the UI seam, which any plugin type may opt into via `[ui]`.
+pub fn find_plugin(plugin_root: &Path, name: &str) -> Option<(PathBuf, PluginManifest)> {
+    find_bundles(plugin_root)
+        .into_iter()
+        .find(|(_, m)| m.name == name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,5 +96,16 @@ mod tests {
     #[test]
     fn find_bundles_on_missing_dir_is_empty() {
         assert!(find_bundles(Path::new("/no/such/dir")).is_empty());
+    }
+
+    #[test]
+    fn find_plugin_matches_by_name_regardless_of_type() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_bundle(tmp.path(), "postgres", "addon");
+        write_bundle(tmp.path(), "slack", "notifier");
+
+        assert!(find_plugin(tmp.path(), "postgres").is_some());
+        assert!(find_plugin(tmp.path(), "slack").is_some());
+        assert!(find_plugin(tmp.path(), "missing").is_none());
     }
 }

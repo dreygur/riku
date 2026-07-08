@@ -84,6 +84,17 @@ pub struct FilterSubscription {
     pub priority: i32,
 }
 
+/// UI panel opt-in; present iff the plugin implements `ui_panel` and wants a
+/// dashboard nav entry. Absent (the default, `nav_label: None`) means the
+/// dashboard never dispatches `ui_panel` for this plugin and it gets no nav
+/// entry — every existing plugin is unaffected.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct UiPanel {
+    /// Label shown in the dashboard's nav. `None` = no `[ui]` block declared.
+    #[serde(default)]
+    pub nav_label: Option<String>,
+}
+
 /// Install/uninstall lifecycle opt-in; present iff the plugin implements one
 /// of these verbs. Absent (the default) means neither is invoked — every
 /// existing plugin (no `[lifecycle]` block) is unaffected.
@@ -127,6 +138,8 @@ pub struct PluginManifest {
     pub events: EventSubscription,
     #[serde(default)]
     pub filters: FilterSubscription,
+    #[serde(default)]
+    pub ui: UiPanel,
 }
 
 impl PluginManifest {

@@ -48,6 +48,9 @@ emit        = false              # may this plugin fire its own plugin.custom.*
 [lifecycle]                      # optional, any plugin type — install/remove hooks
 install     = true               # `riku plugins install` calls on_install
 uninstall   = true               # `riku plugins remove` calls on_uninstall
+
+[ui]                              # optional, any plugin type — dashboard panel
+nav_label   = "My Plugin"        # Next.js dashboard only, not the embedded one
 ```
 
 The kernel sets `RIKU_PLUGIN_API`, `RIKU_ROOT`, `RIKU_PLUGIN_NAME` (the
@@ -74,6 +77,7 @@ neither verb is ever invoked.
 | **notifier / hook** | `on_event` (subscribes to lifecycle events) | shipped |
 | **router** | `configure` / `reload` | shipped — singleton, full-replace (`RIKU_ROUTER=<name>`) |
 | **filter** (any type) | `on_filter` (`[filters]` block, any plugin type) | shipped — chained, augment-only |
+| **UI panel** (any type) | `ui_panel` (`[ui]` block, any plugin type) | shipped — Next.js dashboard only, read-only |
 
 ### Addons
 
@@ -169,6 +173,32 @@ riku plugin-emit plugin.custom.backup-done --data '{"ok":true}'
 - Subscribers receive the same envelope shape as any other event, plus
   `source_plugin: "<name>"` — kernel-set, so you can always tell a
   kernel-truth event (`source_plugin: null`) from a plugin-claimed one.
+
+### UI panels
+
+A plugin declaring `[ui] nav_label = "..."` gets a nav entry and a page in
+the **Next.js browser dashboard** (`dashboard/` — not the embedded
+single-binary one, which has no plugin-panel seam). The dashboard dispatches
+`ui_panel` (no meaningful stdin) and expects structured JSON back:
+
+```json
+{"sections": [{"title": "Status", "fields": [{"label": "Queue depth", "value": "12"}]}]}
+```
+
+**Structured data only, never HTML/JS.** This is the deliberate scope-limiter
+that closes off injection risk — a plugin supplies labels and values, the
+dashboard renders them with its own components, nothing a plugin returns is
+ever interpreted as markup. There's no verb for a plugin-defined *action*
+(a button calling back into the plugin) yet — this is read-only display.
+
+Same degrade-safely contract as filters: a broken, timed-out, or
+malformed-output panel logs a warning and renders as empty, never breaks the
+dashboard.
+
+```toml
+[ui]
+nav_label = "My Plugin"
+```
 
 ## Installing & managing
 
