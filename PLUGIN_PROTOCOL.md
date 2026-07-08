@@ -77,6 +77,10 @@ priority    = 0                  # delivery order among subscribers of the same
 [lifecycle]                      # present iff the plugin implements a hook;
 install     = true               # both default false, so no existing plugin
 uninstall   = true               # is affected
+
+[filters]                        # present iff the plugin registers filters (§7.3)
+subscribe   = ["nginx.include_content"]
+priority    = 0                  # chain order, lower first (default 0)
 ```
 
 `type` is the *category*. `runtime`/`addon`/`router` bind the plugin to a
@@ -229,6 +233,37 @@ remain reserved names only; nothing emits them yet.
 This is the core security idea: **observers are open and safe; only behavior
 that can change or block an action requires explicit trust.** The security model
 falls out of the seam model instead of being bolted on.
+
+### 7.3 Filters _(new)_
+
+Events are fire-and-forget; **filters** are the value-transform counterpart —
+a plugin receives a value and hands back a (possibly modified) one. Declared
+in the manifest `[filters]` block (§3), invoked with verb `on_filter`:
+
+```json
+{"filter": "nginx.include_content", "data": "proxy_read_timeout 60;"}
+```
+
+expecting `{"data": "<transformed value>"}` back on stdout. Multiple plugins
+registered on the same filter name run as a **chain**, ordered by
+`filters.priority` (lower first — the same field and ordering rule as event
+`priority`, §7.1), each receiving the previous one's output.
+
+**Must degrade safely, never break the caller**: a non-zero exit, timeout, or
+malformed response is logged and the *input* passes through unchanged to the
+next filter in the chain. A broken filter can only become a no-op, never a
+hard failure — this is also why filters have no `gate`-equivalent mode: a
+filter can decline to transform, but never veto.
+
+**Shipped example: `nginx.include_content`.** The generated nginx config
+already supports a raw file-based passthrough (`NGINX_INCLUDE_FILE`); that
+file's content (or an empty string if unset) is now the *seed* value run
+through this filter before being inlined into the config
+(`crates/riku-nginx/src/context.rs::insert_include_file`). This is the
+"augment, don't replace" alternative to the router seam's full-replace
+singleton (§6.2) — any number of plugins can each contribute a snippet to
+the *default* nginx output, rather than one plugin taking over routing
+entirely.
 
 ## 8. Backward compatibility
 

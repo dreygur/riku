@@ -21,4 +21,12 @@ server {
   add_header X-XSS-Protection "1; mode=block" always;
   add_header Referrer-Policy "strict-origin-when-cross-origin" always;
   add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+
+{% if NGINX_INCLUDE_CONTENT %}
+  # Custom nginx configuration from file
+  {{ NGINX_INCLUDE_CONTENT }}
+{% elif NGINX_INCLUDE_FILE %}
+  # Custom nginx configuration
+  include {{ NGINX_INCLUDE_FILE }};
+{% endif %}
 }

@@ -9,8 +9,10 @@ license = "MIT"
 
 [dependencies]
 riku-config = { path = "../riku-config" }
+riku-plugins = { path = "../riku-plugins" }
 riku-util = { path = "../riku-util" }
 anyhow = "1"
+serde_json = "1"
 tera = "1"
 tracing = "0.1"
 reqwest = { version = "0.12", features = ["blocking", "json"], default-features = false }

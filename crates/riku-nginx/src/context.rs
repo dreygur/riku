@@ -152,19 +152,27 @@ pub(super) fn insert_feature_flags(
     );
 }
 
-/// Read and insert NGINX_INCLUDE_FILE content, guarding against path traversal.
+/// Read `NGINX_INCLUDE_FILE` content (if set, guarding against path
+/// traversal) as the seed value, run it through the `nginx.include_content`
+/// filter chain (`PLUGIN_PROTOCOL.md` §7.3 — lets an installed plugin augment
+/// the generated config without replacing it), and insert the result.
+/// Always inserts the key, even as an empty string, so it's never simply
+/// absent from the template context.
 pub(super) fn insert_include_file(
     context: &mut tera::Context,
     env: &HashMap<String, String>,
     app_path: &Path,
+    paths: &crate::config::RikuPaths,
 ) {
+    let mut content = String::new();
+
     if let Some(include_file) = env.get("NGINX_INCLUDE_FILE") {
         let include_path = app_path.join(include_file);
         if include_path.exists() {
             match ensure_path_within(&include_path, app_path) {
                 Ok(()) => {
-                    if let Ok(content) = fs::read_to_string(&include_path) {
-                        context.insert("NGINX_INCLUDE_CONTENT", &content);
+                    if let Ok(file_content) = fs::read_to_string(&include_path) {
+                        content = file_content;
                     }
                 }
                 Err(_) => {
@@ -178,6 +186,16 @@ pub(super) fn insert_include_file(
                 }
             }
         }
+    }
+
+    let filtered = riku_plugins::FilterBus::new(paths)
+        .apply("nginx.include_content", serde_json::json!(content));
+    match filtered.as_str() {
+        Some(s) => context.insert("NGINX_INCLUDE_CONTENT", s),
+        // A filter returned something that isn't a string (a bug in that
+        // filter) — degrade to the seed content rather than propagating a
+        // non-string value into the template.
+        None => context.insert("NGINX_INCLUDE_CONTENT", &content),
     }
 }
 
@@ -216,7 +234,7 @@ pub(super) fn build_context(
     insert_address_context(&mut context, env, paths, app, app_path);
     insert_cache_context(&mut context, env, paths, app);
     insert_feature_flags(&mut context, env, paths);
-    insert_include_file(&mut context, env, app_path);
+    insert_include_file(&mut context, env, app_path, paths);
     insert_portmap_context(&mut context, env);
 
     context.insert("RIKU_ROOT", &paths.riku_root.to_string_lossy());
@@ -251,6 +269,7 @@ pub(super) fn build_context(
 mod tests {
     use super::*;
     use std::collections::HashMap;
+    use std::os::unix::fs::PermissionsExt;
     use tempfile::TempDir;
 
     fn make_paths(tmp: &TempDir) -> crate::config::RikuPaths {
@@ -380,6 +399,7 @@ mod tests {
         std::fs::create_dir_all(&app_path).unwrap();
         std::fs::write(app_path.join("nginx_extra.conf"), "proxy_read_timeout 60;").unwrap();
 
+        let paths = make_paths(&tmp);
         let mut env = HashMap::new();
         env.insert(
             "NGINX_INCLUDE_FILE".to_string(),
@@ -387,7 +407,7 @@ mod tests {
         );
 
         let mut ctx = tera::Context::new();
-        insert_include_file(&mut ctx, &env, &app_path);
+        insert_include_file(&mut ctx, &env, &app_path, &paths);
 
         let val = ctx.get("NGINX_INCLUDE_CONTENT").unwrap().to_string();
         assert!(val.contains("proxy_read_timeout"));
@@ -398,6 +418,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let app_path = tmp.path().join("app");
         std::fs::create_dir_all(&app_path).unwrap();
+        let paths = make_paths(&tmp);
 
         let mut env = HashMap::new();
         // Path traversal attempt
@@ -407,9 +428,49 @@ mod tests {
         );
 
         let mut ctx = tera::Context::new();
-        insert_include_file(&mut ctx, &env, &app_path);
+        insert_include_file(&mut ctx, &env, &app_path, &paths);
 
-        // Should not insert content for a traversal attempt
-        assert!(ctx.get("NGINX_INCLUDE_CONTENT").is_none());
+        // The key is always present (so templates never see an undefined
+        // variable), but a rejected traversal attempt leaves it empty.
+        assert_eq!(ctx.get("NGINX_INCLUDE_CONTENT").unwrap(), "");
+    }
+
+    #[test]
+    fn test_include_file_content_runs_through_the_filter_chain() {
+        let tmp = TempDir::new().unwrap();
+        let app_path = tmp.path().join("app");
+        std::fs::create_dir_all(&app_path).unwrap();
+        let paths = make_paths(&tmp);
+
+        // A real installed filter plugin, dispatched through the actual
+        // FilterBus — not a mock — appending a marker line to whatever seed
+        // content it receives.
+        let bundle = paths.plugin_root.join("augmenter");
+        std::fs::create_dir_all(bundle.join("bin")).unwrap();
+        std::fs::write(
+            bundle.join("bin/on-filter"),
+            "#!/bin/sh\nread line\ndata=$(printf '%s' \"$line\" | sed 's/.*\"data\":\"\\([^\"]*\\)\".*/\\1/')\nprintf '{\"data\":\"%s# augmented\\\\n\"}' \"$data\"\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(
+            bundle.join("bin/on-filter"),
+            std::fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+        std::fs::write(
+            bundle.join("riku-plugin.toml"),
+            format!(
+                "name=\"augmenter\"\nversion=\"1\"\ntype=\"notifier\"\napi={}\nentry=\"bin/on-filter\"\n[filters]\nsubscribe=[\"nginx.include_content\"]\n",
+                riku_plugins::RIKU_PLUGIN_API
+            ),
+        )
+        .unwrap();
+
+        let env = HashMap::new();
+        let mut ctx = tera::Context::new();
+        insert_include_file(&mut ctx, &env, &app_path, &paths);
+
+        let val = ctx.get("NGINX_INCLUDE_CONTENT").unwrap().to_string();
+        assert!(val.contains("augmented"), "got: {val}");
     }
 }

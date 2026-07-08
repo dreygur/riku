@@ -69,7 +69,8 @@ neither verb is ever invoked.
 | **runtime** | `detect` / `build` / `env` / `start` | shipped (buildpacks) |
 | **addon** | `provision` / `bind` / `unbind` / `deprovision` / `backup` | shipped |
 | **notifier / hook** | `on_event` (subscribes to lifecycle events) | shipped |
-| **router** | `configure` / `reload` | planned |
+| **router** | `configure` / `reload` | shipped — singleton, full-replace (`RIKU_ROUTER=<name>`) |
+| **filter** (any type) | `on_filter` (`[filters]` block, any plugin type) | shipped — chained, augment-only |
 
 ### Addons
 
@@ -114,6 +115,33 @@ rather than the checksum/signature path below:
 
 ```bash
 riku install-plugins --plugins riku-notify
+```
+
+### Filters
+
+A bundle with a `[filters]` block is invoked with `on_filter` and
+`{"filter": "<name>", "data": <value>}` on stdin, expected to return
+`{"data": <transformed value>}`. Unlike events, filters transform a value
+and hand it back rather than firing-and-forgetting. Multiple plugins on the
+same filter name run as a **chain**, ordered by `filters.priority` (lower
+first), each seeing the previous one's output.
+
+**Must degrade safely**: a broken, timed-out, or malformed-output filter is
+skipped (logged) and the value passes through unchanged — a filter can only
+become a no-op, never break the thing calling it.
+
+**Shipped example: `nginx.include_content`.** The nginx config generator
+already supported a raw file-based passthrough (`NGINX_INCLUDE_FILE`); that
+content is now the *seed* value run through this filter before being
+inlined into the generated `.conf`. This is the "augment the default config"
+alternative to writing a full router plugin (below) — any number of
+installed plugins can each contribute a snippet, rather than one plugin
+replacing routing entirely.
+
+```toml
+[filters]
+subscribe = ["nginx.include_content"]
+priority  = 0
 ```
 
 ## Installing & managing

@@ -52,6 +52,7 @@ pub mod bundles;
 pub mod discovery;
 pub mod events;
 pub mod executor;
+pub mod filters;
 pub mod hooks;
 pub mod install;
 pub mod lockfile;
@@ -69,6 +70,7 @@ pub use addon::{AddonService, InstanceRecord};
 #[allow(unused_imports)]
 pub use discovery::{list_plugins, plugin_exists};
 pub use events::{EventBus, EventEnvelope, EventName};
+pub use filters::FilterBus;
 pub use hooks::{HookContext, PluginHook};
 pub use install::PluginInstaller;
 pub use manager::PluginManager;

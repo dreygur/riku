@@ -64,6 +64,21 @@ pub struct EventSubscription {
     pub priority: i32,
 }
 
+/// Filter-subscription block; present iff the plugin registers filters.
+/// Unlike events there's no `mode` — a filter is always fire-and-transform;
+/// see `FilterBus::apply`'s "must degrade to passthrough, never hard-fail"
+/// contract, which makes a `gate`-equivalent unnecessary (a filter can never
+/// veto, only decline to transform).
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct FilterSubscription {
+    #[serde(default)]
+    pub subscribe: Vec<String>,
+    /// Chain order among filters registered on the same name — lower runs
+    /// first, each receiving the previous one's output.
+    #[serde(default)]
+    pub priority: i32,
+}
+
 /// Install/uninstall lifecycle opt-in; present iff the plugin implements one
 /// of these verbs. Absent (the default) means neither is invoked — every
 /// existing plugin (no `[lifecycle]` block) is unaffected.
@@ -105,6 +120,8 @@ pub struct PluginManifest {
     pub lifecycle: Lifecycle,
     #[serde(default)]
     pub events: EventSubscription,
+    #[serde(default)]
+    pub filters: FilterSubscription,
 }
 
 impl PluginManifest {
