@@ -19,58 +19,97 @@ This is a living document. Phases are ordered by leverage, not by size.
 - **`riku quickstart`** — scaffolds a sample app and prints the exact `git remote add` line so a new user can deploy in under five minutes.
 - **Better first-deploy output** — on `git push`: stream the build log, show the detected runtime, and print the final URL prominently. Make the "it works" moment unmissable.
 
-### Phase 1 — Finish the Dashboard (read-first)
+### Phase 1 — Finish the Dashboard — **shipped**
 
-- Land the `feat/dashboard-control-plane` work: app list, status, **live logs in the browser**, deploy history, env editor.
-- Ship read-only first (safe), then add mutating actions (restart / scale / redeploy) behind the existing operator-token + CSRF protection.
-- Embed UI assets **into the binary** (e.g. `rust-embed`) to preserve the single-binary identity. No separate web stack, no Node runtime on the host.
+- ✅ Two dashboards now exist: the embedded single-binary HTML dashboard
+  (`riku-dashboard` crate, UI baked in via `include_str!` — no separate web
+  stack, no Node runtime on the host) and a fuller Next.js/React browser
+  dashboard (`dashboard/`, built/deployed separately) with app list, live
+  log streaming, deploy history, env editor, addon management, and a
+  plugin marketplace UI.
+- ✅ Mutating actions (deploy/restart/stop, addon provision/bind/unbind,
+  plugin install) are live on both — gated by the backend's operator
+  token (`RIKU_DASHBOARD_TOKEN`) and, on the Next.js dashboard, a real
+  frontend login: a single shared password (scrypt-hashed,
+  `RIKU_DASHBOARD_PASSWORD_HASH`), signed session cookie, enforced by
+  middleware on every route. Auth is a no-op when the password hash is
+  unset (matches Riku's "don't break default/local usage" default).
+- **Still open**: a pluggable auth-*provider* seam (e.g. GitHub/SSO login
+  to the dashboard as a plugin) — the dashboard has a real login now, but
+  not one a plugin can supply or replace. See the "Auth / SSO" row below.
 
-### Phase 2 — Trust & Resilience
+### Phase 2 — Trust & Resilience — **shipped**
 
 What makes a solo dev put a *real* project on Riku.
 
-- **Backups** — `riku backup <app>` / `riku restore <app>`: app source + env + volumes to tar / S3. Cron-able.
-- **Rollback** — `riku rollback <app>`: keep N releases, atomic symlink swap (the per-app deploy lock already protects the critical section).
-- **Zero-downtime deploys** — health-gated cutover wired into the deploy path (the health subsystem already exists).
-- **`riku doctor`** — diagnose nginx / systemd / permissions / disk / cert state. Solo devs have no ops team; the tool *is* the ops team.
+- ✅ **Backups** — `riku backup <app>` / `riku restore <app>` (tar-based; S3/remote-storage output is still open).
+- ✅ **Rollback** — `riku rollback <app>`, atomic symlink swap under the per-app deploy lock.
+- ✅ **Zero-downtime deploys** — canary/generation-based health-gated cutover (`riku-supervisor::process::generation`/`orchestration`).
+- ✅ **`riku doctor`** — diagnoses nginx/systemd/permissions/disk/cert state.
 
-### Phase 3 — Stateful Apps
+### Phase 3 — Stateful Apps — **shipped**
 
 The biggest single unblock for solo devs — shipped as plugins (see Track B), not core bloat.
 
-- **Managed datastores as addons** — Postgres, Redis, SQLite-volume.
-- Auto-inject `DATABASE_URL` / `REDIS_URL` into app env on bind. This converts Riku from "toy" to "I run my SaaS side-project on it."
+- ✅ **Managed datastores as addons** — Postgres, Redis, SQLite-volume ship
+  as example bundles in this repo's own starter marketplace
+  (`examples/plugins/{postgres,redis,sqlite-volume}`,
+  `riku plugins add postgres`). Not bundled/installed by default the way
+  runtime plugins are — an explicit install step, by design (addons hold
+  credentials and are the highest-trust seam).
+- ✅ `bind` injects the addon's returned env (e.g. `DATABASE_URL`) into the
+  app; `unbind` removes exactly those keys.
 
 ---
 
 ## Track B — Plugin Ecosystem
 
-Today's plugin surface is too thin for an ecosystem: four runtime verbs (`detect` / `build` / `env` / `start`) plus four lifecycle hooks (`pre-deploy`, `pre-build`, `post-build`, `post-deploy`). Breadth requires more plugin **types**, easy **distribution**, and stable **contracts**.
+The original plugin surface was thin: four runtime verbs (`detect` /
+`build` / `env` / `start`) plus four fixed lifecycle hooks (`pre-deploy`,
+`pre-build`, `post-build`, `post-deploy`). It has since grown considerably
+(below) — the remaining gap toward "vast ecosystem" is **distribution**
+(marketplace, E2) and **untrusted-author sandboxing** (WASM, E3), not
+plugin-type breadth, which is now largely closed.
 
-### Phase E0 — Stabilize & Document the Contract
+### Phase E0 — Stabilize & Document the Contract — **shipped**
 
-- **Version the plugin protocol** — `RIKU_PLUGIN_API=1`. Without a stable contract, nobody invests in building plugins.
-- **Publish a spec** — document each verb plus a JSON I/O schema. Today it is argv + env vars + line-parsing; formalize it.
-- **`riku plugins scaffold <name>`** — generate a working plugin skeleton (shell and Rust-crate variants). Lower authoring cost means more authors.
+- ✅ **Plugin protocol versioned** — `RIKU_PLUGIN_API=1`, published and
+  actively maintained in `PLUGIN_PROTOCOL.md` (verb I/O, capabilities,
+  every seam and event listed below).
+- ✅ **`riku plugins scaffold <name>`** — generates a bundle skeleton
+  (`--type runtime|addon|notifier`).
 
-### Phase E1 — Expand Plugin Types
+### Phase E1 — Expand Plugin Types — **shipped**
 
-The breadth unlock. Add categories beyond buildpacks:
+Every category from the original table now exists, plus several the
+original table didn't anticipate:
 
-| Plugin type        | Contract (verbs)                                  | Unlocks                          |
-| ------------------ | ------------------------------------------------- | -------------------------------- |
-| Runtime (exists)   | `detect` / `build` / `env` / `start`              | languages                        |
-| Addon / Resource   | `provision` / `bind` / `unbind` / `deprovision` / `backup` | databases, caches, queues |
-| Hook (exists)      | `pre`/`post` `deploy`/`build`                     | notify, migrate, warm cache      |
-| Router             | `configure` / `reload`                            | swap nginx for Caddy / Traefik   |
-| Notifier           | `on_event(json)`                                  | Slack / Discord / webhook        |
-| Auth / SSO         | dashboard auth provider                           | GitHub login to the dashboard    |
+| Plugin type              | Contract (verbs)                                             | Status |
+| ------------------------- | -------------------------------------------------------------- | ------ |
+| Runtime                   | `detect` / `build` / `env` / `start`                            | shipped |
+| Addon / Resource          | `provision` / `bind` / `unbind` / `deprovision` / `backup`      | shipped |
+| Legacy hook                | `pre`/`post` `deploy`/`build` (fixed, 4 stages)                 | shipped (predates the event bus below) |
+| Router                     | `configure` / `reload`                                          | shipped — host-level singleton (`RIKU_ROUTER=<name>`), swaps nginx entirely |
+| Event subscriber            | `on_event` — `subscribe`/`mode`/`priority` in `[events]`        | shipped — `deploy.*`, `build.*`, `app.restarted`, `app.failed`; `riku-notify` (webhook/Discord/Slack/Telegram) is the shipped first-party example |
+| Custom events               | `riku plugin-emit <plugin.custom.*>` (opt-in `events.emit`)     | shipped — namespaced, kernel-stamps `source_plugin` so a subscriber can tell a real kernel event from a plugin-claimed one |
+| Filter (value-transform)   | `on_filter` — `subscribe`/`priority` in `[filters]`             | shipped — chains, always degrades to passthrough on failure; `nginx.include_content` (augments the generated nginx config) is the shipped example |
+| Lifecycle hooks            | `on_install` / `on_uninstall` (opt-in `[lifecycle]`, any plugin type) | shipped |
+| UI panel                   | `ui_panel` (opt-in `[ui]`, Next.js dashboard only)              | shipped — structured JSON only, dashboard renders it, no plugin-supplied HTML/JS |
+| Auth / SSO                 | dashboard auth *provider* seam                                   | **not shipped** — the dashboard has real login (Phase 1 above), but not as something a plugin can supply/replace |
 
-The **Addon contract is the keystone** — it is how managed datastores (Track A, Phase 3) ship as plugins instead of bloating core. It keeps the single-binary purity while delivering the ecosystem's killer plugin category.
+The **addon contract is (still) the keystone** — it is how managed
+datastores (Track A, Phase 3) ship as plugins instead of bloating core.
+It keeps the single-binary purity while delivering the ecosystem's
+killer plugin category.
 
-### Phase E2 — Distribution & Discovery (Claude-style marketplace)
+### Phase E2 — Distribution & Discovery (Claude-style marketplace) — **shipped**
 
 What turns plugins into an *ecosystem*. The model is adapted directly from Claude Code's plugin/marketplace design: **git-native, no central server, manifest-indexed, multi-marketplace, namespaced installs.** Riku copies the distribution UX and layers a stricter server-side trust model on top (see "Plugin Trust Model" below) — because a Riku plugin is an executable that runs on your server, not an instruction run in a local client.
+
+All of the below is shipped, including a real starter marketplace: this
+repo's own `marketplace.toml` indexes `examples/plugins/{sqlite-volume,
+postgres, redis, caddy-router, webhook-notify}` — `riku plugins
+marketplace add github:dreygur/riku` registers it directly.
 
 **Bundle layout** — a plugin is a directory (git repo or subdir), not a single file:
 
@@ -120,40 +159,46 @@ type        = "addon"
 - `riku plugins add ./path` — install from local path for the authoring/dev loop.
 - **Lockfile** (`riku-plugins.lock`) — pins resolved name + marketplace + version + checksum. No silent auto-update of executable code.
 
-**Official starter marketplace** maintained in-repo — postgres, redis, slack-notify, caddy-router, and php / elixir / deno / bun runtimes. Seed the ecosystem so it does not look empty.
+**Official starter marketplace** — shipped (see above). Runtimes beyond
+node/python/ruby/go/rust-lang/java/clojure/container (e.g. php, elixir,
+deno, bun) are still open if demand shows up.
 
-### Phase E2.5 — Plugin Trust Model
+### Phase E2.5 — Plugin Trust Model — **shipped**
 
-Riku plugins run **on the server, as the deploy user, with filesystem and network access** — a far larger blast radius than a Claude skill run in a local client. So Riku copies Claude's distribution UX but hardens the security:
+Riku plugins run **on the server, as the deploy user, with filesystem and network access** — a far larger blast radius than a Claude skill run in a local client. So Riku copies Claude's distribution UX but hardens the security. All of the below is shipped:
 
-- **Checksum + signature verification on install** — the manifest pins a `sha256`; reject on mismatch. Reuse the existing `subtle` / `sha` / `hex` stack. Optional author signature (e.g. minisign) for first-party + verified publishers.
-- **Pinned versions + lockfile** — `name@market@1.2.0`; no silent upgrade of code that runs on the host.
-- **Explicit trust on `marketplace add`** — loud warning; third-party marketplaces are opt-in, never auto-trusted.
-- **Capability declaration** — manifest declares network / FS-write / privileged needs; shown on install (Android-permission style), enforced where the platform allows.
-- **WASM sandbox** for untrusted-author plugins — see Phase E3. A "vast ecosystem" means "lots of untrusted code," so sandboxing is the long-term answer, not an afterthought.
+- ✅ **Checksum + signature verification on install** — a pinned `sha256` mismatch is rejected; an Ed25519 `signature` (`riku plugins keygen`/`sign`) must verify against a key the operator explicitly trusts (`riku plugins trust add/list/remove`) or the install is rejected outright.
+- ✅ **Pinned versions + lockfile** (`riku-plugins.lock`) — records name, source, version, checksum, and verifying key; no silent auto-update of executable code.
+- ✅ **Explicit trust on `marketplace add`** — third-party marketplaces are opt-in.
+- ✅ **Capability declaration** (`network`/`writes`/`privileged`) — shown on install, enforced at spawn time via Landlock + `no_new_privs` wherever the kernel supports it.
+- **WASM sandbox** for untrusted-author plugins — see Phase E3. **Still open** — a "vast ecosystem" means "lots of untrusted code," so sandboxing is the long-term answer, not an afterthought.
 
 Riku deliberately does **not** copy the looser "add a marketplace and run executables" posture wholesale — that is a supply-chain footgun on a server rather than a local dev tool.
 
 ### Phase E3 — Ecosystem Growth
 
-- **Plugin docs site + gallery** — extend the existing mkdocs site.
-- **`riku plugins doctor`** — validate installed plugins against the current API version.
-- **WASM plugin option** (optional, later) — sandboxed plugins for untrusted authors, to keep the security model tight as the ecosystem grows.
+- ✅ **`riku plugins doctor`** — validates installed plugins against the current API version and re-checks integrity against the lockfile.
+- **Still open**: a plugin docs site + gallery (beyond `docs/docs/plugin-bundles.md` and `docs/docs/plugin-gallery.md`, which already exist but aren't a searchable gallery), and `riku plugins update <name>` (currently: remove + reinstall).
+- **WASM plugin option** (optional, later) — sandboxed plugins for untrusted authors, to keep the security model tight as the ecosystem grows. **Still open.**
 
 ---
 
 ## Sequencing
 
-Honest priority order across both tracks:
+Honest priority order across both tracks (✅ = shipped since this was last written):
 
-1. Installer + `quickstart` — cheap, unblocks *all* adoption.
-2. Dashboard, read-only — the branch is already started.
-3. Plugin contract v1 + scaffold — prerequisite for the ecosystem.
-4. Addon plugin type + Postgres — biggest solo-dev unblock; validates the addon model.
-5. Backups + rollback + `doctor` — the trust tier.
-6. Claude-style marketplace + `plugins add name@market` + lockfile — ecosystem ignition. Ship with checksum/signature verification and capability declaration from day one (do not bolt security on later).
-7. Notifier / router plugins + gallery.
-8. Dashboard mutating actions, WASM plugin sandbox, SSO.
+1. Installer + `quickstart` — cheap, unblocks *all* adoption. **Still open** (the one item on this list that isn't shipped).
+2. ✅ Dashboard, mutating actions included, both embedded and Next.js.
+3. ✅ Plugin contract v1 + `scaffold`.
+4. ✅ Addon seam + Postgres/Redis/SQLite-volume as installable example addons (not bundled by default — an explicit `riku plugins add`, since addons hold credentials).
+5. ✅ Backups + rollback + zero-downtime cutover + `doctor`.
+6. ✅ Marketplace (`riku plugins marketplace add/list/remove`, `search`, `add name@market`) + lockfile + checksum/signature verification + capability declaration, shipped together from the start.
+7. ✅ Notifier / router / filter / custom-event / UI-panel plugins. A searchable docs gallery beyond the existing reference pages is still open.
+8. ✅ Dashboard mutating actions. WASM plugin sandbox and a dashboard auth-*provider* seam (SSO as something a plugin supplies) — **still open.**
+
+Given the above, the only genuinely open item across this whole list is
+**#1, the one-line installer** — worth calling out on its own, since it's
+also this roadmap's stated highest-leverage adoption gap.
 
 ---
 
@@ -166,34 +211,56 @@ Estimates are for **one experienced Rust developer who already knows this codeba
 | Phase | Scope | Dev-weeks | Risk |
 | ----- | ----- | --------- | ---- |
 | 0 — Installer / quickstart | one-line installer, `quickstart`, first-deploy output | 2–3 | low |
-| 1 — Dashboard (read-only) | app list, live log stream, history, env editor, embedded assets | 3–5 | med (live logs) |
-| 2 — Trust & resilience | backups/restore, rollback, zero-downtime cutover, `doctor` | 3–5 | med |
-| E0 — Contract v1 | protocol version, spec, scaffold | 1.5–2 | low |
-| E1 — Plugin types | core dispatch for addon/router/notifier/auth + lifecycle wiring | 4–6 | med (addon ~2 alone) |
-| 3 — Postgres addon | first managed datastore, once E1 lands | 1.5–2 | low |
-| E2 — Marketplace | git fetch, manifest, search, install, lockfile, checksum | 3–5 | med |
-| E2.5 — Trust model | signature verify, capability enforcement | 2–4 | high (enforcement) |
-| E3 — Docs + `plugins doctor` | gallery, validation | 1.5–2 | low |
+| 1 — Dashboard | app list, live log stream, history, env editor, mutating actions, auth | ✅ shipped | — |
+| 2 — Trust & resilience | backups/restore, rollback, zero-downtime cutover, `doctor` | ✅ shipped | — |
+| E0 — Contract v1 | protocol version, spec, scaffold | ✅ shipped | — |
+| E1 — Plugin types | addon/router/event/filter/custom-event/UI-panel/lifecycle dispatch | ✅ shipped (auth-provider seam still open) | — |
+| 3 — Postgres addon | first managed datastore | ✅ shipped (example bundle) | — |
+| E2 — Marketplace | git fetch, manifest, search, install, lockfile, checksum | ✅ shipped | — |
+| E2.5 — Trust model | signature verify, capability enforcement | ✅ shipped | — |
+| E3 — Docs + `plugins doctor` | gallery, validation | `doctor` ✅ shipped; searchable gallery still open | low |
 | E3 — WASM sandbox | wasmtime + host API + port plugin model | 6–10 | high |
 
-### MVP slice (ship this first)
+### What's left, honestly
 
-The smallest set that actually moves adoption: **installer + read-only dashboard + the addon contract + a working Postgres addon.**
+Every phase above except the one-line installer/`quickstart` (Phase 0) and
+the WASM sandbox (part of E3) is shipped. The MVP-slice/full-roadmap
+effort math below is kept for historical context (it's what this roadmap
+estimated before that work happened) — treat it as a record, not a live
+estimate. The two remaining items:
+
+- **Phase 0 (installer + quickstart)** — still the single biggest adoption
+  gap: no `curl | sh` installer exists, and `riku quickstart` isn't built.
+  Everything downstream of "a user is running riku" is now in good shape;
+  getting them to that point is the open problem.
+- **WASM sandbox (E3)** — deliberately deferred; the Landlock-based
+  capability enforcement shipped in E2.5 covers the "well-behaved
+  first-party plugin" case, but not a fully untrusted third-party author.
+  Build this when ecosystem size actually demands it, not before.
+
+<details>
+<summary>Original effort estimates (historical — most of this has since shipped)</summary>
+
+#### MVP slice (as originally scoped)
+
+The smallest set that was judged to actually move adoption:
+**installer + read-only dashboard + the addon contract + a working Postgres addon.**
 
 - Phases: **0 + 1 + E0 + E1 (addon only) + 3**
 - Effort: **~12–18 dev-weeks ≈ 3–4 months full-time** (≈ 9–12 months part-time).
 - Outcome: a new user installs in one line, deploys via `git push`, sees apps and live logs in a browser, and attaches a managed Postgres. That is the "I'd run my side-project on this" threshold.
 
-### Full roadmap
+#### Full roadmap (as originally scoped)
 
 - **Core (everything except the WASM sandbox):** ~22–34 dev-weeks, plus ~30% for integration/testing/docs → **~30–44 dev-weeks ≈ 7–10 months full-time** (≈ 1.5–2.5 years part-time).
 - **With the WASM sandbox:** add ~2–2.5 months → **~9–12 months full-time** (≈ ~3 years part-time).
 
-### Estimate caveats
+#### Estimate caveats (as originally written)
 
 - The three high-risk items — dashboard live-log streaming, plugin **capability enforcement** (real Linux sandboxing without containers is genuinely hard — the very thing Riku avoids), and the **WASM sandbox** — carry most of the schedule risk and could each run ~2x over.
 - Estimates assume no major scope creep and a single contributor who knows the code. More contributors help on parallel tracks (DX vs ecosystem) but add coordination cost.
-- Do not plan to "complete the roadmap." Ship the MVP slice, get real users, and let usage reorder E2 / E2.5 / E3. The WASM sandbox is the first thing to defer if time-boxed — build it when ecosystem size actually demands untrusted-author isolation, not before.
+
+</details>
 
 ---
 
@@ -203,7 +270,7 @@ The smallest set that actually moves adoption: **installer + read-only dashboard
 - **The Addon plugin contract is the strategic core.** It lets the *plugin system* deliver databases, so core stays single-binary while the ecosystem gains its killer category — both goals served by one design.
 - **A marketplace is what "vast ecosystem" actually means.** Extensible is not the same as an ecosystem; discovery plus one-command install is the difference. Adopt Claude Code's proven git-native marketplace shape rather than inventing one — but harden it for server-side execution.
 - **Freeze a small, stable API rather than chasing a rich, unstable one.** A stable small contract grows more third-party plugins than a sprawling unstable one. Pick the plugin types above, version them, and hold the line.
-- **Every phase preserves the identity:** single binary, no Docker required, runs on one small box. Addons and databases ship as plugins; UI is embedded in the binary.
+- **Every phase preserves the identity:** single binary, no Docker required, runs on one small box. Addons and databases ship as plugins; the primary dashboard is embedded in the binary. (The separate, fuller Next.js dashboard is optional and deployed independently — it does not compromise the core binary's zero-dependency identity, since riku runs and is fully usable without it.)
 
 ---
 

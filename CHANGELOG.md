@@ -5,6 +5,83 @@ All notable changes to Riku will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-07-08
+
+### Dashboard Authentication
+
+The Next.js browser dashboard (`dashboard/`) gets its own login, independent
+of the backend's `RIKU_DASHBOARD_TOKEN`: a single shared password, never
+stored in plaintext (`RIKU_DASHBOARD_PASSWORD_HASH`, scrypt salt+hash,
+generated via `nub run hash-password`), gating every route through a
+signed session cookie (`middleware.ts`). Fully bypassed when the hash env
+var is unset, so existing local/dev usage is unaffected.
+
+### Incident Alerting
+
+The supervisor's crash/restart path now emits plugin lifecycle events:
+`app.restarted` on every crash it recovers from, `app.failed` when a crash
+exceeds `max_restarts` and the instance is permanently removed instead (the
+more urgent of the two — nothing brings it back without manual
+intervention). The bundled `plugins/riku-notify` event-subscriber plugin
+posts an incident report to a generic webhook, Discord, Slack, and/or
+Telegram, each independently configured.
+
+### Plugin System — Versatility Expansion
+
+Closed a set of gaps identified in an audit of the plugin system's
+extensibility, all additive and opt-in (no effect on any existing plugin):
+
+- **Subscriber priority** — `[events] priority = N` orders delivery when
+  multiple plugins subscribe to the same event (lower runs first).
+- **Install/uninstall lifecycle hooks** — `[lifecycle] install`/`uninstall`
+  lets any plugin (not just addons) run setup/cleanup on
+  `riku plugins install`/`remove`, always best-effort.
+- **Per-plugin scratch directory** — every plugin invocation, across every
+  seam, now gets `RIKU_PLUGIN_DATA_PATH`
+  (`data_root/plugin-data/<plugin-name>/`).
+- **Filters** — a new value-transform seam (`[filters]`, verb `on_filter`):
+  a plugin receives a value and hands back a (possibly transformed) one,
+  chained across multiple filters in priority order. Always degrades to
+  passthrough on any failure (timeout, non-zero exit, malformed output) —
+  a broken filter can only become a no-op. Shipped first use:
+  `nginx.include_content`, letting installed plugins augment the generated
+  nginx config (wired into all 5 nginx templates) without a full router
+  plugin replacing routing entirely.
+- **Plugin-to-plugin custom events** — a plugin declaring `[events] emit =
+  true` can fire its own event via `riku plugin-emit <name> --data
+  '<json>'`. Hard-namespaced to `plugin.custom.*` (anything else, including
+  an attempt to spoof a kernel event name, is rejected), with a
+  kernel-stamped `source_plugin` field a subscriber can trust.
+- **UI panels** — a plugin declaring `[ui] nav_label = "..."` gets a nav
+  entry and its own page in the Next.js dashboard (`ui_panel` verb).
+  Structured JSON only — never HTML/JS — so a plugin can extend the
+  dashboard's UI without being able to inject markup into it.
+
+Every item above shipped with real end-to-end tests against actual
+installed plugin bundles and real dispatch code (no mocks). See
+`PLUGIN_PROTOCOL.md` for the full updated contract.
+
+### Fixed
+
+- Corrected several stale documentation claims found in the course of this
+  work: the dashboard was documented as "read-only" (it can deploy,
+  restart, and manage addons — never was read-only); the router plugin
+  seam was documented as "planned" (it has been shipped for some time,
+  as a host-level singleton); `dashboard/README.md` described a
+  CSRF/Origin-check mechanism that didn't exist in the actual code.
+- Bumped `crossbeam-epoch` to clear RUSTSEC-2026-0204.
+
+### Changed
+
+- `crates/riku-supervisor/src/config/mod.rs` — collapsed 12 repeated
+  `env.get(key).and_then(|v| v.parse().ok()).unwrap_or_else(default)`
+  blocks into `parse_env_or!`/`parse_env_opt!` macros.
+  `crates/riku-util/src/resource_limits/mod.rs` — similarly deduplicated
+  via a small `env_u64()` helper.
+- A `RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path())` test
+  constructor, hand-copied into 12+ test modules across the workspace, is
+  now a single shared `RikuPaths::for_tests()`.
+
 ## [3.0.0] - 2026-04-09
 
 ### Plugin-Based Runtime System
