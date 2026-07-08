@@ -1,0 +1,14 @@
+name = "riku-notify"
+version = "1"
+type = "notifier"
+api = 1
+entry = "bin/on-event"
+description = "Notifies a generic webhook, Telegram, Discord, and/or Slack when a worker crashes and is restarted."
+author = "riku"
+
+[capabilities]
+network = true
+
+[events]
+subscribe = ["app.restarted"]
+mode = "observe"

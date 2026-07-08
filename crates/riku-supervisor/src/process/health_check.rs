@@ -4,6 +4,7 @@ use anyhow::Result;
 use std::time::Duration;
 
 use crate::config::HealthCheck;
+use crate::plugins::{EventBus, EventName};
 use crate::stats::{get_process_resources, HealthStatus};
 
 use super::ProcessManager;
@@ -207,14 +208,17 @@ impl ProcessManager {
             .and_then(|p: &String| p.parse::<u16>().ok())
     }
 
+
+
     /// Restart a specific process.
     pub(super) fn restart_process(&mut self, process_id: &str) -> Result<()> {
         tracing::info!("Restarting process: {}", process_id);
 
-        // Capture config and current restart count before removing the process.
-        let (config, prev_restart_count) = match self.processes.get(process_id) {
-            Some(p) => (Some(p.config.clone()), p.restart_count),
-            None => (None, 0),
+        // Capture config, current restart count, and the crash's exit code
+        // before removing the process.
+        let (config, prev_restart_count, exit_code) = match self.processes.get(process_id) {
+            Some(p) => (Some(p.config.clone()), p.restart_count, p.last_exit_code),
+            None => (None, 0, None),
         };
 
         if let Some(config) = config {
@@ -228,12 +232,42 @@ impl ProcessManager {
             // the exponential backoff keeps growing across successive crashes.
             self.spawn_process(&config)?;
 
+            let new_restart_count = prev_restart_count + 1;
             if let Some(new_process) = self.processes.get_mut(process_id) {
-                new_process.restart_count = prev_restart_count + 1;
+                new_process.restart_count = new_restart_count;
                 new_process.last_restart = std::time::Instant::now();
             }
+
+            emit_app_restarted(
+                config.worker.app,
+                process_id.to_string(),
+                exit_code,
+                new_restart_count,
+            );
         }
 
         Ok(())
     }
+}
+
+/// Fire the `app.restarted` lifecycle event (Plugin Protocol v1 §7.1) for a
+/// crash we just recovered from.
+///
+/// Dispatched on its own thread: `EventBus::emit` runs each subscriber
+/// synchronously with its own timeout, and this fires from the supervisor's
+/// single-threaded 1-second monitoring tick — a slow or unreachable
+/// notification target must never delay health checks for every other app.
+fn emit_app_restarted(app: String, instance: String, exit_code: Option<i32>, restart_count: u32) {
+    std::thread::spawn(move || {
+        let paths = riku_config::RikuPaths::from_env();
+        EventBus::new(&paths).publish(
+            EventName::AppRestarted,
+            &app,
+            serde_json::json!({
+                "instance": instance,
+                "exit_code": exit_code,
+                "restart_count": restart_count,
+            }),
+        );
+    });
 }

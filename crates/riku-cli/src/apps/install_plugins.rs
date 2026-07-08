@@ -20,6 +20,16 @@ const SHELL_PLUGINS: &[&str] = &["node", "python", "ruby", "go", "rust-lang"];
 /// alongside the main `riku` binary for every release).
 const BINARY_PLUGINS: &[&str] = &["java", "clojure", "container"];
 
+/// Event-subscriber plugin bundles available in the repo's `plugins/`
+/// directory — each is a *directory* (manifest + entry script), unlike the
+/// flat single-file `SHELL_PLUGINS`. The file list is relative to the
+/// bundle's own directory and must include `riku-plugin.toml`.
+///
+/// Not installed by default (like `BINARY_PLUGINS`) — opt in with
+/// `riku install-plugins --only riku-notify`.
+const BUNDLE_PLUGINS: &[(&str, &[&str])] =
+    &[("riku-notify", &["riku-plugin.toml", "bin/on-event"])];
+
 /// Base URL for raw plugin script content.
 const PLUGINS_RAW_BASE: &str = "https://raw.githubusercontent.com/dreygur/riku/main/plugins";
 
@@ -39,10 +49,14 @@ pub fn cmd_install_plugins(paths: &RikuPaths, only: Option<Vec<String>>) -> Resu
     let mut failed = 0;
 
     for name in &targets {
+        let bundle_files = BUNDLE_PLUGINS.iter().find(|(n, _)| n == name).map(|(_, f)| *f);
+
         let result = if SHELL_PLUGINS.contains(name) {
             download_shell_plugin(name, paths)
         } else if BINARY_PLUGINS.contains(name) {
             download_binary_plugin(name, paths)
+        } else if let Some(files) = bundle_files {
+            download_bundle_plugin(name, files, paths)
         } else {
             display::warn(&format!("Unknown plugin '{}' — skipping", name));
             continue;
@@ -98,6 +112,41 @@ fn download_shell_plugin(name: &str, paths: &RikuPaths) -> Result<()> {
         use std::os::unix::fs::PermissionsExt;
         let perms = fs::Permissions::from_mode(0o755);
         fs::set_permissions(&dest, perms)?;
+    }
+
+    Ok(())
+}
+
+/// Download a directory-style plugin bundle (manifest + entry script) from
+/// the repo's `plugins/<name>/` into `~/.riku/plugins/<name>/`. Every file
+/// except the manifest itself is made executable.
+fn download_bundle_plugin(name: &str, files: &[&str], paths: &RikuPaths) -> Result<()> {
+    let dest_dir = paths.plugin_root.join(name);
+
+    for file in files {
+        let url = format!("{}/{}/{}", PLUGINS_RAW_BASE, name, file);
+        let dest = dest_dir.join(file);
+
+        display::info(&format!("Downloading {}/{} from {}...", name, file, url));
+
+        let response = reqwest::blocking::get(&url)?;
+        let status = response.status();
+        if !status.is_success() {
+            bail!("HTTP {} when fetching {}", status, url);
+        }
+        let content = response.bytes()?;
+
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let mut out = fs::File::create(&dest)?;
+        out.write_all(&content)?;
+
+        #[cfg(unix)]
+        if *file != "riku-plugin.toml" {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&dest, fs::Permissions::from_mode(0o755))?;
+        }
     }
 
     Ok(())

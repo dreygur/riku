@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# riku-notify: subscribes to the app.restarted event (PLUGIN_PROTOCOL.md §7)
+# and posts an incident report to whichever channels are configured via env
+# vars. Each channel is independent — set only the ones you want.
+#
+#   RIKU_NOTIFY_WEBHOOK_URL              generic JSON POST
+#   RIKU_NOTIFY_DISCORD_WEBHOOK_URL      Discord incoming webhook
+#   RIKU_NOTIFY_SLACK_WEBHOOK_URL        Slack incoming webhook
+#   RIKU_NOTIFY_TELEGRAM_BOT_TOKEN       Telegram bot token   (needs the chat id too)
+#   RIKU_NOTIFY_TELEGRAM_CHAT_ID         Telegram chat id
+set -euo pipefail
+
+[ "${1:-}" = "on_event" ] || exit 0
+
+JSON="$(cat)"
+
+# Pulls a top-level or "data"-nested field out of the single-line event
+# envelope (see EventEnvelope::to_json_line) without depending on jq.
+field() {
+  printf '%s' "$JSON" \
+    | grep -o "\"$1\":\"[^\"]*\"\|\"$1\":[^,}]*" \
+    | head -n1 \
+    | sed -e "s/\"$1\"://" -e 's/^"//' -e 's/"$//'
+}
+
+APP="${RIKU_APP:-$(field app)}"
+INSTANCE="$(field instance)"
+EXIT_CODE="$(field exit_code)"
+RESTART_COUNT="$(field restart_count)"
+
+MESSAGE="riku: ${APP} (${INSTANCE}) crashed and was restarted (exit code ${EXIT_CODE}, restart #${RESTART_COUNT})"
+
+if [ -n "${RIKU_NOTIFY_WEBHOOK_URL:-}" ]; then
+  curl -fsS -m 10 -X POST "$RIKU_NOTIFY_WEBHOOK_URL" \
+    -H 'content-type: application/json' \
+    -d "{\"app\":\"$APP\",\"instance\":\"$INSTANCE\",\"exit_code\":${EXIT_CODE},\"restart_count\":${RESTART_COUNT},\"message\":\"$MESSAGE\"}" \
+    >/dev/null 2>&1 || echo "riku-notify: webhook delivery failed" >&2
+fi
+
+if [ -n "${RIKU_NOTIFY_DISCORD_WEBHOOK_URL:-}" ]; then
+  curl -fsS -m 10 -X POST "$RIKU_NOTIFY_DISCORD_WEBHOOK_URL" \
+    -H 'content-type: application/json' \
+    -d "{\"content\":\"$MESSAGE\"}" \
+    >/dev/null 2>&1 || echo "riku-notify: discord delivery failed" >&2
+fi
+
+if [ -n "${RIKU_NOTIFY_SLACK_WEBHOOK_URL:-}" ]; then
+  curl -fsS -m 10 -X POST "$RIKU_NOTIFY_SLACK_WEBHOOK_URL" \
+    -H 'content-type: application/json' \
+    -d "{\"text\":\"$MESSAGE\"}" \
+    >/dev/null 2>&1 || echo "riku-notify: slack delivery failed" >&2
+fi
+
+if [ -n "${RIKU_NOTIFY_TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${RIKU_NOTIFY_TELEGRAM_CHAT_ID:-}" ]; then
+  curl -fsS -m 10 -X POST "https://api.telegram.org/bot${RIKU_NOTIFY_TELEGRAM_BOT_TOKEN}/sendMessage" \
+    -H 'content-type: application/json' \
+    -d "{\"chat_id\":\"$RIKU_NOTIFY_TELEGRAM_CHAT_ID\",\"text\":\"$MESSAGE\"}" \
+    >/dev/null 2>&1 || echo "riku-notify: telegram delivery failed" >&2
+fi
+
+exit 0

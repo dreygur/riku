@@ -22,6 +22,10 @@ pub struct SpawnedProcess {
     /// Present only when the worker opted into cgroup v2 isolation. Used to
     /// poll for OOM kills and removed once the process has exited.
     pub cgroup: Option<WorkerCgroup>,
+    /// Exit code from the most recent crash, captured by `is_running()` at
+    /// the moment `try_wait()` first observes the process has died — used to
+    /// annotate the `app.restarted` event fired for that crash.
+    pub last_exit_code: Option<i32>,
 }
 
 impl SpawnedProcess {
@@ -44,6 +48,7 @@ impl SpawnedProcess {
             health_check_config,
             consecutive_health_failures: 0,
             cgroup,
+            last_exit_code: None,
         })
     }
 
@@ -56,9 +61,12 @@ impl SpawnedProcess {
     /// Check if the process is still running.
     pub fn is_running(&mut self) -> bool {
         match self.child.try_wait() {
-            Ok(Some(_status)) => false, // Process has exited
-            Ok(None) => true,           // Process is still running
-            Err(_) => false,            // Error checking status, assume dead
+            Ok(Some(status)) => {
+                self.last_exit_code = status.code();
+                false // Process has exited
+            }
+            Ok(None) => true, // Process is still running
+            Err(_) => false, // Error checking status, assume dead
         }
     }
 

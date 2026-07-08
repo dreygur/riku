@@ -244,4 +244,68 @@ mod tests {
         .unwrap();
         EventBus::new(&paths).publish(EventName::DeployFinished, "app", serde_json::json!({}));
     }
+
+    /// End-to-end: the real `plugins/riku-notify` bundle shipped in the repo,
+    /// installed into a temp plugin root exactly as `riku install-plugins`
+    /// would lay it out, actually reaches a webhook when `app.restarted`
+    /// fires — through the *real* sandbox (`capabilities.network = true`
+    /// must actually let curl's DNS/TCP through under landlock), not just a
+    /// direct invocation of the script.
+    #[test]
+    fn bundled_riku_notify_plugin_delivers_webhook_on_app_restarted() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let (_tmp, paths) = make_bus_paths();
+
+        // Copy the repo's real plugins/riku-notify/ bundle into the temp
+        // plugin root — the actual shipped manifest + script, not a fixture.
+        let repo_bundle =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/riku-notify");
+        let dest = paths.plugin_root.join("riku-notify");
+        std::fs::create_dir_all(dest.join("bin")).unwrap();
+        std::fs::copy(
+            repo_bundle.join("riku-plugin.toml"),
+            dest.join("riku-plugin.toml"),
+        )
+        .unwrap();
+        std::fs::copy(repo_bundle.join("bin/on-event"), dest.join("bin/on-event")).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(dest.join("bin/on-event"), std::fs::Permissions::from_mode(0o755))
+                .unwrap();
+        }
+
+        // Minimal one-shot HTTP server: accept a single connection, read the
+        // request, hand back 200. No new dev-dependency for this.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let received = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buf = [0u8; 4096];
+            let n = stream.read(&mut buf).unwrap_or(0);
+            let _ = stream.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n");
+            String::from_utf8_lossy(&buf[..n]).to_string()
+        });
+
+        std::env::set_var(
+            "RIKU_NOTIFY_WEBHOOK_URL",
+            format!("http://127.0.0.1:{port}/incident"),
+        );
+
+        EventBus::new(&paths).publish(
+            EventName::AppRestarted,
+            "demo-app",
+            serde_json::json!({ "instance": "demo-app.web.0", "exit_code": 137, "restart_count": 2 }),
+        );
+
+        std::env::remove_var("RIKU_NOTIFY_WEBHOOK_URL");
+
+        let request = received.join().unwrap();
+        assert!(request.contains("POST /incident"), "got: {request}");
+        assert!(request.contains("\"instance\":\"demo-app.web.0\""), "got: {request}");
+        assert!(request.contains("\"exit_code\":137"), "got: {request}");
+        assert!(request.contains("\"restart_count\":2"), "got: {request}");
+    }
 }
