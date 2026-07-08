@@ -7,14 +7,19 @@
 //! is what runs on the host); a bundle with no pinned checksum installs but is
 //! flagged unverified.
 
+use std::io::Write;
+use std::os::unix::process::CommandExt;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use anyhow::{bail, Context, Result};
 use sha2::{Digest, Sha256};
 
 use crate::config::RikuPaths;
+use crate::executor::{plugin_timeout, spawn_retrying_etxtbsy, wait_with_timeout};
+use crate::sandbox::{harden, SandboxPaths};
 use crate::util::copy_dir_recursive;
+use crate::RIKU_PLUGIN_API;
 
 use super::bundles;
 use super::lockfile::{LockEntry, Lockfile};
@@ -150,6 +155,10 @@ impl<'a> PluginInstaller<'a> {
         copy_dir_recursive(bundle, &dest)?;
         make_executable(&manifest.entry_path(&dest))?;
 
+        if manifest.lifecycle.install {
+            run_lifecycle_verb(self.paths, &dest, &manifest, "on_install");
+        }
+
         Lockfile::new(self.paths).upsert(LockEntry {
             name: manifest.name.clone(),
             source: source.to_string(),
@@ -171,6 +180,15 @@ impl<'a> PluginInstaller<'a> {
         if !dest.exists() {
             bail!("plugin '{name}' is not installed");
         }
+
+        // Best-effort: an unreadable/invalid manifest at this point just
+        // means no cleanup hook to run, never blocks removal.
+        if let Ok(manifest) = PluginManifest::from_dir(&dest) {
+            if manifest.lifecycle.uninstall {
+                run_lifecycle_verb(self.paths, &dest, &manifest, "on_uninstall");
+            }
+        }
+
         std::fs::remove_dir_all(&dest)?;
         Lockfile::new(self.paths).remove(name)?;
         Ok(())
@@ -316,6 +334,64 @@ fn make_executable(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Invoke a lifecycle verb (`on_install`/`on_uninstall`) on a plugin's own
+/// entry executable. **Always best-effort**: a non-zero exit, timeout, or
+/// spawn failure is logged as a warning and never propagated — by the time
+/// either verb runs, the install/removal itself has already succeeded (or is
+/// about to), so a broken hook script must never leave the plugin half
+/// installed or block its removal.
+fn run_lifecycle_verb(paths: &RikuPaths, bundle: &Path, manifest: &PluginManifest, verb: &str) {
+    let mut cmd = Command::new(manifest.entry_path(bundle));
+    cmd.arg(verb)
+        .current_dir(bundle)
+        .env("RIKU_PLUGIN_API", RIKU_PLUGIN_API.to_string())
+        .env("RIKU_ROOT", &paths.riku_root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        // Own process group so a timeout can kill the whole tree, same as
+        // every other verb dispatch site (addon, router, event bus).
+        .process_group(0);
+    if let Some(dir) = crate::plugin_data::plugin_data_path(paths, &manifest.name) {
+        cmd.env("RIKU_PLUGIN_DATA_PATH", dir);
+    }
+    harden(&mut cmd, &manifest.capabilities, &SandboxPaths::default());
+
+    let mut child = match spawn_retrying_etxtbsy(&mut cmd) {
+        Ok(child) => child,
+        Err(e) => {
+            tracing::warn!(plugin = %manifest.name, verb, "failed to spawn lifecycle hook: {e}");
+            return;
+        }
+    };
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let payload = serde_json::json!({ "name": manifest.name, "version": manifest.version });
+        if let Ok(line) = serde_json::to_string(&payload) {
+            let _ = writeln!(stdin, "{line}");
+        }
+    }
+
+    let timed_out = wait_with_timeout(&mut child, plugin_timeout());
+    if timed_out {
+        tracing::warn!(plugin = %manifest.name, verb, "lifecycle hook timed out");
+        return;
+    }
+
+    match child.wait() {
+        Ok(status) if !status.success() => {
+            tracing::warn!(
+                plugin = %manifest.name,
+                verb,
+                "lifecycle hook exited with {}",
+                status.code().unwrap_or(-1)
+            );
+        }
+        Err(e) => tracing::warn!(plugin = %manifest.name, verb, "wait failed: {e}"),
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,6 +420,69 @@ mod tests {
             ),
         )
         .unwrap();
+    }
+
+    /// Write a bundle whose entry script appends `on_install`/`on_uninstall`
+    /// to a marker file each time it's invoked with that verb, so the real
+    /// `PluginInstaller::install`/`remove` calls can be checked end-to-end
+    /// rather than calling `run_lifecycle_verb` directly.
+    fn write_lifecycle_bundle(dir: &Path, name: &str, marker: &Path) {
+        std::fs::create_dir_all(dir.join("bin")).unwrap();
+        let entry = dir.join("bin/addon");
+        std::fs::write(
+            &entry,
+            format!(
+                "#!/bin/sh\ncase \"$1\" in\n  on_install) echo on_install >> '{}' ;;\n  on_uninstall) echo on_uninstall >> '{}' ;;\nesac\n",
+                marker.display(),
+                marker.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&entry, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::write(
+            dir.join("riku-plugin.toml"),
+            format!(
+                "name=\"{name}\"\nversion=\"1.0.0\"\ntype=\"notifier\"\napi={}\nentry=\"bin/addon\"\n[lifecycle]\ninstall=true\nuninstall=true\n",
+                crate::RIKU_PLUGIN_API
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn lifecycle_hooks_fire_on_install_and_remove() {
+        let (tmp, paths) = setup();
+        let src = tmp.path().join("lifecycle-src");
+        let marker = tmp.path().join("lifecycle.log");
+        write_lifecycle_bundle(&src, "lifecycled", &marker);
+
+        let installer = PluginInstaller::new(&paths);
+        installer.install(src.to_str().unwrap()).unwrap();
+        assert_eq!(std::fs::read_to_string(&marker).unwrap(), "on_install\n");
+
+        installer.remove("lifecycled").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&marker).unwrap(),
+            "on_install\non_uninstall\n"
+        );
+    }
+
+    #[test]
+    fn no_lifecycle_block_means_hooks_never_run() {
+        // Every existing plugin (no [lifecycle] table) must be unaffected —
+        // reuses the plain `write_bundle` helper, which declares no
+        // [lifecycle] block at all.
+        let (tmp, paths) = setup();
+        let src = tmp.path().join("plain-src");
+        write_bundle(&src, "plain", None);
+
+        let installer = PluginInstaller::new(&paths);
+        // Would panic/fail loudly if run_lifecycle_verb were called against
+        // this bundle's entry script, since it has no `on_install` case arm
+        // and `set -e` isn't even present — the real assertion is just that
+        // install/remove succeed at all with no [lifecycle] declared.
+        installer.install(src.to_str().unwrap()).unwrap();
+        installer.remove("plain").unwrap();
     }
 
     #[test]

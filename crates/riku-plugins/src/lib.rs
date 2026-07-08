@@ -58,6 +58,7 @@ pub mod lockfile;
 pub mod manager;
 pub mod manifest;
 pub mod marketplace;
+pub mod plugin_data;
 pub mod router;
 pub mod runtime;
 pub mod sandbox;

@@ -58,6 +58,26 @@ pub struct EventSubscription {
     pub subscribe: Vec<String>,
     #[serde(default)]
     pub mode: SubscribeMode,
+    /// Delivery order among subscribers of the same event — lower runs
+    /// first. Default `0`. Ties keep filesystem discovery order (unspecified).
+    #[serde(default)]
+    pub priority: i32,
+}
+
+/// Install/uninstall lifecycle opt-in; present iff the plugin implements one
+/// of these verbs. Absent (the default) means neither is invoked — every
+/// existing plugin (no `[lifecycle]` block) is unaffected.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct Lifecycle {
+    /// Plugin implements `on_install`, invoked once after its files are
+    /// copied into the plugin root (best-effort: a failure is logged, never
+    /// blocks the install, since the files are already in place by then).
+    #[serde(default)]
+    pub install: bool,
+    /// Plugin implements `on_uninstall`, invoked before its files are
+    /// removed (best-effort: a failure is logged, never blocks removal).
+    #[serde(default)]
+    pub uninstall: bool,
 }
 
 /// A parsed, validated `riku-plugin.toml`.
@@ -81,6 +101,8 @@ pub struct PluginManifest {
     pub author: Option<String>,
     #[serde(default)]
     pub capabilities: Capabilities,
+    #[serde(default)]
+    pub lifecycle: Lifecycle,
     #[serde(default)]
     pub events: EventSubscription,
 }

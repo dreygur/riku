@@ -64,12 +64,16 @@ impl<'a> EventBus<'a> {
         }
     }
 
-    /// Plugin bundles whose manifest subscribes to `event`.
+    /// Plugin bundles whose manifest subscribes to `event`, ordered by
+    /// `events.priority` (lower first). Ties keep filesystem discovery order.
     fn subscribers_for(&self, event: &str) -> Vec<(PathBuf, PluginManifest)> {
-        crate::bundles::find_bundles(&self.paths.plugin_root)
-            .into_iter()
-            .filter(|(_, manifest)| manifest.subscribes_to(event))
-            .collect()
+        let mut subscribers: Vec<(PathBuf, PluginManifest)> =
+            crate::bundles::find_bundles(&self.paths.plugin_root)
+                .into_iter()
+                .filter(|(_, manifest)| manifest.subscribes_to(event))
+                .collect();
+        subscribers.sort_by_key(|(_, manifest)| manifest.events.priority);
+        subscribers
     }
 
     /// Invoke one subscriber with `on_event` and the event JSON on stdin.
@@ -91,6 +95,9 @@ impl<'a> EventBus<'a> {
             .stderr(Stdio::piped())
             // Own process group so a timeout can kill the whole tree.
             .process_group(0);
+        if let Some(dir) = crate::plugin_data::plugin_data_path(self.paths, &manifest.name) {
+            cmd.env("RIKU_PLUGIN_DATA_PATH", dir);
+        }
 
         // Confine the subscriber to its declared capabilities before launch.
         let sandbox_paths = crate::sandbox::SandboxPaths {
@@ -164,6 +171,12 @@ mod tests {
         )
     }
 
+    fn manifest_toml_with_priority(name: &str, event: &str, priority: i32) -> String {
+        format!(
+            "name=\"{name}\"\nversion=\"1\"\ntype=\"notifier\"\napi={RIKU_PLUGIN_API}\nentry=\"bin/on-event\"\n[events]\nsubscribe=[\"{event}\"]\npriority={priority}\n"
+        )
+    }
+
     fn make_bus_paths() -> (tempfile::TempDir, RikuPaths) {
         let tmp = tempfile::tempdir().unwrap();
         let paths = RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
@@ -198,6 +211,36 @@ mod tests {
         assert_eq!(parsed["app"], "myapp");
         assert_eq!(parsed["data"]["k"], "v");
         assert_eq!(parsed["api"], RIKU_PLUGIN_API);
+    }
+
+    #[test]
+    fn subscribers_run_in_priority_order() {
+        let (tmp, paths) = make_bus_paths();
+        let marker = tmp.path().join("order.log");
+
+        let make_bundle = |name: &str, priority: i32| {
+            let bundle = paths.plugin_root.join(name);
+            std::fs::create_dir_all(bundle.join("bin")).unwrap();
+            write_exec(
+                &bundle.join("bin/on-event"),
+                &format!("#!/bin/sh\necho {name} >> '{}'\n", marker.display()),
+            );
+            std::fs::write(
+                bundle.join("riku-plugin.toml"),
+                manifest_toml_with_priority(name, "deploy.finished", priority),
+            )
+            .unwrap();
+        };
+
+        // Installed alphabetically reversed and out of priority order, so a
+        // filesystem-order or name-order pass would get this wrong too.
+        make_bundle("second", 5);
+        make_bundle("first", 1);
+
+        EventBus::new(&paths).publish(EventName::DeployFinished, "app", serde_json::json!({}));
+
+        let order = std::fs::read_to_string(&marker).unwrap();
+        assert_eq!(order, "first\nsecond\n");
     }
 
     #[test]

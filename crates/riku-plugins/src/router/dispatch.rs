@@ -39,6 +39,9 @@ pub fn run_verb(
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .process_group(0);
+    if let Some(dir) = crate::plugin_data::plugin_data_path(paths, &manifest.name) {
+        cmd.env("RIKU_PLUGIN_DATA_PATH", dir);
+    }
 
     if let Some(app) = app {
         cmd.env("RIKU_APP", app)

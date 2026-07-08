@@ -40,10 +40,27 @@ privileged  = false
 [events]                         # for event subscribers (notifier/hook)
 subscribe   = ["deploy.finished", "deploy.failed"]
 mode        = "observe"          # observe | gate
+priority    = 0                  # delivery order among subscribers of the
+                                  # same event, lower first (default 0)
+
+[lifecycle]                      # optional, any plugin type — install/remove hooks
+install     = true               # `riku plugins install` calls on_install
+uninstall   = true               # `riku plugins remove` calls on_uninstall
 ```
 
-The kernel sets `RIKU_PLUGIN_API`, `RIKU_ROOT`, and (when app-scoped) `RIKU_APP`,
-`RIKU_APP_PATH`, `RIKU_ENV_PATH` in the plugin's environment on every call.
+The kernel sets `RIKU_PLUGIN_API`, `RIKU_ROOT`, and `RIKU_PLUGIN_DATA_PATH`
+(a scratch directory the plugin owns, `data_root/plugin-data/<name>/`,
+created lazily) in the plugin's environment on every call, plus (when
+app-scoped) `RIKU_APP`, `RIKU_APP_PATH`, `RIKU_ENV_PATH`.
+
+### Install/uninstall lifecycle
+
+A plugin declaring `[lifecycle]` gets `on_install` called right after its
+files are copied into `~/.riku/plugins/`, and/or `on_uninstall` right before
+they're removed — both best-effort (a failing hook is logged, never blocks
+the install or removal it's attached to). Not declaring `[lifecycle]` at all
+(every plugin shipped before this existed, including `riku-notify`) means
+neither verb is ever invoked.
 
 ## Plugin types (seams)
 

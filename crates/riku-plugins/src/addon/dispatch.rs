@@ -46,6 +46,9 @@ pub fn run_verb(call: VerbCall<'_>) -> Result<serde_json::Value> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .process_group(0);
+    if let Some(dir) = crate::plugin_data::plugin_data_path(call.paths, &call.manifest.name) {
+        cmd.env("RIKU_PLUGIN_DATA_PATH", dir);
+    }
 
     let mut sandbox_paths = crate::sandbox::SandboxPaths {
         data_path: Some(call.data_path.to_path_buf()),

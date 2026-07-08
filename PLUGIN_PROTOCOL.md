@@ -70,11 +70,27 @@ privileged  = false
 [events]                         # present iff the plugin subscribes to events
 subscribe   = ["deploy.finished", "deploy.failed"]
 mode        = "observe"          # observe | gate  (gate needs elevated trust, §7)
+priority    = 0                  # delivery order among subscribers of the same
+                                  # event, lower first (default 0; ties keep
+                                  # filesystem discovery order, unspecified)
+
+[lifecycle]                      # present iff the plugin implements a hook;
+install     = true               # both default false, so no existing plugin
+uninstall   = true               # is affected
 ```
 
 `type` is the *category*. `runtime`/`addon`/`router` bind the plugin to a
 behavior seam (§5–§6). `notifier`/`hook` are categories whose behavior is
 entirely defined by the `[events]` block — they implement no seam verbs.
+
+`[lifecycle]` is orthogonal to `type` — any plugin, of any category, may
+declare `install`/`uninstall`. `riku plugins install` calls `on_install`
+right after the bundle's files are copied in; `riku plugins remove` calls
+`on_uninstall` right before they're deleted. Both are **best-effort**: same
+as `observe`-mode events, a failing hook is logged and never blocks the
+install/removal it's attached to — by the time either fires, that action has
+already effectively happened (files copied, or about to be deleted
+regardless), so there's nothing to safely roll back.
 
 ## 4. Invocation model
 
@@ -82,8 +98,12 @@ Every call is a fresh process:
 
 - **Verb** is `argv[1]` (e.g. `detect`, `provision`, `on_event`).
 - **Context** is passed via environment variables. Always present:
-  `RIKU_PLUGIN_API`, `RIKU_ROOT`. App-scoped calls add `RIKU_APP`,
-  `RIKU_APP_PATH`, `RIKU_ENV_PATH`. Seam-specific vars are listed per seam.
+  `RIKU_PLUGIN_API`, `RIKU_ROOT`, and `RIKU_PLUGIN_DATA_PATH` — a scratch
+  directory the plugin owns (`data_root/plugin-data/<plugin-name>/`, created
+  lazily on first use). App-scoped calls add `RIKU_APP`, `RIKU_APP_PATH`,
+  `RIKU_ENV_PATH`. Seam-specific vars are listed per seam. (Addon verbs also
+  get `RIKU_ADDON_DATA_PATH`, a separate, per-*instance* directory — §6.1 —
+  distinct from the per-*plugin* one every seam gets.)
 - **Structured input** (when a verb needs it) is a single JSON document on
   **stdin**. Simple verbs may ignore stdin entirely.
 - **Output:**
@@ -224,7 +244,11 @@ implementation. These stay in the kernel for v1:
 
 - **git intake** and **deploy orchestration**
 - **process supervisor** (health checks, restarts, scaling)
-- **on-disk state** (`RikuPaths`, ENV, worker TOML)
+- **riku's own on-disk state** (`RikuPaths`, ENV, worker TOML) — a plugin
+  never reads or writes riku's control-plane data directly. Narrower than it
+  used to read: every plugin *does* now get its own scratch directory
+  (`RIKU_PLUGIN_DATA_PATH`, §4) — that's net-new plugin-owned storage, not
+  access to the kernel's state, and doesn't change this bullet's intent.
 - **dashboard auth as a plugin seam** (e.g. a pluggable auth-provider seam)
   — deferred to v2, keeping v1 small. Note this is narrower than it used to
   read: the dashboard's own frontend now has a real login (single shared
