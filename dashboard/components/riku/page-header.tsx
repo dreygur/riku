@@ -20,7 +20,7 @@ export function PageHeader({
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
         <Link
           href="/"
-          className="inline-flex items-center gap-0.5 self-start font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex items-center gap-0.5 self-start font-sans text-xs text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeftIcon className="size-3.5" />
           overview
@@ -29,7 +29,7 @@ export function PageHeader({
           className={
             variant === "title"
               ? "font-mono text-xl font-bold"
-              : "font-mono text-sm tracking-widest text-muted-foreground uppercase"
+              : "font-sans text-sm font-medium tracking-widest text-muted-foreground uppercase"
           }
         >
           {title}

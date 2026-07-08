@@ -77,7 +77,10 @@ export function CommandMenu() {
               <CommandItem onSelect={() => act(`Restarted ${a.app}`, () => api.restart(a.app))}>
                 Restart {a.app}
               </CommandItem>
-              <CommandItem onSelect={() => act(`Stopped ${a.app}`, () => api.stop(a.app))}>
+              <CommandItem
+                className="text-destructive data-selected:bg-destructive/10 data-selected:text-destructive"
+                onSelect={() => act(`Stopped ${a.app}`, () => api.stop(a.app))}
+              >
                 Stop {a.app}
               </CommandItem>
               <CommandItem onSelect={() => act(`Rolled back ${a.app}`, () => api.rollback(a.app))}>

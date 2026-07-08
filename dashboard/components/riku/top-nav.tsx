@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { MenuIcon } from "lucide-react";
+import { LockIcon, MenuIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, fmtDur } from "@/lib/api";
 import type { RikuState } from "@/lib/types";
@@ -63,7 +63,7 @@ export function TopNav() {
         href={l.href}
         onClick={onClick}
         className={cn(
-          "px-2.5 py-1 font-mono text-xs tracking-wide uppercase transition-colors",
+          "px-2.5 py-1 font-sans text-xs font-medium tracking-wide uppercase transition-colors",
           active ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
         )}
       >
@@ -71,6 +71,8 @@ export function TopNav() {
       </Link>
     );
   };
+
+  if (path === "/login") return null;
 
   return (
     <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background/85 px-3 py-3 backdrop-blur sm:gap-6 sm:px-5">
@@ -113,6 +115,17 @@ export function TopNav() {
         )}
         title={live ? "live" : "offline"}
       />
+      <button
+        onClick={async () => {
+          await fetch("/api/logout", { method: "POST" });
+          window.location.href = "/login";
+        }}
+        className="text-muted-foreground hover:text-foreground"
+        title="lock dashboard"
+        aria-label="lock dashboard"
+      >
+        <LockIcon className="size-4" />
+      </button>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="w-64 border-r border-border bg-background p-0">

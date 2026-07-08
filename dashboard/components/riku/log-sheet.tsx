@@ -54,7 +54,7 @@ export function LogSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="h-[52vh] border-t border-border bg-[#0a0c0e] p-0"
+        className="h-[52vh] border-t border-border bg-console p-0"
         showCloseButton={false}
       >
         <SheetHeader className="flex-row items-center justify-between gap-3 border-b border-border px-4 py-2.5">

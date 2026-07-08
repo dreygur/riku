@@ -9,6 +9,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "audit:dashboard": "nubx tsx scripts/audit-dashboard.ts",
+    "hash-password": "nubx tsx scripts/hash-password.ts",
     "test:unit": "playwright test --project=unit",
     "test:e2e": "playwright test --project=e2e"
   },

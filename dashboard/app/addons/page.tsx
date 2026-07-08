@@ -159,13 +159,16 @@ export default function AddonsPage() {
                 </Button>
                 <Button
                   size="sm"
-                  variant="secondary"
+                  variant="destructive"
                   disabled={isPending(unbindKey)}
-                  onClick={() =>
-                    run(unbindKey, `Unbound ${inst.instance}`, () =>
-                      api.addonUnbind(inst.instance, bindApp[inst.instance] ?? ""),
-                    )
-                  }
+                  onClick={async () => {
+                    const app = bindApp[inst.instance] ?? "";
+                    const ok = await confirmDialog(`Unbind ${inst.instance} from ${app || "this app"}?`);
+                    if (ok)
+                      run(unbindKey, `Unbound ${inst.instance}`, () =>
+                        api.addonUnbind(inst.instance, app),
+                      );
+                  }}
                 >
                   {isPending(unbindKey) ? "unbinding…" : "unbind"}
                 </Button>

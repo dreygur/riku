@@ -92,9 +92,9 @@ export function EnvEditor({ app }: { app: string }) {
               />
             </div>
             <Button
-              size="sm"
-              variant="ghost"
-              className="shrink-0 text-muted-foreground hover:text-destructive"
+              size="icon-sm"
+              variant="destructive"
+              className="shrink-0"
               onClick={() => setRows((r) => r.filter((_, j) => j !== i))}
             >
               ✕
