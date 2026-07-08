@@ -26,6 +26,7 @@ pub enum EventName {
     BuildFinished,
     DeployFinished,
     AppRestarted,
+    AppFailed,
 }
 
 impl EventName {
@@ -37,6 +38,7 @@ impl EventName {
             EventName::BuildFinished => "build.finished",
             EventName::DeployFinished => "deploy.finished",
             EventName::AppRestarted => "app.restarted",
+            EventName::AppFailed => "app.failed",
         }
     }
 
@@ -136,5 +138,6 @@ mod tests {
         assert_eq!(EventName::DeployRequested.as_str(), "deploy.requested");
         assert_eq!(EventName::BuildStarted.as_str(), "build.started");
         assert_eq!(EventName::AppRestarted.as_str(), "app.restarted");
+        assert_eq!(EventName::AppFailed.as_str(), "app.failed");
     }
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# riku-notify: subscribes to the app.restarted event (PLUGIN_PROTOCOL.md §7)
-# and posts an incident report to whichever channels are configured via env
-# vars. Each channel is independent — set only the ones you want.
+# riku-notify: subscribes to app.restarted and app.failed (PLUGIN_PROTOCOL.md
+# §7) and posts an incident report to whichever channels are configured via
+# env vars. Each channel is independent — set only the ones you want.
 #
 #   RIKU_NOTIFY_WEBHOOK_URL              generic JSON POST
 #   RIKU_NOTIFY_DISCORD_WEBHOOK_URL      Discord incoming webhook
@@ -15,25 +15,39 @@ set -euo pipefail
 JSON="$(cat)"
 
 # Pulls a top-level or "data"-nested field out of the single-line event
-# envelope (see EventEnvelope::to_json_line) without depending on jq.
+# envelope (see EventEnvelope::to_json_line) without depending on jq. Always
+# exits 0, even when the key is absent (e.g. max_restarts on app.restarted) —
+# under `set -o pipefail`, grep's "no match" exit code would otherwise
+# propagate and, combined with `set -e`, silently kill the whole script the
+# moment an optional field is looked up.
 field() {
-  printf '%s' "$JSON" \
+  { printf '%s' "$JSON" \
     | grep -o "\"$1\":\"[^\"]*\"\|\"$1\":[^,}]*" \
     | head -n1 \
     | sed -e "s/\"$1\"://" -e 's/^"//' -e 's/"$//'
+  } || true
 }
 
+EVENT="$(field event)"
 APP="${RIKU_APP:-$(field app)}"
 INSTANCE="$(field instance)"
 EXIT_CODE="$(field exit_code)"
 RESTART_COUNT="$(field restart_count)"
+MAX_RESTARTS="$(field max_restarts)"
+MAX_RESTARTS="${MAX_RESTARTS:-null}"
 
-MESSAGE="riku: ${APP} (${INSTANCE}) crashed and was restarted (exit code ${EXIT_CODE}, restart #${RESTART_COUNT})"
+if [ "$EVENT" = "app.failed" ]; then
+  # riku gave up — this is the more urgent of the two, since nothing will
+  # bring the instance back without manual intervention.
+  MESSAGE="riku: ${APP} (${INSTANCE}) crashed repeatedly and is no longer supervised (exit code ${EXIT_CODE}, restart_count ${RESTART_COUNT}/${MAX_RESTARTS} — manual intervention needed)"
+else
+  MESSAGE="riku: ${APP} (${INSTANCE}) crashed and was restarted (exit code ${EXIT_CODE}, restart #${RESTART_COUNT})"
+fi
 
 if [ -n "${RIKU_NOTIFY_WEBHOOK_URL:-}" ]; then
   curl -fsS -m 10 -X POST "$RIKU_NOTIFY_WEBHOOK_URL" \
     -H 'content-type: application/json' \
-    -d "{\"app\":\"$APP\",\"instance\":\"$INSTANCE\",\"exit_code\":${EXIT_CODE},\"restart_count\":${RESTART_COUNT},\"message\":\"$MESSAGE\"}" \
+    -d "{\"event\":\"$EVENT\",\"app\":\"$APP\",\"instance\":\"$INSTANCE\",\"exit_code\":${EXIT_CODE},\"restart_count\":${RESTART_COUNT},\"max_restarts\":${MAX_RESTARTS},\"message\":\"$MESSAGE\"}" \
     >/dev/null 2>&1 || echo "riku-notify: webhook delivery failed" >&2
 fi
 

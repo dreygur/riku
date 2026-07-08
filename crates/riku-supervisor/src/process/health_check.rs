@@ -140,6 +140,19 @@ impl ProcessManager {
 
         for process_id in to_restart {
             if let Some(id) = process_id.strip_prefix("__remove__") {
+                // Fire app.failed before removing — this is the one case
+                // restart_process() never reaches, and it's the case an
+                // admin most needs to hear about (riku has given up, not
+                // just self-healed).
+                if let Some(p) = self.processes.get(id) {
+                    emit_app_failed(
+                        p.config.worker.app.clone(),
+                        id.to_string(),
+                        p.last_exit_code,
+                        p.restart_count,
+                        p.config.options.max_restarts,
+                    );
+                }
                 // Remove the dead entry so Drop reaps the zombie child.
                 self.processes.remove(id);
                 tracing::error!(
@@ -270,6 +283,33 @@ fn emit_app_restarted(app: String, instance: String, exit_code: Option<i32>, res
     });
 }
 
+/// Fire the `app.failed` lifecycle event for a process that crashed enough
+/// times to hit `max_restarts` and is being permanently removed from
+/// supervision — the case `emit_app_restarted` never covers, since
+/// `restart_process()` (and therefore that emit call) is never reached once
+/// riku gives up.
+fn emit_app_failed(
+    app: String,
+    instance: String,
+    exit_code: Option<i32>,
+    restart_count: u32,
+    max_restarts: u32,
+) {
+    std::thread::spawn(move || {
+        let paths = riku_config::RikuPaths::from_env();
+        EventBus::new(&paths).publish(
+            EventName::AppFailed,
+            &app,
+            serde_json::json!({
+                "instance": instance,
+                "exit_code": exit_code,
+                "restart_count": restart_count,
+                "max_restarts": max_restarts,
+            }),
+        );
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::test_support::minimal_config;
@@ -280,25 +320,17 @@ mod tests {
     use std::sync::Mutex;
     use tempfile::TempDir;
 
-    // `emit_app_restarted` reads `RIKU_ROOT` via `RikuPaths::from_env()`, and
-    // the notifier plugin reads `RIKU_NOTIFY_WEBHOOK_URL` — both are process
-    // env vars. Serialize tests in this module that touch them so they don't
-    // race each other (no other test in this crate reads these names).
+    // `emit_app_restarted`/`emit_app_failed` read `RIKU_ROOT` via
+    // `RikuPaths::from_env()`, and the notifier plugin reads
+    // `RIKU_NOTIFY_WEBHOOK_URL` — both are process env vars. Serialize tests
+    // in this module that touch them so they don't race each other (no other
+    // test in this crate reads these names).
     static ENV_GUARD: Mutex<()> = Mutex::new(());
 
-    /// A real crash, detected through the actual `check_processes()` entry
-    /// point (not a hand-rolled shortcut), must reach the real
-    /// `plugins/riku-notify` bundle and deliver a webhook with the crashed
-    /// process's real exit code, instance id, and restart count.
-    #[test]
-    fn crash_triggers_app_restarted_event_through_the_real_notify_plugin() {
-        let _guard = ENV_GUARD.lock().unwrap();
-
-        let tmp = TempDir::new().unwrap();
-        let riku_root = tmp.path().join(".riku");
-
-        // Install the real bundle exactly as `riku install-plugins --only
-        // riku-notify` would, not a test fixture standing in for it.
+    /// Installs the real `plugins/riku-notify` bundle into `riku_root`,
+    /// exactly as `riku install-plugins --plugins riku-notify` would — not a
+    /// test fixture standing in for it.
+    fn install_real_notify_plugin(riku_root: &Path) {
         // CARGO_MANIFEST_DIR = .../riku/crates/riku-supervisor
         let repo_bundle = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/riku-notify");
         let dest = riku_root.join("plugins").join("riku-notify");
@@ -318,14 +350,17 @@ mod tests {
             )
             .unwrap();
         }
+    }
 
-        // Non-blocking with its own deadline: if the plugin never fires (a
-        // real regression, or the env-var-timing race this test used to
-        // have), this must fail loudly rather than hang the whole suite.
+    /// Spins up a one-shot HTTP listener on `127.0.0.1:0` and returns its
+    /// port plus a join handle yielding the raw request once received (or
+    /// `None` past its own deadline) — so a plugin that never fires a
+    /// regression fails the test loudly instead of hanging the suite.
+    fn one_shot_webhook_listener() -> (u16, std::thread::JoinHandle<Option<String>>) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let port = listener.local_addr().unwrap().port();
-        let received = std::thread::spawn(move || {
+        let handle = std::thread::spawn(move || {
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
             loop {
                 match listener.accept() {
@@ -346,7 +381,22 @@ mod tests {
                 }
             }
         });
+        (port, handle)
+    }
 
+    /// A real crash, detected through the actual `check_processes()` entry
+    /// point (not a hand-rolled shortcut), must reach the real
+    /// `plugins/riku-notify` bundle and deliver a webhook with the crashed
+    /// process's real exit code, instance id, and restart count.
+    #[test]
+    fn crash_triggers_app_restarted_event_through_the_real_notify_plugin() {
+        let _guard = ENV_GUARD.lock().unwrap();
+
+        let tmp = TempDir::new().unwrap();
+        let riku_root = tmp.path().join(".riku");
+        install_real_notify_plugin(&riku_root);
+
+        let (port, received) = one_shot_webhook_listener();
         std::env::set_var("RIKU_ROOT", &riku_root);
         std::env::set_var(
             "RIKU_NOTIFY_WEBHOOK_URL",
@@ -400,6 +450,10 @@ mod tests {
         std::env::remove_var("RIKU_ROOT");
 
         assert!(request.contains("POST /incident"), "got: {request}");
+        assert!(
+            request.contains("\"event\":\"app.restarted\""),
+            "got: {request}"
+        );
         assert!(request.contains("\"app\":\"testapp\""), "got: {request}");
         assert!(
             request.contains("\"instance\":\"testapp-web-1\""),
@@ -407,5 +461,77 @@ mod tests {
         );
         assert!(request.contains("\"exit_code\":42"), "got: {request}");
         assert!(request.contains("\"restart_count\":1"), "got: {request}");
+    }
+
+    /// A crash that exceeds `max_restarts` never reaches `restart_process()`
+    /// — it goes straight to removal — so `app.failed` has its own emit site
+    /// (`emit_app_failed`, called from the `__remove__` branch). Verify it
+    /// actually fires, with `max_restarts: 0` so the very first crash
+    /// detection is already "gave up" and there's no backoff to wait out.
+    #[test]
+    fn exhausted_retries_triggers_app_failed_event_through_the_real_notify_plugin() {
+        let _guard = ENV_GUARD.lock().unwrap();
+
+        let tmp = TempDir::new().unwrap();
+        let riku_root = tmp.path().join(".riku");
+        install_real_notify_plugin(&riku_root);
+
+        let (port, received) = one_shot_webhook_listener();
+        std::env::set_var("RIKU_ROOT", &riku_root);
+        std::env::set_var(
+            "RIKU_NOTIFY_WEBHOOK_URL",
+            format!("http://127.0.0.1:{port}/incident"),
+        );
+
+        let log_path = tmp.path().join("test.log");
+        let mut config = minimal_config(
+            "sh -c 'exit 7'",
+            tmp.path().to_str().unwrap(),
+            log_path.to_str().unwrap(),
+        );
+        config.options.max_restarts = 0;
+
+        let mut pm = ProcessManager::new().expect("ProcessManager::new should succeed");
+        pm.spawn_process(&config).expect("spawn should succeed");
+
+        // Poll the real production entry point until the crash is detected
+        // and the process is permanently removed (max_restarts exceeded).
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        loop {
+            pm.check_processes()
+                .expect("check_processes should not error");
+            if !pm.processes.contains_key("testapp-web-1") {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "crash was never detected and the process was never given up on"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+
+        // Same reasoning as the sibling test above: keep the env vars alive
+        // until the webhook has actually been observed.
+        let request = received
+            .join()
+            .expect("webhook listener thread should not panic")
+            .expect("plugin never delivered the webhook within the deadline");
+
+        std::env::remove_var("RIKU_NOTIFY_WEBHOOK_URL");
+        std::env::remove_var("RIKU_ROOT");
+
+        assert!(request.contains("POST /incident"), "got: {request}");
+        assert!(
+            request.contains("\"event\":\"app.failed\""),
+            "got: {request}"
+        );
+        assert!(request.contains("\"app\":\"testapp\""), "got: {request}");
+        assert!(
+            request.contains("\"instance\":\"testapp-web-1\""),
+            "got: {request}"
+        );
+        assert!(request.contains("\"exit_code\":7"), "got: {request}");
+        assert!(request.contains("\"restart_count\":0"), "got: {request}");
+        assert!(request.contains("\"max_restarts\":0"), "got: {request}");
     }
 }
