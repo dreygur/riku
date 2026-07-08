@@ -208,8 +208,6 @@ impl ProcessManager {
             .and_then(|p: &String| p.parse::<u16>().ok())
     }
 
-
-
     /// Restart a specific process.
     pub(super) fn restart_process(&mut self, process_id: &str) -> Result<()> {
         tracing::info!("Restarting process: {}", process_id);
@@ -356,8 +354,7 @@ mod tests {
             loop {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
-                        let _ = stream
-                            .set_read_timeout(Some(std::time::Duration::from_secs(5)));
+                        let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(5)));
                         let mut buf = [0u8; 4096];
                         let n = stream.read(&mut buf).unwrap_or(0);
                         let _ = stream.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n");
@@ -394,7 +391,8 @@ mod tests {
         // and restarted, rather than reaching into internals to force it.
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
         loop {
-            pm.check_processes().expect("check_processes should not error");
+            pm.check_processes()
+                .expect("check_processes should not error");
             let restarted = pm
                 .processes
                 .get("testapp-web-1")

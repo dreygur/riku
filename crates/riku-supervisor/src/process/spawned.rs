@@ -66,7 +66,7 @@ impl SpawnedProcess {
                 false // Process has exited
             }
             Ok(None) => true, // Process is still running
-            Err(_) => false, // Error checking status, assume dead
+            Err(_) => false,  // Error checking status, assume dead
         }
     }
 

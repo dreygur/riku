@@ -49,7 +49,10 @@ pub fn cmd_install_plugins(paths: &RikuPaths, only: Option<Vec<String>>) -> Resu
     let mut failed = 0;
 
     for name in &targets {
-        let bundle_files = BUNDLE_PLUGINS.iter().find(|(n, _)| n == name).map(|(_, f)| *f);
+        let bundle_files = BUNDLE_PLUGINS
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, f)| *f);
 
         let result = if SHELL_PLUGINS.contains(name) {
             download_shell_plugin(name, paths)

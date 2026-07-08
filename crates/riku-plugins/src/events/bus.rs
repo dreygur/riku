@@ -260,8 +260,7 @@ mod tests {
 
         // Copy the repo's real plugins/riku-notify/ bundle into the temp
         // plugin root — the actual shipped manifest + script, not a fixture.
-        let repo_bundle =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/riku-notify");
+        let repo_bundle = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/riku-notify");
         let dest = paths.plugin_root.join("riku-notify");
         std::fs::create_dir_all(dest.join("bin")).unwrap();
         std::fs::copy(
@@ -273,8 +272,11 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(dest.join("bin/on-event"), std::fs::Permissions::from_mode(0o755))
-                .unwrap();
+            std::fs::set_permissions(
+                dest.join("bin/on-event"),
+                std::fs::Permissions::from_mode(0o755),
+            )
+            .unwrap();
         }
 
         // Minimal one-shot HTTP server: accept a single connection, read the
@@ -304,7 +306,10 @@ mod tests {
 
         let request = received.join().unwrap();
         assert!(request.contains("POST /incident"), "got: {request}");
-        assert!(request.contains("\"instance\":\"demo-app.web.0\""), "got: {request}");
+        assert!(
+            request.contains("\"instance\":\"demo-app.web.0\""),
+            "got: {request}"
+        );
         assert!(request.contains("\"exit_code\":137"), "got: {request}");
         assert!(request.contains("\"restart_count\":2"), "got: {request}");
     }
