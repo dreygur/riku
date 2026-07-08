@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { PageHeader } from "@/components/riku/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
@@ -13,7 +14,7 @@ function Field({
   ...props
 }: React.ComponentProps<typeof Input> & { label: string }) {
   return (
-    <span className="inline-flex flex-col gap-1">
+    <span className="flex w-full flex-col gap-1 sm:w-auto">
       <span className="text-[10px] tracking-wider text-muted-foreground uppercase">
         {label}
       </span>
@@ -63,9 +64,7 @@ export default function MarketplacePage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="font-mono text-sm tracking-widest text-muted-foreground uppercase">
-        marketplace
-      </h1>
+      <PageHeader title="marketplace" />
 
       {/* search + install */}
       <section className="border border-border bg-card">
@@ -102,8 +101,7 @@ export default function MarketplacePage() {
                   <span className="flex-1" />
                   <Button
                     size="sm"
-                    variant="secondary"
-                    className="border-[#3fd07f]/30"
+                    variant="accent"
                     disabled={isPending(installKey)}
                     onClick={() =>
                       run(installKey, `Installed ${h.name}`, () => api.pluginInstall(h.source))
@@ -125,7 +123,7 @@ export default function MarketplacePage() {
             sources
           </span>
           <span className="hidden flex-1 sm:block" />
-          <div className="flex items-end gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <Field
               label="source"
               value={url}
@@ -149,7 +147,7 @@ export default function MarketplacePage() {
             No sources. The repo itself is a marketplace:{" "}
             <button
               type="button"
-              className="text-[#3fd07f] underline underline-offset-2 hover:text-[#3fd07f]/80"
+              className="text-primary underline underline-offset-2 hover:text-primary/80"
               disabled={isPending("add-source")}
               onClick={() => addSource(DEFAULT_SOURCE)}
             >
@@ -171,8 +169,7 @@ export default function MarketplacePage() {
                   <span className="flex-1" />
                   <Button
                     size="sm"
-                    variant="ghost"
-                    className="text-muted-foreground hover:text-destructive"
+                    variant="destructive"
                     disabled={isPending(removeKey)}
                     onClick={() =>
                       run(removeKey, `Removed ${s.name}`, () => api.marketRemove(s.name))
@@ -194,7 +191,7 @@ export default function MarketplacePage() {
             trust keyring
           </span>
           <span className="hidden flex-1 sm:block" />
-          <div className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
             <Field
               label="author"
               value={keyName}
@@ -211,7 +208,7 @@ export default function MarketplacePage() {
             />
             <Button
               size="sm"
-              variant="secondary"
+              variant="accent"
               className="shrink-0"
               disabled={!keyName || !keyVal || isPending("trust")}
               onClick={() =>
@@ -241,8 +238,7 @@ export default function MarketplacePage() {
                   <span className="flex-1" />
                   <Button
                     size="sm"
-                    variant="ghost"
-                    className="text-muted-foreground hover:text-destructive"
+                    variant="destructive"
                     disabled={isPending(untrustKey)}
                     onClick={() =>
                       run(untrustKey, `Untrusted ${k.name}`, () => api.trustRemove(k.name))

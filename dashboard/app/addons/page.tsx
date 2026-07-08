@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { PageHeader } from "@/components/riku/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { confirmDialog } from "@/components/riku/confirm-dialog";
@@ -13,7 +14,7 @@ function Field({
   ...props
 }: React.ComponentProps<typeof Input> & { label: string }) {
   return (
-    <span className="inline-flex flex-col gap-1">
+    <span className="flex w-full flex-col gap-1 sm:w-auto">
       <span className="text-[10px] tracking-wider text-muted-foreground uppercase">
         {label}
       </span>
@@ -44,11 +45,11 @@ export default function AddonsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="mb-3 font-mono text-sm tracking-widest text-muted-foreground uppercase">
-          managed datastores
-        </h1>
+        <div className="mb-3">
+          <PageHeader title="managed datastores" />
+        </div>
         {/* create */}
-        <div className="flex flex-wrap items-end gap-2 border border-border bg-card p-3">
+        <div className="flex flex-col gap-2 border border-border bg-card p-3 sm:flex-row sm:flex-wrap sm:items-end">
           <Field
             label="addon plugin"
             value={plugin}
@@ -65,8 +66,7 @@ export default function AddonsPage() {
           />
           <Button
             size="sm"
-            variant="secondary"
-            className="border-[#3fd07f]/30"
+            variant="accent"
             disabled={!plugin || !name || isPending("provision")}
             onClick={() =>
               run("provision", `Provisioned ${name}`, async () => {
@@ -120,8 +120,7 @@ export default function AddonsPage() {
                 </Button>
                 <Button
                   size="sm"
-                  variant="secondary"
-                  className="hover:border-destructive/50 hover:text-destructive"
+                  variant="destructive"
                   disabled={isPending(destroyKey)}
                   onClick={async () => {
                     const ok = await confirmDialog(
@@ -136,7 +135,7 @@ export default function AddonsPage() {
                   {isPending(destroyKey) ? "destroying…" : "destroy"}
                 </Button>
               </div>
-              <div className="flex flex-wrap items-end gap-2 px-4 py-3">
+              <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-end">
                 <Field
                   label="app name"
                   value={bindApp[inst.instance] ?? ""}

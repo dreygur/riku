@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { PageHeader } from "@/components/riku/page-header";
 import { Sparkline } from "@/components/riku/sparkline";
 import { api, fmtBytes } from "@/lib/api";
 import type { RikuState } from "@/lib/types";
@@ -54,14 +55,14 @@ export default function MetricsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
-        <h1 className="font-mono text-sm tracking-widest text-muted-foreground uppercase">
-          live metrics
-        </h1>
-        <span className="font-mono text-xs text-muted-foreground">
-          total mem <span className="text-foreground">{fmtBytes(totalMem)}</span> · 2s sample
-        </span>
-      </div>
+      <PageHeader
+        title="live metrics"
+        meta={
+          <span className="font-mono text-xs text-muted-foreground">
+            total mem <span className="text-foreground">{fmtBytes(totalMem)}</span> · 2s sample
+          </span>
+        }
+      />
 
       {state.apps.map((app) => (
         <section key={app.app} className="border border-border bg-card">
@@ -85,14 +86,14 @@ export default function MetricsPage() {
                     <span className="w-8 shrink-0 text-[10px] tracking-wider text-muted-foreground uppercase">
                       mem
                     </span>
-                    <Sparkline data={h.mem} stroke="#5b9dd9" />
+                    <Sparkline data={h.mem} stroke="var(--color-info)" />
                     <span className="shrink-0 text-muted-foreground">{fmtBytes(w.memory_bytes)}</span>
                   </span>
                   <span className="flex min-w-0 items-center gap-3">
                     <span className="w-8 shrink-0 text-[10px] tracking-wider text-muted-foreground uppercase">
                       cpu
                     </span>
-                    <Sparkline data={h.cpu} stroke="#e8b54a" />
+                    <Sparkline data={h.cpu} stroke="var(--color-warn)" />
                     <span className="shrink-0 text-muted-foreground">
                       {h.cpu.length ? `${h.cpu[h.cpu.length - 1]}ms/s` : "—"}
                     </span>

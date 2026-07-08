@@ -83,7 +83,7 @@ export function TopNav() {
       </button>
 
       <Link href="/" className="font-mono text-lg font-bold">
-        riku<span className="text-[#3fd07f] motion-safe:animate-pulse">▌</span>
+        riku<span className="text-primary motion-safe:animate-pulse">▌</span>
       </Link>
 
       <nav className="hidden items-center gap-1 md:flex">
@@ -109,7 +109,7 @@ export function TopNav() {
       <span
         className={cn(
           "h-1.5 w-1.5 shrink-0",
-          live ? "bg-[#3fd07f] motion-safe:animate-pulse" : "bg-muted-foreground/40",
+          live ? "bg-primary motion-safe:animate-pulse" : "bg-muted-foreground/40",
         )}
         title={live ? "live" : "offline"}
       />
@@ -118,7 +118,7 @@ export function TopNav() {
         <SheetContent side="left" className="w-64 border-r border-border bg-background p-0">
           <SheetHeader className="border-b border-border px-4 py-3">
             <SheetTitle className="font-mono text-base font-bold">
-              riku<span className="text-[#3fd07f]">▌</span>
+              riku<span className="text-primary">▌</span>
             </SheetTitle>
           </SheetHeader>
           <nav className="flex flex-col gap-1 p-2">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PageHeader } from "@/components/riku/page-header";
 import { api } from "@/lib/api";
 import type { PluginsList } from "@/lib/types";
 
@@ -43,9 +44,7 @@ export default function PluginsPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className="font-mono text-sm tracking-widest text-muted-foreground uppercase">
-        plugins
-      </h1>
+      <PageHeader title="plugins" />
 
       <Section title="runtimes" count={data.runtimes.length}>
         <div className="flex flex-wrap gap-2 px-4 py-3">

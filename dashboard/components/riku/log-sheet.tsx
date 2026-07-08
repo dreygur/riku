@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { XIcon } from "lucide-react";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 
 type Line = { tag: string; text: string };
@@ -47,11 +55,18 @@ export function LogSheet({
       <SheetContent
         side="bottom"
         className="h-[52vh] border-t border-border bg-[#0a0c0e] p-0"
+        showCloseButton={false}
       >
-        <SheetHeader className="border-b border-border px-4 py-2.5">
+        <SheetHeader className="flex-row items-center justify-between gap-3 border-b border-border px-4 py-2.5">
           <SheetTitle className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
             logs · {app}
           </SheetTitle>
+          <SheetClose asChild>
+            <Button variant="ghost" size="icon-sm" className="shrink-0">
+              <XIcon />
+              <span className="sr-only">Close</span>
+            </Button>
+          </SheetClose>
         </SheetHeader>
         <ScrollArea className="h-[calc(52vh-44px)]">
           <div ref={boxRef} className="px-4 py-3 font-mono text-xs leading-relaxed">

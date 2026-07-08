@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PageHeader } from "@/components/riku/page-header";
 import { StatusDot } from "@/components/riku/status-dot";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -35,23 +36,24 @@ export default function DoctorPage() {
 
   return (
     <div>
-      <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <h1 className="font-mono text-sm tracking-widest text-muted-foreground uppercase">
-          system diagnostics
-        </h1>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          {checks && (
-            <span className="font-mono text-xs text-muted-foreground">
-              <span className="text-[#3fd07f]">{counts.ok ?? 0} ok</span> ·{" "}
-              <span className="text-[#e8b54a]">{counts.warn ?? 0} warn</span> ·{" "}
-              <span className="text-[#f25f5c]">{counts.fail ?? 0} fail</span>
-            </span>
-          )}
-          <span className="hidden flex-1 sm:block" />
-          <Button size="sm" variant="secondary" disabled={loading} onClick={run}>
-            {loading ? "running…" : "re-run"}
-          </Button>
-        </div>
+      <div className="mb-5">
+        <PageHeader
+          title="system diagnostics"
+          meta={
+            checks && (
+              <span className="font-mono text-xs text-muted-foreground">
+                <span className="text-primary">{counts.ok ?? 0} ok</span> ·{" "}
+                <span className="text-warn">{counts.warn ?? 0} warn</span> ·{" "}
+                <span className="text-destructive">{counts.fail ?? 0} fail</span>
+              </span>
+            )
+          }
+          actions={
+            <Button size="sm" variant="secondary" disabled={loading} onClick={run}>
+              {loading ? "running…" : "re-run"}
+            </Button>
+          }
+        />
       </div>
 
       <div className="border border-border bg-card">

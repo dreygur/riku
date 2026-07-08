@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { AppCard } from "@/components/riku/app-card";
 import { EnvEditor } from "@/components/riku/env-editor";
+import { PageHeader } from "@/components/riku/page-header";
 import { Button } from "@/components/ui/button";
 import { confirmDialog } from "@/components/riku/confirm-dialog";
 import { api } from "@/lib/api";
@@ -40,7 +41,7 @@ export default function AppDetail({ params }: { params: Promise<{ app: string }>
     return (
       <div className="py-20 text-center text-muted-foreground">
         App <code className="font-mono text-foreground">{app}</code> not found.{" "}
-        <Link href="/" className="text-[#3fd07f] underline">
+        <Link href="/" className="text-primary underline">
           back to overview
         </Link>
       </div>
@@ -53,53 +54,54 @@ export default function AppDetail({ params }: { params: Promise<{ app: string }>
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <Link href="/" className="font-mono text-xs text-muted-foreground hover:text-foreground">
-          ‹ overview
-        </Link>
-        <h1 className="font-mono text-xl font-bold">{state.app}</h1>
-        <span className="flex-1" />
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={isPending("backup")}
-          onClick={() => run("backup", `Backed up ${state.app}`, () => api.backup(state.app))}
-        >
-          {isPending("backup") ? "backing up…" : "back up app"}
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={restoring}
-          onClick={() => restoreInput.current?.click()}
-        >
-          {restoring ? "restoring…" : "restore from file"}
-        </Button>
-        <input
-          ref={restoreInput}
-          type="file"
-          accept=".gz,.tar.gz,application/gzip"
-          className="hidden"
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            e.target.value = "";
-            if (!file) return;
-            const ok = await confirmDialog(
-              `Restore ${state.app} from "${file.name}"? This overwrites the app's current source, env, and data.`,
-            );
-            if (!ok) return;
-            setRestoring(true);
-            api
-              .restore(state.app, file)
-              .then(() => {
-                toast.success(`Restored ${state.app} — redeploy or restart to bring it up`);
-                load();
-              })
-              .catch((err) => toast.error(`Restore failed: ${err.message}`))
-              .finally(() => setRestoring(false));
-          }}
-        />
-      </div>
+      <PageHeader
+        title={state.app}
+        variant="title"
+        actions={
+          <>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={isPending("backup")}
+              onClick={() => run("backup", `Backed up ${state.app}`, () => api.backup(state.app))}
+            >
+              {isPending("backup") ? "backing up…" : "back up app"}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={restoring}
+              onClick={() => restoreInput.current?.click()}
+            >
+              {restoring ? "restoring…" : "restore from file"}
+            </Button>
+            <input
+              ref={restoreInput}
+              type="file"
+              accept=".gz,.tar.gz,application/gzip"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                const ok = await confirmDialog(
+                  `Restore ${state.app} from "${file.name}"? This overwrites the app's current source, env, and data.`,
+                );
+                if (!ok) return;
+                setRestoring(true);
+                api
+                  .restore(state.app, file)
+                  .then(() => {
+                    toast.success(`Restored ${state.app} — redeploy or restart to bring it up`);
+                    load();
+                  })
+                  .catch((err) => toast.error(`Restore failed: ${err.message}`))
+                  .finally(() => setRestoring(false));
+              }}
+            />
+          </>
+        }
+      />
 
       <AppCard app={state} onChanged={load} />
       <EnvEditor app={state.app} />

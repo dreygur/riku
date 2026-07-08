@@ -60,7 +60,7 @@ export function EnvEditor({ app }: { app: string }) {
         <Button size="sm" variant="ghost" onClick={() => setRows((r) => [...r, { key: "", value: "" }])}>
           + add
         </Button>
-        <Button size="sm" variant="secondary" className="border-[#3fd07f]/30" disabled={saving} onClick={save}>
+        <Button size="sm" variant="accent" disabled={saving} onClick={save}>
           {saving ? "saving…" : "save"}
         </Button>
       </div>

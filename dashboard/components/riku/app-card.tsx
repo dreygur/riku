@@ -65,7 +65,7 @@ export function AppCard({ app, onChanged }: { app: AppState; onChanged: () => vo
         </button>
         <Link
           href={`/apps/${app.app}`}
-          className="font-mono text-base font-bold hover:text-[#3fd07f]"
+          className="font-mono text-base font-bold hover:text-primary"
         >
           {app.app}
         </Link>
@@ -85,7 +85,7 @@ export function AppCard({ app, onChanged }: { app: AppState; onChanged: () => vo
           nginx {app.nginx.enabled ? "live" : app.nginx.config_exists ? "staged" : "off"}
         </span>
         {busy && (
-          <span className="border border-[var(--warn)]/40 px-2 py-0.5 font-mono text-[11px] text-[var(--warn)]">
+          <span className="border border-warn/40 px-2 py-0.5 font-mono text-[11px] text-warn">
             deploying…
           </span>
         )}
@@ -138,9 +138,9 @@ export function AppCard({ app, onChanged }: { app: AppState; onChanged: () => vo
                       <span className="text-[9px] tracking-wider text-muted-foreground uppercase">
                         mem
                       </span>
-                      <span className="block h-[6px] w-full bg-[#242a33]">
+                      <span className="block h-[6px] w-full bg-border">
                         <span
-                          className="block h-full bg-[#5b9dd9]"
+                          className="block h-full bg-info"
                           style={{ width: `${pct}%` }}
                         />
                       </span>
@@ -155,7 +155,7 @@ export function AppCard({ app, onChanged }: { app: AppState; onChanged: () => vo
                       </span>
                       <span
                         className={`sm:text-right ${
-                          w.restart_count > 0 ? "text-[var(--warn)]" : "text-muted-foreground"
+                          w.restart_count > 0 ? "text-warn" : "text-muted-foreground"
                         }`}
                       >
                         ↻{w.restart_count}
@@ -179,8 +179,8 @@ export function AppCard({ app, onChanged }: { app: AppState; onChanged: () => vo
                           </Button>
                           <Button
                             size="sm"
-                            variant="secondary"
-                            className="h-6 px-2 text-[10px] hover:border-destructive/50 hover:text-destructive"
+                            variant="destructive"
+                            className="h-6 px-2 text-[10px]"
                             disabled={isPending(deleteKey)}
                             onClick={async () => {
                               const ok = await confirmDialog(
@@ -218,9 +218,8 @@ export function AppCard({ app, onChanged }: { app: AppState; onChanged: () => vo
             </Button>
             <Button
               size="sm"
-              variant="secondary"
+              variant="accent"
               disabled={busy || isPending("redeploy")}
-              className="border-primary/30"
               onClick={() => run("redeploy", "Redeployed", () => api.redeploy(app.app))}
             >
               {isPending("redeploy") ? "redeploying…" : "redeploy"}
@@ -282,9 +281,8 @@ export function AppCard({ app, onChanged }: { app: AppState; onChanged: () => vo
             </Button>
             <Button
               size="sm"
-              variant="secondary"
+              variant="destructive"
               disabled={busy || isPending("stop")}
-              className="hover:border-destructive/50 hover:text-destructive"
               onClick={async () => {
                 const ok = await confirmDialog(`Stop ${app.app}? Its workers will be shut down.`);
                 if (ok) run("stop", "Stopped", () => api.stop(app.app));

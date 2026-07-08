@@ -1,7 +1,7 @@
 export function Sparkline({
   data,
   max,
-  stroke = "#5b9dd9",
+  stroke = "var(--color-info)",
   width = 140,
   height = 30,
 }: {

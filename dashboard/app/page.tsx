@@ -38,7 +38,7 @@ export default function Overview() {
         <br />
         <br />
         Push one:{" "}
-        <code className="bg-card px-2 py-1 font-mono text-[#3fd07f]">git push riku main</code>
+        <code className="bg-card px-2 py-1 font-mono text-primary">git push riku main</code>
       </div>
     );
   }
