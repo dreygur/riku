@@ -61,25 +61,56 @@ impl EventName {
 pub struct EventEnvelope {
     /// Protocol version that produced this event.
     pub api: u32,
-    /// Dotted event name ([`EventName::as_str`]).
-    pub event: &'static str,
+    /// Dotted event name. A `String`, not `&'static str`: kernel events use a
+    /// fixed name from [`EventName`], but `plugin.custom.*` events (§7.4) are
+    /// dynamic strings supplied at emit time.
+    pub event: String,
     /// RFC 3339 / ISO 8601 UTC timestamp.
     pub ts: String,
     /// App the event concerns.
     pub app: String,
     /// Event-specific payload.
     pub data: serde_json::Value,
+    /// `None` for kernel-emitted events. `Some(plugin_name)` for a
+    /// `plugin.custom.*` event — always kernel-set from the emitting
+    /// plugin's own manifest, never a value the plugin could supply itself,
+    /// so a subscriber can trust this field to tell kernel-truth from
+    /// plugin-claimed (`PLUGIN_PROTOCOL.md` §7.4).
+    pub source_plugin: Option<String>,
 }
 
 impl EventEnvelope {
-    /// Build an envelope stamped with the current API version and UTC time.
+    /// Build a kernel-emitted envelope stamped with the current API version
+    /// and UTC time. `source_plugin` is always `None`.
     pub fn new(event: EventName, app: impl Into<String>, data: serde_json::Value) -> Self {
         Self {
             api: RIKU_PLUGIN_API,
-            event: event.as_str(),
+            event: event.as_str().to_string(),
             ts: chrono::Utc::now().to_rfc3339(),
             app: app.into(),
             data,
+            source_plugin: None,
+        }
+    }
+
+    /// Build a plugin-emitted envelope. `name` must already be validated as
+    /// `plugin.custom.*` by the caller (`riku plugin-emit` — §7.4); this
+    /// constructor doesn't re-check it, since it's the one place
+    /// `source_plugin` is ever set to `Some`, and that's what subscribers
+    /// rely on to distinguish it from a kernel event.
+    pub fn new_custom(
+        name: impl Into<String>,
+        source_plugin: impl Into<String>,
+        app: impl Into<String>,
+        data: serde_json::Value,
+    ) -> Self {
+        Self {
+            api: RIKU_PLUGIN_API,
+            event: name.into(),
+            ts: chrono::Utc::now().to_rfc3339(),
+            app: app.into(),
+            data,
+            source_plugin: Some(source_plugin.into()),
         }
     }
 
@@ -131,6 +162,22 @@ mod tests {
         assert_eq!(parsed["app"], "myapp");
         assert_eq!(parsed["data"]["runtime"], "node");
         assert!(parsed["ts"].as_str().unwrap().contains('T'));
+        assert!(parsed["source_plugin"].is_null());
+    }
+
+    #[test]
+    fn custom_envelope_carries_source_plugin() {
+        let env = EventEnvelope::new_custom(
+            "plugin.custom.something",
+            "my-plugin",
+            "myapp",
+            serde_json::json!({ "k": "v" }),
+        );
+        let line = env.to_json_line().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(parsed["event"], "plugin.custom.something");
+        assert_eq!(parsed["source_plugin"], "my-plugin");
+        assert_eq!(parsed["app"], "myapp");
     }
 
     #[test]

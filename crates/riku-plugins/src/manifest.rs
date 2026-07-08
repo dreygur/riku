@@ -62,6 +62,11 @@ pub struct EventSubscription {
     /// first. Default `0`. Ties keep filesystem discovery order (unspecified).
     #[serde(default)]
     pub priority: i32,
+    /// Opt-in: this plugin may emit its own `plugin.custom.*` events via
+    /// `riku plugin-emit`. Default `false` — a plugin that only subscribes
+    /// need not (and should not) declare this.
+    #[serde(default)]
+    pub emit: bool,
 }
 
 /// Filter-subscription block; present iff the plugin registers filters.

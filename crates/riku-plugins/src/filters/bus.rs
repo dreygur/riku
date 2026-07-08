@@ -82,6 +82,7 @@ impl<'a> FilterBus<'a> {
             .current_dir(bundle)
             .env("RIKU_PLUGIN_API", RIKU_PLUGIN_API.to_string())
             .env("RIKU_ROOT", &self.paths.riku_root)
+            .env("RIKU_PLUGIN_NAME", &manifest.name)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

@@ -40,6 +40,21 @@ impl<'a> EventBus<'a> {
         self.emit(&EventEnvelope::new(event, app, data));
     }
 
+    /// Publish a `plugin.custom.*` event on behalf of `source_plugin`
+    /// (`riku plugin-emit` — `PLUGIN_PROTOCOL.md` §7.4). Callers are
+    /// responsible for having already validated `name`'s namespace and that
+    /// `source_plugin` declared `events.emit = true`; this method just
+    /// builds the envelope and delivers it like any other event.
+    pub fn publish_custom(
+        &self,
+        name: &str,
+        source_plugin: &str,
+        app: &str,
+        data: serde_json::Value,
+    ) {
+        self.emit(&EventEnvelope::new_custom(name, source_plugin, app, data));
+    }
+
     /// Log the event and deliver it to every subscriber.
     pub fn emit(&self, envelope: &EventEnvelope) {
         let line = match envelope.to_json_line() {
@@ -52,7 +67,7 @@ impl<'a> EventBus<'a> {
         };
         tracing::debug!(target: "riku::events", "{line}");
 
-        for (bundle, manifest) in self.subscribers_for(envelope.event) {
+        for (bundle, manifest) in self.subscribers_for(&envelope.event) {
             if manifest.events.mode == SubscribeMode::Gate {
                 tracing::warn!(
                     target: "riku::events",
@@ -89,6 +104,7 @@ impl<'a> EventBus<'a> {
             .current_dir(bundle)
             .env("RIKU_PLUGIN_API", RIKU_PLUGIN_API.to_string())
             .env("RIKU_ROOT", &self.paths.riku_root)
+            .env("RIKU_PLUGIN_NAME", &manifest.name)
             .env("RIKU_APP", &envelope.app)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

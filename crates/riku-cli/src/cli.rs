@@ -265,6 +265,24 @@ pub enum Commands {
         plugins: Vec<String>,
     },
 
+    /// Fire a custom plugin.custom.* event (called from within a plugin's
+    /// own script, not by hand) — requires [events] emit = true in the
+    /// calling plugin's manifest
+    #[command(
+        name = "plugin-emit",
+        after_help = "Examples:\n  riku plugin-emit plugin.custom.backup-done --data '{\"ok\":true}'\n  riku plugin-emit plugin.custom.backup-done --data '{}' --app myapp"
+    )]
+    PluginEmit {
+        /// Event name — must start with plugin.custom.
+        event_name: String,
+        /// JSON payload for the event's `data` field
+        #[arg(long)]
+        data: String,
+        /// App the event concerns, if any (defaults to empty)
+        #[arg(long)]
+        app: Option<String>,
+    },
+
     /// Start the process supervisor daemon
     #[command(after_help = "Examples:\n  riku supervisor")]
     Supervisor,

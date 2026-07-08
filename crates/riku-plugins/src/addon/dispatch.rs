@@ -40,6 +40,7 @@ pub fn run_verb(call: VerbCall<'_>) -> Result<serde_json::Value> {
         .current_dir(call.bundle)
         .env("RIKU_PLUGIN_API", RIKU_PLUGIN_API.to_string())
         .env("RIKU_ROOT", &call.paths.riku_root)
+        .env("RIKU_PLUGIN_NAME", &call.manifest.name)
         .env("RIKU_ADDON_INSTANCE", call.instance)
         .env("RIKU_ADDON_DATA_PATH", call.data_path)
         .stdin(Stdio::piped())

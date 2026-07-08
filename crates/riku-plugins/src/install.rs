@@ -346,6 +346,7 @@ fn run_lifecycle_verb(paths: &RikuPaths, bundle: &Path, manifest: &PluginManifes
         .current_dir(bundle)
         .env("RIKU_PLUGIN_API", RIKU_PLUGIN_API.to_string())
         .env("RIKU_ROOT", &paths.riku_root)
+        .env("RIKU_PLUGIN_NAME", &manifest.name)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null())

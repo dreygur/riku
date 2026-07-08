@@ -35,6 +35,7 @@ pub fn run_verb(
         .current_dir(bundle)
         .env("RIKU_PLUGIN_API", RIKU_PLUGIN_API.to_string())
         .env("RIKU_ROOT", &paths.riku_root)
+        .env("RIKU_PLUGIN_NAME", &manifest.name)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())

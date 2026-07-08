@@ -41,6 +41,7 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
         Commands::Addon(_) => None,
         Commands::Update => None,
         Commands::InstallPlugins { .. } => None,
+        Commands::PluginEmit { .. } => None,
         Commands::Supervisor => None,
         Commands::GitHook { .. } => None,
         Commands::GitReceivePack { .. } => None,

@@ -42,16 +42,19 @@ subscribe   = ["deploy.finished", "deploy.failed"]
 mode        = "observe"          # observe | gate
 priority    = 0                  # delivery order among subscribers of the
                                   # same event, lower first (default 0)
+emit        = false              # may this plugin fire its own plugin.custom.*
+                                  # events via `riku plugin-emit`?
 
 [lifecycle]                      # optional, any plugin type — install/remove hooks
 install     = true               # `riku plugins install` calls on_install
 uninstall   = true               # `riku plugins remove` calls on_uninstall
 ```
 
-The kernel sets `RIKU_PLUGIN_API`, `RIKU_ROOT`, and `RIKU_PLUGIN_DATA_PATH`
-(a scratch directory the plugin owns, `data_root/plugin-data/<name>/`,
-created lazily) in the plugin's environment on every call, plus (when
-app-scoped) `RIKU_APP`, `RIKU_APP_PATH`, `RIKU_ENV_PATH`.
+The kernel sets `RIKU_PLUGIN_API`, `RIKU_ROOT`, `RIKU_PLUGIN_NAME` (the
+manifest's own `name`), and `RIKU_PLUGIN_DATA_PATH` (a scratch directory the
+plugin owns, `data_root/plugin-data/<name>/`, created lazily) in the
+plugin's environment on every call, plus (when app-scoped) `RIKU_APP`,
+`RIKU_APP_PATH`, `RIKU_ENV_PATH`.
 
 ### Install/uninstall lifecycle
 
@@ -143,6 +146,29 @@ replacing routing entirely.
 subscribe = ["nginx.include_content"]
 priority  = 0
 ```
+
+### Custom events
+
+Riku's own lifecycle events (`app.restarted`, `deploy.finished`, …) are
+kernel-emitted only — plugins can't fire those, and that's deliberate: the
+event stream is only trustworthy if plugins can't forge it. Instead, a
+plugin that declares `[events] emit = true` can fire its **own** events for
+other plugins to subscribe to:
+
+```bash
+# from inside the emitting plugin's own script
+riku plugin-emit plugin.custom.backup-done --data '{"ok":true}'
+```
+
+- The event name **must** start with `plugin.custom.` — anything else is
+  rejected outright (a plugin can never emit something that looks like a
+  kernel event, e.g. its own fake `app.restarted`).
+- The kernel identifies the caller itself (via `RIKU_PLUGIN_NAME`, always
+  set) and checks *that* plugin's manifest declared `emit = true` — a
+  plugin can't claim to be a different one.
+- Subscribers receive the same envelope shape as any other event, plus
+  `source_plugin: "<name>"` — kernel-set, so you can always tell a
+  kernel-truth event (`source_plugin: null`) from a plugin-claimed one.
 
 ## Installing & managing
 

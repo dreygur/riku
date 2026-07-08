@@ -164,6 +164,11 @@ fn main() -> Result<()> {
             };
             cli::apps::cmd_install_plugins(&paths, only)?
         }
+        Commands::PluginEmit {
+            event_name,
+            data,
+            app,
+        } => cli::apps::cmd_plugin_emit(&paths, &event_name, &data, app.as_deref())?,
         Commands::Supervisor => cli::apps::cmd_supervisor(&paths)?,
         Commands::Plugin(cmd) => match cmd {
             PluginCmd::List => cli::client_plugins::cmd_plugin_list()?,

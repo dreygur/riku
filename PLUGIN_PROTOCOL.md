@@ -73,6 +73,8 @@ mode        = "observe"          # observe | gate  (gate needs elevated trust, �
 priority    = 0                  # delivery order among subscribers of the same
                                   # event, lower first (default 0; ties keep
                                   # filesystem discovery order, unspecified)
+emit        = false              # may this plugin fire its own plugin.custom.*
+                                  # events via `riku plugin-emit`? (§7.4)
 
 [lifecycle]                      # present iff the plugin implements a hook;
 install     = true               # both default false, so no existing plugin
@@ -102,11 +104,14 @@ Every call is a fresh process:
 
 - **Verb** is `argv[1]` (e.g. `detect`, `provision`, `on_event`).
 - **Context** is passed via environment variables. Always present:
-  `RIKU_PLUGIN_API`, `RIKU_ROOT`, and `RIKU_PLUGIN_DATA_PATH` — a scratch
-  directory the plugin owns (`data_root/plugin-data/<plugin-name>/`, created
-  lazily on first use). App-scoped calls add `RIKU_APP`, `RIKU_APP_PATH`,
-  `RIKU_ENV_PATH`. Seam-specific vars are listed per seam. (Addon verbs also
-  get `RIKU_ADDON_DATA_PATH`, a separate, per-*instance* directory — §6.1 —
+  `RIKU_PLUGIN_API`, `RIKU_ROOT`, `RIKU_PLUGIN_NAME` (the manifest's own
+  `name` — this is what lets a plugin's script identify itself when it
+  shells back out to `riku plugin-emit`, §7.4), and `RIKU_PLUGIN_DATA_PATH` —
+  a scratch directory the plugin owns (`data_root/plugin-data/<plugin-name>/`,
+  created lazily on first use). App-scoped calls add `RIKU_APP`,
+  `RIKU_APP_PATH`, `RIKU_ENV_PATH`. Seam-specific vars are listed per seam.
+  (Addon verbs also get `RIKU_ADDON_DATA_PATH`, a separate, per-*instance*
+  directory — §6.1 —
   distinct from the per-*plugin* one every seam gets.)
 - **Structured input** (when a verb needs it) is a single JSON document on
   **stdin**. Simple verbs may ignore stdin entirely.
@@ -264,6 +269,32 @@ through this filter before being inlined into the config
 singleton (§6.2) — any number of plugins can each contribute a snippet to
 the *default* nginx output, rather than one plugin taking over routing
 entirely.
+
+### 7.4 Plugin-emitted custom events _(new)_
+
+§7.1's catalog is kernel-emitted only — closed by design, since the
+event stream's trustworthiness depends on the kernel being the only thing
+that can say "this happened" (§7.2). Plugin-to-plugin custom events are a
+**separate, provenance-stamped channel** rather than opening up the same
+namespace:
+
+- A plugin must declare `[events] emit = true` before it may emit anything.
+- It emits via `riku plugin-emit <name> --data '<json>'`, run from its own
+  script — the kernel reads that script's own `RIKU_PLUGIN_NAME` (set on
+  every dispatch, §4) to know who's calling, so a plugin can't claim to be
+  a different plugin.
+- **The event name must start with `plugin.custom.`** — anything else
+  (including anything that *looks like* a kernel event, e.g. a plugin
+  trying to fire its own `app.restarted`) is hard-rejected, not silently
+  rewritten. This is the actual security boundary: it keeps `app.failed`-style
+  kernel events trustworthy for any subscriber, `gate`-mode or otherwise.
+- The delivered envelope carries `source_plugin: "<name>"` — kernel-set,
+  never a value the emitting plugin supplies itself — so a subscriber can
+  always tell "the kernel said this happened" (`source_plugin: null`) from
+  "a plugin claimed this happened" (`source_plugin: "<name>"`).
+- Delivery, priority ordering, and `observe`/`gate` modes are otherwise
+  identical to kernel events (§7.1–§7.2) — a custom event is just a
+  differently-sourced instance of the same envelope.
 
 ## 8. Backward compatibility
 
