@@ -177,16 +177,21 @@ JSON on stdin:
 | `app.scaled`         | post  | no       | —              |
 | `app.stopped`        | post  | no       | —              |
 | `app.restarted`      | post  | no       | —              |
+| `app.failed`         | post  | no       | —              |
 
 The four legacy hooks are emitted at the **same points** as today — step 1 of
 the refactor is to emit these events there with **zero behavior change**.
 
-`app.restarted` is the first of the `app.*` events to actually fire: the
-supervisor's crash/restart path (`crates/riku-supervisor/src/process/health_check.rs`,
-`restart_process()`) publishes it on every crash-triggered restart, carrying
-the instance, exit code, and restart count in `data`. The bundled
-`plugins/riku-notify` bundle subscribes to it and posts an incident report to
-a generic webhook, Discord, Slack, and/or Telegram — see
+`app.restarted` and `app.failed` are the first `app.*` events to actually
+fire, both from the supervisor's crash-detection path
+(`crates/riku-supervisor/src/process/health_check.rs`): `app.restarted` on
+every crash the supervisor recovers from (`restart_process()`), `app.failed`
+when a crash exceeds `max_restarts` and the instance is permanently removed
+from supervision instead — the more urgent of the two, since nothing brings
+it back without manual intervention. Both carry the instance and exit code
+in `data`; `app.failed` additionally carries `max_restarts`. The bundled
+`plugins/riku-notify` bundle subscribes to both and posts an incident report
+to a generic webhook, Discord, Slack, and/or Telegram — see
 [Plugin Bundles](docs/docs/plugin-bundles.md). `app.scaled`/`app.stopped`
 remain reserved names only; nothing emits them yet.
 
