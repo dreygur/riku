@@ -9,6 +9,15 @@ use std::env;
 #[cfg(test)]
 mod tests;
 
+/// Reads `$key` from the process environment and parses it as `u64`, or
+/// `None` if unset/unparsable. Each resource-limit env var still needs its
+/// own unit conversion and log message below, so this only collapses the
+/// `env::var(key).ok().and_then(|v| v.parse().ok())` lookup itself rather
+/// than the whole per-field block.
+fn env_u64(key: &str) -> Option<u64> {
+    env::var(key).ok().and_then(|v| v.parse::<u64>().ok())
+}
+
 /// Resource limits configuration for spawned processes
 #[derive(Debug, Clone)]
 pub struct ResourceLimits {
@@ -88,43 +97,33 @@ impl ResourceLimits {
             ..Self::default()
         };
 
-        if let Ok(val) = env::var("RIKU_MAX_MEMORY_MB") {
-            if let Ok(mb) = val.parse::<u64>() {
-                limits.max_memory_bytes = Some(mb * 1024 * 1024);
-                tracing::info!("Resource limit: max_memory = {} MB", mb);
-            }
+        if let Some(mb) = env_u64("RIKU_MAX_MEMORY_MB") {
+            limits.max_memory_bytes = Some(mb * 1024 * 1024);
+            tracing::info!("Resource limit: max_memory = {} MB", mb);
         }
 
         // CPU time limit in seconds
-        if let Ok(val) = env::var("RIKU_MAX_CPU_SECONDS") {
-            if let Ok(seconds) = val.parse::<u64>() {
-                limits.max_cpu_seconds = Some(seconds);
-                tracing::info!("Resource limit: max_cpu_time = {} seconds", seconds);
-            }
+        if let Some(seconds) = env_u64("RIKU_MAX_CPU_SECONDS") {
+            limits.max_cpu_seconds = Some(seconds);
+            tracing::info!("Resource limit: max_cpu_time = {} seconds", seconds);
         }
 
         // Open files limit
-        if let Ok(val) = env::var("RIKU_MAX_OPEN_FILES") {
-            if let Ok(count) = val.parse::<u64>() {
-                limits.max_open_files = Some(count);
-                tracing::info!("Resource limit: max_open_files = {}", count);
-            }
+        if let Some(count) = env_u64("RIKU_MAX_OPEN_FILES") {
+            limits.max_open_files = Some(count);
+            tracing::info!("Resource limit: max_open_files = {}", count);
         }
 
         // Max processes limit
-        if let Ok(val) = env::var("RIKU_MAX_PROCESSES") {
-            if let Ok(count) = val.parse::<u64>() {
-                limits.max_processes = Some(count);
-                tracing::info!("Resource limit: max_processes = {}", count);
-            }
+        if let Some(count) = env_u64("RIKU_MAX_PROCESSES") {
+            limits.max_processes = Some(count);
+            tracing::info!("Resource limit: max_processes = {}", count);
         }
 
         // File size limit in MB
-        if let Ok(val) = env::var("RIKU_MAX_FILE_SIZE_MB") {
-            if let Ok(mb) = val.parse::<u64>() {
-                limits.max_file_size_bytes = Some(mb * 1024 * 1024);
-                tracing::info!("Resource limit: max_file_size = {} MB", mb);
-            }
+        if let Some(mb) = env_u64("RIKU_MAX_FILE_SIZE_MB") {
+            limits.max_file_size_bytes = Some(mb * 1024 * 1024);
+            tracing::info!("Resource limit: max_file_size = {} MB", mb);
         }
 
         // Core dumps (disabled by default for security)

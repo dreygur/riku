@@ -8,6 +8,28 @@ use std::collections::HashMap;
 #[cfg(test)]
 mod tests;
 
+/// Reads `$key` out of a worker's `[env]` map (`$env: &HashMap<String, String>`),
+/// parses it as `$ty`, and falls back to `$default` (a `fn() -> $ty`) if the key
+/// is missing or fails to parse. Collapses the
+/// `env.get(key).and_then(|v| v.parse().ok()).unwrap_or_else(default)` shape
+/// that otherwise repeats for every `RIKU_*` worker setting.
+macro_rules! parse_env_or {
+    ($env:expr, $key:literal, $ty:ty, $default:expr) => {
+        $env.get($key)
+            .and_then(|v| v.parse::<$ty>().ok())
+            .unwrap_or_else($default)
+    };
+}
+
+/// Same lookup as [`parse_env_or!`], but yields `None` (rather than a default)
+/// when the key is missing or unparsable — for settings that are opt-in with
+/// no meaningful default.
+macro_rules! parse_env_opt {
+    ($env:expr, $key:literal, $ty:ty) => {
+        $env.get($key).and_then(|v| v.parse::<$ty>().ok())
+    };
+}
+
 /// The main worker configuration structure stored in TOML files.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WorkerConfig {
@@ -160,20 +182,9 @@ pub fn create_worker_config(
     log_file: &str,
 ) -> WorkerConfig {
     // Read RIKU_* settings from environment with defaults
-    let timeout = env
-        .get("RIKU_WORKER_TIMEOUT")
-        .and_then(|v| v.parse::<u64>().ok())
-        .unwrap_or_else(default_timeout);
-
-    let grace_period = env
-        .get("RIKU_WORKER_GRACE_PERIOD")
-        .and_then(|v| v.parse::<u64>().ok())
-        .unwrap_or_else(default_grace_period);
-
-    let max_restarts = env
-        .get("RIKU_MAX_RESTARTS")
-        .and_then(|v| v.parse::<u32>().ok())
-        .unwrap_or_else(default_max_restarts);
+    let timeout = parse_env_or!(env, "RIKU_WORKER_TIMEOUT", u64, default_timeout);
+    let grace_period = parse_env_or!(env, "RIKU_WORKER_GRACE_PERIOD", u64, default_grace_period);
+    let max_restarts = parse_env_or!(env, "RIKU_MAX_RESTARTS", u32, default_max_restarts);
 
     // Add BIND_ADDRESS to worker env if not already set
     if !env.contains_key("BIND_ADDRESS") {
@@ -182,22 +193,30 @@ pub fn create_worker_config(
 
     // Read health check settings from environment
     let health_check = env.get("RIKU_HEALTH_CHECK_URL").map(|_| HealthCheck {
-        url: env
-            .get("RIKU_HEALTH_CHECK_URL")
-            .cloned()
-            .unwrap_or_else(default_health_check_url),
-        interval: env
-            .get("RIKU_HEALTH_CHECK_INTERVAL")
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or_else(default_health_check_interval),
-        timeout: env
-            .get("RIKU_HEALTH_CHECK_TIMEOUT")
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or_else(default_health_check_timeout),
-        retries: env
-            .get("RIKU_HEALTH_CHECK_RETRIES")
-            .and_then(|v| v.parse::<u32>().ok())
-            .unwrap_or_else(default_health_check_retries),
+        url: parse_env_or!(
+            env,
+            "RIKU_HEALTH_CHECK_URL",
+            String,
+            default_health_check_url
+        ),
+        interval: parse_env_or!(
+            env,
+            "RIKU_HEALTH_CHECK_INTERVAL",
+            u64,
+            default_health_check_interval
+        ),
+        timeout: parse_env_or!(
+            env,
+            "RIKU_HEALTH_CHECK_TIMEOUT",
+            u64,
+            default_health_check_timeout
+        ),
+        retries: parse_env_or!(
+            env,
+            "RIKU_HEALTH_CHECK_RETRIES",
+            u32,
+            default_health_check_retries
+        ),
     });
 
     // Isolation is opt-in: only enabled when RIKU_ISOLATION_ROOT is set,
@@ -207,20 +226,16 @@ pub fn create_worker_config(
         .get("RIKU_ISOLATION_ROOT")
         .map(|root_dir| IsolationOptions {
             root_dir: root_dir.clone(),
-            max_memory_bytes: env
-                .get("RIKU_ISOLATION_MAX_MEMORY_MB")
-                .and_then(|v| v.parse::<u64>().ok())
+            max_memory_bytes: parse_env_opt!(env, "RIKU_ISOLATION_MAX_MEMORY_MB", u64)
                 .map(|mb| mb * 1024 * 1024),
-            cpu_quota_us: env
-                .get("RIKU_ISOLATION_CPU_QUOTA_US")
-                .and_then(|v| v.parse::<u64>().ok()),
-            cpu_period_us: env
-                .get("RIKU_ISOLATION_CPU_PERIOD_US")
-                .and_then(|v| v.parse::<u64>().ok())
-                .unwrap_or_else(default_cpu_period_us),
-            max_pids: env
-                .get("RIKU_ISOLATION_MAX_PIDS")
-                .and_then(|v| v.parse::<u64>().ok()),
+            cpu_quota_us: parse_env_opt!(env, "RIKU_ISOLATION_CPU_QUOTA_US", u64),
+            cpu_period_us: parse_env_or!(
+                env,
+                "RIKU_ISOLATION_CPU_PERIOD_US",
+                u64,
+                default_cpu_period_us
+            ),
+            max_pids: parse_env_opt!(env, "RIKU_ISOLATION_MAX_PIDS", u64),
         });
 
     WorkerConfig {
