@@ -252,13 +252,15 @@ pub enum Commands {
     #[command(after_help = "Examples:\n  riku update")]
     Update,
 
-    /// Download and install bundled runtime plugins to ~/.riku/plugins/
+    /// Download and install bundled plugins to ~/.riku/plugins/ (runtimes
+    /// like node/python, and first-party bundles like the riku-notify
+    /// event subscriber — not installed by default, opt in with --plugins)
     #[command(
         name = "install-plugins",
-        after_help = "Examples:\n  riku install-plugins\n  riku install-plugins --plugins node,python"
+        after_help = "Examples:\n  riku install-plugins\n  riku install-plugins --plugins node,python\n  riku install-plugins --plugins riku-notify"
     )]
     InstallPlugins {
-        /// Comma-separated list of plugin names to install (default: all)
+        /// Comma-separated list of plugin names to install (default: all runtimes)
         #[arg(long, value_delimiter = ',')]
         plugins: Vec<String>,
     },

@@ -181,6 +181,15 @@ JSON on stdin:
 The four legacy hooks are emitted at the **same points** as today — step 1 of
 the refactor is to emit these events there with **zero behavior change**.
 
+`app.restarted` is the first of the `app.*` events to actually fire: the
+supervisor's crash/restart path (`crates/riku-supervisor/src/process/health_check.rs`,
+`restart_process()`) publishes it on every crash-triggered restart, carrying
+the instance, exit code, and restart count in `data`. The bundled
+`plugins/riku-notify` bundle subscribes to it and posts an incident report to
+a generic webhook, Discord, Slack, and/or Telegram — see
+[Plugin Bundles](docs/docs/plugin-bundles.md). `app.scaled`/`app.stopped`
+remain reserved names only; nothing emits them yet.
+
 ### 7.2 Modes — power is bounded by trust
 
 - **observe** (default) — fire-and-forget. Runs async; failures are logged, never
@@ -211,8 +220,11 @@ implementation. These stay in the kernel for v1:
 - **git intake** and **deploy orchestration**
 - **process supervisor** (health checks, restarts, scaling)
 - **on-disk state** (`RikuPaths`, ENV, worker TOML)
-- **dashboard auth** — deferred to v2; only matters once the dashboard ships,
-  and keeping v1 small is the discipline that makes the contract stable.
+- **dashboard auth as a plugin seam** (e.g. a pluggable auth-provider seam)
+  — deferred to v2, keeping v1 small. Note this is narrower than it used to
+  read: the dashboard's own frontend now has a real login (single shared
+  password, session cookie) — see [Dashboard](docs/docs/dashboard.md) — it's
+  just not exposed as something a plugin can hook into yet.
 
 ## 10. Security summary
 

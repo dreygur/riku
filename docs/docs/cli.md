@@ -380,8 +380,10 @@ sudo riku doctor   # most complete report
 
 ### `riku dashboard`
 
-Serve the read-only web dashboard (embedded, single binary). See
-[Dashboard](dashboard.md).
+Serve the embedded web dashboard (single binary, no separate install). It can
+deploy, roll back, and manage addons — not read-only — so always set a token
+before exposing it beyond loopback. See [Dashboard](dashboard.md), which also
+covers the separate, fuller Next.js browser dashboard.
 
 ```bash
 riku dashboard

@@ -23,12 +23,15 @@ comes from plugins.
 ### Installing Bundled Plugins
 
 ```bash
-riku install-plugins                          # all bundled plugins
+riku install-plugins                          # all bundled runtime plugins
 riku install-plugins --plugins node,python   # specific plugins only
 ```
 
-Bundled plugins available: `node`, `python`, `ruby`, `go`, `rust-lang`, `java`,
-`clojure`, `container`.
+Bundled runtime plugins available: `node`, `python`, `ruby`, `go`, `rust-lang`,
+`java`, `clojure`, `container`. The same command also installs the
+first-party **event-subscriber** bundle `riku-notify` (`riku install-plugins
+--plugins riku-notify`, not installed by default) — see
+[Plugin Bundles](plugin-bundles.md#event-subscribers-notifiers).
 
 ### Plugin Protocol
 

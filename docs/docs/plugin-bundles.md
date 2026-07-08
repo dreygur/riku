@@ -72,8 +72,30 @@ riku addon destroy db1             # refused while bound
 
 A bundle with an `[events]` block is invoked with `on_event` and the event JSON
 on stdin for each subscribed lifecycle event (`deploy.requested`,
-`build.finished`, `deploy.finished`, …). `observe` mode is fire-and-forget;
-`gate` mode (veto on pre-phase events) requires elevated trust.
+`build.finished`, `deploy.finished`, `app.restarted`, …). `observe` mode is
+fire-and-forget; `gate` mode (veto on pre-phase events) requires elevated
+trust.
+
+**Shipped example: `riku-notify`.** Bundled at `plugins/riku-notify/` (a
+`riku-plugin.toml` + a POSIX shell `bin/on-event`), it subscribes to
+`app.restarted` and posts an incident report — the crashed instance, exit
+code, and restart count — to whichever channels are configured, each
+independent:
+
+| Env var | Channel |
+| --- | --- |
+| `RIKU_NOTIFY_WEBHOOK_URL` | Generic JSON POST |
+| `RIKU_NOTIFY_DISCORD_WEBHOOK_URL` | Discord incoming webhook |
+| `RIKU_NOTIFY_SLACK_WEBHOOK_URL` | Slack incoming webhook |
+| `RIKU_NOTIFY_TELEGRAM_BOT_TOKEN` + `RIKU_NOTIFY_TELEGRAM_CHAT_ID` | Telegram bot message |
+
+Unlike third-party bundles, it's first-party (shipped in the same repo as the
+`riku` binary), so it installs through the simpler bundled-plugin downloader
+rather than the checksum/signature path below:
+
+```bash
+riku install-plugins --plugins riku-notify
+```
 
 ## Installing & managing
 

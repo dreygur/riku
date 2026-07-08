@@ -1,43 +1,64 @@
 # Riku Dashboard
 
-Next.js 16 + Hono 4 + React 19 control plane for the Riku supervisor.
+Next.js 16 + React 19 control plane for the Riku supervisor.
 
-The dashboard runs a server-side API proxy at `/api/*` (`app/api/[[...route]]/route.ts`)
-that forwards to the Rust supervisor. Mutating routes deputize the Rust control
-token (`~/.riku/control.token`) onto upstream `/control/*` calls, so the
-browser-facing side must defend against confused-deputy / CSRF abuse.
+The dashboard runs a same-origin server-side proxy at `/api/riku/[...path]`
+(`app/api/riku/[...path]/route.ts`) that forwards every call to the Rust
+backend (`crates/riku-dashboard`, default `http://127.0.0.1:8088`), attaching
+the backend's bearer token server-side — the browser never sees it.
+
+That backend token alone is **not** enough to expose this dashboard publicly:
+it protects the backend process from being hit directly by something other
+than this proxy, but by itself the *frontend* had no login of its own. A
+session-based login layer sits in front of it for that reason (below).
 
 ## Security configuration
 
-Mutating routes (the `control/*` router and `env` PUT/DELETE) are protected by:
+### Backend token (`RIKU_DASHBOARD_TOKEN`)
 
-1. **Operator token** — every mutating request must carry the header
-   `x-riku-dashboard-token` whose value matches `RIKU_DASHBOARD_TOKEN`
-   (constant-time compared server-side). Read-only GETs
-   (health/metrics/network/logs) stay unauthenticated.
-2. **Same-origin / CSRF check** — the request `Origin` must equal
-   `RIKU_DASHBOARD_ORIGIN`; Origin-less requests are accepted only with
-   `Sec-Fetch-Site: same-origin`. Cross-site requests are rejected `403`.
-3. **Locked CORS** — `Access-Control-Allow-Origin` echoes only
-   `RIKU_DASHBOARD_ORIGIN`, never `*`.
+The proxy attaches `Authorization: Bearer $RIKU_DASHBOARD_TOKEN` to every
+request it forwards to the Rust backend (`app/api/riku/[...path]/route.ts`).
+If unset, no `Authorization` header is sent — matches the backend's own
+loopback-only default (see [Dashboard](../docs/docs/dashboard.md)).
+
+### Frontend login (`RIKU_DASHBOARD_PASSWORD_HASH`)
+
+A single shared password gates the whole frontend — every page and the
+`/api/riku/*` proxy — via a signed session cookie:
+
+- **`middleware.ts`** checks a session cookie (`riku_session`) on every
+  request. No `RIKU_DASHBOARD_PASSWORD_HASH` set → auth is fully bypassed
+  (local/dev default). Unauthenticated pages redirect to `/login`;
+  unauthenticated API calls get `401` JSON instead.
+- **`lib/password-hash.ts`** — the password is never stored in plaintext.
+  `RIKU_DASHBOARD_PASSWORD_HASH` holds a `scrypt` salt+hash
+  (`${saltHex}:${hashHex}`); generate it with:
+
+  ```bash
+  nub run hash-password -- 'your-chosen-password'
+  ```
+- **`lib/auth.ts`** — the session cookie is an HMAC-SHA256 token
+  (`${expiryMs}.${signature}`), keyed off `SHA-256(RIKU_DASHBOARD_PASSWORD_HASH)`
+  — the stored hash itself, never the plaintext — via Web Crypto
+  (`crypto.subtle`), so the same code runs in both the Edge middleware and the
+  Node `/api/login` route. 7-day expiry, `HttpOnly`, `SameSite=Strict`,
+  `Secure` only when the request actually arrived over HTTPS (checked via
+  `x-forwarded-proto`, so it still works during local/plain-HTTP testing).
 
 ### Environment variables
 
-| Variable                | Default                  | Purpose |
-| ----------------------- | ------------------------ | ------- |
-| `RIKU_DASHBOARD_TOKEN`  | *(unset → fail closed)*  | Shared secret required on every mutating request. If unset, mutating routes return `503 "dashboard token not configured"` — they never default to open. |
-| `RIKU_DASHBOARD_ORIGIN` | `http://127.0.0.1:3000`  | The single allowed browser origin for CORS + CSRF. Must match the same env var on the Rust side (`src/supervisor/health/mod.rs`). |
-
-The dashboard's own client JS obtains the token same-origin from `GET /api/csrf`
-(unreadable cross-site) and sends it on mutating calls — the token is never
-embedded in the JS bundle and never exposed via `NEXT_PUBLIC_*`.
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `RIKU_DASHBOARD_TOKEN` | *(unset)* | Bearer token the proxy attaches to backend calls. |
+| `RIKU_DASHBOARD_PASSWORD_HASH` | *(unset → login disabled)* | `scrypt` salt+hash gating the whole frontend. Generate with `nub run hash-password`. |
+| `RIKU_API_URL` | `http://127.0.0.1:8088` | Where the proxy forwards to. |
 
 ## Running
 
-Bind the server to loopback so the dashboard is not reachable from other hosts:
-
 ```bash
-RIKU_DASHBOARD_TOKEN=$(openssl rand -hex 32) next start -H 127.0.0.1
+RIKU_DASHBOARD_TOKEN=$(openssl rand -hex 32) \
+RIKU_DASHBOARD_PASSWORD_HASH=$(nub run hash-password -- 'your-chosen-password' | tail -1 | cut -d= -f2) \
+next start -H 127.0.0.1
 ```
 
 ## Tooling
