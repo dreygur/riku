@@ -130,7 +130,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn make_paths(tmp: &TempDir) -> RikuPaths {
-        RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path())
+        RikuPaths::for_tests(tmp.path())
     }
 
     #[test]

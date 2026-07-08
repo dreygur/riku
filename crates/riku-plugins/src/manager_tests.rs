@@ -10,11 +10,11 @@ use crate::hooks::{HookContext, PluginHook};
 use crate::manager::PluginManager;
 
 fn setup_paths(temp: &TempDir) -> RikuPaths {
-    let riku_root = temp.path().join(".riku");
-    fs::create_dir_all(riku_root.join("plugins")).unwrap();
-    fs::create_dir_all(riku_root.join("apps")).unwrap();
-    fs::create_dir_all(riku_root.join("envs")).unwrap();
-    RikuPaths::from_dirs(riku_root, temp.path())
+    let paths = RikuPaths::for_tests(temp.path());
+    fs::create_dir_all(&paths.plugin_root).unwrap();
+    fs::create_dir_all(&paths.app_root).unwrap();
+    fs::create_dir_all(&paths.env_root).unwrap();
+    paths
 }
 
 fn make_ctx<'a>(

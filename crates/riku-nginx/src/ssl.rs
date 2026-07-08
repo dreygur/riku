@@ -151,7 +151,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn make_paths(tmp: &TempDir) -> crate::config::RikuPaths {
-        let paths = crate::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
+        let paths = crate::config::RikuPaths::for_tests(tmp.path());
         std::fs::create_dir_all(&paths.nginx_root).unwrap();
         std::fs::create_dir_all(&paths.acme_www).unwrap();
         paths

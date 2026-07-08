@@ -272,9 +272,8 @@ fn emit_app_restarted(app: String, instance: String, exit_code: Option<i32>, res
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_support::minimal_config;
     use super::ProcessManager;
-    use crate::config::{WorkerConfig, WorkerInfo, WorkerOptions};
-    use std::collections::HashMap;
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::path::Path;
@@ -286,29 +285,6 @@ mod tests {
     // env vars. Serialize tests in this module that touch them so they don't
     // race each other (no other test in this crate reads these names).
     static ENV_GUARD: Mutex<()> = Mutex::new(());
-
-    fn minimal_config(command: &str, working_dir: &str, log_file: &str) -> WorkerConfig {
-        WorkerConfig {
-            worker: WorkerInfo {
-                app: "testapp".to_string(),
-                kind: "web".to_string(),
-                command: command.to_string(),
-                ordinal: 1,
-            },
-            env: HashMap::new(),
-            options: WorkerOptions {
-                working_dir: working_dir.to_string(),
-                log_file: log_file.to_string(),
-                uid: None,
-                gid: None,
-                timeout: 30,
-                grace_period: 2,
-                max_restarts: 3,
-                health_check: None,
-                isolation: None,
-            },
-        }
-    }
 
     /// A real crash, detected through the actual `check_processes()` entry
     /// point (not a hand-rolled shortcut), must reach the real

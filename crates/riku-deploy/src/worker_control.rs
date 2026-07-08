@@ -107,7 +107,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn paths_for(root: &std::path::Path) -> RikuPaths {
-        let paths = RikuPaths::from_dirs(root.join(".riku"), root);
+        let paths = RikuPaths::for_tests(root);
         fs::create_dir_all(&paths.workers_available).unwrap();
         fs::create_dir_all(&paths.workers_enabled).unwrap();
         paths

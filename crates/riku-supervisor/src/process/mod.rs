@@ -77,3 +77,35 @@ impl ProcessManager {
         &mut self.stats
     }
 }
+
+/// Shared by `spawn.rs` and `health_check.rs`'s test modules, which both
+/// need a minimal `WorkerConfig` to spawn a real (short-lived) process
+/// against — kept in one place instead of two copies drifting apart.
+#[cfg(test)]
+pub(crate) mod test_support {
+    use crate::config::{WorkerConfig, WorkerInfo, WorkerOptions};
+    use std::collections::HashMap;
+
+    pub fn minimal_config(command: &str, working_dir: &str, log_file: &str) -> WorkerConfig {
+        WorkerConfig {
+            worker: WorkerInfo {
+                app: "testapp".to_string(),
+                kind: "web".to_string(),
+                command: command.to_string(),
+                ordinal: 1,
+            },
+            env: HashMap::new(),
+            options: WorkerOptions {
+                working_dir: working_dir.to_string(),
+                log_file: log_file.to_string(),
+                uid: None,
+                gid: None,
+                timeout: 30,
+                grace_period: 2,
+                max_restarts: 3,
+                health_check: None,
+                isolation: None,
+            },
+        }
+    }
+}

@@ -252,7 +252,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn make_paths(tmp: &TempDir) -> RikuPaths {
-        let paths = RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
+        let paths = RikuPaths::for_tests(tmp.path());
         for dir in &[
             &paths.app_root,
             &paths.env_root,

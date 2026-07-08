@@ -155,7 +155,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn make_paths(tmp: &TempDir) -> RikuPaths {
-        crate::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path())
+        crate::config::RikuPaths::for_tests(tmp.path())
     }
 
     // Serialize tests that mutate the process-global PATH/HOME/RIKU_BIN env vars.

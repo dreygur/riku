@@ -97,6 +97,15 @@ impl RikuPaths {
             .unwrap_or_else(|_| home.join(".riku"));
         Self::from_dirs(riku_root, &home)
     }
+
+    /// Build paths rooted at `root/.riku`, using `root` as home too — the
+    /// `RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path())` shape that
+    /// otherwise gets hand-copied into nearly every crate's test module.
+    /// Not `#[cfg(test)]`: other crates' tests need to call it too, and that
+    /// attribute doesn't cross crate boundaries.
+    pub fn for_tests(root: &Path) -> Self {
+        Self::from_dirs(root.join(".riku"), root)
+    }
 }
 
 #[cfg(test)]
