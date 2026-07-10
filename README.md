@@ -172,7 +172,6 @@ Per-app settings live in an `ENV` file (`riku config set` writes it). A few comm
 ```bash
 NGINX_SERVER_NAME=example.com   # domain
 NGINX_HTTPS_ONLY=true           # force HTTPS
-NODE_VERSION=20.11.0            # pin a runtime version
 RIKU_WORKER_TIMEOUT=3600        # kill unresponsive workers
 RIKU_ROUTER=caddy               # use a router plugin instead of nginx
 ```

@@ -13,11 +13,13 @@ This is a living document. Phases are ordered by leverage, not by size.
 
 ## Track A — Solo-Dev DX (adoption funnel)
 
-### Phase 0 — First-5-Minutes Magic (highest leverage)
+### Phase 0 — First-5-Minutes Magic (highest leverage) — **shipped**
 
-- **One-line installer** — `curl -sSL get.riku.sh | sh`. Detects OS, drops the binary, runs `riku init`, configures systemd + nginx. No installer exists today; this is the single biggest adoption gap.
-- **`riku quickstart`** — scaffolds a sample app and prints the exact `git remote add` line so a new user can deploy in under five minutes.
-- **Better first-deploy output** — on `git push`: stream the build log, show the detected runtime, and print the final URL prominently. Make the "it works" moment unmissable.
+All three landed together in `41bb349`:
+
+- ✅ **One-line installer** (`scripts/install.sh`) — `curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh`. Detects OS/arch, downloads and checksum-verifies the matching release binary, installs it, and prints a `riku init` hint (systemd + nginx setup still happens via `riku init` itself, not auto-run by the installer).
+- ✅ **`riku quickstart`** — scaffolds a sample app and prints the exact `git remote add` line so a new user can deploy in under five minutes.
+- ✅ **Better first-deploy output** — `git push` streams the deploy log line-by-line (`DeployLogger`, Heroku-style `-----> ` prefix), logs the detected runtime, and ends with a prominent `<app> deployed!` plus the live URL (from `NGINX_SERVER_NAME`) or a hint to add a domain.
 
 ### Phase 1 — Finish the Dashboard — **shipped**
 
@@ -155,7 +157,7 @@ type        = "addon"
 - `riku plugins marketplace list / remove`
 - `riku plugins search <query>` — reads **manifests only** (progressive disclosure; payload pulled on install).
 - `riku plugins add <name>@<marketplace>[@<version>]` — install, namespaced + version-pinnable.
-- `riku plugins remove / update <name>`
+- `riku plugins remove <name>` (no `update` yet — see Phase E3: currently remove + reinstall)
 - `riku plugins add ./path` — install from local path for the authoring/dev loop.
 - **Lockfile** (`riku-plugins.lock`) — pins resolved name + marketplace + version + checksum. No silent auto-update of executable code.
 
@@ -187,7 +189,7 @@ Riku deliberately does **not** copy the looser "add a marketplace and run execut
 
 Honest priority order across both tracks (✅ = shipped since this was last written):
 
-1. Installer + `quickstart` — cheap, unblocks *all* adoption. **Still open** (the one item on this list that isn't shipped).
+1. ✅ Installer + `quickstart` + first-deploy output — cheap, unblocks *all* adoption. All shipped together in `41bb349`.
 2. ✅ Dashboard, mutating actions included, both embedded and Next.js.
 3. ✅ Plugin contract v1 + `scaffold`.
 4. ✅ Addon seam + Postgres/Redis/SQLite-volume as installable example addons (not bundled by default — an explicit `riku plugins add`, since addons hold credentials).
@@ -196,9 +198,9 @@ Honest priority order across both tracks (✅ = shipped since this was last writ
 7. ✅ Notifier / router / filter / custom-event / UI-panel plugins. A searchable docs gallery beyond the existing reference pages is still open.
 8. ✅ Dashboard mutating actions. WASM plugin sandbox and a dashboard auth-*provider* seam (SSO as something a plugin supplies) — **still open.**
 
-Given the above, the only genuinely open item across this whole list is
-**#1, the one-line installer** — worth calling out on its own, since it's
-also this roadmap's stated highest-leverage adoption gap.
+Given the above, every numbered item on this list has shipped except the
+open ends already called out inline: the docs gallery (#7), and the WASM
+sandbox plus dashboard auth-provider seam (#8).
 
 ---
 
@@ -210,7 +212,7 @@ Estimates are for **one experienced Rust developer who already knows this codeba
 
 | Phase | Scope | Dev-weeks | Risk |
 | ----- | ----- | --------- | ---- |
-| 0 — Installer / quickstart | one-line installer, `quickstart`, first-deploy output | 2–3 | low |
+| 0 — Installer / quickstart | one-line installer, `quickstart`, first-deploy output | ✅ shipped | — |
 | 1 — Dashboard | app list, live log stream, history, env editor, mutating actions, auth | ✅ shipped | — |
 | 2 — Trust & resilience | backups/restore, rollback, zero-downtime cutover, `doctor` | ✅ shipped | — |
 | E0 — Contract v1 | protocol version, spec, scaffold | ✅ shipped | — |
@@ -223,16 +225,11 @@ Estimates are for **one experienced Rust developer who already knows this codeba
 
 ### What's left, honestly
 
-Every phase above except the one-line installer/`quickstart` (Phase 0) and
-the WASM sandbox (part of E3) is shipped. The MVP-slice/full-roadmap
-effort math below is kept for historical context (it's what this roadmap
-estimated before that work happened) — treat it as a record, not a live
-estimate. The two remaining items:
+Every phase above is now shipped except the WASM sandbox (part of E3).
+The MVP-slice/full-roadmap effort math below is kept for historical
+context (it's what this roadmap estimated before that work happened) —
+treat it as a record, not a live estimate. The one remaining item:
 
-- **Phase 0 (installer + quickstart)** — still the single biggest adoption
-  gap: no `curl | sh` installer exists, and `riku quickstart` isn't built.
-  Everything downstream of "a user is running riku" is now in good shape;
-  getting them to that point is the open problem.
 - **WASM sandbox (E3)** — deliberately deferred; the Landlock-based
   capability enforcement shipped in E2.5 covers the "well-behaved
   first-party plugin" case, but not a fully untrusted third-party author.
@@ -266,7 +263,7 @@ The smallest set that was judged to actually move adoption:
 
 ## Guiding Principles
 
-- **Do step 1 before everything.** No installer means losing users at minute one, regardless of features.
+- **Do step 1 before everything.** The installer, `quickstart`, and first-deploy output all shipped in `41bb349` — this held even before the rest of the roadmap was built out, since losing users at minute one erases everything built downstream of it.
 - **The Addon plugin contract is the strategic core.** It lets the *plugin system* deliver databases, so core stays single-binary while the ecosystem gains its killer category — both goals served by one design.
 - **A marketplace is what "vast ecosystem" actually means.** Extensible is not the same as an ecosystem; discovery plus one-command install is the difference. Adopt Claude Code's proven git-native marketplace shape rather than inventing one — but harden it for server-side execution.
 - **Freeze a small, stable API rather than chasing a rich, unstable one.** A stable small contract grows more third-party plugins than a sprawling unstable one. Pick the plugin types above, version them, and hold the line.

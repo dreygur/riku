@@ -61,6 +61,17 @@ Every item above shipped with real end-to-end tests against actual
 installed plugin bundles and real dispatch code (no mocks). See
 `PLUGIN_PROTOCOL.md` for the full updated contract.
 
+### One-Line Installer, `riku quickstart`, and First-Deploy Output
+
+Phase 0 of the adoption funnel (`41bb349`, 2026-06-24): `scripts/install.sh`
+(`curl | sh`) detects OS/arch, downloads and checksum-verifies the
+matching release binary, and installs it, printing the
+`riku init`/`quickstart` next steps. `riku quickstart` scaffolds a
+runnable, dependency-free sample app (python or node), git-inits it, and
+prints the exact `git remote add`/`git push` lines needed to deploy.
+`git push` now ends with a prominent `<app> deployed!` plus the live URL
+(from `NGINX_SERVER_NAME`), or a hint to add a domain if none is set.
+
 ### Fixed
 
 - Corrected several stale documentation claims found in the course of this

@@ -49,14 +49,16 @@ mkdocs gh-deploy
 ## Directory Structure
 
 ```
-docs-site/
-├── docs/                  # Documentation source files
+docs/
+├── docs/                  # Documentation source files (mkdocs docs_dir)
 │   ├── index.md          # Home page
-│   ├── runtimes/         # Runtime-specific docs
-│   └── includes/         # Reusable content snippets
-├── site/                  # Generated site (after build)
-├── requirements.txt       # Python dependencies
-└── mkdocs.yml            # MkDocs configuration (root directory)
+│   ├── runtimes.md       # Runtime support reference (flat file, not a subdir)
+│   ├── includes/         # Reusable content snippets
+│   └── img/              # Images
+├── site/                  # Generated site (after build, mkdocs site_dir)
+└── requirements.txt       # Python dependencies
+
+mkdocs.yml                 # MkDocs configuration (repo root, not under docs/)
 ```
 
 ---

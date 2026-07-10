@@ -263,8 +263,11 @@ NGINX_CACHE_EXPIRY=86400
 NODE_VERSION=18.17.0
 ```
 
-- **Default:** (none — uses system Node.js)
-- **Description:** Node.js version to install via nodeenv
+- **Default:** (none — uses whatever `node` is on `$PATH`)
+- **Description:** format-validated (a warning is printed if it doesn't
+  look like a version string) but **not currently read by the node
+  runtime plugin** — setting it does not select or install a specific
+  Node.js version. Kept here as a placeholder for that feature.
 - **Values:** Any valid Node.js version
 
 ### Node Package Manager

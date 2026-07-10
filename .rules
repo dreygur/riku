@@ -201,8 +201,8 @@ cargo build --release
 
 # Run tests
 cargo test
-./tests/deploy/test-all.sh          # Run deployment tests
-./tests/deploy/quick-test.sh myapp node  # Quick deployment test
+./tests/deploy-smoke/test-all.sh          # Run deployment tests
+./tests/deploy-smoke/quick-test.sh myapp node  # Quick deployment test
 
 # Lint
 cargo clippy
@@ -217,20 +217,18 @@ cargo run -- <command>
 
 ```
 riku/
-├── Cargo.toml              # workspace + root package
-├── src/                    # Main riku binary source
-│   ├── main.rs            # CLI entry point
-│   ├── cli/               # CLI command handlers
-│   │   └── apps/install_plugins.rs  # riku install-plugins
-│   ├── config.rs          # Path & environment configuration
-│   ├── deploy/            # Deployment orchestration (no runtime logic)
-│   ├── plugins/           # Plugin system
-│   │   ├── runtime.rs     # Runtime plugin dispatch (detect/build/env/start)
-│   │   ├── manager.rs     # Lifecycle hook plugins (riku-pre-deploy, etc.)
-│   │   └── executor.rs    # Timeout-aware plugin execution
-│   ├── nginx.rs           # Nginx configuration generation
-│   └── supervisor/        # Process supervisor logic
-├── crates/                # Rust binary plugin sub-crates
+├── Cargo.toml              # workspace manifest (no root package — riku is one member crate)
+├── crates/
+│   ├── riku/               # binary entry point (main.rs) + lib.rs re-exporting the others
+│   ├── riku-cli/           # CLI command handlers (apps/, agent/, doctor/, cli.rs, cmds.rs, ...)
+│   ├── riku-config/        # Path & environment configuration (repository layer)
+│   ├── riku-deploy/        # Deployment orchestration: git_ops, env_setup, releases, router, scaling
+│   ├── riku-nginx/         # Nginx configuration generation (context, template, sanitize, ssl)
+│   ├── riku-plugins/       # Plugin system: discovery, hooks, executor, events/, filters/, addon/
+│   ├── riku-supervisor/    # Process supervisor: daemon/, process/, health/, stats/, cgroups/
+│   ├── riku-util/          # Shared helpers: cron, env, fs, display, procfile, resource_limits
+│   ├── riku-error/         # Shared error types
+│   ├── riku-dashboard/     # Server-rendered control dashboard routes
 │   ├── riku-plugin-java/
 │   ├── riku-plugin-clojure/
 │   └── riku-plugin-container/
@@ -241,8 +239,8 @@ riku/
 │   ├── go
 │   └── rust-lang
 ├── tests/
-│   ├── integration_tests/ # Rust integration tests
-│   └── deploy/            # Shell-based deployment tests
+│   ├── integration_tests/ # Rust integration tests (cli, supervisor, nginx, plugin, e2e, ...)
+│   └── deploy-smoke/      # Shell-based deployment smoke tests
 ├── templates/             # Tera templates for config generation
 └── docs/                  # Documentation
 ```
@@ -282,7 +280,7 @@ Set in `~/.riku/envs/<app>/ENV`:
 1. **Make changes** to source code
 2. **Run tests**: `cargo test`
 3. **Lint**: `cargo clippy && cargo fmt`
-4. **Test deployment**: Use `tests/deploy/quick-test.sh`
+4. **Test deployment**: Use `tests/deploy-smoke/quick-test.sh`
 5. **Commit** with conventional commits format
 
 ## Testing
@@ -297,15 +295,22 @@ cargo test --test integration_tests # Integration tests
 ### Deployment Tests
 ```bash
 ./tests/run-all-tests.sh            # Full test suite
-./tests/deploy/quick-test.sh app node  # Single app test
+./tests/deploy-smoke/quick-test.sh app node  # Single app test
 ```
 
 ### Test Categories
-- **CLI tests** (19): Environment setup, app management, configuration
-- **Supervisor tests** (22): Worker configs, cron, log rotation
+All under `tests/integration_tests/` unless noted.
+- **CLI tests** (18): Environment setup, app management, configuration
+- **Supervisor tests** (17): Worker configs, cron, log rotation
 - **Nginx tests** (15): Configuration generation
-- **Plugin tests** (16): Plugin system functionality
-- **E2E tests** (11): Complete deployment scenarios
+- **Plugin tests** (23): Plugin system functionality
+- **E2E tests** (41): Complete deployment scenarios
+- **Smoke tests** (37): Fast sanity checks across core commands
+- **Resilience tests** (17): Crash recovery, restart limits, degraded-mode behavior
+- **Regression tests** (10): Fixes for specific past bugs
+- **Security tests** (14): Injection, path traversal, and other trust-boundary checks
+- **Sandbox tests** (2): Plugin isolation (namespaces/cgroups)
+- **Stress tests** (6, `tests/stress_tests.rs`, outside `integration_tests/`): Load and leak checks
 
 ## Code Style
 
