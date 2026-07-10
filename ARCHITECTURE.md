@@ -50,9 +50,15 @@ the crates were split out.
 | Layer | Crates |
 |---|---|
 | Repository | `riku-config` (`RikuPaths`), `riku-util`, `riku-error` |
-| Service | `riku-nginx`, `riku-deploy`, `riku-supervisor` |
-| Provider | `riku-cli`, `riku-plugins`, `riku-dashboard` |
+| Service | `riku-nginx`, `riku-deploy`, `riku-supervisor`, `riku-plugins` |
+| Provider | `riku-cli`, `riku-dashboard` |
 | Standalone runtime plugins | `riku-plugin-java`, `riku-plugin-clojure`, `riku-plugin-container` |
+
+`riku-plugins` is Service, not Provider, despite living next to `riku-cli`
+in spirit: `riku-supervisor`, `riku-deploy`, and `riku-nginx` all depend on
+it directly (for lifecycle hook dispatch, filters, and events), which only
+makes sense if it sits below them in the dependency graph. A Provider
+label would mean those three services depend on something above them.
 
 See `API.md` for the per-crate module map.
 

@@ -20,18 +20,18 @@ riku-supervisor = { path = "../riku-supervisor" }
 riku-deploy = { path = "../riku-deploy" }
 riku-cli = { path = "../riku-cli" }
 riku-dashboard = { path = "../riku-dashboard" }
-clap = { version = "4", features = ["derive"] }
-anyhow = "1"
-tracing = "0.1"
+clap = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = { workspace = true }
 criterion = { version = "0.5", features = ["html_reports"] }
-serde_json = "1"
-toml = "0.8"
-glob = "0.3"
-which = "7"
+serde_json = { workspace = true }
+toml = { workspace = true }
+glob = { workspace = true }
+which = { workspace = true }
 
 [lints.clippy]
 zombie_processes = "deny"

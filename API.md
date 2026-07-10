@@ -23,7 +23,7 @@ language-specific code at all.
 | `riku-util` | repository | Shared helpers: env parsing, Procfile parsing, cron, SSH keys, resource limits, secure comparisons |
 | `riku-error` | repository | Shared error types (`DeployError`, …) |
 | `riku-nginx` | service | Nginx config generation: Tera context construction, template selection, SSL, Cloudflare ACLs |
-| `riku-plugins` | provider | The entire plugin system — see below |
+| `riku-plugins` | service | The entire plugin system — see below (`riku-supervisor`, `riku-deploy`, and `riku-nginx` all depend on it for hook dispatch, so it sits below them, not above, despite the name) |
 | `riku-deploy` | service | Deployment orchestration: git sync, hooks, worker/env setup, router dispatch, releases, locking, scaling |
 | `riku-supervisor` | service | Process supervisor: spawn/health-check/restart, cgroups, log rotation, cron, and its own axum HTTP API (`/health`, `/metrics`, `/control/*`) |
 | `riku-cli` | provider | CLI command handlers, argument parsing (clap), user-facing output |

