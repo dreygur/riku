@@ -55,6 +55,15 @@ pub fn cmd_config_set(paths: &RikuPaths, app: &str, settings: &[String]) -> Resu
         if let Some(eq_pos) = s.find('=') {
             let k = s[..eq_pos].trim().to_string();
             let v = s[eq_pos + 1..].trim().to_string();
+
+            if k.contains(['\n', '\r']) || v.contains(['\n', '\r']) {
+                display::error(&format!(
+                    "Error: setting '{}' contains a newline, which would corrupt the ENV file",
+                    s
+                ));
+                return Ok(());
+            }
+
             display::note(&format!("Setting {}={} for '{}'", k, v, app));
             env.insert(k, v);
         } else {

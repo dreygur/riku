@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -89,13 +90,19 @@ impl RikuPaths {
 
     /// Build paths from the environment, honoring `$RIKU_ROOT` and `$HOME`.
     ///
-    /// Falls back to `$HOME/.riku` when `RIKU_ROOT` is not set.
-    pub fn from_env() -> Self {
-        let home = PathBuf::from(env::var("HOME").expect("HOME environment variable must be set"));
+    /// Falls back to `$HOME/.riku` when `RIKU_ROOT` is not set. Returns an
+    /// error instead of panicking when `$HOME` is unset, which happens under
+    /// forced-command SSH/git-shell setups that strip the caller's
+    /// environment before invoking riku.
+    pub fn from_env() -> Result<Self> {
+        let home = match env::var("HOME") {
+            Ok(value) => PathBuf::from(value),
+            Err(e) => return Err(e).context("HOME environment variable must be set"),
+        };
         let riku_root = env::var("RIKU_ROOT")
             .map(PathBuf::from)
             .unwrap_or_else(|_| home.join(".riku"));
-        Self::from_dirs(riku_root, &home)
+        Ok(Self::from_dirs(riku_root, &home))
     }
 
     /// Build paths rooted at `root/.riku`, using `root` as home too — the

@@ -7,19 +7,29 @@ use crate::config::RikuPaths;
 use crate::util::{copy_dir_recursive, count_files, display, exit_if_invalid};
 
 /// Deploy an app.
+// Explicit match/if-let over `?` per project convention (.claude/CLAUDE.md
+// rule 16): every early exit stays visible as a `return Err(...)`.
+#[allow(clippy::question_mark)]
 pub fn cmd_deploy(paths: &RikuPaths, app: &str, from_path: Option<&str>) -> Result<()> {
+    let app = match exit_if_invalid(app, &paths.app_root) {
+        Ok(name) => name,
+        Err(e) => return Err(e),
+    };
+
     let deltas: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
 
     // If deploying from local path, copy files first (creates app directory)
     if let Some(source_path) = from_path {
-        deploy_from_path(paths, app, source_path)?;
+        if let Err(e) = deploy_from_path(paths, &app, source_path) {
+            return Err(e);
+        }
     } else if is_bare_repo() {
-        deploy_from_bare_repo(paths, app)?;
-    } else {
-        let _ = exit_if_invalid(app, &paths.app_root)?;
+        if let Err(e) = deploy_from_bare_repo(paths, &app) {
+            return Err(e);
+        }
     }
 
-    crate::deploy::do_deploy(app, paths, &deltas, None)
+    crate::deploy::do_deploy(&app, paths, &deltas, None)
 }
 
 /// Check if current directory is a bare git repo.

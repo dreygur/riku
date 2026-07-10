@@ -18,8 +18,13 @@ impl Supervisor {
     /// `RIKU_WATCH_SERVICES`, one per configured service. Runs on the shared
     /// cron thread pool so a slow or hanging registry pull can't stall the
     /// main loop's health-check and log-rotation timing.
+    // Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
+    #[allow(clippy::question_mark)]
     pub(super) fn check_watched_images(&self) -> Result<()> {
-        let paths = RikuPaths::from_env();
+        let paths = match RikuPaths::from_env() {
+            Ok(paths) => paths,
+            Err(e) => return Err(e),
+        };
         if !paths.env_root.exists() {
             return Ok(());
         }

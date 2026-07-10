@@ -27,7 +27,15 @@ pub(super) async fn plugins_handler(
 
 /// GET /hooks — server-side lifecycle hook plugins (`~/.riku/plugins/`).
 pub(super) async fn hooks_handler() -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let paths = RikuPaths::from_env();
+    let paths = match RikuPaths::from_env() {
+        Ok(paths) => paths,
+        Err(e) => {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "failed to resolve riku paths", "detail": e.to_string()})),
+            ))
+        }
+    };
     match crate::plugins::list_plugins(&paths) {
         Ok(hooks) => Ok(Json(json!({ "hooks": hooks }))),
         Err(e) => Err((

@@ -99,29 +99,66 @@ pub fn setup_post_receive_hook(repo_path: &Path, _app: &str) -> Result<()> {
 }
 
 /// Extract files from bare repo to app directory using git archive.
+///
+/// Runs `git archive` and `tar` directly with argument vectors (no shell), so
+/// neither `app` nor `bare_repo` can inject shell metacharacters into the
+/// extraction command — `app` only ever reaches a path join, never a string
+/// interpolated into a command line.
 pub fn extract_bare_repo_to_app(bare_repo: &Path, app: &str, paths: &RikuPaths) -> Result<()> {
     let app_dir = paths.app_root.join(app);
 
     // Create app directory
     if app_dir.exists() {
-        fs::remove_dir_all(&app_dir)?;
-    }
-    fs::create_dir_all(&app_dir)?;
-
-    // Use git archive piped to tar to extract files
-    let status = Command::new("sh")
-        .args([
-            "-c",
-            &format!(
-                "git archive --format=tar HEAD | tar -xf - -C '{}'",
+        if let Err(e) = fs::remove_dir_all(&app_dir) {
+            return Err(anyhow::anyhow!(
+                "failed to remove existing app directory {}: {e}",
                 app_dir.display()
-            ),
-        ])
-        .current_dir(bare_repo)
-        .status()?;
+            ));
+        }
+    }
+    if let Err(e) = fs::create_dir_all(&app_dir) {
+        return Err(anyhow::anyhow!(
+            "failed to create app directory {}: {e}",
+            app_dir.display()
+        ));
+    }
 
-    if !status.success() {
-        bail!("Failed to extract files from bare repo");
+    let mut git_archive = match Command::new("git")
+        .args(["archive", "--format=tar", "HEAD"])
+        .current_dir(bare_repo)
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(e) => return Err(anyhow::anyhow!("failed to spawn git archive: {e}")),
+    };
+
+    let archive_stdout = match git_archive.stdout.take() {
+        Some(stdout) => stdout,
+        None => return Err(anyhow::anyhow!("failed to capture git archive stdout")),
+    };
+
+    let tar_status = Command::new("tar")
+        .arg("-xf")
+        .arg("-")
+        .arg("-C")
+        .arg(&app_dir)
+        .stdin(archive_stdout)
+        .status();
+
+    let git_status = git_archive.wait();
+
+    match (git_status, tar_status) {
+        (Ok(git), Ok(tar)) if git.success() && tar.success() => {}
+        (Ok(git), Ok(tar)) => {
+            bail!(
+                "Failed to extract files from bare repo (git archive: {}, tar: {})",
+                git,
+                tar
+            );
+        }
+        (Err(e), _) => return Err(anyhow::anyhow!("git archive failed to run: {e}")),
+        (_, Err(e)) => return Err(anyhow::anyhow!("tar failed to run: {e}")),
     }
 
     echo("✓ Extracted files from bare repo", "green");

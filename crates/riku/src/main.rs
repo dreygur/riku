@@ -30,12 +30,17 @@ fn init_tracing() {
         .init();
 }
 
+// Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
+#[allow(clippy::question_mark)]
 fn main() -> Result<()> {
     // Initialize structured logging
     init_tracing();
 
     let args = Cli::parse();
-    let paths = RikuPaths::from_env();
+    let paths = match RikuPaths::from_env() {
+        Ok(paths) => paths,
+        Err(e) => return Err(e),
+    };
 
     // Check for client plugins first — they can override built-in commands.
     if let Some(plugin_name) = get_plugin_command(&args.command) {

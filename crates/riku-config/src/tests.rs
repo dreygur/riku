@@ -82,7 +82,6 @@ fn riku_raw_source_url_constant() {
 
 #[test]
 fn from_env_uses_home() {
-    // Just verify it doesn't panic and produces a sensible root.
-    let paths = RikuPaths::from_env();
+    let paths = RikuPaths::from_env().expect("HOME is set in the test environment");
     assert!(paths.riku_root.is_absolute() || env::var("RIKU_ROOT").is_ok());
 }

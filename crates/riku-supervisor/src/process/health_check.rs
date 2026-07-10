@@ -270,7 +270,13 @@ impl ProcessManager {
 /// notification target must never delay health checks for every other app.
 fn emit_app_restarted(app: String, instance: String, exit_code: Option<i32>, restart_count: u32) {
     std::thread::spawn(move || {
-        let paths = riku_config::RikuPaths::from_env();
+        let paths = match riku_config::RikuPaths::from_env() {
+            Ok(paths) => paths,
+            Err(e) => {
+                tracing::error!("Cannot emit app.restarted for {app}: {e}");
+                return;
+            }
+        };
         EventBus::new(&paths).publish(
             EventName::AppRestarted,
             &app,
@@ -296,7 +302,13 @@ fn emit_app_failed(
     max_restarts: u32,
 ) {
     std::thread::spawn(move || {
-        let paths = riku_config::RikuPaths::from_env();
+        let paths = match riku_config::RikuPaths::from_env() {
+            Ok(paths) => paths,
+            Err(e) => {
+                tracing::error!("Cannot emit app.failed for {app}: {e}");
+                return;
+            }
+        };
         EventBus::new(&paths).publish(
             EventName::AppFailed,
             &app,

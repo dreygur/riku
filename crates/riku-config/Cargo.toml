@@ -8,3 +8,4 @@ repository = "https://github.com/dreygur/riku"
 license = "MIT"
 
 [dependencies]
+anyhow = "1"

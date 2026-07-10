@@ -5,6 +5,7 @@ use notify::Event;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::PoisonError;
 
 use crate::config::WorkerConfig;
 use crate::daemon::Supervisor;
@@ -13,8 +14,12 @@ use crate::CONFIG_RELOAD_LOCK;
 impl Supervisor {
     /// Reload all configurations - stop removed configs, start new/modified ones.
     pub(super) fn reload_all_configs(&mut self) -> Result<()> {
-        // Acquire lock to prevent race with file watcher events
-        let _lock = CONFIG_RELOAD_LOCK.lock().unwrap();
+        // Acquire lock to prevent race with file watcher events. A prior
+        // panic while holding this lock must not permanently break every
+        // future reload, so recover the poisoned guard instead of unwrapping.
+        let _lock = CONFIG_RELOAD_LOCK
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
 
         // Scan directory for current config files
         let mut current_configs: HashMap<String, std::path::PathBuf> = HashMap::new();
@@ -105,8 +110,11 @@ impl Supervisor {
 
     /// Handle file system events (create, modify, remove config files).
     pub(super) fn handle_file_event(&mut self, event: Event) -> Result<()> {
-        // Acquire lock to prevent race with manual reload (SIGHUP)
-        let _lock = CONFIG_RELOAD_LOCK.lock().unwrap();
+        // Acquire lock to prevent race with manual reload (SIGHUP). See
+        // `reload_all_configs` for why a poisoned lock is recovered here.
+        let _lock = CONFIG_RELOAD_LOCK
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
 
         for path in event.paths {
             if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
@@ -241,6 +249,8 @@ impl Supervisor {
     /// 1..3 again. `riku stop`/`riku destroy` still stop everything: they
     /// remove *all* of an app's config files, so this runs once per file and
     /// the net effect is unchanged for that case.
+    // Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
+    #[allow(clippy::question_mark)]
     pub(super) fn unload_config(&mut self, filename: &str) -> Result<()> {
         // Worker config filenames are <app>-<kind>-<ordinal>.toml, which is
         // exactly the process_id format `stop_process_by_id` expects.
@@ -275,7 +285,10 @@ impl Supervisor {
         // latter case should the stats entries be purged; otherwise every
         // destroyed app leaves a permanent ghost row in `/metrics` that
         // nothing ever clears.
-        let paths = riku_config::RikuPaths::from_env();
+        let paths = match riku_config::RikuPaths::from_env() {
+            Ok(paths) => paths,
+            Err(e) => return Err(e),
+        };
         if !paths.app_root.join(app_name).exists() {
             self.process_manager.stats_mut().remove_app(app_name);
             self.cron_scheduler.remove_app_jobs(app_name);

@@ -81,7 +81,15 @@ fn run_blocking_command(
     f: impl FnOnce(&RikuPaths, &str) -> anyhow::Result<()> + Send + 'static,
 ) -> std::thread::JoinHandle<HandlerResult> {
     std::thread::spawn(move || {
-        let paths = RikuPaths::from_env();
+        let paths = match RikuPaths::from_env() {
+            Ok(paths) => paths,
+            Err(e) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"ok": false, "app": app, "action": label, "error": e.to_string()})),
+                ))
+            }
+        };
         match f(&paths, &app) {
             Ok(()) => Ok(Json(json!({"ok": true, "app": app, "action": label}))),
             Err(e) => {
@@ -193,7 +201,15 @@ async fn install_plugins_handler(
         });
 
     let handle = std::thread::spawn(move || -> HandlerResult {
-        let paths = RikuPaths::from_env();
+        let paths = match RikuPaths::from_env() {
+            Ok(paths) => paths,
+            Err(e) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"ok": false, "action": "install-plugins", "error": e.to_string()})),
+                ))
+            }
+        };
         match actions.install_plugins(&paths, only) {
             Ok(()) => Ok(Json(json!({"ok": true, "action": "install-plugins"}))),
             Err(e) => Err((
@@ -218,7 +234,15 @@ async fn container_export_handler(
     Path(app): Path<String>,
 ) -> impl IntoResponse {
     let handle = std::thread::spawn(move || -> HandlerResult {
-        let paths = RikuPaths::from_env();
+        let paths = match RikuPaths::from_env() {
+            Ok(paths) => paths,
+            Err(e) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"ok": false, "error": e.to_string()})),
+                ))
+            }
+        };
 
         let app = match crate::util::validate_app_name(&app) {
             Ok(a) => a,

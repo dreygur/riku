@@ -16,8 +16,13 @@ use super::systemd::{install_systemd_service, setup_systemd_service};
 
 /// Initialize Riku on a server.
 /// Creates directory structure, optionally sets up systemd, and configures SSH keys.
+// Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
+#[allow(clippy::question_mark)]
 pub fn cmd_init(no_systemd: bool) -> Result<()> {
-    let paths = RikuPaths::from_env();
+    let paths = match RikuPaths::from_env() {
+        Ok(paths) => paths,
+        Err(e) => return Err(e),
+    };
 
     let is_root = env::var("USER").unwrap_or_default() == "root";
 
