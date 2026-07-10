@@ -5,7 +5,7 @@ use std::fs;
 use crate::config::RikuPaths;
 use crate::util::{echo, exit_if_invalid};
 
-use super::ps_all::{collect_worker_configs, load_stats, lookup_process_stats};
+use super::ps_all::{collect_worker_configs, load_stats, lookup_process_stats, read_worker_config};
 
 /// Show process scaling info.
 pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
@@ -109,16 +109,23 @@ fn show_running_verbose(
     let stats_data = load_stats(paths);
 
     for config_path in worker_configs {
-        if let Some(filename) = config_path.file_name().and_then(|s| s.to_str()) {
-            let stem = filename.trim_end_matches(".toml").trim_end_matches(".ini");
-            let prefix = format!("{}-", app);
-            let remainder = stem.strip_prefix(prefix.as_str()).unwrap_or("");
-            if let Some((kind, ordinal)) = remainder.split_once('-') {
-                let process_name = format!("{}-{}-{}", app, kind, ordinal);
-                let (pid, status, health) = lookup_process_stats(&stats_data, &process_name);
-                rows.push(vec![process_name, kind.to_string(), pid, status, health]);
-            }
-        }
+        let worker_config = match read_worker_config(&config_path) {
+            Some(config) => config,
+            None => continue,
+        };
+
+        let process_name = format!(
+            "{}-{}-{}",
+            worker_config.worker.app, worker_config.worker.kind, worker_config.worker.ordinal
+        );
+        let (pid, status, health) = lookup_process_stats(&stats_data, &process_name);
+        rows.push(vec![
+            process_name,
+            worker_config.worker.kind,
+            pid,
+            status,
+            health,
+        ]);
     }
 
     crate::util::print_table_with_title(
@@ -154,12 +161,8 @@ fn show_running_compact(
     } else {
         let mut counts: HashMap<String, u32> = HashMap::new();
         for config_path in worker_configs {
-            if let Some(filename) = config_path.file_name().and_then(|s| s.to_str()) {
-                let parts: Vec<&str> = filename.trim_end_matches(".toml").split('-').collect();
-                if parts.len() >= 2 {
-                    let kind = parts[1].to_string();
-                    *counts.entry(kind).or_insert(0) += 1;
-                }
+            if let Some(worker_config) = read_worker_config(config_path) {
+                *counts.entry(worker_config.worker.kind).or_insert(0) += 1;
             }
         }
         for (kind, count) in counts {

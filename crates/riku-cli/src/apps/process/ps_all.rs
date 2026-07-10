@@ -2,6 +2,9 @@ use anyhow::Result;
 use colored::Colorize;
 use std::fs;
 
+use riku_supervisor::config::WorkerConfig;
+use riku_supervisor::stats::AppStats;
+
 use crate::config::RikuPaths;
 use crate::util::display;
 
@@ -45,25 +48,26 @@ fn show_all_verbose(paths: &RikuPaths, apps: &[String]) -> Result<()> {
         let worker_configs = collect_worker_configs(paths, app);
 
         for config_path in worker_configs {
-            if let Some(filename) = config_path.file_name().and_then(|s| s.to_str()) {
-                let stem = filename.trim_end_matches(".toml").trim_end_matches(".ini");
-                let prefix = format!("{}-", app);
-                let remainder = stem.strip_prefix(prefix.as_str()).unwrap_or("");
-                if let Some((kind, ordinal)) = remainder.split_once('-') {
-                    let process_name = format!("{}-{}-{}", app, kind, ordinal);
-                    let (pid, status, health) = lookup_process_stats(&stats_data, &process_name);
+            let worker_config = match read_worker_config(&config_path) {
+                Some(config) => config,
+                None => continue,
+            };
 
-                    rows.push(vec![
-                        app.clone(),
-                        process_name,
-                        kind.to_string(),
-                        pid,
-                        status,
-                        health,
-                    ]);
-                    total_processes += 1;
-                }
-            }
+            let process_name = format!(
+                "{}-{}-{}",
+                worker_config.worker.app, worker_config.worker.kind, worker_config.worker.ordinal
+            );
+            let (pid, status, health) = lookup_process_stats(&stats_data, &process_name);
+
+            rows.push(vec![
+                app.clone(),
+                process_name,
+                worker_config.worker.kind,
+                pid,
+                status,
+                health,
+            ]);
+            total_processes += 1;
         }
     }
 
@@ -100,61 +104,55 @@ fn show_all_compact(paths: &RikuPaths, apps: &[String]) -> Result<()> {
 }
 
 /// Load stats JSON from supervisor stats file, if present.
-pub(super) fn load_stats(paths: &RikuPaths) -> Option<Vec<serde_json::Value>> {
+pub(super) fn load_stats(paths: &RikuPaths) -> Option<Vec<AppStats>> {
     let stats_file = paths.riku_root.join("stats.json");
-    if stats_file.exists() {
-        fs::read_to_string(&stats_file)
-            .ok()
-            .and_then(|content| serde_json::from_str::<Vec<serde_json::Value>>(&content).ok())
-    } else {
-        None
-    }
+    riku_supervisor::stats::read_stats_file(&stats_file)
 }
 
 /// Look up PID, status, and health for a process from the stats vec.
 pub(super) fn lookup_process_stats(
-    stats_data: &Option<Vec<serde_json::Value>>,
+    stats_data: &Option<Vec<AppStats>>,
     process_name: &str,
 ) -> (String, String, String) {
-    if let Some(stats_vec) = stats_data {
-        let mut pid = "N/A".to_string();
-        let mut status = "unknown".to_string();
-        let mut health = "unknown".to_string();
-
-        for app_stats in stats_vec {
-            if let Some(processes) = app_stats.get("processes").and_then(|v| v.as_array()) {
-                for proc_stats in processes {
-                    if let Some(proc_id) = proc_stats.get("process_id").and_then(|v| v.as_str()) {
-                        if proc_id == process_name {
-                            pid = proc_stats
-                                .get("pid")
-                                .and_then(|v| v.as_u64())
-                                .map(|p| p.to_string())
-                                .unwrap_or_else(|| "N/A".to_string());
-                            status = proc_stats
-                                .get("status")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("unknown")
-                                .to_string();
-                            health = proc_stats
-                                .get("health_check_status")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("unknown")
-                                .to_string();
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        (pid, status, health)
-    } else {
-        (
+    let Some(stats_vec) = stats_data else {
+        return (
             "N/A".to_string(),
             "running".to_string(),
             "unknown".to_string(),
-        )
+        );
+    };
+
+    for app_stats in stats_vec {
+        if let Some(proc_stats) = app_stats
+            .processes
+            .iter()
+            .find(|p| p.process_id == process_name)
+        {
+            let pid = proc_stats
+                .pid
+                .map(|p| p.to_string())
+                .unwrap_or_else(|| "N/A".to_string());
+            return (
+                pid,
+                proc_stats.status.to_string(),
+                proc_stats.health_check_status.to_string(),
+            );
+        }
     }
+
+    (
+        "N/A".to_string(),
+        "unknown".to_string(),
+        "unknown".to_string(),
+    )
+}
+
+/// Parse a worker config TOML file. Configs ending in `.ini` (a legacy
+/// extension `collect_worker_configs` still globs for) aren't valid TOML
+/// and are skipped here the same as any other unparsable file.
+pub(super) fn read_worker_config(path: &std::path::Path) -> Option<WorkerConfig> {
+    let content = fs::read_to_string(path).ok()?;
+    toml::from_str(&content).ok()
 }
 
 /// Collect all worker config paths (toml + ini) for an app.

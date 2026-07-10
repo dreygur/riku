@@ -179,33 +179,45 @@ fn test_hook_receives_riku_env_vars() {
     );
 }
 
+// Both timeout scenarios share one test (rather than two) to avoid a data
+// race on the process-global `RIKU_PLUGIN_TIMEOUT` env var when tests run in
+// parallel — see the equivalent note in executor.rs.
 #[test]
 fn test_plugin_timeout_kills_hung_plugin() {
     let temp = TempDir::new().unwrap();
     let paths = setup_paths(&temp);
 
-    let plugin_path = paths.plugin_root.join("riku-pre-deploy");
-    fs::write(&plugin_path, "#!/bin/sh\nsleep 60\n").unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&plugin_path, fs::Permissions::from_mode(0o755)).unwrap();
+    for (hook_file, hook) in [
+        ("riku-pre-deploy", PluginHook::PreDeploy),
+        ("riku-post-build", PluginHook::PostBuild),
+    ] {
+        let plugin_path = paths.plugin_root.join(hook_file);
+        fs::write(&plugin_path, "#!/bin/sh\nsleep 60\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&plugin_path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        std::env::set_var("RIKU_PLUGIN_TIMEOUT", "1");
+        let manager = PluginManager::new(&paths);
+        let app_path = PathBuf::from("/tmp/myapp");
+        let env_path = PathBuf::from("/tmp/envs/myapp");
+        let riku_root = paths.riku_root.clone();
+        let app_env = HashMap::new();
+
+        let ctx = make_ctx("myapp", &hook, &app_path, &env_path, &riku_root, &app_env);
+        let result = manager.run_hook(&ctx);
+        std::env::remove_var("RIKU_PLUGIN_TIMEOUT");
+        fs::remove_file(&plugin_path).unwrap();
+
+        assert!(
+            result.is_err(),
+            "Timed-out {} plugin should abort",
+            hook.hook_name()
+        );
+        assert!(result.unwrap_err().to_string().contains("timed out"));
     }
-
-    std::env::set_var("RIKU_PLUGIN_TIMEOUT", "1");
-    let manager = PluginManager::new(&paths);
-    let app_path = PathBuf::from("/tmp/myapp");
-    let env_path = PathBuf::from("/tmp/envs/myapp");
-    let riku_root = paths.riku_root.clone();
-    let app_env = HashMap::new();
-    let hook = PluginHook::PreDeploy;
-
-    let ctx = make_ctx("myapp", &hook, &app_path, &env_path, &riku_root, &app_env);
-    let result = manager.run_hook(&ctx);
-    std::env::remove_var("RIKU_PLUGIN_TIMEOUT");
-
-    assert!(result.is_err(), "Timed-out pre-deploy plugin should abort");
-    assert!(result.unwrap_err().to_string().contains("timed out"));
 }
 
 #[test]

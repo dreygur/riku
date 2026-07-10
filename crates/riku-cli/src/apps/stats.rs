@@ -1,6 +1,5 @@
 use anyhow::Result;
 use colored::Colorize;
-use serde_json;
 use std::fs;
 
 use crate::config::RikuPaths;
@@ -8,48 +7,34 @@ use crate::util::{display, exit_if_invalid};
 
 /// Show stats for all apps.
 pub fn cmd_stats_all(paths: &RikuPaths) -> Result<()> {
-    // Read stats from the supervisor's stats file if it exists
     let stats_file = paths.riku_root.join("stats.json");
 
-    if stats_file.exists() {
-        if let Ok(content) = fs::read_to_string(&stats_file) {
-            if let Ok(stats_vec) = serde_json::from_str::<Vec<serde_json::Value>>(&content) {
-                display::section("Riku Stats");
-                display::blank();
+    if let Some(app_stats_vec) = riku_supervisor::stats::read_stats_file(&stats_file) {
+        display::section("Riku Stats");
+        display::blank();
 
-                for stats in stats_vec {
-                    if let Some(app) = stats.get("app").and_then(|v| v.as_str()) {
-                        let total_procs = stats
-                            .get("total_processes")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(0);
-                        let running_procs = stats
-                            .get("running_processes")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(0);
-                        let healthy_procs = stats
-                            .get("healthy_processes")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(0);
-                        let memory_bytes = stats
-                            .get("total_memory_bytes")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(0);
-                        let memory_mb = memory_bytes as f64 / 1024.0 / 1024.0;
+        for app_stats in app_stats_vec {
+            let memory_mb = app_stats.total_memory_bytes as f64 / 1024.0 / 1024.0;
 
-                        display::info(&format!("App: {}", app));
-                        display::kv(
-                            "Processes:",
-                            &format!("{}/{} running", running_procs, total_procs),
-                        );
-                        display::kv("Healthy:", &format!("{}/{}", healthy_procs, total_procs));
-                        display::kv("Memory:", &format!("{:.2} MB", memory_mb));
-                        display::blank();
-                    }
-                }
-                return Ok(());
-            }
+            display::info(&format!("App: {}", app_stats.app));
+            display::kv(
+                "Processes:",
+                &format!(
+                    "{}/{} running",
+                    app_stats.running_processes, app_stats.total_processes
+                ),
+            );
+            display::kv(
+                "Healthy:",
+                &format!(
+                    "{}/{}",
+                    app_stats.healthy_processes, app_stats.total_processes
+                ),
+            );
+            display::kv("Memory:", &format!("{:.2} MB", memory_mb));
+            display::blank();
         }
+        return Ok(());
     }
 
     // Fallback: show basic info from worker configs
@@ -83,69 +68,42 @@ pub fn cmd_stats_all(paths: &RikuPaths) -> Result<()> {
 pub fn cmd_stats_app(paths: &RikuPaths, app: &str) -> Result<()> {
     let app = exit_if_invalid(app, &paths.app_root)?;
 
-    // Read stats from the supervisor's stats file if it exists
     let stats_file = paths.riku_root.join("stats.json");
 
-    if stats_file.exists() {
-        if let Ok(content) = fs::read_to_string(&stats_file) {
-            if let Ok(stats_vec) = serde_json::from_str::<Vec<serde_json::Value>>(&content) {
-                for stats in stats_vec {
-                    if let Some(stats_app) = stats.get("app").and_then(|v| v.as_str()) {
-                        if stats_app == app {
-                            display::section(&format!("Stats for '{}'", app));
-                            display::blank();
+    if let Some(app_stats_vec) = riku_supervisor::stats::read_stats_file(&stats_file) {
+        if let Some(app_stats) = app_stats_vec.into_iter().find(|s| s.app == app) {
+            display::section(&format!("Stats for '{}'", app));
+            display::blank();
 
-                            if let Some(processes) =
-                                stats.get("processes").and_then(|v| v.as_array())
-                            {
-                                println!(
-                                    "{:<25} {:<10} {:<10} {:<12} {:<15}",
-                                    "PROCESS", "KIND", "PID", "STATUS", "HEALTH"
-                                );
-                                println!("{}", "-".repeat(75));
+            println!(
+                "{:<25} {:<10} {:<10} {:<12} {:<15}",
+                "PROCESS", "KIND", "PID", "STATUS", "HEALTH"
+            );
+            println!("{}", "-".repeat(75));
 
-                                for proc_stats in processes {
-                                    let process_id = proc_stats
-                                        .get("process_id")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("unknown");
-                                    let kind = proc_stats
-                                        .get("kind")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("unknown");
-                                    let pid = proc_stats
-                                        .get("pid")
-                                        .and_then(|v| v.as_u64())
-                                        .map(|p| p.to_string())
-                                        .unwrap_or_else(|| "N/A".to_string());
-                                    let status = proc_stats
-                                        .get("status")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("unknown");
-                                    let health = proc_stats
-                                        .get("health_check_status")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("unknown");
+            for proc_stats in &app_stats.processes {
+                let pid = proc_stats
+                    .pid
+                    .map(|p| p.to_string())
+                    .unwrap_or_else(|| "N/A".to_string());
 
-                                    println!(
-                                        "{:<25} {:<10} {:<10} {:<12} {:<15}",
-                                        process_id, kind, pid, status, health
-                                    );
-                                }
-                            }
-
-                            if let Some(mem) =
-                                stats.get("total_memory_bytes").and_then(|v| v.as_u64())
-                            {
-                                println!();
-                                println!("Total Memory: {:.2} MB", mem as f64 / 1024.0 / 1024.0);
-                            }
-
-                            return Ok(());
-                        }
-                    }
-                }
+                println!(
+                    "{:<25} {:<10} {:<10} {:<12} {:<15}",
+                    proc_stats.process_id,
+                    proc_stats.kind,
+                    pid,
+                    proc_stats.status,
+                    proc_stats.health_check_status,
+                );
             }
+
+            println!();
+            println!(
+                "Total Memory: {:.2} MB",
+                app_stats.total_memory_bytes as f64 / 1024.0 / 1024.0
+            );
+
+            return Ok(());
         }
     }
 
@@ -166,15 +124,23 @@ pub fn cmd_stats_app(paths: &RikuPaths, app: &str) -> Result<()> {
     println!("{}", "-".repeat(55));
 
     for config_path in worker_configs {
-        if let Some(filename) = config_path.file_name().and_then(|s| s.to_str()) {
-            let parts: Vec<&str> = filename.trim_end_matches(".toml").split('-').collect();
-            if parts.len() >= 3 {
-                let kind = parts[1];
-                let ordinal = parts.get(2).unwrap_or(&"1");
-                let process_name = format!("{}-{}-{}", app, kind, ordinal);
-                println!("{:<30} {:<10} {:<10}", process_name, kind, "running");
-            }
-        }
+        let content = match fs::read_to_string(&config_path) {
+            Ok(content) => content,
+            Err(_) => continue,
+        };
+        let worker_config: riku_supervisor::config::WorkerConfig = match toml::from_str(&content) {
+            Ok(config) => config,
+            Err(_) => continue,
+        };
+
+        let process_name = format!(
+            "{}-{}-{}",
+            worker_config.worker.app, worker_config.worker.kind, worker_config.worker.ordinal
+        );
+        println!(
+            "{:<30} {:<10} {:<10}",
+            process_name, worker_config.worker.kind, "running"
+        );
     }
 
     Ok(())

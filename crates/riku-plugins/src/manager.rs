@@ -22,10 +22,11 @@ mod tests;
 ///
 /// # Failure policy
 ///
-/// - `PreDeploy` hook failure **aborts** the deploy (returns `Err`).
-/// - `PreBuild` hook failure **aborts** the deploy (returns `Err`).
-/// - `PostBuild` and `PostDeploy` hook failures are **logged as warnings**
-///   and do not abort the deploy, because the code is already running.
+/// - `PreDeploy`, `PreBuild`, and `PostBuild` hook failure **aborts** the
+///   deploy (returns `Err`): the new code has not been activated yet, so
+///   there is still a safe point to stop at.
+/// - `PostDeploy` hook failure is **logged as a warning** and does not abort
+///   the deploy, because the new code is already running by that point.
 pub struct PluginManager<'a> {
     paths: &'a RikuPaths,
 }
@@ -105,8 +106,10 @@ impl<'a> PluginManager<'a> {
                 plugin_name, ctx.app, timeout
             );
             return match ctx.hook {
-                PluginHook::PreDeploy | PluginHook::PreBuild => Err(anyhow::anyhow!("{}", msg)),
-                PluginHook::PostBuild | PluginHook::PostDeploy => {
+                PluginHook::PreDeploy | PluginHook::PreBuild | PluginHook::PostBuild => {
+                    Err(anyhow::anyhow!("{}", msg))
+                }
+                PluginHook::PostDeploy => {
                     tracing::warn!("{}", msg);
                     Ok(true)
                 }

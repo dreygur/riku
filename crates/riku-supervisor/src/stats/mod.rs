@@ -4,10 +4,12 @@
 
 pub mod manager;
 pub mod queries;
+pub mod repository;
 pub mod resources;
 pub mod types;
 
 pub use manager::StatsManager;
+pub use repository::read_stats_file;
 pub use resources::get_process_resources;
 pub use types::{AppStats, HealthStatus, ProcessStatus};
 

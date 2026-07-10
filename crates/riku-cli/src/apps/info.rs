@@ -127,35 +127,27 @@ fn print_process_status(paths: &RikuPaths, app: &str) -> Result<()> {
 /// Print memory and process stats from the supervisor's `stats.json`, if available.
 fn print_supervisor_stats(paths: &RikuPaths, app: &str) {
     let stats_file = paths.riku_root.join("stats.json");
-    if stats_file.exists() {
-        if let Ok(content) = fs::read_to_string(&stats_file) {
-            if let Ok(stats_vec) = serde_json::from_str::<Vec<serde_json::Value>>(&content) {
-                for app_stats in stats_vec {
-                    if let Some(app_name) = app_stats.get("app").and_then(|v| v.as_str()) {
-                        if app_name == app {
-                            if let Some(mem) =
-                                app_stats.get("total_memory_bytes").and_then(|v| v.as_u64())
-                            {
-                                display::kv(
-                                    "Memory:",
-                                    &format!("{:.2} MB", mem as f64 / 1024.0 / 1024.0),
-                                );
-                            }
-                            if let Some(running) =
-                                app_stats.get("running_processes").and_then(|v| v.as_u64())
-                            {
-                                display::kv("Running Processes:", &running.to_string());
-                            }
-                            if let Some(healthy) =
-                                app_stats.get("healthy_processes").and_then(|v| v.as_u64())
-                            {
-                                display::kv("Healthy Processes:", &healthy.to_string());
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    }
+    let Some(app_stats_vec) = riku_supervisor::stats::read_stats_file(&stats_file) else {
+        return;
+    };
+
+    let Some(app_stats) = app_stats_vec.into_iter().find(|s| s.app == app) else {
+        return;
+    };
+
+    display::kv(
+        "Memory:",
+        &format!(
+            "{:.2} MB",
+            app_stats.total_memory_bytes as f64 / 1024.0 / 1024.0
+        ),
+    );
+    display::kv(
+        "Running Processes:",
+        &app_stats.running_processes.to_string(),
+    );
+    display::kv(
+        "Healthy Processes:",
+        &app_stats.healthy_processes.to_string(),
+    );
 }
