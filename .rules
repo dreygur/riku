@@ -29,7 +29,7 @@
    - Debug and understand the root cause
    - Fix the underlying issue properly
    - Maintain existing validation, error handling, and safety checks
-   - If validation fails, fix the code being validated—not the validation itself
+   - If validation fails, fix the code being validated, not the validation itself
    - Senior developers solve problems; they don't hide them
 
 8. **Security First** - Before writing any new code, explicitly plan for security:
@@ -38,34 +38,153 @@
    - Apply least-privilege: only request/expose what is strictly needed
    - Consider injection vectors (command injection, path traversal, template injection)
    - Document the security model of any new module in its doc comment
-   - Never defer security to "a later pass" — it must be baked in from the first line
+   - Never defer security to "a later pass": it must be baked in from the first line
 
 9. **Service / Provider / Repository Pattern** - Structure code using clean architecture layers:
-   - **Repository** (`repository.rs` or `repository/`) — raw data access: file I/O, parsing, persistence. No business logic.
-   - **Service** (`service.rs` or `service/`) — business logic and orchestration. Calls repositories, never touches storage directly.
-   - **Provider / CLI** (`cli/`, `plugins/`) — entry points that wire services together and handle user-facing concerns.
+   - **Repository** (`repository.rs` or `repository/`): raw data access: file I/O, parsing, persistence. No business logic.
+   - **Service** (`service.rs` or `service/`): business logic and orchestration. Calls repositories, never touches storage directly.
+   - **Provider / CLI** (`cli/`, `plugins/`): entry points that wire services together and handle user-facing concerns.
    - Keep each layer ignorant of layers above it. A repository must not know about services; a service must not know about CLI.
 
 10. **Delegate to Sub-Agents** - Split non-trivial tasks into sub-agents to keep the main context clean:
-    - Use the `Explore` agent for any codebase research, multi-file searches, or "how does X work" questions — never pollute main context with exploration results
+    - Use the `Explore` agent for any codebase research, multi-file searches, or "how does X work" questions. Never pollute main context with exploration results
     - Use the `general-purpose` agent for self-contained implementation tasks (write code, run tests, fix a bug) that don't need back-and-forth with the user
     - Use the `Plan` agent to design implementation strategies before writing code
     - Run independent sub-tasks in parallel (multiple Agent calls in one message)
-    - The main context should only contain decisions, blockers, and final results — not the full output of every search or read
+    - The main context should only contain decisions, blockers, and final results, not the full output of every search or read
 
 11. **Minimal Context Usage** - Always use the lowest amount of context necessary to complete a task:
     - Read only the specific lines needed (`offset` + `limit`), not whole files
-    - Search with `Grep`/`Glob` before reading — locate the exact location first, then read only that section
+    - Search with `Grep`/`Glob` before reading: locate the exact location first, then read only that section
     - Avoid re-reading files already seen in the same session
     - Prefer targeted searches over broad exploration; use an Explore agent only when multiple rounds of searching are clearly required
     - When editing, use `Edit` (sends only the diff) instead of `Write` (sends the whole file)
-    - Ask clarifying questions before researching a vague task — one question upfront is cheaper than reading the wrong files
+    - Ask clarifying questions before researching a vague task: one question upfront is cheaper than reading the wrong files
 
-11. **Small Files, Small Functions** - Files and functions must stay focused and short:
+12. **Small Files, Small Functions** - Files and functions must stay focused and short:
     - Split any file that grows beyond ~200 lines into sub-modules
+    - Split by use case or feature, not by line count alone. A 150-line file mixing three unrelated concerns still needs splitting; a `mod.rs` per concern (`spawn.rs`, `health_check.rs`, `stop.rs`) beats one `process.rs` handling all of them
     - Each function does one thing; if it needs a comment to explain what a section does, that section is a new function
-    - If a block of code will be (or already is) used in more than one place, extract it into a named function immediately — no copy-paste
+    - If a block of code will be (or already is) used in more than one place, extract it into a named function immediately, no copy-paste
     - Prefer many small files over one large file; Rust's module system makes this cheap
+    - Inline tests belong in a sibling `_tests.rs` file included via `#[path = "..."] mod tests;`, not appended to the bottom of the source file they test
+
+13. **Human-Written Code Only - No AI Tells** - Code must read like a senior engineer wrote it by hand, not like an LLM generated it:
+    - No comments that restate the code ("// increment counter" above `counter += 1`) or narrate what you just did ("// now we validate the input")
+    - No defensive checks, fallbacks, or error handling for cases that structurally cannot happen (validating a value the type system already guarantees, catching an error a function can't return)
+    - No unnecessary abstraction: don't introduce a trait, generic, builder, or config struct for a single concrete use case "in case it's needed later"
+    - No generic filler names (`data`, `result`, `helper`, `manager`, `handleX`, `processX`) when a specific name is available
+    - No emoji, anywhere: not in code, comments, doc comments, commit messages, PR descriptions, or this rules file
+    - No em dashes anywhere either, same scope as above. Use a period, comma, colon, or parentheses instead. Prefer short plain sentences over a dash-joined one
+    - No exclamation points, no "Note:"/"Important:" banners unless the user explicitly asks for them
+    - No changelog-style comments in code (`// added 2026-07-10`, `// fixes issue #123`, `// changed by AI`). That belongs in the commit message, not the source
+    - When two implementations are equally correct, pick the one a reviewer would not flag as "obviously generated": plainer control flow over cleverness, one clear function over a chain of tiny indirections
+    - This rule applies to everything committed: `.rs` source, docs, templates, config, and commit messages
+
+14. **Write Real Documentation, Not Decoration** - Every public item gets a doc comment that earns its place. A missing doc comment on a public API is as much a bug as a bloated one:
+    - Doc comment content: one line stating what the function/struct/module does if the name doesn't already make it obvious, followed by a short paragraph only if there's a non-obvious invariant, precondition, workaround, or "why" that isn't visible from the signature
+    - Module-level (`//!`) doc comments are required for every module that isn't trivially self-explanatory from its name; describe what the module owns and, per rule 8, its security model if it handles a trust boundary
+    - Public structs/enums: document what each field means when the name alone doesn't say it (units, valid ranges, what `None` means versus `Some(default)`)
+    - Skip doc comments entirely on private helpers whose name and 3-line body already say everything; a doc comment there is noise, not documentation
+    - Write it the way a teammate would explain the code out loud: plain, specific, no marketing language, no restating the function signature in prose
+    - `cargo doc` output should read like a real crate's docs, not like a to-do list of AI-generated filler
+
+15. **Use Idiomatic Advanced Rust, Not Just C-with-Rust-Syntax** - Reach for the language's real tools when the problem calls for them:
+    - Enums carrying data plus exhaustive `match`, instead of a `bool`/`&str` flag plus a chain of `if`s standing in for a state machine
+    - Newtype wrappers (`struct AppName(String)`) at trust boundaries so an invalid state (an unvalidated app name where a validated one is required) can't type-check, instead of passing raw `String`/`&str` everywhere and revalidating by convention
+    - Traits and generics for real polymorphism, when two or more types genuinely share behavior. A trait with exactly one implementor is over-abstraction, not idiomatic Rust; see rule 13
+    - Iterator combinators (`map`, `filter`, `fold`) over a manual loop with a mutable accumulator, whenever the combinator version is at least as readable
+    - `impl Trait` / static generics at a call site that only ever sees one concrete type; `dyn Trait` only where runtime polymorphism is real (plugin dispatch behind a registry, trait objects returned from a factory)
+    - `From`/`TryFrom` for conversions instead of a one-off `fn to_x()` scattered across call sites
+    - Borrow first, clone only when ownership is actually needed. Don't let a fight with the borrow checker turn into unreadable lifetime gymnastics either; a clone of a small value is fine when it keeps the code plain
+    - The bar is idiomatic fit, not sophistication. If a simple `if`/`for`/`struct` already says exactly what the code does, using a trait or macro to say the same thing is a rule 13 violation, not rule 15 compliance
+
+    Example, enum plus newtype instead of stringly-typed flags:
+    ```rust
+    // avoid
+    fn run_hook(kind: &str, app: String, abort_on_fail: bool) -> anyhow::Result<()> { ... }
+
+    // prefer
+    struct AppName(String);
+
+    enum PluginHook {
+        PreDeploy,
+        PreBuild,
+        PostBuild,
+        PostDeploy,
+    }
+
+    impl PluginHook {
+        fn aborts_on_failure(&self) -> bool {
+            matches!(self, PluginHook::PreDeploy | PluginHook::PreBuild)
+        }
+    }
+
+    fn run_hook(hook: PluginHook, app: AppName) -> anyhow::Result<()> { ... }
+    ```
+    The enum makes every call site self-documenting and the match exhaustive; the newtype makes an unvalidated app name a compile error wherever a validated one is expected.
+
+16. **No `?` Operator, Explicit Error Propagation Only** - Do not use `?` on `Result` or `Option`, in new code or in any function you touch for another reason:
+    - `?` hides a control-flow exit at the point where a reader can least afford to miss it: the middle of a function body, with no visible `return`
+    - Propagate explicitly instead: `match result { Ok(v) => v, Err(e) => return Err(e.into()) }`, or `if let Err(e) = ...`, or a `.map_err(...)` chain that ends in an explicit `return Err(...)`
+    - This does not change the return type convention: functions still return `anyhow::Result<T>` per rule 5. Only the propagation mechanism inside the function body changes
+    - Applies equally to `Option` (`if let None = ... { return None }` instead of `?` on an `Option`-returning function)
+    - Existing `?` usage elsewhere in the codebase is grandfathered and not a standing bug; don't do a drive-by rewrite of files you aren't otherwise touching
+
+    Example:
+    ```rust
+    // avoid
+    fn load_manifest(path: &Path) -> anyhow::Result<PluginManifest> {
+        let raw = fs::read_to_string(path)?;
+        let manifest: PluginManifest = toml::from_str(&raw)?;
+        Ok(manifest)
+    }
+
+    // prefer
+    fn load_manifest(path: &Path) -> anyhow::Result<PluginManifest> {
+        let raw = match fs::read_to_string(path) {
+            Ok(contents) => contents,
+            Err(e) => return Err(anyhow::anyhow!("failed to read manifest at {path:?}: {e}")),
+        };
+
+        let manifest: PluginManifest = match toml::from_str(&raw) {
+            Ok(m) => m,
+            Err(e) => return Err(anyhow::anyhow!("failed to parse manifest at {path:?}: {e}")),
+        };
+
+        Ok(manifest)
+    }
+    ```
+    Every exit point is a visible `return Err(...)`, with its own context message, instead of two silent early exits behind `?`.
+
+17. **Riku Runs in Production. Report Truth, Not Comfort** - This is deployed, real-user software now, not a toy project. The AI assistant must never soften, hide, or omit a real problem to make a response sound better:
+    - Report bugs, security holes, broken tests, and design flaws the moment they're found, in the same message, even mid-task and even if the user didn't ask for a review
+    - State severity plainly. Don't downgrade "this is exploitable" to "this could maybe be improved" to soften the message
+    - Never say a fix is "done", "working", or "safe" without actually running the build, the test, or the reproduction step that proves it. If it wasn't verified, say so explicitly instead of implying it was
+    - If the user's request itself would introduce a regression, a security hole, or a production incident, say that plainly before doing it, with the concrete failure scenario, not just a vague warning
+    - Agreement is not the default posture. If a past decision, a design choice, or the user's own suggestion is wrong, say it's wrong and why, the same way a senior engineer would push back on a bad idea from a colleague
+    - Uncertainty gets stated as uncertainty ("I haven't verified X" / "this is a guess based on Y") rather than presented with false confidence
+    - Name what you actually built. If a task called for "per-line output prefixing" and you shipped a plain passthrough with a header line, say that, don't call it "prefixing". If an implementation is partial or simplified, say so explicitly instead of describing it with the language of the finished version
+    - This overrides any general instinct to be agreeable. A reassuring answer that hides a real production risk is a failure, not a courtesy
+
+18. **No Guessing, No Assumptions** - Every factual claim about this codebase must come from actually reading the code, the docs, the test output, or the running system, never from a plausible-sounding guess:
+    - Before stating what a function does, what a config value defaults to, whether a test passes, or whether a bug is fixed, go read the file, run the command, or run the test. State the claim only after that check
+    - If checking isn't possible right now (file not found, command didn't run, ambiguous requirement), say exactly that instead of filling the gap with an assumption presented as fact
+    - When a request is ambiguous and the answer materially changes the outcome (which crate, which env var, which behavior on conflict), ask, rather than picking the most likely interpretation and proceeding silently
+    - This applies to memory too: a memory file is a past observation, not current truth. Re-verify a remembered file path, function name, or line number against the live code before relying on it, per the memory system's own instructions
+    - "I assume X" is not an acceptable substitute for checking X when checking X is possible
+
+19. **Test Quality Over Test Volume** - Minimum number of tests that comprehensively cover the behavior, not maximum coverage percentage:
+    - Each behavior gets tested once, well: the golden path, the one or two failure modes with user-facing consequences, and the boundary condition that's easy to get wrong. Stop there
+    - Hand-crafted feel. Signs of agent-generated test bloat to avoid: near-identical assertions repeated across multiple test functions with only the setup varied, per-input parametrization where one assertion already proves the point, a test added right after another that already covers the same case in different words
+    - Test names describe the contract, not the implementation. `fn rejects_app_name_with_path_traversal()` is good; `fn test_validate_app_name()` says nothing; a name that paraphrases the function body is documenting the code twice
+    - Failure messages must be self-debugging. `assert_eq!(result.is_ok(), true)` tells you nothing when it fails; assert on the specific field that matters, or add a message, so a CI failure is diagnosable without a local rerun
+    - Some things are legitimately untestable (timing-dependent OS behavior, real network flakiness). Leaving them untested and saying so in a comment is honest. Writing a ceremonial test that always passes is worse than no test
+
+20. **Flakes Are a P1 Bug in the Test, Never Noise to Retry Past** - A test that passes on one run and fails on another is a defect, not bad luck:
+    - The cause is almost always shared mutable state or ordering coupling between tests: a `static`/`OnceCell`, a shared temp directory, a mutated env var or working directory, reliance on file iteration order. Cargo's default multi-threaded test runner runs tests in parallel by default, so this kind of state leaks between them
+    - The fix is to make the test hermetic: give it its own temp dir, its own env scope, no dependency on run order or on what another test left behind. Serialize tests against shared state only as a last resort, and only for the specific tests that must share it
+    - Banned as a "fix": `#[ignore]`-ing the test, adding a retry wrapper, loosening the assertion to stop noticing the divergence, or re-running until it's green and calling that resolved. A single green run does not prove a flake is fixed; if you suspect one is gone, run the suspect test repeatedly, including with a different `--test-threads` count, before saying so
 
 ## Project Overview
 
@@ -217,8 +336,8 @@ config.rs     ← Repository layer: path resolution, env var access
 ```
 
 **Rules:**
-- Repositories (`config.rs`, file parsers) only read/write data — no logic
-- Services orchestrate logic — no direct user I/O, no `println!` (use `tracing`)
+- Repositories (`config.rs`, file parsers) only read/write data, no logic
+- Services orchestrate logic, no direct user I/O, no `println!` (use `tracing`)
 - Providers (CLI, plugins) wire services, handle user-facing output
 
 See `ARCHITECTURE.md` and `API.md` for detailed documentation.
