@@ -99,39 +99,6 @@ pub fn exit_if_invalid(app: &str, app_root: &Path) -> Result<String> {
     Ok(app)
 }
 
-/// Convert a boolean-ish string to a boolean.
-#[cfg(test)]
-pub fn get_boolean(value: &str) -> bool {
-    matches!(
-        value.to_lowercase().as_str(),
-        "1" | "on" | "true" | "enabled" | "yes" | "y"
-    )
-}
-
-/// Validate and parse a positive integer environment variable.
-/// Returns Ok(value) if valid, or Err with a helpful error message.
-#[cfg(test)]
-pub fn parse_positive_int(name: &str, value: &str) -> Result<u64, String> {
-    value
-        .parse::<u64>()
-        .map_err(|_| {
-            format!(
-                "Invalid value for {}: '{}' is not a valid positive integer",
-                name, value
-            )
-        })
-        .and_then(|v| {
-            if v == 0 {
-                Err(format!(
-                    "Invalid value for {}: must be greater than 0",
-                    name
-                ))
-            } else {
-                Ok(v)
-            }
-        })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,48 +167,5 @@ mod tests {
         let root = temp_dir.path().join("root");
         fs::create_dir(&root).unwrap();
         assert!(ensure_path_within(temp_dir.path(), &root).is_err());
-    }
-
-    #[test]
-    fn test_get_boolean_truthy() {
-        for val in &["1", "on", "true", "enabled", "yes", "y"] {
-            assert!(get_boolean(val), "expected true for '{}'", val);
-        }
-    }
-
-    #[test]
-    fn test_get_boolean_case_insensitive() {
-        assert!(get_boolean("True"));
-        assert!(get_boolean("TRUE"));
-        assert!(get_boolean("ON"));
-        assert!(get_boolean("Yes"));
-        assert!(get_boolean("Y"));
-        assert!(get_boolean("Enabled"));
-    }
-
-    #[test]
-    fn test_get_boolean_falsy() {
-        assert!(!get_boolean("0"));
-        assert!(!get_boolean("off"));
-        assert!(!get_boolean("false"));
-        assert!(!get_boolean("no"));
-        assert!(!get_boolean("n"));
-        assert!(!get_boolean(""));
-        assert!(!get_boolean("random"));
-    }
-
-    #[test]
-    fn test_parse_positive_int_valid() {
-        assert_eq!(parse_positive_int("TEST", "100"), Ok(100));
-        assert_eq!(parse_positive_int("TEST", "1"), Ok(1));
-        assert_eq!(parse_positive_int("TEST", "999999"), Ok(999999));
-    }
-
-    #[test]
-    fn test_parse_positive_int_invalid() {
-        assert!(parse_positive_int("TEST", "abc").is_err());
-        assert!(parse_positive_int("TEST", "-5").is_err());
-        assert!(parse_positive_int("TEST", "0").is_err());
-        assert!(parse_positive_int("TEST", "").is_err());
     }
 }

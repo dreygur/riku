@@ -6,16 +6,17 @@
 //! reader thread so a large or slow plugin cannot deadlock against an undrained
 //! pipe, and the shared timeout still bounds the whole call.
 
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::Write;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex};
 
 use anyhow::{bail, Context, Result};
 
 use crate::config::RikuPaths;
-use crate::executor::{plugin_timeout, spawn_retrying_etxtbsy, wait_with_timeout};
+use crate::executor::{
+    capture_stdout, plugin_timeout, spawn_retrying_etxtbsy, stream_stderr, wait_with_timeout,
+};
 use crate::manifest::PluginManifest;
 use crate::RIKU_PLUGIN_API;
 
@@ -75,23 +76,10 @@ pub fn run_verb(call: VerbCall<'_>) -> Result<serde_json::Value> {
     }
 
     // Capture stdout on a thread (response body); stream stderr to the log.
-    let stdout_buf = Arc::new(Mutex::new(String::new()));
-    let stdout_handle = child.stdout.take().map(|out| {
-        let buf = Arc::clone(&stdout_buf);
-        std::thread::spawn(move || {
-            let mut s = String::new();
-            if BufReader::new(out).read_to_string(&mut s).is_ok() {
-                *buf.lock().unwrap() = s;
-            }
-        })
-    });
+    let (stdout_handle, stdout_buf) = capture_stdout(&mut child);
     let plugin_name = call.manifest.name.clone();
-    let stderr_handle = child.stderr.take().map(|err| {
-        std::thread::spawn(move || {
-            for line in BufReader::new(err).lines().map_while(Result::ok) {
-                tracing::info!(addon = %plugin_name, "{line}");
-            }
-        })
+    let stderr_handle = stream_stderr(&mut child, move |line| {
+        tracing::info!(addon = %plugin_name, "{line}");
     });
 
     let timed_out = wait_with_timeout(&mut child, plugin_timeout());

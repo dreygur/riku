@@ -72,6 +72,10 @@ pub struct Supervisor {
     pub(super) actions: crate::health::SharedActions,
 }
 
+// Explicit match/if-let over `?` throughout this impl block per project
+// convention (.claude/CLAUDE.md rule 16): every early exit stays visible as
+// a `return Err(...)`.
+#[allow(clippy::question_mark)]
 impl Supervisor {
     /// Start the supervisor daemon loop.
     pub fn run(&mut self) -> Result<()> {
@@ -79,22 +83,13 @@ impl Supervisor {
         tracing::info!("Monitoring: {}", self.config_dir.display());
         tracing::info!("Press Ctrl+C to stop");
 
-        // Create PID file with exclusive lock to prevent multiple supervisors
-        let my_pid = std::process::id();
-        match self.create_pid_file_with_lock(my_pid) {
-            Ok(file) => {
-                self.pid_file_lock = Some(file);
-            }
-            Err(e) => {
-                return Err(anyhow::anyhow!(
-                    "Another supervisor is already running (PID file locked): {}",
-                    e
-                ));
-            }
+        if let Err(e) = self.acquire_pid_lock() {
+            return Err(e);
         }
 
-        // Set up signal handlers for graceful shutdown
-        setup_signal_handlers()?;
+        if let Err(e) = setup_signal_handlers() {
+            return Err(e);
+        }
 
         // Async, non-blocking SIGHUP listener (config hot-reload trigger).
         // Runs on its own dedicated thread/runtime — never touches this
@@ -103,11 +98,52 @@ impl Supervisor {
         // iteration regardless of where the increment came from.
         crate::spawn_sighup_listener();
 
-        // Best-effort check that cgroup v2 isolation, if any worker opts
-        // into it, will actually work. Non-fatal: isolation is opt-in per
-        // worker, so a riku deployment that never uses it should still run.
-        // Without this check the first failure surfaces deep inside
-        // spawn_process the moment someone enables isolation.
+        self.check_cgroup_isolation();
+        self.start_health_endpoint();
+
+        if let Err(e) = self.load_initial_configs() {
+            return Err(e);
+        }
+
+        let initial_count = self.process_manager.get_process_count();
+        tracing::info!("Loaded {} worker configurations", initial_count);
+
+        let (_watcher, rx) = match self.watch_config_dir() {
+            Ok(pair) => pair,
+            Err(e) => return Err(e),
+        };
+
+        tracing::info!("Supervisor running. Waiting for configuration changes...");
+
+        if let Err(e) = self.run_event_loop(&rx) {
+            return Err(e);
+        }
+
+        self.shutdown()
+    }
+
+    /// Create the PID file with an exclusive lock, so a second supervisor
+    /// can't start against the same config directory.
+    fn acquire_pid_lock(&mut self) -> Result<()> {
+        let my_pid = std::process::id();
+        match self.create_pid_file_with_lock(my_pid) {
+            Ok(file) => {
+                self.pid_file_lock = Some(file);
+                Ok(())
+            }
+            Err(e) => Err(anyhow::anyhow!(
+                "Another supervisor is already running (PID file locked): {}",
+                e
+            )),
+        }
+    }
+
+    /// Best-effort check that cgroup v2 isolation, if any worker opts into
+    /// it, will actually work. Non-fatal: isolation is opt-in per worker, so
+    /// a riku deployment that never uses it should still run. Without this
+    /// check the first failure surfaces deep inside `spawn_process` the
+    /// moment someone enables isolation.
+    fn check_cgroup_isolation(&self) {
         if let Err(e) = crate::cgroups::verify_root_writable() {
             let diagnostic = crate::cgroups::startup_diagnostic(&e);
             if is_production_mode() {
@@ -124,8 +160,13 @@ impl Supervisor {
                 tracing::warn!("{}", diagnostic);
             }
         }
+    }
 
-        // Start health check server
+    /// Start the health-check HTTP server, storing the metrics broadcast
+    /// sender on success so the event loop can push SSE frames to it later.
+    /// Non-fatal on failure: the supervisor still runs without a health
+    /// endpoint, just without live metrics/control-plane access.
+    fn start_health_endpoint(&mut self) {
         let health_port = std::env::var("RIKU_HEALTH_PORT")
             .ok()
             .and_then(|p| p.parse().ok())
@@ -143,24 +184,39 @@ impl Supervisor {
         } else {
             tracing::warn!("Failed to start health server on port {}", health_port);
         }
+    }
 
-        // Load existing configurations at startup
-        self.load_initial_configs()?;
-
-        let initial_count = self.process_manager.get_process_count();
-        tracing::info!("Loaded {} worker configurations", initial_count);
-
-        // Set up file watcher for config directory with symlink following enabled
+    /// Set up the filesystem watcher on `config_dir`. The returned watcher
+    /// must be kept alive by the caller for as long as `rx` is read from —
+    /// dropping it stops the watch.
+    #[allow(clippy::type_complexity)]
+    fn watch_config_dir(
+        &self,
+    ) -> Result<(
+        notify::RecommendedWatcher,
+        mpsc::Receiver<notify::Result<notify::Event>>,
+    )> {
         let (tx, rx) = mpsc::channel();
-        let mut watcher = notify::RecommendedWatcher::new(
+        let mut watcher = match notify::RecommendedWatcher::new(
             tx,
             notify::Config::default().with_follow_symlinks(true),
-        )?;
-        watcher.watch(&self.config_dir, RecursiveMode::NonRecursive)?;
+        ) {
+            Ok(w) => w,
+            Err(e) => return Err(e.into()),
+        };
+        if let Err(e) = watcher.watch(&self.config_dir, RecursiveMode::NonRecursive) {
+            return Err(e.into());
+        }
+        Ok((watcher, rx))
+    }
 
-        tracing::info!("Supervisor running. Waiting for configuration changes...");
-
-        // Main event loop
+    /// Main event loop: reacts to config file changes and, on each idle
+    /// timeout tick, runs the periodic maintenance sweep. Runs until a
+    /// shutdown signal (SIGTERM/SIGINT) is observed. A watcher-reported
+    /// error, or a failure handling a config file event, aborts the loop
+    /// and propagates — matching the previous inline behavior where either
+    /// would exit `run()` entirely rather than being treated as recoverable.
+    fn run_event_loop(&mut self, rx: &mpsc::Receiver<notify::Result<notify::Event>>) -> Result<()> {
         loop {
             // Check if we should shut down (SIGTERM/SIGINT received)
             if !is_running() {
@@ -168,116 +224,22 @@ impl Supervisor {
                 break;
             }
 
-            // Check if reload was requested via SIGHUP
-            // Use swap to atomically get and reset the counter, preventing signal loss
-            let pending_reloads = RELOAD_COUNTER.swap(0, Ordering::SeqCst);
-            if pending_reloads > 0 {
-                tracing::info!(
-                    "Received {} reload request(s). Reloading all configurations...",
-                    pending_reloads
-                );
-                // reload_all_configs() diffs current worker TOML manifests
-                // against `watched_configs` (riku's live process tree) and
-                // only touches what's new, modified, or removed —
-                // unchanged workers are never stopped or restarted.
-                self.reload_all_configs()?;
-
-                // Refresh nginx's routing config too, so a SIGHUP-triggered
-                // reload reconciles both halves of "live config" together.
-                // `nginx -s reload` is itself graceful (finishes in-flight
-                // connections on old workers), so this never drops traffic
-                // for unaffected apps either.
-                crate::nginx::reload_nginx();
+            if let Err(e) = self.reload_if_requested() {
+                return Err(e);
             }
 
             match rx.recv_timeout(Duration::from_secs(1)) {
                 Ok(event) => {
-                    self.handle_file_event(event?)?;
+                    let event = match event {
+                        Ok(event) => event,
+                        Err(e) => return Err(e.into()),
+                    };
+                    if let Err(e) = self.handle_file_event(event) {
+                        return Err(e);
+                    }
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
-                    // Periodic maintenance tasks - check process health
-                    self.process_manager.check_processes()?;
-
-                    // Drain canary probe outcomes: promote healthy generations,
-                    // roll back failed ones. Never touches the stable generation
-                    // unless promotion succeeds.
-                    if let Err(e) = self.process_manager.reconcile_generations() {
-                        tracing::error!("Generation reconciliation error: {:?}", e);
-                    }
-
-                    // Forward any rollback/promotion notifications onto the same
-                    // broadcast channel the metrics SSE stream uses. `send` is
-                    // non-blocking for the same reason the stats frame below is.
-                    if let Some(tx) = &self.metrics_broadcast_tx {
-                        for event in self.process_manager.drain_deployment_events() {
-                            let _ = tx.send(event);
-                        }
-                    }
-
-                    // Check if it's time for log rotation
-                    if self
-                        .last_log_rotation
-                        .elapsed()
-                        .unwrap_or(Duration::from_secs(0))
-                        >= self.log_rotation_interval
-                    {
-                        if let Err(e) = self.rotate_logs() {
-                            tracing::error!("Log rotation error: {:?}", e);
-                        }
-                        self.last_log_rotation = std::time::SystemTime::now();
-                    }
-
-                    // Check if it's time to write stats
-                    if self
-                        .last_stats_write
-                        .elapsed()
-                        .unwrap_or(Duration::from_secs(0))
-                        >= self.stats_write_interval
-                    {
-                        if let Err(e) = self.write_stats() {
-                            tracing::error!("Failed to write stats: {:?}", e);
-                        }
-
-                        if let Some(tx) = &self.metrics_broadcast_tx {
-                            let json = serde_json::to_string(
-                                &self.process_manager.stats().get_all_stats(),
-                            )
-                            .unwrap_or_default();
-                            // `broadcast::Sender::send` never blocks the supervisor hot
-                            // loop: with no subscribers it just errors (ignored here),
-                            // and a full ring buffer overwrites the oldest frame instead
-                            // of waiting on a slow SSE client.
-                            let _ = tx.send(json);
-                        }
-
-                        self.last_stats_write = std::time::SystemTime::now();
-                    }
-
-                    // Check if it's time to check cron jobs
-                    if self
-                        .last_cron_check
-                        .elapsed()
-                        .unwrap_or(Duration::from_secs(0))
-                        >= self.cron_check_interval
-                    {
-                        if let Err(e) = self.check_cron_jobs() {
-                            tracing::error!("Cron job check error: {:?}", e);
-                        }
-                        self.last_cron_check = std::time::SystemTime::now();
-                    }
-
-                    // Check if it's time to re-pull watched compose images
-                    if self
-                        .last_image_watch_check
-                        .elapsed()
-                        .unwrap_or(Duration::from_secs(0))
-                        >= self.image_watch_interval
-                    {
-                        if let Err(e) = self.check_watched_images() {
-                            tracing::error!("Watched image check error: {:?}", e);
-                        }
-                        self.last_image_watch_check = std::time::SystemTime::now();
-                    }
+                    self.run_periodic_maintenance();
                 }
                 Err(e) => {
                     tracing::error!("Watcher error: {:?}", e);
@@ -285,7 +247,132 @@ impl Supervisor {
             }
         }
 
-        // Clean shutdown
+        Ok(())
+    }
+
+    /// Reload all worker configs if a SIGHUP was received since the last
+    /// check. Uses `swap` to atomically get-and-reset the counter, so a
+    /// signal delivered between ticks is never lost.
+    fn reload_if_requested(&mut self) -> Result<()> {
+        let pending_reloads = RELOAD_COUNTER.swap(0, Ordering::SeqCst);
+        if pending_reloads > 0 {
+            tracing::info!(
+                "Received {} reload request(s). Reloading all configurations...",
+                pending_reloads
+            );
+            // reload_all_configs() diffs current worker TOML manifests
+            // against `watched_configs` (riku's live process tree) and
+            // only touches what's new, modified, or removed —
+            // unchanged workers are never stopped or restarted.
+            if let Err(e) = self.reload_all_configs() {
+                return Err(e);
+            }
+
+            // Refresh nginx's routing config too, so a SIGHUP-triggered
+            // reload reconciles both halves of "live config" together.
+            // `nginx -s reload` is itself graceful (finishes in-flight
+            // connections on old workers), so this never drops traffic
+            // for unaffected apps either.
+            crate::nginx::reload_nginx();
+        }
+        Ok(())
+    }
+
+    /// Runs on every event-loop timeout tick (i.e. no config file event in
+    /// the last second): process health, canary reconciliation, log
+    /// rotation, stats writing, cron, and watched-image checks, each gated
+    /// on its own interval. Every failure here is logged and swallowed —
+    /// none of these should ever be able to take the whole daemon down.
+    fn run_periodic_maintenance(&mut self) {
+        if let Err(e) = self.process_manager.check_processes() {
+            tracing::error!("Process health check error: {:?}", e);
+        }
+
+        // Drain canary probe outcomes: promote healthy generations,
+        // roll back failed ones. Never touches the stable generation
+        // unless promotion succeeds.
+        if let Err(e) = self.process_manager.reconcile_generations() {
+            tracing::error!("Generation reconciliation error: {:?}", e);
+        }
+
+        // Forward any rollback/promotion notifications onto the same
+        // broadcast channel the metrics SSE stream uses. `send` is
+        // non-blocking for the same reason the stats frame below is.
+        if let Some(tx) = &self.metrics_broadcast_tx {
+            for event in self.process_manager.drain_deployment_events() {
+                let _ = tx.send(event);
+            }
+        }
+
+        // Check if it's time for log rotation
+        if self
+            .last_log_rotation
+            .elapsed()
+            .unwrap_or(Duration::from_secs(0))
+            >= self.log_rotation_interval
+        {
+            if let Err(e) = self.rotate_logs() {
+                tracing::error!("Log rotation error: {:?}", e);
+            }
+            self.last_log_rotation = std::time::SystemTime::now();
+        }
+
+        // Check if it's time to write stats
+        if self
+            .last_stats_write
+            .elapsed()
+            .unwrap_or(Duration::from_secs(0))
+            >= self.stats_write_interval
+        {
+            if let Err(e) = self.write_stats() {
+                tracing::error!("Failed to write stats: {:?}", e);
+            }
+
+            if let Some(tx) = &self.metrics_broadcast_tx {
+                let json = serde_json::to_string(&self.process_manager.stats().get_all_stats())
+                    .unwrap_or_default();
+                // `broadcast::Sender::send` never blocks the supervisor hot
+                // loop: with no subscribers it just errors (ignored here),
+                // and a full ring buffer overwrites the oldest frame instead
+                // of waiting on a slow SSE client.
+                let _ = tx.send(json);
+            }
+
+            self.last_stats_write = std::time::SystemTime::now();
+        }
+
+        // Check if it's time to check cron jobs
+        if self
+            .last_cron_check
+            .elapsed()
+            .unwrap_or(Duration::from_secs(0))
+            >= self.cron_check_interval
+        {
+            if let Err(e) = self.check_cron_jobs() {
+                tracing::error!("Cron job check error: {:?}", e);
+            }
+            self.last_cron_check = std::time::SystemTime::now();
+        }
+
+        // Check if it's time to re-pull watched compose images
+        if self
+            .last_image_watch_check
+            .elapsed()
+            .unwrap_or(Duration::from_secs(0))
+            >= self.image_watch_interval
+        {
+            if let Err(e) = self.check_watched_images() {
+                tracing::error!("Watched image check error: {:?}", e);
+            }
+            self.last_image_watch_check = std::time::SystemTime::now();
+        }
+    }
+
+    /// Clean shutdown: stop the health server, wait for in-flight cron jobs,
+    /// stop every managed process, and release the PID file. Only reached
+    /// when the event loop exits via a shutdown signal — an error exiting
+    /// the loop skips straight to returning that error instead.
+    fn shutdown(&mut self) -> Result<()> {
         tracing::info!("Shutting down health server...");
         self.health_running.store(false, Ordering::SeqCst);
 
@@ -293,7 +380,9 @@ impl Supervisor {
         self.cron_thread_pool.join();
 
         tracing::info!("Stopping all managed processes...");
-        self.process_manager.stop_all_processes()?;
+        if let Err(e) = self.process_manager.stop_all_processes() {
+            return Err(e);
+        }
 
         // Drop PID file lock (releases exclusive lock automatically)
         drop(self.pid_file_lock.take());
@@ -306,111 +395,4 @@ impl Supervisor {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::create_worker_config;
-    use std::collections::HashMap;
-    use tempfile::TempDir;
-
-    fn write_sleep_worker_config(config_dir: &std::path::Path, log_dir: &std::path::Path) {
-        let config = create_worker_config(
-            "sighuptest",
-            "web",
-            "sleep 60",
-            1,
-            HashMap::new(),
-            "/tmp",
-            log_dir.join("web.1.log").to_str().unwrap(),
-        );
-        let toml_str = toml::to_string(&config).unwrap();
-        std::fs::write(config_dir.join("sighuptest-web-1.toml"), toml_str).unwrap();
-    }
-
-    /// End-to-end regression test for the SIGHUP hot-reload path: fires a
-    /// *real* `SIGHUP` at this test process via `nix::sys::signal::kill`
-    /// (not a direct function call), proving the async
-    /// `tokio::signal::unix` listener spawned by `spawn_sighup_listener`
-    /// actually catches process-level signal delivery — not just that the
-    /// reload logic works when called directly.
-    ///
-    /// Also proves the reload is non-destructive: a worker whose config
-    /// file didn't change keeps the exact same PID across the reload, i.e.
-    /// `reload_all_configs`'s mtime diff against `watched_configs` (the
-    /// live process tree) correctly skips it rather than restarting
-    /// everything on every SIGHUP.
-    #[test]
-    fn test_sighup_triggers_reload_without_disturbing_unchanged_worker() {
-        let tmp = TempDir::new().unwrap();
-        let riku_root = tmp.path().join(".riku");
-        let config_dir = riku_root.join("workers-enabled");
-        let log_dir = riku_root.join("logs");
-        std::fs::create_dir_all(&config_dir).unwrap();
-        std::fs::create_dir_all(&log_dir).unwrap();
-
-        write_sleep_worker_config(&config_dir, &log_dir);
-
-        let mut supervisor = Supervisor::new(config_dir.clone()).unwrap();
-        supervisor.load_initial_configs().unwrap();
-        assert_eq!(
-            supervisor.process_manager.get_process_count(),
-            1,
-            "the sleep worker should be spawned by load_initial_configs"
-        );
-
-        let pid_before = supervisor
-            .process_manager
-            .list_processes()
-            .into_iter()
-            .find(|p| p.process_id == "sighuptest-web-1")
-            .expect("worker should be registered before reload")
-            .pid;
-
-        // Start the real async listener under test, then fire an actual
-        // SIGHUP at this process — exercising real kernel signal delivery
-        // end to end, not a synthetic counter bump.
-        crate::spawn_sighup_listener();
-        RELOAD_COUNTER.store(0, Ordering::SeqCst);
-
-        nix::sys::signal::kill(nix::unistd::Pid::this(), nix::sys::signal::Signal::SIGHUP)
-            .expect("failed to send SIGHUP to self");
-
-        // The listener runs on its own thread/runtime asynchronously, so
-        // poll briefly rather than assuming instant delivery.
-        let mut caught = false;
-        for _ in 0..50 {
-            if RELOAD_COUNTER.load(Ordering::SeqCst) > 0 {
-                caught = true;
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(20));
-        }
-        assert!(
-            caught,
-            "tokio::signal::unix SIGHUP listener did not observe the signal within 1s"
-        );
-
-        // Mirror exactly what the main loop does on a pending reload.
-        RELOAD_COUNTER.store(0, Ordering::SeqCst);
-        supervisor.reload_all_configs().unwrap();
-
-        assert_eq!(
-            supervisor.process_manager.get_process_count(),
-            1,
-            "reload must not have added or removed the worker"
-        );
-        let pid_after = supervisor
-            .process_manager
-            .list_processes()
-            .into_iter()
-            .find(|p| p.process_id == "sighuptest-web-1")
-            .expect("worker should still be registered after reload")
-            .pid;
-        assert_eq!(
-            pid_before, pid_after,
-            "an unchanged worker config must not be restarted by a SIGHUP reload \
-             (same PID before and after)"
-        );
-
-        supervisor.process_manager.stop_all_processes().unwrap();
-    }
-}
+mod tests;

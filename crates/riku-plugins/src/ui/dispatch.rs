@@ -7,16 +7,17 @@
 //! spawn failure, malformed JSON) returns an empty panel and logs a
 //! warning — a broken UI plugin can never break the dashboard.
 
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::Write;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
 use crate::config::RikuPaths;
-use crate::executor::{plugin_timeout, spawn_retrying_etxtbsy, wait_with_timeout};
+use crate::executor::{
+    capture_stdout, plugin_timeout, spawn_retrying_etxtbsy, stream_stderr, wait_with_timeout,
+};
 use crate::manifest::PluginManifest;
 use crate::RIKU_PLUGIN_API;
 
@@ -85,23 +86,10 @@ pub fn run_ui_panel(
 
     // Capture stdout on a thread (the panel body); stream stderr to the log
     // — same convention as the addon/filter seams' verb dispatch.
-    let stdout_buf = Arc::new(Mutex::new(String::new()));
-    let stdout_handle = child.stdout.take().map(|out| {
-        let buf = Arc::clone(&stdout_buf);
-        std::thread::spawn(move || {
-            let mut s = String::new();
-            if BufReader::new(out).read_to_string(&mut s).is_ok() {
-                *buf.lock().unwrap() = s;
-            }
-        })
-    });
+    let (stdout_handle, stdout_buf) = capture_stdout(&mut child);
     let plugin_name = manifest.name.clone();
-    let stderr_handle = child.stderr.take().map(|err| {
-        std::thread::spawn(move || {
-            for line in BufReader::new(err).lines().map_while(Result::ok) {
-                tracing::info!(target: "riku::ui", plugin = %plugin_name, "{line}");
-            }
-        })
+    let stderr_handle = stream_stderr(&mut child, move |line| {
+        tracing::info!(target: "riku::ui", plugin = %plugin_name, "{line}");
     });
 
     let timed_out = wait_with_timeout(&mut child, plugin_timeout());
