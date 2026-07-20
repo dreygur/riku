@@ -68,6 +68,9 @@ jobs:
       - name: Type-check
         run: nub run typecheck
 
+      - name: Unit tests
+        run: nub run test:unit
+
       - name: Build
         run: nub run build
 

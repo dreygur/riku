@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "audit:dashboard": "nubx tsx scripts/audit-dashboard.ts",
     "hash-password": "nubx tsx scripts/hash-password.ts",
-    "test:unit": "playwright test --project=unit",
+    "test:unit": "vitest run",
     "test:e2e": "playwright test --project=e2e"
   },
   "dependencies": {
@@ -33,11 +33,17 @@
   "devDependencies": {
     "@playwright/test": "^1.61.0",
     "@tailwindcss/postcss": "^4.3.1",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^22.15.21",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4.3.1",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.10"
   },
   "packageManager": "nub@0.2.10",
   "devEngines": {

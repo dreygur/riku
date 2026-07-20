@@ -15,14 +15,6 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   projects: [
-    // Pure unit tests (no browser, no server): the dashboard's security
-    // boundary — validateAppName + the env-driven origin/token helpers.
-    // Fast and safe to run in CI on every change.
-    {
-      name: "unit",
-      testDir: "./tests/unit",
-      timeout: 30_000,
-    },
     // Heavy end-to-end suite: boots a real riku supervisor + Next.js
     // dashboard (see tests/e2e-dashboard/helpers/sandbox.ts), so it manages
     // its own servers and needs a long per-test budget.
