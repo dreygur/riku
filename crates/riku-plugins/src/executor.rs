@@ -6,7 +6,7 @@
 use nix::sys::signal::{kill, killpg, Signal};
 use nix::unistd::{getpgid, Pid};
 use std::io::{BufRead, BufReader, Read};
-use std::process::{Child, Command, ExitStatus};
+use std::process::{Child, Command, ExitStatus, Output};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -40,18 +40,31 @@ pub fn plugin_timeout() -> Duration {
 /// actual concurrent writer), which will still fail after the retry budget
 /// is exhausted.
 pub fn spawn_retrying_etxtbsy(cmd: &mut Command) -> std::io::Result<Child> {
+    retry_etxtbsy(|| cmd.spawn())
+}
+
+/// `cmd.output()`, retrying on `ETXTBSY` for the same reason as
+/// [`spawn_retrying_etxtbsy`]. Use this for the plugin subcommands whose
+/// stdout riku consumes (`env`, `start`): they run moments after a build or
+/// install step may have written the plugin file, so a plain `output()` can
+/// hit the same transient "text file busy" that the spawn path guards
+/// against.
+pub fn output_retrying_etxtbsy(cmd: &mut Command) -> std::io::Result<Output> {
+    retry_etxtbsy(|| cmd.output())
+}
+
+fn retry_etxtbsy<T>(mut attempt: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T> {
     const MAX_ATTEMPTS: u32 = 5;
     const INITIAL_BACKOFF: Duration = Duration::from_millis(5);
 
     let mut backoff = INITIAL_BACKOFF;
-    for attempt in 1..=MAX_ATTEMPTS {
-        match cmd.spawn() {
-            Ok(child) => return Ok(child),
-            Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) && attempt < MAX_ATTEMPTS => {
+    for n in 1..=MAX_ATTEMPTS {
+        match attempt() {
+            Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) && n < MAX_ATTEMPTS => {
                 std::thread::sleep(backoff);
                 backoff *= 2;
             }
-            Err(e) => return Err(e),
+            other => return other,
         }
     }
     unreachable!("loop always returns on its last iteration");

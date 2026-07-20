@@ -279,11 +279,12 @@ pub fn get_env(
     plugin: &RuntimePlugin,
     ctx: &RuntimeContext<'_>,
 ) -> Result<HashMap<String, String>> {
-    let output = Command::new(&plugin.path)
-        .arg("env")
-        .envs(ctx.build_env())
-        .output()
-        .map_err(|e| anyhow!("Failed to run '{} env': {}", plugin.name, e))?;
+    let mut cmd = Command::new(&plugin.path);
+    cmd.arg("env").envs(ctx.build_env());
+    let output = match super::executor::output_retrying_etxtbsy(&mut cmd) {
+        Ok(o) => o,
+        Err(e) => return Err(anyhow!("Failed to run '{} env': {}", plugin.name, e)),
+    };
 
     if !output.status.success() {
         tracing::warn!(
@@ -297,11 +298,12 @@ pub fn get_env(
 
 /// Run `plugin start` and return the first non-empty trimmed line, or `None`.
 pub fn get_start_cmd(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result<Option<String>> {
-    let output = Command::new(&plugin.path)
-        .arg("start")
-        .envs(ctx.build_env())
-        .output()
-        .map_err(|e| anyhow!("Failed to run '{} start': {}", plugin.name, e))?;
+    let mut cmd = Command::new(&plugin.path);
+    cmd.arg("start").envs(ctx.build_env());
+    let output = match super::executor::output_retrying_etxtbsy(&mut cmd) {
+        Ok(o) => o,
+        Err(e) => return Err(anyhow!("Failed to run '{} start': {}", plugin.name, e)),
+    };
 
     let cmd = String::from_utf8_lossy(&output.stdout)
         .lines()
