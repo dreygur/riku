@@ -32,16 +32,16 @@ this plugin stays dormant.
 
 ## Verbs
 
-| Verb        | Input (stdin JSON)                        | Effect                                   |
-| ----------- | ----------------------------------------- | ---------------------------------------- |
-| `configure` | `{app, domains, upstream_port, https}`    | writes `$RIKU_ROOT/caddy/sites/<app>.caddy` |
-| `reload`    | —                                         | `caddy reload` with the generated Caddyfile |
+| Verb          | Input (stdin JSON)                     | Effect                                      |
+| ------------- | -------------------------------------- | ------------------------------------------- |
+| `configure`   | `{app, domains, upstream_port, https}` | writes `$RIKU_ROOT/caddy/sites/<app>.caddy` |
+| `unconfigure` | —                                      | removes `$RIKU_ROOT/caddy/sites/<app>.caddy`|
+| `reload`      | —                                      | `caddy reload` with the generated Caddyfile |
 
 Per-app config is shaped from the app's `ENV` (`NGINX_SERVER_NAME` → domains,
 `PORT`/`NGINX_INTERNAL_PORT` → upstream port, `NGINX_HTTPS_ONLY` → https).
 
 ## Teardown
 
-API v1 has no per-app router teardown verb, so `riku destroy` issues a best-effort
-`reload`. Caddy keeps serving the app until you remove its site file and reload;
-remove `$RIKU_ROOT/caddy/sites/<app>.caddy` to drop it fully.
+`riku destroy` dispatches `unconfigure` (removing the app's site file) then
+`reload`, so Caddy stops serving the app cleanly.

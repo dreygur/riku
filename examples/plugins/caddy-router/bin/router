@@ -5,13 +5,14 @@
 # and `jq` on the host.
 #
 # Verbs:
-#   configure  reads {app,domains,upstream_port,https} as one JSON line on
-#              stdin and writes a per-app site file under
-#              $RIKU_ROOT/caddy/sites/<app>.caddy
-#   reload     reloads the running caddy with the generated Caddyfile
+#   configure    reads {app,domains,upstream_port,https} as one JSON line on
+#                stdin and writes a per-app site file under
+#                $RIKU_ROOT/caddy/sites/<app>.caddy
+#   unconfigure  removes the per-app site file (app from $RIKU_APP)
+#   reload       reloads the running caddy with the generated Caddyfile
 #
-# Context env: RIKU_ROOT (always present), RIKU_APP (configure). Logs go to
-# stderr; this seam has no stdout contract.
+# Context env: RIKU_ROOT (always present), RIKU_APP (configure/unconfigure).
+# Logs go to stderr; this seam has no stdout contract.
 set -eu
 
 verb="${1:-}"
@@ -46,6 +47,12 @@ case "$verb" in
       printf '}\n'
     } >"$site"
     printf 'caddy: wrote %s (https=%s)\n' "$site" "$https" >&2
+    ;;
+  unconfigure)
+    app="${RIKU_APP:?RIKU_APP not set}"
+    site="$sites_dir/$app.caddy"
+    rm -f "$site"
+    printf 'caddy: removed %s\n' "$site" >&2
     ;;
   reload)
     ensure_layout
