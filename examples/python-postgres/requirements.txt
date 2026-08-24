@@ -1,11 +1,10 @@
 # Python dependencies for Django example app
 # Updated to latest stable versions
 
-# Django web framework (LTS version recommended for production)
-Django>=4.2,<5.0
-
-# Timezone support
-pytz>=2024.1
+# Django web framework (LTS version recommended for production).
+# 5.2 is the current LTS; 4.2 reached end of security support in April 2026,
+# so its last release (4.2.30) still carries GHSA-8qcx-xf44-272x and friends.
+Django>=5.2.17,<6.0
 
 # SQL parser (required by Django)
 sqlparse>=0.5.0
