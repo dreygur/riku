@@ -291,7 +291,7 @@ pub enum Commands {
     #[command(
         subcommand,
         about = "Manage client-side plugins (local scripts that extend riku CLI)",
-        after_help = "Examples:\n  riku plugin list\n  riku plugin exists riku-deploy"
+        after_help = "Examples:\n  riku plugin list\n  riku plugin exists deploy"
     )]
     Plugin(PluginCmd),
 

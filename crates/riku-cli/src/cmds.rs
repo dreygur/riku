@@ -103,7 +103,7 @@ pub enum PluginCmd {
     List,
 
     /// Check if a client plugin exists and is executable
-    #[command(after_help = "Examples:\n  riku plugin exists riku-deploy")]
+    #[command(after_help = "Examples:\n  riku plugin exists deploy")]
     Exists {
         /// Plugin name
         name: String,
