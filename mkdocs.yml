@@ -1,7 +1,9 @@
 site_name: Riku
 site_description: The smallest PaaS you've ever seen (Rust edition)
 site_author: Rakibul Yeasin
-site_url: https://dreygur.github.io/riku
+# Canonical home: github.io redirects here, so canonical tags and the
+# sitemap must point at the custom domain, not at the redirecting origin.
+site_url: https://dreygur.js.org/riku/
 
 repo_name: dreygur/riku
 repo_url: https://github.com/dreygur/riku

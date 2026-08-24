@@ -219,6 +219,46 @@ git push riku main
 
 ---
 
+### `riku stats all`
+
+Per-app process counts, health, and memory across every deployed app.
+
+```bash
+riku stats all
+```
+
+**Output:**
+```
+App: myapp
+  Processes:  3/3 running
+  Healthy:    3/3
+  Memory:     128.40 MB
+```
+
+The numbers come from `~/.riku/stats.json`, which the supervisor writes. With
+the supervisor stopped, the command falls back to listing each app and its
+worker count and says so.
+
+---
+
+### `riku stats app <app>`
+
+Per-process detail for one app.
+
+```bash
+riku stats app myapp
+```
+
+**Output:**
+```
+PROCESS                   KIND       PID        STATUS       HEALTH
+---------------------------------------------------------------------------
+myapp.web.0               web        41288      running      healthy
+myapp.worker.0            worker     41290      running      healthy
+```
+
+---
+
 ## Releases & Resilience
 
 ### `riku rollback <app>`
@@ -294,6 +334,44 @@ riku plugins doctor                # Validate API compatibility + integrity
 riku plugins marketplace add <src> # Register and clone a marketplace
 riku plugins trust list            # Manage trusted publisher keys
 ```
+
+Three commands sit next to each other here and manage different things:
+`plugins` (above) handles manifest-based bundles, `hook` handles the
+server-side lifecycle scripts, and `plugin` handles client-side CLI overrides.
+
+---
+
+### `riku hook <command>`
+
+Inspect the server-side lifecycle hook plugins in `~/.riku/plugins/` (the
+executables named `riku-pre-deploy`, `riku-post-deploy`, and so on). See
+[Plugins](plugins.md) for what each hook does and when it runs.
+
+```bash
+riku hook list                     # List executable hook plugins
+riku hook check riku-pre-deploy    # Check one exists and is executable
+```
+
+Both are read-only: installing a hook means dropping an executable into
+`~/.riku/plugins/` yourself, or letting `riku install-plugins` do it.
+
+---
+
+### `riku plugin <command>`
+
+Inspect client-side plugins: executables in `~/.riku/client-plugins/` named
+after a riku command, which run **instead of** that command on your machine.
+
+```bash
+riku plugin list                   # List installed client plugins
+riku plugin exists deploy          # Check one exists and is executable
+```
+
+Only some commands can be overridden this way: `apps`, `config`, `deploy`,
+`destroy`, `logs`, `ps`, `stats`, `run`, `restart`, `stop`, and `container`.
+Everything else (`init`, `backup`, `restore`, `doctor`, `rollback`, the plugin
+commands themselves) always runs riku's own implementation, so a plugin cannot
+shadow them.
 
 ---
 

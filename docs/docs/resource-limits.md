@@ -1,10 +1,5 @@
 # Resource Limits Configuration
 
-**Status:** ✅ Production Ready  
-**Version:** 3.0.0-rc.1
-
----
-
 ## Overview
 
 Riku implements comprehensive resource limits (ulimit) for all spawned application processes. This prevents runaway processes, enables safe multi-tenant deployments, and protects the host system from resource exhaustion.
@@ -377,9 +372,3 @@ Planned improvements:
 - [setrlimit(2) man page](https://man7.org/linux/man-pages/man2/setrlimit.2.html)
 - [Resource limit kernel documentation](https://www.kernel.org/doc/Documentation/scheduler/sched-bwc.txt)
 - [nix crate documentation](https://docs.rs/nix/latest/nix/sys/resource/)
-
----
-
-**Status:** ✅ Production Ready  
-**Last Updated:** March 11, 2026  
-**Version:** 3.0.0-rc.1
