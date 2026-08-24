@@ -56,7 +56,7 @@ cp examples/server-hooks/riku-pre-deploy ~/.riku/plugins/riku-pre-deploy
 chmod +x ~/.riku/plugins/riku-pre-deploy
 ```
 
-That's it — the plugin fires automatically on the next `git push`.
+That's it: the plugin fires automatically on the next `git push`.
 
 ## Example Plugins in This Directory
 

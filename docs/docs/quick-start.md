@@ -168,7 +168,7 @@ git push riku main
 # 2. Deploy your app
 ```
 
-**Note:** The post-receive hook must pass the repo path. If using a custom hook, include:
+The post-receive hook must pass the repo path. If using a custom hook, include:
 ```bash
 #!/bin/bash
 REPO_PATH="$(pwd)"
@@ -196,7 +196,7 @@ When you push to Riku:
 5. **Supervisor starts** - If not running, supervisor auto-starts and spawns workers
 6. **App running** - Your app is live!
 
-> **Note:** Riku automatically handles:
+> Riku automatically handles:
 > - Nginx config symlinks (`/etc/nginx/sites-enabled/`)
 > - Supervisor auto-start on first deployment
 > - Custom bare repo locations (symlinked to `~/.riku/repos/`)

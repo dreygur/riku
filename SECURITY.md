@@ -10,7 +10,7 @@ This is by design. A PaaS that executes user-provided Procfiles inherently grant
 
 - **SSH access = server access.** Only add trusted users' SSH keys to `authorized_keys`.
 - **Run riku under a dedicated unprivileged user** (e.g., `riku` or `piku`). Never run as root.
-- **Restrict the riku user's capabilities** — no sudo, limited filesystem access.
+- **Restrict the riku user's capabilities**: no sudo, limited filesystem access.
 - **For untrusted workloads**, use container deployments with Docker/Podman to add isolation.
 
 ## Input Validation

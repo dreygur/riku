@@ -46,7 +46,7 @@ Permanently remove an application and all its data.
 riku destroy myapp
 ```
 
-**Warning:** This deletes:
+This deletes:
 - Application code in `~/.riku/apps/<app>/`
 - Environment variables in `~/.riku/envs/<app>/`
 - Git repository in `~/.riku/repos/<app>/`
@@ -54,7 +54,7 @@ riku destroy myapp
 - Nginx configuration
 - Worker configurations
 
-**Note:** `~/.riku/data/<app>/` and `~/.riku/cache/<app>/` are **preserved** by destroy.
+`~/.riku/data/<app>/` and `~/.riku/cache/<app>/` are **preserved** by destroy.
 
 ---
 
@@ -459,7 +459,7 @@ sudo riku doctor   # most complete report
 ### `riku dashboard`
 
 Serve the embedded web dashboard (single binary, no separate install). It can
-deploy, roll back, and manage addons — not read-only — so always set a token
+deploy, roll back, and manage addons, not read-only, so always set a token
 before exposing it beyond loopback. See [Dashboard](dashboard.md), which also
 covers the separate, fuller Next.js browser dashboard.
 

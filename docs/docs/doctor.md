@@ -10,7 +10,7 @@ periodic health check.
 riku doctor
 ```
 
-Some checks (system directories, nginx, systemd) inspect privileged state — run
+Some checks (system directories, nginx, systemd) inspect privileged state, run
 with `sudo` for the most complete report:
 
 ```bash
@@ -45,5 +45,5 @@ sudo riku doctor      # find the broken piece
 
 !!! tip "Plugins have their own doctor"
     To validate installed plugin bundles (API compatibility and integrity), use
-    [`riku plugins doctor`](marketplace.md) instead — it checks the plugin
+    [`riku plugins doctor`](marketplace.md) instead: it checks the plugin
     ecosystem rather than the core installation.

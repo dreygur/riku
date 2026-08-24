@@ -40,7 +40,7 @@ Environment=PATH=/usr/local/bin:/usr/bin:/bin
 WantedBy=default.target
 ```
 
-**Note:** The binary is installed at `~/.local/bin/riku` (i.e., `%h/.local/bin/riku` in systemd notation).
+The binary is installed at `~/.local/bin/riku` (i.e., `%h/.local/bin/riku` in systemd notation).
 
 ---
 

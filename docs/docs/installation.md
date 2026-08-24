@@ -95,7 +95,7 @@ sudo su - riku
 export RIKU_USER=riku  # Tell riku to use this username
 ```
 
-**Note:** If using a custom username, set `RIKU_USER` before running `riku init` so systemd services are configured correctly.
+If using a custom username, set `RIKU_USER` before running `riku init` so systemd services are configured correctly.
 
 ### Step 5: Initialize Riku
 

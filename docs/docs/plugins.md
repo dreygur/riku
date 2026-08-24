@@ -2,15 +2,15 @@
 
 !!! tip "Looking for installable, versioned plugins?"
     This page documents the original single-file plugins. For the modern
-    manifest-based bundles — addons, notifiers, `riku plugins install`,
-    marketplaces, and signature verification — see
+    manifest-based bundles: addons, notifiers, `riku plugins install`,
+    marketplaces, and signature verification, see
     [Plugin Bundles](plugin-bundles.md) and the [Plugin Gallery](plugin-gallery.md).
 
 Riku supports three categories of plugins, all stored in `~/.riku/plugins/`:
 
-1. **Runtime plugins** — detect and build your application (e.g. `node`, `python`)
-2. **Lifecycle hook plugins** — run at deploy stages (e.g. `riku-pre-deploy`)
-3. **Client-side plugins** — run locally, coordinate with the server
+1. **Runtime plugins**: detect and build your application (e.g. `node`, `python`)
+2. **Lifecycle hook plugins**: run at deploy stages (e.g. `riku-pre-deploy`)
+3. **Client-side plugins**: run locally, coordinate with the server
 
 ---
 
@@ -30,7 +30,7 @@ riku install-plugins --plugins node,python   # specific plugins only
 Bundled runtime plugins available: `node`, `python`, `ruby`, `go`, `rust-lang`,
 `java`, `clojure`, `container`. The same command also installs the
 first-party **event-subscriber** bundle `riku-notify` (`riku install-plugins
---plugins riku-notify`, not installed by default) — see
+--plugins riku-notify`, not installed by default), see
 [Plugin Bundles](plugin-bundles.md#event-subscribers-notifiers).
 
 ### Plugin Protocol

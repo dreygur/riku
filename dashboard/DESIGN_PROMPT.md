@@ -1,7 +1,7 @@
-# Design Prompt — Riku Control Dashboard (v2)
+# Design Prompt: Riku Control Dashboard (v2)
 
 > Paste this to Claude to design and build the new dashboard. It ships with
-> `FEATURE_INVENTORY.md` (the full capability + API map) — treat that as the
+> `FEATURE_INVENTORY.md` (the full capability + API map), treat that as the
 > source of truth for what the UI must cover.
 
 ---
@@ -9,21 +9,21 @@
 ## Role
 
 You are the design lead and front-end engineer rebuilding the web dashboard for
-**Riku** — a single-binary micro-PaaS that gives solo developers Heroku-style
+**Riku**: a single-binary micro-PaaS that gives solo developers Heroku-style
 `git push` deploys on one small box (a VPS, an old laptop, a Raspberry Pi). The
 operator is usually SSH-range close to their own server, watching a handful of
 their own apps. The dashboard's job: **see every app's health at a glance, and
 drive every riku capability without touching the CLI.**
 
 The current dashboard is thin and generic. Replace it with something that feels
-purpose-built for a machine you operate — a control deck, not a SaaS console.
+purpose-built for a machine you operate: a control deck, not a SaaS console.
 
 ## Stack (hard requirements)
 
 - **Next.js** (latest, App Router, React Server Components where sensible).
-- **TailwindCSS latest (v4)** — CSS-first config, `@theme` tokens.
+- **TailwindCSS latest (v4)**: CSS-first config, `@theme` tokens.
 - **shadcn/ui** for the component layer (latest CLI/registry).
-- **animate-ui** (https://animate-ui.com) for motion — use its components/primitives
+- **animate-ui** (https://animate-ui.com) for motion, use its components/primitives
   for transitions, reveals, and micro-interactions rather than hand-rolling.
 - Keep the existing **Next API proxy** pattern that deputizes the riku control
   token server-side (the browser never sees `~/.riku/control.token`).
@@ -35,7 +35,7 @@ purpose-built for a machine you operate — a control deck, not a SaaS console.
    button, input, badge, popover, dialog, avatar, and chart element. Sharp
    corners are the spine of the look.
 2. **Dark / darkish theme** as the default and primary (a light mode is optional,
-   not required). Deep, slightly-warm or slightly-cool near-black — not pure
+   not required). Deep, slightly-warm or slightly-cool near-black, not pure
    `#000`, not the generic acid-green-on-black. Pick a deliberate palette.
 3. **Restraint:** one accent color used only to mean something (alive / action).
    Status colors (ok / warn / danger) appear only where they carry meaning.
@@ -46,7 +46,7 @@ The subject's world is the **terminal and the bare-metal box**. Lean into a
 *mission-console / machine-readout* aesthetic: dense, aligned, monospace for all
 machine data (pids, mem, cpu, SHAs, timestamps, log lines), a clean sans for
 chrome and prose. Hairline dividers, a tight grid, square everything. Numbers
-are first-class — the page is a readout. Avoid the three AI defaults
+are first-class: the page is a readout. Avoid the three AI defaults
 (cream+serif+terracotta; near-black+acid-green; broadsheet columns); if you land
 near one, change it and say why.
 
@@ -57,30 +57,30 @@ around it quiet.
 
 ## Information architecture (must cover all of FEATURE_INVENTORY.md)
 
-- **Overview** — every app as a status row/card: state, domain, nginx state,
+- **Overview**: every app as a status row/card: state, domain, nginx state,
   worker health, mem/cpu at a glance, deploy-lock ("deploying…"). Host header:
   riku version, supervisor uptime, app count, live indicator.
-- **App detail** — workers table (kind.ordinal, status, pid, mem, cpu, restarts),
+- **App detail**: workers table (kind.ordinal, status, pid, mem, cpu, restarts),
   actions (redeploy / restart / stop / destroy / scale / rollback / export image),
   routing panel (domain, https, static, cache, cloudflare), env editor,
   release timeline (roll back to any SHA), backups.
-- **Live logs** — per-app and per-worker, streamed over SSE; pause, follow,
+- **Live logs**: per-app and per-worker, streamed over SSE; pause, follow,
   filter by worker, search. Make it feel like a console.
-- **Metrics** — cpu / mem / requests over time (SSE `/metrics/stream`),
+- **Metrics**: cpu / mem / requests over time (SSE `/metrics/stream`),
   per-worker and aggregated; host gauges.
-- **Plugins & addons** — installed runtime/hook plugins; managed datastores
+- **Plugins & addons**: installed runtime/hook plugins; managed datastores
   (addons: create / bind / unbind / backup / destroy); install bundled runtimes.
-- **Marketplace** — browse, search, add sources, install/remove bundles; trust
+- **Marketplace**: browse, search, add sources, install/remove bundles; trust
   keyring (author signatures); plugins doctor.
-- **System** — `riku doctor` results (nginx/systemd/perms/disk/cert), health.
-- **Command palette (⌘K)** — fuzzy-run any action on any app; the power-user spine.
+- **System**: `riku doctor` results (nginx/systemd/perms/disk/cert), health.
+- **Command palette (⌘K)**: fuzzy-run any action on any app; the power-user spine.
 
-Not every panel needs a backend endpoint yet — `FEATURE_INVENTORY.md` §10 lists
+Not every panel needs a backend endpoint yet: `FEATURE_INVENTORY.md` §10 lists
 what's CLI-only. Design the surface fully; stub or disable actions whose endpoint
 doesn't exist, with a clear "not wired yet" affordance, so the IA is complete and
 the backend can fill in behind it.
 
-## API contract (summary — full map in FEATURE_INVENTORY.md)
+## API contract (summary: full map in FEATURE_INVENTORY.md)
 
 - **Read (open on loopback):** `GET /api/state`, `/metrics`, `/metrics/apps[/:app]`,
   `/metrics/stream` (SSE), `/plugins`, `/hooks`, `/api/apps/:app/releases`,
@@ -99,15 +99,15 @@ the backend can fill in behind it.
   ("Restarting web…" → "Restarted web"; errors say what failed and how to fix).
 - **Live first:** logs and metrics stream; the overview refreshes without a full
   reload; the live indicator reflects real connection state.
-- **Guarded destructive actions** (stop / destroy / rollback) — confirm, name the
+- **Guarded destructive actions** (stop / destroy / rollback), confirm, name the
   consequence, never a bare "Submit".
-- **Empty + error states are directions, not mood** ("No apps yet — push one:
+- **Empty + error states are directions, not mood** ("No apps yet, push one:
   `git push riku main`").
 - **animate-ui** for: page/section transitions, list-item reveals on load, the
   log/console drawer, status-dot heartbeat, command-palette open. Orchestrated,
   not scattered. Respect `prefers-reduced-motion`.
 - **Quality floor:** responsive to mobile, visible keyboard focus, real contrast,
-  keyboard-drivable (palette + tab order). Don't announce it — just meet it.
+  keyboard-drivable (palette + tab order). Don't announce it, just meet it.
 
 ## Copy
 

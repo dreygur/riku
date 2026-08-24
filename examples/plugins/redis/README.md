@@ -24,7 +24,7 @@ On `bind`, the app's ENV receives:
 | Var | Meaning |
 |---|---|
 | `REDIS_URL` | `redis://<ident>:<pass>@host:port/0` |
-| `REDIS_KEY_PREFIX` | `<ident>:` — the namespace the tenant is allowed to use |
+| `REDIS_KEY_PREFIX` | `<ident>:`, the namespace the tenant is allowed to use |
 
 ## Isolation model
 

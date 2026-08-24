@@ -1,13 +1,13 @@
 # Backup & Restore
 
-Riku can snapshot an entire app to a single `.tar.gz` and restore it later — on
+Riku can snapshot an entire app to a single `.tar.gz` and restore it later, on
 the same server or a different one. A backup bundles everything that makes the
 app reproducible:
 
-- **Source** — the checked-out application code
-- **Env** — the app's environment variables
-- **Volumes** — persistent data volumes
-- **Repo** — the bare git repository
+- **Source**: the checked-out application code
+- **Env**: the app's environment variables
+- **Volumes**: persistent data volumes
+- **Repo**: the bare git repository
 
 ## Back up an app
 

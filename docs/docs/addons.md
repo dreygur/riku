@@ -1,7 +1,7 @@
 # Addons
 
-Addons are **managed resources** — databases, caches, and other stateful
-services — that Riku provisions and binds to your apps. Each addon is an
+Addons are **managed resources**: databases, caches, and other stateful
+services: that Riku provisions and binds to your apps. Each addon is an
 [addon-type plugin](plugin-bundles.md); the core stays a single binary while the
 ecosystem provides the datastores.
 
@@ -15,9 +15,9 @@ Officially bundled addons (in the [marketplace](marketplace.md)):
 
 ## Concepts
 
-- **Plugin** — the addon implementation (e.g. `postgres`), installed once.
-- **Instance** — a provisioned resource (e.g. a database named `db1`).
-- **Bind** — attaching an instance to an app injects its connection env
+- **Plugin**: the addon implementation (e.g. `postgres`), installed once.
+- **Instance**: a provisioned resource (e.g. a database named `db1`).
+- **Bind**: attaching an instance to an app injects its connection env
   (e.g. `DATABASE_URL`) into that app.
 
 An instance must be **unbound** before it can be destroyed.
@@ -41,7 +41,7 @@ signatures.
 # Create an instance named db1 from the postgres addon
 riku addon create postgres db1
 
-# Bind it to an app — injects DATABASE_URL into myapp's environment
+# Bind it to an app, injecting DATABASE_URL into myapp's environment
 riku addon bind db1 myapp
 
 # Restart so the app picks up the new env
@@ -96,8 +96,8 @@ An addon plugin is an executable that implements the Plugin Protocol verbs over
 JSON on stdin/stdout: `provision`, `bind`, `unbind`, `deprovision`, and
 `backup`. Riku passes context via environment variables:
 
-- `RIKU_ADDON_INSTANCE` — the instance name
-- `RIKU_ADDON_DATA_PATH` — a per-instance data directory for credentials/state
+- `RIKU_ADDON_INSTANCE`: the instance name
+- `RIKU_ADDON_DATA_PATH`: a per-instance data directory for credentials/state
 
 To author your own addon, scaffold a bundle and implement those verbs:
 

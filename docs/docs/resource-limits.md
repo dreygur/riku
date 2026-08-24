@@ -298,12 +298,17 @@ systemctl restart riku-supervisor
 
 ### Best Practices
 
-1. ✅ **Start Conservative** - Begin with strict limits, relax as needed
-2. ✅ **Monitor Usage** - Check `/metrics` endpoint for resource usage
-3. ✅ **Test Limits** - Deploy to staging first with production limits
-4. ✅ **Log Violations** - Review logs for apps hitting limits
-5. ❌ **Don't Disable** - Always enforce limits in multi-tenant environments
-6. ❌ **Don't Enable Core Dumps** - Security risk in production
+Do:
+
+1. **Start conservative**: begin with strict limits, relax as needed.
+2. **Monitor usage**: check the `/metrics` endpoint for resource usage.
+3. **Test limits**: deploy to staging first with production limits.
+4. **Log violations**: review logs for apps hitting limits.
+
+Don't:
+
+1. **Disable limits**: always enforce them in multi-tenant environments.
+2. **Enable core dumps**: they are a security risk in production.
 
 ---
 

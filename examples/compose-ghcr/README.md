@@ -2,10 +2,10 @@
 
 A minimal app for manually exercising riku's compose/GHCR support end to end:
 detecting a compose app, pulling a private GHCR image, and auto-updating a
-service when you push a new image tag — with no `git push riku`.
+service when you push a new image tag: with no `git push riku`.
 
 This is a real demo app you `git push` to an actual riku server that has
-Docker or Podman installed — not a self-contained sandbox (see
+Docker or Podman installed: not a self-contained sandbox (see
 `tests/e2e/riku-sandbox/` for a compose file that boots a full riku instance
 with demo apps already deployed).
 
@@ -75,7 +75,7 @@ curl http://<your-riku-server>:8080
 ```
 
 That's the whole feature: riku noticed the `latest` tag moved, pulled it, and
-recreated just the `web` service — the rest of the app (and any other
+recreated just the `web` service: the rest of the app (and any other
 services in the same compose file) untouched.
 
 ## Cleanup

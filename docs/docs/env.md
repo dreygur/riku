@@ -183,7 +183,7 @@ NGINX_ALLOW_GIT_FOLDERS=false
 - **Description:** Allow access to `.git` folders (security risk)
 - **Values:** `true` | `false`
 
-**Warning:** Setting this to `true` exposes your git history publicly.
+Setting this to `true` exposes your git history publicly.
 
 ### Catch-All for SPA
 
@@ -263,17 +263,17 @@ NGINX_CACHE_EXPIRY=86400
 NODE_VERSION=18.17.0
 ```
 
-- **Default:** (none — uses whatever `node` is on `$PATH`)
+- **Default:** (none, uses whatever `node` is on `$PATH`)
 - **Description:** format-validated (a warning is printed if it doesn't
   look like a version string) but **not currently read by the node
-  runtime plugin** — setting it does not select or install a specific
+  runtime plugin**: setting it does not select or install a specific
   Node.js version. Kept here as a placeholder for that feature.
 - **Values:** Any valid Node.js version
 
 ### Node Package Manager
 
 Riku builds Node apps with [nub](https://nubjs.com), which auto-detects the
-lockfile in your repo (`npm`, `pnpm`, or `bun`) — there is no package-manager
+lockfile in your repo (`npm`, `pnpm`, or `bun`), there is no package-manager
 setting to configure. Commit a lockfile to pin your dependency versions. See
 [Runtimes → Node.js](runtimes.md) for details.
 
@@ -341,7 +341,7 @@ riku config set myapp GHCR_USERNAME=octocat GHCR_TOKEN=ghp_xxx
 RIKU_WATCH_SERVICES=web,worker
 ```
 
-- **Default:** (none — auto-update disabled)
+- **Default:** (none, auto-update disabled)
 - **Description:** Compose services to periodically re-pull and recreate on a new registry image, without a `git push`
 - **Values:** Comma-separated compose service names
 

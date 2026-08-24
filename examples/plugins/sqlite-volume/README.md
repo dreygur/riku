@@ -1,7 +1,7 @@
 # sqlite-volume
 
 A Riku **addon** (Plugin Protocol v1) that gives an app a persistent SQLite
-database file on a managed volume — no external database server, true to Riku's
+database file on a managed volume: no external database server, true to Riku's
 single-box identity.
 
 ## Install (local/dev)

@@ -6,7 +6,7 @@ Each is a working reference you can install as-is or copy as a starting point.
 
 | Plugin | Type | What it does | Capabilities |
 | ------ | ---- | ------------ | ------------ |
-| [`sqlite-volume`](#sqlite-volume) | addon | Persistent SQLite database file on a managed volume — no external services | `writes` |
+| [`sqlite-volume`](#sqlite-volume) | addon | Persistent SQLite database file on a managed volume, no external services | `writes` |
 | [`postgres`](#postgres) | addon | Managed PostgreSQL database + role on the host | `network`, `writes` |
 | [`webhook-notify`](#webhook-notify) | notifier | POST lifecycle events to a webhook | `network` |
 
@@ -20,7 +20,7 @@ riku plugins install ./examples/plugins/<name>
 
 ## sqlite-volume
 
-A zero-dependency addon giving an app a persistent SQLite file — true to Riku's
+A zero-dependency addon giving an app a persistent SQLite file, true to Riku's
 single-box identity.
 
 ```bash
@@ -59,7 +59,7 @@ riku config set <app> WEBHOOK_URL=https://hooks.example.com/...
 ```
 
 It subscribes to `deploy.requested`, `build.finished`, and `deploy.finished`
-(observe mode — failures are logged, never block a deploy).
+(observe mode: failures are logged, never block a deploy).
 
 ---
 
@@ -72,5 +72,5 @@ It subscribes to `deploy.requested`, `build.finished`, and `deploy.finished`
 3. Publish it as a git repo, and (optionally) list it in a marketplace's
    `marketplace.toml` so others can `riku plugins search` / `add` it.
 
-The full contract — verbs, I/O schema, the event catalog, and the trust model —
+The full contract: verbs, I/O schema, the event catalog, and the trust model,
 is in [`PLUGIN_PROTOCOL.md`](https://github.com/dreygur/riku/blob/main/PLUGIN_PROTOCOL.md).

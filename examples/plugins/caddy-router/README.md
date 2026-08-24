@@ -4,7 +4,7 @@ A **router** plugin that swaps Riku's built-in nginx generation for
 [Caddy](https://caddyserver.com), which provides automatic HTTPS out of the box.
 
 Router plugins implement the `router` seam (`PLUGIN_PROTOCOL.md` §6.2). The
-router is a host-level **singleton** — exactly one is active, selected with the
+router is a host-level **singleton**: exactly one is active, selected with the
 `RIKU_ROUTER` environment variable.
 
 ## Requirements
@@ -35,8 +35,8 @@ this plugin stays dormant.
 | Verb          | Input (stdin JSON)                     | Effect                                      |
 | ------------- | -------------------------------------- | ------------------------------------------- |
 | `configure`   | `{app, domains, upstream_port, https}` | writes `$RIKU_ROOT/caddy/sites/<app>.caddy` |
-| `unconfigure` | —                                      | removes `$RIKU_ROOT/caddy/sites/<app>.caddy`|
-| `reload`      | —                                      | `caddy reload` with the generated Caddyfile |
+| `unconfigure` | - | removes `$RIKU_ROOT/caddy/sites/<app>.caddy`|
+| `reload`      | - | `caddy reload` with the generated Caddyfile |
 
 Per-app config is shaped from the app's `ENV` (`NGINX_SERVER_NAME` → domains,
 `PORT`/`NGINX_INTERNAL_PORT` → upstream port, `NGINX_HTTPS_ONLY` → https).

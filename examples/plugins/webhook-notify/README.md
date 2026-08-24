@@ -3,7 +3,7 @@
 A minimal Riku **notifier** plugin (Plugin Protocol v1). It subscribes to
 lifecycle events and POSTs each event envelope to a webhook.
 
-A notifier is not a special plugin kind — it is simply an **event subscriber**:
+A notifier is not a special plugin kind: it is simply an **event subscriber**:
 a bundle whose `riku-plugin.toml` declares an `[events]` block. The kernel runs
 `entry` with the verb `on_event` and the event JSON on stdin for each subscribed
 event.
@@ -28,7 +28,7 @@ On the next deploy you will receive a POST for `deploy.requested`,
 
 ## Contract
 
-- **Mode:** `observe` — failures are logged, never block a deploy.
+- **Mode:** `observe`, failures are logged, never block a deploy.
 - **Input:** one JSON line on stdin per event, e.g.
   `{"api":1,"event":"deploy.finished","ts":"...","app":"myapp","data":{...}}`.
 - **Capabilities:** `network = true` (declared in the manifest).

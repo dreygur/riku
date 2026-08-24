@@ -13,7 +13,7 @@ details of the Riku system.
 2. **Compatibility**: Maintain full compatibility with existing Piku workflows
 3. **Reliability**: Improve stability and error handling
 4. **Maintainability**: Clean layering, no language-specific code in core
-5. **Extensibility**: A real plugin system — not just new runtimes, but
+5. **Extensibility**: A real plugin system, not just new runtimes, but
    addons, routers, event subscribers, value-transform filters, and
    dashboard UI panels
 
@@ -39,7 +39,7 @@ details of the Riku system.
 
 Riku is a Cargo **workspace**: each concern is its own crate under
 `crates/`, following a repository / service / provider layering (see this
-project's `.claude/CLAUDE.md` for the stated rule — repositories only
+project's `.claude/CLAUDE.md` for the stated rule, repositories only
 read/write data with no logic, services orchestrate logic with no direct
 user I/O, providers wire services together and own user-facing output).
 The `riku` crate is a thin binary that re-exports every other crate under
@@ -76,7 +76,7 @@ Handles user commands and orchestrates operations:
 
 ### 2. Configuration System (`riku-config`)
 
-Repository layer — pure path/env resolution, no business logic:
+Repository layer: pure path/env resolution, no business logic:
 
 - **Path Resolution**: `RikuPaths::from_env()` resolves every on-disk
   directory from `$RIKU_ROOT`/`$HOME`
@@ -86,7 +86,7 @@ Repository layer — pure path/env resolution, no business logic:
 ### 3. Deployment Engine (`riku-deploy`)
 
 `do_deploy()` orchestrates a deploy by calling into the plugin system for
-runtime-specific work — the deploy engine itself carries no language-specific
+runtime-specific work: the deploy engine itself carries no language-specific
 code:
 
 - **Plugin Discovery**: scans `~/.riku/plugins/` for runtime plugin executables
@@ -114,14 +114,14 @@ Plugins receive context via environment variables: `RIKU_APP`,
 
 #### Bundled Runtime Plugins
 
-- `node` — Node.js (npm/yarn/pnpm), detects `package.json`
-- `python` — Python (pip/Poetry/uv), detects `requirements.txt` / `pyproject.toml`
-- `ruby` — Ruby (Bundler), detects `Gemfile`
-- `go` — Go (modules/godeps), detects `go.mod` / `Godeps` / `.go` files
-- `rust-lang` — Rust (Cargo), detects `Cargo.toml` + `rust-toolchain.toml`
-- `riku-plugin-java` — Java (Maven/Gradle), detects `pom.xml` / `build.gradle`
-- `riku-plugin-clojure` — Clojure (Lein/deps.edn), detects `project.clj` / `deps.edn`
-- `riku-plugin-container` — Docker/Podman, detects `Dockerfile` / `Containerfile` / `docker-compose.yml`
+- `node`: Node.js (npm/yarn/pnpm), detects `package.json`
+- `python`: Python (pip/Poetry/uv), detects `requirements.txt` / `pyproject.toml`
+- `ruby`: Ruby (Bundler), detects `Gemfile`
+- `go`: Go (modules/godeps), detects `go.mod` / `Godeps` / `.go` files
+- `rust-lang`: Rust (Cargo), detects `Cargo.toml` + `rust-toolchain.toml`
+- `riku-plugin-java`: Java (Maven/Gradle), detects `pom.xml` / `build.gradle`
+- `riku-plugin-clojure`: Clojure (Lein/deps.edn), detects `project.clj` / `deps.edn`
+- `riku-plugin-container`: Docker/Podman, detects `Dockerfile` / `Containerfile` / `docker-compose.yml`
 
 ### 4. Process Supervisor (`riku-supervisor`)
 
@@ -134,23 +134,23 @@ Manages application processes and provides process lifecycle management:
   backoff (or permanently gives up past `max_restarts`), and fires the
   `app.restarted`/`app.failed` plugin events either way
 - **File Watching**: watches worker TOML files for changes, restarts on change
-- **Log Rotation**: `log_rotation/` — size/retention-based rotation
-- **Cron Scheduling**: `daemon/cron_tasks.rs` — Procfile `cron:` entries
+- **Log Rotation**: `log_rotation/`, size/retention-based rotation
+- **Cron Scheduling**: `daemon/cron_tasks.rs`, Procfile `cron:` entries
 - **Its own HTTP API**: `health/` runs a separate axum server exposing
   `/health`, `/metrics*`, read-only `/plugins`/`/hooks`, and mutating
-  `/control/*` actions (create/deploy/restart/stop app, install plugins) —
+  `/control/*` actions (create/deploy/restart/stop app, install plugins),
   this is distinct from the `riku-dashboard` crate below, which is its own
   server with its own route table
 
 #### Supervisor modules
 
-- `process/` — spawn/health-check/stop/generation (canary)/orchestration/isolation
-- `daemon/` — main loop, config-file watcher, cron tasks, maintenance
-- `health/` — the supervisor's own HTTP API (control-plane + metrics)
-- `stats/` — resource usage and health-check state tracking
-- `config/` — `WorkerConfig` and TOML (de)serialization
-- `cgroups/` — cgroup v2 isolation limits
-- `log_rotation/` — log file rotation and cleanup
+- `process/`: spawn/health-check/stop/generation (canary)/orchestration/isolation
+- `daemon/`: main loop, config-file watcher, cron tasks, maintenance
+- `health/`: the supervisor's own HTTP API (control-plane + metrics)
+- `stats/`: resource usage and health-check state tracking
+- `config/`: `WorkerConfig` and TOML (de)serialization
+- `cgroups/`: cgroup v2 isolation limits
+- `log_rotation/`: log file rotation and cleanup
 
 ### 5. Nginx Integration (`riku-nginx`)
 
@@ -162,7 +162,7 @@ Generates nginx configurations for applications:
   WSGI socket, external port mapping
 - **Plugin Augmentation**: `NGINX_INCLUDE_FILE` content is run through the
   `nginx.include_content` filter chain (§ Plugin System) before being
-  inlined — any number of installed filter plugins can each contribute a
+  inlined: any number of installed filter plugins can each contribute a
   snippet to the generated config, without replacing it wholesale
 - **ACME Integration**: Let's Encrypt certificate challenges
 - **Validation**: generated configs are checked with `nginx -t` before use
@@ -171,7 +171,7 @@ Generates nginx configurations for applications:
 
 The full wire contract is `PLUGIN_PROTOCOL.md`; this is the architectural
 summary. A plugin is a directory (`riku-plugin.toml` manifest + one or more
-executables) under `~/.riku/plugins/`, discovered fresh on every dispatch —
+executables) under `~/.riku/plugins/`, discovered fresh on every dispatch,
 installing a new plugin needs no supervisor restart. Every invocation is a
 fresh child process: verb as `argv[1]`, structured input (if any) as one
 JSON line on stdin, context via env vars, response on stdout, logs on
@@ -179,31 +179,31 @@ stderr, bounded by a shared timeout.
 
 Riku extends in two ways:
 
-- **Behavior seams** — the kernel calls *into* the plugin to get work done.
-  - `runtime` — `detect`/`build`/`env`/`start` (§ above)
-  - `addon` — `provision`/`bind`/`unbind`/`deprovision`/`backup`; a managed
+- **Behavior seams**: the kernel calls *into* the plugin to get work done.
+  - `runtime`: `detect`/`build`/`env`/`start` (§ above)
+  - `addon`: `provision`/`bind`/`unbind`/`deprovision`/`backup`; a managed
     resource (database, cache, …) with named instances, each with its own
     data directory
-  - `router` — `configure`/`reload`; a host-level singleton, swaps out
+  - `router`: `configure`/`reload`; a host-level singleton, swaps out
     nginx entirely (`RIKU_ROUTER=<name>`)
-- **Event subscribers** — the plugin reacts to lifecycle events the kernel
+- **Event subscribers**: the plugin reacts to lifecycle events the kernel
   emits (`deploy.*`, `build.*`, `app.restarted`, `app.failed`, …), verb
   `on_event`, always fire-and-forget (`observe` mode) or veto-capable on
   pre-phase events (`gate` mode, elevated trust). Subscribers on the same
   event run in `priority` order. A plugin may also declare `events.emit =
   true` to fire its own namespaced `plugin.custom.*` events via `riku
-  plugin-emit` — the kernel stamps `source_plugin` so a subscriber can
+  plugin-emit`: the kernel stamps `source_plugin` so a subscriber can
   always tell a real kernel event from a plugin-claimed one.
-- **Filters** — the value-transform counterpart to events: verb
+- **Filters**: the value-transform counterpart to events: verb
   `on_filter`, a plugin receives a value and hands back a (possibly
   transformed) one. Multiple filters on the same name chain in priority
   order. Must degrade safely: any failure (non-zero exit, timeout,
   malformed output) passes the input through unchanged rather than
-  breaking the caller — this is why filters have no veto/`gate` mode.
-- **UI panels** — verb `ui_panel`, Next.js dashboard only: a plugin returns
+  breaking the caller: this is why filters have no veto/`gate` mode.
+- **UI panels**: verb `ui_panel`, Next.js dashboard only: a plugin returns
   structured JSON (never HTML/JS) that the dashboard renders as its own
   page, reached from a dynamically-added nav entry.
-- **Lifecycle hooks** — orthogonal to all of the above: any plugin may
+- **Lifecycle hooks**: orthogonal to all of the above: any plugin may
   declare `on_install`/`on_uninstall`, invoked by `riku plugins
   install`/`remove`, always best-effort (a failing hook never blocks the
   install or removal it's attached to).
@@ -211,13 +211,13 @@ Riku extends in two ways:
 There is also a legacy, separate hook mechanism (`manager.rs`/`hooks.rs`):
 four fixed `riku-*`-prefixed executables (`riku-pre-deploy`,
 `riku-pre-build`, `riku-post-build`, `riku-post-deploy`) invoked directly
-by `riku-deploy` at the corresponding stage — predates the manifest-based
+by `riku-deploy` at the corresponding stage: predates the manifest-based
 event bus and is kept for backward compatibility.
 
 **Trust model.** `PluginInstaller` verifies a pinned checksum (rejects on
 mismatch) and, if the manifest carries an Ed25519 `signature`, requires it
 to verify against a keyring the operator explicitly trusts
-(`riku plugins trust add`) — an unverified signed bundle is rejected, not
+(`riku plugins trust add`): an unverified signed bundle is rejected, not
 merely flagged. Declared `[capabilities]` (`network`, `writes`,
 `privileged`) are enforced at spawn time via Landlock + `PR_SET_NO_NEW_PRIVS`
 (`sandbox/`) wherever the kernel supports it, degrading to a logged no-op
@@ -226,14 +226,14 @@ the one capability that opts a plugin *out* of the sandbox entirely.
 
 ### 7. Two dashboards
 
-- **`riku-dashboard`** (in-workspace crate) — a single embedded HTML/JS page
+- **`riku-dashboard`** (in-workspace crate): a single embedded HTML/JS page
   baked into the `riku` binary (`include_str!`), served by `riku dashboard`.
   Its own axum server exposes both the static page and a JSON API
   (`/api/state`, `/api/apps/:app/*`, `/api/plugins`, `/api/plugins/:name/ui`,
-  `/api/addons/*`, `/api/marketplace/*`). Not read-only — it can deploy,
-  restart, and manage addons — so a token (`RIKU_DASHBOARD_TOKEN`) is
+  `/api/addons/*`, `/api/marketplace/*`). Not read-only, it can deploy,
+  restart, and manage addons, so a token (`RIKU_DASHBOARD_TOKEN`) is
   required before binding it beyond loopback.
-- **`dashboard/`** (top-level, *not* a workspace crate) — a separate Next.js
+- **`dashboard/`** (top-level, *not* a workspace crate), a separate Next.js
   16 / React 19 application, built and deployed independently. It proxies
   the same backend (either dashboard's API, or `riku-supervisor`'s own
   `/control/*` API depending on the action) same-origin, so the browser
@@ -261,7 +261,7 @@ Shared, dependency-free helpers used across the workspace:
    push for a new app is detected by checking for a `HEAD` file inside the
    target bare repo (`riku_repo.join("HEAD").exists()` in
    `riku-cli/src/git/receive_pack.rs`), not by checking whether the repo
-   directory itself exists — a plain directory-existence check is
+   directory itself exists: a plain directory-existence check is
    unreliable here because the `hooks/` subdirectory created later in the
    same code path would otherwise make the repo appear to "exist" before
    `git init --bare` has actually run, silently skipping initialization.
@@ -283,7 +283,7 @@ Shared, dependency-free helpers used across the workspace:
 14. **Router configured**: nginx (default) regenerates and reloads its
     config, or a router plugin's `configure`/`reload` runs instead
 15. **Process Start**: supervisor spawns the new worker configs
-16. **post-deploy hook**: non-fatal — a failure is a warning, not an abort
+16. **post-deploy hook**: non-fatal, a failure is a warning, not an abort
 17. **Release recorded** for `riku rollback`
 
 ### Process Management Flow
@@ -350,13 +350,13 @@ KEY2=VALUE2
 ### Unprivileged Worker / Nginx Interaction Model
 
 - The `riku supervisor` daemon and all spawned application workers run
-  entirely as the unprivileged deploy user (e.g. `riku`) — the daemon is
+  entirely as the unprivileged deploy user (e.g. `riku`), the daemon is
   never started as root in a correctly configured deployment.
 - Nginx's master process runs as root by OS package default, which the
   deploy user cannot signal directly. Riku does not solve this by running
   itself as root; instead, the deploy user is granted a narrowly-scoped
   passwordless sudo rule limited to the `nginx` binary itself (config test
-  and reload only — no shell, no other commands), reached through a
+  and reload only: no shell, no other commands), reached through a
   `nginx` wrapper placed ahead of `/usr/sbin/nginx` in `PATH`. This keeps
   the supervisor and every application process fully unprivileged while
   still allowing config reloads to take effect.
@@ -373,7 +373,7 @@ KEY2=VALUE2
 - Checksum verification is mandatory when a manifest pins one; mismatch
   rejects the install outright.
 - Ed25519 signatures (optional) require a trusted key to verify, or the
-  install is rejected — not merely warned.
+  install is rejected: not merely warned.
 - Declared capabilities (`network`, `writes`, `privileged`) are enforced
   at spawn time via Landlock + `no_new_privs`, best-effort on kernels
   without full Landlock support.
@@ -454,7 +454,7 @@ boots the container, performs an actual `git push` deploy of a mock app
 over SSH, then drives concurrent HTTP load against the nginx-proxied
 app and collects a structured pass/fail verdict (502/504 count, zombie
 process check, supervisor liveness). It runs with either Docker or
-Podman — the script detects whichever is on `PATH` and uses it
+Podman: the script detects whichever is on `PATH` and uses it
 transparently, no flags needed:
 
 ```bash

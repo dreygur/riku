@@ -207,7 +207,7 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-**Note:** Manual edits may be overwritten on redeploy.
+Manual edits may be overwritten on redeploy.
 
 ### Add Custom Config
 

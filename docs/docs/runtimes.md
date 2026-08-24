@@ -115,7 +115,7 @@ web: node server.js
 
 ### Package Manager
 
-Riku builds Node apps with [nub](https://nubjs.com) — a single Rust binary that
+Riku builds Node apps with [nub](https://nubjs.com), a single Rust binary that
 reads `npm`, `pnpm`, and `bun` lockfiles directly, so there is no package
 manager to choose. Commit a lockfile and Riku installs from it:
 
@@ -450,7 +450,7 @@ Riku builds the image (`docker build` / `podman build`) and runs it with
 
 ### Compose apps
 
-A compose file describes one or more pre-built images to run — no local
+A compose file describes one or more pre-built images to run, no local
 `Dockerfile` needed:
 
 ```yaml
@@ -466,7 +466,7 @@ services:
 
 For a compose app, `riku deploy` logs in to the configured registry (see
 [GHCR authentication](#ghcr-authentication) below), runs `compose pull`, and
-starts the stack with `compose up` — supervised as a single riku process, the
+starts the stack with `compose up`: supervised as a single riku process, the
 same way any other app's `web` process is.
 
 ### GHCR authentication
@@ -478,7 +478,7 @@ If `GHCR_USERNAME` and `GHCR_TOKEN` are set in the app's env, riku logs in to
 riku config set myapp GHCR_USERNAME=your-username GHCR_TOKEN=ghp_xxx
 ```
 
-Omit these for public images — pulls work without authentication. Docker Hub
+Omit these for public images: pulls work without authentication. Docker Hub
 and other registries referenced in the compose file are pulled as configured
 in the compose file itself; riku does not manage credentials for them.
 
@@ -494,11 +494,11 @@ riku config set myapp RIKU_WATCH_SERVICES=web,worker
 
 The supervisor re-checks every 60 seconds: it re-pulls each listed service and
 recreates it if the image actually changed. Both steps are safe to run
-repeatedly — `compose pull` skips unchanged layers, and `compose up -d` only
-recreates a service whose resolved image differs — so an unwatched or
+repeatedly: `compose pull` skips unchanged layers, and `compose up -d` only
+recreates a service whose resolved image differs, so an unwatched or
 unchanged app costs nothing extra. This is outbound-only (riku polls the
 registry; nothing needs to reach riku from the internet), so it works
-regardless of what's fronting your apps — nginx, Caddy, or nothing at all.
+regardless of what's fronting your apps: nginx, Caddy, or nothing at all.
 
 See [Environment Variables](env.md#container-compose-settings) for the full
 variable reference.

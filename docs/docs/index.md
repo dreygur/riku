@@ -10,7 +10,7 @@ hide:
 
 # Deploy with <span class="grad">git push</span>.<br>On a box you own.
 
-<p class="tagline">Riku is the smallest PaaS you've ever seen — one Rust binary that turns a small server into a Heroku-style deploy target. No runtime, no daemons you didn't ask for.</p>
+<p class="tagline">Riku is the smallest PaaS you've ever seen, one Rust binary that turns a small server into a Heroku-style deploy target. No runtime, no daemons you didn't ask for.</p>
 
 <div class="riku-cta" markdown>
 [Get started](quick-start.md){ .md-button .md-button--primary }
@@ -31,7 +31,7 @@ hide:
 
     ---
 
-    Push your code and Riku builds, configures, and runs it — exactly like Heroku, on a box you own.
+    Push your code and Riku builds, configures, and runs it, exactly like Heroku, on a box you own.
 
     [:octicons-arrow-right-24: Quick Start](quick-start.md)
 
@@ -63,7 +63,7 @@ hide:
 
     ---
 
-    A read-only web UI is baked into the binary — app list, live logs, and history.
+    A read-only web UI is baked into the binary: app list, live logs, and history.
 
     [:octicons-arrow-right-24: Dashboard](dashboard.md)
 
@@ -71,7 +71,7 @@ hide:
 
     ---
 
-    Extend Riku with runtime, addon, router, and notifier plugins — installable by name.
+    Extend Riku with runtime, addon, router, and notifier plugins, installable by name.
 
     [:octicons-arrow-right-24: Marketplace](marketplace.md)
 
@@ -119,7 +119,7 @@ supervisor, and wires up nginx. That's the whole loop.
 | Startup | Fast | Slower |
 
 Riku is a complete Rust port of [Piku](https://github.com/piku/piku) and competes
-with Piku, Dokku, and CapRover — winning on the single-binary, no-Docker story.
+with Piku, Dokku, and CapRover, winning on the single-binary, no-Docker story.
 It runs on one small box: 1 core, 256 MB RAM is enough.
 
 !!! tip "Stands on the shoulders of giants"
@@ -160,7 +160,7 @@ It runs on one small box: 1 core, 256 MB RAM is enough.
     web: ./target/release/myapp
     ```
 
-Java, Clojure, and containers are supported too — see [Runtimes](runtimes.md).
+Java, Clojure, and containers are supported too, see [Runtimes](runtimes.md).
 
 ---
 

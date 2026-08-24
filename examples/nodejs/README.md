@@ -119,14 +119,14 @@ PORT=3001 nub start
 
 ## Features Demonstrated
 
-- ✅ Express.js web server
-- ✅ Health check endpoint
-- ✅ Environment variables
-- ✅ Graceful shutdown
-- ✅ Request logging
-- ✅ Error handling
-- ✅ JSON API responses
-- ✅ 404 handling
+- Express.js web server
+- Health check endpoint
+- Environment variables
+- Graceful shutdown
+- Request logging
+- Error handling
+- JSON API responses
+- 404 handling
 
 ## Troubleshooting
 

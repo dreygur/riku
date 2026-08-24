@@ -1,7 +1,7 @@
 # Marketplace
 
 The marketplace lets you **discover and install plugins by name** from git
-repositories that index them — the difference between "extensible" and an actual
+repositories that index them: the difference between "extensible" and an actual
 ecosystem. Riku adopts a git-native marketplace shape (like Claude Code's),
 hardened for server-side execution with signature verification and capability
 declarations.

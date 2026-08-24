@@ -1,6 +1,6 @@
 # Plugin Bundles (Protocol v1)
 
-Riku's modern extension model is the **plugin bundle** — a directory with a
+Riku's modern extension model is the **plugin bundle**, a directory with a
 `riku-plugin.toml` manifest and one or more executables. Bundles are installed,
 versioned, checksum-verified, and (optionally) signature-verified through the
 `riku plugins` commands.
@@ -45,11 +45,11 @@ priority    = 0                  # delivery order among subscribers of the
 emit        = false              # may this plugin fire its own plugin.custom.*
                                   # events via `riku plugin-emit`?
 
-[lifecycle]                      # optional, any plugin type — install/remove hooks
+[lifecycle]                      # optional, any plugin type: install/remove hooks
 install     = true               # `riku plugins install` calls on_install
 uninstall   = true               # `riku plugins remove` calls on_uninstall
 
-[ui]                              # optional, any plugin type — dashboard panel
+[ui]                              # optional, any plugin type: dashboard panel
 nav_label   = "My Plugin"        # Next.js dashboard only, not the embedded one
 ```
 
@@ -63,7 +63,7 @@ plugin's environment on every call, plus (when app-scoped) `RIKU_APP`,
 
 A plugin declaring `[lifecycle]` gets `on_install` called right after its
 files are copied into `~/.riku/plugins/`, and/or `on_uninstall` right before
-they're removed — both best-effort (a failing hook is logged, never blocks
+they're removed: both best-effort (a failing hook is logged, never blocks
 the install or removal it's attached to). Not declaring `[lifecycle]` at all
 (every plugin shipped before this existed, including `riku-notify`) means
 neither verb is ever invoked.
@@ -75,9 +75,9 @@ neither verb is ever invoked.
 | **runtime** | `detect` / `build` / `env` / `start` | shipped (buildpacks) |
 | **addon** | `provision` / `bind` / `unbind` / `deprovision` / `backup` | shipped |
 | **notifier / hook** | `on_event` (subscribes to lifecycle events) | shipped |
-| **router** | `configure` / `reload` | shipped — singleton, full-replace (`RIKU_ROUTER=<name>`) |
-| **filter** (any type) | `on_filter` (`[filters]` block, any plugin type) | shipped — chained, augment-only |
-| **UI panel** (any type) | `ui_panel` (`[ui]` block, any plugin type) | shipped — Next.js dashboard only, read-only |
+| **router** | `configure` / `reload` | shipped: singleton, full-replace (`RIKU_ROUTER=<name>`) |
+| **filter** (any type) | `on_filter` (`[filters]` block, any plugin type) | shipped, chained, augment-only |
+| **UI panel** (any type) | `ui_panel` (`[ui]` block, any plugin type) | shipped, Next.js dashboard only, read-only |
 
 ### Addons
 
@@ -104,9 +104,9 @@ requires elevated trust.
 **Shipped example: `riku-notify`.** Bundled at `plugins/riku-notify/` (a
 `riku-plugin.toml` + a POSIX shell `bin/on-event`), it subscribes to both
 `app.restarted` (a crash the supervisor recovered from) and `app.failed` (a
-crash that exceeded `max_restarts` — riku has given up on the instance
-entirely, the more urgent of the two), and posts an incident report — the
-crashed instance, exit code, and restart count — to whichever channels are
+crash that exceeded `max_restarts`: riku has given up on the instance
+entirely, the more urgent of the two), and posts an incident report, the
+crashed instance, exit code, and restart count, to whichever channels are
 configured, each independent:
 
 | Env var | Channel |
@@ -134,14 +134,14 @@ same filter name run as a **chain**, ordered by `filters.priority` (lower
 first), each seeing the previous one's output.
 
 **Must degrade safely**: a broken, timed-out, or malformed-output filter is
-skipped (logged) and the value passes through unchanged — a filter can only
+skipped (logged) and the value passes through unchanged, a filter can only
 become a no-op, never break the thing calling it.
 
 **Shipped example: `nginx.include_content`.** The nginx config generator
 already supported a raw file-based passthrough (`NGINX_INCLUDE_FILE`); that
 content is now the *seed* value run through this filter before being
 inlined into the generated `.conf`. This is the "augment the default config"
-alternative to writing a full router plugin (below) — any number of
+alternative to writing a full router plugin (below), any number of
 installed plugins can each contribute a snippet, rather than one plugin
 replacing routing entirely.
 
@@ -154,7 +154,7 @@ priority  = 0
 ### Custom events
 
 Riku's own lifecycle events (`app.restarted`, `deploy.finished`, …) are
-kernel-emitted only — plugins can't fire those, and that's deliberate: the
+kernel-emitted only: plugins can't fire those, and that's deliberate: the
 event stream is only trustworthy if plugins can't forge it. Instead, a
 plugin that declares `[events] emit = true` can fire its **own** events for
 other plugins to subscribe to:
@@ -164,20 +164,20 @@ other plugins to subscribe to:
 riku plugin-emit plugin.custom.backup-done --data '{"ok":true}'
 ```
 
-- The event name **must** start with `plugin.custom.` — anything else is
+- The event name **must** start with `plugin.custom.`: anything else is
   rejected outright (a plugin can never emit something that looks like a
   kernel event, e.g. its own fake `app.restarted`).
 - The kernel identifies the caller itself (via `RIKU_PLUGIN_NAME`, always
-  set) and checks *that* plugin's manifest declared `emit = true` — a
+  set) and checks *that* plugin's manifest declared `emit = true`, a
   plugin can't claim to be a different one.
 - Subscribers receive the same envelope shape as any other event, plus
-  `source_plugin: "<name>"` — kernel-set, so you can always tell a
+  `source_plugin: "<name>"`, kernel-set, so you can always tell a
   kernel-truth event (`source_plugin: null`) from a plugin-claimed one.
 
 ### UI panels
 
 A plugin declaring `[ui] nav_label = "..."` gets a nav entry and a page in
-the **Next.js browser dashboard** (`dashboard/` — not the embedded
+the **Next.js browser dashboard** (`dashboard/`: not the embedded
 single-binary one, which has no plugin-panel seam). The dashboard dispatches
 `ui_panel` (no meaningful stdin) and expects structured JSON back:
 
@@ -186,10 +186,10 @@ single-binary one, which has no plugin-panel seam). The dashboard dispatches
 ```
 
 **Structured data only, never HTML/JS.** This is the deliberate scope-limiter
-that closes off injection risk — a plugin supplies labels and values, the
+that closes off injection risk: a plugin supplies labels and values, the
 dashboard renders them with its own components, nothing a plugin returns is
 ever interpreted as markup. There's no verb for a plugin-defined *action*
-(a button calling back into the plugin) yet — this is read-only display.
+(a button calling back into the plugin) yet: this is read-only display.
 
 Same degrade-safely contract as filters: a broken, timed-out, or
 malformed-output panel logs a warning and renders as empty, never breaks the
@@ -213,7 +213,7 @@ riku plugins doctor                     # validate api + integrity (tamper check
 ## Marketplaces
 
 A marketplace is a git repo whose `marketplace.toml` indexes plugins. It is
-**git-native — no central server**:
+**git-native: no central server**:
 
 ```bash
 riku plugins marketplace add github:dreygur/riku-marketplace
@@ -230,10 +230,10 @@ is an explicit trust decision (Riku warns on `add`).
 
 Riku plugins run on the server as the deploy user, so installs are gated:
 
-- **Checksum** — a manifest-pinned `sha256` is rejected on mismatch; the
+- **Checksum**: a manifest-pinned `sha256` is rejected on mismatch; the
   computed digest is recorded in `riku-plugins.lock` regardless, so
   `riku plugins doctor` can later detect tampering.
-- **Signatures** — an author signs the entry with an Ed25519 key; the operator
+- **Signatures**: an author signs the entry with an Ed25519 key; the operator
   trusts publisher keys. A signed bundle installs only if a trusted key verifies
   it, else it is **rejected**.
 
@@ -247,9 +247,9 @@ Riku plugins run on the server as the deploy user, so installs are gated:
   riku plugins install ./my-plugin     # accepted only if a trusted key verifies
   ```
 
-- **Capabilities** — `network` / `writes` / `privileged` are declared in the
+- **Capabilities**: `network` / `writes` / `privileged` are declared in the
   manifest and shown on install (informed consent).
-- **Lockfile** — `riku-plugins.lock` pins each install's name, source, version,
+- **Lockfile**: `riku-plugins.lock` pins each install's name, source, version,
   checksum, and verifying key. No silent auto-update of executable code.
 
 See the [Plugin Gallery](plugin-gallery.md) for ready-made examples.

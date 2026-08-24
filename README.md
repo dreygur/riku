@@ -1,13 +1,13 @@
 # Riku
 
-**Git-push deployments on a single small box — one Rust binary, no Docker required.**
+**Git-push deployments on a single small box: one Rust binary, no Docker required.**
 
 [![CI](https://github.com/dreygur/riku/actions/workflows/ci.yml/badge.svg)](https://github.com/dreygur/riku/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/dreygur/riku?sort=semver)](https://github.com/dreygur/riku/releases)
 [![Made with Rust](https://img.shields.io/badge/made%20with-Rust-orange.svg)](https://www.rust-lang.org/)
 
-Riku gives you a Heroku-style workflow on hardware you already own — a VPS, an old
+Riku gives you a Heroku-style workflow on hardware you already own, a VPS, an old
 laptop, a Raspberry Pi. You `git push`, Riku detects the language, builds it, runs
 it under a supervisor, and wires up nginx. That's it. No control plane, no cluster,
 no container runtime to babysit.
@@ -28,16 +28,16 @@ git push riku main      # 👈 that's the deploy
 
 ## What it does
 
-- **`git push` to deploy** — language detected, built, supervised, and routed automatically.
-- **Many languages, no recompile** — Python, Node, Ruby, Go, Rust, Java, Clojure, and containers, each as an installable runtime plugin.
-- **Built-in process supervisor** — health checks, restarts, scaling, and cron, written in Rust (no uWSGI Emperor).
-- **Zero-downtime deploys** — new processes are health-gated before old ones are retired.
-- **Rollback & backups** — `riku rollback`, `riku backup`/`riku restore`.
-- **Managed datastores as plugins** — attach Postgres, Redis, or a SQLite volume with `riku addon`; the connection string is injected into your app's env.
-- **A plugin ecosystem** — a versioned plugin protocol, a git-native marketplace, signed bundles, and capability sandboxing (Landlock) for plugins you install.
-- **Swappable router** — nginx by default; drop in a Caddy/Traefik router plugin without touching core.
-- **Embedded dashboard** — `riku dashboard` serves a status UI straight from the binary, no Node runtime on the host.
-- **`riku doctor`** — diagnoses nginx, systemd, permissions, disk, and certs when something's off.
+- **`git push` to deploy**: language detected, built, supervised, and routed automatically.
+- **Many languages, no recompile**, Python, Node, Ruby, Go, Rust, Java, Clojure, and containers, each as an installable runtime plugin.
+- **Built-in process supervisor**: health checks, restarts, scaling, and cron, written in Rust (no uWSGI Emperor).
+- **Zero-downtime deploys**: new processes are health-gated before old ones are retired.
+- **Rollback & backups**: `riku rollback`, `riku backup`/`riku restore`.
+- **Managed datastores as plugins**: attach Postgres, Redis, or a SQLite volume with `riku addon`; the connection string is injected into your app's env.
+- **A plugin ecosystem**: a versioned plugin protocol, a git-native marketplace, signed bundles, and capability sandboxing (Landlock) for plugins you install.
+- **Swappable router**: nginx by default; drop in a Caddy/Traefik router plugin without touching core.
+- **Embedded dashboard**: `riku dashboard` serves a status UI straight from the binary, no Node runtime on the host.
+- **`riku doctor`**: diagnoses nginx, systemd, permissions, disk, and certs when something's off.
 
 ## Requirements
 
@@ -98,7 +98,7 @@ git push riku main
 In a hurry? `riku quickstart` scaffolds a sample app and prints the exact
 `git remote add` line to copy.
 
-> You can keep a bare repo anywhere on the server — `git init --bare ~/projects/myapp.git`,
+> You can keep a bare repo anywhere on the server, `git init --bare ~/projects/myapp.git`,
 > push to it, and Riku symlinks it into `~/.riku/repos/` for you.
 
 ## Commands
@@ -134,7 +134,7 @@ set with `riku install-plugins` (or pick some: `riku install-plugins --plugins n
 | `clojure` | `project.clj`, `deps.edn` | Leiningen / Clojure CLI |
 | `container` | `Dockerfile`, `docker-compose.yml` | Docker / Podman |
 
-Detection runs in order — set `RUNTIME=node` to skip it. To add your own language,
+Detection runs in order: set `RUNTIME=node` to skip it. To add your own language,
 drop an executable into `~/.riku/plugins/` implementing four subcommands:
 
 | Subcommand | Does |
@@ -161,7 +161,7 @@ riku plugins scaffold my-addon --type addon          # start your own
 
 Installed plugins are pinned in a lockfile, can carry Ed25519 author signatures, and
 run under capability sandboxing (filesystem/network limits via Landlock) based on
-what their manifest declares. Managed datastores ship this way — see
+what their manifest declares. Managed datastores ship this way, see
 [`examples/plugins/`](examples/plugins/) for working postgres, redis, sqlite-volume,
 caddy-router, and webhook-notify bundles.
 
@@ -181,7 +181,7 @@ for `web:` / `worker:` / `cron:` process definitions.
 
 ## How it works
 
-Everything lives under `~/.riku/` — `apps/` (source), `envs/` (config), `repos/`
+Everything lives under `~/.riku/`: `apps/` (source), `envs/` (config), `repos/`
 (bare git), `logs/`, `nginx/`, `plugins/`, `data/`. A `git push` triggers a
 post-receive hook that checks out the code, runs the matching runtime plugin to
 build it, writes worker configs, and signals the supervisor. The supervisor watches
@@ -198,17 +198,17 @@ cargo test
 cargo clippy && cargo fmt
 ```
 
-Contributions welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md) and the
+Contributions welcome: see [`CONTRIBUTING.md`](CONTRIBUTING.md) and the
 [Code of Conduct](CODE_OF_CONDUCT.md). The short version: fork, branch, make sure
 `cargo test` and `cargo clippy` pass, open a PR.
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT: see [`LICENSE`](LICENSE).
 
 ## Credits
 
 Riku owes everything to [Piku](https://github.com/piku/piku) and the people behind
 it: the original micro-PaaS whose concepts, workflows, and directory layout Riku
-reimplements in Rust. It's an alternative implementation, not a replacement — if
+reimplements in Rust. It's an alternative implementation, not a replacement, if
 Piku fits your needs, use Piku. Either way, support both.

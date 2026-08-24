@@ -21,40 +21,40 @@ var is unset, so existing local/dev usage is unaffected.
 The supervisor's crash/restart path now emits plugin lifecycle events:
 `app.restarted` on every crash it recovers from, `app.failed` when a crash
 exceeds `max_restarts` and the instance is permanently removed instead (the
-more urgent of the two — nothing brings it back without manual
+more urgent of the two: nothing brings it back without manual
 intervention). The bundled `plugins/riku-notify` event-subscriber plugin
 posts an incident report to a generic webhook, Discord, Slack, and/or
 Telegram, each independently configured.
 
-### Plugin System — Versatility Expansion
+### Plugin System: Versatility Expansion
 
 Closed a set of gaps identified in an audit of the plugin system's
 extensibility, all additive and opt-in (no effect on any existing plugin):
 
-- **Subscriber priority** — `[events] priority = N` orders delivery when
+- **Subscriber priority**: `[events] priority = N` orders delivery when
   multiple plugins subscribe to the same event (lower runs first).
-- **Install/uninstall lifecycle hooks** — `[lifecycle] install`/`uninstall`
+- **Install/uninstall lifecycle hooks**: `[lifecycle] install`/`uninstall`
   lets any plugin (not just addons) run setup/cleanup on
   `riku plugins install`/`remove`, always best-effort.
-- **Per-plugin scratch directory** — every plugin invocation, across every
+- **Per-plugin scratch directory**: every plugin invocation, across every
   seam, now gets `RIKU_PLUGIN_DATA_PATH`
   (`data_root/plugin-data/<plugin-name>/`).
-- **Filters** — a new value-transform seam (`[filters]`, verb `on_filter`):
+- **Filters**: a new value-transform seam (`[filters]`, verb `on_filter`):
   a plugin receives a value and hands back a (possibly transformed) one,
   chained across multiple filters in priority order. Always degrades to
-  passthrough on any failure (timeout, non-zero exit, malformed output) —
+  passthrough on any failure (timeout, non-zero exit, malformed output),
   a broken filter can only become a no-op. Shipped first use:
   `nginx.include_content`, letting installed plugins augment the generated
   nginx config (wired into all 5 nginx templates) without a full router
   plugin replacing routing entirely.
-- **Plugin-to-plugin custom events** — a plugin declaring `[events] emit =
+- **Plugin-to-plugin custom events**: a plugin declaring `[events] emit =
   true` can fire its own event via `riku plugin-emit <name> --data
   '<json>'`. Hard-namespaced to `plugin.custom.*` (anything else, including
   an attempt to spoof a kernel event name, is rejected), with a
   kernel-stamped `source_plugin` field a subscriber can trust.
-- **UI panels** — a plugin declaring `[ui] nav_label = "..."` gets a nav
+- **UI panels**: a plugin declaring `[ui] nav_label = "..."` gets a nav
   entry and its own page in the Next.js dashboard (`ui_panel` verb).
-  Structured JSON only — never HTML/JS — so a plugin can extend the
+  Structured JSON only: never HTML/JS, so a plugin can extend the
   dashboard's UI without being able to inject markup into it.
 
 Every item above shipped with real end-to-end tests against actual
@@ -76,7 +76,7 @@ prints the exact `git remote add`/`git push` lines needed to deploy.
 
 - Corrected several stale documentation claims found in the course of this
   work: the dashboard was documented as "read-only" (it can deploy,
-  restart, and manage addons — never was read-only); the router plugin
+  restart, and manage addons, never was read-only); the router plugin
   seam was documented as "planned" (it has been shipped for some time,
   as a host-level singleton); `dashboard/README.md` described a
   CSRF/Origin-check mechanism that didn't exist in the actual code.
@@ -84,10 +84,10 @@ prints the exact `git remote add`/`git push` lines needed to deploy.
 
 ### Changed
 
-- `crates/riku-supervisor/src/config/mod.rs` — collapsed 12 repeated
+- `crates/riku-supervisor/src/config/mod.rs`: collapsed 12 repeated
   `env.get(key).and_then(|v| v.parse().ok()).unwrap_or_else(default)`
   blocks into `parse_env_or!`/`parse_env_opt!` macros.
-  `crates/riku-util/src/resource_limits/mod.rs` — similarly deduplicated
+  `crates/riku-util/src/resource_limits/mod.rs`: similarly deduplicated
   via a small `env_u64()` helper.
 - A `RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path())` test
   constructor, hand-copied into 12+ test modules across the workspace, is
@@ -115,25 +115,25 @@ All 263 unit tests and 191 integration tests continue to pass.
 
 ### Added
 
-- `src/plugins/runtime.rs` — plugin discovery, detection, build dispatch, env and start command extraction
-- `plugins/node` — bundled Node.js shell script plugin (detects `package.json`)
-- `plugins/python` — bundled Python shell script plugin (detects `requirements.txt`, `pyproject.toml`)
-- `plugins/ruby` — bundled Ruby shell script plugin (detects `Gemfile`)
-- `plugins/go` — bundled Go shell script plugin (detects `go.mod`, `Godeps`, `.go` files)
-- `plugins/rust-lang` — bundled Rust shell script plugin (detects `Cargo.toml` + `rust-toolchain.toml`)
-- `crates/riku-plugin-java` — Rust binary plugin for Java (Maven/Gradle)
-- `crates/riku-plugin-clojure` — Rust binary plugin for Clojure (Lein/deps.edn)
-- `crates/riku-plugin-container` — Rust binary plugin for containers (Docker/Podman, auto-detected)
-- `riku install-plugins` CLI command — downloads bundled plugins from GitHub
-- `riku install-plugins --plugins <list>` — install specific plugins only
+- `src/plugins/runtime.rs`: plugin discovery, detection, build dispatch, env and start command extraction
+- `plugins/node`: bundled Node.js shell script plugin (detects `package.json`)
+- `plugins/python`: bundled Python shell script plugin (detects `requirements.txt`, `pyproject.toml`)
+- `plugins/ruby`: bundled Ruby shell script plugin (detects `Gemfile`)
+- `plugins/go`: bundled Go shell script plugin (detects `go.mod`, `Godeps`, `.go` files)
+- `plugins/rust-lang`: bundled Rust shell script plugin (detects `Cargo.toml` + `rust-toolchain.toml`)
+- `crates/riku-plugin-java`: Rust binary plugin for Java (Maven/Gradle)
+- `crates/riku-plugin-clojure`: Rust binary plugin for Clojure (Lein/deps.edn)
+- `crates/riku-plugin-container`: Rust binary plugin for containers (Docker/Podman, auto-detected)
+- `riku install-plugins` CLI command: downloads bundled plugins from GitHub
+- `riku install-plugins --plugins <list>`: install specific plugins only
 - Cargo workspace: root package + `crates/riku-plugin-*` sub-crates
 
 ### Changed
 
-- `src/deploy/mod.rs` — replaced runtime dispatch with plugin-based orchestration
-- `src/deploy/workers.rs` — `create_workers_generic` now accepts `start_cmd: Option<&str>` for plugin-provided fallback command
-- `src/plugins/executor.rs` — `plugin_timeout` and `wait_with_timeout` made `pub(crate)` for use by runtime.rs
-- Integration tests — all full-deploy tests now use lightweight mock plugins; no npm/pip/bundler required on the test host
+- `src/deploy/mod.rs`: replaced runtime dispatch with plugin-based orchestration
+- `src/deploy/workers.rs`: `create_workers_generic` now accepts `start_cmd: Option<&str>` for plugin-provided fallback command
+- `src/plugins/executor.rs`: `plugin_timeout` and `wait_with_timeout` made `pub(crate)` for use by runtime.rs
+- Integration tests: all full-deploy tests now use lightweight mock plugins; no npm/pip/bundler required on the test host
 
 ### Removed
 
@@ -154,37 +154,37 @@ is clean with zero warnings in production code.
 
 ### Breaking Changes
 
-- **`PIKU_AUTO_RESTART` renamed to `RIKU_AUTO_RESTART`** — update your `ENV` files.
+- **`PIKU_AUTO_RESTART` renamed to `RIKU_AUTO_RESTART`**: update your `ENV` files.
   The old variable name was a residual from the Python Piku port and has now been
   fully removed. All runtimes (Python, Node, Ruby, Go, Java, Clojure, Rust,
   Container, Identity) and all documentation now use the correct `RIKU_AUTO_RESTART`.
 
 ### Security Fixes
 
-- **`cargo audit --deny warnings` now blocks releases** — CI will fail on any known
+- **`cargo audit --deny warnings` now blocks releases**, CI will fail on any known
   CVE in the dependency tree instead of silently reporting it (`ci.yml`).
-- **Nginx security headers hardened** — `nginx_static.conf.tera` and
+- **Nginx security headers hardened**: `nginx_static.conf.tera` and
   `nginx_portmap.conf.tera` now include `Referrer-Policy` and `Permissions-Policy`
   headers (the HTTPS-only template already had `HSTS`; `nginx_common.conf.tera`
   already had the full set).
-- **Systemd `ReadWritePaths` tilde expansion fixed** — `setup.rs` now writes the
+- **Systemd `ReadWritePaths` tilde expansion fixed**: `setup.rs` now writes the
   absolute path to `~/.riku` (resolved at runtime) instead of the literal `~/.riku`
   string, which is not expanded by systemd on all distributions.
-- **Predictable `/tmp` test path removed** — `tests/deploy-smoke/test-all.sh` now uses
+- **Predictable `/tmp` test path removed**: `tests/deploy-smoke/test-all.sh` now uses
   `mktemp -d` instead of the PID-based `/tmp/riku-test-$$` path that was vulnerable
   to symlink attacks.
 
 ### Dependency Upgrades
 
-- **`reqwest` upgraded from v0.11 to v0.12** — v0.11 is in maintenance-only mode;
+- **`reqwest` upgraded from v0.11 to v0.12**: v0.11 is in maintenance-only mode;
   v0.12 brings `hyper` 1.x, `http` 1.x, and updated TLS dependencies.
 
 ### Code Quality
 
-- **All `unwrap()` calls in production paths eliminated** — replaced with
+- **All `unwrap()` calls in production paths eliminated**, replaced with
   `unwrap_or_default()` (for infallible `SystemTime` operations) and
   `ok_or_else(|| anyhow!(...))` (for path operations in `setup.rs` and `apps.rs`).
-- **Duplicate `create_identity_workers` removed** — the ~170-line copy in
+- **Duplicate `create_identity_workers` removed**: the ~170-line copy in
   `deploy/mod.rs` was dead code shadowing the canonical implementation in
   `deploy/identity.rs`. Only the `identity.rs` version remains.
 - **Dead code suppressions removed or resolved**:
@@ -197,12 +197,12 @@ is clean with zero warnings in production code.
   - `install_systemd_service` (system-wide, root) is now called from `cmd_init`
     when running as root, removing its dead-code status.
   - `install_nginx_default_config` and `num_cpus` (genuinely unused) removed entirely.
-- **Clippy clean** — `cargo clippy -- -D warnings` passes with zero errors or
+- **Clippy clean**: `cargo clippy -- -D warnings` passes with zero errors or
   warnings in production code. Fixed 8 `useless_format!` instances across deploy
   modules and 1 `io_other_error` in `supervisor/stats.rs`.
-- **`CONTRIBUTING.md` clone URL corrected** — was pointing to `piku.git`, now
+- **`CONTRIBUTING.md` clone URL corrected**: was pointing to `piku.git`, now
   correctly points to `riku.git`.
-- **`Runtime::Identity` variant now constructed** — the `None` branch in `do_deploy`
+- **`Runtime::Identity` variant now constructed**, the `None` branch in `do_deploy`
   now calls `found_app(&Runtime::Identity.to_string())` before dispatching, making
   the variant active and removing the dead-code warning.
 
@@ -216,7 +216,7 @@ is clean with zero warnings in production code.
 
 ## [1.0.0] - 2026-02-23
 
-### 🎉 First Stable Release
+### First Stable Release
 
 Riku 1.0.0 is the first stable release of the Rust port of Piku, providing Heroku-like git push deployments.
 
@@ -248,7 +248,7 @@ Riku 1.0.0 is the first stable release of the Rust port of Piku, providing Herok
 - Code formatting with `cargo fmt`
 - Linting with `cargo clippy`
 
-### 🔧 Improvements
+### Improvements
 
 - Fixed repository URLs (piku → riku)
 - Improved SSH key scope parsing for AI agents
@@ -256,14 +256,14 @@ Riku 1.0.0 is the first stable release of the Rust port of Piku, providing Herok
 - Enhanced error handling with structured JSON responses
 - Added confirmation tokens for destructive operations
 
-### 📦 Technical Changes
+### Technical Changes
 
 - All 77 integration tests passing
 - Release build optimized with LTO
 - Documentation builds with mkdocs-material theme
 - GitHub Actions CI/CD pipeline configured
 
-### 📝 Documentation Updates
+### Documentation Updates
 
 - Moved SYSTEMD.md to mkdocs
 - Fixed incorrect repository references

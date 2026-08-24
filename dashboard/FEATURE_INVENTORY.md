@@ -1,4 +1,4 @@
-# Riku — Feature Inventory for the Dashboard
+# Riku: Feature Inventory for the Dashboard
 
 Every capability riku exposes, grouped by domain, with the **CLI** that backs it,
 the **HTTP** surface (if any today), and the **dashboard surface** it should map to.
@@ -6,7 +6,7 @@ the **HTTP** surface (if any today), and the **dashboard surface** it should map
 Legend for *HTTP today*:
 - ✅ endpoint exists (supervisor control plane or embedded dashboard)
 - 🟡 read-only data exists, no action endpoint
-- ❌ CLI-only — needs a control-plane/proxy endpoint to drive from the browser
+- ❌ CLI-only: needs a control-plane/proxy endpoint to drive from the browser
 
 The dashboard's Next.js server runs on the same host as riku, so "❌" items can
 be exposed either by (a) adding a control-plane route, or (b) the Next API proxy
@@ -33,7 +33,7 @@ shelling out to the `riku` binary. Prefer (a) for anything mutating.
 | Feature | CLI | HTTP today | Dashboard surface |
 |---|---|---|---|
 | Live worker + deploy logs | `riku logs <app> [proc]` | ✅ `GET /api/apps/:app/logs` (SSE, embedded) | Live log console (per app + per worker) |
-| Deploy log (history) | — | 🟡 file | Deploy timeline view |
+| Deploy log (history) | - | 🟡 file | Deploy timeline view |
 
 ## 3. Processes, scaling, metrics
 
@@ -61,7 +61,7 @@ shelling out to the `riku` binary. Prefer (a) for anything mutating.
 | Plugin bundles: install/list/remove | `riku plugins install|list|remove` | ❌ | Plugin manager |
 | Search / add from marketplace | `riku plugins search|add` | ❌ | Marketplace browser |
 | Marketplace add/list/remove | `riku plugins marketplace …` | ❌ | Marketplace sources |
-| Scaffold a plugin | `riku plugins scaffold` | ❌ | (dev tool — optional) |
+| Scaffold a plugin | `riku plugins scaffold` | ❌ | (dev tool, optional) |
 | Signing: keygen/sign/trust | `riku plugins keygen|sign|trust …` | ❌ | Trust keyring panel |
 | Plugins doctor | `riku plugins doctor` | ❌ | Plugin health check |
 | Addons: list/create/bind/unbind/destroy/backup | `riku addon …` | ✅ `GET/POST/DELETE /api/addons[/:instance][/bind|unbind|backup]` | Addons / managed datastores |
@@ -84,15 +84,15 @@ shelling out to the `riku` binary. Prefer (a) for anything mutating.
 | Feature | CLI | HTTP today | Dashboard surface |
 |---|---|---|---|
 | Doctor (nginx/systemd/perms/disk/cert) | `riku doctor` | ✅ `GET /api/doctor` | System health page |
-| Supervisor health + uptime | — | ✅ `GET /health` | Header status / host panel |
-| Update binary | `riku update` | ❌ | (system — optional) |
-| Init server | `riku init` | ❌ | (setup — out of scope) |
+| Supervisor health + uptime | - | ✅ `GET /health` | Header status / host panel |
+| Update binary | `riku update` | ❌ | (system: optional) |
+| Init server | `riku init` | ❌ | (setup: out of scope) |
 
 ## 9. Security model the dashboard must honor
 
 - **Read-only** routes (`/health`, `/metrics*`, `/plugins`, `/hooks`, `/api/state`,
-  releases, logs) — open on loopback; require token off-loopback.
-- **Mutating** routes (`/control/*`, scale, rollback, env writes) — require the
+  releases, logs), open on loopback; require token off-loopback.
+- **Mutating** routes (`/control/*`, scale, rollback, env writes), require the
   control token (`~/.riku/control.token`) and a same-origin/CSRF check. The
   Next proxy deputizes the token server-side; the browser never sees it.
 - Status wire format is **snake_case** (`running`, `oom_killed`, …).
