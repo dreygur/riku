@@ -22,7 +22,7 @@ toml = { workspace = true }
 tracing = { workspace = true }
 chrono = { workspace = true }
 colored = { workspace = true }
-dirs = "5"
+dirs = "6"
 glob = { workspace = true }
 reqwest = { workspace = true }
 nix = { workspace = true, features = ["signal", "process", "user", "fs"] }
