@@ -21,7 +21,7 @@ STARTUP_ITERS="${STARTUP_ITERS:-20}"
 echo "=== Riku Load Test ==="
 echo ""
 
-# ── Helper: require a command ──────────────────────────────────────────────────
+# Helper: require a command
 require() {
     if ! command -v "$1" &>/dev/null; then
         echo -e "${RED}Error: '$1' not found. Install it to run this test.${NC}"
@@ -29,7 +29,7 @@ require() {
     fi
 }
 
-# ── 1. CLI startup time (stable average over N iterations) ────────────────────
+# 1. CLI startup time (stable average over N iterations)
 echo -e "${BLUE}=== 1. CLI Startup Time ===${NC}"
 
 if ! command -v riku &>/dev/null; then
@@ -68,7 +68,7 @@ else
     echo ""
 fi
 
-# ── 2. Health endpoint load test ──────────────────────────────────────────────
+# 2. Health endpoint load test
 echo -e "${BLUE}=== 2. Health Endpoint Load Test ===${NC}"
 
 # Check if health server is running
@@ -137,7 +137,7 @@ else
     fi
     echo ""
 
-    # ── 3. Per-app metrics endpoint ───────────────────────────────────────────
+    # 3. Per-app metrics endpoint
     echo -e "${BLUE}=== 3. Per-App Metrics Endpoint ===${NC}"
     apps_json=$(curl -sf "http://${HEALTH_HOST}:${HEALTH_PORT}/metrics/apps" 2>/dev/null || echo "[]")
     app_count=$(echo "$apps_json" | grep -o '"app":' | wc -l || true)
@@ -168,7 +168,7 @@ else
     echo ""
 fi
 
-# ── 4. Binary size ─────────────────────────────────────────────────────────────
+# 4. Binary size
 echo -e "${BLUE}=== 4. Binary Information ===${NC}"
 if command -v riku &>/dev/null; then
     binary=$(which riku)

@@ -65,7 +65,7 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
     await stopSandbox(env, [APP_NAME]);
   });
 
-  // ── Phase 1: Bootstrap & Connection Hardening ──────────────────────────
+  // Phase 1: Bootstrap & Connection Hardening
 
   test("Phase 1: real supervisor + dashboard boot and report healthy", async () => {
     const rikuHealth = await fetch(`${env.rikuApiUrl}/health`);
@@ -88,7 +88,7 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
     await expect(page.getByText(/CONN:OK/)).toBeVisible({ timeout: 15_000 });
   });
 
-  // ── Phase 2a: Real Procfile Deploy (no podman) ─────────────────────────
+  // Phase 2a: Real Procfile Deploy (no podman)
 
   test("Phase 2a: create + deploy a real app, worker grid flips empty -> running", async () => {
     await expect(page.getByTestId("worker-row").filter({ hasText: APP_NAME })).toHaveCount(0);
@@ -127,7 +127,7 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
     ).toBeVisible({ timeout: 15_000 });
   });
 
-  // ── Phase 2b: Real Podman Build + Export ───────────────────────────────
+  // Phase 2b: Real Podman Build + Export
 
   test("Phase 2b: real podman build+export produces a valid, loadable tar", async () => {
     await page.getByTestId("export-image-btn").click();
@@ -152,7 +152,7 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
     expect(images).toContain(`riku-${APP_NAME}`);
   });
 
-  // ── Phase 3: Hostile Stream Stress, Disconnection, and Truncation ─────
+  // Phase 3: Hostile Stream Stress, Disconnection, and Truncation
 
   test("Phase 3: high-volume ordering, disconnect/reconnect, fd leak, truncation defect", async () => {
     const deployLogPath = join(env.rikuRoot, "logs", APP_NAME, "deploy.log");
@@ -184,7 +184,7 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
       expect(sequenceNumbers[i]).toBeGreaterThan(sequenceNumbers[i - 1]); // strict ordering, no truncation/reorder
     }
 
-    // ── fd leak check: baseline before the disconnect cycle ──
+    // fd leak check: baseline before the disconnect cycle
     const fdBaseline = countOpenFds(env.dashboardProc.pid!);
 
     // ── Hostile disconnect: reload mid-"stream" (file is idle now, but the
@@ -260,7 +260,7 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
     expect(isProcessAlive(workerPid)).toBe(true);
   });
 
-  // ── Phase 4: Deep Cleanup & Tear Down ───────────────────────────────────
+  // Phase 4: Deep Cleanup & Tear Down
 
   test("Phase 4: destroy via UI terminates the real process and clears the grid", async () => {
     expect(isProcessAlive(workerPid)).toBe(true); // sanity: still alive before destroy
