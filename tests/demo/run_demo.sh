@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# run_demo.sh — thin wrapper around compose.yml: builds the riku release
-# binary (compose.yml can't do this itself — see its header comment), then
+# run_demo.sh: thin wrapper around compose.yml: builds the riku release
+# binary (compose.yml can't do this itself: see its header comment), then
 # `docker compose up --build`, replacing any previous instance.
 #
 # Prefer running compose.yml directly if you don't need this convenience:
@@ -36,7 +36,7 @@ cat <<EOF
 riku demo environment is up.
 
 *.localhost addresses resolve to 127.0.0.1 on their own on virtually
-every modern OS/browser — no /etc/hosts edit needed. Open:
+every modern OS/browser: no /etc/hosts edit needed. Open:
 
   Dashboard:     http://dashboard.localhost:8080
   hello-node:    http://hello-node.localhost:8080

@@ -27,7 +27,7 @@ def index():
     return 'ok'
 EOF
 
-# Skip pip install — only care about config generation
+# Skip pip install: only care about config generation
 RIKU_SKIP_BUILD=1 push_app "$APP" "$src"
 
 assert_file_exists "$RIKU_ROOT/workers-available/${APP}-web-1.toml"

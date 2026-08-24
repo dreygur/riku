@@ -45,7 +45,7 @@ chmod +x benchmark.sh
 
 ## Contributing Benchmarks
 
-I encourage users to share their benchmark results! Please submit:
+I encourage users to share their benchmark results. Please submit:
 
 1. **System specs** (CPU, RAM, OS, storage type)
 2. **Workload description** (number of apps, traffic, etc.)

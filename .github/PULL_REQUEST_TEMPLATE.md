@@ -1,4 +1,4 @@
-<!-- Thanks for contributing to Riku! Keep this short. -->
+<!-- Thanks for contributing to Riku. Keep this short. -->
 
 ## What
 

@@ -1,8 +1,8 @@
 #!/bin/sh
-# sqlite-volume addon — Plugin Protocol v1 (PLUGIN_PROTOCOL.md §6.1).
+# sqlite-volume addon: Plugin Protocol v1 (PLUGIN_PROTOCOL.md §6.1).
 #
 # Provides a persistent SQLite database file on a managed volume, with no
-# external services — ideal for the single-box identity. Each verb receives a
+# external services: ideal for the single-box identity. Each verb receives a
 # JSON request on stdin and emits a JSON response on stdout.
 #
 # Context env: RIKU_ADDON_INSTANCE, RIKU_ADDON_DATA_PATH, and RIKU_APP on

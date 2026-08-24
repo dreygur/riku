@@ -22,7 +22,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
   const init: RequestInit & { duplex?: "half" } = { method: req.method, headers };
   if (req.method !== "GET" && req.method !== "HEAD") {
     // Forward the original content-type: most calls are JSON, but uploads
-    // (e.g. the restore endpoint's tar.gz) are multipart/form-data —
+    // (e.g. the restore endpoint's tar.gz) are multipart/form-data,
     // rewriting that to application/json would corrupt the multipart
     // boundary and the file. Stream the body through rather than buffering
     // it as text, so a large backup archive isn't held fully in memory here.
@@ -38,7 +38,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
     return new Response("supervisor unreachable", { status: 502 });
   }
 
-  // Pass the body through verbatim — this keeps SSE streams live.
+  // Pass the body through verbatim: this keeps SSE streams live.
   return new Response(upstream.body, {
     status: upstream.status,
     headers: {

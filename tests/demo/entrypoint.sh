@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# entrypoint.sh — container init for the persistent riku demo environment.
+# entrypoint.sh: container init for the persistent riku demo environment.
 #
 # Same boot sequence as ../stress/container/entrypoint.sh (see that file for
 # the detailed rationale on SSH key import order, the forced-command SSH
 # setup, and the plugin-bundling reasoning), plus:
 #   - the crates/riku-dashboard embedded API server (`riku dashboard`),
-#     started on 127.0.0.1:8088 — the actual backend the Next.js dashboard
+#     started on 127.0.0.1:8088, the actual backend the Next.js dashboard
 #     talks to (see dashboard/app/api/riku/[...path]/route.ts).
 #   - the Next.js dashboard UI, started on 127.0.0.1:3100, reached only
 #     through nginx's dashboard.localhost vhost (nginx-site.conf).
 #   - five demo apps (tests/demo/apps/*), deployed via a real `git push`
-#     against each app's own bare repo — over the loopback filesystem path,
+#     against each app's own bare repo: over the loopback filesystem path,
 #     not SSH, so this needs no keypair to work. This is the same mechanism
 #     a real `git push riku main` uses (the post-receive hook it installs
 #     calls `riku git-hook`), just invoked with a local repo path instead of
 #     an ssh:// remote.
 #
 # Unlike the automated test target, this container is meant to stay up: it
-# does not tear itself down, and run_demo.sh does not stop it after boot —
+# does not tear itself down, and run_demo.sh does not stop it after boot,
 # only run_demo.sh (re-run) or stop_demo.sh do that.
 set -euo pipefail
 
@@ -53,7 +53,7 @@ su - riku -c "RIKU_ROOT=$RIKU_ROOT /usr/local/bin/riku init --no-systemd" \
         exit 1;
     }
 cat "$LOG_DIR/riku-init.log"
-# riku init copies the running binary to ~/.local/bin/riku — the exact path
+# riku init copies the running binary to ~/.local/bin/riku, the exact path
 # the post-receive hook `riku apps create` writes is hardcoded to look for
 # (src/cli/apps/create.rs). Deploying any app below before this point would
 # silently no-op: the hook would find no riku binary and skip the deploy.

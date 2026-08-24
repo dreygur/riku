@@ -1,5 +1,5 @@
 #!/bin/bash
-# riku-pre-deploy — validate required env vars before deploy proceeds.
+# riku-pre-deploy: validate required env vars before deploy proceeds.
 #
 # Install: cp riku-pre-deploy ~/.riku/plugins/ && chmod +x ~/.riku/plugins/riku-pre-deploy
 #

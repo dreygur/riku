@@ -6,7 +6,7 @@ import { toast } from "sonner";
 /**
  * Runs an async action, tracking which one (by `key`) is in flight so
  * callers can disable just that control and show a "…ing" state instead of
- * only reacting after the fact — a request that takes a couple of seconds
+ * only reacting after the fact: a request that takes a couple of seconds
  * (a marketplace clone, a scale) otherwise looks like nothing happened, or
  * like it silently failed, until the toast finally appears.
  */

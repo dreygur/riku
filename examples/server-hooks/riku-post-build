@@ -1,5 +1,5 @@
 #!/bin/bash
-# riku-post-build — run database migrations after the build step.
+# riku-post-build: run database migrations after the build step.
 #
 # Install: cp riku-post-build ~/.riku/plugins/ && chmod +x ~/.riku/plugins/riku-post-build
 #
@@ -12,12 +12,12 @@ MANAGE="${RIKU_APP_PATH}/manage.py"
 VENV_PYTHON="${RIKU_ENV_PATH}/venv/bin/python"
 
 if [[ ! -f "${MANAGE}" ]]; then
-    echo "       No manage.py found — skipping migrations."
+    echo "       No manage.py found: skipping migrations."
     exit 0
 fi
 
 if [[ ! -x "${VENV_PYTHON}" ]]; then
-    echo "       No venv python found — skipping migrations." >&2
+    echo "       No venv python found: skipping migrations." >&2
     exit 0
 fi
 

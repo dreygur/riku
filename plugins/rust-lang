@@ -17,7 +17,7 @@ case "$CMD" in
     if command -v cargo >/dev/null 2>&1; then
       cargo build --release
     else
-      echo "cargo not found — is Rust installed?" >&2
+      echo "cargo not found: is Rust installed?" >&2
       exit 1
     fi
     ;;

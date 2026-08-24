@@ -41,7 +41,7 @@ export function EnvEditor({ app }: { app: string }) {
         return;
       }
       await api.setEnv(app, set, unset);
-      toast.success("Saved environment — app redeploys");
+      toast.success("Saved environment: app redeploys");
       setTimeout(load, 800);
     } catch (e) {
       toast.error(`Save failed: ${(e as Error).message}`);

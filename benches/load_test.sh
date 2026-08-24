@@ -33,7 +33,7 @@ require() {
 echo -e "${BLUE}=== 1. CLI Startup Time ===${NC}"
 
 if ! command -v riku &>/dev/null; then
-    echo -e "${YELLOW}Warning: riku not in PATH — skipping startup benchmark.${NC}"
+    echo -e "${YELLOW}Warning: riku not in PATH, skipping startup benchmark.${NC}"
     echo "  Build and install with: cargo build --release && sudo cp target/release/riku /usr/local/bin/"
     echo ""
 else
@@ -133,7 +133,7 @@ else
     elif [ "$success_pct" -ge 99 ]; then
         echo -e "  ${YELLOW}⚠ ${success_pct}% success rate${NC}"
     else
-        echo -e "  ${RED}✗ ${success_pct}% success rate — investigate failures${NC}"
+        echo -e "  ${RED}✗ ${success_pct}% success rate: investigate failures${NC}"
     fi
     echo ""
 
@@ -182,4 +182,4 @@ fi
 echo ""
 
 echo -e "${GREEN}Load test complete.${NC}"
-echo "Tip: Share your results in benches/results/ — see benches/README.md for the format."
+echo "Tip: Share your results in benches/results/, see benches/README.md for the format."

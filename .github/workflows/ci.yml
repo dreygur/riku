@@ -56,7 +56,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Replaces actions/setup-node — installs nub (and Node) and caches the store.
+      # Replaces actions/setup-node: installs nub (and Node) and caches the store.
       - name: Install nub
         uses: nubjs/setup-nub@v0
         with:

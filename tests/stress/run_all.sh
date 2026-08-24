@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run_all.sh — orchestrates the full production audit suite in order.
+# run_all.sh: orchestrates the full production audit suite in order.
 # Requires a running `riku supervisor` instance reachable via the `riku`
 # CLI on PATH. Resource-limit tests additionally require the supervisor
 # to have been started with bad_tenant_app/start-supervisor.env sourced.

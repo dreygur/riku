@@ -1,4 +1,4 @@
-# mise — dev orchestration for Riku.
+# mise: dev orchestration for Riku.
 #
 # Pins the helper-tool versions and codifies every workflow as a task so that
 # `local == CI == release`. Rust itself is owned by rustup via
@@ -64,5 +64,5 @@ description = "License / ban / advisory checks"
 run = "cargo deny check"
 
 [tasks.ci]
-description = "Full local pipeline — mirrors the CI workflow"
+description = "Full local pipeline: mirrors the CI workflow"
 depends = ["fmt:check", "lint", "build", "test", "test:doc", "audit", "deny"]

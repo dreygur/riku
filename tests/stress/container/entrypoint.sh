@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# entrypoint.sh — container init for the Riku integration-test target server.
+# entrypoint.sh: container init for the Riku integration-test target server.
 #
 # Order matters and is intentional:
 #   1. Import the host-generated test SSH key (mounted read-only at
 #      /home/riku/.ssh-bootstrap by run_container_test.sh) into the riku
 #      user's ~/.ssh, BEFORE running `riku init`. src/cli/setup/ssh.rs's
 #      find_public_keys()/select_key() only auto-adds the key without an
-#      interactive prompt when exactly one *.pub file is present — so we
+#      interactive prompt when exactly one *.pub file is present, so we
 #      must ensure exactly one is there at this point.
 #   2. Start sshd on port 2222 (see sshd_config).
 #   3. Run `riku init --no-systemd` as the riku user, which creates the
@@ -17,7 +17,7 @@
 #      git pushes to `riku git-receive-pack <app>`.
 #   4. Start nginx (serves the static site + Riku's generated per-app
 #      configs included from ~/.riku/nginx/*.conf).
-#   5. Start `riku supervisor` in the background as the riku user — the
+#   5. Start `riku supervisor` in the background as the riku user, the
 #      custom process supervisor under test (src/supervisor/).
 #   6. Tail all relevant logs in the foreground so `docker logs` captures
 #      everything for run_container_test.sh's log-collection step.

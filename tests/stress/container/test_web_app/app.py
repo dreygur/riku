@@ -3,11 +3,11 @@
 
 Deliberately stdlib-only (no FastAPI/uvicorn) to avoid pip-install flake
 inside the test container's plugins/python build step (which only runs
-`pip install -r requirements.txt` — an empty requirements.txt is enough
+`pip install -r requirements.txt`: an empty requirements.txt is enough
 to satisfy the plugin's detect() check, see plugins/python).
 
 Riku injects $PORT for `web` process types (src/deploy/workers.rs:212)
-and proxies external port 80 to it via nginx — this app must bind
+and proxies external port 80 to it via nginx: this app must bind
 0.0.0.0:$PORT, which it does below.
 """
 import json

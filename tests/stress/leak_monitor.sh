@@ -5,7 +5,7 @@
 # redeploy, see src/cli/cmds.rs ConfigCmd::Set and src/deploy/env_setup.rs)
 # against a target app, and tracks the supervisor's open file descriptor
 # count and RSS over the run. Each `config set` rewrites the app's ENV
-# file and triggers do_deploy, which restarts the app's workers — this
+# file and triggers do_deploy, which restarts the app's workers, this
 # exercises src/supervisor/daemon/config_watcher.rs's reload_all_configs()
 # path (unload_config + load_config_file) on every iteration.
 #
@@ -97,9 +97,9 @@ FD_GROWTH=$((FINAL_FD - BASELINE_FD))
 log "fd_growth=$FD_GROWTH (threshold: fail if > 5, i.e. growing roughly 1:1 with reload count)"
 
 if [ "$FD_GROWTH" -gt 5 ]; then
-    log "RESULT: FAIL — fd count grew by $FD_GROWTH over $ITERATIONS reloads, possible fd leak"
+    log "RESULT: FAIL, fd count grew by $FD_GROWTH over $ITERATIONS reloads, possible fd leak"
     exit 2
 else
-    log "RESULT: PASS — fd count stable within threshold"
+    log "RESULT: PASS, fd count stable within threshold"
     exit 0
 fi

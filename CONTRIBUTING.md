@@ -1,6 +1,6 @@
 # Contributing to Riku
 
-Thank you for your interest in contributing to Riku! This document outlines the process for contributing to the project.
+Thank you for your interest in contributing to Riku. This document outlines the process for contributing to the project.
 
 ## Getting Started
 
@@ -254,4 +254,4 @@ To add a new CLI command:
 
 Please follow the project's Code of Conduct in all interactions.
 
-Thank you for contributing to Riku!
+Thank you for contributing to Riku.

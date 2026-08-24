@@ -164,7 +164,7 @@ print_summary() {
         echo ""
         return 0
     else
-        echo -e "${RED}✗ Some tests failed!${NC}"
+        echo -e "${RED}✗ Some tests failed${NC}"
         echo ""
         return 1
     fi

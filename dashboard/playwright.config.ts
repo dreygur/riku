@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 // This suite manages its own servers (real riku supervisor + real Next.js
-// dashboard, see tests/e2e-dashboard/helpers/sandbox.ts) — no Playwright
+// dashboard, see tests/e2e-dashboard/helpers/sandbox.ts), no Playwright
 // `webServer` entry, since each test run needs a fresh sandboxed RIKU_ROOT
 // and dynamically allocated ports, not one fixed server for the whole run.
 export default defineConfig({

@@ -37,7 +37,7 @@ const SHELL_PLUGIN_PATH = join(__dirname, "..", "fixtures", "shell-plugin.sh");
 
 /** Directory skeleton matching create_directory_structure() in
  * src/cli/setup/init.rs, minus the bits that require root or interactive
- * input (systemd, acme cert generation, SSH key setup) — we don't need
+ * input (systemd, acme cert generation, SSH key setup), we don't need
  * `riku init`'s full interactive flow, just the directories the supervisor
  * and CLI commands assume exist. */
 const REQUIRED_SUBDIRS = [
@@ -87,7 +87,7 @@ export function createSandboxRoot(): string {
  * directory (created via the real [CREATE] button, so the bare git repo
  * under repos/<app>.git also exists, matching real-world usage). Also
  * installs the `shell` runtime plugin into the sandbox's plugins/ dir and
- * sets RUNTIME=shell in the app's ENV file — the fixture app is a bare
+ * sets RUNTIME=shell in the app's ENV file: the fixture app is a bare
  * shell script with no package.json/requirements.txt/etc., so none of the
  * bundled runtime plugins (node, python, ruby, go, rust-lang) would
  * `detect` it, and detection would otherwise fail with "No runtime plugin
@@ -178,12 +178,12 @@ export async function startSandbox(): Promise<SandboxHandle> {
 
   // `next dev` is deliberately not used here: client-side useEffect hooks
   // never fire on initial mount under this Next 16.2.9 + React 19.2.7 +
-  // Turbopack dev-server combination (verified directly — a
+  // Turbopack dev-server combination (verified directly, a
   // window.fetch-patching init script and a literal console.log placed
   // inside the effect body both observed zero invocations for 20+ seconds,
   // while a manual page.evaluate(() => fetch(...)) against the same origin
-  // succeeded instantly). `next build && next start` does not exhibit this
-  // — every poll fires correctly — and matches how the dashboard actually
+  // succeeded instantly). `next build && next start` does not exhibit this:
+  // every poll fires correctly, and matches how the dashboard actually
   // runs in production, and how tests/production_audit/dashboard already
   // tests it for the same fidelity reason.
   execFileSync("npx", ["next", "build"], { cwd: DASHBOARD_ROOT, stdio: "ignore" });
@@ -211,7 +211,7 @@ export async function startSandbox(): Promise<SandboxHandle> {
 
 /** SIGTERM the whole process group, escalate to SIGKILL if it doesn't exit
  * within the grace period. Each spawned process is `detached: true`, so its
- * pid is also its process group id — `-pid` signals the whole group
+ * pid is also its process group id: `-pid` signals the whole group
  * (the shell `sh -c` wrapper riku spawns for Procfile commands included). */
 async function killProcessGroup(proc: ChildProcess, graceMs = 5_000): Promise<void> {
   if (proc.pid === undefined || proc.exitCode !== null) return;
@@ -246,7 +246,7 @@ function cleanupPodmanImage(appName: string): void {
   try {
     spawn("podman", ["rmi", "-f", `riku-${appName}`], { stdio: "ignore" });
   } catch {
-    // podman not present or image never built — nothing to clean up
+    // podman not present or image never built: nothing to clean up
   }
 }
 
@@ -256,13 +256,13 @@ export async function stopSandbox(handle: SandboxHandle, appNames: string[]): Pr
   rmSync(handle.rikuRoot, { recursive: true, force: true });
 }
 
-/** Count open file descriptors for a process via /proc — used to assert the
+/** Count open file descriptors for a process via /proc, used to assert the
  * Hono SSE route doesn't leak a fd/watcher per abandoned connection. */
 export function countOpenFds(pid: number): number {
   try {
     return readdirSync(`/proc/${pid}/fd`).length;
   } catch {
-    return -1; // process gone or /proc unavailable (non-Linux) — caller should skip the assertion
+    return -1; // process gone or /proc unavailable (non-Linux), caller should skip the assertion
   }
 }
 

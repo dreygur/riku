@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# user_traffic_simulation.sh — runs on the HOST, against the running
+# user_traffic_simulation.sh: runs on the HOST, against the running
 # container started by run_container_test.sh.
 #
 # Phase 1 (developer workflow): git init the mock app, push it over SSH
 # to the container on port 2222. Ground truth: the first push to a new
 # app auto-creates the bare repo and hook (src/cli/git/receive_pack.rs
 # cmd_git_receive_pack -> ensure_repo_symlink + git init --bare on first
-# call) — no `riku apps create` step is required before pushing.
+# call): no `riku apps create` step is required before pushing.
 #
 # Phase 2 (traffic): blast the nginx-proxied app (port 80 on the host,
 # mapped from the container) with concurrent load, log status codes and
@@ -65,7 +65,7 @@ else
 fi
 
 if [ "$DEPLOY_OK" -ne 1 ]; then
-    log "RESULT: FAIL — deployment did not succeed, skipping traffic phase"
+    log "RESULT: FAIL, deployment did not succeed, skipping traffic phase"
     exit 2
 fi
 
@@ -73,7 +73,7 @@ fi
 # ENV has no explicit override (src/nginx/context.rs:49). The static vhost
 # in this container (riku-nginx.conf) is a catch-all default_server with
 # server_name "_", so requests WITHOUT a matching Host header land there
-# (404, no proxy_pass) instead of reaching the app — this is correct nginx
+# (404, no proxy_pass) instead of reaching the app, this is correct nginx
 # behavior, not a bug, but it means every request in this script must send
 # the right Host header to actually exercise the app.
 APP_HOST_HEADER="${APP_NAME}.example.com"
@@ -89,7 +89,7 @@ for i in $(seq 1 30); do
 done
 
 if [ "$APP_UP" -ne 1 ]; then
-    log "RESULT: FAIL — app did not respond on /health within 30s after deploy"
+    log "RESULT: FAIL, app did not respond on /health within 30s after deploy"
     exit 2
 fi
 log "app is up and responding to /health"
@@ -103,7 +103,7 @@ LATENCY_LOG="$RESULT_DIR/traffic_latency_${TS}.csv"
 echo "request_id,http_code,time_total_s" > "$LATENCY_LOG"
 
 run_curl_fallback() {
-    log "wrk/k6 not found — using parallel curl loop fallback"
+    log "wrk/k6 not found: using parallel curl loop fallback"
     local end_time=$(( $(date +%s) + DURATION_SECONDS ))
     local req_id=0
     local pids=()
@@ -182,9 +182,9 @@ rm -rf "$WORK_DIR"
 
 log "=== run complete ==="
 if [ "$ERROR_502" -gt 0 ] || [ "$ERROR_504" -gt 0 ]; then
-    log "RESULT: FAIL — 502/504 errors observed under load (502=$ERROR_502 504=$ERROR_504)"
+    log "RESULT: FAIL, 502/504 errors observed under load (502=$ERROR_502 504=$ERROR_504)"
     exit 2
 else
-    log "RESULT: PASS — deploy succeeded, no 502/504 observed"
+    log "RESULT: PASS, deploy succeeded, no 502/504 observed"
     exit 0
 fi

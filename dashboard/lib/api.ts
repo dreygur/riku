@@ -1,4 +1,4 @@
-// Client API — all calls go through the same-origin /api/riku proxy.
+// Client API: all calls go through the same-origin /api/riku proxy.
 import type {
   RikuState,
   Release,

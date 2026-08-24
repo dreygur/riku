@@ -1,5 +1,5 @@
 #!/bin/sh
-# redis addon — Plugin Protocol v1 (PLUGIN_PROTOCOL.md §6.1).
+# redis addon: Plugin Protocol v1 (PLUGIN_PROTOCOL.md §6.1).
 #
 # Provisions an isolated Redis tenant by creating a per-instance ACL user
 # (Redis ≥6) scoped to its own key namespace `<ident>:*`. The admin connection
@@ -31,7 +31,7 @@ case "$verb" in
     admin_redis ACL SETUSER "$ident" on ">$pass" "~$ident:*" "+@all" >/dev/null
     admin_redis ACL SAVE >/dev/null 2>&1 || true
     # Persist the connection string for bind (not world-readable). Keys live
-    # under the `<ident>:` prefix — apps must namespace their keys accordingly.
+    # under the `<ident>:` prefix, apps must namespace their keys accordingly.
     printf 'REDIS_URL=redis://%s:%s@%s:%s/0\n' \
       "$ident" "$pass" "$host" "$port" > "$creds"
     printf 'REDIS_KEY_PREFIX=%s:\n' "$ident" >> "$creds"

@@ -92,7 +92,7 @@ export default function AppDetail({ params }: { params: Promise<{ app: string }>
                 api
                   .restore(state.app, file)
                   .then(() => {
-                    toast.success(`Restored ${state.app} — redeploy or restart to bring it up`);
+                    toast.success(`Restored ${state.app}: redeploy or restart to bring it up`);
                     load();
                   })
                   .catch((err) => toast.error(`Restore failed: ${err.message}`))

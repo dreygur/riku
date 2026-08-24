@@ -1,5 +1,5 @@
 #!/bin/sh
-# Riku notifier — Plugin Protocol v1 event subscriber.
+# Riku notifier: Plugin Protocol v1 event subscriber.
 #
 # The kernel invokes this once per subscribed event with the verb `on_event`
 # and the event envelope as a single JSON line on stdin (see PLUGIN_PROTOCOL.md

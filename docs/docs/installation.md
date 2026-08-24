@@ -359,4 +359,4 @@ sudo nginx -t
 After installation:
 1. Read [Environment Variables](env.md) for environment variable configuration
 2. Check [Plugin System](plugins.md) for extending Riku
-3. Deploy your first app!
+3. Deploy your first app.

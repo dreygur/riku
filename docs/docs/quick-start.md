@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Get Riku up and running in 5 minutes!
+Get Riku up and running in 5 minutes.
 
 ## Prerequisites
 
@@ -179,7 +179,7 @@ cat | RIKU_ROOT="$HOME/.riku" riku git-hook "myapp" "$REPO_PATH"
 
 ## Step 7: Access Your App
 
-Your app should now be running! Access it at:
+Your app should now be running. Access it at:
 
 ```
 http://your-server-ip
@@ -194,7 +194,7 @@ When you push to Riku:
 3. **Dependencies install** - nub install (Node), pip install (Python), etc.
 4. **Nginx config** - Automatically created and symlinked to `/etc/nginx/sites-enabled/`
 5. **Supervisor starts** - If not running, supervisor auto-starts and spawns workers
-6. **App running** - Your app is live!
+6. **App running**: your app is live.
 
 > Riku automatically handles:
 > - Nginx config symlinks (`/etc/nginx/sites-enabled/`)
@@ -291,4 +291,4 @@ ssh deploy@your-server-ip "tail ~/.riku/logs/myapp/*.log"
 
 ---
 
-*Congratulations! You've deployed your first app with Riku!*
+*You've deployed your first app with Riku.*

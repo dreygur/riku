@@ -1,5 +1,5 @@
 /**
- * Subtle staggered fade-up on mount. Pure CSS (tw-animate-css) — no JS
+ * Subtle staggered fade-up on mount. Pure CSS (tw-animate-css), no JS
  * animation runtime, so it works under strict CSP (no unsafe-eval).
  */
 export function Reveal({ children, i = 0 }: { children: React.ReactNode; i?: number }) {

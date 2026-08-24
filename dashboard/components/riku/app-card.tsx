@@ -109,7 +109,7 @@ export function AppCard({ app, onChanged }: { app: AppState; onChanged: () => vo
                 const m = statusMeta(w.status);
                 const pct = Math.min(100, ((w.memory_bytes || 0) / MEM_CEIL) * 100);
                 // Only a worker that's actually down (not mid-transition) can be
-                // usefully restarted or deleted on its own — a config file is
+                // usefully restarted or deleted on its own: a config file is
                 // guaranteed to still exist for it (the API hides stopped rows
                 // whose config was scaled away entirely), so both actions are
                 // always safe to offer here.
@@ -150,7 +150,7 @@ export function AppCard({ app, onChanged }: { app: AppState; onChanged: () => vo
                     </span>
                     <span className="flex items-center justify-between gap-2 sm:contents">
                       <span className="text-muted-foreground">
-                        {w.pid ? `pid ${w.pid}` : "—"} · cpu{" "}
+                        {w.pid ? `pid ${w.pid}` : "-"} · cpu{" "}
                         {Math.round((w.cpu_time_ms || 0) / 1000)}s
                       </span>
                       <span

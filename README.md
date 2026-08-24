@@ -23,7 +23,7 @@ tar -xzf riku-linux-amd64.tar.gz && sudo ./riku init
 
 # on your laptop
 git remote add riku deploy@your-server:myapp
-git push riku main      # 👈 that's the deploy
+git push riku main      # that's the deploy
 ```
 
 ## What it does

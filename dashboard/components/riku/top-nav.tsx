@@ -57,7 +57,7 @@ export function TopNav() {
   }, []);
 
   // Plugin-declared nav entries change only on install/remove, not worth
-  // polling every 5s alongside supervisor state — fetch once on mount.
+  // polling every 5s alongside supervisor state: fetch once on mount.
   useEffect(() => {
     api
       .plugins()

@@ -15,7 +15,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // The HMAC key is derived from the stored hash string itself — verifying
+  // The HMAC key is derived from the stored hash string itself, verifying
   // a session here never needs the plaintext password (see lib/password-hash.ts).
   const ok = await verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value, storedHash);
   if (ok) return NextResponse.next();

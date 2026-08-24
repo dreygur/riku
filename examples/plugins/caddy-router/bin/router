@@ -1,5 +1,5 @@
 #!/bin/sh
-# caddy router — Plugin Protocol v1 (PLUGIN_PROTOCOL.md §6.2).
+# caddy router: Plugin Protocol v1 (PLUGIN_PROTOCOL.md §6.2).
 #
 # Exposes apps through Caddy, which handles automatic HTTPS. Requires `caddy`
 # and `jq` on the host.

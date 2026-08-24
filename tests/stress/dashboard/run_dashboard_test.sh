@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# run_dashboard_test.sh — orchestrates a production-fidelity audit of the
+# run_dashboard_test.sh: orchestrates a production-fidelity audit of the
 # Next.js/Hono dashboard: builds the real riku binary, runs a real
 # `riku supervisor` against a sandboxed RIKU_ROOT (not the host's real
-# ~/.riku — unlike the other scripts in this suite, the dashboard doesn't
+# ~/.riku: unlike the other scripts in this suite, the dashboard doesn't
 # need to touch host state to be tested honestly, so it doesn't), deploys
 # the suite's existing `container/test_web_app` as a real worker process,
 # builds and starts the dashboard in production mode (`next build && next
@@ -13,10 +13,10 @@
 # Ground truth baked in (verified against source before writing):
 # - The dashboard's Hono routes read RIKU_API_URL from process.env at
 #   request time (src/...dashboard/server/routers/supervisor.ts), not at
-#   build time — so one `next build` can be reused against any sandboxed
+#   build time: so one `next build` can be reused against any sandboxed
 #   supervisor port without rebuilding.
 # - Worker config filenames are <app>-<kind>-<ordinal>.toml under
-#   workers-enabled/ (src/supervisor/daemon/config_watcher.rs) — this
+#   workers-enabled/ (src/supervisor/daemon/config_watcher.rs), this
 #   script writes one directly, same mechanism `riku ps --scale` uses
 #   under the hood, to avoid depending on a full git-push deploy.
 set -uo pipefail
@@ -143,7 +143,7 @@ log "--- step 4: building dashboard (next build) ---"
 
 log "--- step 4b: starting dashboard (next start -p $DASHBOARD_PORT) ---"
 # Invoke the local `next` binary directly (not via `npx`, which forks an
-# indirection process of its own) so $! below is the actual server PID —
+# indirection process of its own) so $! below is the actual server PID,
 # needed for the alive/zombie checks in step 6 to mean anything.
 RIKU_API_URL="http://127.0.0.1:${HEALTH_PORT}" \
     "$DASHBOARD_DIR/node_modules/.bin/next" start "$DASHBOARD_DIR" -p "$DASHBOARD_PORT" \
@@ -185,7 +185,7 @@ cp "$SANDBOX_ROOT/dashboard.log" "$RESULT_DIR/dashboard_${TS}.log" 2>/dev/null
 cp "$SANDBOX_ROOT/logs/$APP_NAME/web.log" "$RESULT_DIR/worker_${TS}.log" 2>/dev/null
 
 # Scoped to direct descendants of the supervisor we started (same
-# convention as stress_lifecycle.sh) — a system-wide zombie grep would
+# convention as stress_lifecycle.sh): a system-wide zombie grep would
 # pick up unrelated noise from whatever else is running on this host.
 ZOMBIES_FOUND="$(ps -eo state,pid,ppid 2>/dev/null | awk -v root="$SUPERVISOR_PID" '$1 ~ /^Z/ && $3 == root {print $2}' | wc -l)"
 SUPERVISOR_ALIVE="no"
@@ -198,7 +198,7 @@ log "--- step 7: verdict ---"
 VERDICT_FILE="$RESULT_DIR/verdict_${TS}.txt"
 {
     echo "==================================================================="
-    echo "RIKU DASHBOARD AUDIT — VERDICT"
+    echo "RIKU DASHBOARD AUDIT: VERDICT"
     echo "==================================================================="
     echo "timestamp:               $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     echo "app:                     $APP_NAME"
@@ -213,9 +213,9 @@ VERDICT_FILE="$RESULT_DIR/verdict_${TS}.txt"
     echo
     if [ "$AUDIT_EXIT" -eq 0 ] && [ "$SUPERVISOR_ALIVE" = "yes" ] \
         && [ "$DASHBOARD_ALIVE" = "yes" ] && [ "$ZOMBIES_FOUND" -eq 0 ]; then
-        echo "OVERALL: PASS — REST handlers, metrics SSE, and log-tail SSE all verified live; no zombies."
+        echo "OVERALL: PASS, REST handlers, metrics SSE, and log-tail SSE all verified live; no zombies."
     else
-        echo "OVERALL: FAIL — see component results above for which check failed."
+        echo "OVERALL: FAIL, see component results above for which check failed."
     fi
     echo "==================================================================="
 } | tee "$VERDICT_FILE" | tee -a "$LOG"

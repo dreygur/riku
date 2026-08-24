@@ -4,14 +4,14 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Riku dashboard — dark "machine readout" theme.
+ * Riku dashboard: dark "machine readout" theme.
  *
  * One accent (signal green) that only means alive / action. Status hues
  * (warn / danger / info) appear only where they carry meaning. Monospace for
- * machine data (app names, ports, env vars, logs, metrics — anything that is
+ * machine data (app names, ports, env vars, logs, metrics, anything that is
  * literally system state); sans for chrome (nav, section labels) so the eye
  * has a resting place against all that dense mono data. Radius is forced to
- * 0 everywhere — sharp corners are the spine of the look.
+ * 0 everywhere: sharp corners are the spine of the look.
  */
 
 :root,
@@ -50,7 +50,7 @@
   --warn: #e8b54a;
   --info: #5b9dd9;
 
-  /* Slightly darker than --background — used for the log console's own
+  /* Slightly darker than --background: used for the log console's own
      surface so streamed output reads as a distinct sunken panel. */
   --console: #0a0c0e;
 

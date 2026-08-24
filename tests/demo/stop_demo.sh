@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# stop_demo.sh — tears down the container started by run_demo.sh / compose.yml.
+# stop_demo.sh: tears down the container started by run_demo.sh / compose.yml.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

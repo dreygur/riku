@@ -217,7 +217,7 @@ cargo run -- <command>
 
 ```
 riku/
-├── Cargo.toml              # workspace manifest (no root package — riku is one member crate)
+├── Cargo.toml              # workspace manifest (no root package, riku is one member crate)
 ├── crates/
 │   ├── riku/               # binary entry point (main.rs) + lib.rs re-exporting the others
 │   ├── riku-cli/           # CLI command handlers (apps/, agent/, doctor/, cli.rs, cmds.rs, ...)

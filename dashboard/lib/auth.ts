@@ -2,12 +2,12 @@
  * Session cookie for the dashboard's single-shared-password login.
  *
  * Runs in both the Edge middleware and Node route handlers, so this only
- * uses Web Crypto (`crypto.subtle`, `atob`/`btoa`) — no `Buffer`, no Node
- * `crypto` — to stay portable across both runtimes.
+ * uses Web Crypto (`crypto.subtle`, `atob`/`btoa`), no `Buffer`, no Node
+ * `crypto`: to stay portable across both runtimes.
  *
  * The token is `${expiryMs}.${hmacSignature}`, signed with an HMAC key
- * derived from `SHA-256(RIKU_DASHBOARD_PASSWORD_HASH)` — the stored
- * (already-hashed) secret, never the plaintext password — so no separate
+ * derived from `SHA-256(RIKU_DASHBOARD_PASSWORD_HASH)`, the stored
+ * (already-hashed) secret, never the plaintext password, so no separate
  * signing secret needs to be provisioned or rotated, and the plaintext
  * password never has to be read back out of anything at rest.
  */

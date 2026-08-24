@@ -1,5 +1,5 @@
 #!/bin/sh
-# postgres addon — Plugin Protocol v1 (PLUGIN_PROTOCOL.md §6.1).
+# postgres addon: Plugin Protocol v1 (PLUGIN_PROTOCOL.md §6.1).
 #
 # Provisions a database and a login role on a PostgreSQL server reachable via
 # the standard PG* environment variables (defaults to the local socket as an

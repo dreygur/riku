@@ -2,14 +2,14 @@
 /**
  * Standalone production audit for the riku dashboard's live backend routes.
  *
- * Real endpoints only — no fabricated routes:
+ * Real endpoints only: no fabricated routes:
  *   - GET  {DASHBOARD_URL}/api/health          (Hono catch-all, server/routers/supervisor.ts)
  *   - GET  {DASHBOARD_URL}/api/env/:app        (Hono catch-all, server/routers/env.ts)
  *   - GET  {DASHBOARD_URL}/api/metrics/apps    (Hono catch-all, used to build the worker matrix)
  *   - GET  {DASHBOARD_URL}/api/logs/stream     (app/api/logs/stream/route.ts, native SSE tail)
  *   - GET  {RIKU_API_URL}/metrics/stream       (Rust axum server, src/supervisor/health/mod.rs)
  *
- * NOTE: the dashboard has no Hono proxy for the metrics SSE stream — only
+ * NOTE: the dashboard has no Hono proxy for the metrics SSE stream, only
  * REST polling is proxied (/api/metrics, /api/metrics/apps). The live
  * "metrics-update" SSE events only exist on the Rust health server, so
  * Phase 2 connects there directly instead of pretending a passthrough
@@ -32,7 +32,7 @@ const LOG_WAIT_MS = 5_000;
 const LOG_DIR = join(homedir(), ".riku", "logs", AUDIT_APP);
 const LOG_FILE = join(LOG_DIR, "deploy.log");
 
-// ── SSE frame parsing (works identically on Bun and Node — no EventSource dependency) ──
+// ── SSE frame parsing (works identically on Bun and Node, no EventSource dependency) ──
 
 interface SseFrame {
   event: string | null;

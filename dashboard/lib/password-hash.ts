@@ -1,7 +1,7 @@
 /**
  * Password hashing for `RIKU_DASHBOARD_PASSWORD_HASH`.
  *
- * Node-only (uses `crypto.scrypt`) — do not import this from `middleware.ts`,
+ * Node-only (uses `crypto.scrypt`): do not import this from `middleware.ts`,
  * which runs on the Edge runtime. The stored value is `${saltHex}:${hashHex}`;
  * the plaintext password itself is never persisted, only compared transiently
  * during a login POST.

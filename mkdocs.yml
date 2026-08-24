@@ -152,7 +152,7 @@ extra:
   generator: false
 
 copyright: >
-  Made with Rust 🦀 — Riku is MIT licensed.
+  Made with Rust. Riku is MIT licensed.
 
 # Validation
 validation:

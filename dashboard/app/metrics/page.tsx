@@ -95,7 +95,7 @@ export default function MetricsPage() {
                     </span>
                     <Sparkline data={h.cpu} stroke="var(--color-warn)" />
                     <span className="shrink-0 text-muted-foreground">
-                      {h.cpu.length ? `${h.cpu[h.cpu.length - 1]}ms/s` : "—"}
+                      {h.cpu.length ? `${h.cpu[h.cpu.length - 1]}ms/s` : "-"}
                     </span>
                   </span>
                 </div>

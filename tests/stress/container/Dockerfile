@@ -7,7 +7,7 @@
 #     (src/cli/cli.rs Commands::GitReceivePack, src/cli/git/receive_pack.rs).
 #   - `riku init --no-systemd` (src/cli/setup/init.rs) auto-adds an SSH key
 #     from ~/.ssh/*.pub WITHOUT prompting only if exactly one key is found
-#     (src/cli/setup/ssh.rs::find_public_keys / select_key) — this image
+#     (src/cli/setup/ssh.rs::find_public_keys / select_key), this image
 #     relies on exactly one pubkey being present at first-boot time.
 #   - Web workers get $PORT injected by Riku (src/deploy/workers.rs:212) and
 #     are proxied from external port 80 by nginx; the app must bind
@@ -39,7 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Dedicated, non-root deploy user. Git pushes and the riku supervisor both
 # run as this user, matching the production model (contrib/nginx/default.conf
-# references /home/deploy/.riku — we use /home/riku/.riku here instead).
+# references /home/deploy/.riku: we use /home/riku/.riku here instead).
 RUN useradd -m -s /bin/bash riku \
     && usermod -p '*' riku \
     && mkdir -p /home/riku/.ssh \
@@ -88,7 +88,7 @@ RUN chmod 755 /usr/local/bin/nginx
 
 # Bundle the repo's runtime plugins directly into the image rather than
 # relying on `riku install-plugins`, which fetches each script over HTTPS
-# from raw.githubusercontent.com (src/cli/apps/install_plugins.rs) — that
+# from raw.githubusercontent.com (src/cli/apps/install_plugins.rs), that
 # egress path is blocked in this build environment's network policy even
 # though the apt mirror is reachable, so it cannot be used here.
 COPY plugins/ /home/riku/.riku/plugins/

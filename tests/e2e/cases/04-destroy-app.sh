@@ -27,7 +27,7 @@ RIKU_SKIP_BUILD=1 push_app "$APP" "$src"
 assert_dir_exists "$RIKU_ROOT/apps/${APP}"
 assert_file_exists "$RIKU_ROOT/workers-available/${APP}-web-1.toml"
 
-# CLI syntax: riku destroy APP  (or: riku apps destroy APP — both route to cmd_destroy)
+# CLI syntax: riku destroy APP  (or: riku apps destroy APP, both route to cmd_destroy)
 RIKU_ROOT="$RIKU_ROOT" riku destroy "$APP"
 
 # Core directories must be removed

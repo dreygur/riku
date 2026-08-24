@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  // `dark` is forced — the dashboard is dark-only by design.
+  // `dark` is forced: the dashboard is dark-only by design.
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <body>

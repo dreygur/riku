@@ -1,5 +1,5 @@
 /* ============================================================
-   Riku docs — matched to the embedded dashboard theme
+   Riku docs: matched to the embedded dashboard theme
    (crates/riku-dashboard/src/index.html).
    Cool near-black monitoring palette, mono labels, flat panels,
    status-color accents (green=alive, blue=info, amber=warn).
@@ -232,7 +232,7 @@ body, .md-typeset { font-family: var(--riku-sans); }
 @keyframes riku-blink { 50% { opacity: 0; } }
 
 /* ============================================================
-   FEATURE CARDS — flat dashboard panels
+   FEATURE CARDS: flat dashboard panels
    ============================================================ */
 .md-typeset .grid.cards > ul > li,
 .md-typeset .grid > .card {
@@ -276,7 +276,7 @@ body, .md-typeset { font-family: var(--riku-sans); }
 .md-nav__link--active { color: var(--riku-info) !important; font-weight: 600; }
 
 /* Keep long content tabs (e.g. the "three steps") from pushing the page
-   wide on narrow screens — scroll the label strip instead. */
+   wide on narrow screens: scroll the label strip instead. */
 .md-typeset .tabbed-set { overflow: hidden; }
 .md-typeset .tabbed-labels { overflow-x: auto; scrollbar-width: none; }
 .md-typeset .tabbed-labels::-webkit-scrollbar { display: none; }

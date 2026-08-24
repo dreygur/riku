@@ -1,6 +1,6 @@
 # sshd_config for the Riku integration-test container.
 # Non-privileged port, key-only auth, forced-command gating handled entirely
-# by authorized_keys (src/util/ssh_keys.rs) — sshd itself just needs to allow
+# by authorized_keys (src/util/ssh_keys.rs): sshd itself just needs to allow
 # pubkey auth and honor the command= restriction, which is default behavior.
 
 Port 2222

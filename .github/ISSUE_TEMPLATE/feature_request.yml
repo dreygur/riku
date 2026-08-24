@@ -6,7 +6,7 @@ body:
     id: problem
     attributes:
       label: What problem does this solve?
-      description: Describe the use case or pain point first — not just the solution.
+      description: Describe the use case or pain point first, not just the solution.
       placeholder: I want to …, but today Riku …
     validations:
       required: true

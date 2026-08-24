@@ -20,7 +20,7 @@
 #   http://hello-worker.localhost:8080
 #
 # *.localhost resolves to 127.0.0.1 on its own on virtually every modern
-# OS/browser — no /etc/hosts edit needed.
+# OS/browser: no /etc/hosts edit needed.
 #
 # git remote for redeploying any app directly, or pushing a new one:
 #   ssh -p 2222 riku@127.0.0.1 ...   (see README.md for the one-time SSH key setup)
@@ -37,6 +37,6 @@ services:
     # A bootstrap SSH public key dropped here (before first boot) is
     # imported into riku's authorized_keys automatically, so you can push
     # more apps or redeploy the demo ones yourself over SSH afterward.
-    # Entirely optional — the 5 demo apps deploy without it.
+    # Entirely optional: the 5 demo apps deploy without it.
     volumes:
       - ./.ssh-bootstrap:/home/riku/.ssh-bootstrap:ro

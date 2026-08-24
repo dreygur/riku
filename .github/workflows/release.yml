@@ -103,7 +103,7 @@ jobs:
           retention-days: 30
 
       # Binary runtime plugins (downloaded by `riku install-plugins java|clojure|container`,
-      # see src/cli/apps/install_plugins.rs) — uploaded per-target so the CLI can fetch the
+      # see src/cli/apps/install_plugins.rs): uploaded per-target so the CLI can fetch the
       # right one for the host triple from `releases/latest/download/riku-plugin-<name>-<target>`.
       - name: Upload plugin artifacts
         uses: actions/upload-artifact@v4

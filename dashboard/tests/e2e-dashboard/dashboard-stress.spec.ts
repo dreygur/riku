@@ -5,11 +5,11 @@
 // No mocked HTTP, no stubbed SSE, no fake process states.
 //
 // Two corrections versus the original spec, grounded in the actual source
-// (not asserted on faith — see the inline citations below):
+// (not asserted on faith: see the inline citations below):
 //   1. There is no "building" worker-grid state. `ProcessStats.status` only
 //      ever resolves to running|stopped|crashed (dashboard/lib/types.ts
 //      STATUS_MAP). A deploy either produces a RUNNING row or no row.
-//   2. Podman is not part of `riku deploy` — Procfile workers are spawned
+//   2. Podman is not part of `riku deploy`: Procfile workers are spawned
 //      directly by the supervisor. Podman only exists via the separate
 //      container-export feature, which builds+tars an image and never runs
 //      it as a worker. Phase 2 is split into a deploy sub-phase (no podman)
@@ -26,9 +26,9 @@
 //     truncation, so the stream goes permanently silent for that
 //     connection even though the file is still being written to.
 //   - Reconnecting (e.g. after a page reload) computes `offset = current
-//     file size` at connect time — it never backfills. The UI's `lines`
+//     file size` at connect time: it never backfills. The UI's `lines`
 //     state is also component-local with no persistence. So a reload does
-//     NOT "catch up with backlogged logs" — it starts from a blank slate
+//     NOT "catch up with backlogged logs": it starts from a blank slate
 //     and only shows lines written after the new connection opens.
 
 import { test, expect, chromium, type Browser, type Page } from "@playwright/test";
@@ -196,7 +196,7 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
     // REAL behavior, not the originally-assumed one: `activeApp` is plain
     // React state (app/page.tsx) with no localStorage/URL persistence, so
     // a reload resets the active-app selector back to its hardcoded
-    // placeholder ("myapp"), not e2estressapp — TerminalStream would
+    // placeholder ("myapp"), not e2estressapp, TerminalStream would
     // otherwise open an EventSource against the wrong app entirely. A
     // real user recovers by retyping the app name into the same
     // data-testid="active-app-input" the [CREATE] flow used earlier; do
@@ -218,7 +218,7 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
       timeout: 10_000,
     });
 
-    // The old connection's fd must be cleaned up — the route's
+    // The old connection's fd must be cleaned up: the route's
     // `req.signal.addEventListener("abort", ...)` should fire on
     // navigation. Allow a small margin for the new connection's own fd
     // plus unrelated Node internals, but a real leak would show a large,
@@ -233,7 +233,7 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
     // at the post-reload file size (which includes POST_RECONNECT_LINE).
     // A second deploy truncates the file back to near-zero, so
     // `size <= offset` holds forever afterward and the stream goes
-    // silent — even though the file is actively being written to. ──
+    // silent: even though the file is actively being written to. ──
     await page.getByTestId("deploy-btn").click();
     await expect(page.getByTestId("action-status")).toHaveText(new RegExp(`\\[DEPLOY\\] ${APP_NAME} ok`), {
       timeout: 30_000,
@@ -244,7 +244,7 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
       .filter({ hasText: `Deploying app '${APP_NAME}'` });
     await page.waitForTimeout(5_000); // generous window; this asserts an absence, not a race
     expect(await newDeployLine.count()).toBe(0); // confirms the silent-stream defect, not a flaky timing assumption
-    expect(readFileSync(deployLogPath, "utf-8")).toContain(`Deploying app '${APP_NAME}'`); // the data IS there — only the stream is stuck
+    expect(readFileSync(deployLogPath, "utf-8")).toContain(`Deploying app '${APP_NAME}'`); // the data IS there, only the stream is stuck
 
     // This redeploy restarted the worker (spawn_process stops the old PID
     // before spawning a new one), so the PID captured back in Phase 2a is

@@ -113,9 +113,9 @@ log "baseline_zombies=$BASELINE_Z final_zombies=$FINAL_Z"
 log "total_zombie_sample_events=$ZOMBIE_EVENTS (see $ZOMBIE_LOG)"
 
 if [ "$FINAL_Z" -gt "$BASELINE_Z" ] || [ "$ZOMBIE_EVENTS" -gt 0 ]; then
-    log "RESULT: FAIL — zombies observed during or after the run"
+    log "RESULT: FAIL, zombies observed during or after the run"
     exit 2
 else
-    log "RESULT: PASS — no zombie accumulation observed"
+    log "RESULT: PASS, no zombie accumulation observed"
     exit 0
 fi

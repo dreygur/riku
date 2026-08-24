@@ -1,5 +1,5 @@
 #!/bin/bash
-# riku-post-deploy — send a deployment notification (Slack, etc.)
+# riku-post-deploy: send a deployment notification (Slack, etc.)
 #
 # Install: cp riku-post-deploy ~/.riku/plugins/ && chmod +x ~/.riku/plugins/riku-post-deploy
 #
@@ -10,12 +10,12 @@ set -euo pipefail
 echo "-----> [post-deploy] Sending deploy notification for '${RIKU_APP}'"
 
 if [[ -z "${SLACK_WEBHOOK:-}" ]]; then
-    echo "       SLACK_WEBHOOK not set — skipping notification."
+    echo "       SLACK_WEBHOOK not set: skipping notification."
     exit 0
 fi
 
 if ! command -v curl &>/dev/null; then
-    echo "       curl not found — skipping notification." >&2
+    echo "       curl not found: skipping notification." >&2
     exit 0
 fi
 

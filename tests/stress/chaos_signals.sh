@@ -11,7 +11,7 @@
 # recv_timeout loop in src/supervisor/daemon/mod.rs. There is no SIGCHLD
 # handler. Respawn also goes through an exponential backoff with jitter
 # (health_check.rs: base_backoff = min(60, 2^restart_count), + 0-9s
-# jitter from pid % 10) — so "respawn within 2 seconds" is NOT guaranteed
+# jitter from pid % 10): so "respawn within 2 seconds" is NOT guaranteed
 # by the code as written; this script measures the real number rather
 # than assuming it.
 set -uo pipefail
@@ -96,6 +96,6 @@ if [ "$HEALED" -eq 1 ]; then
     log "      compare against health_check.rs backoff formula before flagging."
     exit 0
 else
-    log "RESULT: FAIL — worker was not respawned within ${TIMEOUT_SECONDS}s"
+    log "RESULT: FAIL, worker was not respawned within ${TIMEOUT_SECONDS}s"
     exit 2
 fi

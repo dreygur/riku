@@ -202,4 +202,4 @@ head -1 ~/.riku/client-plugins/myplugin
 
 ## Contributing
 
-Share your plugins with the community! Submit them as examples or create a plugin repository.
+Share your plugins with the community. Submit them as examples or create a plugin repository.

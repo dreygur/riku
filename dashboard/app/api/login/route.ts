@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   }
 
   // The session HMAC key is derived from the stored hash, not the plaintext
-  // password — the plaintext never persists past this request.
+  // password: the plaintext never persists past this request.
   const res = NextResponse.json({ ok: true });
   res.cookies.set(SESSION_COOKIE, await createSessionToken(storedHash), {
     httpOnly: true,

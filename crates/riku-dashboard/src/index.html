@@ -378,7 +378,7 @@
       render(await res.json());
     } catch (e) {
       $("#pulse").style.opacity = ".2";
-      $("#readout").textContent = "supervisor unreachable — retrying";
+      $("#readout").textContent = "supervisor unreachable, retrying";
     }
   }
   const soon = () => setTimeout(load, 600);

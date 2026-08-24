@@ -17,7 +17,7 @@
 
 **Q: Is Riku compatible with Piku?**
 
-**A:** Yes! Riku maintains compatibility with Piku's:
+**A:** Yes. Riku maintains compatibility with Piku's:
 - Directory structure (`~/.riku/` instead of `~/.piku/`)
 - Environment variable format
 - Procfile syntax
@@ -26,7 +26,7 @@
 
 **Q: Does Riku use uWSGI?**
 
-**A:** No! Riku implements its own process supervisor in Rust, replacing uWSGI Emperor. This gives us:
+**A:** No. Riku implements its own process supervisor in Rust, replacing uWSGI Emperor. This gives us:
 - Better control over process lifecycle
 - Native health checking
 - Built-in log rotation
@@ -82,14 +82,14 @@ Or create an `ENV` file in `~/.riku/envs/myapp/ENV`.
 
 **Q: Can I use custom nginx configuration?**
 
-**A:** Yes! Place `nginx.conf`, `nginx.custom.conf`, or `.nginx.conf` in your app directory, or use:
+**A:** Yes. Place `nginx.conf`, `nginx.custom.conf`, or `.nginx.conf` in your app directory, or use:
 ```bash
 NGINX_INCLUDE_FILE=custom.conf
 ```
 
 **Q: Can I store my bare git repo in a custom location?**
 
-**A:** Yes! Riku automatically symlinks custom repo locations to `~/.riku/repos/`:
+**A:** Yes. Riku automatically symlinks custom repo locations to `~/.riku/repos/`:
 
 ```bash
 # On server: create bare repo anywhere
@@ -104,7 +104,7 @@ git push riku main
 
 **Q: Does Riku auto-start the supervisor?**
 
-**A:** Yes! On first deployment, Riku automatically starts the supervisor daemon if not running. Nginx configs are also automatically symlinked to `/etc/nginx/sites-enabled/`.
+**A:** Yes. On first deployment, Riku automatically starts the supervisor daemon if not running. Nginx configs are also automatically symlinked to `/etc/nginx/sites-enabled/`.
 
 **Q: Do I need to install python3-venv for Python apps?**
 
@@ -162,7 +162,7 @@ Then obtain SSL certificates (ACME support is built-in).
 
 **Q: Can I use Riku with Cloudflare?**
 
-**A:** Yes! Set:
+**A:** Yes. Set:
 ```bash
 NGINX_CLOUDFLARE_ACL=true
 ```
@@ -178,7 +178,7 @@ cron: 0 2 * * * /path/to/script.sh
 
 **Q: Does Riku support zero-downtime deployments?**
 
-**A:** Yes! Use `riku restart myapp --hot` for a rolling zero-downtime restart. Standard `riku restart` does a graceful restart (brief downtime). Set `RIKU_AUTO_RESTART=true` (default) for automatic restarts on deploy.
+**A:** Yes. Use `riku restart myapp --hot` for a rolling zero-downtime restart. Standard `riku restart` does a graceful restart (brief downtime). Set `RIKU_AUTO_RESTART=true` (default) for automatic restarts on deploy.
 
 ## Migration from Piku
 
@@ -194,7 +194,7 @@ cron: 0 2 * * * /path/to/script.sh
 
 **Q: Are Piku plugins compatible with Riku?**
 
-**A:** Yes! Shell-based plugins work with both. Place them in `~/.riku/plugins/`.
+**A:** Yes. Shell-based plugins work with both. Place them in `~/.riku/plugins/`.
 
 **Q: What about uWSGI configuration?**
 

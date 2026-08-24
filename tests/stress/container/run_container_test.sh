@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run_container_test.sh — orchestrates the full containerized integration
+# run_container_test.sh: orchestrates the full containerized integration
 # test: build host binary, build image, provision SSH key, run container,
 # drive traffic, collect logs, produce a verdict.
 set -uo pipefail
@@ -160,7 +160,7 @@ ZOMBIES_FOUND=$($DOCKER_BIN exec "$CONTAINER_NAME" sh -c "ps -eo stat | grep -c 
 VERDICT_FILE="$RESULT_DIR/verdict_${TS}.txt"
 {
     echo "==================================================================="
-    echo "RIKU CONTAINER INTEGRATION TEST — VERDICT"
+    echo "RIKU CONTAINER INTEGRATION TEST: VERDICT"
     echo "==================================================================="
     echo "timestamp:               $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     echo "app:                     $APP_NAME"
@@ -175,9 +175,9 @@ VERDICT_FILE="$RESULT_DIR/verdict_${TS}.txt"
     echo
     if [ "$TRAFFIC_EXIT" -eq 0 ] && [ "$NGINX_502_COUNT" -eq 0 ] && [ "$NGINX_504_COUNT" -eq 0 ] \
         && [ "$SUPERVISOR_ALIVE" = "yes" ] && [ "$ZOMBIES_FOUND" -eq 0 ]; then
-        echo "OVERALL: PASS — deploy succeeded, no 502/504s, supervisor survived, no zombies."
+        echo "OVERALL: PASS, deploy succeeded, no 502/504s, supervisor survived, no zombies."
     else
-        echo "OVERALL: FAIL — see component results above for which check failed."
+        echo "OVERALL: FAIL, see component results above for which check failed."
     fi
     echo "==================================================================="
 } | tee "$VERDICT_FILE" | tee -a "$LOG"

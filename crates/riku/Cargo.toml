@@ -2,7 +2,7 @@
 name = "riku"
 version = "3.0.0"
 edition = "2021"
-description = "Production-ready PaaS for multi-tenant deployments — in Rust"
+description = "Production-ready PaaS for multi-tenant deployments, in Rust"
 authors = ["Rakibul Yeasin"]
 repository = "https://github.com/dreygur/riku"
 homepage = "https://github.com/dreygur/riku"

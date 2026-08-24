@@ -17,7 +17,7 @@ case "$CMD" in
     if command -v bundle >/dev/null 2>&1; then
       bundle install --without development test
     else
-      echo "bundler not found — skipping gem install" >&2
+      echo "bundler not found: skipping gem install" >&2
     fi
     ;;
 

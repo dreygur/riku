@@ -5,8 +5,8 @@
 # (see bad_tenant_app/start-supervisor.env) and confirms whether
 # setrlimit enforcement in src/supervisor/resource_limits/mod.rs actually
 # bounds the runaway process, or whether it survives / takes the host
-# down with it. No cgroups are used anywhere in src/ (confirmed by grep)
-# — this script does not pretend otherwise.
+# down with it. No cgroups are used anywhere in src/ (confirmed by grep),
+# and this script does not pretend otherwise.
 set -uo pipefail
 
 APP="${1:-badtenant}"
@@ -76,7 +76,7 @@ dmesg 2>/dev/null | tail -10 | tee -a "$LOG" || log "(dmesg not accessible witho
 log "=== sibling-starvation check ==="
 log "if a known-good app is also running, compare its scheduling latency now:"
 log "  mpstat -P ALL 1 5"
-log "RLIMIT_CPU is a TOTAL CONSUMPTION cap, not a fair-share scheduler —"
+log "RLIMIT_CPU is a TOTAL CONSUMPTION cap, not a fair-share scheduler, "
 log "a cpu-spin tenant CAN peg one core for the full duration before SIGXCPU fires."
 
 log "=== cleanup: killing tenant worker if still alive ==="
@@ -89,6 +89,6 @@ if [ "$KILLED_BY_LIMIT" -eq 1 ]; then
     log "        before crediting 'graceful' enforcement vs OOM-killer vs SIGXCPU)"
     exit 0
 else
-    log "RESULT: FAIL — tenant survived the full monitoring window unbounded"
+    log "RESULT: FAIL, tenant survived the full monitoring window unbounded"
     exit 2
 fi
