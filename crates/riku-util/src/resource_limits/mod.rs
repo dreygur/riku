@@ -111,6 +111,14 @@ impl ResourceLimits {
     /// instead (see `cgroups`). `RLIMIT_AS` is therefore enforced only when the
     /// operator explicitly sets `RIKU_MAX_MEMORY_MB`.
     pub fn from_env() -> Self {
+        Self::from_lookup(env_u64)
+    }
+
+    /// Parsing half of [`from_env`](Self::from_env), reading each setting
+    /// through `lookup` instead of the process environment. Tests go through
+    /// this: the env vars are process-global, so setting them changes the
+    /// limits every other test's spawned process runs under.
+    fn from_lookup(lookup: impl Fn(&str) -> Option<u64>) -> Self {
         // Memory (RLIMIT_AS) is opt-in: no virtual-address cap unless the
         // operator asks for one. See the doc comment above for why.
         let mut limits = Self {
@@ -118,31 +126,31 @@ impl ResourceLimits {
             ..Self::default()
         };
 
-        if let Some(mb) = env_u64("RIKU_MAX_MEMORY_MB") {
+        if let Some(mb) = lookup("RIKU_MAX_MEMORY_MB") {
             limits.max_memory_bytes = Some(mb * 1024 * 1024);
             tracing::info!("Resource limit: max_memory = {} MB", mb);
         }
 
         // CPU time limit in seconds
-        if let Some(seconds) = env_u64("RIKU_MAX_CPU_SECONDS") {
+        if let Some(seconds) = lookup("RIKU_MAX_CPU_SECONDS") {
             limits.max_cpu_seconds = Some(seconds);
             tracing::info!("Resource limit: max_cpu_time = {} seconds", seconds);
         }
 
         // Open files limit
-        if let Some(count) = env_u64("RIKU_MAX_OPEN_FILES") {
+        if let Some(count) = lookup("RIKU_MAX_OPEN_FILES") {
             limits.max_open_files = Some(count);
             tracing::info!("Resource limit: max_open_files = {}", count);
         }
 
         // Max processes limit
-        if let Some(count) = env_u64("RIKU_MAX_PROCESSES") {
+        if let Some(count) = lookup("RIKU_MAX_PROCESSES") {
             limits.max_processes = Some(count);
             tracing::info!("Resource limit: max_processes = {}", count);
         }
 
         // File size limit in MB
-        if let Some(mb) = env_u64("RIKU_MAX_FILE_SIZE_MB") {
+        if let Some(mb) = lookup("RIKU_MAX_FILE_SIZE_MB") {
             limits.max_file_size_bytes = Some(mb * 1024 * 1024);
             tracing::info!("Resource limit: max_file_size = {} MB", mb);
         }

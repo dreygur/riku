@@ -32,15 +32,23 @@ fn test_summary_with_max_processes_opted_in() {
 }
 
 #[test]
-fn test_from_env() {
-    env::set_var("RIKU_MAX_MEMORY_MB", "256");
-    env::set_var("RIKU_MAX_CPU_SECONDS", "7200");
-
-    let limits = ResourceLimits::from_env();
+fn configured_memory_and_cpu_override_the_defaults() {
+    let limits = ResourceLimits::from_lookup(|key| match key {
+        "RIKU_MAX_MEMORY_MB" => Some(256),
+        "RIKU_MAX_CPU_SECONDS" => Some(7200),
+        _ => None,
+    });
 
     assert_eq!(limits.max_memory_bytes, Some(256 * 1024 * 1024));
     assert_eq!(limits.max_cpu_seconds, Some(7200));
+}
 
-    env::remove_var("RIKU_MAX_MEMORY_MB");
-    env::remove_var("RIKU_MAX_CPU_SECONDS");
+#[test]
+fn memory_stays_unset_when_not_configured() {
+    let limits = ResourceLimits::from_lookup(|_| None);
+
+    assert_eq!(
+        limits.max_memory_bytes, None,
+        "RLIMIT_AS is opt-in: an unset RIKU_MAX_MEMORY_MB must leave it uncapped"
+    );
 }
