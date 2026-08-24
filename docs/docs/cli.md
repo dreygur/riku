@@ -480,7 +480,6 @@ These affect CLI behavior:
 |----------|-------------|
 | `RUST_LOG` | Set log level: `debug`, `info`, `warn`, `error` |
 | `RIKU_ROOT` | Override default `~/.riku` location |
-| `RIKU_DEBUG` | Enable debug output |
 
 **Example:**
 ```bash

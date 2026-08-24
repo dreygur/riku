@@ -17,12 +17,25 @@ By default, Riku enforces the following limits on all application processes:
 
 | Resource | Limit | Environment Variable | Description |
 |----------|-------|---------------------|-------------|
-| **Memory** | 512 MB | `RIKU_MAX_MEMORY_MB` | Maximum virtual memory (address space) |
+| **Memory** | *not applied* | `RIKU_MAX_MEMORY_MB` | Maximum virtual memory (address space) |
 | **CPU Time** | 3600 seconds | `RIKU_MAX_CPU_SECONDS` | Maximum CPU time before SIGKILL |
 | **Open Files** | 1024 | `RIKU_MAX_OPEN_FILES` | Maximum file descriptors |
-| **Processes** | 64 | `RIKU_MAX_PROCESSES` | Maximum child processes (fork limit) |
+| **Processes** | *not applied* | `RIKU_MAX_PROCESSES` | Maximum child processes (fork limit) |
 | **File Size** | 1 GB | `RIKU_MAX_FILE_SIZE_MB` | Maximum size of created files |
 | **Core Dumps** | 0 (disabled) | `RIKU_ENABLE_CORE_DUMPS` | Core dump files (disabled for security) |
+
+Two of these are opt-in and are left unset unless you configure them:
+
+- **Memory** caps *virtual* address space (`RLIMIT_AS`). Node/v8 and the JVM
+  reserve multiple GB of virtual memory at startup and abort under a tight cap,
+  so applying one by default would make those builds and workers unrunnable.
+  Resident memory for isolated workers is bounded by the cgroup `memory.max`
+  instead (see [Supervisor](supervisor.md)).
+- **Processes** (`RLIMIT_NPROC`) is UID-wide, not per-worker: every process the
+  deploy user owns counts against it, including the supervisor and your shell.
+  A per-app-looking number set here can lock the whole user out of forking.
+
+Set either one explicitly when you want it enforced.
 
 ---
 
@@ -140,8 +153,11 @@ This ensures limits are in place before the application code runs.
 The supervisor logs resource limit configuration on startup:
 
 ```
-ProcessManager initialized with resource limits: mem=512MB, cpu=3600s, files=1024, procs=64
+ProcessManager initialized with resource limits: cpu=3600s, files=1024
 ```
+
+Only the limits actually in effect are listed, so `mem=` and `procs=` appear
+here once you set `RIKU_MAX_MEMORY_MB` or `RIKU_MAX_PROCESSES`.
 
 ---
 
@@ -162,20 +178,20 @@ riku ps myapp
 cat /proc/<PID>/limits
 ```
 
-Expected output:
+Expected output with the defaults (memory and processes left unset):
 ```
 Limit                     Soft Limit           Hard Limit           Units
 Max cpu time              3600                 3600                 seconds
 Max file size             1073741824           1073741824           bytes
-Max data size             536870912            536870912            bytes
-Max stack size            8388608              8388608              bytes
 Max core file size        0                    0                    bytes
 Max resident set          unlimited            unlimited            bytes
-Max processes             64                   64                   processes
+Max processes             unlimited            unlimited            processes
 Max open files            1024                 1024                 files
-Max locked memory         unlimited            unlimited            bytes
-Max address space         536870912            536870912            bytes
+Max address space         unlimited            unlimited            bytes
 ```
+
+With `RIKU_MAX_MEMORY_MB=512` set, `Max address space` reads `536870912`
+instead; with `RIKU_MAX_PROCESSES=64`, `Max processes` reads `64`.
 
 ### Test Memory Limit
 
