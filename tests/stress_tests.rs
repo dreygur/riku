@@ -16,8 +16,10 @@
 use std::collections::HashMap;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Barrier, Mutex};
+use std::path::Path;
+#[cfg(target_os = "linux")]
+use std::path::PathBuf;
+use std::sync::{Arc, Barrier};
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
@@ -25,14 +27,10 @@ use riku::config::RikuPaths;
 use riku::error::DeployError;
 use riku::plugins::hooks::{HookContext, PluginHook};
 use riku::plugins::manager::PluginManager;
+#[cfg(target_os = "linux")]
 use riku::plugins::runtime::{RuntimeContext, RuntimePlugin};
-
-/// Tests below mutate process-global env vars (`RIKU_PLUGIN_TIMEOUT`,
-/// `RIKU_MAX_MEMORY_MB`) that `ResourceLimits::from_env()` /
-/// `plugin_timeout()` read. `cargo test` runs `#[test]` fns concurrently on
-/// separate threads of the *same* process by default, so without this lock
-/// two such tests running at once could each see the other's env var value.
-static ENV_VAR_LOCK: Mutex<()> = Mutex::new(());
+#[cfg(target_os = "linux")]
+use riku::util::resource_limits::ResourceLimits;
 
 /// Build a `RikuPaths` rooted inside `tmp` and create every directory
 /// `do_deploy` / `PluginManager` touch.
@@ -290,22 +288,13 @@ sleep 100
 
     let manager = PluginManager::new(&paths);
 
-    // Holds ENV_VAR_LOCK for the entire env-var-dependent section so this
-    // doesn't race test_build_phase_memory_limit_chokes_runaway_allocation,
-    // which mutates its own (different) env vars on another thread.
-    let (result, elapsed) = {
-        let _guard = ENV_VAR_LOCK.lock().unwrap();
-        // Tight timeout: well under the children's `sleep 100`, so the
-        // timeout path — not a normal exit — is what tears everything down.
-        std::env::set_var("RIKU_PLUGIN_TIMEOUT", "1");
-
-        let start = Instant::now();
-        let result = manager.run_hook(&ctx);
-        let elapsed = start.elapsed();
-
-        std::env::remove_var("RIKU_PLUGIN_TIMEOUT");
-        (result, elapsed)
-    };
+    // Tight timeout: well under the children's `sleep 100`, so the timeout
+    // path — not a normal exit — is what tears everything down. Passed
+    // directly rather than via `RIKU_PLUGIN_TIMEOUT`, which is process-global
+    // and would cut short every plugin the other tests spawn in parallel.
+    let start = Instant::now();
+    let result = manager.run_hook_with_timeout(&ctx, Duration::from_secs(1));
+    let elapsed = start.elapsed();
 
     // PreDeploy is abort-on-timeout, so a timed-out hook must surface as Err.
     assert!(
@@ -353,6 +342,7 @@ sleep 100
 /// this test guards against), the worst case is one bash process briefly
 /// holding ~300MB, never an unbounded climb that could pressure the host
 /// the way an unconstrained fork-bomb or memory grab would.
+#[cfg(target_os = "linux")]
 fn write_memory_hog_plugin(paths: &RikuPaths, name: &str) -> PathBuf {
     let script = r#"#!/usr/bin/env bash
 case "${1:-}" in
@@ -383,6 +373,12 @@ esac
 /// must do so well before the *unrelated* plugin-timeout backstop would
 /// have fired, proving the resource limit — not the timeout — is what
 /// stopped it.
+///
+/// Linux-only: macOS rejects `setrlimit(RLIMIT_AS, 64MB)` with `EINVAL`
+/// (its hard limit is `RLIM_INFINITY` and it does not enforce an address
+/// space cap), so there the spawn fails before the build ever runs and the
+/// mechanism under test does not exist to be tested.
+#[cfg(target_os = "linux")]
 #[test]
 fn test_build_phase_memory_limit_chokes_runaway_allocation() {
     let tmp = TempDir::new().unwrap();
@@ -408,23 +404,21 @@ fn test_build_phase_memory_limit_chokes_runaway_allocation() {
         app_env: &app_env,
     };
 
-    let (result, elapsed) = {
-        let _guard = ENV_VAR_LOCK.lock().unwrap();
-        // Small cap so the limit trips almost immediately (well within the
-        // 30 * 10MB = 300MB ceiling the script itself is bounded to), and a
-        // generous timeout backstop that should never actually be needed —
-        // its only job here is to prove it *wasn't* what stopped the build.
-        std::env::set_var("RIKU_MAX_MEMORY_MB", "64");
-        std::env::set_var("RIKU_PLUGIN_TIMEOUT", "15");
-
-        let start = Instant::now();
-        let result = riku::plugins::runtime::build(&plugin, &ctx);
-        let elapsed = start.elapsed();
-
-        std::env::remove_var("RIKU_MAX_MEMORY_MB");
-        std::env::remove_var("RIKU_PLUGIN_TIMEOUT");
-        (result, elapsed)
+    // Small cap so the limit trips almost immediately (well within the
+    // 30 * 10MB = 300MB ceiling the script itself is bounded to), and a
+    // generous timeout backstop that should never actually be needed — its
+    // only job here is to prove it *wasn't* what stopped the build. Both are
+    // passed directly: the env vars behind them are process-global, so
+    // setting them would cap and time out the plugins other tests spawn in
+    // parallel.
+    let limits = ResourceLimits {
+        max_memory_bytes: Some(64 * 1024 * 1024),
+        ..ResourceLimits::default()
     };
+    let start = Instant::now();
+    let result =
+        riku::plugins::runtime::build_with_limits(&plugin, &ctx, limits, Duration::from_secs(15));
+    let elapsed = start.elapsed();
 
     let err = result.expect_err("a build step that exceeds RIKU_MAX_MEMORY_MB must fail, got Ok");
     assert!(

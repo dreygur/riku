@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::time::Duration;
 use tempfile::TempDir;
 
 use crate::config::RikuPaths;
@@ -179,9 +180,10 @@ fn test_hook_receives_riku_env_vars() {
     );
 }
 
-// Both timeout scenarios share one test (rather than two) to avoid a data
-// race on the process-global `RIKU_PLUGIN_TIMEOUT` env var when tests run in
-// parallel — see the equivalent note in executor.rs.
+// Drives the timeout through `run_hook_with_timeout` rather than setting
+// `RIKU_PLUGIN_TIMEOUT`: that env var is process-global, so a one-second
+// value leaks into every other test spawning a plugin in parallel and kills
+// their plugins mid-run.
 #[test]
 fn test_plugin_timeout_kills_hung_plugin() {
     let temp = TempDir::new().unwrap();
@@ -199,7 +201,6 @@ fn test_plugin_timeout_kills_hung_plugin() {
             fs::set_permissions(&plugin_path, fs::Permissions::from_mode(0o755)).unwrap();
         }
 
-        std::env::set_var("RIKU_PLUGIN_TIMEOUT", "1");
         let manager = PluginManager::new(&paths);
         let app_path = PathBuf::from("/tmp/myapp");
         let env_path = PathBuf::from("/tmp/envs/myapp");
@@ -207,8 +208,7 @@ fn test_plugin_timeout_kills_hung_plugin() {
         let app_env = HashMap::new();
 
         let ctx = make_ctx("myapp", &hook, &app_path, &env_path, &riku_root, &app_env);
-        let result = manager.run_hook(&ctx);
-        std::env::remove_var("RIKU_PLUGIN_TIMEOUT");
+        let result = manager.run_hook_with_timeout(&ctx, Duration::from_secs(1));
         fs::remove_file(&plugin_path).unwrap();
 
         assert!(

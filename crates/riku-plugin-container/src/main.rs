@@ -248,54 +248,42 @@ fn pull_service(app_path: &Path, service: &str, env_path: Option<&Path>) -> Resu
 mod tests {
     use super::*;
     use std::fs::File;
-
-    fn temp_app_dir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "riku-plugin-container-test-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        dir
-    }
+    use tempfile::TempDir;
 
     #[test]
     fn compose_file_prefers_compose_yaml_over_docker_compose_yml() {
-        let dir = temp_app_dir();
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path();
         File::create(dir.join("docker-compose.yml")).unwrap();
         File::create(dir.join("compose.yaml")).unwrap();
 
-        assert_eq!(compose_file(&dir), Some(dir.join("compose.yaml")));
-        fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(compose_file(dir), Some(dir.join("compose.yaml")));
     }
 
     #[test]
     fn compose_file_finds_docker_compose_yml_alone() {
-        let dir = temp_app_dir();
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path();
         File::create(dir.join("docker-compose.yml")).unwrap();
 
-        assert_eq!(compose_file(&dir), Some(dir.join("docker-compose.yml")));
-        fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(compose_file(dir), Some(dir.join("docker-compose.yml")));
     }
 
     #[test]
     fn compose_file_none_when_absent() {
-        let dir = temp_app_dir();
-        assert_eq!(compose_file(&dir), None);
-        fs::remove_dir_all(&dir).unwrap();
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path();
+        assert_eq!(compose_file(dir), None);
     }
 
     #[test]
     fn detect_exits_0_for_compose_app() {
-        let dir = temp_app_dir();
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path();
         File::create(dir.join("compose.yml")).unwrap();
         // detect() calls process::exit, so we only check compose_file directly
         // here rather than forking a process in a unit test.
-        assert!(compose_file(&dir).is_some());
-        fs::remove_dir_all(&dir).unwrap();
+        assert!(compose_file(dir).is_some());
     }
 
     #[test]
@@ -312,17 +300,17 @@ mod tests {
 
     #[test]
     fn read_env_file_parses_ghcr_credentials() {
-        let dir = temp_app_dir();
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path();
         fs::write(
             dir.join("ENV"),
             "GHCR_USERNAME=octocat\nGHCR_TOKEN=ghp_abc123\n# comment\n\n",
         )
         .unwrap();
 
-        let vars = read_env_file(Some(&dir));
+        let vars = read_env_file(Some(dir));
         assert_eq!(vars.get("GHCR_USERNAME").unwrap(), "octocat");
         assert_eq!(vars.get("GHCR_TOKEN").unwrap(), "ghp_abc123");
-        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

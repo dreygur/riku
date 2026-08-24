@@ -14,9 +14,15 @@ use std::time::{Duration, Instant};
 /// Read plugin timeout from `RIKU_PLUGIN_TIMEOUT` env var (seconds).
 /// Defaults to 300 seconds (5 minutes).
 pub fn plugin_timeout() -> Duration {
-    std::env::var("RIKU_PLUGIN_TIMEOUT")
-        .ok()
-        .and_then(|v| v.parse::<u64>().ok())
+    timeout_from_raw(std::env::var("RIKU_PLUGIN_TIMEOUT").ok())
+}
+
+/// Parsing half of [`plugin_timeout`], split out so it can be tested without
+/// writing to the process-global environment that every parallel test shares.
+/// An unset or unparsable value means the default rather than an error: a
+/// typo in an operator's env file must not stop deployments.
+fn timeout_from_raw(raw: Option<String>) -> Duration {
+    raw.and_then(|v| v.parse::<u64>().ok())
         .map(Duration::from_secs)
         .unwrap_or(Duration::from_secs(300))
 }

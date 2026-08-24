@@ -4,6 +4,7 @@ use anyhow::Result;
 use std::fs;
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
+use std::time::Duration;
 
 use crate::config::RikuPaths;
 use crate::hooks::{HookContext, PluginHook};
@@ -43,6 +44,14 @@ impl<'a> PluginManager<'a> {
     /// `Ok(false)` if no plugin exists for this hook,
     /// or `Err` if the plugin failed and the hook is abort-on-failure.
     pub fn run_hook(&self, ctx: &HookContext<'_>) -> Result<bool> {
+        self.run_hook_with_timeout(ctx, plugin_timeout())
+    }
+
+    /// [`run_hook`](Self::run_hook) with the plugin timeout supplied by the
+    /// caller instead of read from `RIKU_PLUGIN_TIMEOUT`. Tests drive the
+    /// timeout path through this, because the env var is process-global and
+    /// mutating it races every other test spawning a plugin in parallel.
+    pub fn run_hook_with_timeout(&self, ctx: &HookContext<'_>, timeout: Duration) -> Result<bool> {
         let plugin_name = ctx.hook.plugin_name();
 
         // Validate name before path construction
@@ -75,7 +84,6 @@ impl<'a> PluginManager<'a> {
         }
 
         let env = ctx.build_env();
-        let timeout = plugin_timeout();
 
         tracing::info!(
             hook = ctx.hook.hook_name(),

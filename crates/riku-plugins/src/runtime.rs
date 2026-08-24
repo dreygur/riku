@@ -26,6 +26,7 @@ use std::io::{BufRead, BufReader};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::Duration;
 
 use super::executor::{plugin_timeout, wait_with_timeout};
 
@@ -175,8 +176,6 @@ fn plugin_accepts(
 /// Run `plugin build`, streaming stdout and stderr to the terminal in real time.
 /// Aborts the deploy if the build exits non-zero or times out.
 pub fn build(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result<()> {
-    tracing::info!(plugin = plugin.name.as_str(), "running build");
-
     // The build step (npm install, pip install, cargo build, ...) is bounded by
     // the same RLIMIT_* ceilings as workers (CPU time, open files, file size,
     // core dumps) plus the build timeout, so a malicious or buggy postinstall
@@ -184,7 +183,26 @@ pub fn build(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result<()> {
     // (`RIKU_MAX_MEMORY_MB`): a default virtual-address cap aborts node/v8 and
     // JVM builds, which reserve multiple GB of virtual memory at startup. See
     // `ResourceLimits::from_env`.
-    let limits = crate::util::resource_limits::ResourceLimits::from_env();
+    build_with_limits(
+        plugin,
+        ctx,
+        crate::util::resource_limits::ResourceLimits::from_env(),
+        plugin_timeout(),
+    )
+}
+
+/// [`build`] with the resource ceilings and timeout supplied by the caller
+/// instead of read from the environment. Tests exercise the limit paths
+/// through this: `RIKU_MAX_MEMORY_MB` and `RIKU_PLUGIN_TIMEOUT` are
+/// process-global, so setting them races every other test that spawns a
+/// plugin in parallel.
+pub fn build_with_limits(
+    plugin: &RuntimePlugin,
+    ctx: &RuntimeContext<'_>,
+    limits: crate::util::resource_limits::ResourceLimits,
+    timeout: Duration,
+) -> Result<()> {
+    tracing::info!(plugin = plugin.name.as_str(), "running build");
 
     let mut cmd = Command::new(&plugin.path);
     cmd.arg("build")
@@ -203,7 +221,7 @@ pub fn build(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result<()> {
         .map_err(|e| anyhow!("Failed to spawn '{} build': {}", plugin.name, e))?;
 
     let (tee_handles, stderr_tail) = super::executor::tee_output(&mut child);
-    let timed_out = wait_with_timeout(&mut child, plugin_timeout());
+    let timed_out = wait_with_timeout(&mut child, timeout);
     let status = child.wait()?;
     for h in tee_handles {
         let _ = h.join();

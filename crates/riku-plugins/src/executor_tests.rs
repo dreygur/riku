@@ -166,39 +166,22 @@ fn test_emit_plugin_output_handles_no_pipes() {
 }
 
 // ── plugin_timeout ───────────────────────────────────────────────────────
-//
-// The three scenarios are in one sequential test to avoid data races on
-// the process-global `RIKU_PLUGIN_TIMEOUT` env var when tests run in
-// parallel.
 
 #[test]
-fn test_plugin_timeout_env_var_scenarios() {
-    const KEY: &str = "RIKU_PLUGIN_TIMEOUT";
-
-    // 1. Unset → default 300 s.
-    std::env::remove_var(KEY);
+fn plugin_timeout_defaults_when_unset_or_unparsable() {
     assert_eq!(
-        plugin_timeout(),
+        timeout_from_raw(None),
         Duration::from_secs(300),
-        "default plugin timeout should be 300 s"
+        "unset RIKU_PLUGIN_TIMEOUT should mean the 300 s default"
     );
-
-    // 2. Valid numeric value is respected.
-    std::env::set_var(KEY, "42");
     assert_eq!(
-        plugin_timeout(),
-        Duration::from_secs(42),
-        "plugin_timeout should honour RIKU_PLUGIN_TIMEOUT"
-    );
-
-    // 3. Non-numeric value falls back to default.
-    std::env::set_var(KEY, "not-a-number");
-    assert_eq!(
-        plugin_timeout(),
+        timeout_from_raw(Some("not-a-number".into())),
         Duration::from_secs(300),
-        "non-numeric RIKU_PLUGIN_TIMEOUT should fall back to 300 s"
+        "unparsable RIKU_PLUGIN_TIMEOUT should fall back to the 300 s default"
     );
+}
 
-    // Clean up.
-    std::env::remove_var(KEY);
+#[test]
+fn plugin_timeout_honours_numeric_value() {
+    assert_eq!(timeout_from_raw(Some("42".into())), Duration::from_secs(42));
 }
