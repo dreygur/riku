@@ -1,0 +1,55 @@
+version: 2
+
+# Every third-party action in .github/workflows/ is pinned to a commit SHA with
+# the release tag in a trailing comment. Dependabot reads that comment, so it
+# can still offer version bumps against the pins. Without this file the pins
+# would simply rot.
+#
+# dtolnay/rust-toolchain is the exception: it ships branches rather than
+# releases, so its pin has "# stable" instead of a version and Dependabot has
+# nothing to compare against. Re-pin that one by hand when it matters.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build(deps)
+    groups:
+      # One PR for the routine patch/minor churn across ~30 crates; anything
+      # major still arrives as its own reviewable PR.
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Dependabot does not understand nub's lock.yaml, so an npm PR here updates
+  # package.json and leaves the lockfile behind. CI installs with
+  # --frozen-lockfile and fails on the mismatch, which is the intended
+  # backstop: run `nub install` on the branch before merging. Security updates
+  # are worth that friction.
+  - package-ecosystem: npm
+    directories:
+      - /dashboard
+      - /examples/nodejs
+      - /examples/nodejs-wisp
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build(deps)
+
+  - package-ecosystem: pip
+    directories:
+      - /docs
+      - /examples/python-postgres
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build(deps)
