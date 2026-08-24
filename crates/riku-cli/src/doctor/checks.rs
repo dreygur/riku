@@ -14,7 +14,7 @@ use crate::config::RikuPaths;
 use super::Check;
 
 /// `command="FINGERPRINT=...` prefix that `setup_authorized_keys` writes for
-/// every riku deploy key — used to distinguish riku keys from unrelated ones.
+/// every riku deploy key: used to distinguish riku keys from unrelated ones.
 const RIKU_KEY_MARKER: &str = "FINGERPRINT=";
 
 /// External tools Riku relies on: git is required, nginx and systemd are
@@ -27,7 +27,7 @@ pub fn dependencies() -> Vec<Check> {
     } else {
         out.push(Check::fail(
             "git",
-            "not found — git is required (apt install git)",
+            "not found: git is required (apt install git)",
         ));
     }
 
@@ -36,7 +36,7 @@ pub fn dependencies() -> Vec<Check> {
     } else {
         out.push(Check::warn(
             "nginx",
-            "not found — web serving disabled (apt install nginx)",
+            "not found: web serving disabled (apt install nginx)",
         ));
     }
 
@@ -45,7 +45,7 @@ pub fn dependencies() -> Vec<Check> {
     } else {
         out.push(Check::warn(
             "systemd",
-            "systemctl not found — run the supervisor manually: riku supervisor",
+            "systemctl not found: run the supervisor manually: riku supervisor",
         ));
     }
 
@@ -80,7 +80,7 @@ pub fn directories(paths: &RikuPaths) -> Check {
     } else {
         Check::fail(
             "directory structure",
-            format!("missing: {} — run: riku init", missing.join(", ")),
+            format!("missing: {}, run: riku init", missing.join(", ")),
         )
     }
 }
@@ -94,7 +94,7 @@ pub fn binary() -> Vec<Check> {
         Ok(p) => out.push(Check::ok("riku on PATH", p.display().to_string())),
         Err(_) => out.push(Check::warn(
             "riku on PATH",
-            "not on PATH — add ~/.local/bin to PATH",
+            "not on PATH: add ~/.local/bin to PATH",
         )),
     }
 
@@ -108,7 +108,7 @@ pub fn binary() -> Vec<Check> {
         } else {
             out.push(Check::warn(
                 "installed binary",
-                format!("{} not found — run: riku init", installed.display()),
+                format!("{} not found, run: riku init", installed.display()),
             ));
         }
     }
@@ -122,7 +122,7 @@ pub fn systemd_service() -> Check {
     if which::which("systemctl").is_err() {
         return Check::warn(
             "supervisor service",
-            "systemctl unavailable — start manually: riku supervisor",
+            "systemctl unavailable, start manually: riku supervisor",
         );
     }
 
@@ -144,12 +144,12 @@ pub fn systemd_service() -> Check {
 
     Check::warn(
         "supervisor service",
-        "riku.service not active — start with: systemctl --user start riku",
+        "riku.service not active, start with: systemctl --user start riku",
     )
 }
 
 /// Validate the generated nginx configuration via `nginx -t`. Skipped (empty
-/// result) when nginx is absent — `dependencies` already reports that.
+/// result) when nginx is absent: `dependencies` already reports that.
 pub fn nginx() -> Vec<Check> {
     if which::which("nginx").is_err() {
         return Vec::new();
@@ -164,7 +164,7 @@ pub fn nginx() -> Vec<Check> {
             if stderr.to_lowercase().contains("permission denied") {
                 vec![Check::warn(
                     "nginx config",
-                    "cannot validate without root — re-run: sudo riku doctor",
+                    "cannot validate without root, re-run: sudo riku doctor",
                 )]
             } else {
                 let last = stderr
@@ -192,7 +192,7 @@ pub fn plugins(paths: &RikuPaths) -> Check {
     if !paths.plugin_root.exists() {
         return Check::warn(
             "runtime plugins",
-            "plugins dir missing — run: riku install-plugins",
+            "plugins dir missing, run: riku install-plugins",
         );
     }
 
@@ -207,7 +207,7 @@ pub fn plugins(paths: &RikuPaths) -> Check {
     if count == 0 {
         Check::warn(
             "runtime plugins",
-            "none installed — run: riku install-plugins",
+            "none installed, run: riku install-plugins",
         )
     } else {
         Check::ok("runtime plugins", format!("{count} installed"))
@@ -238,7 +238,7 @@ pub fn disk(paths: &RikuPaths) -> Check {
                 target.display()
             );
             if free < 100 * MIB {
-                Check::fail("disk space", format!("only {detail} — deploys will fail"))
+                Check::fail("disk space", format!("only {detail}, deploys will fail"))
             } else if free < GIB {
                 Check::warn("disk space", format!("low: {detail}"))
             } else {
@@ -256,14 +256,14 @@ pub fn disk(paths: &RikuPaths) -> Check {
 pub fn ssh_access() -> Check {
     let home = match std::env::var("HOME") {
         Ok(h) => h,
-        Err(_) => return Check::warn("ssh access", "HOME not set — cannot locate authorized_keys"),
+        Err(_) => return Check::warn("ssh access", "HOME not set, cannot locate authorized_keys"),
     };
 
     let authorized_keys = std::path::Path::new(&home).join(".ssh/authorized_keys");
     if !authorized_keys.exists() {
         return Check::warn(
             "ssh access",
-            "no authorized_keys — git push deploys need a key (riku init)",
+            "no authorized_keys: git push deploys need a key (riku init)",
         );
     }
 
@@ -281,7 +281,7 @@ pub fn ssh_access() -> Check {
             } else {
                 Check::warn(
                     "ssh access",
-                    "authorized_keys present but no riku deploy keys — add one via riku init",
+                    "authorized_keys present but no riku deploy keys, add one via riku init",
                 )
             }
         }

@@ -4,7 +4,7 @@
 //! manifest subscribes to it: the entry executable is invoked with the verb
 //! `on_event` and the event JSON on stdin.
 //!
-//! Slice 2 implements **observe** mode only — delivery is fire-and-forget and a
+//! Slice 2 implements **observe** mode only: delivery is fire-and-forget and a
 //! subscriber failure is logged, never fatal. `gate` mode (veto) needs the
 //! trust model (§7.2 / `ROADMAP.md` E2.5); a gate subscriber currently runs as
 //! observe and logs that the veto is not yet enforced, so it grants no false
@@ -41,7 +41,7 @@ impl<'a> EventBus<'a> {
     }
 
     /// Publish a `plugin.custom.*` event on behalf of `source_plugin`
-    /// (`riku plugin-emit` — `PLUGIN_PROTOCOL.md` §7.4). Callers are
+    /// (`riku plugin-emit`: `PLUGIN_PROTOCOL.md` §7.4). Callers are
     /// responsible for having already validated `name`'s namespace and that
     /// `source_plugin` declared `events.emit = true`; this method just
     /// builds the envelope and delivers it like any other event.

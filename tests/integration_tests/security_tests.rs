@@ -1,7 +1,7 @@
 //! Security-focused integration tests.
 //!
-//! Exercises the trust boundaries — path handling, file permissions, and what
-//! ends up in generated config — through real file operations.
+//! Exercises the trust boundaries: path handling, file permissions, and what
+//! ends up in generated config: through real file operations.
 
 #[cfg(test)]
 mod tests {

@@ -221,7 +221,7 @@ fn configure_web_env(
         socket_path.to_string_lossy().to_string(),
     );
 
-    // Suppress unused warning — paths is used by callers for socket_path resolution
+    // Suppress unused warning: paths is used by callers for socket_path resolution
     let _ = paths;
 
     Ok(())
@@ -231,14 +231,14 @@ fn configure_web_env(
 /// every deploy.
 ///
 /// `configure_web_env`/`configure_wsgi_env` allocate a fresh ephemeral port
-/// (or socket) on every single deploy, not just the first — so the values
+/// (or socket) on every single deploy, not just the first, so the values
 /// persisted here (read back by `spawn_app`'s `generate_nginx_config` call)
 /// must always be overwritten to match, never just "written once". A
 /// previous version of this function skipped the whole write whenever the
 /// ENV file already contained `NGINX_PORTMAP`/`NGINX_WSGI` from an earlier
 /// deploy, which left `NGINX_INTERNAL_PORT` pinned to that first deploy's
 /// port forever: every redeploy after the first would spawn the worker on
-/// a new port while nginx kept proxying to the old, now-dead one — a
+/// a new port while nginx kept proxying to the old, now-dead one, a
 /// guaranteed 502 on the very next deploy of any web app.
 fn persist_nginx_env(
     app: &str,

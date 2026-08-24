@@ -1,4 +1,4 @@
-//! CLI provider layer — module declarations and public re-exports.
+//! CLI provider layer: module declarations and public re-exports.
 
 // Dependency crates aliased as their former module names.
 pub(crate) use riku_config as config;

@@ -12,7 +12,7 @@ use super::types::AppStats;
 /// Read and parse `stats.json` into typed `AppStats`.
 ///
 /// Returns `None` if the file doesn't exist, can't be read, or fails to
-/// parse (an older/newer supervisor version wrote an incompatible shape) —
+/// parse (an older/newer supervisor version wrote an incompatible shape),
 /// callers treat that the same as "supervisor isn't running" and fall back
 /// to a worker-config-only view instead of hard-failing.
 pub fn read_stats_file(path: &Path) -> Option<Vec<AppStats>> {

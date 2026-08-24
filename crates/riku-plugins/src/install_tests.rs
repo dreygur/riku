@@ -73,7 +73,7 @@ fn lifecycle_hooks_fire_on_install_and_remove() {
 
 #[test]
 fn no_lifecycle_block_means_hooks_never_run() {
-    // Every existing plugin (no [lifecycle] table) must be unaffected —
+    // Every existing plugin (no [lifecycle] table) must be unaffected,
     // reuses the plain `write_bundle` helper, which declares no
     // [lifecycle] block at all.
     let (tmp, paths) = setup();
@@ -83,7 +83,7 @@ fn no_lifecycle_block_means_hooks_never_run() {
     let installer = PluginInstaller::new(&paths);
     // Would panic/fail loudly if run_lifecycle_verb were called against
     // this bundle's entry script, since it has no `on_install` case arm
-    // and `set -e` isn't even present — the real assertion is just that
+    // and `set -e` isn't even present: the real assertion is just that
     // install/remove succeed at all with no [lifecycle] declared.
     installer.install(src.to_str().unwrap()).unwrap();
     installer.remove("plain").unwrap();

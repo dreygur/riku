@@ -96,7 +96,7 @@ pub fn start_health_server(
         .layer(axum::extract::Extension(stats_file))
         .layer(readonly_cors_layer());
 
-    // Mutating routes intentionally carry no CorsLayer — only callers that
+    // Mutating routes intentionally carry no CorsLayer, only callers that
     // already hold the control token (the dashboard's server-side proxy)
     // are expected to reach them. See `auth` module docs.
     let router = readonly_router
@@ -115,7 +115,7 @@ pub fn start_health_server(
     // failure (e.g. the port is already in use) is surfaced to the caller as
     // an `Err` instead of panicking a detached thread after we've already
     // returned `Ok`. The std listener is then converted to a Tokio listener
-    // inside the runtime — that conversion does not re-bind and cannot fail
+    // inside the runtime: that conversion does not re-bind and cannot fail
     // on an already-bound socket.
     let std_listener = std::net::TcpListener::bind(addr)
         .map_err(|e| anyhow::anyhow!("failed to bind health server on {}: {}", addr, e))?;
@@ -149,7 +149,7 @@ pub fn start_health_server(
             };
 
             // A serve error *after* a clean graceful-shutdown signal must not
-            // panic this detached thread — log it and let the thread exit.
+            // panic this detached thread: log it and let the thread exit.
             if let Err(e) = axum::serve(listener, router)
                 .with_graceful_shutdown(shutdown_signal)
                 .await
@@ -188,14 +188,14 @@ fn readonly_cors_layer() -> tower_http::cors::CorsLayer {
         .allow_headers([axum::http::header::CONTENT_TYPE])
 }
 
-// ── Axum Handlers ──────────────────────────────────────────────────────────
+// Axum Handlers
 
-/// GET /health — Returns supervisor health status.
+/// GET /health: Returns supervisor health status.
 async fn health_handler(Extension(start_time): Extension<SystemTime>) -> Json<serde_json::Value> {
     Json(build_health_json(start_time))
 }
 
-/// GET /metrics — Returns full metrics snapshot from stats.json.
+/// GET /metrics: Returns full metrics snapshot from stats.json.
 async fn metrics_handler(
     Extension(stats_file): Extension<PathBuf>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
@@ -209,7 +209,7 @@ async fn metrics_handler(
     Ok(Json(value))
 }
 
-/// GET /metrics/apps — Returns per-app aggregated metrics.
+/// GET /metrics/apps: Returns per-app aggregated metrics.
 async fn metrics_apps_handler(
     Extension(stats_file): Extension<PathBuf>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
@@ -223,7 +223,7 @@ async fn metrics_apps_handler(
     Ok(Json(value))
 }
 
-/// GET /metrics/apps/:app — Returns metrics for a specific app.
+/// GET /metrics/apps/:app, Returns metrics for a specific app.
 async fn metrics_app_handler(
     Extension(stats_file): Extension<PathBuf>,
     Path(app_name): Path<String>,
@@ -261,7 +261,7 @@ async fn metrics_app_handler(
     Ok(Json(value))
 }
 
-/// GET /metrics/stream — SSE endpoint broadcasting live metrics.
+/// GET /metrics/stream: SSE endpoint broadcasting live metrics.
 ///
 /// Sends the current snapshot immediately on connection, then streams
 /// every broadcast update as an `Event::default().data(json)`.

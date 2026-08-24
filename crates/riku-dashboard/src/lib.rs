@@ -2,7 +2,7 @@
 //!
 //! A small Axum server, compiled **into the riku binary**, that serves a
 //! single embedded HTML page plus a read-only JSON API. No Node runtime, no
-//! separate web stack — the single-binary identity is preserved.
+//! separate web stack: the single-binary identity is preserved.
 //!
 //! Security posture (read-only first, per the roadmap):
 //! - Binds `127.0.0.1` by default; read-only status data is low-sensitivity and

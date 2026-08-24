@@ -131,7 +131,7 @@ impl<'a> MarketplaceService<'a> {
             _ => {
                 let markets: Vec<&str> = matches.iter().map(|(m, _)| m.as_str()).collect();
                 bail!(
-                    "'{name}' is in multiple marketplaces ({}) — disambiguate with {name}@<marketplace>",
+                    "'{name}' is in multiple marketplaces ({}): disambiguate with {name}@<marketplace>",
                     markets.join(", ")
                 )
             }

@@ -1,4 +1,4 @@
-//! `riku quickstart` — scaffold a runnable sample app and print the exact
+//! `riku quickstart`: scaffold a runnable sample app and print the exact
 //! `git remote add` / `git push` lines, so a new user deploys in minutes.
 //!
 //! This runs on the *developer's* machine (it writes into the current
@@ -23,7 +23,7 @@ pub fn cmd_quickstart(name: &str, runtime: &str, remote: Option<&str>) -> Result
 
     let dir = Path::new(&app);
     if dir.exists() {
-        bail!("'{app}' already exists here — choose another name or remove it");
+        bail!("'{app}' already exists here, choose another name or remove it");
     }
 
     display::info(&format!("Scaffolding {} app in ./{app}...", rt.label()));

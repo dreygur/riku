@@ -16,7 +16,7 @@ use super::paths::{Resolved, SandboxPaths};
 /// A resolved restriction plan for one plugin invocation.
 #[derive(Clone, Debug)]
 pub struct Sandbox {
-    /// `false` for `privileged` plugins — the operator has opted them out, so
+    /// `false` for `privileged` plugins: the operator has opted them out, so
     /// no restriction is applied at all.
     enabled: bool,
     /// Directories the plugin may write to (read/exec stays globally allowed).
@@ -72,8 +72,8 @@ impl Sandbox {
         let allow_network = self.allow_network;
 
         // SAFETY: the closure runs in the forked child before exec. It only
-        // makes syscalls and a best-effort stderr write — no locks, no parent
-        // heap mutation — so it is safe across fork.
+        // makes syscalls and a best-effort stderr write: no locks, no parent
+        // heap mutation: so it is safe across fork.
         unsafe {
             cmd.pre_exec(move || enforce::install(&write_paths, allow_network));
         }
@@ -119,7 +119,7 @@ mod tests {
 
     #[test]
     fn unknown_and_unavailable_targets_are_dropped() {
-        // env_dir is unavailable (None), "bogus" is unknown — neither grants a path.
+        // env_dir is unavailable (None), "bogus" is unknown, neither grants a path.
         let s = Sandbox::from_capabilities(&caps(true, &["env_dir", "bogus"], false), &ctx());
         assert!(s.allow_network);
         // only the always-on temp dir remains

@@ -281,7 +281,7 @@ impl ProcessManager {
         };
         let temp_key = gens[idx].temp_key.clone();
         // Keep the entry as a `Failed` audit record rather than dropping it
-        // outright — only the OS process underneath it is torn down.
+        // outright: only the OS process underneath it is torn down.
         gens[idx].status = GenerationStatus::Failed;
         gens[idx].pids.clear();
 
@@ -295,7 +295,7 @@ impl ProcessManager {
         self.stats.remove_process(&temp_key);
 
         tracing::error!(
-            "Generation v{} for {} failed: {}. Rolling back — traffic stays on the previous stable generation.",
+            "Generation v{} for {} failed: {}. Rolling back, traffic stays on the previous stable generation.",
             version,
             process_id,
             reason

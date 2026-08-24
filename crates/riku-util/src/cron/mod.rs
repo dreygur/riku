@@ -2,7 +2,7 @@
 //!
 //! Handles cron expression parsing and job scheduling.
 //!
-//! All schedules are interpreted in **UTC** — see [`parser`] for the full
+//! All schedules are interpreted in **UTC**: see [`parser`] for the full
 //! schedule contract and time-zone rationale.
 
 use anyhow::Result;

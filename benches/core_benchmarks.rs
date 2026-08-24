@@ -8,7 +8,7 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::collections::HashMap;
 
-// ── TOML fixtures ─────────────────────────────────────────────────────────────
+// TOML fixtures
 
 fn minimal_worker_toml() -> &'static str {
     r#"
@@ -60,7 +60,7 @@ retries = 3
 "#
 }
 
-// ── Stats JSON fixtures ───────────────────────────────────────────────────────
+// Stats JSON fixtures
 
 fn make_process_stat(app: &str, kind: &str, ordinal: u32) -> serde_json::Value {
     serde_json::json!({
@@ -100,7 +100,7 @@ fn make_app_stats(app: &str, process_count: u32) -> serde_json::Value {
     })
 }
 
-// ── Benchmarks ────────────────────────────────────────────────────────────────
+// Benchmarks
 
 fn bench_toml_parse(c: &mut Criterion) {
     let mut group = c.benchmark_group("toml_parse");

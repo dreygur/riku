@@ -1,4 +1,4 @@
-//! Versioned deployment generations — the data model backing zero-downtime,
+//! Versioned deployment generations: the data model backing zero-downtime,
 //! health-probed rollouts (see `orchestration.rs`).
 
 /// Lifecycle state of a single deployment generation.

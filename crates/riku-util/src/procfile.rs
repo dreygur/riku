@@ -189,7 +189,7 @@ mod tests {
 
     #[test]
     fn test_parse_procfile_cron_accepts_weekday_7_sunday() {
-        // 7 is a legal alias for Sunday in Unix cron — the old regex-based
+        // 7 is a legal alias for Sunday in Unix cron: the old regex-based
         // validator wrongly rejected it; the engine accepts it.
         let mut f = NamedTempFile::new().unwrap();
         writeln!(f, "cron: 0 0 * * 7 /usr/bin/task").unwrap();

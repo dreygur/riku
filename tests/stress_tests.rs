@@ -1,14 +1,14 @@
-//! Concurrency stress tests guarding two specific fixes against regression:
+//! Concurrency stress tests guarding three specific fixes against regression:
 //!
-//! - **App deploy lock** (`deploy::lock`) — concurrent `do_deploy` calls for
+//! - **App deploy lock** (`deploy::lock`), concurrent `do_deploy` calls for
 //!   the same app must serialize: exactly one wins the `flock`, the rest
 //!   fail immediately with `DeployError::DeployInProgress` instead of
 //!   racing on git/worker-config/ENV writes.
-//! - **Plugin process-group reaping** (`plugins::executor::terminate_process_tree`)
-//!   — a hook plugin that backgrounds grandchildren and then hangs past its
+//! - **Plugin process-group reaping** (`plugins::executor::terminate_process_tree`):
+//!   a hook plugin that backgrounds grandchildren and then hangs past its
 //!   timeout must have its *entire* process group killed, not just the
 //!   immediate child, so no grandchild survives as an orphan.
-//! - **Build-phase resource limits** (`plugins::runtime::build`) — a build
+//! - **Build-phase resource limits** (`plugins::runtime::build`), a build
 //!   step that tries to balloon its own memory use must be choked by
 //!   `ResourceLimits::apply()`'s `RLIMIT_AS`, not run unbounded until it
 //!   pressures the host.
@@ -54,7 +54,7 @@ fn make_paths(tmp: &TempDir) -> RikuPaths {
 }
 
 /// Install a mock runtime plugin that always accepts the app and sleeps
-/// briefly during `build` — widening the window during which the deploy
+/// briefly during `build`: widening the window during which the deploy
 /// lock must be held, so a racing second deploy has time to collide with it
 /// instead of the two calls happening to interleave without overlapping.
 fn install_slow_mock_plugin(paths: &RikuPaths, name: &str, marker_file: &str, start_cmd: &str) {
@@ -85,12 +85,12 @@ esac
 /// Five threads call `do_deploy` for the exact same app at the same instant.
 /// `sync_app_repo(.., None)` only does a best-effort `git fetch` (ignored on
 /// failure) and skips the reset entirely, so this test doesn't need a real
-/// git repo — it isolates the lock behavior from git mechanics, which fix
+/// git repo: it isolates the lock behavior from git mechanics, which fix
 /// #2 (the per-app `flock` in `deploy::lock`) doesn't touch.
 ///
 /// Without the lock, all five threads would race on `git_reset` (skipped
 /// here), worker TOML writes, and the ENV file's `NGINX_INTERNAL_PORT`
-/// read-modify-write — exactly the corruption fix #2 closes off.
+/// read-modify-write: exactly the corruption fix #2 closes off.
 #[test]
 fn test_concurrent_deploy_lockout() {
     let tmp = TempDir::new().unwrap();
@@ -197,8 +197,8 @@ fn test_deploy_lock_released_after_completion() {
         .expect("second sequential deploy should succeed once the first released the lock");
 }
 
-/// Concurrent deploys of *different* apps must not contend with each other
-/// — the lock is keyed per app name, not global.
+/// Concurrent deploys of *different* apps must not contend with each other:
+/// the lock is keyed per app name, not global.
 #[test]
 fn test_concurrent_deploys_of_different_apps_do_not_contend() {
     let tmp = TempDir::new().unwrap();
@@ -247,7 +247,7 @@ fn test_concurrent_deploys_of_different_apps_do_not_contend() {
 /// `riku-pre-deploy` backgrounds two long-sleeping grandchildren, records
 /// their PIDs to a file, then itself hangs past the configured timeout.
 /// Before fix #3, `wait_with_timeout` only `Child::kill()`ed the immediate
-/// hook process — the backgrounded `sleep`s, left in the same process group
+/// hook process: the backgrounded `sleep`s, left in the same process group
 /// (`process_group(0)` makes the hook process the group leader; bash's `&`
 /// jobs without job control inherit that same pgid), survived as orphans.
 /// After the fix, `terminate_process_tree` detects the hook is its own
@@ -289,7 +289,7 @@ sleep 100
     let manager = PluginManager::new(&paths);
 
     // Tight timeout: well under the children's `sleep 100`, so the timeout
-    // path — not a normal exit — is what tears everything down. Passed
+    // path: not a normal exit, is what tears everything down. Passed
     // directly rather than via `RIKU_PLUGIN_TIMEOUT`, which is process-global
     // and would cut short every plugin the other tests spawn in parallel.
     let start = Instant::now();
@@ -325,7 +325,7 @@ sleep 100
         let proc_path = format!("/proc/{}", pid);
         assert!(
             !Path::new(&proc_path).exists(),
-            "backgrounded grandchild PID {} survived the hook timeout — killpg did not reap the process group",
+            "backgrounded grandchild PID {} survived the hook timeout, killpg did not reap the process group",
             pid
         );
     }
@@ -336,8 +336,8 @@ sleep 100
 // ---------------------------------------------------------------------------
 
 /// The mock runtime plugin's `build` subcommand tries to balloon its own
-/// memory use. Growth is in fixed 10MB chunks up to a hard ceiling of 300MB
-/// — bounded by construction, so even if `ResourceLimits::apply()` were
+/// memory use. Growth is in fixed 10MB chunks up to a hard ceiling of 300MB,
+/// bounded by construction, so even if `ResourceLimits::apply()` were
 /// somehow *not* wired into `plugins::runtime::build()` (the regression
 /// this test guards against), the worst case is one bash process briefly
 /// holding ~300MB, never an unbounded climb that could pressure the host
@@ -365,13 +365,13 @@ esac
 
 /// `plugins::runtime::build()` applies `ResourceLimits::apply()` (RLIMIT_AS
 /// included) via `pre_exec` before exec'ing the plugin's `build`
-/// subcommand (fix #6 — this used to run completely unbounded). With
+/// subcommand (fix #6: this used to run completely unbounded). With
 /// `RIKU_MAX_MEMORY_MB=64`, the plugin's attempt to grow past 64MB must
 /// fail fast: either bash's own allocator reports "cannot allocate memory"
 /// and exits non-zero, or the kernel kills it for an `mmap`/`brk` that
-/// would exceed RLIMIT_AS — either way `build()` must return `Err`, and it
+/// would exceed RLIMIT_AS: either way `build()` must return `Err`, and it
 /// must do so well before the *unrelated* plugin-timeout backstop would
-/// have fired, proving the resource limit — not the timeout — is what
+/// have fired, proving the resource limit, not the timeout, is what
 /// stopped it.
 ///
 /// Linux-only: macOS rejects `setrlimit(RLIMIT_AS, 64MB)` with `EINVAL`
@@ -406,7 +406,7 @@ fn test_build_phase_memory_limit_chokes_runaway_allocation() {
 
     // Small cap so the limit trips almost immediately (well within the
     // 30 * 10MB = 300MB ceiling the script itself is bounded to), and a
-    // generous timeout backstop that should never actually be needed — its
+    // generous timeout backstop that should never actually be needed, its
     // only job here is to prove it *wasn't* what stopped the build. Both are
     // passed directly: the env vars behind them are process-global, so
     // setting them would cap and time out the plugins other tests spawn in
@@ -423,14 +423,14 @@ fn test_build_phase_memory_limit_chokes_runaway_allocation() {
     let err = result.expect_err("a build step that exceeds RIKU_MAX_MEMORY_MB must fail, got Ok");
     assert!(
         elapsed < Duration::from_secs(5),
-        "build() took {:?} — should fail almost immediately once RLIMIT_AS is \
+        "build() took {:?}, should fail almost immediately once RLIMIT_AS is \
          exceeded; taking close to the 15s timeout would mean the timeout, \
          not the memory limit, is what actually stopped it",
         elapsed
     );
 
     // The failure must surface as the structured resource-exhaustion
-    // diagnostic, not a bare "exited with code N" — i.e. classify_resource_exit
+    // diagnostic, not a bare "exited with code N", i.e. classify_resource_exit
     // must have actually matched the allocator's "xrealloc: cannot allocate"
     // message on the captured stderr tail, and DeployError::resource_exhausted
     // must have built the labeled diagnostic block from it.

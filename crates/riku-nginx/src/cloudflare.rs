@@ -157,7 +157,7 @@ mod tests {
         let tmp = tempfile::TempDir::new().unwrap();
         let path = tmp.path().join("cloudflare.conf");
         std::fs::write(&path, "# fresh").unwrap();
-        // File was just created — should NOT need refresh
+        // File was just created: should NOT need refresh
         assert!(!needs_refresh(&path));
     }
 }

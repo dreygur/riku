@@ -90,37 +90,37 @@ pub fn print_table_with_title(
     print_table(headers, rows, column_spacing);
 }
 
-/// `"-----> msg"` green stdout — deployment steps, status.
+/// `"-----> msg"` green stdout: deployment steps, status.
 pub fn info(msg: &str) {
     println!("{} {}", "----->".green(), msg);
 }
 
-/// `"✓ msg"` green bold stdout — completed actions.
+/// `"✓ msg"` green bold stdout: completed actions.
 pub fn success(msg: &str) {
     println!("{} {}", "✓".green().bold(), msg);
 }
 
-/// `" !     msg"` yellow stderr — warnings, non-fatal issues.
+/// `" !     msg"` yellow stderr: warnings, non-fatal issues.
 pub fn warn(msg: &str) {
     eprintln!("{} {}", " !    ".yellow(), msg);
 }
 
-/// `" !     msg"` red bold stderr — errors (follow with `bail!` or `return Err`).
+/// `" !     msg"` red bold stderr: errors (follow with `bail!` or `return Err`).
 pub fn error(msg: &str) {
     eprintln!("{} {}", " !    ".red().bold(), msg);
 }
 
-/// `"       msg"` white stdout — data/config display.
+/// `"       msg"` white stdout: data/config display.
 pub fn note(msg: &str) {
     println!("       {}", msg.white());
 }
 
-/// `"=== title ==="` green bold stdout — section headers.
+/// `"=== title ==="` green bold stdout: section headers.
 pub fn section(title: &str) {
     println!("{}", format!("=== {} ===", title).green().bold());
 }
 
-/// `"  key   value"` stdout — key-value pair, key is bold.
+/// `"  key   value"` stdout: key-value pair, key is bold.
 pub fn kv(key: &str, value: &str) {
     println!("  {:<20} {}", key.bold(), value);
 }

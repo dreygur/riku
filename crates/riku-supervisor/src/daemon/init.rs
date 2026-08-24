@@ -1,4 +1,4 @@
-//! Supervisor initialization — struct definition, constructor, and PID file management.
+//! Supervisor initialization: struct definition, constructor, and PID file management.
 
 use anyhow::Result;
 use std::collections::HashMap;

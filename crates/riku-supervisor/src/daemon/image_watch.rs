@@ -4,8 +4,8 @@
 //!
 //! Each check just re-runs the app's existing `pull_service` action (compose
 //! pull + `up -d --no-deps`). Docker/Podman already treat that as a cheap
-//! no-op when nothing changed — pull skips unchanged layers, and `up -d`
-//! only recreates a service whose resolved image actually differs — so no
+//! no-op when nothing changed: pull skips unchanged layers, and `up -d`
+//! only recreates a service whose resolved image actually differs, so no
 //! separate digest-diffing is needed here.
 
 use anyhow::Result;

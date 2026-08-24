@@ -180,7 +180,7 @@ fn test_setup_wsgi_env_idempotent() -> Result<()> {
     setup_env_dir(&paths, "wsgiapp");
 
     let mut env = HashMap::new();
-    // Call twice — should not duplicate the lines in the ENV file
+    // Call twice: should not duplicate the lines in the ENV file
     setup_wsgi_env("wsgiapp", &paths, &mut env)?;
     setup_wsgi_env("wsgiapp", &paths, &mut env)?;
 

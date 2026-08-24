@@ -42,7 +42,7 @@ fn main() -> Result<()> {
         Err(e) => return Err(e),
     };
 
-    // Check for client plugins first — they can override built-in commands.
+    // Check for client plugins first: they can override built-in commands.
     if let Some(plugin_name) = get_plugin_command(&args.command) {
         let plugin_args = build_plugin_args(&args.command);
         if client_plugins::try_execute_client_plugin(&plugin_name, &plugin_args)? {

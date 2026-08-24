@@ -5,7 +5,7 @@
 //! `routing.rs` and `hooks.rs` modules through both binary invocation
 //! and direct unit tests.
 
-// ── Binary invocation helpers ────────────────────────────────────────────────
+// Binary invocation helpers
 
 /// Return the path to the debug binary.
 ///
@@ -23,10 +23,10 @@ fn run(args: &[&str]) -> std::process::Output {
     std::process::Command::new(riku_bin())
         .args(args)
         .output()
-        .expect("failed to execute riku binary — make sure `cargo build` has been run")
+        .expect("failed to execute riku binary: make sure `cargo build` has been run")
 }
 
-// ── Binary invocation tests ───────────────────────────────────────────────────
+// Binary invocation tests
 
 #[cfg(test)]
 mod binary_tests {
@@ -138,14 +138,14 @@ mod binary_tests {
     }
 }
 
-// ── Unit tests for routing.rs ─────────────────────────────────────────────────
+// Unit tests for routing.rs
 
 #[cfg(test)]
 mod routing_tests {
     use riku::cli::routing::{build_plugin_args, get_plugin_command};
     use riku::cli::{Commands, ConfigCmd};
 
-    // ── get_plugin_command ────────────────────────────────────────────────────
+    // get_plugin_command
 
     #[test]
     fn apps_command_maps_to_apps() {
@@ -248,7 +248,7 @@ mod routing_tests {
         assert_eq!(get_plugin_command(&cmd), None);
     }
 
-    // ── build_plugin_args ─────────────────────────────────────────────────────
+    // build_plugin_args
 
     #[test]
     fn build_plugin_args_apps_has_server_placeholder() {
@@ -342,7 +342,7 @@ mod routing_tests {
     }
 }
 
-// ── Unit tests for hooks.rs ───────────────────────────────────────────────────
+// Unit tests for hooks.rs
 
 #[cfg(test)]
 mod hook_cmd_tests {
@@ -388,13 +388,13 @@ mod hook_cmd_tests {
         p
     }
 
-    // cmd_hook_list — empty plugins dir ----------------------------------------
+    // cmd_hook_list: empty plugins dir ----------------------------------------
 
     #[test]
     fn hook_list_empty_dir_returns_ok() {
         let temp = TempDir::new().unwrap();
         let (_root, paths) = make_paths(&temp);
-        // No plugins installed — should return Ok (not panic or error).
+        // No plugins installed: should return Ok (not panic or error).
         let result = riku::cli::hooks::cmd_hook_list(&paths);
         assert!(
             result.is_ok(),
@@ -402,7 +402,7 @@ mod hook_cmd_tests {
         );
     }
 
-    // cmd_hook_list — populated plugins dir ------------------------------------
+    // cmd_hook_list: populated plugins dir ------------------------------------
 
     #[test]
     fn hook_list_with_plugins_returns_ok() {
@@ -418,7 +418,7 @@ mod hook_cmd_tests {
         );
     }
 
-    // cmd_hook_check — invalid name (path traversal) ---------------------------
+    // cmd_hook_check: invalid name (path traversal) ---------------------------
 
     #[test]
     fn hook_check_invalid_name_returns_error() {
@@ -443,8 +443,8 @@ mod hook_cmd_tests {
         );
     }
 
-    // cmd_hook_check — non-existent hook  --------------------------------------
-    // NOTE: cmd_hook_check calls std::process::exit on both the found and
+    // cmd_hook_check: non-existent hook  --------------------------------------
+    // cmd_hook_check calls std::process::exit on both the found and
     // not-found paths. We cannot safely call it in-process for those cases
     // without catching the exit. The tests above cover the validation-error
     // path (which returns Err before exit). The exit-path behaviour is covered

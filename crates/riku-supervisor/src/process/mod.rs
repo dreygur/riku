@@ -80,7 +80,7 @@ impl ProcessManager {
 
 /// Shared by `spawn.rs` and `health_check.rs`'s test modules, which both
 /// need a minimal `WorkerConfig` to spawn a real (short-lived) process
-/// against — kept in one place instead of two copies drifting apart.
+/// against: kept in one place instead of two copies drifting apart.
 #[cfg(test)]
 pub(crate) mod test_support {
     use crate::config::{WorkerConfig, WorkerInfo, WorkerOptions};

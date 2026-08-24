@@ -41,7 +41,7 @@ fn worker_paths(
 }
 
 /// Restart exactly one worker by re-triggering its symlink swap in
-/// `workers-enabled/` — the same atomic rename dance `write_worker_config`
+/// `workers-enabled/`: the same atomic rename dance `write_worker_config`
 /// performs on every deploy, which the supervisor's file watcher already
 /// reliably treats as "this worker changed, stop and respawn it" (see
 /// `handle_modified_config`). Content is unchanged; only the symlink moves,
@@ -73,8 +73,8 @@ pub fn restart_worker(app: &str, paths: &RikuPaths, kind: &str, ordinal: u32) ->
 /// Only the *highest* ordinal for `kind` can be deleted this way, and doing
 /// so goes through the same `apply_scaling_deltas` path the "scale down"
 /// button uses (delta -1) rather than just unlinking the file. Riku's
-/// scaling model is "N contiguous workers, 1..=N" — there's no such thing as
-/// a sparse hole at ordinal 2 while 1 and 3 exist — so deleting a
+/// scaling model is "N contiguous workers, 1..=N", there's no such thing as
+/// a sparse hole at ordinal 2 while 1 and 3 exist: so deleting a
 /// non-highest ordinal directly would leave the SCALING file still saying
 /// the old count, and the very next deploy/config-set would silently
 /// recreate exactly the instance the operator just removed. Restart a

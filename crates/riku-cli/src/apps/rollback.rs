@@ -1,4 +1,4 @@
-//! `riku rollback` provider — roll an app back to a previous release.
+//! `riku rollback` provider: roll an app back to a previous release.
 
 use anyhow::Result;
 

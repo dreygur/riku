@@ -1,7 +1,7 @@
 use super::*;
 use std::process::{Command, Stdio};
 
-// ── classify_resource_exit ───────────────────────────────────────────────
+// classify_resource_exit
 
 #[test]
 fn test_classify_resource_exit_detects_sigkill() {
@@ -54,7 +54,7 @@ fn test_classify_resource_exit_detects_allocator_failure_marker() {
 #[test]
 fn test_classify_resource_exit_ordinary_failure_returns_none() {
     // A plain non-zero exit with no signal and no allocator marker in
-    // stderr is an ordinary application bug, not a resource limit —
+    // stderr is an ordinary application bug, not a resource limit,
     // must not be misclassified.
     let status = Command::new("sh").args(["-c", "exit 1"]).status().unwrap();
     assert_eq!(
@@ -63,7 +63,7 @@ fn test_classify_resource_exit_ordinary_failure_returns_none() {
     );
 }
 
-// ── exit_code_for ────────────────────────────────────────────────────────
+// exit_code_for
 
 #[test]
 fn test_exit_code_for_normal_exit() {
@@ -80,7 +80,7 @@ fn test_exit_code_for_signal_uses_128_plus_signal_convention() {
     assert_eq!(exit_code_for(&status), 128 + 9);
 }
 
-// ── tee_output ───────────────────────────────────────────────────────────
+// tee_output
 
 #[test]
 fn test_tee_output_captures_stderr_tail() {
@@ -98,7 +98,7 @@ fn test_tee_output_captures_stderr_tail() {
     assert!(tail.lock().unwrap().contains("to stderr error"));
 }
 
-// ── wait_with_timeout ────────────────────────────────────────────────────
+// wait_with_timeout
 
 #[test]
 fn test_wait_with_timeout_fast_process_returns_false() {
@@ -129,7 +129,7 @@ fn test_wait_with_timeout_slow_process_returns_true() {
     assert!(timed_out, "slow process should time out and be killed");
 }
 
-// ── emit_plugin_output ───────────────────────────────────────────────────
+// emit_plugin_output
 
 #[test]
 fn test_emit_plugin_output_does_not_panic_with_output() {
@@ -165,7 +165,7 @@ fn test_emit_plugin_output_handles_no_pipes() {
     emit_plugin_output(&mut child, "no-pipes-plugin");
 }
 
-// ── plugin_timeout ───────────────────────────────────────────────────────
+// plugin_timeout
 
 #[test]
 fn plugin_timeout_defaults_when_unset_or_unparsable() {

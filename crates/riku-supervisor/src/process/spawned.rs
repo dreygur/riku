@@ -1,4 +1,4 @@
-//! `SpawnedProcess` — wrapper around a running child process with metadata.
+//! `SpawnedProcess`: wrapper around a running child process with metadata.
 
 use anyhow::Result;
 use nix::sys::signal::Signal;
@@ -23,7 +23,7 @@ pub struct SpawnedProcess {
     /// poll for OOM kills and removed once the process has exited.
     pub cgroup: Option<WorkerCgroup>,
     /// Exit code from the most recent crash, captured by `is_running()` at
-    /// the moment `try_wait()` first observes the process has died — used to
+    /// the moment `try_wait()` first observes the process has died, used to
     /// annotate the `app.restarted` event fired for that crash.
     pub last_exit_code: Option<i32>,
 }

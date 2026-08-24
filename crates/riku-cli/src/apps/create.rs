@@ -43,7 +43,7 @@ pub fn cmd_apps_create(paths: &RikuPaths, name: &str) -> Result<()> {
 
     let post_receive = hooks_dir.join("post-receive");
     // `riku git-hook` reads the "oldrev newrev refname" lines git feeds this
-    // hook directly from its OWN stdin (one iteration per updated ref — see
+    // hook directly from its OWN stdin (one iteration per updated ref, see
     // cmd_git_hook). Do not `read` them first: a `while read ...; do ... ;
     // done` wrapper here would consume that input itself, leaving `riku
     // git-hook` nothing to read (immediate EOF, zero iterations, silent

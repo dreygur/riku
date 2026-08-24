@@ -2,7 +2,7 @@
 //!
 //! Verifies that a sandboxed plugin child can write only to its declared
 //! directories. Landlock is best-effort, so on a kernel/sandbox without it the
-//! confinement assertion is skipped rather than failing — the feature degrades,
+//! confinement assertion is skipped rather than failing, the feature degrades,
 //! it does not break deploys.
 
 #[cfg(test)]
@@ -22,7 +22,7 @@ mod tests {
 
     #[test]
     fn writes_confined_to_declared_dirs() {
-        // Use the per-test target dir, which lives under target/ — NOT under the
+        // Use the per-test target dir, which lives under target/, NOT under the
         // system temp dir (which the sandbox always grants), so `forbidden` is a
         // genuine out-of-policy location.
         let base = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("sandbox-writes");

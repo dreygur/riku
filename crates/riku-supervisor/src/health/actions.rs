@@ -2,7 +2,7 @@
 //!
 //! The supervisor's HTTP control plane (`control.rs`, `plugins.rs`) must drive
 //! high-level app lifecycle (deploy/restart/destroy/…) and client-plugin
-//! discovery — logic that lives in higher layers (`cli`, `deploy`). To keep the
+//! discovery: logic that lives in higher layers (`cli`, `deploy`). To keep the
 //! supervisor a *lower* crate that those layers depend on (not the reverse),
 //! the handlers call through this trait instead of those crates directly. The
 //! binary injects a concrete implementation at startup via

@@ -7,12 +7,12 @@
 //! change, not a code change. See `PLUGIN_PROTOCOL.md` §6.2.
 //!
 //! The router is a **host-level singleton**, chosen by the `RIKU_ROUTER`
-//! environment variable (default `nginx`) — not a per-app setting. Per-app
+//! environment variable (default `nginx`): not a per-app setting. Per-app
 //! `ENV` still shapes the *contents* of a router config (domains, port, TLS),
 //! but never which router is active.
 //!
 //! Security: the request handed to a plugin is built only from a fixed set of
-//! the app's own `ENV` keys, serialized as JSON — no shell interpolation, no
+//! the app's own `ENV` keys, serialized as JSON, no shell interpolation, no
 //! caller-controlled argv. The plugin runs under the shared plugin timeout.
 
 use std::collections::HashMap;
@@ -92,7 +92,7 @@ pub fn configure(
 /// though the app's `ENV` is already gone by destroy time) then `reload`.
 ///
 /// `unconfigure` is **best-effort**: it was added within API v1, so a plugin
-/// predating it may not implement the verb and will exit non-zero — in that
+/// predating it may not implement the verb and will exit non-zero, in that
 /// case the following `reload` lets the plugin reconcile the orphaned upstream
 /// on its own. See `PLUGIN_PROTOCOL.md` §6.2.
 pub fn remove(app: &str, paths: &RikuPaths) -> Result<()> {

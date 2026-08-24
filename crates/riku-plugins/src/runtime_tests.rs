@@ -65,7 +65,7 @@ fn detect_runtime_override_selects_named_plugin() {
 #[test]
 fn detect_first_match_alphabetically() {
     let tmp = TempDir::new().unwrap();
-    // Both accept — 'node' < 'python' alphabetically
+    // Both accept: 'node' < 'python' alphabetically
     make_plugin(tmp.path(), "node", "#!/bin/sh\nexit 0\n");
     make_plugin(tmp.path(), "python", "#!/bin/sh\nexit 0\n");
     let plugins = discover(tmp.path());

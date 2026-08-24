@@ -135,7 +135,7 @@ impl<'a> PluginInstaller<'a> {
                 {
                     Some(key) => Some(key.name),
                     None => bail!(
-                        "plugin '{}' is signed but no trusted key verifies it — add the publisher's key with `riku plugins trust add <name> <pubkey>`",
+                        "plugin '{}' is signed but no trusted key verifies it, add the publisher's key with `riku plugins trust add <name> <pubkey>`",
                         manifest.name
                     ),
                 }
@@ -146,7 +146,7 @@ impl<'a> PluginInstaller<'a> {
         let dest = self.paths.plugin_root.join(&manifest.name);
         if dest.exists() {
             bail!(
-                "plugin '{}' is already installed — `riku plugins remove {}` first",
+                "plugin '{}' is already installed: `riku plugins remove {}` first",
                 manifest.name,
                 manifest.name
             );
@@ -207,7 +207,7 @@ impl<'a> PluginInstaller<'a> {
     }
 
     /// Audit every installed bundle: manifest validity, entry presence, and
-    /// **integrity** — the entry is re-hashed and compared to the lockfile, so
+    /// **integrity**: the entry is re-hashed and compared to the lockfile, so
     /// tampering since install is caught.
     pub fn audit(&self) -> Vec<PluginHealth> {
         let locks = Lockfile::new(self.paths).entries();
@@ -265,7 +265,7 @@ impl<'a> PluginInstaller<'a> {
             },
             None => PluginHealth::warn(
                 manifest.name,
-                "installed but not in the lockfile (unmanaged — reinstall via `riku plugins`)"
+                "installed but not in the lockfile (unmanaged: reinstall via `riku plugins`)"
                     .into(),
             ),
         }
@@ -336,7 +336,7 @@ fn make_executable(path: &Path) -> Result<()> {
 
 /// Invoke a lifecycle verb (`on_install`/`on_uninstall`) on a plugin's own
 /// entry executable. **Always best-effort**: a non-zero exit, timeout, or
-/// spawn failure is logged as a warning and never propagated — by the time
+/// spawn failure is logged as a warning and never propagated, by the time
 /// either verb runs, the install/removal itself has already succeeded (or is
 /// about to), so a broken hook script must never leave the plugin half
 /// installed or block its removal.

@@ -9,7 +9,7 @@ fn make_paths(tmp: &TempDir) -> crate::config::RikuPaths {
     paths
 }
 
-// ── insert_address_context ─────────────────────────────────────────────
+// insert_address_context
 
 #[test]
 fn test_address_defaults_applied_when_env_empty() {
@@ -70,7 +70,7 @@ fn test_address_disable_ipv6_with_one_value() {
     assert_eq!(ctx.get("NGINX_IPV6_ADDRESS").unwrap(), "");
 }
 
-// ── insert_portmap_context ─────────────────────────────────────────────
+// insert_portmap_context
 
 #[test]
 fn test_portmap_defaults_to_80_and_8080() {
@@ -105,7 +105,7 @@ fn test_portmap_explicit_internal_port_overrides_port() {
     assert_eq!(ctx.get("NGINX_INTERNAL_PORT").unwrap(), "9000");
 }
 
-// ── insert_cache_context ───────────────────────────────────────────────
+// insert_cache_context
 
 #[test]
 fn test_cache_defaults_inserted() {
@@ -121,7 +121,7 @@ fn test_cache_defaults_inserted() {
     assert!(ctx.get("NGINX_CACHE_PATH").is_some());
 }
 
-// ── insert_include_file ────────────────────────────────────────────────
+// insert_include_file
 
 #[test]
 fn test_include_file_within_app_dir_is_inserted() {
@@ -174,7 +174,7 @@ fn test_include_file_content_runs_through_the_filter_chain() {
     let paths = make_paths(&tmp);
 
     // A real installed filter plugin, dispatched through the actual
-    // FilterBus — not a mock — appending a marker line to whatever seed
+    // FilterBus: not a mock, appending a marker line to whatever seed
     // content it receives.
     let bundle = paths.plugin_root.join("augmenter");
     std::fs::create_dir_all(bundle.join("bin")).unwrap();

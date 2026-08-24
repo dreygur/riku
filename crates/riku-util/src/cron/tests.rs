@@ -3,7 +3,7 @@ use super::*;
 use chrono::{Datelike, Timelike, Weekday};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-// ── validate_cron_expression ────────────────────────────────────────────────
+// validate_cron_expression
 
 #[test]
 fn test_validate_cron_expression() {
@@ -39,11 +39,11 @@ fn test_validate_cron_expression_rejects_out_of_range() {
 
 #[test]
 fn test_validate_cron_expression_rejects_impossible_schedule() {
-    // February never has a 30th — the schedule can never fire.
+    // February never has a 30th: the schedule can never fire.
     assert!(!validate_cron_expression("0 0 30 2 *"));
 }
 
-// ── calculate_next_run_after ────────────────────────────────────────────────
+// calculate_next_run_after
 
 /// A fixed epoch timestamp for a known point in time.
 /// 2024-01-01 00:00:00 UTC (Monday) → unix epoch 1704067200
@@ -97,14 +97,14 @@ fn test_next_run_short_expression_returns_error() {
     assert!(result.is_err(), "4-field cron expression should return Err");
 }
 
-// ── B1: day-of-week restriction must be honoured ─────────────────────────────
+// B1: day-of-week restriction must be honoured
 
 #[test]
 fn test_next_run_monday_only_fires_on_monday() {
     // `0 9 * * 1` = 09:00 UTC on Mondays. With the old OR-on-wildcard bug this
     // fired every day; the engine must now land on an actual Monday.
     // Start from Tuesday 2024-01-02 00:00 UTC so the very next day is NOT the
-    // target weekday — proving non-Mondays are skipped.
+    // target weekday: proving non-Mondays are skipped.
     let tuesday = UNIX_EPOCH + Duration::from_secs(1704153600); // 2024-01-02 00:00 UTC (Tue)
     let next = calculate_next_run_after("0 9 * * 1", tuesday).unwrap();
     let dt = as_utc(next);
@@ -120,7 +120,7 @@ fn test_next_run_monday_only_fires_on_monday() {
     assert_eq!(dt.day(), 8, "next Monday after 2024-01-02 is the 8th");
 }
 
-// ── B4: unsatisfiable schedule must error, not silently fall back ────────────
+// B4: unsatisfiable schedule must error, not silently fall back
 
 #[test]
 fn test_next_run_impossible_schedule_returns_error() {
@@ -146,7 +146,7 @@ fn test_next_run_weekday_range() {
     assert_eq!(dt.hour(), 9);
 }
 
-// ── CronJob ─────────────────────────────────────────────────────────────────
+// CronJob
 
 #[test]
 fn test_cron_job_creation() {

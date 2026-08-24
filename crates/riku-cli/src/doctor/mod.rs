@@ -1,4 +1,4 @@
-//! `riku doctor` — diagnose the local Riku installation.
+//! `riku doctor`: diagnose the local Riku installation.
 //!
 //! Solo devs have no ops team, so the tool *is* the ops team: `doctor` runs a
 //! battery of **read-only** health checks across dependencies, the `~/.riku`

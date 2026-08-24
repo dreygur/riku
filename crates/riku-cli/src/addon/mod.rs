@@ -1,4 +1,4 @@
-//! `riku addon` provider layer — wires the addon CLI to [`AddonService`] and
+//! `riku addon` provider layer: wires the addon CLI to [`AddonService`] and
 //! handles user-facing output. No business logic lives here.
 
 use anyhow::Result;

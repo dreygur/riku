@@ -38,7 +38,7 @@ ProtectSystem=strict
 ProtectHome=read-only
 PrivateTmp=true
 
-# Allow writing to riku directories (absolute path required — ~ is not expanded
+# Allow writing to riku directories (absolute path required, ~ is not expanded
 # by systemd in ReadWritePaths for user services on all distributions)
 ReadWritePaths={riku_root}
 

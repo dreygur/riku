@@ -1,13 +1,13 @@
 //! Utility functions for Riku.
 //!
 //! Organised into focused sub-modules:
-//! - [`display`]           — terminal output and table formatting
-//! - [`validation`]        — app-name sanitization, path-traversal checks
-//! - [`nginx_validation`]  — nginx cache config and env-var validation
-//! - [`procfile`]          — Procfile parsing and cron validation
-//! - [`env`]               — KEY=VALUE file parsing, variable expansion
-//! - [`ssh_keys`]          — SSH authorized_keys management
-//! - [`process_util`]      — free-port allocation, shell command helpers, binary checks
+//! - [`display`]: terminal output and table formatting
+//! - [`validation`]: app-name sanitization, path-traversal checks
+//! - [`nginx_validation`]: nginx cache config and env-var validation
+//! - [`procfile`]: Procfile parsing and cron validation
+//! - [`env`]: KEY=VALUE file parsing, variable expansion
+//! - [`ssh_keys`]: SSH authorized_keys management
+//! - [`process_util`]: free-port allocation, shell command helpers, binary checks
 
 pub mod cron;
 pub mod deploy_logger;

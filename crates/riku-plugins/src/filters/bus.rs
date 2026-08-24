@@ -7,7 +7,7 @@
 //!
 //! **Must degrade safely, never break a caller**: a non-zero exit, timeout,
 //! spawn failure, or malformed response is logged as a warning and the
-//! *input* value passes through unchanged to the next filter in the chain —
+//! *input* value passes through unchanged to the next filter in the chain,
 //! a broken filter plugin can only turn a filter into a no-op, never a hard
 //! failure. This is why filters have no `gate`-equivalent mode: a filter
 //! can decline to transform, but never veto.
@@ -116,7 +116,7 @@ impl<'a> FilterBus<'a> {
         }
 
         // Capture stdout on a thread (the transformed value); stream stderr
-        // to the log — same convention as the addon seam's verb dispatch.
+        // to the log: same convention as the addon seam's verb dispatch.
         let (stdout_handle, stdout_buf) = capture_stdout(&mut child);
         let plugin_name = manifest.name.clone();
         let stderr_handle = stream_stderr(&mut child, move |line| {

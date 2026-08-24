@@ -1,11 +1,11 @@
 //! App backup & restore (Track A, Phase 2).
 //!
-//! Bundles an app's durable state — source (`apps/<app>`), env
-//! (`envs/<app>`), volumes (`data/<app>`), and git repo (`repos/<app>.git`) —
+//! Bundles an app's durable state: source (`apps/<app>`), env
+//! (`envs/<app>`), volumes (`data/<app>`), and git repo (`repos/<app>.git`),
 //! into a `tar.gz`, and restores it.
 //!
 //! Security: restore extracts an operator-supplied archive, so every member is
-//! validated first — no absolute paths, no `..`, and every entry must live
+//! validated first: no absolute paths, no `..`, and every entry must live
 //! under one of *this app's* directories. A crafted archive cannot write
 //! elsewhere on disk or touch another app.
 
@@ -73,7 +73,7 @@ impl<'a> BackupService<'a> {
     /// Restore an app from a `tar.gz`, after validating every archive member.
     ///
     /// Serialized against a concurrent `do_deploy` (or another restore) of
-    /// the same app via the same per-app deploy lock `do_deploy` uses — both
+    /// the same app via the same per-app deploy lock `do_deploy` uses, both
     /// mutate `apps/<app>`, `envs/<app>`, and `data/<app>` in place.
     pub fn restore(&self, app: &str, archive: &Path) -> Result<()> {
         let app = validate_app_name(app)?;

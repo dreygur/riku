@@ -145,7 +145,7 @@ fn install_nginx_symlink(config_file: &Path, app: &str) {
 mod tests {
     use super::*;
 
-    // ── select_template ────────────────────────────────────────────────────
+    // select_template
 
     #[test]
     fn test_select_template_default_when_no_flags() {
@@ -190,7 +190,7 @@ mod tests {
         assert_eq!(select_template(&env), "nginx_https_only.conf.tera");
     }
 
-    // ── register_templates ────────────────────────────────────────────────
+    // register_templates
 
     #[test]
     fn test_register_templates_succeeds() {

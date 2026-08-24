@@ -27,7 +27,7 @@ fn with_env_var<F: FnOnce()>(key: &str, value: &str, f: F) {
 /// Core regression test for fix #11: even with `PATH` empty or pointed
 /// entirely at attacker-controlled, malicious directories, and no
 /// `RIKU_BIN` override, `resolve_riku_bin` must never hand back a bare
-/// `"riku"` for the OS loader to search `$PATH` for — it must resolve to
+/// `"riku"` for the OS loader to search `$PATH` for: it must resolve to
 /// an absolute path via `current_exe()`, which is immune to `$PATH`
 /// content entirely.
 #[test]
@@ -48,7 +48,7 @@ fn test_resolve_riku_bin_ignores_malicious_path_falls_back_to_current_exe() {
     }
 
     // HOME with no ~/.local/bin/riku, so that branch can't satisfy
-    // resolution either — forces the current_exe() fallback.
+    // resolution either: forces the current_exe() fallback.
     let home_dir = tmp.path().join("home");
     fs::create_dir_all(&home_dir).unwrap();
 
@@ -194,7 +194,7 @@ fn test_pid_is_alive_returns_true_for_own_process() {
 
 #[test]
 fn test_pid_is_alive_returns_false_for_pid_zero() {
-    // PID 0 means "process group" — kill(0, 0) raises ESRCH or EPERM;
+    // PID 0 means "process group": kill(0, 0) raises ESRCH or EPERM;
     // either way riku treats it as "not alive" to avoid signalling the group.
     // We just verify the function does not panic.
     let _ = pid_is_alive(0);
@@ -215,7 +215,7 @@ fn test_pid_is_alive_returns_false_for_nonexistent_pid() {
 fn test_notify_supervisor_reload_no_pid_file_does_not_panic() {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
-    // No PID file — should be a no-op, never panic
+    // No PID file: should be a no-op, never panic
     notify_supervisor_reload(&paths);
 }
 
@@ -240,7 +240,7 @@ fn test_ensure_supervisor_running_returns_false_when_no_binary() {
     std::env::set_var("RIKU_BIN", "/nonexistent/riku-binary-that-does-not-exist");
     let result = ensure_supervisor_running(&paths);
     std::env::remove_var("RIKU_BIN");
-    // Either true (if a stale riku binary somehow exists) or false — we just
+    // Either true (if a stale riku binary somehow exists) or false, we just
     // verify the function returns without panicking and doesn't claim success
     // when no real supervisor started.
     let _ = result; // result is bool; no panic is the key assertion

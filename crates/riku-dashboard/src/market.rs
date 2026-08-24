@@ -33,7 +33,7 @@ where
 
 // ---- marketplace ----
 
-/// GET /api/marketplace — registered sources.
+/// GET /api/marketplace: registered sources.
 pub(crate) async fn list_sources(
     State(state): State<DashboardState>,
     headers: HeaderMap,
@@ -45,7 +45,7 @@ pub(crate) async fn list_sources(
     Json(MarketplaceService::new(&state.paths).list()).into_response()
 }
 
-/// GET /api/marketplace/search?q= — entries across sources.
+/// GET /api/marketplace/search?q=: entries across sources.
 pub(crate) async fn search(
     State(state): State<DashboardState>,
     headers: HeaderMap,
@@ -76,7 +76,7 @@ pub(crate) struct AddSource {
     name: Option<String>,
 }
 
-/// POST /api/marketplace — add a source `{url, name?}`.
+/// POST /api/marketplace: add a source `{url, name?}`.
 pub(crate) async fn add_source(
     State(state): State<DashboardState>,
     headers: HeaderMap,
@@ -92,7 +92,7 @@ pub(crate) async fn add_source(
     .await
 }
 
-/// DELETE /api/marketplace/:name — remove a source.
+/// DELETE /api/marketplace/:name, remove a source.
 pub(crate) async fn remove_source(
     State(state): State<DashboardState>,
     headers: HeaderMap,
@@ -115,7 +115,7 @@ pub(crate) struct InstallBody {
     source: String,
 }
 
-/// POST /api/plugins/install — install a bundle from a source string.
+/// POST /api/plugins/install: install a bundle from a source string.
 pub(crate) async fn install(
     State(state): State<DashboardState>,
     headers: HeaderMap,
@@ -131,7 +131,7 @@ pub(crate) async fn install(
     .await
 }
 
-/// DELETE /api/plugins/:name — remove an installed bundle.
+/// DELETE /api/plugins/:name, remove an installed bundle.
 pub(crate) async fn remove_plugin(
     State(state): State<DashboardState>,
     headers: HeaderMap,
@@ -149,7 +149,7 @@ pub(crate) async fn remove_plugin(
 
 // ---- trust keyring ----
 
-/// GET /api/trust — trusted author keys.
+/// GET /api/trust: trusted author keys.
 pub(crate) async fn list_keys(
     State(state): State<DashboardState>,
     headers: HeaderMap,
@@ -172,7 +172,7 @@ pub(crate) struct AddKey {
     pubkey: String,
 }
 
-/// POST /api/trust — trust a key `{name, pubkey}`.
+/// POST /api/trust: trust a key `{name, pubkey}`.
 pub(crate) async fn add_key(
     State(state): State<DashboardState>,
     headers: HeaderMap,
@@ -188,7 +188,7 @@ pub(crate) async fn add_key(
     .await
 }
 
-/// DELETE /api/trust/:name — untrust a key.
+/// DELETE /api/trust/:name, untrust a key.
 pub(crate) async fn remove_key(
     State(state): State<DashboardState>,
     headers: HeaderMap,

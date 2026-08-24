@@ -2,7 +2,7 @@
 //!
 //! Turns a plugin's *declared* `[capabilities]` into OS-level restrictions on
 //! the child process, so a plugin can do only what its manifest claimed.
-//! Enforcement is **unprivileged** (no root, no setup) and **best-effort** —
+//! Enforcement is **unprivileged** (no root, no setup) and **best-effort**,
 //! the manifest's "enforced where possible": on a kernel without Landlock the
 //! filesystem/network limits degrade to no-ops (warned on the deploy log),
 //! while `no_new_privs` applies everywhere.
@@ -18,7 +18,7 @@
 //!   declared targets (plus the system temp dir). Undeclared writes ⇒ denied.
 //! - `network = false` → Landlock network ruleset denies all TCP bind/connect
 //!   (kernel ≥6.7). UDP and non-TCP protocols are out of scope for now and are
-//!   *not* blocked — declaring `network = false` is not yet a UDP guarantee.
+//!   *not* blocked: declaring `network = false` is not yet a UDP guarantee.
 //!
 //! Legacy runtime plugins without a manifest (§8) carry no declared
 //! capabilities and are spawned through their own path, so they are unaffected.

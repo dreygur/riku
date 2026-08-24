@@ -2,10 +2,10 @@
 //!
 //! All tests run without requiring npm, pip, or any runtime toolchain.
 //!
-//! - **Sub-step tests** — exercise individual deploy pipeline steps
+//! - **Sub-step tests**: exercise individual deploy pipeline steps
 //!   (git sync, worker config creation, plugin detection, nginx config generation).
 //!
-//! - **Full-deploy tests** — call `do_deploy()` end-to-end using lightweight mock
+//! - **Full-deploy tests**: call `do_deploy()` end-to-end using lightweight mock
 //!   plugins (shell scripts) installed into a temp directory. The mock plugins detect
 //!   a marker file, perform a no-op build, and emit a start command. The rest of the
 //!   pipeline (git sync, worker config creation, LIVE_ENV writing, supervisor
@@ -192,7 +192,7 @@ esac
     }
 
     // -------------------------------------------------------------------------
-    // Test 1: git sync — Node app
+    // Test 1: git sync, Node app
     // -------------------------------------------------------------------------
 
     #[test]
@@ -231,7 +231,7 @@ esac
     }
 
     // -------------------------------------------------------------------------
-    // Test 2: worker config creation — Node app
+    // Test 2: worker config creation, Node app
     // -------------------------------------------------------------------------
 
     #[test]
@@ -279,7 +279,7 @@ esac
     }
 
     // -------------------------------------------------------------------------
-    // Test 3: worker config creation — Python app
+    // Test 3: worker config creation, Python app
     // -------------------------------------------------------------------------
 
     #[test]
@@ -323,7 +323,7 @@ esac
     // `generate_nginx_config` calls `nginx -t` internally for validation, which
     // requires nginx to be installed. Rather than depending on nginx, this test
     // verifies the naming convention and path contract by writing the config
-    // file directly — the same file path that the real generator would produce.
+    // file directly: the same file path that the real generator would produce.
     // The template rendering itself is covered by the nginx unit tests.
     // -------------------------------------------------------------------------
 
@@ -435,7 +435,7 @@ esac
     }
 
     // -------------------------------------------------------------------------
-    // Test 7: plugin detection — Node app marker
+    // Test 7: plugin detection, Node app marker
     // -------------------------------------------------------------------------
 
     #[test]
@@ -453,7 +453,7 @@ esac
     }
 
     // -------------------------------------------------------------------------
-    // Test 8: plugin detection — Python app marker
+    // Test 8: plugin detection, Python app marker
     // -------------------------------------------------------------------------
 
     #[test]
@@ -471,7 +471,7 @@ esac
     }
 
     // -------------------------------------------------------------------------
-    // Test 9: git sync — Python app
+    // Test 9: git sync, Python app
     // -------------------------------------------------------------------------
 
     #[test]
@@ -570,7 +570,7 @@ esac
     }
 
     // =========================================================================
-    // Full-deploy tests — call do_deploy() end-to-end with mock runtime plugins.
+    // Full-deploy tests: call do_deploy() end-to-end with mock runtime plugins.
     // No npm, pip, or other runtime toolchain required on the host.
     // =========================================================================
 
@@ -640,7 +640,7 @@ esac
     }
 
     // =========================================================================
-    // Plugin runtime detection — verify plugin-based detect subcommand dispatch
+    // Plugin runtime detection: verify plugin-based detect subcommand dispatch
     // =========================================================================
 
     /// Helper: create a plugin dir, install a mock plugin for a marker file,
@@ -752,7 +752,7 @@ esac
         let plugin_tmp = TempDir::new()?;
         let app_tmp = TempDir::new()?;
 
-        // Both plugins accept everything — alphabetically first wins
+        // Both plugins accept everything: alphabetically first wins
         for name in &["beta", "alpha"] {
             let script = "#!/usr/bin/env bash\n[ \"${1:-}\" = detect ] && exit 0; exit 1\n";
             let dest = plugin_tmp.path().join(name);
@@ -791,7 +791,7 @@ esac
     }
 
     // =========================================================================
-    // Worker config — additional coverage
+    // Worker config: additional coverage
     // =========================================================================
 
     #[test]
@@ -956,7 +956,7 @@ esac
     }
 
     // =========================================================================
-    // ENV file parsing — edge cases
+    // ENV file parsing: edge cases
     // =========================================================================
 
     #[test]
@@ -1030,7 +1030,7 @@ esac
     }
 
     // =========================================================================
-    // Full deploy — additional scenarios
+    // Full deploy: additional scenarios
     // =========================================================================
 
     #[test]
@@ -1163,7 +1163,7 @@ esac
         let (bare, _work, sha) = make_git_repo_with_files(files);
         let _app_dir = setup_app_clone(bare.path(), app, &paths);
 
-        // Create env dir but no ENV file — deploy must still succeed
+        // Create env dir but no ENV file: deploy must still succeed
         fs::create_dir_all(paths.env_root.join(app))?;
         fs::create_dir_all(paths.log_root.join(app))?;
 
@@ -1218,7 +1218,7 @@ esac
     }
 
     // =========================================================================
-    // Error cases — additional coverage
+    // Error cases: additional coverage
     // =========================================================================
 
     #[test]
@@ -1273,7 +1273,7 @@ esac
     }
 
     // =========================================================================
-    // Git sync — additional scenarios
+    // Git sync: additional scenarios
     // =========================================================================
 
     #[test]
@@ -1290,7 +1290,7 @@ esac
         let (bare, _work, _sha) = make_git_repo_with_files(files);
         let app_dir = setup_app_clone(bare.path(), app, &paths);
 
-        // Pass None for SHA — should sync to HEAD without error
+        // Pass None for SHA: should sync to HEAD without error
         riku::deploy::git_ops::sync_app_repo(&app_dir, None)?;
 
         assert!(
@@ -1361,7 +1361,7 @@ esac
     }
 
     // =========================================================================
-    // Scaling — read_scaling_count public API
+    // Scaling: read_scaling_count public API
     // =========================================================================
 
     #[test]

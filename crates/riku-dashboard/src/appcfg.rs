@@ -1,7 +1,7 @@
 //! App configuration (environment) endpoints.
 //!
-//! - `GET  /api/apps/:app/env` — current key/values (read gate).
-//! - `POST /api/apps/:app/env` — `{ "set": {K:V}, "unset": [K] }` (token gate).
+//! - `GET  /api/apps/:app/env`, current key/values (read gate).
+//! - `POST /api/apps/:app/env`, `{ "set": {K:V}, "unset": [K] }` (token gate).
 //!
 //! Reads parse the app's `ENV` file directly; writes go through the same
 //! `config set` / `config unset` command functions the CLI uses, so validation

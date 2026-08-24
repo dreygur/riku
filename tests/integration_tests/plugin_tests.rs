@@ -446,7 +446,7 @@ echo "Plugin: $plugin_name v$version"
         Ok(())
     }
 
-    // ── Plugin Architecture / PluginHook integration tests ────────────────────
+    // Plugin Architecture / PluginHook integration tests
 
     /// All four hooks map to the correct plugin file names.
     #[test]
@@ -606,7 +606,7 @@ echo "Plugin: $plugin_name v$version"
         // No riku-pre-deploy file exists
         assert!(!plugins_dir.join("riku-pre-deploy").exists());
 
-        // Simulating "no plugin" — the PluginManager returns Ok(false) in this case.
+        // Simulating "no plugin": the PluginManager returns Ok(false) in this case.
         // Verify by just checking the file is absent (unit tests cover the Ok(false) path).
         let entries = fs::read_dir(&plugins_dir)?.count();
         assert_eq!(entries, 0, "Plugin dir should be empty");

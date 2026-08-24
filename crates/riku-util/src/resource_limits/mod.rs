@@ -57,7 +57,7 @@ pub struct ResourceLimits {
     /// Maximum number of processes (RLIMIT_NPROC).
     ///
     /// Disabled (`None`) by default. `RLIMIT_NPROC` counts every process
-    /// owned by the *real UID*, system-wide — not just this worker's
+    /// owned by the *real UID*, system-wide, not just this worker's
     /// process tree. Setting it here would falsely crash-loop a perfectly
     /// healthy worker the moment anything else running as the same UID
     /// (other workers, a shell, a desktop session) pushes that UID's total
@@ -96,16 +96,16 @@ impl ResourceLimits {
     /// Load resource limits from environment variables.
     ///
     /// Environment variables:
-    /// - RIKU_MAX_MEMORY_MB: RLIMIT_AS ceiling in MB (default: unset — see below)
+    /// - RIKU_MAX_MEMORY_MB: RLIMIT_AS ceiling in MB (default: unset, see below)
     /// - RIKU_MAX_CPU_SECONDS: Maximum CPU time in seconds (default: 3600)
     /// - RIKU_MAX_OPEN_FILES: Maximum open files (default: 1024)
-    /// - RIKU_MAX_PROCESSES: Maximum processes, RLIMIT_NPROC, UID-wide (default: disabled — see field doc)
+    /// - RIKU_MAX_PROCESSES: Maximum processes, RLIMIT_NPROC, UID-wide (default: disabled, see field doc)
     /// - RIKU_MAX_FILE_SIZE_MB: Maximum file size in MB (default: 1024)
     /// - RIKU_ENABLE_CORE_DUMPS: Enable core dumps (default: false)
     ///
     /// **Memory is opt-in.** `RLIMIT_AS` caps *virtual* address space, but
     /// language runtimes (node/v8, the JVM) reserve multiple GB of virtual
-    /// memory at startup and abort under a tight cap — so applying a default
+    /// memory at startup and abort under a tight cap: so applying a default
     /// `RLIMIT_AS` makes node/JVM builds and workers unrunnable. Resident
     /// memory for isolated workers is bounded by the cgroup `memory.max`
     /// instead (see `cgroups`). `RLIMIT_AS` is therefore enforced only when the

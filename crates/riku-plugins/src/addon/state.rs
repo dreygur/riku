@@ -1,9 +1,9 @@
-//! Addon instance registry — repository layer (`PLUGIN_PROTOCOL.md` §6.1).
+//! Addon instance registry: repository layer (`PLUGIN_PROTOCOL.md` §6.1).
 //!
 //! Each provisioned addon instance has one record under
 //! `~/.riku/addons/instances/<instance>.toml` tracking which addon owns it and
 //! which apps are bound (and the env keys injected into each, so `unbind` can
-//! remove exactly what `bind` added). Pure persistence — no plugin execution.
+//! remove exactly what `bind` added). Pure persistence, no plugin execution.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

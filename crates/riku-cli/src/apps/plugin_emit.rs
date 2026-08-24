@@ -1,11 +1,11 @@
-//! `riku plugin-emit` — lets a plugin's own script fire a custom
+//! `riku plugin-emit`: lets a plugin's own script fire a custom
 //! `plugin.custom.*` event (`PLUGIN_PROTOCOL.md` §7.4).
 //!
 //! Must be run from within a plugin invocation (reads `RIKU_PLUGIN_NAME`,
 //! set by every dispatch site alongside `RIKU_PLUGIN_API`/`RIKU_ROOT`), and
 //! that plugin must have declared `[events] emit = true` in its own
 //! manifest. The `plugin.custom.` namespace is enforced here, not just
-//! documented — a plugin can never emit something that looks like a kernel
+//! documented: a plugin can never emit something that looks like a kernel
 //! event (`app.restarted`, `deploy.finished`, …), which is what keeps those
 //! events trustworthy for `gate`-mode subscribers.
 
@@ -25,12 +25,12 @@ pub fn cmd_plugin_emit(
 ) -> Result<()> {
     let plugin_name = std::env::var("RIKU_PLUGIN_NAME").context(
         "riku plugin-emit must be run from within a plugin invocation \
-         (RIKU_PLUGIN_NAME is unset — this isn't meant to be run by hand)",
+         (RIKU_PLUGIN_NAME is unset: this isn't meant to be run by hand)",
     )?;
 
     if !event_name.starts_with(CUSTOM_NAMESPACE) {
         bail!(
-            "custom event names must start with '{CUSTOM_NAMESPACE}' (got '{event_name}') — \
+            "custom event names must start with '{CUSTOM_NAMESPACE}' (got '{event_name}'), \
              a plugin can never emit something that looks like a kernel event"
         );
     }
@@ -40,7 +40,7 @@ pub fn cmd_plugin_emit(
 
     if !manifest.events.emit {
         bail!(
-            "plugin '{plugin_name}' has not declared `[events] emit = true` in its manifest — \
+            "plugin '{plugin_name}' has not declared `[events] emit = true` in its manifest, \
              add it before calling `riku plugin-emit`"
         );
     }
@@ -59,7 +59,7 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use std::sync::Mutex;
 
-    // cmd_plugin_emit reads the process-global RIKU_PLUGIN_NAME env var —
+    // cmd_plugin_emit reads the process-global RIKU_PLUGIN_NAME env var,
     // serialize tests that set it so they don't race each other.
     static ENV_GUARD: Mutex<()> = Mutex::new(());
 

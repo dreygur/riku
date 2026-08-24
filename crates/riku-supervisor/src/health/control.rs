@@ -25,7 +25,7 @@ pub struct ControlState {
 }
 
 /// Build the mutating control-plane sub-router, gated by bearer-token auth.
-/// Deliberately has no `CorsLayer` — only the dashboard's own server-side
+/// Deliberately has no `CorsLayer`: only the dashboard's own server-side
 /// proxy (or another local process holding the token) is expected to call
 /// these routes, never a browser directly.
 pub fn control_router(token: String) -> Router {
@@ -94,7 +94,7 @@ fn run_blocking_command(
             Ok(()) => Ok(Json(json!({"ok": true, "app": app, "action": label}))),
             Err(e) => {
                 // A deploy already in progress for this app is a conflict,
-                // not a server failure — surface 409 so callers can retry
+                // not a server failure: surface 409 so callers can retry
                 // instead of treating it like a crash.
                 let status = match e.downcast_ref::<crate::error::DeployError>() {
                     Some(crate::error::DeployError::DeployInProgress(_)) => StatusCode::CONFLICT,
@@ -123,7 +123,7 @@ async fn join_blocking(handle: std::thread::JoinHandle<HandlerResult>) -> impl I
     }
 }
 
-/// POST /control/apps — { "name": "myapp" }
+/// POST /control/apps: { "name": "myapp" }
 async fn create_app_handler(
     Extension(actions): Extension<SharedActions>,
     Json(body): Json<Value>,
@@ -185,7 +185,7 @@ async fn destroy_handler(
     join_blocking(handle).await.into_response()
 }
 
-/// POST /control/plugins/install — { "only": ["node", "python"] } (omit for all bundled runtimes)
+/// POST /control/plugins/install: { "only": ["node", "python"] } (omit for all bundled runtimes)
 async fn install_plugins_handler(
     Extension(actions): Extension<SharedActions>,
     body: Option<Json<Value>>,
@@ -221,12 +221,12 @@ async fn install_plugins_handler(
     join_blocking(handle).await.into_response()
 }
 
-/// POST /control/apps/:app/container/export — builds the app's deployed
+/// POST /control/apps/:app/container/export, builds the app's deployed
 /// source directory as a container image (auto-detects Docker/Podman) and
 /// exports it to a tar archive under `{data_root}/exports/{app}.tar`.
 ///
 /// The build context and output path are always server-derived from the
-/// validated app name — never taken from the request — so this can't be
+/// validated app name: never taken from the request, so this can't be
 /// used to build an arbitrary host directory or write outside riku's data
 /// root.
 async fn container_export_handler(

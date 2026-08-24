@@ -1,11 +1,11 @@
 //! UI panel verb dispatch (`PLUGIN_PROTOCOL.md` §7.5).
 //!
 //! Runs a plugin's `ui_panel` verb: no meaningful stdin (`{}`), response is
-//! **structured JSON only** — `{"sections": [{"title", "fields": [{"label",
-//! "value"}]}]}` — never HTML/JS, closing off injection risk into the
+//! **structured JSON only**: `{"sections": [{"title", "fields": [{"label",
+//! "value"}]}]}`: never HTML/JS, closing off injection risk into the
 //! dashboard. Must degrade safely: any failure (non-zero exit, timeout,
 //! spawn failure, malformed JSON) returns an empty panel and logs a
-//! warning — a broken UI plugin can never break the dashboard.
+//! warning: a broken UI plugin can never break the dashboard.
 
 use std::io::Write;
 use std::os::unix::process::CommandExt;
@@ -21,7 +21,7 @@ use crate::executor::{
 use crate::manifest::PluginManifest;
 use crate::RIKU_PLUGIN_API;
 
-/// One labeled value in a panel section. Plain text only, by construction —
+/// One labeled value in a panel section. Plain text only, by construction,
 /// this struct has no field that could carry markup.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PanelField {
@@ -45,7 +45,7 @@ pub struct UiPanelResponse {
     pub sections: Vec<PanelSection>,
 }
 
-/// Dispatch `ui_panel` for `manifest`/`bundle`. Always returns a panel — an
+/// Dispatch `ui_panel` for `manifest`/`bundle`. Always returns a panel, an
 /// empty one, with the failure logged, if anything goes wrong.
 pub fn run_ui_panel(
     paths: &RikuPaths,
@@ -84,8 +84,8 @@ pub fn run_ui_panel(
         let _ = writeln!(stdin, "{{}}");
     }
 
-    // Capture stdout on a thread (the panel body); stream stderr to the log
-    // — same convention as the addon/filter seams' verb dispatch.
+    // Capture stdout on a thread (the panel body); stream stderr to the log,
+    // same convention as the addon/filter seams' verb dispatch.
     let (stdout_handle, stdout_buf) = capture_stdout(&mut child);
     let plugin_name = manifest.name.clone();
     let stderr_handle = stream_stderr(&mut child, move |line| {

@@ -1,4 +1,4 @@
-//! `riku __dump-state` — read-only export of the supervisor's in-memory
+//! `riku __dump-state`: read-only export of the supervisor's in-memory
 //! state matrix (port allocations, worker PIDs, deploy locks, nginx
 //! routing) as structured JSON, for operator visibility without
 //! interrupting the running supervisor.
@@ -7,7 +7,7 @@
 //!
 //! Everything here is read from on-disk state the supervisor itself
 //! already persists (`stats.json`, app `ENV` files, nginx configs, deploy
-//! lock files) — this command never connects to the running supervisor
+//! lock files): this command never connects to the running supervisor
 //! process, so it can't disturb it, and it never blocks: the deploy-lock
 //! check is a non-blocking probe (see `deploy::lock::is_locked`) that's
 //! released immediately if it happens to succeed.
@@ -17,7 +17,7 @@
 //! [`ROUTING_ENV_ALLOWLIST`] is a strict allowlist, not a blocklist: only
 //! the handful of known, non-secret routing/port keys are ever read out of
 //! an app's env map. Everything else is silently omitted, never just
-//! masked — there's no value in printing `SECRET_KEY: "***"` and pretending
+//! masked: there's no value in printing `SECRET_KEY: "***"` and pretending
 //! that's safe against a future key that looks like a secret but isn't on
 //! some hypothetical blocklist.
 
@@ -33,7 +33,7 @@ use crate::deploy::lock;
 use crate::supervisor::stats::{AppStats, ProcessStatus};
 
 /// Known non-secret routing/port keys an app's `ENV` file may carry.
-/// Strict allowlist — see module docs for why this isn't a blocklist.
+/// Strict allowlist: see module docs for why this isn't a blocklist.
 const ROUTING_ENV_ALLOWLIST: &[&str] = &[
     "PORT",
     "SOCKET",
@@ -59,7 +59,7 @@ struct StateDump {
 struct AppStateEntry {
     app: String,
     deploy_lock: LockState,
-    /// Allowlisted routing/port env vars only — see module docs.
+    /// Allowlisted routing/port env vars only: see module docs.
     routing: BTreeMap<String, String>,
     nginx: NginxState,
     workers: Vec<WorkerStateEntry>,
@@ -133,7 +133,7 @@ fn build_state_dump(paths: &RikuPaths) -> Result<StateDump> {
     })
 }
 
-/// Whether `{app}-{kind}-{ordinal}.toml` is still enabled — i.e. this worker
+/// Whether `{app}-{kind}-{ordinal}.toml` is still enabled, i.e. this worker
 /// is part of the app's current scale, not a leftover from a higher one.
 fn worker_config_exists(paths: &RikuPaths, app: &str, kind: &str, ordinal: u32) -> bool {
     paths
@@ -166,7 +166,7 @@ fn build_app_entry(
                 // "stopped" ghost row with nothing behind it to restart or
                 // inspect. Hide exactly that case: no worker config left AND not
                 // actually running. A *running* entry with no config is kept
-                // visible regardless — that combination shouldn't happen, and
+                // visible regardless: that combination shouldn't happen, and
                 // hiding it would bury a real inconsistency instead of surfacing it.
                 .filter(|p| {
                     p.status == ProcessStatus::Running
@@ -213,7 +213,7 @@ fn extract_routing_fields(env: &HashMap<String, String>) -> BTreeMap<String, Str
 
 /// Load `stats.json` (written periodically by the running supervisor) as
 /// `app -> AppStats`, or an empty map if it doesn't exist yet / fails to
-/// parse — a dump with no worker data is still useful for inspecting
+/// parse: a dump with no worker data is still useful for inspecting
 /// routing and lock state, so this never errors the whole command out.
 fn load_app_stats(paths: &RikuPaths) -> HashMap<String, AppStats> {
     let stats_file = paths.riku_root.join("stats.json");
@@ -226,7 +226,7 @@ fn load_app_stats(paths: &RikuPaths) -> HashMap<String, AppStats> {
     stats_vec.into_iter().map(|s| (s.app.clone(), s)).collect()
 }
 
-/// Approximate supervisor uptime from the PID file's mtime — written once,
+/// Approximate supervisor uptime from the PID file's mtime, written once,
 /// at startup, by `create_pid_file_with_lock`. This command never connects
 /// to the running supervisor process, so this is the closest available
 /// proxy for "when did it start" without one.

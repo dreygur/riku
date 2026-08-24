@@ -4,7 +4,7 @@
 //! `data_root/plugin-data/<plugin-name>/`, auto-created lazily on first use.
 //! This generalizes the addon seam's existing per-*instance*
 //! `RIKU_ADDON_DATA_PATH` (which stays as-is, unchanged) to a per-*plugin*
-//! directory available to every seam — it's net-new storage the plugin owns,
+//! directory available to every seam: it's net-new storage the plugin owns,
 //! not access to riku's own control-plane state (`RikuPaths`, ENV, worker
 //! TOML remain kernel-only, per `PLUGIN_PROTOCOL.md` §9).
 
@@ -14,7 +14,7 @@ use crate::config::RikuPaths;
 
 /// The scratch directory for `plugin_name`, created if it doesn't exist yet.
 /// Returns `None` (rather than failing the caller's dispatch) if creation
-/// fails — this is an additive convenience, never a hard requirement for a
+/// fails: this is an additive convenience, never a hard requirement for a
 /// plugin invocation to proceed.
 pub fn plugin_data_path(paths: &RikuPaths, plugin_name: &str) -> Option<PathBuf> {
     let dir = paths.data_root.join("plugin-data").join(plugin_name);

@@ -1,4 +1,4 @@
-//! Registered marketplaces — repository layer.
+//! Registered marketplaces: repository layer.
 //!
 //! `~/.riku/marketplaces.toml` records which marketplaces are registered; each
 //! is cloned to `~/.riku/marketplaces/<name>/`. Registering a marketplace lets

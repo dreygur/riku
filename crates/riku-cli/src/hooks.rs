@@ -17,10 +17,10 @@ pub fn cmd_hook_list(paths: &RikuPaths) -> Result<()> {
         display::note("  ~/.riku/plugins/");
         display::blank();
         display::note("Supported hook names:");
-        display::note("  riku-pre-deploy   — runs before deploy, abort on failure");
-        display::note("  riku-pre-build    — runs before build, abort on failure");
-        display::note("  riku-post-build   — runs after build, failure is a warning");
-        display::note("  riku-post-deploy  — runs after deploy, failure is a warning");
+        display::note("  riku-pre-deploy, runs before deploy, abort on failure");
+        display::note("  riku-pre-build, runs before build, abort on failure");
+        display::note("  riku-post-build, runs after build, failure is a warning");
+        display::note("  riku-post-deploy, runs after deploy, failure is a warning");
     } else {
         display::section("Installed Hook Plugins");
         for hook in hooks {

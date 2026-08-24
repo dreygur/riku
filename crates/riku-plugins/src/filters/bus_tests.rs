@@ -53,7 +53,7 @@ fn chain_runs_in_priority_order_each_seeing_previous_output() {
     let (_tmp, paths) = make_bus_paths();
 
     // "second" installed first / alphabetically first, but priority 5
-    // means it must run AFTER "first" (priority 1) — proves ordering
+    // means it must run AFTER "first" (priority 1): proves ordering
     // isn't filesystem or name order.
     write_filter_bundle(
             &paths.plugin_root.join("second"),

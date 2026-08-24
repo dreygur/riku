@@ -1,4 +1,4 @@
-//! Resilience tests — what happens when things go wrong.
+//! Resilience tests: what happens when things go wrong.
 //!
 //! Resource exhaustion, process crashes, and malformed configs: each case
 //! should fail in a contained way instead of taking the supervisor down.
@@ -112,7 +112,7 @@ PORT = "5000"
 working_dir = "/tmp"
 log_file = "/tmp/test.log"
 "#;
-        // Deserialize as a generic Value — it parses, but won't have expected keys
+        // Deserialize as a generic Value: it parses, but won't have expected keys
         let val: toml::Value = toml::from_str(missing_worker_section)?;
         assert!(
             val.get("worker").is_none(),
@@ -216,7 +216,7 @@ log_file = "/tmp/test.log"
         env::remove_var("RIKU_MAX_PROCESSES");
         env::remove_var("RIKU_MAX_CPU_SECONDS");
 
-        // Extreme values should be strings — parsing them is the caller's responsibility
+        // Extreme values should be strings: parsing them is the caller's responsibility
         env::set_var("RIKU_MAX_MEMORY_MB", "999999");
         env::set_var("RIKU_MAX_OPEN_FILES", "1000000");
         let mem: u64 = env::var("RIKU_MAX_MEMORY_MB")
@@ -225,7 +225,7 @@ log_file = "/tmp/test.log"
             .expect("should parse large number");
         assert_eq!(mem, 999999);
 
-        // Invalid (non-numeric) value — parsing should fail
+        // Invalid (non-numeric) value: parsing should fail
         env::set_var("RIKU_MAX_MEMORY_MB", "not_a_number");
         let result: std::result::Result<u64, _> = env::var("RIKU_MAX_MEMORY_MB").unwrap().parse();
         assert!(
@@ -429,7 +429,7 @@ log_file = "/tmp/test.log"
                             .push(format!("thread {}: write error: {}", i, e));
                         return;
                     }
-                    // Atomic rename — last writer wins, but no corruption
+                    // Atomic rename: last writer wins, but no corruption
                     if let Err(e) = fs::rename(&tmp, &*path) {
                         errors
                             .lock()
@@ -552,7 +552,7 @@ log_file = "/tmp/test.log"
         assert!(test_file.exists());
         assert_eq!(fs::read_to_string(&test_file)?, "test content");
 
-        // Overwrite with new content — simulates what would fail on full disk
+        // Overwrite with new content: simulates what would fail on full disk
         let result = fs::write(&test_file, "updated content");
         assert!(result.is_ok(), "Write to writable dir should succeed");
 
@@ -593,7 +593,7 @@ log_file = "/tmp/test.log"
 
         // Names with path traversal characters should not create files outside workers dir
         let traversal_attempt = "../../../etc/passwd";
-        // The filename would be "../../etc/passwd.web.1.toml" — this should either fail or
+        // The filename would be "../../etc/passwd.web.1.toml", this should either fail or
         // be contained within the workers_enabled directory
         let config_path = workers_enabled.join(format!("{}.web.1.toml", traversal_attempt));
         // Canonicalizing helps detect escapes
@@ -742,7 +742,7 @@ log_file = "/tmp/test.log"
 
         let reported_memory = parsed[0]["total_memory_bytes"].as_u64().unwrap();
         assert_eq!(reported_memory, used_bytes);
-        // Memory usage exceeds 90% of limit — this would trigger an alert in monitoring
+        // Memory usage exceeds 90% of limit: this would trigger an alert in monitoring
         assert!(
             (reported_memory as f64 / limit_bytes as f64) > 0.9,
             "Memory usage should be above 90% of limit"

@@ -35,7 +35,7 @@ pub(super) fn install(_write_paths: &[PathBuf], _allow_network: bool) -> std::io
     Ok(())
 }
 
-/// `PR_SET_NO_NEW_PRIVS` — stop the plugin gaining privileges via setuid/setgid
+/// `PR_SET_NO_NEW_PRIVS`: stop the plugin gaining privileges via setuid/setgid
 /// binaries, and satisfy Landlock's unprivileged precondition.
 #[cfg(target_os = "linux")]
 fn set_no_new_privs() -> std::io::Result<()> {

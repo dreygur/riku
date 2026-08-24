@@ -100,7 +100,7 @@ fn bring_up_loopback() -> io::Result<()> {
 /// Follows the standard safe `pivot_root(2)` recipe:
 /// 1. Make the mount namespace private (`MS_REC|MS_PRIVATE` on `/`) so
 ///    mount/unmount events here never propagate back to the host.
-/// 2. Bind-mount `root` onto itself so it is a mount point — `pivot_root`
+/// 2. Bind-mount `root` onto itself so it is a mount point, `pivot_root`
 ///    requires the new root to be a mount point, not just a directory.
 /// 3. Create `root/.riku_old_root`, pivot, `chdir` to `/`, then detach and
 ///    remove the old root so the host filesystem is unreachable.
@@ -144,7 +144,7 @@ fn run_signal_forwarding_shim(child: Pid) -> ! {
     INNER_PID.store(child.as_raw(), Ordering::SeqCst);
 
     // SAFETY: forward_signal performs only an atomic load and a kill()
-    // syscall — both async-signal-safe.
+    // syscall: both async-signal-safe.
     extern "C" fn forward_signal(sig: c_int) {
         let pid = INNER_PID.load(Ordering::SeqCst);
         if pid > 0 {

@@ -4,7 +4,7 @@
 //! isolated (no shared mutable global state) and use `tempfile::TempDir` for
 //! any filesystem operations.
 //!
-//! NOTE: The integration test binary is standalone (the crate has no `lib`
+//! The integration test binary is standalone (the crate has no `lib`
 //! target), so all helpers are reimplemented here rather than imported from
 //! the crate.
 
@@ -14,7 +14,7 @@ mod tests {
     use std::path::{Path, PathBuf};
     use tempfile::TempDir;
 
-    // ── helpers ──────────────────────────────────────────────────────────────
+    // helpers
 
     /// Create the standard directory tree under `tmp/.riku/`.
     fn setup_riku_env() -> (TempDir, PathBuf) {
@@ -84,7 +84,7 @@ mod tests {
         }
     }
 
-    // ── 1. env_var_isolation ─────────────────────────────────────────────────
+    // 1. env_var_isolation
 
     /// Regression: env vars set in a child thread are process-global and can
     /// bleed into other tests running in the same process.  This test
@@ -115,7 +115,7 @@ mod tests {
         );
     }
 
-    // ── 2. plugin_pre_deploy_abort ───────────────────────────────────────────
+    // 2. plugin_pre_deploy_abort
 
     /// Regression for `test_pre_deploy_hook_failure_aborts`: a `riku-pre-deploy`
     /// script that exits 1 must cause the hook runner to report failure.
@@ -151,7 +151,7 @@ mod tests {
         );
     }
 
-    // ── 3. nginx_config_cleanup ──────────────────────────────────────────────
+    // 3. nginx_config_cleanup
 
     /// Regression: after a config file is removed (simulating `remove_nginx_config`),
     /// the `.conf` file must no longer exist on disk.
@@ -184,7 +184,7 @@ mod tests {
         );
     }
 
-    // ── 4. app_name_rejects_path_traversal ───────────────────────────────────
+    // 4. app_name_rejects_path_traversal
 
     /// Security regression: `validate_app_name` must reject names that contain
     /// `..` to prevent path-traversal attacks on the filesystem.
@@ -209,7 +209,7 @@ mod tests {
         }
     }
 
-    // ── 5. app_name_rejects_semicolons ───────────────────────────────────────
+    // 5. app_name_rejects_semicolons
 
     /// Security regression: `validate_app_name` (which uses a character
     /// whitelist) must never let shell metacharacters through.  The function
@@ -244,7 +244,7 @@ mod tests {
         }
     }
 
-    // ── 6. worker_config_survives_reload ─────────────────────────────────────
+    // 6. worker_config_survives_reload
 
     /// Regression: a worker config written to TOML and read back must preserve
     /// all fields unchanged (TOML round-trip).
@@ -302,7 +302,7 @@ max_restarts = 5
         assert_eq!(options["max_restarts"].as_integer().unwrap(), 5);
     }
 
-    // ── extra: cron expression regressions ───────────────────────────────────
+    // extra: cron expression regressions
 
     /// Regression: validate_cron_expression (reimplemented inline) must accept
     /// valid expressions and reject those with wrong field counts or out-of-range
@@ -359,7 +359,7 @@ max_restarts = 5
         );
     }
 
-    // ── extra: worker config file naming convention ───────────────────────────
+    // extra: worker config file naming convention
 
     /// Regression: worker config files must follow the `<app>.<kind>.<ordinal>.toml`
     /// naming convention so the supervisor can glob them reliably.
@@ -397,7 +397,7 @@ max_restarts = 5
         );
     }
 
-    // ── extra: plugin timeout env var parsing ─────────────────────────────────
+    // extra: plugin timeout env var parsing
 
     /// Regression: `RIKU_PLUGIN_TIMEOUT` must fall back to 300 s when unset or
     /// non-numeric.  Verified at the integration level by checking the env var

@@ -26,7 +26,7 @@ impl ProcessManager {
 
         // Generations under active probing are owned exclusively by the
         // orchestrator (`reconcile_generations` + the probe thread's circuit
-        // breaker) — skip them here so the two restart paths never race.
+        // breaker): skip them here so the two restart paths never race.
         let probing_keys: std::collections::HashSet<String> = self
             .generations
             .values()
@@ -108,7 +108,7 @@ impl ProcessManager {
     }
 
     /// Second pass: perform health checks (kept separate from the scan above
-    /// to avoid borrow checker issues — this needs `&mut self` per process
+    /// to avoid borrow checker issues: this needs `&mut self` per process
     /// while the scan still holds an iterator over `self.processes`).
     fn run_health_checks(
         &mut self,
@@ -163,7 +163,7 @@ impl ProcessManager {
 
         for process_id in to_restart {
             if let Some(id) = process_id.strip_prefix("__remove__") {
-                // Fire app.failed before removing — this is the one case
+                // Fire app.failed before removing: this is the one case
                 // restart_process() never reaches, and it's the case an
                 // admin most needs to hear about (riku has given up, not
                 // just self-healed).
@@ -291,7 +291,7 @@ impl ProcessManager {
 ///
 /// Dispatched on its own thread: `EventBus::emit` runs each subscriber
 /// synchronously with its own timeout, and this fires from the supervisor's
-/// single-threaded 1-second monitoring tick — a slow or unreachable
+/// single-threaded 1-second monitoring tick: a slow or unreachable
 /// notification target must never delay health checks for every other app.
 fn emit_app_restarted(app: String, instance: String, exit_code: Option<i32>, restart_count: u32) {
     std::thread::spawn(move || {
@@ -316,7 +316,7 @@ fn emit_app_restarted(app: String, instance: String, exit_code: Option<i32>, res
 
 /// Fire the `app.failed` lifecycle event for a process that crashed enough
 /// times to hit `max_restarts` and is being permanently removed from
-/// supervision — the case `emit_app_restarted` never covers, since
+/// supervision: the case `emit_app_restarted` never covers, since
 /// `restart_process()` (and therefore that emit call) is never reached once
 /// riku gives up.
 fn emit_app_failed(

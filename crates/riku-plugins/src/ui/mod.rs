@@ -1,4 +1,4 @@
-//! UI panel seam — plugin-contributed dashboard panels (`PLUGIN_PROTOCOL.md` §7.5).
+//! UI panel seam: plugin-contributed dashboard panels (`PLUGIN_PROTOCOL.md` §7.5).
 
 mod dispatch;
 

@@ -136,7 +136,7 @@ impl ProcessManager {
 
                     // Join the cgroup using our own (real, top-level) PID.
                     // This is the same PID whether we're about to exec the
-                    // worker directly or exec into `__ns-shim` — the cgroup
+                    // worker directly or exec into `__ns-shim`: the cgroup
                     // membership is inherited across both the shim's own
                     // fork and its exec of the real worker.
                     if let Some(cgroup) = &cgroup_for_child {
@@ -159,7 +159,7 @@ impl ProcessManager {
         let mut child = cmd.spawn()?;
 
         // Take the pipes now (must happen before `child` is moved into
-        // SpawnedProcess below), but don't start the reader threads yet —
+        // SpawnedProcess below), but don't start the reader threads yet,
         // they must only run once the wrapper construction below has
         // actually succeeded, otherwise a construction failure leaves
         // threads reading from a child we're about to SIGKILL.
@@ -264,11 +264,11 @@ const ROTATION_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 /// rotation:
 ///
 /// - **copytruncate** (same inode, file truncated to 0 in place): already
-///   handled for free — `file` was opened with `O_APPEND`, so the kernel
+///   handled for free: `file` was opened with `O_APPEND`, so the kernel
 ///   seeks to the file's *current* end before every `write()`, which after
 ///   a truncate is simply offset 0. No detection needed, no hole, no panic.
 /// - **rename + recreate** (the conventional `logrotate` default): the path
-///   now refers to a *different* inode than the one `file` has open — `file`
+///   now refers to a *different* inode than the one `file` has open, `file`
 ///   would otherwise keep appending into the renamed-away copy, invisible
 ///   to anything tailing the original path. Detected here by periodically
 ///   comparing `fstat(file)` against `stat(log_path)`; on a mismatch, the
@@ -283,7 +283,7 @@ const ROTATION_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 /// If `log_path` now refers to a different inode than `file` has open,
 /// reopen it in append mode and swap `*file` for the new handle. A no-op
 /// when nothing has rotated, when the path is temporarily missing
-/// (deleted but not yet recreated — kept writing through the existing,
+/// (deleted but not yet recreated: kept writing through the existing,
 /// still-valid-just-unlinked fd until the next check), or when reopening
 /// itself fails (logged, old handle kept so lines keep landing somewhere
 /// rather than being dropped entirely).
@@ -312,7 +312,7 @@ fn reopen_if_rotated(log_path: &std::path::Path, file: &mut File, stream_name: &
         }
         Err(e) => {
             tracing::warn!(
-                "Failed to reopen rotated {} log {}: {} — continuing to write to the old file handle",
+                "Failed to reopen rotated {} log {}: {}, continuing to write to the old file handle",
                 stream_name,
                 log_path.display(),
                 e
@@ -326,11 +326,11 @@ fn reopen_if_rotated(log_path: &std::path::Path, file: &mut File, stream_name: &
 /// rotation:
 ///
 /// - **copytruncate** (same inode, file truncated to 0 in place): already
-///   handled for free — `file` was opened with `O_APPEND`, so the kernel
+///   handled for free: `file` was opened with `O_APPEND`, so the kernel
 ///   seeks to the file's *current* end before every `write()`, which after
 ///   a truncate is simply offset 0. No detection needed, no hole, no panic.
 /// - **rename + recreate** (the conventional `logrotate` default): the path
-///   now refers to a *different* inode than the one `file` has open —
+///   now refers to a *different* inode than the one `file` has open,
 ///   detected by [`reopen_if_rotated`], called at most once per
 ///   [`ROTATION_CHECK_INTERVAL`] so the check cost stays constant
 ///   regardless of log volume.

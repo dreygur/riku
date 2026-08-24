@@ -58,7 +58,7 @@ impl SeamType {
 fn runtime_script(name: &str) -> String {
     format!(
         r#"#!/bin/sh
-# {name} — Riku runtime plugin (Plugin Protocol v1).
+# {name}: Riku runtime plugin (Plugin Protocol v1).
 # Verbs: detect | build | env | start. Context in RIKU_APP, RIKU_APP_PATH, …
 set -eu
 
@@ -90,7 +90,7 @@ esac
 fn addon_script(name: &str) -> String {
     format!(
         r#"#!/bin/sh
-# {name} — Riku addon (Plugin Protocol v1).
+# {name}: Riku addon (Plugin Protocol v1).
 # Verbs receive a JSON request on stdin and emit a JSON response on stdout.
 # Context: RIKU_ADDON_INSTANCE, RIKU_ADDON_DATA_PATH, RIKU_APP (bind/unbind).
 set -eu
@@ -122,7 +122,7 @@ esac
 fn notifier_script(name: &str) -> String {
     format!(
         r#"#!/bin/sh
-# {name} — Riku notifier (Plugin Protocol v1 event subscriber).
+# {name}: Riku notifier (Plugin Protocol v1 event subscriber).
 # Invoked as `on_event` with one event JSON line on stdin per subscribed event.
 set -eu
 

@@ -1,4 +1,4 @@
-//! Lifecycle event schema and bus — Plugin Protocol v1 (`PLUGIN_PROTOCOL.md` §7).
+//! Lifecycle event schema and bus: Plugin Protocol v1 (`PLUGIN_PROTOCOL.md` §7).
 //!
 //! This module defines the **schema** ([`EventName`], [`EventEnvelope`]) and
 //! re-exports the [`EventBus`], which delivers events to subscribed plugins.
@@ -55,7 +55,7 @@ impl EventName {
     }
 }
 
-/// The serialized event passed to subscribers — the envelope from
+/// The serialized event passed to subscribers: the envelope from
 /// `PLUGIN_PROTOCOL.md` §7.
 #[derive(Debug, Clone, Serialize)]
 pub struct EventEnvelope {
@@ -72,7 +72,7 @@ pub struct EventEnvelope {
     /// Event-specific payload.
     pub data: serde_json::Value,
     /// `None` for kernel-emitted events. `Some(plugin_name)` for a
-    /// `plugin.custom.*` event — always kernel-set from the emitting
+    /// `plugin.custom.*` event: always kernel-set from the emitting
     /// plugin's own manifest, never a value the plugin could supply itself,
     /// so a subscriber can trust this field to tell kernel-truth from
     /// plugin-claimed (`PLUGIN_PROTOCOL.md` §7.4).
@@ -94,7 +94,7 @@ impl EventEnvelope {
     }
 
     /// Build a plugin-emitted envelope. `name` must already be validated as
-    /// `plugin.custom.*` by the caller (`riku plugin-emit` — §7.4); this
+    /// `plugin.custom.*` by the caller (`riku plugin-emit`: §7.4); this
     /// constructor doesn't re-check it, since it's the one place
     /// `source_plugin` is ever set to `Some`, and that's what subscribers
     /// rely on to distinguish it from a kernel event.
@@ -153,7 +153,7 @@ mod tests {
             serde_json::json!({ "runtime": "node" }),
         );
         let line = env.to_json_line().unwrap();
-        // One line, no embedded newlines — it is delivered as a single line.
+        // One line, no embedded newlines, it is delivered as a single line.
         assert!(!line.contains('\n'));
 
         let parsed: serde_json::Value = serde_json::from_str(&line).unwrap();

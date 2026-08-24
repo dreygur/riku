@@ -1,7 +1,7 @@
 //! Per-app release history for `riku rollback` (repository layer).
 //!
 //! Each successful deploy appends `"<unix_ts> <sha>"` to
-//! `~/.riku/releases/<app>.log`. Rollback redeploys a prior SHA — git-native,
+//! `~/.riku/releases/<app>.log`. Rollback redeploys a prior SHA, git-native,
 //! fitting Riku's existing model where `apps/<app>` is a git working tree.
 
 use std::io::Write;
@@ -74,7 +74,7 @@ impl<'a> ReleaseLog<'a> {
             .collect()
     }
 
-    /// The most recent SHA different from the current one — the default
+    /// The most recent SHA different from the current one, the default
     /// rollback target.
     pub fn previous(&self, app: &str) -> Option<String> {
         let history = self.list(app);
@@ -106,7 +106,7 @@ mod tests {
 
         log.record("app", "aaa").unwrap();
         log.record("app", "bbb").unwrap();
-        log.record("app", "bbb").unwrap(); // duplicate — ignored
+        log.record("app", "bbb").unwrap(); // duplicate, ignored
         assert_eq!(log.list("app").len(), 2);
         // Current is bbb; previous distinct is aaa.
         assert_eq!(log.previous("app").as_deref(), Some("aaa"));

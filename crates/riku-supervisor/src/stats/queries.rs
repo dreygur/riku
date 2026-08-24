@@ -93,7 +93,7 @@ impl StatsManager {
 
     /// Remove stats for every process belonging to `app`. For use when the
     /// app itself is gone (e.g. `riku destroy`), as opposed to merely
-    /// stopped — a stopped app's stats are kept on purpose so the UI still
+    /// stopped: a stopped app's stats are kept on purpose so the UI still
     /// shows a `[STOPPED]` row until the next deploy/restart.
     pub fn remove_app(&mut self, app: &str) {
         let process_ids: Vec<String> = self

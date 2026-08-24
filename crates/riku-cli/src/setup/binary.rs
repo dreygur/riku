@@ -74,12 +74,12 @@ fn try_add_to_shell_config() -> bool {
     let mut added = false;
 
     if let Ok(home) = env::var("HOME") {
-        // .profile — sourced for login shells and non-interactive SSH
+        // .profile: sourced for login shells and non-interactive SSH
         // command execution. This is the critical one for remote usage.
         let profile = PathBuf::from(&home).join(".profile");
         added |= append_once(&profile, line, true);
 
-        // .bashrc / .zshrc — sourced for interactive terminal sessions.
+        // .bashrc / .zshrc: sourced for interactive terminal sessions.
         for config in &[".bashrc", ".zshrc"] {
             let config_path = PathBuf::from(&home).join(config);
             append_once(&config_path, line, false);

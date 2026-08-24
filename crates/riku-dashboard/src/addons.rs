@@ -1,11 +1,11 @@
-//! Addon (managed datastore) endpoints — Plugin Protocol v1 addon seam.
+//! Addon (managed datastore) endpoints: Plugin Protocol v1 addon seam.
 //!
-//! - `GET    /api/addons` — provisioned instances (read gate).
-//! - `POST   /api/addons` — `{plugin, instance}` provision (token gate).
-//! - `POST   /api/addons/:instance/bind`   — `{app}` → injected env keys.
-//! - `POST   /api/addons/:instance/unbind` — `{app}`.
-//! - `POST   /api/addons/:instance/backup` — `{artifact}`.
-//! - `DELETE /api/addons/:instance` — deprovision (guarded by the service).
+//! - `GET    /api/addons`: provisioned instances (read gate).
+//! - `POST   /api/addons`: `{plugin, instance}` provision (token gate).
+//! - `POST   /api/addons/:instance/bind`, `{app}` → injected env keys.
+//! - `POST   /api/addons/:instance/unbind`, `{app}`.
+//! - `POST   /api/addons/:instance/backup`, `{artifact}`.
+//! - `DELETE /api/addons/:instance`, deprovision (guarded by the service).
 //!
 //! All of it runs through [`AddonService`], the same logic the CLI uses.
 

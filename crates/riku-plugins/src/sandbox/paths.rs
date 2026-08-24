@@ -2,7 +2,7 @@
 //!
 //! A manifest declares write targets symbolically (`app_dir`, `data_dir`,
 //! `env_dir`) rather than as absolute paths, so the manifest stays portable and
-//! the kernel — not the plugin — decides what each name maps to. This module is
+//! the kernel: not the plugin, decides what each name maps to. This module is
 //! the single source of truth for that mapping.
 
 use std::path::PathBuf;
@@ -29,7 +29,7 @@ pub(super) enum Resolved {
     /// The target name is valid but not available in this context (e.g.
     /// `data_dir` requested by a non-addon). Granted nothing; not an error.
     Unavailable,
-    /// The target name is not part of the vocabulary — a manifest typo or a
+    /// The target name is not part of the vocabulary: a manifest typo or a
     /// privilege the kernel will not grant.
     Unknown,
 }

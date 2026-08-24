@@ -23,7 +23,7 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
         Commands::Rollback { .. } => None,
         Commands::Container { .. } => Some("container".to_string()),
 
-        // Plugin/Hook commands — don't recursively check for plugins
+        // Plugin/Hook commands: don't recursively check for plugins
         Commands::Plugin(_) => None,
         Commands::Plugins(_) => None,
         Commands::Hook(_) => None,

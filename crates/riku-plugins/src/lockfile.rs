@@ -1,8 +1,8 @@
-//! Plugin lockfile — repository layer (`PLUGIN_PROTOCOL.md` / ROADMAP E2).
+//! Plugin lockfile: repository layer (`PLUGIN_PROTOCOL.md` / ROADMAP E2).
 //!
 //! `~/.riku/riku-plugins.lock` records every installed bundle: its resolved
 //! name, the source it came from, the version, and the verified checksum. This
-//! pins exactly what executable code is on the host — no silent auto-update.
+//! pins exactly what executable code is on the host, no silent auto-update.
 
 use std::path::PathBuf;
 
@@ -17,7 +17,7 @@ pub struct LockEntry {
     pub name: String,
     pub source: String,
     pub version: String,
-    /// The computed `sha256:` digest of the installed entry — pins the exact
+    /// The computed `sha256:` digest of the installed entry, pins the exact
     /// bytes on disk for later tamper detection, whether or not the author
     /// attested it.
     #[serde(default)]

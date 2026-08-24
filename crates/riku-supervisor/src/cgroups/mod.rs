@@ -60,7 +60,7 @@ pub struct WorkerCgroup {
 
 /// Verify the cgroup v2 root riku provisions worker cgroups under actually
 /// exists and is writable, by creating and removing a throwaway probe
-/// directory under it — the same `create_dir_all` + write pattern
+/// directory under it: the same `create_dir_all` + write pattern
 /// `provision` uses for real workers.
 ///
 /// Call this once at supervisor startup so an unmounted cgroup v2
@@ -89,7 +89,7 @@ pub fn startup_diagnostic(err: &anyhow::Error) -> String {
          \x20 status    : FAILED\n\
          \x20 detail    : {err}\n\
          \x20 impact    : any worker with `isolation` enabled in its config will fail to\n\
-         \x20             start the moment it's deployed — the failure surfaces deep in\n\
+         \x20             start the moment it's deployed, the failure surfaces deep in\n\
          \x20             spawn_process, not here, unless this check catches it first\n\
          \x20 remedy    : mount cgroup v2 at /sys/fs/cgroup (most modern distros do this by\n\
          \x20             default) and ensure the riku user has write access to {root},\n\
@@ -123,7 +123,7 @@ impl WorkerCgroup {
 
     /// Move the *calling* process into this cgroup by writing its own PID
     /// to `cgroup.procs`. Must be called from within the worker's own
-    /// `pre_exec` hook (after fork, before exec) — joining from there,
+    /// `pre_exec` hook (after fork, before exec), joining from there,
     /// using the worker's real top-level PID, avoids the race that would
     /// exist if the parent tried to add the PID after `Command::spawn()`
     /// returns (by then the worker may already have started running
@@ -144,7 +144,7 @@ impl WorkerCgroup {
     }
 
     /// Remove the cgroup directory. Must be called after the worker has
-    /// exited — the kernel refuses to rmdir a non-empty cgroup.
+    /// exited: the kernel refuses to rmdir a non-empty cgroup.
     pub fn cleanup(&self) -> Result<()> {
         match fs::remove_dir(&self.path) {
             Ok(()) => Ok(()),

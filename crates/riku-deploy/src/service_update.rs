@@ -1,7 +1,7 @@
 //! Single-service image update for compose-based apps.
 //!
 //! Used by the supervisor's periodic image-watch check to pull and recreate
-//! one compose service without running a full [`crate::do_deploy`] — no
+//! one compose service without running a full [`crate::do_deploy`], no
 //! hooks, no Procfile parsing, no worker respawn, just the one container.
 
 use anyhow::{anyhow, Result};

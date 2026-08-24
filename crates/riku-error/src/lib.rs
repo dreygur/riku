@@ -37,19 +37,19 @@ impl DeployError {
     /// the plugin name or shell command that was running; `cause` is the
     /// specific classification from
     /// [`crate::plugins::executor::classify_resource_exit`] (e.g. "killed
-    /// by SIGKILL — the kernel's OOM killer...").
+    /// by SIGKILL: the kernel's OOM killer...").
     pub fn resource_exhausted(stage: &str, command: &str, cause: &str) -> Self {
         DeployError::ResourceExhausted(format!(
-            "riku deploy halted — resource limit exceeded\n\
+            "riku deploy halted: resource limit exceeded\n\
              \x20 stage   : {stage}\n\
              \x20 command : {command}\n\
              \x20 cause   : {cause}\n\
-             \x20 impact  : the {stage} step was halted to protect the host — this is not a\n\
+             \x20 impact  : the {stage} step was halted to protect the host, this is not a\n\
              \x20           bug in your application code, it ran past an enforced resource\n\
              \x20           ceiling\n\
-             \x20 remedy  : raise the relevant limit for this deploy — RIKU_MAX_MEMORY_MB\n\
+             \x20 remedy  : raise the relevant limit for this deploy, RIKU_MAX_MEMORY_MB\n\
              \x20           (default 512) for memory, RIKU_MAX_CPU_SECONDS (default 3600) for\n\
-             \x20           CPU time — or reduce the {stage} step's own memory/CPU footprint",
+             \x20           CPU time: or reduce the {stage} step's own memory/CPU footprint",
             stage = stage,
             command = command,
             cause = cause,
@@ -66,7 +66,7 @@ mod tests {
         let err = DeployError::resource_exhausted(
             "build",
             "node",
-            "killed by SIGKILL — the kernel's OOM killer terminated it directly",
+            "killed by SIGKILL: the kernel's OOM killer terminated it directly",
         );
         let message = err.to_string();
 

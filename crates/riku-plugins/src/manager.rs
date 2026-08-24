@@ -1,4 +1,4 @@
-//! Plugin manager — discovers and runs lifecycle hook plugins.
+//! Plugin manager: discovers and runs lifecycle hook plugins.
 
 use anyhow::Result;
 use std::fs;
@@ -65,7 +65,7 @@ impl<'a> PluginManager<'a> {
             tracing::debug!(
                 hook = ctx.hook.hook_name(),
                 plugin = plugin_name,
-                "No plugin found for hook — skipping"
+                "No plugin found for hook, skipping"
             );
             return Ok(false);
         }
@@ -97,7 +97,7 @@ impl<'a> PluginManager<'a> {
                 .envs(&env)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
-                // Own process group so a timeout can killpg() the whole tree —
+                // Own process group so a timeout can killpg() the whole tree,
                 // hooks are arbitrary scripts that may background work.
                 .process_group(0),
         )

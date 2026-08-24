@@ -18,7 +18,7 @@ impl ProcessManager {
 
     /// SIGTERM, wait up to the process's configured `grace_period`, then
     /// SIGKILL if it's still alive. Takes an already-removed process so it
-    /// can run on its own thread without holding `&mut self` —
+    /// can run on its own thread without holding `&mut self`,
     /// `stop_all_processes` parallelizes this across every managed process.
     fn stop_owned_process(process_id: &str, process: &mut super::SpawnedProcess) -> Result<()> {
         tracing::info!("Stopping process: {} (PID: {})", process_id, process.pid);
@@ -72,7 +72,7 @@ impl ProcessManager {
     ///
     /// Each process is stopped on its own thread so total shutdown time is
     /// bounded by the *slowest* process's grace_period, not the sum of all
-    /// of them — stopping N processes sequentially on the single-threaded
+    /// of them: stopping N processes sequentially on the single-threaded
     /// supervisor shutdown path would otherwise serialize N grace-period
     /// waits.
     pub fn stop_all_processes(&mut self) -> Result<()> {

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::config::RikuPaths;
 use crate::util::{echo, exit_if_invalid, parse_settings};
 
-/// Scale workers — parse SCALING file, compute deltas, deploy.
+/// Scale workers: parse SCALING file, compute deltas, deploy.
 pub fn cmd_ps_scale(paths: &RikuPaths, app: &str, settings: &[String]) -> Result<()> {
     let app = exit_if_invalid(app, &paths.app_root)?;
 

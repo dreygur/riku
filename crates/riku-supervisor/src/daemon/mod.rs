@@ -1,4 +1,4 @@
-//! Supervisor daemon — owns the `Supervisor` struct and its main event loop.
+//! Supervisor daemon: owns the `Supervisor` struct and its main event loop.
 //!
 //! Monitors `workers-enabled/` for TOML config changes, spawns/restarts processes,
 //! drives log rotation, cron scheduling, and the periodic stats writer.
@@ -92,7 +92,7 @@ impl Supervisor {
         }
 
         // Async, non-blocking SIGHUP listener (config hot-reload trigger).
-        // Runs on its own dedicated thread/runtime — never touches this
+        // Runs on its own dedicated thread/runtime: never touches this
         // (synchronous) main loop's thread directly, just increments
         // RELOAD_COUNTER, which the loop below already polls every
         // iteration regardless of where the increment came from.
@@ -187,7 +187,7 @@ impl Supervisor {
     }
 
     /// Set up the filesystem watcher on `config_dir`. The returned watcher
-    /// must be kept alive by the caller for as long as `rx` is read from —
+    /// must be kept alive by the caller for as long as `rx` is read from,
     /// dropping it stops the watch.
     #[allow(clippy::type_complexity)]
     fn watch_config_dir(
@@ -214,7 +214,7 @@ impl Supervisor {
     /// timeout tick, runs the periodic maintenance sweep. Runs until a
     /// shutdown signal (SIGTERM/SIGINT) is observed. A watcher-reported
     /// error, or a failure handling a config file event, aborts the loop
-    /// and propagates — matching the previous inline behavior where either
+    /// and propagates: matching the previous inline behavior where either
     /// would exit `run()` entirely rather than being treated as recoverable.
     fn run_event_loop(&mut self, rx: &mpsc::Receiver<notify::Result<notify::Event>>) -> Result<()> {
         loop {
@@ -262,7 +262,7 @@ impl Supervisor {
             );
             // reload_all_configs() diffs current worker TOML manifests
             // against `watched_configs` (riku's live process tree) and
-            // only touches what's new, modified, or removed —
+            // only touches what's new, modified, or removed,
             // unchanged workers are never stopped or restarted.
             if let Err(e) = self.reload_all_configs() {
                 return Err(e);
@@ -281,7 +281,7 @@ impl Supervisor {
     /// Runs on every event-loop timeout tick (i.e. no config file event in
     /// the last second): process health, canary reconciliation, log
     /// rotation, stats writing, cron, and watched-image checks, each gated
-    /// on its own interval. Every failure here is logged and swallowed —
+    /// on its own interval. Every failure here is logged and swallowed,
     /// none of these should ever be able to take the whole daemon down.
     fn run_periodic_maintenance(&mut self) {
         if let Err(e) = self.process_manager.check_processes() {
@@ -370,7 +370,7 @@ impl Supervisor {
 
     /// Clean shutdown: stop the health server, wait for in-flight cron jobs,
     /// stop every managed process, and release the PID file. Only reached
-    /// when the event loop exits via a shutdown signal — an error exiting
+    /// when the event loop exits via a shutdown signal, an error exiting
     /// the loop skips straight to returning that error instead.
     fn shutdown(&mut self) -> Result<()> {
         tracing::info!("Shutting down health server...");

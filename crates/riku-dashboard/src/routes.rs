@@ -95,7 +95,7 @@ async fn api_state(
     }
 }
 
-/// GET /api/apps/:app/releases — recorded deploy history (for the rollback UI).
+/// GET /api/apps/:app/releases, recorded deploy history (for the rollback UI).
 async fn api_releases(
     State(state): State<DashboardState>,
     headers: HeaderMap,
@@ -144,7 +144,7 @@ pub(crate) fn authorize(
 
 fn host_is_loopback(headers: &HeaderMap) -> bool {
     let Some(host) = headers.get(header::HOST).and_then(|v| v.to_str().ok()) else {
-        // No Host header (e.g. HTTP/1.0) — treat as local.
+        // No Host header (e.g. HTTP/1.0): treat as local.
         return true;
     };
     let hostname = host.rsplit_once(':').map(|(h, _)| h).unwrap_or(host);

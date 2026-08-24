@@ -5,13 +5,13 @@ use clap::{Parser, Subcommand};
 use super::cmds::{AddonCmd, AppsCmd, ConfigCmd, HookCmd, PluginCmd, PluginsCmd, StatsCmd};
 use super::container::ContainerSubCmd;
 
-/// riku — the smallest PaaS you've ever seen (Rust edition)
+/// riku: the smallest PaaS you've ever seen (Rust edition)
 #[derive(Parser, Debug)]
 #[command(
     name = "riku",
     version = "3.0.0",
-    about = "riku — the smallest PaaS you've ever seen (Rust edition)",
-    long_about = "riku is a single-binary micro-PaaS that provides Heroku-like git push deployments.\nManage apps, config, processes, and plugins — all from one tool."
+    about = "riku: the smallest PaaS you've ever seen (Rust edition)",
+    long_about = "riku is a single-binary micro-PaaS that provides Heroku-like git push deployments.\nManage apps, config, processes, and plugins, all from one tool."
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -254,7 +254,7 @@ pub enum Commands {
 
     /// Download and install bundled plugins to ~/.riku/plugins/ (runtimes
     /// like node/python, and first-party bundles like the riku-notify
-    /// event subscriber — not installed by default, opt in with --plugins)
+    /// event subscriber: not installed by default, opt in with --plugins)
     #[command(
         name = "install-plugins",
         after_help = "Examples:\n  riku install-plugins\n  riku install-plugins --plugins node,python\n  riku install-plugins --plugins riku-notify"
@@ -266,14 +266,14 @@ pub enum Commands {
     },
 
     /// Fire a custom plugin.custom.* event (called from within a plugin's
-    /// own script, not by hand) — requires [events] emit = true in the
+    /// own script, not by hand), requires [events] emit = true in the
     /// calling plugin's manifest
     #[command(
         name = "plugin-emit",
         after_help = "Examples:\n  riku plugin-emit plugin.custom.backup-done --data '{\"ok\":true}'\n  riku plugin-emit plugin.custom.backup-done --data '{}' --app myapp"
     )]
     PluginEmit {
-        /// Event name — must start with plugin.custom.
+        /// Event name: must start with plugin.custom.
         event_name: String,
         /// JSON payload for the event's `data` field
         #[arg(long)]
@@ -344,7 +344,7 @@ pub enum Commands {
         args: Vec<String>,
     },
 
-    /// Namespace-isolation shim (internal — exec'd by the supervisor, never
+    /// Namespace-isolation shim (internal: exec'd by the supervisor, never
     /// run directly). Reads `RIKU_NS_ROOT` / `RIKU_NS_CMD` from its
     /// environment, sets up the worker's mount/network/PID namespaces, and
     /// execs the real worker command inside them.
@@ -355,18 +355,18 @@ pub enum Commands {
     /// `Command::spawn()` has already returned: `pre_exec` runs before the
     /// CLOEXEC self-pipe `Command` uses to detect successful `execve`
     /// closes, so forking again in there and never exec'ing in the original
-    /// process — which the old implementation did, to become a
-    /// signal-forwarding shim — left `Command::spawn()` blocked on that pipe
+    /// process: which the old implementation did, to become a
+    /// signal-forwarding shim: left `Command::spawn()` blocked on that pipe
     /// for the worker's entire lifetime, freezing the whole supervisor.
     #[command(hide = true, name = "__ns-shim")]
     NsShim,
 
-    /// Dump the supervisor's state matrix as JSON (internal — operator
+    /// Dump the supervisor's state matrix as JSON (internal, operator
     /// diagnostics). Reads on-disk state only (`stats.json`, app `ENV`
     /// files, nginx configs, deploy lock files); never connects to the
     /// running supervisor process and never blocks. App env vars are
     /// strictly allowlisted to known routing/port keys before being
-    /// included — secrets never appear in the output.
+    /// included: secrets never appear in the output.
     #[command(hide = true, name = "__dump-state")]
     DumpState,
 }

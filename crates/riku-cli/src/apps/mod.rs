@@ -1,15 +1,15 @@
 //! CLI handlers for application management.
 //!
 //! This module is split into focused sub-modules:
-//! - `list`    — app listing
-//! - `create`  — app creation
-//! - `info`    — app details
-//! - `config`  — environment variable management
-//! - `deploy`  — deployment from paths and bare repos
-//! - `process` — process scaling and status (ps commands)
-//! - `logs`    — log tailing
-//! - `stats`   — resource usage statistics
-//! - `control` — run, restart, stop, update, supervisor, hot-reload
+//! - `list`: app listing
+//! - `create`: app creation
+//! - `info`: app details
+//! - `config`: environment variable management
+//! - `deploy`: deployment from paths and bare repos
+//! - `process`: process scaling and status (ps commands)
+//! - `logs`: log tailing
+//! - `stats`: resource usage statistics
+//! - `control`: run, restart, stop, update, supervisor, hot-reload
 
 pub mod config;
 pub mod control;

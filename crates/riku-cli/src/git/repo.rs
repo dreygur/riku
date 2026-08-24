@@ -56,13 +56,13 @@ pub fn ensure_repo_symlink(paths: &RikuPaths, app: &str) -> Result<()> {
                 // Remove the old symlink
                 fs::remove_file(&riku_repo)?;
             } else if meta.file_type().is_dir() {
-                // Refuse to remove a real directory — that would destroy data.
+                // Refuse to remove a real directory: that would destroy data.
                 return Err(anyhow::anyhow!(
                     "Repo path '{}' is a real directory, not a symlink; refusing to remove it",
                     riku_repo.display()
                 ));
             } else {
-                // Regular file at the repo path — remove it.
+                // Regular file at the repo path: remove it.
                 fs::remove_file(&riku_repo)?;
             }
         }
@@ -102,7 +102,7 @@ pub fn setup_post_receive_hook(repo_path: &Path, _app: &str) -> Result<()> {
 ///
 /// Runs `git archive` and `tar` directly with argument vectors (no shell), so
 /// neither `app` nor `bare_repo` can inject shell metacharacters into the
-/// extraction command — `app` only ever reaches a path join, never a string
+/// extraction command: `app` only ever reaches a path join, never a string
 /// interpolated into a command line.
 pub fn extract_bare_repo_to_app(bare_repo: &Path, app: &str, paths: &RikuPaths) -> Result<()> {
     let app_dir = paths.app_root.join(app);

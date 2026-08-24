@@ -1,8 +1,8 @@
 //! System endpoints: diagnostics and app backup/restore.
 //!
-//! - `GET  /api/doctor` — run the same checks as `riku doctor`, as JSON.
-//! - `POST /api/apps/:app/backup` — create a backup, return the artifact path.
-//! - `POST /api/apps/:app/restore` — restore from an uploaded `tar.gz`.
+//! - `GET  /api/doctor`: run the same checks as `riku doctor`, as JSON.
+//! - `POST /api/apps/:app/backup`, create a backup, return the artifact path.
+//! - `POST /api/apps/:app/restore`, restore from an uploaded `tar.gz`.
 
 use std::collections::HashMap;
 
@@ -24,7 +24,7 @@ fn status_str(s: Status) -> &'static str {
     }
 }
 
-/// GET /api/doctor — diagnostics as a JSON array of `{name, status, detail}`.
+/// GET /api/doctor: diagnostics as a JSON array of `{name, status, detail}`.
 pub(crate) async fn doctor(
     State(state): State<DashboardState>,
     headers: HeaderMap,
@@ -60,7 +60,7 @@ pub(crate) async fn doctor(
     }
 }
 
-/// POST /api/apps/:app/backup — returns `{artifact: "<path>"}`.
+/// POST /api/apps/:app/backup, returns `{artifact: "<path>"}`.
 pub(crate) async fn backup_app(
     State(state): State<DashboardState>,
     headers: HeaderMap,
@@ -91,12 +91,12 @@ pub(crate) async fn backup_app(
     }
 }
 
-/// POST /api/apps/:app/restore — multipart upload, field name `file`, the
+/// POST /api/apps/:app/restore, multipart upload, field name `file`, the
 /// `tar.gz` produced by `riku backup` / `POST .../backup`.
 ///
 /// The upload is written to a scratch file under `data_root` (never a
 /// caller-controlled path) and removed again once
-/// [`crate::deploy::backup::BackupService::restore`] returns — that function
+/// [`crate::deploy::backup::BackupService::restore`] returns, that function
 /// does its own archive-member validation (no absolute paths, no `..`, every
 /// entry confined to this app's directories) before extracting anything.
 pub(crate) async fn restore_app(

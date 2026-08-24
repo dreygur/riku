@@ -27,14 +27,14 @@ pub(crate) struct LogQuery {
     token: Option<String>,
 }
 
-/// GET /api/apps/:app/logs — SSE stream of the app's combined logs.
+/// GET /api/apps/:app/logs, SSE stream of the app's combined logs.
 pub(crate) async fn stream(
     State(state): State<DashboardState>,
     headers: HeaderMap,
     Path(app): Path<String>,
     Query(query): Query<LogQuery>,
 ) -> Response {
-    // Reuse the read-only API gate (token / loopback Host) — EventSource cannot
+    // Reuse the read-only API gate (token / loopback Host), EventSource cannot
     // set headers, so the token may arrive as ?token=.
     let mut q = HashMap::new();
     if let Some(t) = query.token {
@@ -89,7 +89,7 @@ pub(crate) async fn stream(
                 };
                 let len = f.metadata().await.map(|m| m.len()).unwrap_or(*offset);
                 if len < *offset {
-                    *offset = 0; // file truncated/rotated — restart from the top
+                    *offset = 0; // file truncated/rotated: restart from the top
                 }
                 if len > *offset {
                     if f.seek(std::io::SeekFrom::Start(*offset)).await.is_err() {

@@ -108,7 +108,7 @@ impl StatsManager {
     ///
     /// Uses the shared `write_atomic` (temp file + `fsync` + `rename`) so a
     /// crash or external log-rotation sweep running concurrently never
-    /// observes a half-written `stats.json` — the same guarantee already
+    /// observes a half-written `stats.json`: the same guarantee already
     /// applied to worker TOML, ENV, and nginx config writes.
     pub fn write_stats_to_file(&self, path: &std::path::Path) -> anyhow::Result<()> {
         let app_stats = self.get_all_stats();

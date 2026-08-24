@@ -42,7 +42,7 @@ pub fn find_router(plugin_root: &Path, name: &str) -> Option<(PathBuf, PluginMan
         .find(|(_, m)| m.plugin_type == PluginType::Router && m.name == name)
 }
 
-/// Any installed plugin bundle named `name`, regardless of `type` — used by
+/// Any installed plugin bundle named `name`, regardless of `type`, used by
 /// the UI seam, which any plugin type may opt into via `[ui]`.
 pub fn find_plugin(plugin_root: &Path, name: &str) -> Option<(PathBuf, PluginManifest)> {
     find_bundles(plugin_root)

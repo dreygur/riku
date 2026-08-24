@@ -11,7 +11,7 @@
 //! High-level `PluginManager` that fires standard hooks at defined points in
 //! the deploy pipeline. See [`hooks::PluginHook`] for available hooks.
 //!
-//! ## Quick start — writing a plugin
+//! ## Quick start: writing a plugin
 //!
 //! ```sh
 //! # ~/.riku/plugins/riku-post-deploy

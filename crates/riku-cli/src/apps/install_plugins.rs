@@ -1,4 +1,4 @@
-//! `riku install-plugins` — download and install bundled runtime plugins.
+//! `riku install-plugins`: download and install bundled runtime plugins.
 //!
 //! Downloads shell script plugins from the Riku GitHub repository into
 //! `~/.riku/plugins/` and makes them executable. Rust binary plugins
@@ -21,11 +21,11 @@ const SHELL_PLUGINS: &[&str] = &["node", "python", "ruby", "go", "rust-lang"];
 const BINARY_PLUGINS: &[&str] = &["java", "clojure", "container"];
 
 /// Event-subscriber plugin bundles available in the repo's `plugins/`
-/// directory — each is a *directory* (manifest + entry script), unlike the
+/// directory: each is a *directory* (manifest + entry script), unlike the
 /// flat single-file `SHELL_PLUGINS`. The file list is relative to the
 /// bundle's own directory and must include `riku-plugin.toml`.
 ///
-/// Not installed by default (like `BINARY_PLUGINS`) — opt in with
+/// Not installed by default (like `BINARY_PLUGINS`): opt in with
 /// `riku install-plugins --only riku-notify`.
 const BUNDLE_PLUGINS: &[(&str, &[&str])] =
     &[("riku-notify", &["riku-plugin.toml", "bin/on-event"])];
@@ -61,7 +61,7 @@ pub fn cmd_install_plugins(paths: &RikuPaths, only: Option<Vec<String>>) -> Resu
         } else if let Some(files) = bundle_files {
             download_bundle_plugin(name, files, paths)
         } else {
-            display::warn(&format!("Unknown plugin '{}' — skipping", name));
+            display::warn(&format!("Unknown plugin '{}', skipping", name));
             continue;
         };
 
@@ -166,7 +166,7 @@ fn host_target_triple() -> Result<&'static str> {
         ("macos", "x86_64") => Ok("x86_64-apple-darwin"),
         ("macos", "aarch64") => Ok("aarch64-apple-darwin"),
         (os, arch) => bail!(
-            "no pre-built '{}' binary plugin for {}/{} — see .github/workflows/release.yml for supported targets",
+            "no pre-built '{}' binary plugin for {}/{}: see .github/workflows/release.yml for supported targets",
             os,
             os,
             arch

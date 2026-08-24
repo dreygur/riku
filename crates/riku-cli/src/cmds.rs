@@ -127,7 +127,7 @@ pub enum HookCmd {
     },
 }
 
-/// Addon (managed resource) commands — Plugin Protocol v1 addon seam.
+/// Addon (managed resource) commands: Plugin Protocol v1 addon seam.
 #[derive(Subcommand, Debug)]
 pub enum AddonCmd {
     /// List provisioned addon instances

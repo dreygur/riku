@@ -1,4 +1,4 @@
-//! Configuration watcher — loads, reloads, and unloads TOML worker configs for the supervisor.
+//! Configuration watcher: loads, reloads, and unloads TOML worker configs for the supervisor.
 
 use anyhow::Result;
 use notify::Event;
@@ -240,7 +240,7 @@ impl Supervisor {
 
     /// Stop and remove a configuration.
     ///
-    /// Stops exactly the one process this config file described — NOT every
+    /// Stops exactly the one process this config file described, NOT every
     /// process belonging to the app. A single worker config can be removed
     /// on its own (scaling one ordinal down, or a per-instance delete from
     /// the dashboard), and this used to tear down every sibling ordinal too
@@ -260,7 +260,7 @@ impl Supervisor {
             .rsplit_once('-')
             .map(|x| x.0)
             .unwrap_or(process_id);
-        // Strip "-<kind>" (now last component) — the app name itself may
+        // Strip "-<kind>" (now last component): the app name itself may
         // contain hyphens (e.g. "my-app"), hence stripping from the right.
         let (app_name, kind) = without_ordinal
             .rsplit_once('-')
@@ -270,7 +270,7 @@ impl Supervisor {
             // Cron jobs live in the in-memory scheduler, not the process
             // manager. There's no scaling concept for cron workers (always
             // ordinal 1), so removing a cron config always means "this
-            // app's cron entries changed or it's stopping" — purging all of
+            // app's cron entries changed or it's stopping": purging all of
             // the app's jobs here is correct, not over-eager like the
             // process case would be.
             self.cron_scheduler.remove_app_jobs(app_name);
@@ -280,7 +280,7 @@ impl Supervisor {
 
         // `riku stop` removes worker configs but leaves the app's source
         // directory in place (so a later deploy/restart can recreate
-        // them) — its stats should persist as `[STOPPED]` until then.
+        // them): its stats should persist as `[STOPPED]` until then.
         // `riku destroy` removes the app directory too. Only in the
         // latter case should the stats entries be purged; otherwise every
         // destroyed app leaves a permanent ghost row in `/metrics` that

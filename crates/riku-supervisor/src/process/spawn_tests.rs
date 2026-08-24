@@ -6,7 +6,7 @@ use std::io::{Read, Write};
 use std::os::unix::fs::MetadataExt;
 use tempfile::TempDir;
 
-// ── reopen_if_rotated ────────────────────────────────────────────────────
+// reopen_if_rotated
 
 #[test]
 fn test_reopen_if_rotated_noop_when_unchanged() {
@@ -78,7 +78,7 @@ fn test_reopen_if_rotated_detects_rename_and_recreate() {
 fn test_reopen_if_rotated_keeps_old_handle_when_path_missing() {
     // Deleted but not yet recreated (e.g. mid-rotation race, or an
     // operator running `rm` directly): must not panic, and must keep
-    // the existing — still valid, just unlinked — handle rather than
+    // the existing: still valid, just unlinked, handle rather than
     // erroring.
     let tmp = TempDir::new().unwrap();
     let log_path = tmp.path().join("app.log");
@@ -103,10 +103,10 @@ fn test_reopen_if_rotated_keeps_old_handle_when_path_missing() {
     file.flush().unwrap();
 }
 
-// ── run_log_capture_thread ───────────────────────────────────────────────
+// run_log_capture_thread
 
 /// A `Read` impl that yields one chunk, then blocks (via a channel
-/// recv) until the test signals it to yield EOF — long enough to let
+/// recv) until the test signals it to yield EOF: long enough to let
 /// the test perform an external rotation while the capture loop is
 /// genuinely mid-stream, not finished.
 struct PausableReader {
@@ -159,7 +159,7 @@ fn test_run_log_capture_thread_survives_external_rotation_mid_stream() {
     fs::rename(&log_path, &rotated_path).unwrap();
     fs::write(&log_path, "").unwrap();
 
-    // Let the reader hit EOF so the thread exits — run_log_capture_thread
+    // Let the reader hit EOF so the thread exits: run_log_capture_thread
     // checks for rotation on a wall-clock interval, but the test only
     // needs to prove the *mechanism* (reopen_if_rotated, covered above);
     // here we're proving the surrounding thread doesn't panic or hang
@@ -168,7 +168,7 @@ fn test_run_log_capture_thread_survives_external_rotation_mid_stream() {
     handle.join().expect("capture thread must not panic");
 
     // Whichever file "line one" landed in, it must be exactly one of
-    // the two — never silently lost, never duplicated, never corrupted.
+    // the two: never silently lost, never duplicated, never corrupted.
     let original_content = fs::read_to_string(&log_path).unwrap_or_default();
     let rotated_content = fs::read_to_string(&rotated_path).unwrap_or_default();
     assert_eq!(

@@ -1,4 +1,4 @@
-//! Marketplace index parsing — repository layer.
+//! Marketplace index parsing: repository layer.
 //!
 //! A marketplace is a git repo with a `marketplace.toml` listing its plugins
 //! and where each plugin's bundle is fetched from (`source`). The index is

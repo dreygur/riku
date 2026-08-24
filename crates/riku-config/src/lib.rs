@@ -105,7 +105,7 @@ impl RikuPaths {
         Ok(Self::from_dirs(riku_root, &home))
     }
 
-    /// Build paths rooted at `root/.riku`, using `root` as home too — the
+    /// Build paths rooted at `root/.riku`, using `root` as home too, the
     /// `RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path())` shape that
     /// otherwise gets hand-copied into nearly every crate's test module.
     /// Not `#[cfg(test)]`: other crates' tests need to call it too, and that

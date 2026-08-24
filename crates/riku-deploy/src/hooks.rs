@@ -151,7 +151,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let paths = make_paths(&tmp);
         let env = HashMap::new();
-        // No plugin file exists — should succeed silently
+        // No plugin file exists: should succeed silently
         run_pre_deploy("myapp", tmp.path(), &paths, &env)
     }
 
@@ -221,7 +221,7 @@ mod tests {
 
     #[test]
     fn test_post_build_failing_plugin_aborts() {
-        // post-build failures are fatal — they abort the deploy
+        // post-build failures are fatal: they abort the deploy
         let tmp = TempDir::new().unwrap();
         let paths = make_paths(&tmp);
         write_plugin(&paths, "riku-post-build", "exit 1");

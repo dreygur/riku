@@ -21,7 +21,7 @@ fn write_sleep_worker_config(config_dir: &std::path::Path, log_dir: &std::path::
 /// *real* `SIGHUP` at this test process via `nix::sys::signal::kill`
 /// (not a direct function call), proving the async
 /// `tokio::signal::unix` listener spawned by `spawn_sighup_listener`
-/// actually catches process-level signal delivery — not just that the
+/// actually catches process-level signal delivery: not just that the
 /// reload logic works when called directly.
 ///
 /// Also proves the reload is non-destructive: a worker whose config
@@ -57,7 +57,7 @@ fn test_sighup_triggers_reload_without_disturbing_unchanged_worker() {
         .pid;
 
     // Start the real async listener under test, then fire an actual
-    // SIGHUP at this process — exercising real kernel signal delivery
+    // SIGHUP at this process: exercising real kernel signal delivery
     // end to end, not a synthetic counter bump.
     crate::spawn_sighup_listener();
     RELOAD_COUNTER.store(0, Ordering::SeqCst);

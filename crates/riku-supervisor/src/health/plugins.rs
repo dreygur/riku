@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 use super::actions::SharedActions;
 use riku_config::RikuPaths;
 
-/// GET /plugins — client-side plugins (`~/.riku/client-plugins/`).
+/// GET /plugins: client-side plugins (`~/.riku/client-plugins/`).
 pub(super) async fn plugins_handler(
     Extension(actions): Extension<SharedActions>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
@@ -25,7 +25,7 @@ pub(super) async fn plugins_handler(
     }
 }
 
-/// GET /hooks — server-side lifecycle hook plugins (`~/.riku/plugins/`).
+/// GET /hooks: server-side lifecycle hook plugins (`~/.riku/plugins/`).
 pub(super) async fn hooks_handler() -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let paths = match RikuPaths::from_env() {
         Ok(paths) => paths,

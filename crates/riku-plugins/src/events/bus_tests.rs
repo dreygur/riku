@@ -111,7 +111,7 @@ fn subscriber_to_other_event_is_not_invoked() {
 fn emit_is_safe_with_no_plugins_dir() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
-    // plugin_root does not exist — must not panic.
+    // plugin_root does not exist: must not panic.
     EventBus::new(&paths).publish(EventName::DeployFinished, "app", serde_json::json!({}));
 }
 
@@ -132,7 +132,7 @@ fn invalid_bundle_is_skipped_without_panicking() {
 /// End-to-end: the real `plugins/riku-notify` bundle shipped in the repo,
 /// installed into a temp plugin root exactly as `riku install-plugins`
 /// would lay it out, actually reaches a webhook when `app.restarted`
-/// fires — through the *real* sandbox (`capabilities.network = true`
+/// fires: through the *real* sandbox (`capabilities.network = true`
 /// must actually let curl's DNS/TCP through under landlock), not just a
 /// direct invocation of the script.
 #[test]
@@ -143,7 +143,7 @@ fn bundled_riku_notify_plugin_delivers_webhook_on_app_restarted() {
     let (_tmp, paths) = make_bus_paths();
 
     // Copy the repo's real plugins/riku-notify/ bundle into the temp
-    // plugin root — the actual shipped manifest + script, not a fixture.
+    // plugin root: the actual shipped manifest + script, not a fixture.
     let repo_bundle = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/riku-notify");
     let dest = paths.plugin_root.join("riku-notify");
     std::fs::create_dir_all(dest.join("bin")).unwrap();

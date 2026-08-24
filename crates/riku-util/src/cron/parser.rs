@@ -4,7 +4,7 @@
 //!
 //! Schedules use the **5-field Unix cron** format that users write in a
 //! Procfile: `minute hour day-of-month month day-of-week`. This is the same
-//! grammar the public [`crate::util::procfile`] parser accepts — both route
+//! grammar the public [`crate::util::procfile`] parser accepts, both route
 //! through [`validate_cron_expression`] here so there is a single source of
 //! truth for what a valid schedule is.
 //!
@@ -74,7 +74,7 @@ pub(super) fn calculate_next_run(schedule: &str) -> Result<SystemTime> {
 /// Calculate the next UTC fire time strictly **after** the given instant.
 ///
 /// Returns an error for invalid schedules and for unsatisfiable schedules
-/// (e.g. `0 0 30 2 *` — February never has a 30th), instead of silently
+/// (e.g. `0 0 30 2 *`: February never has a 30th), instead of silently
 /// degrading to an hourly fallback.
 pub(super) fn calculate_next_run_after(schedule: &str, after: SystemTime) -> Result<SystemTime> {
     let cron = parse_schedule(schedule)?;

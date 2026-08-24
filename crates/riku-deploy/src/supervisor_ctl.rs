@@ -31,11 +31,11 @@ fn pid_is_alive(pid: i32) -> bool {
 ///
 /// Deliberately never falls back to a bare `"riku"` resolved by the loader
 /// off `$PATH`. The supervisor is (re)started from inside a git hook's exec
-/// environment — if an attacker can influence `$PATH` there (e.g. via a
+/// environment: if an attacker can influence `$PATH` there (e.g. via a
 /// crafted `ENV` that reaches this process, or a hook running with an
 /// unsanitized shell environment), a bare-name lookup would let them get an
 /// arbitrary binary executed as the deploy user. `current_exe()` resolves
-/// via `/proc/self/exe` (Linux) — an absolute path to the binary that is
+/// via `/proc/self/exe` (Linux): an absolute path to the binary that is
 /// *actually currently running*, immune to `$PATH` content entirely.
 pub(crate) fn resolve_riku_bin() -> String {
     std::env::var("RIKU_BIN")
@@ -57,12 +57,12 @@ pub(crate) fn resolve_riku_bin() -> String {
 
 /// Check if supervisor is running (via PID file) and start it if not.
 pub(crate) fn ensure_supervisor_running(paths: &RikuPaths) -> bool {
-    // Check PID file first — reliable and does not match unrelated processes.
+    // Check PID file first: reliable and does not match unrelated processes.
     if let Some(pid) = read_supervisor_pid(paths) {
         if pid_is_alive(pid) {
             return true;
         }
-        // Stale PID file — supervisor died without cleaning up. Remove it.
+        // Stale PID file: supervisor died without cleaning up. Remove it.
         let _ = std::fs::remove_file(paths.riku_root.join("supervisor.pid"));
     }
 
@@ -71,7 +71,7 @@ pub(crate) fn ensure_supervisor_running(paths: &RikuPaths) -> bool {
 
     let riku_root = paths.riku_root.to_str().unwrap_or("/root/.riku");
 
-    // Exec nohup directly — never interpolate riku_bin into a shell string to
+    // Exec nohup directly: never interpolate riku_bin into a shell string to
     // avoid injection if RIKU_BIN contains metacharacters.
     if std::process::Command::new("nohup")
         .args([&riku_bin, "supervisor"])

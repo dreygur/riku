@@ -81,7 +81,7 @@ pub fn discover(plugin_root: &Path) -> Vec<RuntimePlugin> {
             let name = entry.file_name();
             let name = name.to_str()?;
 
-            // Lifecycle hooks keep the riku- prefix — skip them
+            // Lifecycle hooks keep the riku- prefix: skip them
             if name.starts_with("riku-") {
                 return None;
             }
@@ -165,7 +165,7 @@ fn plugin_accepts(
     if timed_out {
         tracing::warn!(
             plugin = plugin.name.as_str(),
-            "'detect' timed out — skipping"
+            "'detect' timed out, skipping"
         );
         return Ok(false);
     }
@@ -307,7 +307,7 @@ pub fn get_env(
     if !output.status.success() {
         tracing::warn!(
             plugin = plugin.name.as_str(),
-            "'env' subcommand returned non-zero — env vars may be incomplete"
+            "'env' subcommand returned non-zero: env vars may be incomplete"
         );
     }
 

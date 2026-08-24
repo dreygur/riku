@@ -38,7 +38,7 @@ fn build(app_path: &Path) -> Result<()> {
             bail!("lein uberjar failed");
         }
     } else if app_path.join("deps.edn").exists() {
-        // Deps.edn — run clojure -T:build uber if build.clj exists, else no-op
+        // Deps.edn: run clojure -T:build uber if build.clj exists, else no-op
         if app_path.join("build.clj").exists() {
             let status = Command::new("clojure")
                 .args(["-T:build", "uber"])

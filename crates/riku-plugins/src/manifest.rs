@@ -6,8 +6,8 @@
 //! the kernel dispatches to the plugin.
 //!
 //! Security: the manifest is attacker-influenced data. [`PluginManifest::validate`]
-//! rejects an unsupported API version, an empty/unsafe `name`, and — critically
-//! — any `entry` that is absolute or escapes the bundle via `..`, so a manifest
+//! rejects an unsupported API version, an empty/unsafe `name`, and, critically,
+//! any `entry` that is absolute or escapes the bundle via `..`, so a manifest
 //! can never point the kernel at an executable outside its own directory.
 
 use std::path::{Component, Path, PathBuf};
@@ -40,7 +40,7 @@ pub enum SubscribeMode {
     Gate,
 }
 
-/// Declared capabilities — shown on install, enforced where the platform allows.
+/// Declared capabilities: shown on install, enforced where the platform allows.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct Capabilities {
     #[serde(default)]
@@ -58,19 +58,19 @@ pub struct EventSubscription {
     pub subscribe: Vec<String>,
     #[serde(default)]
     pub mode: SubscribeMode,
-    /// Delivery order among subscribers of the same event — lower runs
+    /// Delivery order among subscribers of the same event, lower runs
     /// first. Default `0`. Ties keep filesystem discovery order (unspecified).
     #[serde(default)]
     pub priority: i32,
     /// Opt-in: this plugin may emit its own `plugin.custom.*` events via
-    /// `riku plugin-emit`. Default `false` — a plugin that only subscribes
+    /// `riku plugin-emit`. Default `false`: a plugin that only subscribes
     /// need not (and should not) declare this.
     #[serde(default)]
     pub emit: bool,
 }
 
 /// Filter-subscription block; present iff the plugin registers filters.
-/// Unlike events there's no `mode` — a filter is always fire-and-transform;
+/// Unlike events there's no `mode`: a filter is always fire-and-transform;
 /// see `FilterBus::apply`'s "must degrade to passthrough, never hard-fail"
 /// contract, which makes a `gate`-equivalent unnecessary (a filter can never
 /// veto, only decline to transform).
@@ -78,7 +78,7 @@ pub struct EventSubscription {
 pub struct FilterSubscription {
     #[serde(default)]
     pub subscribe: Vec<String>,
-    /// Chain order among filters registered on the same name — lower runs
+    /// Chain order among filters registered on the same name, lower runs
     /// first, each receiving the previous one's output.
     #[serde(default)]
     pub priority: i32,
@@ -87,7 +87,7 @@ pub struct FilterSubscription {
 /// UI panel opt-in; present iff the plugin implements `ui_panel` and wants a
 /// dashboard nav entry. Absent (the default, `nav_label: None`) means the
 /// dashboard never dispatches `ui_panel` for this plugin and it gets no nav
-/// entry — every existing plugin is unaffected.
+/// entry: every existing plugin is unaffected.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct UiPanel {
     /// Label shown in the dashboard's nav. `None` = no `[ui]` block declared.
@@ -96,7 +96,7 @@ pub struct UiPanel {
 }
 
 /// Install/uninstall lifecycle opt-in; present iff the plugin implements one
-/// of these verbs. Absent (the default) means neither is invoked — every
+/// of these verbs. Absent (the default) means neither is invoked, every
 /// existing plugin (no `[lifecycle]` block) is unaffected.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct Lifecycle {

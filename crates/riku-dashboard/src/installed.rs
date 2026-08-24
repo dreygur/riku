@@ -1,16 +1,16 @@
 //! Installed-plugin listing endpoint.
 //!
 //! `GET /api/plugins` → `{ runtimes, hooks, bundles }`:
-//! - `runtimes` / `hooks` — executable plugins in `~/.riku/plugins/`, split by
+//! - `runtimes` / `hooks`: executable plugins in `~/.riku/plugins/`, split by
 //!   the `riku-` lifecycle-hook prefix.
-//! - `bundles` — manifest-based plugin bundles (addons, routers, notifiers).
+//! - `bundles`: manifest-based plugin bundles (addons, routers, notifiers).
 //!
-//! `GET /api/plugins/:name/ui` — dispatches that plugin's `ui_panel` verb
+//! `GET /api/plugins/:name/ui`, dispatches that plugin's `ui_panel` verb
 //! (Plugin Protocol v1 §7.5) and returns the structured panel JSON. Only
 //! plugins declaring `[ui]` (i.e. present with a `ui.nav_label` in the list
 //! above) are meaningful to call this for, but calling it for any other
 //! installed plugin just gets an empty panel back (`run_ui_panel` degrades
-//! safely rather than erroring) — a nonexistent plugin name is the one real
+//! safely rather than erroring): a nonexistent plugin name is the one real
 //! 404 case.
 
 use std::collections::HashMap;

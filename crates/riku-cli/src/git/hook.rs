@@ -1,4 +1,4 @@
-//! Git post-receive hook handler — triggers deployment on push.
+//! Git post-receive hook handler: triggers deployment on push.
 
 use anyhow::Result;
 use std::fs;

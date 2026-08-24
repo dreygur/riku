@@ -24,8 +24,8 @@ fn test_cpu_max_value_unlimited() {
 
 /// Full provision/add_self/oom_kill_count/cleanup cycle against the real
 /// cgroup v2 filesystem. Skipped (not failed) when cgroup v2 isn't mounted
-/// or we lack permission to write under it — both common in CI/dev
-/// containers — since this is exercising kernel state, not our logic.
+/// or we lack permission to write under it: both common in CI/dev
+/// containers: since this is exercising kernel state, not our logic.
 #[test]
 fn test_provision_and_cleanup_lifecycle() {
     let limits = CgroupLimits {

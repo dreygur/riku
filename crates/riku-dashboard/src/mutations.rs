@@ -1,9 +1,9 @@
-//! Dashboard mutating actions (Track A, Phase 1 — second half).
+//! Dashboard mutating actions (Track A, Phase 1, second half).
 //!
 //! Restart / stop / redeploy, gated harder than the read-only API:
 //! - A token is **required** (the dashboard must be started with `--token`);
 //!   loopback openness does not apply to mutations.
-//! - The token must arrive in the `Authorization: Bearer` header — never a query
+//! - The token must arrive in the `Authorization: Bearer` header, never a query
 //!   param. A cross-origin page cannot set that header without a CORS preflight,
 //!   which this server never approves, so this doubles as CSRF protection.
 //! - Each action reuses the same service function the CLI calls, on a blocking
@@ -55,7 +55,7 @@ async fn redeploy(state: State<DashboardState>, headers: HeaderMap, app: Path<St
     .await
 }
 
-/// POST /api/apps/:app/scale — body `{"web":2,"worker":1}` (kind → count).
+/// POST /api/apps/:app/scale, body `{"web":2,"worker":1}` (kind → count).
 async fn scale(
     State(state): State<DashboardState>,
     headers: HeaderMap,
@@ -90,7 +90,7 @@ async fn scale(
     finish(result, "scale")
 }
 
-/// POST /api/apps/:app/rollback — body `{"to":"<sha>"}` (omit `to` for previous).
+/// POST /api/apps/:app/rollback, body `{"to":"<sha>"}` (omit `to` for previous).
 async fn rollback(
     State(state): State<DashboardState>,
     headers: HeaderMap,
@@ -113,7 +113,7 @@ async fn rollback(
     finish(result, "rollback")
 }
 
-/// POST /api/apps/:app/workers/:kind/:ordinal/restart — restart exactly one
+/// POST /api/apps/:app/workers/:kind/:ordinal/restart, restart exactly one
 /// worker ordinal (e.g. just `web.3`), leaving its siblings untouched.
 async fn restart_worker(
     State(state): State<DashboardState>,
@@ -134,7 +134,7 @@ async fn restart_worker(
     finish(result, "restart_worker")
 }
 
-/// DELETE /api/apps/:app/workers/:kind/:ordinal — remove exactly one worker
+/// DELETE /api/apps/:app/workers/:kind/:ordinal, remove exactly one worker
 /// ordinal's config, stopping it without touching siblings (equivalent to
 /// scaling down by exactly one).
 async fn delete_worker(
@@ -208,7 +208,7 @@ pub(crate) fn authorize_mutation(state: &DashboardState, headers: &HeaderMap) ->
         return Some(
             (
                 StatusCode::FORBIDDEN,
-                "mutating actions are disabled — start the dashboard with --token",
+                "mutating actions are disabled, start the dashboard with --token",
             )
                 .into_response(),
         );

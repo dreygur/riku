@@ -22,7 +22,7 @@ macro_rules! parse_env_or {
 }
 
 /// Same lookup as [`parse_env_or!`], but yields `None` (rather than a default)
-/// when the key is missing or unparsable — for settings that are opt-in with
+/// when the key is missing or unparsable: for settings that are opt-in with
 /// no meaningful default.
 macro_rules! parse_env_opt {
     ($env:expr, $key:literal, $ty:ty) => {

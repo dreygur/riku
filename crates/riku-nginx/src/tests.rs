@@ -7,8 +7,8 @@ use tempfile::TempDir;
 
 use super::generate_nginx_config;
 
-/// Installs a real `nginx.include_content` filter plugin — dispatched
-/// through the actual `FilterBus`, not mocked — that appends a marker line
+/// Installs a real `nginx.include_content` filter plugin, dispatched
+/// through the actual `FilterBus`, not mocked, that appends a marker line
 /// to whatever seed content it receives, into `paths.plugin_root`.
 fn install_augmenter_filter(paths: &crate::config::RikuPaths) {
     let bundle = paths.plugin_root.join("augmenter");

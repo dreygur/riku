@@ -4,7 +4,7 @@ use std::fs;
 use crate::config::RikuPaths;
 use crate::util::{echo, ensure_path_within, exit_if_invalid};
 
-/// Destroy an app — remove directories and config files, preserve data/cache.
+/// Destroy an app: remove directories and config files, preserve data/cache.
 pub fn cmd_destroy(paths: &RikuPaths, app: &str) -> Result<()> {
     let app = exit_if_invalid(app, &paths.app_root)?;
 

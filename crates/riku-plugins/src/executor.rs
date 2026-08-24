@@ -29,10 +29,10 @@ fn timeout_from_raw(raw: Option<String>) -> Duration {
 
 /// `cmd.spawn()`, retrying on `ETXTBSY`.
 ///
-/// `ETXTBSY` ("text file busy") is normally permanent — the loader refuses
+/// `ETXTBSY` ("text file busy") is normally permanent, the loader refuses
 /// to `execve()` a file that's genuinely still open for writing. But riku
 /// routinely spawns scripts it (or `riku install-plugins`) only *just*
-/// finished writing — runtime/hook plugins here, and any executable a
+/// finished writing: runtime/hook plugins here, and any executable a
 /// build/install step drops moments before something execs it. On Linux,
 /// `execve()` of a file that was written-then-`rename()`d into place only
 /// microseconds earlier can transiently return `ETXTBSY` even though no
@@ -42,7 +42,7 @@ fn timeout_from_raw(raw: Option<String>) -> Duration {
 /// a busy production host running many worker/hook spawns at once). The
 /// condition self-resolves in microseconds, so a few retries with a short
 /// backoff turns a spurious, permanent-looking failure into the success it
-/// actually is — without masking a real, persistent `ETXTBSY` (e.g. an
+/// actually is: without masking a real, persistent `ETXTBSY` (e.g. an
 /// actual concurrent writer), which will still fail after the retry budget
 /// is exhausted.
 pub fn spawn_retrying_etxtbsy(cmd: &mut Command) -> std::io::Result<Child> {
@@ -79,12 +79,12 @@ fn retry_etxtbsy<T>(mut attempt: impl FnMut() -> std::io::Result<T>) -> std::io:
 /// Cap on how much trailing stderr `tee_output` retains for post-mortem
 /// classification. Just needs to be big enough to catch a one-line
 /// allocator failure message ("xrealloc: cannot allocate N bytes"), not a
-/// full build log — this isn't meant to replace the live-streamed output.
+/// full build log: this isn't meant to replace the live-streamed output.
 const STDERR_TAIL_CAP: usize = 4096;
 
 /// Spawn background threads that mirror `child`'s stdout/stderr to this
-/// process's own stdout/stderr line-by-line — preserving real-time
-/// streaming for whoever's watching `riku deploy` — while also retaining
+/// process's own stdout/stderr line-by-line: preserving real-time
+/// streaming for whoever's watching `riku deploy`: while also retaining
 /// the last [`STDERR_TAIL_CAP`] bytes of stderr in the returned buffer, so
 /// a failed exit can be classified by [`classify_resource_exit`] afterward.
 /// `child.stdout`/`child.stderr` must be `Stdio::piped()` for this to do
@@ -146,7 +146,7 @@ pub fn capture_stdout(child: &mut Child) -> (Option<JoinHandle<()>>, Arc<Mutex<S
     (handle, buf)
 }
 
-/// Spawn a thread that streams `child`'s stderr line-by-line to `on_line` —
+/// Spawn a thread that streams `child`'s stderr line-by-line to `on_line`,
 /// typically a `tracing::info!` call with seam-specific target and fields,
 /// which is why this takes a callback rather than logging itself. Returns
 /// the join handle (`None` if `child.stderr` wasn't piped); callers must
@@ -173,7 +173,7 @@ pub fn stream_stderr(
 ///   cgroup `memory.max` limit) or `SIGXCPU` (`RLIMIT_CPU` exceeded). These
 ///   show up as a signal on the exit status, not an exit code.
 /// - **Its own allocator gave up**: hitting `RLIMIT_AS` doesn't kill the
-///   process — `malloc`/`mmap` just starts returning `ENOMEM`, which most
+///   process: `malloc`/`mmap` just starts returning `ENOMEM`, which most
 ///   allocators (glibc, bash's `xrealloc`) report on stderr and then exit
 ///   non-zero on their own. Detected via a substring match on the
 ///   `tee_output`-captured stderr tail.
@@ -186,14 +186,14 @@ pub fn classify_resource_exit(status: &ExitStatus, stderr_tail: &str) -> Option<
         match status.signal() {
             Some(9) => {
                 return Some(
-                    "killed by SIGKILL — the kernel's OOM killer or a cgroup memory.max limit \
+                    "killed by SIGKILL: the kernel's OOM killer or a cgroup memory.max limit \
                      terminated it directly"
                         .to_string(),
                 )
             }
             Some(24) => {
                 return Some(
-                    "killed by SIGXCPU — exceeded its configured CPU time limit (RLIMIT_CPU)"
+                    "killed by SIGXCPU: exceeded its configured CPU time limit (RLIMIT_CPU)"
                         .to_string(),
                 )
             }
@@ -214,7 +214,7 @@ pub fn classify_resource_exit(status: &ExitStatus, stderr_tail: &str) -> Option<
         .find(|marker| lower.contains(*marker))
         .map(|marker| {
             format!(
-                "its own allocator reported '{}' — it hit the configured memory ceiling \
+                "its own allocator reported '{}': it hit the configured memory ceiling \
                  (RLIMIT_AS) before the kernel needed to step in",
                 marker
             )

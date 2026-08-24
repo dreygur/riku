@@ -5,7 +5,7 @@
 //! configs, and read-modify-writes the ENV file's nginx port allocation.
 //! Two deploys for the same app racing (a second `git push` landing while
 //! the first `post-receive` hook is still running, or a dashboard-triggered
-//! redeploy firing mid-push) corrupt that shared state — e.g. a lost update
+//! redeploy firing mid-push) corrupt that shared state, e.g. a lost update
 //! on `NGINX_INTERNAL_PORT` leaves nginx proxying to a port no worker is
 //! bound to. An advisory `flock` keyed by app name serializes deploys of the
 //! same app without affecting deploys of different apps.
@@ -23,7 +23,7 @@ use crate::error::DeployError;
 /// `flock(2)` is interruptible: a signal delivered to the process (e.g.
 /// `SIGCHLD` when an unrelated child process exits) can interrupt the syscall
 /// and make it return `EINTR`. Treating that as "contended" would spuriously
-/// report a lock as held — and, in `acquire`, fail a legitimate deploy — so we
+/// report a lock as held: and, in `acquire`, fail a legitimate deploy, so we
 /// retry on `EINTR` and only report `false` for a genuine would-block.
 ///
 /// Returns `Ok(true)` if the operation acquired/changed the lock, `Ok(false)`
@@ -45,7 +45,7 @@ fn try_flock(fd: RawFd, operation: libc::c_int) -> io::Result<bool> {
 }
 
 /// Acquire the deploy lock for `app`, non-blocking. Returns the locked file
-/// handle — the lock is held until it is dropped, so callers must keep the
+/// handle: the lock is held until it is dropped, so callers must keep the
 /// returned `File` alive for the duration of the deploy.
 ///
 /// Returns `Err(DeployError::DeployInProgress)` if another deploy for this
@@ -62,7 +62,7 @@ pub fn acquire(app: &str, paths: &RikuPaths) -> Result<File> {
         .open(&lock_path)?;
 
     // Use libc::flock directly, same as the supervisor's PID-file lock
-    // (create_pid_file_with_lock) — portable across Unix systems, no extra
+    // (create_pid_file_with_lock): portable across Unix systems, no extra
     // dependency. EINTR is retried inside try_flock so a stray signal can't
     // make a legitimate deploy look like a concurrent one.
     match try_flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) {
@@ -84,14 +84,14 @@ fn lock_path_for(app: &str, paths: &RikuPaths) -> std::path::PathBuf {
 /// ever taking the lock itself.
 ///
 /// Implemented as a non-blocking `flock` attempt that's immediately
-/// released on success — the only race-free way to ask "is this locked"
+/// released on success: the only race-free way to ask "is this locked"
 /// without disturbing a genuine holder: open a *fresh* fd (never the
 /// holder's), try `LOCK_EX | LOCK_NB`. Success means nobody held it (and
 /// this probe's own momentary lock is dropped immediately after); `EWOULDBLOCK`
 /// means somebody does.
 ///
 /// Returns `false` (not held) if the lock file doesn't exist yet, or if it
-/// can't be opened at all — under-reporting "free" is the safe default for
+/// can't be opened at all: under-reporting "free" is the safe default for
 /// a monitoring dump, since this is informational only and never gates a
 /// real deploy decision.
 pub fn is_locked(app: &str, paths: &RikuPaths) -> bool {
@@ -108,7 +108,7 @@ pub fn is_locked(app: &str, paths: &RikuPaths) -> bool {
 
     match try_flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) {
         Ok(true) => {
-            // We got it — nobody else holds it. Release immediately; dropping
+            // We got it: nobody else holds it. Release immediately; dropping
             // `file` closes the fd, which releases the flock too, but we
             // unlock explicitly first so there's no window where this probe
             // itself looks like a held lock to a concurrent probe.
@@ -117,7 +117,7 @@ pub fn is_locked(app: &str, paths: &RikuPaths) -> bool {
         }
         // Genuinely contended → held by someone else.
         Ok(false) => true,
-        // Can't determine (unexpected error). Under-report "free" — this is a
+        // Can't determine (unexpected error). Under-report "free", this is a
         // best-effort monitoring probe that never gates a real deploy.
         Err(_) => false,
     }
@@ -244,7 +244,7 @@ mod tests {
     #[test]
     fn test_is_locked_probe_does_not_itself_hold_the_lock() {
         // Calling is_locked() on a free lock must not leave it held for a
-        // subsequent real acquire() — the probe releases what it took.
+        // subsequent real acquire(): the probe releases what it took.
         let tmp = TempDir::new().unwrap();
         let paths = make_paths(&tmp);
         assert!(!is_locked("myapp", &paths));

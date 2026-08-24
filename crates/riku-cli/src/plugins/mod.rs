@@ -1,4 +1,4 @@
-//! `riku plugins` provider layer — install/list/remove manifest-based plugin
+//! `riku plugins` provider layer: install/list/remove manifest-based plugin
 //! bundles via [`PluginInstaller`]. Handles user-facing output only.
 
 mod scaffold;
@@ -52,7 +52,7 @@ fn report_trust(manifest: &PluginManifest) {
     } else if manifest.checksum.is_some() {
         display::note("Checksum verified.");
     } else {
-        display::warn("No signature or checksum in the manifest — installed unverified.");
+        display::warn("No signature or checksum in the manifest, installed unverified.");
     }
 }
 
@@ -130,7 +130,7 @@ pub fn cmd_plugins_add(paths: &RikuPaths, spec: &str) -> Result<()> {
     Ok(())
 }
 
-/// `riku plugins doctor` — validate installed bundles (api + integrity).
+/// `riku plugins doctor`: validate installed bundles (api + integrity).
 pub fn cmd_plugins_doctor(paths: &RikuPaths) -> Result<()> {
     let results = PluginInstaller::new(paths).audit();
     if results.is_empty() {
@@ -140,11 +140,11 @@ pub fn cmd_plugins_doctor(paths: &RikuPaths) -> Result<()> {
     let mut failures = 0;
     for r in &results {
         match r.status {
-            HealthStatus::Ok => display::success(&format!("{} — {}", r.name, r.detail)),
-            HealthStatus::Warn => display::warn(&format!("{} — {}", r.name, r.detail)),
+            HealthStatus::Ok => display::success(&format!("{}, {}", r.name, r.detail)),
+            HealthStatus::Warn => display::warn(&format!("{}, {}", r.name, r.detail)),
             HealthStatus::Fail => {
                 failures += 1;
-                display::error(&format!("{} — {}", r.name, r.detail));
+                display::error(&format!("{}, {}", r.name, r.detail));
             }
         }
     }
@@ -214,7 +214,7 @@ pub fn cmd_plugins_scaffold(name: &str, plugin_type: &str, dir: Option<&str>) ->
     let bundle = base.join(&name);
     if bundle.exists() {
         anyhow::bail!(
-            "'{}' already exists — choose another name or path",
+            "'{}' already exists, choose another name or path",
             bundle.display()
         );
     }
@@ -250,7 +250,7 @@ pub fn cmd_plugins_keygen(out: &str) -> Result<()> {
 
     let path = std::path::Path::new(out);
     if path.exists() {
-        anyhow::bail!("'{out}' already exists — choose another --out path");
+        anyhow::bail!("'{out}' already exists, choose another --out path");
     }
     let kp = Keypair::generate();
     std::fs::write(path, format!("{}\n", kp.secret_hex()))?;

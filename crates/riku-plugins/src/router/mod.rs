@@ -1,4 +1,4 @@
-//! Router seam — exposes apps to the network (`PLUGIN_PROTOCOL.md` §6.2).
+//! Router seam: exposes apps to the network (`PLUGIN_PROTOCOL.md` §6.2).
 //!
 //! A **singleton** seam: exactly one router is active per host, chosen by the
 //! `RIKU_ROUTER` config (default `nginx`, the built-in generator). This module

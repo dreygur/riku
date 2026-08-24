@@ -1,4 +1,4 @@
-//! Addon service — orchestrates the addon lifecycle (`PLUGIN_PROTOCOL.md` §6.1).
+//! Addon service: orchestrates the addon lifecycle (`PLUGIN_PROTOCOL.md` §6.1).
 //!
 //! Ties together bundle discovery, verb dispatch, the instance registry, and
 //! app env injection. It runs the addon plugin's verbs and keeps the on-disk
@@ -145,7 +145,7 @@ impl<'a> AddonService<'a> {
         if !record.bindings.is_empty() {
             let apps: Vec<&str> = record.bindings.keys().map(String::as_str).collect();
             bail!(
-                "instance '{instance}' is still bound to {} — unbind first",
+                "instance '{instance}' is still bound to {}: unbind first",
                 apps.join(", ")
             );
         }

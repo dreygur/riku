@@ -1,8 +1,8 @@
-//! Plugin author signatures (ROADMAP E2.5) — Ed25519 over the entry bytes.
+//! Plugin author signatures (ROADMAP E2.5): Ed25519 over the entry bytes.
 //!
 //! An author signs a bundle's entry executable with their secret key; the
 //! operator adds the author's public key to a **trust keyring**. On install, a
-//! signed bundle is accepted only if some trusted key verifies the signature —
+//! signed bundle is accepted only if some trusted key verifies the signature,
 //! so a signed plugin from an unknown publisher is rejected, not merely warned.
 //! Keys and signatures are hex-encoded.
 

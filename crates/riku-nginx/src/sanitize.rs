@@ -8,12 +8,12 @@
 //! An allow-list is the generally safer default, but it was deliberately not
 //! adopted here: `NGINX_SERVER_NAME` alone has to accommodate space/comma
 //! separated hostname lists, IPv6 literals (`[::1]`), wildcards (`*.example.com`),
-//! and regex-anchored forms (`~^(?<sub>.+)\.example\.com$`) — enumerating every
+//! and regex-anchored forms (`~^(?<sub>.+)\.example\.com$`), enumerating every
 //! legitimate character across those forms without access to real-world usage
 //! risks silently rejecting valid values in a running deployment, which is worse
 //! than the deny-list it would replace. Instead, every character structurally
-//! required to terminate an nginx directive and start another — `;`, `{`, `}`,
-//! and newlines — is blocked outright, which is sufficient on its own regardless
+//! required to terminate an nginx directive and start another, `;`, `{`, `}`,
+//! and newlines: is blocked outright, which is sufficient on its own regardless
 //! of what else is allowed: nginx directives cannot be split, block-nested, or
 //! chained without one of those four. The remaining entries (backtick, `$`,
 //! quotes, `#`) are defense in depth against nginx variable interpolation and

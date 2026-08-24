@@ -58,7 +58,7 @@ pub fn generate_nginx_config(
 }
 
 /// Ask the running nginx master process to reload its configuration
-/// (`nginx -s reload`) — a graceful reload that finishes in-flight
+/// (`nginx -s reload`): a graceful reload that finishes in-flight
 /// connections on old worker processes while new connections pick up the
 /// refreshed config, never dropping active traffic the way a restart
 /// would. Best-effort: returns `false` (and logs a warning) if nginx isn't

@@ -154,7 +154,7 @@ pub(super) fn insert_feature_flags(
 
 /// Read `NGINX_INCLUDE_FILE` content (if set, guarding against path
 /// traversal) as the seed value, run it through the `nginx.include_content`
-/// filter chain (`PLUGIN_PROTOCOL.md` §7.3 — lets an installed plugin augment
+/// filter chain (`PLUGIN_PROTOCOL.md` §7.3: lets an installed plugin augment
 /// the generated config without replacing it), and insert the result.
 /// Always inserts the key, even as an empty string, so it's never simply
 /// absent from the template context.
@@ -193,7 +193,7 @@ pub(super) fn insert_include_file(
     match filtered.as_str() {
         Some(s) => context.insert("NGINX_INCLUDE_CONTENT", s),
         // A filter returned something that isn't a string (a bug in that
-        // filter) — degrade to the seed content rather than propagating a
+        // filter): degrade to the seed content rather than propagating a
         // non-string value into the template.
         None => context.insert("NGINX_INCLUDE_CONTENT", &content),
     }

@@ -37,7 +37,7 @@ pub(crate) static CONFIG_RELOAD_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(
 
 /// Signal handler for graceful shutdown.
 ///
-/// `SIGHUP` is deliberately *not* registered here via raw `sigaction` —
+/// `SIGHUP` is deliberately *not* registered here via raw `sigaction`,
 /// see [`spawn_sighup_listener`] for why and how it's handled instead.
 pub fn setup_signal_handlers() -> Result<()> {
     #[cfg(unix)]
@@ -81,37 +81,37 @@ pub fn setup_signal_handlers() -> Result<()> {
 }
 
 /// Start an async, non-blocking `SIGHUP` listener on a dedicated
-/// background thread, and return immediately — never run on the main
+/// background thread, and return immediately, never run on the main
 /// supervisor loop's thread, so a slow or stuck reload can never delay
 /// worker health checks, log rotation, or the file watcher.
 ///
 /// Uses `tokio::signal::unix::signal(SignalKind::hangup())` rather than a
 /// raw `sigaction` (unlike `SIGTERM`/`SIGINT` above) so catching the signal
-/// and incrementing [`RELOAD_COUNTER`] happens inside an `async fn` body —
+/// and incrementing [`RELOAD_COUNTER`] happens inside an `async fn` body,
 /// ordinary Rust, not the async-signal-safe-only subset `extern "C"`
 /// handlers are restricted to. That matters here because, unlike the
 /// shutdown flags, this is the path operators expect to extend over time
-/// (this revision adds an `nginx -s reload` after the config diff — see
+/// (this revision adds an `nginx -s reload` after the config diff, see
 /// `daemon::mod::run`), and `extern "C"` handlers make that a hazard: every
 /// addition has to be re-audited for signal-safety. The listener itself
 /// still does only an atomic increment per wakeup, so it's exactly as
-/// cheap as the old handler — `tokio::signal::unix::signal` registers its
+/// cheap as the old handler: `tokio::signal::unix::signal` registers its
 /// own internal handler via `signal-hook-registry` and wakes the awaiting
 /// task through a self-pipe, not by running our code inside a signal
 /// context.
 ///
 /// A raw `sigaction(SIGHUP, ...)` registered *anywhere else* in this
 /// process would silently steal `SIGHUP` delivery from this listener
-/// (`sigaction` is last-registration-wins, process-wide) — which is
+/// (`sigaction` is last-registration-wins, process-wide), which is
 /// exactly why `setup_signal_handlers` above no longer registers one.
 ///
-/// Blocks the *calling* thread (briefly — microseconds) until the
+/// Blocks the *calling* thread (briefly: microseconds) until the
 /// background thread has actually registered the handler before
 /// returning. This isn't just test convenience: without it, a `SIGHUP`
 /// delivered in the window between this function returning and the
 /// spawned thread reaching `tokio::signal::unix::signal()` would hit
 /// `SIGHUP`'s default disposition (terminate the process) instead of
-/// being caught — silently killing the supervisor on a signal that's
+/// being caught: silently killing the supervisor on a signal that's
 /// supposed to reload it. `Supervisor::run()` calls this before doing
 /// anything else that could plausibly provoke an operator to send
 /// `SIGHUP`, so the wait is never on any hot path.
@@ -128,7 +128,7 @@ pub(crate) fn spawn_sighup_listener() {
                 Ok(rt) => rt,
                 Err(e) => {
                     tracing::error!(
-                        "Failed to start SIGHUP listener runtime — SIGHUP reload will not \
+                        "Failed to start SIGHUP listener runtime: SIGHUP reload will not \
                          work until the supervisor is restarted: {}",
                         e
                     );
@@ -147,12 +147,12 @@ pub(crate) fn spawn_sighup_listener() {
                     };
 
                 // Handler is registered now (the constructor above
-                // registers synchronously) — let the caller proceed.
+                // registers synchronously): let the caller proceed.
                 let _ = ready_tx.send(());
 
                 loop {
                     stream.recv().await;
-                    tracing::info!("Received SIGHUP — scheduling configuration reload");
+                    tracing::info!("Received SIGHUP, scheduling configuration reload");
                     RELOAD_COUNTER.fetch_add(1, Ordering::SeqCst);
                 }
             });
@@ -165,7 +165,7 @@ pub(crate) fn spawn_sighup_listener() {
     // supervisor rather than hang its startup forever.
     if ready_rx.recv_timeout(Duration::from_secs(5)).is_err() {
         tracing::error!(
-            "SIGHUP listener did not confirm startup within 5s — SIGHUP reload may not work"
+            "SIGHUP listener did not confirm startup within 5s, SIGHUP reload may not work"
         );
     }
 }

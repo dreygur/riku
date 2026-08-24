@@ -8,13 +8,13 @@ use tempfile::TempDir;
 
 // `emit_app_restarted`/`emit_app_failed` read `RIKU_ROOT` via
 // `RikuPaths::from_env()`, and the notifier plugin reads
-// `RIKU_NOTIFY_WEBHOOK_URL` — both are process env vars. Serialize tests
+// `RIKU_NOTIFY_WEBHOOK_URL`: both are process env vars. Serialize tests
 // in this module that touch them so they don't race each other (no other
 // test in this crate reads these names).
 static ENV_GUARD: Mutex<()> = Mutex::new(());
 
 /// Installs the real `plugins/riku-notify` bundle into `riku_root`,
-/// exactly as `riku install-plugins --plugins riku-notify` would — not a
+/// exactly as `riku install-plugins --plugins riku-notify` would, not a
 /// test fixture standing in for it.
 fn install_real_notify_plugin(riku_root: &Path) {
     // CARGO_MANIFEST_DIR = .../riku/crates/riku-supervisor
@@ -40,7 +40,7 @@ fn install_real_notify_plugin(riku_root: &Path) {
 
 /// Spins up a one-shot HTTP listener on `127.0.0.1:0` and returns its
 /// port plus a join handle yielding the raw request once received (or
-/// `None` past its own deadline) — so a plugin that never fires a
+/// `None` past its own deadline): so a plugin that never fires a
 /// regression fails the test loudly instead of hanging the suite.
 fn one_shot_webhook_listener() -> (u16, std::thread::JoinHandle<Option<String>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -122,7 +122,7 @@ fn crash_triggers_app_restarted_event_through_the_real_notify_plugin() {
 
     // Do NOT clear the env vars yet: `emit_app_restarted` (called from
     // inside `restart_process()`, above) spawns its own background
-    // thread that reads them independently of this thread's timing —
+    // thread that reads them independently of this thread's timing,
     // clearing them here raced that thread and made this test hang
     // (it fell back to `$HOME/.riku` with no webhook URL configured,
     // so the plugin never fired and `received.join()` blocked forever).
@@ -149,8 +149,8 @@ fn crash_triggers_app_restarted_event_through_the_real_notify_plugin() {
     assert!(request.contains("\"restart_count\":1"), "got: {request}");
 }
 
-/// A crash that exceeds `max_restarts` never reaches `restart_process()`
-/// — it goes straight to removal — so `app.failed` has its own emit site
+/// A crash that exceeds `max_restarts` never reaches `restart_process()`,
+/// it goes straight to removal, so `app.failed` has its own emit site
 /// (`emit_app_failed`, called from the `__remove__` branch). Verify it
 /// actually fires, with `max_restarts: 0` so the very first crash
 /// detection is already "gave up" and there's no backoff to wait out.
