@@ -26,11 +26,8 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      # Installs mise and the helper tools declared in mise.toml
-      # (nextest, llvm-cov, audit, deny); caches them between runs.
-      - name: Install mise
-        uses: jdx/mise-action@v2
-
+      # Restored before mise runs so that any helper tool it does have to
+      # build from source can reuse the registry rather than refetching it.
       - name: Cache cargo registry and target
         uses: actions/cache@v4
         with:
@@ -39,6 +36,18 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      # mise's cargo backend prefers cargo-binstall when it is on PATH, which
+      # fetches the helper tools as prebuilt binaries. Without it each one is
+      # compiled from source on every cache miss, which is where the crates.io
+      # index timeouts have been landing.
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      # Installs mise and the helper tools declared in mise.toml
+      # (nextest, llvm-cov, audit, deny); caches them between runs.
+      - name: Install mise
+        uses: jdx/mise-action@v2
 
       # fmt:check + lint + build + test + test:doc + audit + deny.
       - name: Run CI pipeline
@@ -57,9 +66,13 @@ jobs:
       - uses: actions/checkout@v4
 
       # Replaces actions/setup-node: installs nub (and Node) and caches the store.
+      # working-directory is needed because defaults.run above does not apply to
+      # action steps: without it the action looks for the Node pin at the repo
+      # root, finds none, and leaves the job on the runner's host Node.
       - name: Install nub
         uses: nubjs/setup-nub@v0
         with:
+          working-directory: dashboard
           cache-dependency-path: dashboard/lock.yaml
 
       - name: Install dependencies

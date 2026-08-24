@@ -14,10 +14,15 @@ min_version = "2024.1.0"
 [tools]
 # Helper tools, version-pinned for reproducibility. Installed via the cargo
 # backend (compiled from source unless cargo-binstall is present).
-"cargo:cargo-nextest" = "latest"
-"cargo:cargo-llvm-cov" = "latest"
-"cargo:cargo-audit" = "latest"
-"cargo:cargo-deny" = "latest"
+#
+# These are exact pins, not ranges: "latest" re-resolves against the crates.io
+# index on every run, which both defeats the tool cache in CI and makes a
+# transient index timeout enough to fail the whole pipeline before a single
+# line of riku compiles. Bump them deliberately.
+"cargo:cargo-nextest" = "0.9.143"
+"cargo:cargo-llvm-cov" = "0.9.0"
+"cargo:cargo-audit" = "0.22.2"
+"cargo:cargo-deny" = "0.20.2"
 
 [tasks.fmt]
 description = "Format all code"
