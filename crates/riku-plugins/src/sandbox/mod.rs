@@ -24,6 +24,7 @@
 //! capabilities and are spawned through their own path, so they are unaffected.
 
 mod apply;
+mod enforce;
 mod paths;
 
 pub use apply::Sandbox;

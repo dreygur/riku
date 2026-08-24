@@ -18,6 +18,27 @@ fn env_u64(key: &str) -> Option<u64> {
     env::var(key).ok().and_then(|v| v.parse::<u64>().ok())
 }
 
+/// Applies `RLIMIT_NPROC`, which is UID-wide rather than per-process.
+///
+/// Apple targets do not expose this limit through nix, so a development build
+/// on macOS leaves it unset. Riku runs in production on Linux, where the limit
+/// is applied as configured.
+#[cfg(target_os = "linux")]
+fn set_max_processes(count: u64) -> std::io::Result<()> {
+    match setrlimit(Resource::RLIMIT_NPROC, count, count) {
+        Ok(()) => Ok(()),
+        Err(e) => Err(std::io::Error::other(format!(
+            "Failed to set process limit: {}",
+            e
+        ))),
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn set_max_processes(_count: u64) -> std::io::Result<()> {
+    Ok(())
+}
+
 /// Resource limits configuration for spawned processes
 #[derive(Debug, Clone)]
 pub struct ResourceLimits {
@@ -181,9 +202,10 @@ impl ResourceLimits {
 
         // Max processes limit
         if let Some(count) = self.max_processes {
-            setrlimit(Resource::RLIMIT_NPROC, count, count).map_err(|e| {
-                std::io::Error::other(format!("Failed to set process limit: {}", e))
-            })?;
+            match set_max_processes(count) {
+                Ok(()) => {}
+                Err(e) => return Err(e),
+            }
         }
 
         // Core file limit
