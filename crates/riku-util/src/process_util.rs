@@ -24,8 +24,10 @@ pub fn validate_node_version(version: &str) -> Result<(), String> {
         return Err("NODE_VERSION cannot be empty".to_string());
     }
 
-    // Basic version format check (e.g., "18.17.0", "18", "18.17.0-nightly")
-    let version_regex = Regex::new(r"^\d+(\.\d+)*(-[\w.]+)?$").unwrap();
+    // Accepts "18", "18.17.0", "18.x", "18.17.0-nightly". The value is only
+    // format-checked to warn on typos: no runtime reads it (docs/docs/env.md),
+    // so an npm-style wildcard segment must not draw a warning.
+    let version_regex = Regex::new(r"^\d+(\.(\d+|[xX*]))*(-[\w.]+)?$").unwrap();
     if !version_regex.is_match(version) {
         return Err(format!(
             "Invalid NODE_VERSION: '{}' - expected format like '18.17.0' or '18'",
@@ -66,9 +68,16 @@ mod tests {
     }
 
     #[test]
+    fn accepts_an_npm_style_wildcard_segment() {
+        assert!(validate_node_version("18.x").is_ok());
+        assert!(validate_node_version("18.17.x").is_ok());
+    }
+
+    #[test]
     fn test_validate_node_version_invalid() {
         assert!(validate_node_version("").is_err());
         assert!(validate_node_version("abc").is_err());
-        assert!(validate_node_version("18.x").is_err());
+        assert!(validate_node_version("x.18").is_err());
+        assert!(validate_node_version("18.y").is_err());
     }
 }
