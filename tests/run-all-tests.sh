@@ -2,8 +2,6 @@
 # Comprehensive test runner for Riku
 # Runs all tests: unit, integration, and deployment tests
 
-set -e
-
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -45,13 +43,12 @@ run_unit_tests() {
     print_header "Running Rust Unit Tests"
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
-    if cargo test --bin riku 2>&1 | grep -E "(running|test result)"; then
+    if cargo test --workspace --lib; then
         log_success "Rust unit tests passed"
         PASSED_TESTS=$((PASSED_TESTS + 1))
     else
         log_error "Rust unit tests failed"
         FAILED_TESTS=$((FAILED_TESTS + 1))
-        return 1
     fi
 }
 
@@ -60,13 +57,12 @@ run_integration_tests() {
     print_header "Running Rust Integration Tests"
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
-    if cargo test --test '*' 2>&1; then
+    if cargo test --workspace --test '*'; then
         log_success "Rust integration tests passed"
         PASSED_TESTS=$((PASSED_TESTS + 1))
     else
         log_error "Rust integration tests failed"
         FAILED_TESTS=$((FAILED_TESTS + 1))
-        return 1
     fi
 }
 
@@ -75,13 +71,12 @@ run_rust_tests() {
     print_header "Running All Rust Tests"
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
-    if cargo test 2>&1 | grep -E "(running|test result)"; then
+    if cargo test --workspace; then
         log_success "All Rust tests passed"
         PASSED_TESTS=$((PASSED_TESTS + 1))
     else
         log_error "Rust tests failed"
         FAILED_TESTS=$((FAILED_TESTS + 1))
-        return 1
     fi
 }
 
@@ -91,13 +86,12 @@ run_deployment_tests() {
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
     if [ -f "tests/deploy-smoke/test-all.sh" ]; then
-        if bash tests/deploy-smoke/test-all.sh 2>&1; then
+        if bash tests/deploy-smoke/test-all.sh; then
             log_success "Deployment tests passed"
             PASSED_TESTS=$((PASSED_TESTS + 1))
         else
             log_error "Deployment tests failed"
             FAILED_TESTS=$((FAILED_TESTS + 1))
-            return 1
         fi
     else
         log_warning "Deployment test script not found"
@@ -109,13 +103,12 @@ run_clippy() {
     print_header "Running Clippy Lints"
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
-    if cargo clippy -- -D warnings 2>&1; then
+    if cargo clippy --workspace --all-targets -- -D warnings; then
         log_success "Clippy lints passed"
         PASSED_TESTS=$((PASSED_TESTS + 1))
     else
         log_error "Clippy lints failed"
         FAILED_TESTS=$((FAILED_TESTS + 1))
-        return 1
     fi
 }
 
@@ -124,14 +117,13 @@ run_fmt_check() {
     print_header "Running Format Check"
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
-    if cargo fmt -- --check 2>&1; then
+    if cargo fmt --all -- --check; then
         log_success "Format check passed"
         PASSED_TESTS=$((PASSED_TESTS + 1))
     else
         log_error "Format check failed"
         log_info "Run 'cargo fmt' to fix formatting issues"
         FAILED_TESTS=$((FAILED_TESTS + 1))
-        return 1
     fi
 }
 
@@ -140,13 +132,12 @@ run_build() {
     print_header "Building Release Binary"
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
-    if cargo build --release 2>&1; then
+    if cargo build --release --workspace; then
         log_success "Release build succeeded"
         PASSED_TESTS=$((PASSED_TESTS + 1))
     else
         log_error "Release build failed"
         FAILED_TESTS=$((FAILED_TESTS + 1))
-        return 1
     fi
 }
 
@@ -255,7 +246,10 @@ main() {
     done
 
     # Change to project root
-    cd "$(dirname "$0")/.."
+    if ! cd "$(dirname "$0")/.."; then
+        log_error "Could not enter the project root"
+        exit 1
+    fi
 
     print_header "Riku Test Suite"
     echo "Starting test run..."
@@ -265,7 +259,7 @@ main() {
         run_rust_tests
         run_deployment_tests
         run_clippy
-        run_fmt
+        run_fmt_check
         run_build
     else
         if [ "$run_unit" = true ]; then
@@ -294,9 +288,6 @@ main() {
     fi
 
     print_summary
-    exit_code=$?
-
-    exit $exit_code
 }
 
 main "$@"
