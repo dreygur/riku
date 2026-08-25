@@ -5,7 +5,7 @@ use tempfile::TempDir;
 
 #[test]
 fn test_log_rotator_creation() {
-    let rotator = LogRotator::with_defaults();
+    let rotator = LogRotator::new(LogRotationConfig::default());
     assert_eq!(rotator.config.max_size, 10 * 1024 * 1024);
     assert_eq!(rotator.config.retention_count, 5);
 }
@@ -19,7 +19,7 @@ fn test_needs_rotation() {
     let mut file = File::create(&log_path).unwrap();
     writeln!(file, "Small log entry").unwrap();
 
-    let rotator = LogRotator::with_defaults();
+    let rotator = LogRotator::new(LogRotationConfig::default());
     assert!(!rotator.needs_rotation(&log_path).unwrap());
 }
 
@@ -49,16 +49,4 @@ fn test_rotate_log() {
     assert!(std::fs::read_to_string(&rotated_path)
         .unwrap()
         .contains("Log content"));
-}
-
-#[test]
-fn test_log_size() {
-    let temp_dir = TempDir::new().unwrap();
-    let log_path = temp_dir.path().join("test.log");
-
-    let mut file = File::create(&log_path).unwrap();
-    writeln!(file, "Test content").unwrap();
-
-    let size = get_log_size(&log_path).unwrap();
-    assert!(size > 0);
 }

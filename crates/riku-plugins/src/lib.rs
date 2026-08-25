@@ -48,7 +48,6 @@ pub(crate) use riku_util as util;
 
 pub mod addon;
 pub mod bundles;
-#[allow(unused_imports)]
 pub mod discovery;
 pub mod events;
 pub mod executor;
@@ -68,7 +67,6 @@ pub mod ui;
 
 // Re-export the public API (used by CLI plugin commands and external code)
 pub use addon::{AddonService, InstanceRecord};
-#[allow(unused_imports)]
 pub use discovery::{list_plugins, plugin_exists};
 pub use events::{EventBus, EventEnvelope, EventName};
 pub use filters::FilterBus;

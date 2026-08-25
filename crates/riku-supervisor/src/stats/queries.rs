@@ -10,48 +10,6 @@ use super::manager::StatsManager;
 use super::types::{AppStats, HealthStatus, ProcessStatus};
 
 impl StatsManager {
-    /// Get stats for a specific process.
-    #[cfg(test)]
-    pub fn get_process_stats(&self, process_id: &str) -> Option<&super::types::ProcessStats> {
-        self.stats.get(process_id)
-    }
-
-    /// Get stats for all processes of an app.
-    #[cfg(test)]
-    pub fn get_app_stats(&self, app: &str) -> AppStats {
-        let processes: Vec<super::types::ProcessStats> = self
-            .stats
-            .values()
-            .filter(|s| s.app == app)
-            .cloned()
-            .collect();
-
-        let total_processes = processes.len() as u32;
-        let running_processes = processes
-            .iter()
-            .filter(|p| p.status == ProcessStatus::Running)
-            .count() as u32;
-        let healthy_processes = processes
-            .iter()
-            .filter(|p| p.health_check_status == HealthStatus::Healthy)
-            .count() as u32;
-        let total_restarts = processes.iter().map(|p| p.restart_count).sum();
-        let total_memory_bytes = processes.iter().map(|p| p.memory_bytes).sum();
-        let total_cpu_time_ms = processes.iter().map(|p| p.cpu_time_ms).sum();
-
-        AppStats {
-            app: app.to_string(),
-            total_processes,
-            running_processes,
-            healthy_processes,
-            total_restarts,
-            total_memory_bytes,
-            total_cpu_time_ms,
-            processes,
-            last_updated: Utc::now(),
-        }
-    }
-
     /// Get stats for all apps.
     pub fn get_all_stats(&self) -> Vec<AppStats> {
         let mut apps: HashMap<String, AppStats> = HashMap::new();
@@ -105,11 +63,5 @@ impl StatsManager {
         for process_id in process_ids {
             self.remove_process(&process_id);
         }
-    }
-
-    /// Get total process count.
-    #[cfg(test)]
-    pub fn total_processes(&self) -> usize {
-        self.stats.len()
     }
 }

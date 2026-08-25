@@ -39,14 +39,6 @@ impl LogRotator {
         LogRotator { config }
     }
 
-    /// Create a log rotator with default configuration.
-    #[cfg(test)]
-    pub fn with_defaults() -> Self {
-        LogRotator {
-            config: LogRotationConfig::default(),
-        }
-    }
-
     /// Check if a log file needs rotation.
     pub fn needs_rotation(&self, log_path: &Path) -> Result<bool> {
         if !log_path.exists() {
@@ -128,13 +120,4 @@ impl LogRotator {
 
         Ok(())
     }
-}
-
-/// Get log file size in bytes.
-#[cfg(test)]
-pub fn get_log_size(log_path: &Path) -> Result<u64> {
-    if !log_path.exists() {
-        return Ok(0);
-    }
-    Ok(fs::metadata(log_path)?.len())
 }

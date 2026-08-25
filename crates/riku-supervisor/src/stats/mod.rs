@@ -15,12 +15,33 @@ pub use types::{AppStats, HealthStatus, ProcessStatus};
 
 #[cfg(test)]
 mod tests {
+    use super::types::ProcessStats;
     use super::*;
+
+    fn process_stats(manager: &StatsManager, process_id: &str) -> ProcessStats {
+        manager
+            .get_all_stats()
+            .into_iter()
+            .flat_map(|app| app.processes)
+            .find(|p| p.process_id == process_id)
+            .unwrap_or_else(|| panic!("no stats tracked for {}", process_id))
+    }
+
+    fn app_stats(manager: &StatsManager, app: &str) -> AppStats {
+        manager
+            .get_all_stats()
+            .into_iter()
+            .find(|a| a.app == app)
+            .unwrap_or_else(|| panic!("no stats tracked for app {}", app))
+    }
 
     #[test]
     fn test_stats_manager_creation() {
         let manager = StatsManager::new();
-        assert_eq!(manager.total_processes(), 0);
+        assert!(
+            manager.get_all_stats().is_empty(),
+            "a fresh manager must track no apps"
+        );
     }
 
     #[test]
@@ -33,9 +54,7 @@ mod tests {
             1,
         );
 
-        let stats = manager.get_process_stats("app-web-1");
-        assert!(stats.is_some());
-        let stats = stats.unwrap();
+        let stats = process_stats(&manager, "app-web-1");
         assert_eq!(stats.app, "app");
         assert_eq!(stats.kind, "web");
         assert_eq!(stats.status, ProcessStatus::Starting);
@@ -52,7 +71,7 @@ mod tests {
         );
         manager.mark_running("app-web-1", 12345);
 
-        let stats = manager.get_process_stats("app-web-1").unwrap();
+        let stats = process_stats(&manager, "app-web-1");
         assert_eq!(stats.status, ProcessStatus::Running);
         assert_eq!(stats.pid, Some(12345));
     }
@@ -68,7 +87,7 @@ mod tests {
         );
         manager.update_health_check("app-web-1", HealthStatus::Healthy);
 
-        let stats = manager.get_process_stats("app-web-1").unwrap();
+        let stats = process_stats(&manager, "app-web-1");
         assert_eq!(stats.health_check_status, HealthStatus::Healthy);
         assert!(stats.last_health_check.is_some());
     }
@@ -92,9 +111,9 @@ mod tests {
         manager.mark_running("app-web-2", 12346);
         manager.update_health_check("app-web-1", HealthStatus::Healthy);
 
-        let app_stats = manager.get_app_stats("app");
-        assert_eq!(app_stats.total_processes, 2);
-        assert_eq!(app_stats.running_processes, 2);
-        assert_eq!(app_stats.healthy_processes, 1);
+        let stats = app_stats(&manager, "app");
+        assert_eq!(stats.total_processes, 2);
+        assert_eq!(stats.running_processes, 2);
+        assert_eq!(stats.healthy_processes, 1);
     }
 }
