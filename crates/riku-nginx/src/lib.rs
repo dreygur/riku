@@ -84,28 +84,39 @@ pub fn reload_nginx() -> bool {
     }
 }
 
-/// Remove nginx configuration for an app.
+/// Remove nginx configuration for an app: the rendered config, its
+/// sites-enabled symlink, and the socket/cert/key files beside it.
 pub fn remove_nginx_config(app: &str, paths: &crate::config::RikuPaths) -> Result<()> {
     let config_file = paths.nginx_root.join(format!("{}.conf", app));
     if config_file.exists() {
-        fs::remove_file(&config_file)?;
+        if let Err(e) = fs::remove_file(&config_file) {
+            return Err(anyhow::anyhow!(
+                "failed to remove nginx config {:?}: {}",
+                config_file,
+                e
+            ));
+        }
     }
 
-    // Remove symlink from /etc/nginx/sites-enabled/ if it exists
-    let nginx_sites_enabled = Path::new("/etc/nginx/sites-enabled");
-    if nginx_sites_enabled.exists() {
-        let symlink_path = nginx_sites_enabled.join(format!("{}.conf", app));
-        if symlink_path.exists() {
+    let sites_enabled = &paths.nginx_sites_enabled;
+    if sites_enabled.exists() {
+        let symlink_path = sites_enabled.join(format!("{}.conf", app));
+        // symlink_metadata, not exists: the config file this points at is
+        // removed just above, and exists() follows the link, so it reports
+        // false for the dangling symlink we still need to clear. Leaving one
+        // behind breaks every later `nginx -s reload` on the host.
+        if symlink_path.symlink_metadata().is_ok() {
             let _ = fs::remove_file(&symlink_path);
             reload_nginx();
         }
     }
 
-    // Also remove associated socket, cert, and key files
     for ext in ["sock", "key", "crt"] {
         let file = paths.nginx_root.join(format!("{}.{}", app, ext));
         if file.exists() {
-            fs::remove_file(&file)?;
+            if let Err(e) = fs::remove_file(&file) {
+                return Err(anyhow::anyhow!("failed to remove {:?}: {}", file, e));
+            }
         }
     }
 

@@ -25,7 +25,6 @@ use anyhow::Result;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
-use std::path::Path;
 use std::time::SystemTime;
 
 use crate::config::RikuPaths;
@@ -152,7 +151,7 @@ fn build_app_entry(
     let _ = crate::util::parse_settings(&env_file, &mut env_map);
 
     let nginx_config = paths.nginx_root.join(format!("{}.conf", app));
-    let nginx_enabled_symlink = Path::new("/etc/nginx/sites-enabled").join(format!("{}.conf", app));
+    let nginx_enabled_symlink = paths.nginx_sites_enabled.join(format!("{}.conf", app));
 
     let workers = app_stats
         .get(app)
