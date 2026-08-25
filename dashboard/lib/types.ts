@@ -65,6 +65,7 @@ export interface PluginBundle {
   version: string;
   type: string;
   description: string | null;
+  author: string | null;
   ui: PluginUi | null;
 }
 export interface PluginsList {

@@ -45,6 +45,7 @@ pub(crate) async fn list(
                 "version": m.version,
                 "type": format!("{:?}", m.plugin_type).to_lowercase(),
                 "description": m.description,
+                "author": m.author,
                 "ui": m.ui.nav_label.as_ref().map(|nav_label| json!({ "nav_label": nav_label })),
             })
         })
