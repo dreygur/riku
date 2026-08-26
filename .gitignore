@@ -134,3 +134,6 @@ authorized_keys.*
 riku-agent-*.log
 riku-confirm-*
 docs/site/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
