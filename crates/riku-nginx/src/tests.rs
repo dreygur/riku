@@ -46,7 +46,7 @@ fn test_generate_nginx_config() {
         "myapp.example.com".to_string(),
     );
 
-    let paths = crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
+    let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
 
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
@@ -66,7 +66,7 @@ fn test_nginx_config_with_bind_address() {
     env.insert("BIND_ADDRESS".to_string(), "192.168.1.1".to_string());
     env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
 
-    let paths = crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
+    let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
     let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
@@ -84,7 +84,7 @@ fn test_nginx_config_with_ipv4_address() {
     env.insert("NGINX_IPV4_ADDRESS".to_string(), "192.168.1.1".to_string());
     env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
 
-    let paths = crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
+    let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
     let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
@@ -103,7 +103,7 @@ fn test_nginx_config_disable_ipv6() {
     env.insert("DISABLE_IPV6".to_string(), "true".to_string());
     env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
 
-    let paths = crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
+    let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
     let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
@@ -127,7 +127,7 @@ fn test_nginx_config_with_cache() {
     env.insert("NGINX_CACHE_SIZE".to_string(), "2".to_string());
     env.insert("NGINX_CACHE_TIME".to_string(), "7200".to_string());
 
-    let paths = crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
+    let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
     let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
@@ -148,7 +148,7 @@ fn test_nginx_config_with_cloudflare_acl() {
     env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
     env.insert("NGINX_CLOUDFLARE_ACL".to_string(), "true".to_string());
 
-    let paths = crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
+    let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
     let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
@@ -167,7 +167,7 @@ fn test_nginx_config_https_only() {
     env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
     env.insert("NGINX_HTTPS_ONLY".to_string(), "true".to_string());
 
-    let paths = crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
+    let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
     let _ = generate_nginx_config("myapp", &app_path, &env, &paths);
@@ -189,7 +189,7 @@ fn test_default_template_includes_filter_augmented_content() {
     let app_path = temp_dir.path().join("myapp");
     fs::create_dir(&app_path).unwrap();
 
-    let paths = crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
+    let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
     install_augmenter_filter(&paths);
 
@@ -213,7 +213,7 @@ fn test_static_template_includes_filter_augmented_content() {
     let app_path = temp_dir.path().join("myapp");
     fs::create_dir(&app_path).unwrap();
 
-    let paths = crate::config::RikuPaths::from_dirs(temp_dir.path().join(".riku"), temp_dir.path());
+    let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
     install_augmenter_filter(&paths);
 
@@ -226,5 +226,27 @@ fn test_static_template_includes_filter_augmented_content() {
     assert!(
         config_content.contains("augmented-by-plugin"),
         "got: {config_content}"
+    );
+}
+
+#[test]
+fn remove_nginx_config_clears_a_symlink_left_dangling_by_the_config_removal() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
+    fs::create_dir_all(&paths.nginx_root).unwrap();
+    fs::create_dir_all(&paths.nginx_sites_enabled).unwrap();
+
+    let config_file = paths.nginx_root.join("myapp.conf");
+    fs::write(&config_file, "server {}\n").unwrap();
+    let symlink = paths.nginx_sites_enabled.join("myapp.conf");
+    std::os::unix::fs::symlink(&config_file, &symlink).unwrap();
+
+    super::remove_nginx_config("myapp", &paths).unwrap();
+
+    assert!(
+        symlink.symlink_metadata().is_err(),
+        "sites-enabled still holds {:?}, which now points at a deleted file and \
+         breaks every later nginx reload",
+        symlink
     );
 }

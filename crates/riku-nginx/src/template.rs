@@ -1,7 +1,7 @@
 //! Nginx config template rendering and config file installation.
 //!
 //! Registers Tera templates, selects the right template for an app's config,
-//! renders the file, and manages the /etc/nginx/sites-enabled/ symlink.
+//! renders the file, and manages the nginx sites-enabled symlink.
 
 use anyhow::Result;
 use std::collections::HashMap;
@@ -48,7 +48,7 @@ pub(super) fn generate_nginx_config_from_template(
     crate::util::write_atomic(&config_file, config_content.as_bytes())?;
     validate_nginx_config(&config_file)?;
 
-    install_nginx_symlink(&config_file, app);
+    install_nginx_symlink(&config_file, app, paths);
 
     Ok(())
 }
@@ -115,14 +115,17 @@ fn select_template(env: &HashMap<String, String>) -> &'static str {
     }
 }
 
-/// Create or update the /etc/nginx/sites-enabled/ symlink and reload nginx.
-fn install_nginx_symlink(config_file: &Path, app: &str) {
-    let nginx_sites_enabled = Path::new("/etc/nginx/sites-enabled");
-    if !nginx_sites_enabled.exists() {
+/// Create or update the app's sites-enabled symlink and reload nginx.
+///
+/// Does nothing when the sites-enabled directory is absent, which is the
+/// normal case on a host with no nginx installed.
+fn install_nginx_symlink(config_file: &Path, app: &str, paths: &crate::config::RikuPaths) {
+    let sites_enabled = &paths.nginx_sites_enabled;
+    if !sites_enabled.exists() {
         return;
     }
 
-    let symlink_path = nginx_sites_enabled.join(format!("{}.conf", app));
+    let symlink_path = sites_enabled.join(format!("{}.conf", app));
 
     if symlink_path.symlink_metadata().is_ok() {
         if let Err(e) = fs::remove_file(&symlink_path) {

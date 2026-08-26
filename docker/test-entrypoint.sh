@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# The deploy path reloads nginx after writing a config. With no nginx running
+# that reload fails on an empty /run/nginx.pid and the tests never exercise it.
+nginx
+
 PASS=0
 FAIL=0
 ERRORS=()
@@ -12,9 +16,17 @@ run_test() {
     test_home=$(mktemp -d /tmp/riku-test-XXXXXX)
     export RIKU_ROOT="$test_home"
 
+    # Riku symlinks each generated config into the nginx sites-enabled
+    # directory, which is system-wide and so outside $test_home. Point it
+    # inside instead: otherwise the rm -rf below leaves a dangling symlink in
+    # /etc/nginx/sites-enabled and every later test's nginx reload fails on it.
+    local sites_enabled="$test_home/nginx-sites-enabled"
+    mkdir -p "$sites_enabled"
+    export RIKU_NGINX_SITES_ENABLED="$sites_enabled"
+
     echo ""
     echo "━━━ $name ━━━"
-    if RIKU_ROOT="$test_home" bash "$script" 2>&1; then
+    if RIKU_ROOT="$test_home" RIKU_NGINX_SITES_ENABLED="$sites_enabled" bash "$script" 2>&1; then
         echo "✓ PASS: $name"
         PASS=$((PASS + 1))
     else

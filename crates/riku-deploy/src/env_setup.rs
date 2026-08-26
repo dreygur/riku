@@ -181,43 +181,6 @@ pub fn update_env_and_redeploy(
     super::do_deploy(app, paths, &deltas, None)
 }
 
-/// Inject WSGI socket variables into `env` and persist them to the ENV file.
-///
-/// This must happen before a WSGI nginx config is generated so that the
-/// config template sees `NGINX_WSGI` and `UWSGI_SOCKET`.
-#[cfg(test)]
-pub fn setup_wsgi_env(
-    app: &str,
-    paths: &RikuPaths,
-    env: &mut HashMap<String, String>,
-) -> Result<()> {
-    let socket_path = paths.nginx_root.join(format!("{}.sock", app));
-    env.insert("NGINX_WSGI".to_string(), "true".to_string());
-    env.insert(
-        "UWSGI_SOCKET".to_string(),
-        socket_path.to_string_lossy().to_string(),
-    );
-    env.insert(
-        "SOCKET".to_string(),
-        format!("unix://{}", socket_path.to_string_lossy()),
-    );
-
-    let env_dir = paths.env_root.join(app);
-    fs::create_dir_all(&env_dir)?;
-    let env_file = env_dir.join("ENV");
-    let mut env_content = if env_file.exists() {
-        fs::read_to_string(&env_file)?
-    } else {
-        String::new()
-    };
-    if !env_content.contains("NGINX_WSGI") {
-        env_content.push_str("NGINX_WSGI=true\n");
-        env_content.push_str(&format!("UWSGI_SOCKET={}\n", socket_path.display()));
-        fs::write(&env_file, &env_content)?;
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 #[path = "env_setup_tests.rs"]
 mod tests;

@@ -7,7 +7,7 @@
 //! - [`procfile`]: Procfile parsing and cron validation
 //! - [`env`]: KEY=VALUE file parsing, variable expansion
 //! - [`ssh_keys`]: SSH authorized_keys management
-//! - [`process_util`]: free-port allocation, shell command helpers, binary checks
+//! - [`process_util`]: free-port allocation, Node version validation
 
 pub mod cron;
 pub mod deploy_logger;

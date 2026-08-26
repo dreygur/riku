@@ -264,6 +264,7 @@ NODE_VERSION=18.17.0
 ```
 
 - **Default:** (none, uses whatever `node` is on `$PATH`)
+- **Accepts:** `18`, `18.17`, `18.17.0`, `18.x`, `18.17.0-nightly`
 - **Description:** format-validated (a warning is printed if it doesn't
   look like a version string) but **not currently read by the node
   runtime plugin**: setting it does not select or install a specific

@@ -79,6 +79,7 @@ export default function PluginsPage() {
                 {b.type}
               </span>
               <span className="min-w-0 break-words text-muted-foreground">{b.description}</span>
+              {b.author && <span className="text-muted-foreground">by {b.author}</span>}
             </div>
           ))}
         </div>

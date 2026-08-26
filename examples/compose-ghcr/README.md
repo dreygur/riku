@@ -5,9 +5,8 @@ detecting a compose app, pulling a private GHCR image, and auto-updating a
 service when you push a new image tag: with no `git push riku`.
 
 This is a real demo app you `git push` to an actual riku server that has
-Docker or Podman installed: not a self-contained sandbox (see
-`tests/e2e/riku-sandbox/` for a compose file that boots a full riku instance
-with demo apps already deployed).
+Docker or Podman installed: not a self-contained sandbox (see `tests/demo/`
+for a compose file that boots a full riku instance you can push to).
 
 ## 1. Build and push the demo image to your own GHCR
 

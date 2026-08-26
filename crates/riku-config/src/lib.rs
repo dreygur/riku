@@ -33,6 +33,9 @@ pub const NGINX_CACHE_ANY_DEFAULT: u32 = 3600;
 /// Default nginx cache control time in seconds (1 hour).
 pub const NGINX_CACHE_CONTROL_DEFAULT: u32 = 3600;
 
+/// Where nginx looks for enabled site configs on a stock Debian/Ubuntu install.
+pub const DEFAULT_NGINX_SITES_ENABLED: &str = "/etc/nginx/sites-enabled";
+
 /// All resolved directory paths used by riku.
 #[derive(Debug, Clone)]
 pub struct RikuPaths {
@@ -51,6 +54,12 @@ pub struct RikuPaths {
     pub workers_enabled: PathBuf,
     pub acme_root: PathBuf,
     pub acme_www: PathBuf,
+    /// Directory nginx reads enabled site configs from. Every generated app
+    /// config is symlinked in here, so unlike the fields above it is a
+    /// system-wide path (`/etc/nginx/sites-enabled`), not one under
+    /// `riku_root`. `RIKU_NGINX_SITES_ENABLED` overrides it so a test run can
+    /// point it somewhere disposable instead of writing to the real nginx.
+    pub nginx_sites_enabled: PathBuf,
 }
 
 impl RikuPaths {
@@ -69,6 +78,10 @@ impl RikuPaths {
             .map(PathBuf::from)
             .unwrap_or_else(|_| home.join(".acme.sh"));
 
+        let nginx_sites_enabled = env::var("RIKU_NGINX_SITES_ENABLED")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from(DEFAULT_NGINX_SITES_ENABLED));
+
         Self {
             plugin_root: riku_root.join("plugins"),
             app_root: riku_root.join("apps"),
@@ -85,6 +98,7 @@ impl RikuPaths {
             riku_root,
             riku_script,
             acme_root,
+            nginx_sites_enabled,
         }
     }
 
@@ -111,7 +125,11 @@ impl RikuPaths {
     /// Not `#[cfg(test)]`: other crates' tests need to call it too, and that
     /// attribute doesn't cross crate boundaries.
     pub fn for_tests(root: &Path) -> Self {
-        Self::from_dirs(root.join(".riku"), root)
+        let mut paths = Self::from_dirs(root.join(".riku"), root);
+        // Ignore any RIKU_NGINX_SITES_ENABLED the surrounding process set: a
+        // test must never symlink into the machine's real nginx.
+        paths.nginx_sites_enabled = root.join("nginx-sites-enabled");
+        paths
     }
 }
 

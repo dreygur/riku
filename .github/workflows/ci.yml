@@ -123,6 +123,19 @@ jobs:
           chmod +x tests/deploy-smoke/quick-test.sh
           ./tests/deploy-smoke/quick-test.sh test-node node
 
+  e2e:
+    name: Docker E2E
+    runs-on: ubuntu-latest
+    needs: ci
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Build the e2e image
+        run: docker build -f docker/Dockerfile.test -t riku-e2e:ci .
+
+      - name: Run the e2e cases
+        run: docker run --rm riku-e2e:ci
+
   release:
     name: Create Release
     runs-on: ubuntu-latest

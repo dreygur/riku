@@ -85,3 +85,23 @@ fn from_env_uses_home() {
     let paths = RikuPaths::from_env().expect("HOME is set in the test environment");
     assert!(paths.riku_root.is_absolute() || env::var("RIKU_ROOT").is_ok());
 }
+
+#[test]
+fn sites_enabled_defaults_to_the_system_nginx_directory() {
+    let p = paths_with_root("/srv/riku", "/home/riku");
+    assert_eq!(
+        p.nginx_sites_enabled,
+        Path::new(DEFAULT_NGINX_SITES_ENABLED),
+        "without an override riku must enable sites where nginx reads them"
+    );
+}
+
+#[test]
+fn for_tests_keeps_sites_enabled_inside_the_test_root() {
+    let p = RikuPaths::for_tests(Path::new("/tmp/riku-case"));
+    assert_eq!(
+        p.nginx_sites_enabled,
+        Path::new("/tmp/riku-case/nginx-sites-enabled"),
+        "a test must never symlink into the machine's real nginx"
+    );
+}
