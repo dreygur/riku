@@ -10,7 +10,7 @@
 Django>=5.2.16,<6.0
 
 # SQL parser (required by Django)
-sqlparse>=0.5.0
+sqlparse>=0.6.0
 
 # PostgreSQL database adapter
 psycopg2-binary>=2.9.9
