@@ -42,7 +42,7 @@
     "@vitejs/plugin-react": "^6.0.3",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4.3.1",
-    "typescript": "^5.8.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
   "packageManager": "nub@0.2.10",
