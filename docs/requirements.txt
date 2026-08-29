@@ -11,4 +11,4 @@ mkdocs-material>=9.5.0
 mkdocs-minify-plugin>=0.7.0
 
 # Markdown extensions
-pymdown-extensions>=10.0
+pymdown-extensions>=11.0.1
