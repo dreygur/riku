@@ -1,13 +1,16 @@
 //! Riku runtime plugin: Container
 //!
 //! Handles apps with a `Dockerfile`, `Containerfile`, or a compose file
-//! (`compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`).
-//! Auto-detects Docker or Podman. Subcommands: detect, build, env, start,
-//! pull-service.
+//! (`compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`,
+//! or the one `COMPOSE_FILE` names). Auto-detects Docker or Podman.
+//! Subcommands: detect, build, env, start, pull-service.
 //!
-//! Compose apps pull pre-built images rather than building from a local
-//! Dockerfile. If `GHCR_USERNAME`/`GHCR_TOKEN` are set in the app's ENV file,
-//! the plugin logs in to `ghcr.io` before pulling.
+//! Compose apps pull their registry images, then build every service that
+//! has a `build:` section. If `GHCR_USERNAME`/`GHCR_TOKEN` are set in the
+//! app's ENV file, the plugin logs in to `ghcr.io` before pulling.
+
+mod compose_cli;
+mod compose_file;
 
 use anyhow::{anyhow, bail, Result};
 use std::collections::HashMap;
@@ -16,12 +19,8 @@ use std::io::Write as IoWrite;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-const COMPOSE_FILE_NAMES: [&str; 4] = [
-    "compose.yaml",
-    "compose.yml",
-    "docker-compose.yaml",
-    "docker-compose.yml",
-];
+use compose_cli::{compose_cmd, compose_cmd_display, pull_and_build, run_compose};
+use compose_file::{compose_file, default_compose_file, requested_compose_file};
 
 fn main() -> Result<()> {
     let cmd = std::env::args().nth(1).unwrap_or_default();
@@ -44,19 +43,20 @@ fn main() -> Result<()> {
     }
 }
 
-/// Find the app's compose file, following docker compose's own precedence.
-fn compose_file(app_path: &Path) -> Option<PathBuf> {
-    COMPOSE_FILE_NAMES
-        .iter()
-        .map(|name| app_path.join(name))
-        .find(|path| path.exists())
+/// Whether this plugin should handle the app.
+///
+/// A set `COMPOSE_FILE` claims the app even if it names a bad path, so the
+/// validation error surfaces from `build` instead of another runtime plugin
+/// silently taking the deploy.
+fn handles_app(app_path: &Path, requested: Option<&str>) -> bool {
+    requested.is_some()
+        || app_path.join("Dockerfile").exists()
+        || app_path.join("Containerfile").exists()
+        || default_compose_file(app_path).is_some()
 }
 
 fn detect(app_path: &Path) -> Result<()> {
-    if app_path.join("Dockerfile").exists()
-        || app_path.join("Containerfile").exists()
-        || compose_file(app_path).is_some()
-    {
+    if handles_app(app_path, requested_compose_file().as_deref()) {
         std::process::exit(0);
     }
     std::process::exit(1);
@@ -76,25 +76,6 @@ fn which(bin: &str) -> bool {
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
-}
-
-/// Program and leading args for invoking compose with the active container runtime.
-fn compose_cmd() -> (&'static str, Vec<&'static str>) {
-    if runtime() == "podman" {
-        if which("podman-compose") {
-            return ("podman-compose", vec![]);
-        }
-        return ("podman", vec!["compose"]);
-    }
-    ("docker", vec!["compose"])
-}
-
-fn compose_cmd_display((program, base_args): &(&'static str, Vec<&'static str>)) -> String {
-    if base_args.is_empty() {
-        program.to_string()
-    } else {
-        format!("{} {}", program, base_args.join(" "))
-    }
 }
 
 /// Read `KEY=VALUE` lines from the app's ENV file (ignoring comments/blanks).
@@ -141,23 +122,17 @@ fn ghcr_login(env_path: Option<&Path>) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::question_mark)]
 fn build(app_path: &Path, app: &str, env_path: Option<&Path>) -> Result<()> {
-    if let Some(compose) = compose_file(app_path) {
-        ghcr_login(env_path)?;
-        let (program, base_args) = compose_cmd();
-        let status = Command::new(program)
-            .args(&base_args)
-            .args([
-                "-f",
-                &compose.file_name().unwrap().to_string_lossy(),
-                "pull",
-            ])
-            .current_dir(app_path)
-            .status()?;
-        if !status.success() {
-            bail!("compose pull failed");
+    let compose = match compose_file(app_path) {
+        Ok(compose) => compose,
+        Err(e) => return Err(e),
+    };
+    if let Some(compose) = compose {
+        if let Err(e) = ghcr_login(env_path) {
+            return Err(e);
         }
-        return Ok(());
+        return pull_and_build(app_path, &compose);
     }
 
     let rt = runtime();
@@ -169,10 +144,14 @@ fn build(app_path: &Path, app: &str, env_path: Option<&Path>) -> Result<()> {
         "Dockerfile"
     };
 
-    let status = Command::new(rt)
+    let status = match Command::new(rt)
         .args(["build", "-t", &image, "-f", dockerfile, "."])
         .current_dir(app_path)
-        .status()?;
+        .status()
+    {
+        Ok(status) => status,
+        Err(e) => return Err(anyhow!("failed to run {rt} build: {e}")),
+    };
 
     if !status.success() {
         bail!("Container build failed");
@@ -180,13 +159,15 @@ fn build(app_path: &Path, app: &str, env_path: Option<&Path>) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::question_mark)]
 fn print_env(app_path: &Path, app: &str) -> Result<()> {
-    if let Some(compose) = compose_file(app_path) {
+    let compose = match compose_file(app_path) {
+        Ok(compose) => compose,
+        Err(e) => return Err(e),
+    };
+    if let Some(compose) = compose {
         println!("CONTAINER_RUNTIME={}", runtime());
-        println!(
-            "COMPOSE_FILE={}",
-            compose.file_name().unwrap().to_string_lossy()
-        );
+        println!("COMPOSE_FILE={}", compose.arg());
         return Ok(());
     }
     let image = format!("riku-{}", app);
@@ -195,14 +176,15 @@ fn print_env(app_path: &Path, app: &str) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::question_mark)]
 fn print_start(app_path: &Path, app: &str) -> Result<()> {
-    if let Some(compose) = compose_file(app_path) {
+    let compose = match compose_file(app_path) {
+        Ok(compose) => compose,
+        Err(e) => return Err(e),
+    };
+    if let Some(compose) = compose {
         let cmd = compose_cmd();
-        println!(
-            "{} -f {} up",
-            compose_cmd_display(&cmd),
-            compose.file_name().unwrap().to_string_lossy()
-        );
+        println!("{} -f {} up", compose_cmd_display(&cmd), compose.arg());
         return Ok(());
     }
 
@@ -215,106 +197,31 @@ fn print_start(app_path: &Path, app: &str) -> Result<()> {
 /// Pull and recreate a single compose service, without touching the rest of
 /// the stack. Used by the supervisor's periodic image-watch check to apply
 /// a freshly pushed image.
+#[allow(clippy::question_mark)]
 fn pull_service(app_path: &Path, service: &str, env_path: Option<&Path>) -> Result<()> {
-    let Some(compose) = compose_file(app_path) else {
-        bail!("No compose file found in {}", app_path.display());
+    let compose = match compose_file(app_path) {
+        Ok(Some(compose)) => compose,
+        Ok(None) => bail!("No compose file found in {}", app_path.display()),
+        Err(e) => return Err(e),
     };
-    ghcr_login(env_path)?;
-
-    let (program, base_args) = compose_cmd();
-    let compose_filename = compose.file_name().unwrap().to_string_lossy().into_owned();
-
-    let status = Command::new(program)
-        .args(&base_args)
-        .args(["-f", &compose_filename, "pull", service])
-        .current_dir(app_path)
-        .status()?;
-    if !status.success() {
-        bail!("compose pull failed for service '{}'", service);
+    if let Err(e) = ghcr_login(env_path) {
+        return Err(e);
     }
 
-    let status = Command::new(program)
-        .args(&base_args)
-        .args(["-f", &compose_filename, "up", "-d", "--no-deps", service])
-        .current_dir(app_path)
-        .status()?;
-    if !status.success() {
-        bail!("compose up failed for service '{}'", service);
+    let pull_step = format!("compose pull for service '{service}'");
+    if let Err(e) = run_compose(app_path, &compose, &["pull", service], &pull_step) {
+        return Err(e);
     }
-    Ok(())
+
+    let up_step = format!("compose up for service '{service}'");
+    run_compose(
+        app_path,
+        &compose,
+        &["up", "-d", "--no-deps", service],
+        &up_step,
+    )
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs::File;
-    use tempfile::TempDir;
-
-    #[test]
-    fn compose_file_prefers_compose_yaml_over_docker_compose_yml() {
-        let tmp = TempDir::new().unwrap();
-        let dir = tmp.path();
-        File::create(dir.join("docker-compose.yml")).unwrap();
-        File::create(dir.join("compose.yaml")).unwrap();
-
-        assert_eq!(compose_file(dir), Some(dir.join("compose.yaml")));
-    }
-
-    #[test]
-    fn compose_file_finds_docker_compose_yml_alone() {
-        let tmp = TempDir::new().unwrap();
-        let dir = tmp.path();
-        File::create(dir.join("docker-compose.yml")).unwrap();
-
-        assert_eq!(compose_file(dir), Some(dir.join("docker-compose.yml")));
-    }
-
-    #[test]
-    fn compose_file_none_when_absent() {
-        let tmp = TempDir::new().unwrap();
-        let dir = tmp.path();
-        assert_eq!(compose_file(dir), None);
-    }
-
-    #[test]
-    fn detect_exits_0_for_compose_app() {
-        let tmp = TempDir::new().unwrap();
-        let dir = tmp.path();
-        File::create(dir.join("compose.yml")).unwrap();
-        // detect() calls process::exit, so we only check compose_file directly
-        // here rather than forking a process in a unit test.
-        assert!(compose_file(dir).is_some());
-    }
-
-    #[test]
-    fn compose_cmd_display_formats_with_base_args() {
-        assert_eq!(
-            compose_cmd_display(&("docker", vec!["compose"])),
-            "docker compose"
-        );
-        assert_eq!(
-            compose_cmd_display(&("podman-compose", vec![])),
-            "podman-compose"
-        );
-    }
-
-    #[test]
-    fn read_env_file_parses_ghcr_credentials() {
-        let tmp = TempDir::new().unwrap();
-        let dir = tmp.path();
-        fs::write(
-            dir.join("ENV"),
-            "GHCR_USERNAME=octocat\nGHCR_TOKEN=ghp_abc123\n# comment\n\n",
-        )
-        .unwrap();
-
-        let vars = read_env_file(Some(dir));
-        assert_eq!(vars.get("GHCR_USERNAME").unwrap(), "octocat");
-        assert_eq!(vars.get("GHCR_TOKEN").unwrap(), "ghp_abc123");
-    }
-
-    #[test]
-    fn read_env_file_empty_when_no_env_path() {
-        assert!(read_env_file(None).is_empty());
-    }
-}
+#[path = "main_tests.rs"]
+mod tests;
