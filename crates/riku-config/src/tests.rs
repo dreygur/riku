@@ -87,6 +87,30 @@ fn from_env_uses_home() {
 }
 
 #[test]
+fn root_dirs_fall_back_to_home_dot_riku() {
+    let (root, home) = root_dirs(Some("/home/riku".into()), None).unwrap();
+    assert_eq!(home, Path::new("/home/riku"));
+    assert_eq!(root, Path::new("/home/riku/.riku"));
+}
+
+#[test]
+fn root_dirs_reject_relative_or_climbing_paths() {
+    let cases = [
+        (Some("relative/home"), None, "HOME"),
+        (Some("/home/riku"), Some(".riku"), "RIKU_ROOT"),
+        (Some("/home/riku"), Some("/srv/../etc"), "RIKU_ROOT"),
+    ];
+    for (home, root, var) in cases {
+        let err = root_dirs(home.map(String::from), root.map(String::from))
+            .expect_err("unsafe root must be rejected");
+        assert!(
+            err.to_string().contains(var),
+            "HOME={home:?} RIKU_ROOT={root:?}: error should name {var}, got: {err}"
+        );
+    }
+}
+
+#[test]
 fn sites_enabled_defaults_to_the_system_nginx_directory() {
     let p = paths_with_root("/srv/riku", "/home/riku");
     assert_eq!(
