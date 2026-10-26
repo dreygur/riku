@@ -102,5 +102,8 @@ export interface TrustKey {
 }
 
 export const domainOf = (a: AppState) => a.routing?.RIKU_DOMAINS;
-export const httpsOf = (a: AppState) => Boolean(a.routing?.RIKU_HTTPS_ONLY);
+// Same on values as `riku_util::flag::is_on`; anything else, "false" included, is off.
+const ON_VALUES = ["1", "true", "yes", "on"];
+export const httpsOf = (a: AppState) =>
+  ON_VALUES.includes((a.routing?.RIKU_HTTPS_ONLY ?? "").trim().toLowerCase());
 export const isBusy = (a: AppState) => (a.deploy_lock || "").toLowerCase() === "held";

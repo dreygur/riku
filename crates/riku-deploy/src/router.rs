@@ -24,6 +24,7 @@ use serde::Serialize;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::plugins::{bundles, router};
+use crate::util::flag::https_only;
 
 mod caddy;
 
@@ -55,7 +56,7 @@ fn configure_plugin(
         app: app.to_string(),
         domains: domains_from_env(env),
         upstream_port: upstream_port_from_env(env),
-        https: https_from_env(env),
+        https: https_only(env),
     };
     let request = match serde_json::to_value(&request) {
         Ok(value) => value,
@@ -155,16 +156,6 @@ fn upstream_port_from_env(env: &HashMap<String, String>) -> u16 {
         .or_else(|| env.get("PORT"))
         .and_then(|p| p.trim().parse().ok())
         .unwrap_or(8080)
-}
-
-/// Whether HTTPS-only is requested (`RIKU_HTTPS_ONLY` set to a truthy value).
-fn https_from_env(env: &HashMap<String, String>) -> bool {
-    env.get("RIKU_HTTPS_ONLY")
-        .map(|v| {
-            let v = v.trim().to_ascii_lowercase();
-            !matches!(v.as_str(), "" | "0" | "false" | "no")
-        })
-        .unwrap_or(false)
 }
 
 #[cfg(test)]

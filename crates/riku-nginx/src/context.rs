@@ -219,6 +219,7 @@ pub(super) fn insert_portmap_context(context: &mut tera::Context, env: &HashMap<
 }
 
 /// Build the full Tera context from sanitized environment variables and paths.
+#[allow(clippy::question_mark)]
 pub(super) fn build_context(
     app: &str,
     app_path: &Path,
@@ -249,14 +250,16 @@ pub(super) fn build_context(
             .unwrap_or_else(|| "letsencrypt.org".to_string()),
     );
 
-    if env.contains_key("RIKU_HTTPS_ONLY") {
+    if crate::util::flag::https_only(env) {
         if let Some(server_name) = env.get("RIKU_DOMAINS") {
             let domains: Vec<String> = server_name
                 .split_whitespace()
                 .map(|s| s.to_string())
                 .collect();
             if !domains.is_empty() {
-                ensure_ssl_certificates(app, &domains, paths)?;
+                if let Err(e) = ensure_ssl_certificates(app, &domains, paths) {
+                    return Err(e);
+                }
             }
         }
     }

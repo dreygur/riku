@@ -16,6 +16,7 @@ pub mod deploy_logger;
 pub mod display;
 pub mod domain;
 pub mod env;
+pub mod flag;
 pub mod fs;
 pub mod legacy_env;
 pub mod nginx_validation;

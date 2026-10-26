@@ -25,12 +25,3 @@ fn upstream_port_prefers_internal_then_port_then_default() {
     // Garbage falls back to the default rather than panicking.
     assert_eq!(upstream_port_from_env(&env(&[("PORT", "nope")])), 8080);
 }
-
-#[test]
-fn https_truthiness() {
-    assert!(https_from_env(&env(&[("RIKU_HTTPS_ONLY", "1")])));
-    assert!(https_from_env(&env(&[("RIKU_HTTPS_ONLY", "true")])));
-    assert!(!https_from_env(&env(&[("RIKU_HTTPS_ONLY", "false")])));
-    assert!(!https_from_env(&env(&[("RIKU_HTTPS_ONLY", "0")])));
-    assert!(!https_from_env(&env(&[])));
-}

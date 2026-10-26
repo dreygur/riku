@@ -214,11 +214,11 @@ pub fn do_deploy(
     echo(&format!("-----> {} deployed!", app), "green");
     match env.get("RIKU_DOMAINS").filter(|d| !d.is_empty()) {
         Some(domain) => {
-            let https = env
-                .get("RIKU_HTTPS_ONLY")
-                .map(|v| matches!(v.as_str(), "1" | "true" | "yes" | "on"))
-                .unwrap_or(false);
-            let scheme = if https { "https" } else { "http" };
+            let scheme = if crate::util::flag::https_only(&env) {
+                "https"
+            } else {
+                "http"
+            };
             echo(&format!("       Live at {}://{}", scheme, domain), "green");
         }
         None => echo(

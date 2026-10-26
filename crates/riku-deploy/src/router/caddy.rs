@@ -9,11 +9,12 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 
-use super::{https_from_env, upstream_port_from_env};
+use super::upstream_port_from_env;
 use crate::caddy::{HttpsPolicy, SiteRequest};
 use crate::config::RikuPaths;
 use crate::util::domain::parse_domains;
 use crate::util::echo;
+use crate::util::flag::https_only;
 
 const DOMAINS_KEY: &str = "RIKU_DOMAINS";
 const NGINX_WSGI_KEY: &str = "RIKU_NGINX_WSGI";
@@ -43,7 +44,7 @@ fn caddy_request(env: &HashMap<String, String>) -> Result<Option<SiteRequest>> {
         return Ok(None);
     }
 
-    let https = if https_from_env(env) {
+    let https = if https_only(env) {
         HttpsPolicy::Only
     } else {
         HttpsPolicy::AlsoPlainHttp
