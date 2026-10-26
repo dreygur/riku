@@ -113,7 +113,7 @@ pub struct InitOptions {
 /// A root init gives the per-user run no terminal, so that run never
 /// prompts; root prints how to add a key instead.
 #[allow(clippy::question_mark)]
-fn ssh_key_step(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
+fn ssh_key_step(options: &InitOptions) -> Result<()> {
     let keys = match &options.ssh_key {
         Some(file) => read_key_file(file),
         None => parse_key_args(&options.add_keys),
@@ -128,7 +128,7 @@ fn ssh_key_step(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
 
     echo("[3/4] SSH key setup...", "");
     let added = if keys.is_empty() {
-        setup_ssh_key_interactive(paths)
+        setup_ssh_key_interactive()
     } else {
         add_deploy_keys(&keys)
     };
@@ -162,7 +162,7 @@ fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
         }
     }
 
-    ssh_key_step(paths, options)
+    ssh_key_step(options)
 }
 
 fn print_finish(no_systemd: bool) {

@@ -6,6 +6,8 @@ use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::echo;
 
+use super::binary::INSTALL_DIR;
+
 /// Setup systemd service for Riku supervisor (user-level, no root required).
 pub fn setup_systemd_service(paths: &RikuPaths, router: &Router) -> Result<()> {
     let Some(home_dir) = dirs::home_dir() else {
@@ -20,7 +22,9 @@ pub fn setup_systemd_service(paths: &RikuPaths, router: &Router) -> Result<()> {
         ));
     }
 
-    let riku_binary_path = paths.riku_script.to_string_lossy();
+    // The copy init installed, not wherever init was launched from.
+    let riku_binary = home_dir.join(INSTALL_DIR).join("riku");
+    let riku_binary_path = riku_binary.to_string_lossy();
     let riku_root_abs = paths.riku_root.to_string_lossy();
 
     let service_content = format!(
