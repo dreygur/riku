@@ -557,7 +557,7 @@ These affect CLI behavior:
 | Variable | Description |
 |----------|-------------|
 | `RUST_LOG` | Set log level: `debug`, `info`, `warn`, `error` |
-| `RIKU_ROOT` | Override default `~/.riku` location |
+| `RIKU_ROOT` | Override default `~/.riku` location. Must be an absolute path without `..`; riku exits with an error otherwise. The same rule applies to `HOME` |
 
 **Example:**
 ```bash
