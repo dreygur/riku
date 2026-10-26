@@ -13,11 +13,32 @@ use super::Check;
 
 const NAME: &str = "app env";
 
+fn app_warnings(app_dir: &Path) -> Vec<Check> {
+    let app = app_dir.file_name().unwrap_or_default().to_string_lossy();
+    let mut env = HashMap::new();
+    if let Err(e) = crate::util::parse_settings(&app_dir.join("ENV"), &mut env) {
+        return vec![Check::warn(NAME, format!("{app}: could not read ENV: {e}"))];
+    }
+
+    legacy_keys(&env)
+        .into_iter()
+        .map(|(old, new)| Check::warn(NAME, format!("{app}: {old} is no longer read, use {new}")))
+        .collect()
+}
+
 /// One warning per app and renamed key, or a single `Ok` when none is found.
 pub fn renamed_keys(paths: &RikuPaths) -> Vec<Check> {
     let entries = match std::fs::read_dir(&paths.env_root) {
         Ok(rd) => rd,
-        Err(_) => return vec![Check::ok(NAME, "no app envs")],
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return vec![Check::ok(NAME, "no app envs")];
+        }
+        Err(e) => {
+            return vec![Check::warn(
+                NAME,
+                format!("could not read {}: {e}", paths.env_root.display()),
+            )];
+        }
     };
 
     let mut app_dirs: Vec<_> = entries
@@ -32,19 +53,6 @@ pub fn renamed_keys(paths: &RikuPaths) -> Vec<Check> {
         return vec![Check::ok(NAME, "no renamed keys in use")];
     }
     warnings
-}
-
-fn app_warnings(app_dir: &Path) -> Vec<Check> {
-    let app = app_dir.file_name().unwrap_or_default().to_string_lossy();
-    let mut env = HashMap::new();
-    if let Err(e) = crate::util::parse_settings(&app_dir.join("ENV"), &mut env) {
-        return vec![Check::warn(NAME, format!("{app}: could not read ENV: {e}"))];
-    }
-
-    legacy_keys(&env)
-        .into_iter()
-        .map(|(old, new)| Check::warn(NAME, format!("{app}: {old} is no longer read, use {new}")))
-        .collect()
 }
 
 #[cfg(test)]

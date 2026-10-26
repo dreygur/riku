@@ -11,7 +11,7 @@ fn paths_with_env(app: &str, contents: &str) -> (tempfile::TempDir, RikuPaths) {
 }
 
 #[test]
-fn warns_per_app_on_a_renamed_key() {
+fn warns_on_renamed_key() {
     let (_tmp, paths) = paths_with_env("shop", "NGINX_SERVER_NAME=shop.example\nPORT=5000\n");
 
     let checks = renamed_keys(&paths);
@@ -25,7 +25,7 @@ fn warns_per_app_on_a_renamed_key() {
 }
 
 #[test]
-fn ok_when_only_new_keys_are_set() {
+fn ok_with_only_new_keys() {
     let (_tmp, paths) = paths_with_env("shop", "RIKU_DOMAINS=shop.example\n");
 
     let checks = renamed_keys(&paths);

@@ -9,7 +9,7 @@ fn env_with(keys: &[&str]) -> HashMap<String, String> {
 }
 
 #[test]
-fn reports_old_keys_with_their_new_name() {
+fn reports_old_with_new_name() {
     let env = env_with(&["NGINX_SERVER_NAME", "PORT"]);
 
     assert_eq!(
@@ -19,14 +19,14 @@ fn reports_old_keys_with_their_new_name() {
 }
 
 #[test]
-fn ignores_new_and_lookalike_keys() {
+fn ignores_lookalike_keys() {
     let env = env_with(&["RIKU_DOMAINS", "NGINX_SERVER_NAME_EXTRA"]);
 
     assert_eq!(legacy_keys(&env), vec![]);
 }
 
 #[test]
-fn table_has_no_duplicate_or_unprefixed_targets() {
+fn table_is_unique_and_prefixed() {
     let mut seen = HashSet::new();
     for (old, new) in RENAMED_KEYS {
         assert!(new.starts_with("RIKU_"), "{old} maps to unprefixed {new}");
