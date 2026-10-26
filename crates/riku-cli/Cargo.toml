@@ -11,6 +11,7 @@ license = "MIT"
 riku-config = { path = "../riku-config" }
 riku-util = { path = "../riku-util" }
 riku-nginx = { path = "../riku-nginx" }
+riku-caddy = { path = "../riku-caddy" }
 riku-plugins = { path = "../riku-plugins" }
 riku-supervisor = { path = "../riku-supervisor" }
 riku-deploy = { path = "../riku-deploy" }

@@ -1,12 +1,12 @@
 //! `riku __dump-state`: read-only export of the supervisor's in-memory
-//! state matrix (port allocations, worker PIDs, deploy locks, nginx
-//! routing) as structured JSON, for operator visibility without
+//! state matrix (port allocations, worker PIDs, deploy locks, router
+//! state) as structured JSON, for operator visibility without
 //! interrupting the running supervisor.
 //!
 //! # Security model
 //!
 //! Everything here is read from on-disk state the supervisor itself
-//! already persists (`stats.json`, app `ENV` files, nginx configs, deploy
+//! already persists (`stats.json`, app `ENV` files, router configs, deploy
 //! lock files): this command never connects to the running supervisor
 //! process, so it can't disturb it, and it never blocks: the deploy-lock
 //! check is a non-blocking probe (see `deploy::lock::is_locked`) that's
@@ -30,6 +30,10 @@ use std::time::SystemTime;
 use crate::config::RikuPaths;
 use crate::deploy::lock;
 use crate::supervisor::stats::{AppStats, ProcessStatus};
+
+mod route;
+
+use route::{route_state, RouteState};
 
 /// Known non-secret routing/port keys an app's `ENV` file may carry.
 /// Strict allowlist: see module docs for why this isn't a blocklist.
@@ -60,7 +64,7 @@ struct AppStateEntry {
     deploy_lock: LockState,
     /// Allowlisted routing/port env vars only: see module docs.
     routing: BTreeMap<String, String>,
-    nginx: NginxState,
+    route: RouteState,
     workers: Vec<WorkerStateEntry>,
 }
 
@@ -69,12 +73,6 @@ struct AppStateEntry {
 enum LockState {
     Free,
     Held,
-}
-
-#[derive(Serialize)]
-struct NginxState {
-    config_exists: bool,
-    enabled: bool,
 }
 
 #[derive(Serialize)]
@@ -150,9 +148,6 @@ fn build_app_entry(
     let mut env_map = HashMap::new();
     let _ = crate::util::parse_settings(&env_file, &mut env_map);
 
-    let nginx_config = paths.nginx_root.join(format!("{}.conf", app));
-    let nginx_enabled_symlink = paths.nginx_sites_enabled.join(format!("{}.conf", app));
-
     let workers = app_stats
         .get(app)
         .map(|stats| {
@@ -193,10 +188,7 @@ fn build_app_entry(
             LockState::Free
         },
         routing: extract_routing_fields(&env_map),
-        nginx: NginxState {
-            config_exists: nginx_config.exists(),
-            enabled: nginx_enabled_symlink.exists(),
-        },
+        route: route_state(app, paths),
         workers,
     }
 }

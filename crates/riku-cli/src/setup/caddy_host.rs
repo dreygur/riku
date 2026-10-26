@@ -20,30 +20,26 @@ use std::process::Command;
 
 use anyhow::{anyhow, Result};
 
+use crate::caddy::{has_import, import_line, SYSTEM_CADDYFILE as CADDYFILE};
 use crate::config::RikuPaths;
 use crate::util::{echo, write_atomic};
 
 use super::deploy_user::DeployUser;
 
-const CADDYFILE: &str = "/etc/caddy/Caddyfile";
 const CADDY_USER: &str = "caddy";
 const SITE_DIR_MODE: &str = "750";
 
-fn import_line(caddy_root: &Path) -> String {
-    format!("import {}/*.caddy", caddy_root.display())
-}
-
-/// `current` with `import_line` appended on its own line, or `None` when
-/// that exact line is already there.
-fn caddyfile_with_import(current: &str, import_line: &str) -> Option<String> {
-    if current.lines().any(|line| line.trim() == import_line) {
+/// `current` with `line` appended on its own line, or `None` when that
+/// exact line is already there.
+fn caddyfile_with_import(current: &str, line: &str) -> Option<String> {
+    if has_import(current, line) {
         return None;
     }
     let mut updated = current.to_string();
     if !updated.is_empty() && !updated.ends_with('\n') {
         updated.push('\n');
     }
-    updated.push_str(import_line);
+    updated.push_str(line);
     updated.push('\n');
     Some(updated)
 }
@@ -61,7 +57,7 @@ fn run(program: &str, args: &[&str]) -> Result<()> {
 }
 
 #[allow(clippy::question_mark)]
-fn add_caddyfile_import(caddy_root: &Path) -> Result<()> {
+fn add_caddyfile_import(paths: &RikuPaths) -> Result<()> {
     let current = match fs::read_to_string(CADDYFILE) {
         Ok(text) => text,
         Err(e) if e.kind() == ErrorKind::NotFound => {
@@ -72,7 +68,7 @@ fn add_caddyfile_import(caddy_root: &Path) -> Result<()> {
         Err(e) => return Err(anyhow!("failed to read {CADDYFILE}: {e}")),
     };
 
-    let Some(updated) = caddyfile_with_import(&current, &import_line(caddy_root)) else {
+    let Some(updated) = caddyfile_with_import(&current, &import_line(paths)) else {
         return Ok(());
     };
     if let Err(e) = write_atomic(Path::new(CADDYFILE), updated.as_bytes()) {
@@ -114,7 +110,7 @@ pub fn setup_caddy_host(paths: &RikuPaths, user: &DeployUser) -> Result<()> {
     if let Err(e) = run("caddy", &["version"]) {
         return Err(anyhow!("caddy is not installed or not on PATH: {e}"));
     }
-    if let Err(e) = add_caddyfile_import(&paths.caddy_root) {
+    if let Err(e) = add_caddyfile_import(paths) {
         return Err(e);
     }
     if let Err(e) = create_site_dir(user, &paths.caddy_root) {

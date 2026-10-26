@@ -7,10 +7,14 @@
 
 use std::fs;
 use std::io::ErrorKind;
+use std::path::Path;
 
 use anyhow::{anyhow, Result};
 
 use crate::RikuPaths;
+
+/// File name of the host router choice, directly under the riku root.
+pub const ROUTER_FILE: &str = "ROUTER";
 
 const NGINX: &str = "nginx";
 const CADDY: &str = "caddy";
@@ -30,12 +34,18 @@ impl Router {
     /// Read the host router. A missing file means nginx; any other read
     /// failure is an error, so a broken file never silently becomes nginx.
     pub fn load(paths: &RikuPaths) -> Result<Router> {
-        match fs::read_to_string(&paths.router_file) {
+        Router::load_file(&paths.router_file)
+    }
+
+    /// [`Router::load`] for a process that knows only the file path, such as
+    /// the supervisor, which is built from its worker config directory.
+    pub fn load_file(file: &Path) -> Result<Router> {
+        match fs::read_to_string(file) {
             Ok(name) => Ok(Router::from(name.as_str())),
             Err(e) if e.kind() == ErrorKind::NotFound => Ok(Router::Nginx),
             Err(e) => Err(anyhow!(
                 "failed to read router file {}: {e}",
-                paths.router_file.display()
+                file.display()
             )),
         }
     }

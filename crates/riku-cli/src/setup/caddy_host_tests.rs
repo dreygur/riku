@@ -1,8 +1,11 @@
+use std::path::PathBuf;
+
 use super::*;
 
 #[test]
 fn import_added_once() {
-    let line = import_line(Path::new("/home/deploy/.riku/caddy"));
+    let home = PathBuf::from("/home/deploy");
+    let line = import_line(&RikuPaths::from_dirs(home.join(".riku"), &home));
 
     let updated = caddyfile_with_import(":80 {\n}\n", &line).expect("import should be added");
     assert!(

@@ -1611,6 +1611,7 @@ dependencies = [
  "glob",
  "nix",
  "reqwest",
+ "riku-caddy",
  "riku-config",
  "riku-deploy",
  "riku-nginx",

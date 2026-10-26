@@ -2,7 +2,7 @@
 //!
 //! Solo devs have no ops team, so the tool *is* the ops team: `doctor` runs a
 //! battery of **read-only** health checks across dependencies, the `~/.riku`
-//! directory layout, the systemd supervisor service, nginx, runtime plugins,
+//! directory layout, the systemd supervisor service, the host router, runtime plugins,
 //! disk headroom, SSH deploy access, and renamed app ENV keys, then prints a
 //! summary. It never mutates state, so it is always safe to run.
 //!
@@ -11,6 +11,7 @@
 
 pub mod app_env;
 pub mod checks;
+pub mod router_check;
 
 use anyhow::Result;
 use colored::Colorize;
@@ -68,14 +69,15 @@ pub fn cmd_doctor(paths: &RikuPaths) -> Result<()> {
     Ok(())
 }
 
-/// Gather all checks in display order.
-fn collect(paths: &RikuPaths) -> Vec<Check> {
+/// Gather all checks in display order. The dashboard's `/api/doctor` serves
+/// this same list.
+pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     let mut checks = Vec::new();
     checks.extend(checks::dependencies());
     checks.push(checks::directories(paths));
     checks.extend(checks::binary());
     checks.push(checks::systemd_service());
-    checks.extend(checks::nginx());
+    checks.extend(router_check::router(paths));
     checks.push(checks::plugins(paths));
     checks.push(checks::disk(paths));
     checks.push(checks::ssh_access());

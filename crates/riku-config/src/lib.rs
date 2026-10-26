@@ -140,7 +140,7 @@ impl RikuPaths {
             log_root: riku_root.join("logs"),
             nginx_root: riku_root.join("nginx"),
             caddy_root: riku_root.join("caddy"),
-            router_file: riku_root.join("ROUTER"),
+            router_file: riku_root.join(router::ROUTER_FILE),
             cache_root: riku_root.join("cache"),
             workers_root: riku_root.join("workers"),
             workers_available: riku_root.join("workers-available"),

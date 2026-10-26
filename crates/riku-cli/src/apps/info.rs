@@ -4,12 +4,37 @@ use std::collections::HashMap;
 use std::fs;
 use std::process::Command;
 
+use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::{display, parse_settings};
 
+/// Print where the host router keeps this app's config.
+fn print_route(paths: &RikuPaths, app: &str) {
+    match Router::load(paths) {
+        Ok(Router::Nginx) => {
+            let nginx_conf = paths.nginx_root.join(format!("{app}.conf"));
+            if nginx_conf.exists() {
+                display::kv("Nginx Config:", &nginx_conf.display().to_string());
+            }
+        }
+        Ok(Router::Caddy) => {
+            let site = crate::caddy::site_path(app, paths);
+            if site.exists() {
+                display::kv("Caddy Site:", &site.display().to_string());
+            }
+        }
+        Ok(Router::Plugin(name)) => display::kv("Router:", &format!("plugin {name}")),
+        Err(e) => display::kv("Router:", &format!("unreadable: {e}")),
+    }
+}
+
 /// Show detailed information about an application.
+#[allow(clippy::question_mark)]
 pub fn cmd_apps_info(paths: &RikuPaths, app: &str) -> Result<()> {
-    let app = crate::util::validate_app_name(app)?;
+    let app = match crate::util::validate_app_name(app) {
+        Ok(app) => app,
+        Err(e) => return Err(e),
+    };
     let app_dir = paths.app_root.join(&app);
 
     if !app_dir.exists() {
@@ -29,14 +54,16 @@ pub fn cmd_apps_info(paths: &RikuPaths, app: &str) -> Result<()> {
     }
 
     print_disk_usage(&app_dir);
-    print_env_summary(paths, &app)?;
-    print_scaling(paths, &app)?;
-    print_process_status(paths, &app)?;
-
-    let nginx_conf = paths.nginx_root.join(format!("{}.conf", app));
-    if nginx_conf.exists() {
-        display::kv("Nginx Config:", &nginx_conf.display().to_string());
+    if let Err(e) = print_env_summary(paths, &app) {
+        return Err(e);
     }
+    if let Err(e) = print_scaling(paths, &app) {
+        return Err(e);
+    }
+    if let Err(e) = print_process_status(paths, &app) {
+        return Err(e);
+    }
+    print_route(paths, &app);
 
     let log_dir = paths.log_root.join(&app);
     if log_dir.exists() {

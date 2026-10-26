@@ -1,6 +1,7 @@
 //! CLI provider layer: module declarations and public re-exports.
 
 // Dependency crates aliased as their former module names.
+pub(crate) use riku_caddy as caddy;
 pub(crate) use riku_config as config;
 pub(crate) use riku_deploy as deploy;
 pub(crate) use riku_nginx as nginx;

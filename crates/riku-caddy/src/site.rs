@@ -33,7 +33,8 @@ pub struct SiteRequest {
     pub https: HttpsPolicy,
 }
 
-fn site_path(app: &str, paths: &RikuPaths) -> PathBuf {
+/// Where `app`'s site file lives: `<riku root>/caddy/<app>.caddy`.
+pub fn site_path(app: &str, paths: &RikuPaths) -> PathBuf {
     paths.caddy_root.join(format!("{app}.{SITE_EXTENSION}"))
 }
 

@@ -100,12 +100,14 @@ fn test_build_app_entry_nginx_state() {
     fs::create_dir_all(paths.app_root.join(app)).unwrap();
     fs::create_dir_all(paths.env_root.join(app)).unwrap();
 
-    let before = build_app_entry(app, &paths, &HashMap::new());
-    assert!(!before.nginx.config_exists);
+    let route = |paths: &RikuPaths| {
+        serde_json::to_value(build_app_entry(app, paths, &HashMap::new()).route).unwrap()
+    };
+    assert_eq!(route(&paths)["config_exists"], false);
 
     fs::write(paths.nginx_root.join(format!("{}.conf", app)), "# conf").unwrap();
-    let after = build_app_entry(app, &paths, &HashMap::new());
-    assert!(after.nginx.config_exists);
+    assert_eq!(route(&paths)["router"], "nginx");
+    assert_eq!(route(&paths)["config_exists"], true);
 }
 
 #[test]
@@ -178,4 +180,23 @@ fn test_build_state_dump_end_to_end_no_panic() {
     assert_eq!(dump.apps.len(), 1);
     assert!(serialized.contains("3000"));
     assert!(!serialized.contains("hide"));
+}
+
+#[test]
+fn dump_state_reports_caddy_site() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let app = "shop";
+    fs::create_dir_all(paths.env_root.join(app)).unwrap();
+    fs::write(&paths.router_file, "caddy\n").unwrap();
+    fs::create_dir_all(&paths.caddy_root).unwrap();
+    let site = paths.caddy_root.join("shop.caddy");
+    fs::write(&site, "# riku app: shop\n").unwrap();
+
+    let route = serde_json::to_value(build_app_entry(app, &paths, &HashMap::new()).route).unwrap();
+    assert_eq!(
+        route,
+        serde_json::json!({ "router": "caddy", "site": site.display().to_string() }),
+        "caddy route should carry the site path and no nginx fields"
+    );
 }

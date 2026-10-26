@@ -14,7 +14,7 @@ use serde_json::json;
 use super::mutations::authorize_mutation;
 use super::routes::authorize;
 use super::DashboardState;
-use crate::cli::doctor::{checks, Status};
+use crate::cli::doctor::{self, Status};
 
 fn status_str(s: Status) -> &'static str {
     match s {
@@ -35,16 +35,8 @@ pub(crate) async fn doctor(
     }
     let paths = state.paths.clone();
     let out = tokio::task::spawn_blocking(move || {
-        let mut all = Vec::new();
-        all.extend(checks::dependencies());
-        all.push(checks::directories(&paths));
-        all.extend(checks::binary());
-        all.push(checks::systemd_service());
-        all.extend(checks::nginx());
-        all.push(checks::plugins(&paths));
-        all.push(checks::disk(&paths));
-        all.push(checks::ssh_access());
-        all.into_iter()
+        doctor::collect(&paths)
+            .into_iter()
             .map(|c| json!({ "name": c.name, "status": status_str(c.status), "detail": c.detail }))
             .collect::<Vec<_>>()
     })
