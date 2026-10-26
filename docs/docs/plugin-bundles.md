@@ -75,7 +75,7 @@ neither verb is ever invoked.
 | **runtime** | `detect` / `build` / `env` / `start` | shipped (buildpacks) |
 | **addon** | `provision` / `bind` / `unbind` / `deprovision` / `backup` | shipped |
 | **notifier / hook** | `on_event` (subscribes to lifecycle events) | shipped |
-| **router** | `configure` / `reload` | shipped: singleton, full-replace (`RIKU_ROUTER=<name>`) |
+| **router** | `configure` / `reload` | shipped: singleton named in `<riku root>/ROUTER`, for third party routers (nginx and Caddy are built in) |
 | **filter** (any type) | `on_filter` (`[filters]` block, any plugin type) | shipped, chained, augment-only |
 | **UI panel** (any type) | `ui_panel` (`[ui]` block, any plugin type) | shipped, Next.js dashboard only, read-only |
 

@@ -184,8 +184,9 @@ Riku extends in two ways:
   - `addon`: `provision`/`bind`/`unbind`/`deprovision`/`backup`; a managed
     resource (database, cache, …) with named instances, each with its own
     data directory
-  - `router`: `configure`/`reload`; a host-level singleton, swaps out
-    nginx entirely (`RIKU_ROUTER=<name>`)
+  - `router`: `configure`/`reload`; a host-level singleton named in
+    `<riku root>/ROUTER`, for third party routers (nginx and Caddy are
+    built in)
 - **Event subscribers**: the plugin reacts to lifecycle events the kernel
   emits (`deploy.*`, `build.*`, `app.restarted`, `app.failed`, …), verb
   `on_event`, always fire-and-forget (`observe` mode) or veto-capable on

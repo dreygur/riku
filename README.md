@@ -19,6 +19,7 @@ with no runtime dependencies.
 ```bash
 # on your server
 curl -LO https://github.com/dreygur/riku/releases/latest/download/riku-linux-amd64.tar.gz
+sudo adduser --disabled-password --gecos '' deploy
 tar -xzf riku-linux-amd64.tar.gz && sudo ./riku init
 
 # on your laptop
@@ -35,7 +36,7 @@ git push riku main      # that's the deploy
 - **Rollback & backups**: `riku rollback`, `riku backup`/`riku restore`.
 - **Managed datastores as plugins**: attach Postgres, Redis, or a SQLite volume with `riku addon`; the connection string is injected into your app's env.
 - **A plugin ecosystem**: a versioned plugin protocol, a git-native marketplace, signed bundles, and capability sandboxing (Landlock) for plugins you install.
-- **Swappable router**: nginx by default; drop in a Caddy/Traefik router plugin without touching core.
+- **Swappable router**: nginx by default, Caddy built in (`sudo RIKU_ROUTER=caddy riku init`), or a third party router plugin without touching core.
 - **Embedded dashboard**: `riku dashboard` serves a status UI straight from the binary, no Node runtime on the host.
 - **`riku doctor`**: diagnoses nginx, systemd, permissions, disk, and certs when something's off.
 
@@ -56,12 +57,15 @@ the scripts in [`benches/`](benches/) measure it rather than guess.
 curl -LO https://github.com/dreygur/riku/releases/latest/download/riku-linux-amd64.tar.gz
 tar -xzf riku-linux-amd64.tar.gz
 chmod +x riku
+sudo adduser --disabled-password --gecos '' deploy
 sudo ./riku init
 ```
 
 Running `riku init` as root installs the binary to `~/.local/bin`, creates a systemd
-service that starts on boot, launches the supervisor, and enables nginx auto-reload.
-Deploying as a user other than `deploy`? Pass `sudo RIKU_USER=myuser ./riku init`.
+service that starts on boot, launches the supervisor, and enables router auto-reload.
+The deploy user must exist first. Deploying as a user other than `deploy`? Pass
+`sudo RIKU_USER=myuser ./riku init`. For Caddy instead of nginx, see
+[`docs/docs/caddy.md`](docs/docs/caddy.md).
 
 ### From source
 
@@ -163,7 +167,7 @@ Installed plugins are pinned in a lockfile, can carry Ed25519 author signatures,
 run under capability sandboxing (filesystem/network limits via Landlock) based on
 what their manifest declares. Managed datastores ship this way, see
 [`examples/plugins/`](examples/plugins/) for working postgres, redis, sqlite-volume,
-caddy-router, and webhook-notify bundles.
+and webhook-notify bundles.
 
 ## Configuration
 
@@ -173,11 +177,13 @@ Per-app settings live in an `ENV` file (`riku config set` writes it). A few comm
 RIKU_DOMAINS=example.com   # domain
 RIKU_HTTPS_ONLY=true           # force HTTPS
 RIKU_WORKER_TIMEOUT=3600        # kill unresponsive workers
-RIKU_ROUTER=caddy               # use a router plugin instead of nginx
 ```
 
 See [`docs/docs/env.md`](docs/docs/env.md) for the full reference, and `Procfile`
 for `web:` / `worker:` / `cron:` process definitions.
+
+The router is a host setting, not an `ENV` key. To serve apps through Caddy
+instead of nginx, see [`docs/docs/caddy.md`](docs/docs/caddy.md).
 
 ## How it works
 

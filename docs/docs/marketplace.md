@@ -7,8 +7,7 @@ hardened for server-side execution with signature verification and capability
 declarations.
 
 The Riku repository is itself a marketplace, indexing the official plugins:
-`postgres`, `redis`, `sqlite-volume` (addons), `caddy-router` (router), and
-`webhook-notify` (notifier).
+`postgres`, `redis`, `sqlite-volume` (addons) and `webhook-notify` (notifier).
 
 ## Register a marketplace
 

@@ -74,6 +74,7 @@ nav:
       - Environment Variables: env.md
       - Runtimes: runtimes.md
       - Nginx: nginx.md
+      - Caddy: caddy.md
       - Supervisor: supervisor.md
       - Resource Limits: resource-limits.md
       - Plugins (legacy): plugins.md

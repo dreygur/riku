@@ -91,7 +91,7 @@ original table didn't anticipate:
 | Runtime                   | `detect` / `build` / `env` / `start`                            | shipped |
 | Addon / Resource          | `provision` / `bind` / `unbind` / `deprovision` / `backup`      | shipped |
 | Legacy hook                | `pre`/`post` `deploy`/`build` (fixed, 4 stages)                 | shipped (predates the event bus below) |
-| Router                     | `configure` / `reload`                                          | shipped, host-level singleton (`RIKU_ROUTER=<name>`), swaps nginx entirely |
+| Router                     | `configure` / `reload`                                          | shipped, host-level singleton named in `<riku root>/ROUTER`; nginx and Caddy are built in |
 | Event subscriber            | `on_event`: `subscribe`/`mode`/`priority` in `[events]`        | shipped, `deploy.*`, `build.*`, `app.restarted`, `app.failed`; `riku-notify` (webhook/Discord/Slack/Telegram) is the shipped first-party example |
 | Custom events               | `riku plugin-emit <plugin.custom.*>` (opt-in `events.emit`)     | shipped, namespaced, kernel-stamps `source_plugin` so a subscriber can tell a real kernel event from a plugin-claimed one |
 | Filter (value-transform)   | `on_filter`: `subscribe`/`priority` in `[filters]`             | shipped, chains, always degrades to passthrough on failure; `nginx.include_content` (augments the generated nginx config) is the shipped example |
@@ -110,7 +110,7 @@ What turns plugins into an *ecosystem*. The model is adapted directly from Claud
 
 All of the below is shipped, including a real starter marketplace: this
 repo's own `marketplace.toml` indexes `examples/plugins/{sqlite-volume,
-postgres, redis, caddy-router, webhook-notify}`, `riku plugins
+postgres, redis, webhook-notify}`, `riku plugins
 marketplace add github:dreygur/riku` registers it directly.
 
 **Bundle layout**: a plugin is a directory (git repo or subdir), not a single file:

@@ -169,8 +169,9 @@ context for bind/unbind.
 ### 6.2 router _(new)_
 
 Exposes apps to the network. **Singleton**: exactly one router is active,
-chosen by config (`RIKU_ROUTER=nginx|caddy|…`, default `nginx`). Today's built-in
-nginx generation is the default router; the seam lets it be swapped.
+chosen by the `<riku root>/ROUTER` file (`nginx`, `caddy`, or a router plugin
+name; written by `RIKU_ROUTER=<name> riku init`; default `nginx`). nginx and
+Caddy are built in; this seam is for third party routers.
 
 | Verb          | Input (stdin JSON)                                 | Output           |
 | ------------- | -------------------------------------------------- | ---------------- |
