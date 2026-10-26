@@ -5,8 +5,9 @@
 /// - Stats JSON serialization (written every supervisor tick to stats.json)
 /// - Stats JSON deserialization (read by CLI and health server)
 /// - App-level stats aggregation (performed before every metrics response)
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::collections::HashMap;
+use std::hint::black_box;
 
 // TOML fixtures
 

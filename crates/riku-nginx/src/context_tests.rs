@@ -9,6 +9,13 @@ fn make_paths(tmp: &TempDir) -> crate::config::RikuPaths {
     paths
 }
 
+fn ctx_str<'a>(ctx: &'a tera::Context, key: &str) -> &'a str {
+    ctx.get(key)
+        .unwrap_or_else(|| panic!("{key} missing from context"))
+        .as_str()
+        .unwrap_or_else(|| panic!("{key} is not a string"))
+}
+
 // insert_address_context
 
 #[test]
@@ -21,9 +28,9 @@ fn test_address_defaults_applied_when_env_empty() {
     let mut ctx = tera::Context::new();
     insert_address_context(&mut ctx, &env, &paths, "myapp", &app_path);
 
-    assert_eq!(ctx.get("BIND_ADDRESS").unwrap(), "127.0.0.1");
-    assert_eq!(ctx.get("NGINX_IPV4_ADDRESS").unwrap(), "0.0.0.0");
-    assert_eq!(ctx.get("NGINX_IPV6_ADDRESS").unwrap(), "[::]");
+    assert_eq!(ctx_str(&ctx, "BIND_ADDRESS"), "127.0.0.1");
+    assert_eq!(ctx_str(&ctx, "NGINX_IPV4_ADDRESS"), "0.0.0.0");
+    assert_eq!(ctx_str(&ctx, "NGINX_IPV6_ADDRESS"), "[::]");
     assert!(ctx
         .get("NGINX_SERVER_NAME")
         .unwrap()
@@ -41,7 +48,7 @@ fn test_address_custom_bind_address_used() {
     let mut ctx = tera::Context::new();
     insert_address_context(&mut ctx, &env, &paths, "app", &tmp.path().join("app"));
 
-    assert_eq!(ctx.get("BIND_ADDRESS").unwrap(), "10.0.0.5");
+    assert_eq!(ctx_str(&ctx, "BIND_ADDRESS"), "10.0.0.5");
 }
 
 #[test]
@@ -54,7 +61,7 @@ fn test_address_disable_ipv6_clears_ipv6_address() {
     let mut ctx = tera::Context::new();
     insert_address_context(&mut ctx, &env, &paths, "app", &tmp.path().join("app"));
 
-    assert_eq!(ctx.get("NGINX_IPV6_ADDRESS").unwrap(), "");
+    assert_eq!(ctx_str(&ctx, "NGINX_IPV6_ADDRESS"), "");
 }
 
 #[test]
@@ -67,7 +74,7 @@ fn test_address_disable_ipv6_with_one_value() {
     let mut ctx = tera::Context::new();
     insert_address_context(&mut ctx, &env, &paths, "app", &tmp.path().join("app"));
 
-    assert_eq!(ctx.get("NGINX_IPV6_ADDRESS").unwrap(), "");
+    assert_eq!(ctx_str(&ctx, "NGINX_IPV6_ADDRESS"), "");
 }
 
 // insert_portmap_context
@@ -78,8 +85,8 @@ fn test_portmap_defaults_to_80_and_8080() {
     let mut ctx = tera::Context::new();
     insert_portmap_context(&mut ctx, &env);
 
-    assert_eq!(ctx.get("NGINX_EXTERNAL_PORT").unwrap(), "80");
-    assert_eq!(ctx.get("NGINX_INTERNAL_PORT").unwrap(), "8080");
+    assert_eq!(ctx_str(&ctx, "NGINX_EXTERNAL_PORT"), "80");
+    assert_eq!(ctx_str(&ctx, "NGINX_INTERNAL_PORT"), "8080");
 }
 
 #[test]
@@ -90,7 +97,7 @@ fn test_portmap_port_env_var_used_as_internal_port() {
     let mut ctx = tera::Context::new();
     insert_portmap_context(&mut ctx, &env);
 
-    assert_eq!(ctx.get("NGINX_INTERNAL_PORT").unwrap(), "5000");
+    assert_eq!(ctx_str(&ctx, "NGINX_INTERNAL_PORT"), "5000");
 }
 
 #[test]
@@ -102,7 +109,7 @@ fn test_portmap_explicit_internal_port_overrides_port() {
     let mut ctx = tera::Context::new();
     insert_portmap_context(&mut ctx, &env);
 
-    assert_eq!(ctx.get("NGINX_INTERNAL_PORT").unwrap(), "9000");
+    assert_eq!(ctx_str(&ctx, "NGINX_INTERNAL_PORT"), "9000");
 }
 
 // insert_cache_context
@@ -163,7 +170,7 @@ fn test_include_file_outside_app_dir_is_rejected() {
 
     // The key is always present (so templates never see an undefined
     // variable), but a rejected traversal attempt leaves it empty.
-    assert_eq!(ctx.get("NGINX_INCLUDE_CONTENT").unwrap(), "");
+    assert_eq!(ctx_str(&ctx, "NGINX_INCLUDE_CONTENT"), "");
 }
 
 #[test]

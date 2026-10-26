@@ -433,6 +433,17 @@ or a compose file (`compose.yaml`, `compose.yml`, `docker-compose.yaml`,
 Podman is installed and uses whichever is available (Podman preferred if both
 are present).
 
+To deploy with a compose file under another name, set `COMPOSE_FILE` in the
+app's env. It wins over the default names and claims the app for the container
+runtime:
+
+```bash
+riku config set myapp COMPOSE_FILE=compose.prod.yml
+```
+
+The value must be a single path inside the app directory; see
+[Environment Variables](env.md#compose-file).
+
 ### Dockerfile / Containerfile apps
 
 A single-container app builds an image from the repo and runs it directly:
@@ -465,9 +476,15 @@ services:
 ```
 
 For a compose app, `riku deploy` logs in to the configured registry (see
-[GHCR authentication](#ghcr-authentication) below), runs `compose pull`, and
-starts the stack with `compose up`: supervised as a single riku process, the
-same way any other app's `web` process is.
+[GHCR authentication](#ghcr-authentication) below), runs `compose pull`, then
+`compose build`, and starts the stack with `compose up`: supervised as a
+single riku process, the same way any other app's `web` process is.
+
+Services with a `build:` section are built on the server from the checked out
+repo instead of pulled, so one stack can mix registry images and local builds.
+The pull skips them (`--ignore-buildable` on docker compose; podman-compose
+skips them on its own), and `compose build` does nothing for a stack that has
+none.
 
 ### GHCR authentication
 

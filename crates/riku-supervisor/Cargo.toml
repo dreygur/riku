@@ -24,9 +24,9 @@ notify = "8"
 rand = { workspace = true }
 threadpool = "1"
 tracing = { workspace = true }
-axum = "0.7"
+axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "signal"] }
-tower-http = { version = "0.5", features = ["cors"] }
+tower-http = { version = "0.7", features = ["cors"] }
 toml = { workspace = true }
 hex = { workspace = true }
 reqwest = { workspace = true }

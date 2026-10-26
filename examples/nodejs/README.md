@@ -103,7 +103,7 @@ nodejs/
 ## Local Development
 
 This example uses [nub](https://nubjs.com) as its package manager
-(`packageManager` in `package.json`, lockfile `lock.yaml`). Install nub with
+(`packageManager` in `package.json`, lockfile `nub.lock`). Install nub with
 `npm install -g @nubjs/nub`, then:
 
 ```bash

@@ -35,13 +35,13 @@ pub fn control_router(token: String) -> Router {
 
     Router::new()
         .route("/control/apps", post(create_app_handler))
-        .route("/control/apps/:app/deploy", post(deploy_handler))
-        .route("/control/apps/:app/restart", post(restart_handler))
-        .route("/control/apps/:app/stop", post(stop_handler))
-        .route("/control/apps/:app", delete(destroy_handler))
+        .route("/control/apps/{app}/deploy", post(deploy_handler))
+        .route("/control/apps/{app}/restart", post(restart_handler))
+        .route("/control/apps/{app}/stop", post(stop_handler))
+        .route("/control/apps/{app}", delete(destroy_handler))
         .route("/control/plugins/install", post(install_plugins_handler))
         .route(
-            "/control/apps/:app/container/export",
+            "/control/apps/{app}/container/export",
             post(container_export_handler),
         )
         .route_layer(middleware::from_fn_with_state(state.clone(), require_token))

@@ -309,6 +309,18 @@ PYTHON_PACKAGE_MANAGER=poetry
 See [Runtimes → Container](runtimes.md#container) for how detection, builds,
 and auto-updates work end to end.
 
+### Compose File
+
+```bash
+COMPOSE_FILE=compose.prod.yml
+```
+
+- **Default:** (none; the first of `compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml` present)
+- **Description:** The compose file a compose app deploys with, passed to every `compose` command as `-f`
+- **Values:** One path relative to the app root, such as `compose.prod.yml` or `deploy/compose.yml`
+
+Setting it selects the container runtime even when the repo also has a `package.json` or other runtime marker. The path must stay inside the app: absolute paths, `..`, and symlinks pointing outside are rejected, as is a docker-style list (`a.yml:b.yml`). An invalid value fails the deploy instead of falling back to another runtime.
+
 ### GHCR Username
 
 ```bash
