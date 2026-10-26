@@ -10,6 +10,8 @@ use anyhow::{anyhow, Result};
 use std::env;
 use std::path::{Component, Path, PathBuf};
 
+pub mod router;
+
 /// Raw source URL for fetching the latest riku script (for reference implementation).
 pub const RIKU_RAW_SOURCE_URL: &str =
     "https://raw.githubusercontent.com/dreygur/riku/master/src/main.rs";
@@ -91,6 +93,10 @@ pub struct RikuPaths {
     pub git_root: PathBuf,
     pub log_root: PathBuf,
     pub nginx_root: PathBuf,
+    /// Per app Caddy site files, imported by `/etc/caddy/Caddyfile`.
+    pub caddy_root: PathBuf,
+    /// Holds the host router name. See [`router::Router::load`].
+    pub router_file: PathBuf,
     pub cache_root: PathBuf,
     pub workers_root: PathBuf,
     pub workers_available: PathBuf,
@@ -133,6 +139,8 @@ impl RikuPaths {
             git_root: riku_root.join("repos"),
             log_root: riku_root.join("logs"),
             nginx_root: riku_root.join("nginx"),
+            caddy_root: riku_root.join("caddy"),
+            router_file: riku_root.join("ROUTER"),
             cache_root: riku_root.join("cache"),
             workers_root: riku_root.join("workers"),
             workers_available: riku_root.join("workers-available"),

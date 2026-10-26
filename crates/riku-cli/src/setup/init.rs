@@ -5,6 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
+use crate::config::router::{self, Router};
 use crate::config::RikuPaths;
 use crate::util::echo;
 
@@ -42,6 +43,9 @@ pub fn cmd_init(no_systemd: bool) -> Result<()> {
 
     echo("[1/4] Creating directory structure...", "");
     create_directory_structure(&paths)?;
+    if let Err(e) = persist_router(&paths) {
+        return Err(e);
+    }
 
     install_riku_binary()?;
     generate_acme_config(&paths);
@@ -122,6 +126,23 @@ fn create_directory_structure(paths: &RikuPaths) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Write `RIKU_ROUTER` to the host `ROUTER` file. Init is the only reader of
+/// the env var; unset leaves an existing choice alone.
+#[allow(clippy::question_mark)]
+fn persist_router(paths: &RikuPaths) -> Result<()> {
+    let raw = env::var("RIKU_ROUTER").unwrap_or_default();
+    if raw.trim().is_empty() {
+        return Ok(());
+    }
+
+    let router = Router::from(raw.as_str());
+    if let Err(e) = router::save(paths, &router) {
+        return Err(e);
+    }
+    echo(&format!("      ✓ router: {}", router.name()), "green");
     Ok(())
 }
 
