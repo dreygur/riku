@@ -9,6 +9,7 @@ use crate::config::RikuPaths;
 use crate::util::echo;
 
 use super::binary::install_riku_binary;
+use super::deploy_keys::{add_deploy_keys, parse_key_args, read_key_file};
 use super::git_hook::create_git_hook;
 use super::guidance::{print_first_app_guide, print_verification_summary, verify_supervisor};
 use super::init_router::persist_router;
@@ -97,11 +98,50 @@ fn setup_user_service(paths: &RikuPaths, router: &Router, no_systemd: bool) -> R
     installed
 }
 
+/// What `riku init` was asked to do.
+pub struct InitOptions {
+    pub no_systemd: bool,
+    /// Set by a root init when it runs the per-user steps as the deploy user.
+    pub user_steps: bool,
+    /// `--ssh-key`: a `.pub` or `authorized_keys` file whose keys to authorize.
+    pub ssh_key: Option<PathBuf>,
+    /// Keys a root init already read and validated, for the per-user run.
+    pub add_keys: Vec<String>,
+}
+
+/// Authorize the keys given on the command line, or else prompt for one.
+/// A root init gives the per-user run no terminal, so that run never
+/// prompts; root prints how to add a key instead.
+#[allow(clippy::question_mark)]
+fn ssh_key_step(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
+    let keys = match &options.ssh_key {
+        Some(file) => read_key_file(file),
+        None => parse_key_args(&options.add_keys),
+    };
+    let keys = match keys {
+        Ok(keys) => keys,
+        Err(e) => return Err(e),
+    };
+    if keys.is_empty() && options.user_steps {
+        return Ok(());
+    }
+
+    echo("[3/4] SSH key setup...", "");
+    let added = if keys.is_empty() {
+        setup_ssh_key_interactive(paths)
+    } else {
+        add_deploy_keys(&keys)
+    };
+    echo("", "");
+    added
+}
+
 /// Init for the user running it, in that user's own tree. With
 /// `user_steps`, a root init is driving: the warning, prerequisites and
 /// systemd step are root's to do, and root prints the summary.
 #[allow(clippy::question_mark)]
-fn user_init(paths: &RikuPaths, no_systemd: bool, user_steps: bool) -> Result<()> {
+fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
+    let user_steps = options.user_steps;
     let router = match persist_router(paths) {
         Ok(router) => router,
         Err(e) => return Err(e),
@@ -117,21 +157,12 @@ fn user_init(paths: &RikuPaths, no_systemd: bool, user_steps: bool) -> Result<()
         return Err(e);
     }
     if !user_steps {
-        if let Err(e) = setup_user_service(paths, &router, no_systemd) {
+        if let Err(e) = setup_user_service(paths, &router, options.no_systemd) {
             return Err(e);
         }
     }
 
-    // A root init gives this run no terminal, so it cannot prompt for a key.
-    if user_steps {
-        return Ok(());
-    }
-    echo("[3/4] SSH key setup...", "");
-    if let Err(e) = setup_ssh_key_interactive(paths) {
-        return Err(e);
-    }
-    echo("", "");
-    Ok(())
+    ssh_key_step(paths, options)
 }
 
 fn print_finish(no_systemd: bool) {
@@ -150,17 +181,16 @@ fn print_finish(no_systemd: bool) {
 ///
 /// As root, the per-user steps run as the deploy user (see
 /// [`super::root_init`]) and root adds the host setup. Otherwise everything
-/// happens in the caller's own tree. `user_steps` is the hidden flag a root
-/// init passes to that per-user run.
+/// happens in the caller's own tree.
 // Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
 #[allow(clippy::question_mark)]
-pub fn cmd_init(no_systemd: bool, user_steps: bool) -> Result<()> {
+pub fn cmd_init(options: InitOptions) -> Result<()> {
     let is_root = env::var("USER").unwrap_or_default() == "root";
     if is_root {
-        if let Err(e) = root_init(no_systemd) {
+        if let Err(e) = root_init(&options) {
             return Err(e);
         }
-        print_finish(no_systemd);
+        print_finish(options.no_systemd);
         return Ok(());
     }
 
@@ -168,11 +198,11 @@ pub fn cmd_init(no_systemd: bool, user_steps: bool) -> Result<()> {
         Ok(paths) => paths,
         Err(e) => return Err(e),
     };
-    if let Err(e) = user_init(&paths, no_systemd, user_steps) {
+    if let Err(e) = user_init(&paths, &options) {
         return Err(e);
     }
-    if !user_steps {
-        print_finish(no_systemd);
+    if !options.user_steps {
+        print_finish(options.no_systemd);
     }
     Ok(())
 }

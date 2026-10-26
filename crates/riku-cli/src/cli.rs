@@ -180,11 +180,19 @@ pub enum Commands {
     },
 
     /// Initialize Riku server (directories + systemd + SSH)
-    #[command(after_help = "Examples:\n  riku init\n  riku init --no-systemd")]
+    #[command(
+        after_help = "Examples:\n  riku init\n  riku init --no-systemd\n  sudo riku init --ssh-key /home/ubuntu/.ssh/authorized_keys"
+    )]
     Init {
         /// Skip systemd service setup
         #[arg(long)]
         no_systemd: bool,
+        /// Authorize the deploy keys in this .pub or authorized_keys file
+        #[arg(long, value_name = "FILE")]
+        ssh_key: Option<std::path::PathBuf>,
+        /// A key a root init already validated, for the per-user run.
+        #[arg(long = "add-key", hide = true)]
+        add_key: Vec<String>,
         /// Run only the per-user steps. A root init passes this when it
         /// re-runs init as the deploy user.
         #[arg(long, hide = true)]

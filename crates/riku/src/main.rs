@@ -138,8 +138,15 @@ fn main() -> Result<()> {
         }
         Commands::Init {
             no_systemd,
+            ssh_key,
+            add_key,
             user_steps,
-        } => cli::setup::cmd_init(no_systemd, user_steps)?,
+        } => cli::setup::cmd_init(cli::setup::InitOptions {
+            no_systemd,
+            user_steps,
+            ssh_key,
+            add_keys: add_key,
+        })?,
         Commands::Quickstart {
             name,
             runtime,

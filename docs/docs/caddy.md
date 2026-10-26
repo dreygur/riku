@@ -13,7 +13,7 @@ Install Caddy from your distribution (or Caddy's own apt repository), create the
 ```bash
 sudo apt install caddy
 sudo adduser --disabled-password --gecos '' deploy
-sudo RIKU_ROUTER=caddy riku init
+sudo RIKU_ROUTER=caddy riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
 `RIKU_ROUTER` is read only by `riku init`. Deploys, the supervisor and `riku doctor` read the `ROUTER` file. Running `riku init` again without `RIKU_ROUTER` keeps the current choice.

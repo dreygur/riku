@@ -2,6 +2,7 @@
 
 pub mod binary;
 mod caddy_host;
+mod deploy_keys;
 pub(crate) mod deploy_user;
 pub mod git_hook;
 mod guidance;
@@ -15,4 +16,4 @@ pub mod system_service;
 pub mod systemd;
 pub mod user_service;
 
-pub use init::cmd_init;
+pub use init::{cmd_init, InitOptions};

@@ -22,6 +22,7 @@ pub mod legacy_env;
 pub mod nginx_validation;
 pub mod process_util;
 pub mod procfile;
+pub mod public_key;
 pub mod resource_limits;
 pub mod secure;
 pub mod ssh_keys;

@@ -234,6 +234,8 @@ mod routing_tests {
     fn init_command_returns_none() {
         let cmd = Commands::Init {
             no_systemd: false,
+            ssh_key: None,
+            add_key: Vec::new(),
             user_steps: false,
         };
         assert_eq!(get_plugin_command(&cmd), None);

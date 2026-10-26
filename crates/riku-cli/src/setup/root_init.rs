@@ -11,8 +11,8 @@
 //! Security: root never writes in the deploy user's home and never runs a
 //! binary from it: the deploy user could swap one between install and exec.
 //! The staged copy sits in a directory only root can write. The child gets
-//! no terminal (see [`DeployUser`]), so SSH key selection, which prompts,
-//! is left to the deploy user's own `riku init`.
+//! no terminal (see [`DeployUser`]), so it cannot prompt for an SSH key:
+//! keys come from `--ssh-key`, read here as root and passed on validated.
 
 use std::env;
 use std::fs;
@@ -22,8 +22,11 @@ use anyhow::{anyhow, Result};
 use tempfile::TempDir;
 
 use crate::util::echo;
+use crate::util::public_key::PublicKey;
 
+use super::deploy_keys::read_key_file;
 use super::deploy_user::DeployUser;
+use super::init::InitOptions;
 use super::init_router::{deploy_router, setup_router_host};
 use super::prerequisites::check_prerequisites;
 use super::systemd::install_systemd_service;
@@ -56,33 +59,49 @@ fn stage_binary() -> Result<TempDir> {
     Ok(stage)
 }
 
-fn print_ssh_hint(user: &DeployUser) {
+fn print_ssh_hint() {
     echo("[3/4] SSH key setup...", "");
     echo(
-        &format!(
-            "      ℹ Add a deploy key as {name}: sudo -iu {name} riku init --no-systemd",
-            name = user.name
-        ),
+        "      ℹ No deploy key added. git push needs one, add yours with:",
+        "yellow",
+    );
+    echo(
+        "        sudo riku init --ssh-key <your .pub or authorized_keys file>",
         "yellow",
     );
     echo("", "");
 }
 
 #[allow(clippy::question_mark)]
-fn run_user_steps(user: &DeployUser) -> Result<()> {
+fn run_user_steps(user: &DeployUser, keys: &[PublicKey]) -> Result<()> {
     let stage = match stage_binary() {
         Ok(stage) => stage,
         Err(e) => return Err(e),
     };
     let binary = stage.path().join(BINARY_NAME);
-    user.run_relayed(&binary, &["init", "--user-steps"])
+    let key_args: Vec<String> = keys
+        .iter()
+        .flat_map(|key| ["--add-key".to_string(), key.to_string()])
+        .collect();
+    let mut args = vec!["init", "--user-steps"];
+    args.extend(key_args.iter().map(String::as_str));
+    user.run_relayed(&binary, &args)
 }
 
 /// Run a root init: per-user steps as the deploy user, then host setup.
 #[allow(clippy::question_mark)]
-pub fn root_init(no_systemd: bool) -> Result<()> {
+pub fn root_init(options: &InitOptions) -> Result<()> {
     let user = match DeployUser::lookup() {
         Ok(user) => user,
+        Err(e) => return Err(e),
+    };
+    // Read as root, before any change, so a wrong file fails the init early.
+    let keys = match &options.ssh_key {
+        Some(file) => read_key_file(file),
+        None => Ok(Vec::new()),
+    };
+    let keys = match keys {
+        Ok(keys) => keys,
         Err(e) => return Err(e),
     };
     echo(
@@ -94,7 +113,7 @@ pub fn root_init(no_systemd: bool) -> Result<()> {
     );
     echo("", "");
 
-    if let Err(e) = run_user_steps(&user) {
+    if let Err(e) = run_user_steps(&user, &keys) {
         return Err(e);
     }
     let router = match deploy_router(&user) {
@@ -106,7 +125,7 @@ pub fn root_init(no_systemd: bool) -> Result<()> {
         return Err(e);
     }
 
-    if no_systemd {
+    if options.no_systemd {
         echo("[2/4] Skipping systemd setup (--no-systemd)", "yellow");
     } else {
         echo("[2/4] Setting up systemd service...", "");
@@ -115,6 +134,8 @@ pub fn root_init(no_systemd: bool) -> Result<()> {
         }
     }
     echo("", "");
-    print_ssh_hint(&user);
+    if keys.is_empty() {
+        print_ssh_hint();
+    }
     Ok(())
 }

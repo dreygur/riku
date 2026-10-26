@@ -20,7 +20,7 @@ with no runtime dependencies.
 # on your server
 curl -LO https://github.com/dreygur/riku/releases/latest/download/riku-linux-amd64.tar.gz
 sudo adduser --disabled-password --gecos '' deploy
-tar -xzf riku-linux-amd64.tar.gz && sudo ./riku init
+tar -xzf riku-linux-amd64.tar.gz && sudo ./riku init --ssh-key ~/.ssh/authorized_keys
 
 # on your laptop
 git remote add riku deploy@your-server:myapp
@@ -58,15 +58,17 @@ curl -LO https://github.com/dreygur/riku/releases/latest/download/riku-linux-amd
 tar -xzf riku-linux-amd64.tar.gz
 chmod +x riku
 sudo adduser --disabled-password --gecos '' deploy
-sudo ./riku init
+sudo ./riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
 Running `riku init` as root sets up the deploy user's home as that user (binary in
 `~/.local/bin`, `~/.riku`, the git hook, SSH keys), then creates a systemd service
 that starts on boot, launches the supervisor, and enables router auto-reload. The
-deploy user must exist first. Deploying as a user other than `deploy`? Pass
-`sudo RIKU_USER=myuser ./riku init`. For Caddy instead of nginx, see
-[`docs/docs/caddy.md`](docs/docs/caddy.md).
+deploy user must exist first. `--ssh-key` authorizes the keys in a `.pub` or
+`authorized_keys` file (here, the ones you used to log in) for `git push`; without
+it, run the command init prints before your first push. Deploying as a user other
+than `deploy`? Pass `sudo RIKU_USER=myuser ./riku init`. For Caddy instead of
+nginx, see [`docs/docs/caddy.md`](docs/docs/caddy.md).
 
 ### From source
 
