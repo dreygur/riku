@@ -25,6 +25,9 @@ mod tests {
     // -------------------------------------------------------------------------
 
     /// Build a `RikuPaths` rooted inside `tmp` and create all required directories.
+    ///
+    /// The host router is Caddy: with no `RIKU_DOMAINS` set, routing is a
+    /// file removal, so deploys here need no `nginx` binary for `nginx -t`.
     fn make_paths(tmp: &TempDir) -> riku::config::RikuPaths {
         let paths = riku::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
         for dir in &[
@@ -41,6 +44,8 @@ mod tests {
         ] {
             fs::create_dir_all(dir).expect("Failed to create riku dir");
         }
+        riku::config::router::save(&paths, &riku::config::router::Router::Caddy)
+            .expect("Failed to write router file");
         paths
     }
 

@@ -23,6 +23,7 @@ use std::sync::{Arc, Barrier};
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
+use riku::config::router::{self, Router};
 use riku::config::RikuPaths;
 use riku::error::DeployError;
 use riku::plugins::hooks::{HookContext, PluginHook};
@@ -34,6 +35,9 @@ use riku::util::resource_limits::ResourceLimits;
 
 /// Build a `RikuPaths` rooted inside `tmp` and create every directory
 /// `do_deploy` / `PluginManager` touch.
+///
+/// The host router is Caddy: with no `RIKU_DOMAINS` set, routing is a file
+/// removal, so deploys here need no `nginx` binary for `nginx -t`.
 fn make_paths(tmp: &TempDir) -> RikuPaths {
     let paths = RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
     for dir in &[
@@ -50,6 +54,7 @@ fn make_paths(tmp: &TempDir) -> RikuPaths {
     ] {
         fs::create_dir_all(dir).expect("create riku dir");
     }
+    router::save(&paths, &Router::Caddy).expect("write router file");
     paths
 }
 

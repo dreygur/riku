@@ -21,9 +21,16 @@ use std::path::Path;
 use anyhow::{anyhow, Result};
 use serde::Serialize;
 
+use crate::caddy::{HttpsPolicy, SiteRequest};
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::plugins::{bundles, router};
+use crate::util::domain::parse_domains;
+use crate::util::echo;
+
+const DOMAINS_KEY: &str = "RIKU_DOMAINS";
+const NGINX_WSGI_KEY: &str = "RIKU_NGINX_WSGI";
+const NGINX_STATIC_KEY: &str = "RIKU_NGINX_STATIC";
 
 /// The request handed to a router plugin's `configure` verb (one JSON line on
 /// stdin). Mirrors `PLUGIN_PROTOCOL.md` §6.2.
@@ -71,6 +78,63 @@ fn configure_plugin(
     router::run_verb(paths, &bundle, &manifest, "reload", None, None)
 }
 
+/// The Caddy site for an app, or `None` when it sets no domain.
+///
+/// Caddy only proxies HTTP over TCP, so uWSGI socket apps and nginx static
+/// sites are rejected instead of getting a site that routes to nothing.
+#[allow(clippy::question_mark)]
+fn caddy_request(env: &HashMap<String, String>) -> Result<Option<SiteRequest>> {
+    let tcp_only = [NGINX_WSGI_KEY, NGINX_STATIC_KEY]
+        .iter()
+        .find(|key| env.contains_key(**key));
+    if let Some(key) = tcp_only {
+        return Err(anyhow!(
+            "{key} is set, but Caddy proxies TCP only. Run a web: process listening on $PORT"
+        ));
+    }
+
+    let raw = env.get(DOMAINS_KEY).map(String::as_str).unwrap_or_default();
+    let domains = match parse_domains(raw) {
+        Ok(domains) => domains,
+        Err(e) => return Err(e),
+    };
+    if domains.is_empty() {
+        return Ok(None);
+    }
+
+    let https = if https_from_env(env) {
+        HttpsPolicy::Only
+    } else {
+        HttpsPolicy::AlsoPlainHttp
+    };
+    Ok(Some(SiteRequest {
+        domains,
+        upstream_port: upstream_port_from_env(env),
+        https,
+    }))
+}
+
+/// Write or clear `app`'s Caddy site. The `riku-caddy.path` unit reloads
+/// Caddy when the site directory changes, so there is no reload call here.
+#[allow(clippy::question_mark)]
+fn configure_caddy(app: &str, env: &HashMap<String, String>, paths: &RikuPaths) -> Result<()> {
+    let site = match caddy_request(env) {
+        Ok(site) => site,
+        Err(e) => return Err(e),
+    };
+
+    match site {
+        Some(site) => crate::caddy::write_site(app, &site, paths),
+        None => {
+            echo(
+                &format!("-----> No {DOMAINS_KEY} set, app is not routed. Set one with: riku config set {app} {DOMAINS_KEY}=<domain>"),
+                "yellow",
+            );
+            crate::caddy::remove_site(app, paths)
+        }
+    }
+}
+
 /// Configure the active router so `app` is reachable.
 ///
 /// With the default `nginx` router this generates the config and returns; the
@@ -91,7 +155,7 @@ pub fn configure(
 
     match active {
         Router::Nginx => crate::nginx::generate_nginx_config(app, app_path, env, paths),
-        Router::Caddy => Err(anyhow!("caddy router not built yet")),
+        Router::Caddy => configure_caddy(app, env, paths),
         Router::Plugin(name) => configure_plugin(&name, app, env, paths),
     }
 }
@@ -127,7 +191,7 @@ pub fn remove(app: &str, paths: &RikuPaths) -> Result<()> {
 
     match active {
         Router::Nginx => crate::nginx::remove_nginx_config(app, paths),
-        Router::Caddy => Err(anyhow!("caddy router not built yet")),
+        Router::Caddy => crate::caddy::remove_site(app, paths),
         Router::Plugin(name) => remove_plugin(&name, app, paths),
     }
 }

@@ -1590,6 +1590,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "riku-caddy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "riku-config",
+ "riku-util",
+ "tempfile",
+]
+
+[[package]]
 name = "riku-cli"
 version = "0.1.0"
 dependencies = [
@@ -1651,6 +1661,7 @@ dependencies = [
  "glob",
  "libc",
  "nix",
+ "riku-caddy",
  "riku-config",
  "riku-error",
  "riku-nginx",
