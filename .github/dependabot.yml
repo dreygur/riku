@@ -44,6 +44,12 @@ updates:
       interval: weekly
     commit-message:
       prefix: build(deps)
+    ignore:
+      # @types/node tracks the Node runtime, which is pinned to 24 in
+      # dashboard/.node-version. Newer majors would type-check APIs Node 24
+      # does not have. Lift this when the runtime moves.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: pip
     directories:
