@@ -1,6 +1,14 @@
-use anyhow::{Context, Result};
+//! Path and environment configuration for riku.
+//!
+//! Security model: every path riku reads or writes hangs off `$RIKU_ROOT`
+//! (default `$HOME/.riku`). Those two variables are the only path inputs this
+//! crate takes from outside, and they are accepted only as absolute paths with
+//! no `..`, so the resolved tree never depends on the working directory or
+//! climbs out of the directory the operator named.
+
+use anyhow::{anyhow, Result};
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 /// Raw source URL for fetching the latest riku script (for reference implementation).
 pub const RIKU_RAW_SOURCE_URL: &str =
@@ -35,6 +43,41 @@ pub const NGINX_CACHE_CONTROL_DEFAULT: u32 = 3600;
 
 /// Where nginx looks for enabled site configs on a stock Debian/Ubuntu install.
 pub const DEFAULT_NGINX_SITES_ENABLED: &str = "/etc/nginx/sites-enabled";
+
+fn checked_dir(var: &str, value: String) -> Result<PathBuf> {
+    let path = PathBuf::from(value);
+    let climbs = path.components().any(|c| c == Component::ParentDir);
+    if !path.is_absolute() || climbs {
+        return Err(anyhow!(
+            "{var} must be an absolute path without `..`, got {}",
+            path.display()
+        ));
+    }
+    Ok(path)
+}
+
+/// Resolve `(riku_root, home)` from the raw `HOME` and `RIKU_ROOT` values.
+///
+/// Kept apart from `from_env` so the validation can be tested without
+/// mutating the process environment.
+#[allow(clippy::question_mark)]
+fn root_dirs(home: Option<String>, riku_root: Option<String>) -> Result<(PathBuf, PathBuf)> {
+    let home = match home {
+        Some(value) => match checked_dir("HOME", value) {
+            Ok(path) => path,
+            Err(e) => return Err(e),
+        },
+        None => return Err(anyhow!("HOME environment variable must be set")),
+    };
+    let riku_root = match riku_root {
+        Some(value) => match checked_dir("RIKU_ROOT", value) {
+            Ok(path) => path,
+            Err(e) => return Err(e),
+        },
+        None => home.join(".riku"),
+    };
+    Ok((riku_root, home))
+}
 
 /// All resolved directory paths used by riku.
 #[derive(Debug, Clone)]
@@ -107,16 +150,13 @@ impl RikuPaths {
     /// Falls back to `$HOME/.riku` when `RIKU_ROOT` is not set. Returns an
     /// error instead of panicking when `$HOME` is unset, which happens under
     /// forced-command SSH/git-shell setups that strip the caller's
-    /// environment before invoking riku.
+    /// environment before invoking riku. Also errors when either value is
+    /// relative or contains `..`.
     pub fn from_env() -> Result<Self> {
-        let home = match env::var("HOME") {
-            Ok(value) => PathBuf::from(value),
-            Err(e) => return Err(e).context("HOME environment variable must be set"),
-        };
-        let riku_root = env::var("RIKU_ROOT")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| home.join(".riku"));
-        Ok(Self::from_dirs(riku_root, &home))
+        match root_dirs(env::var("HOME").ok(), env::var("RIKU_ROOT").ok()) {
+            Ok((riku_root, home)) => Ok(Self::from_dirs(riku_root, &home)),
+            Err(e) => Err(e),
+        }
     }
 
     /// Build paths rooted at `root/.riku`, using `root` as home too, the
