@@ -28,6 +28,7 @@ use anyhow::{anyhow, Result};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use chrono::{DateTime, Utc};
+use croner::parser::CronParser;
 use croner::Cron;
 
 /// Parse a 5-field Unix cron expression with Vixie day-of-month/day-of-week
@@ -43,8 +44,8 @@ fn parse_schedule(schedule: &str) -> Result<Cron> {
         ));
     }
 
-    Cron::new(schedule)
-        .parse()
+    CronParser::new()
+        .parse(schedule)
         .map_err(|e| anyhow!("Invalid cron expression '{}': {}", schedule, e))
 }
 

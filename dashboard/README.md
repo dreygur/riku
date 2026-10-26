@@ -64,7 +64,7 @@ next start -H 127.0.0.1
 ## Tooling
 
 This project uses [nub](https://nubjs.com) as its package manager (declared via
-`packageManager` in `package.json`; the lockfile is `lock.yaml`). Install it once:
+`packageManager` in `package.json`; the lockfile is `nub.lock`). Install it once:
 
 ```bash
 npm install -g @nubjs/nub   # or: brew install nubjs/tap/nub, mise use -g nub

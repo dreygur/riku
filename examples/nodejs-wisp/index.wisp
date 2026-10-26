@@ -17,7 +17,7 @@
             (ws.on "message"
                    (fn [msg]
                      (console.log "Got message:" msg)
-                     (.map (.-clients (ews.getWss)) 
+                     (.forEach (.-clients (ews.getWss))
                            (fn [c]
                              (c.send msg)))))
             (ws.on "close" (fn [] (console.log "WebSocket was closed")))))

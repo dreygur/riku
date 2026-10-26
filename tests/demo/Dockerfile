@@ -41,7 +41,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && rm -rf /var/lib/apt/lists/*
 
 # nub (https://nubjs.com): the package manager dashboard/ is pinned to
-# (packageManager field in dashboard/package.json, lockfile is lock.yaml).
+# (packageManager field in dashboard/package.json, lockfile is nub.lock).
 RUN npm install -g @nubjs/nub
 
 # Dedicated, non-root deploy user, same model as the automated test target.
@@ -105,11 +105,11 @@ RUN chmod 755 /home/riku/.riku/plugins/* \
 COPY tests/demo/apps/ /opt/demo-apps/
 
 # Dashboard: built at image-build time so container boot doesn't pay the
-# `next build` cost every run. package.json + lock.yaml copied (and
+# `next build` cost every run. package.json + nub.lock copied (and
 # `nub install --frozen-lockfile` run) before the rest of the source so
 # re-running run_demo.sh after only an app-code change reuses the cached
 # node_modules layer instead of reinstalling every dependency.
-COPY dashboard/package.json dashboard/lock.yaml /opt/dashboard/
+COPY dashboard/package.json dashboard/nub.lock /opt/dashboard/
 RUN cd /opt/dashboard && nub install --frozen-lockfile
 COPY dashboard/ /opt/dashboard/
 RUN cd /opt/dashboard && nub run build

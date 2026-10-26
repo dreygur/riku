@@ -22,34 +22,34 @@ pub(crate) fn router(state: DashboardState) -> Router {
         .route("/", get(index))
         .route("/healthz", get(healthz))
         .route("/api/state", get(api_state))
-        .route("/api/apps/:app/releases", get(api_releases))
-        .route("/api/apps/:app/logs", get(super::logs::stream))
+        .route("/api/apps/{app}/releases", get(api_releases))
+        .route("/api/apps/{app}/logs", get(super::logs::stream))
         // env editor
         .route(
-            "/api/apps/:app/env",
+            "/api/apps/{app}/env",
             get(super::appcfg::get_env).post(super::appcfg::edit_env),
         )
         // app backup + restore + diagnostics
-        .route("/api/apps/:app/backup", post(super::system::backup_app))
+        .route("/api/apps/{app}/backup", post(super::system::backup_app))
         .route(
-            "/api/apps/:app/restore",
+            "/api/apps/{app}/restore",
             post(super::system::restore_app).route_layer(DefaultBodyLimit::max(RESTORE_MAX_BYTES)),
         )
         .route("/api/doctor", get(super::system::doctor))
         .route("/api/plugins", get(super::installed::list))
         .route("/api/plugins/install", post(super::market::install))
         .route(
-            "/api/plugins/:name",
+            "/api/plugins/{name}",
             axum::routing::delete(super::market::remove_plugin),
         )
-        .route("/api/plugins/:name/ui", get(super::installed::ui_panel))
+        .route("/api/plugins/{name}/ui", get(super::installed::ui_panel))
         .route(
             "/api/marketplace",
             get(super::market::list_sources).post(super::market::add_source),
         )
         .route("/api/marketplace/search", get(super::market::search))
         .route(
-            "/api/marketplace/:name",
+            "/api/marketplace/{name}",
             axum::routing::delete(super::market::remove_source),
         )
         .route(
@@ -57,7 +57,7 @@ pub(crate) fn router(state: DashboardState) -> Router {
             get(super::market::list_keys).post(super::market::add_key),
         )
         .route(
-            "/api/trust/:name",
+            "/api/trust/{name}",
             axum::routing::delete(super::market::remove_key),
         )
         // addons (managed datastores)
@@ -65,10 +65,10 @@ pub(crate) fn router(state: DashboardState) -> Router {
             "/api/addons",
             get(super::addons::list).post(super::addons::create),
         )
-        .route("/api/addons/:instance", delete(super::addons::deprovision))
-        .route("/api/addons/:instance/bind", post(super::addons::bind))
-        .route("/api/addons/:instance/unbind", post(super::addons::unbind))
-        .route("/api/addons/:instance/backup", post(super::addons::backup))
+        .route("/api/addons/{instance}", delete(super::addons::deprovision))
+        .route("/api/addons/{instance}/bind", post(super::addons::bind))
+        .route("/api/addons/{instance}/unbind", post(super::addons::unbind))
+        .route("/api/addons/{instance}/backup", post(super::addons::backup))
         .merge(super::mutations::router())
         .with_state(state)
 }

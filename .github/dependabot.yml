@@ -30,7 +30,7 @@ updates:
           - minor
           - patch
 
-  # Dependabot does not understand nub's lock.yaml, so an npm PR here updates
+  # Dependabot does not understand nub's nub.lock, so an npm PR here updates
   # package.json and leaves the lockfile behind. CI installs with
   # --frozen-lockfile and fails on the mismatch, which is the intended
   # backstop: run `nub install` on the branch before merging. Security updates
