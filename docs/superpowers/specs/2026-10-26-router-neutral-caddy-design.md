@@ -38,7 +38,8 @@ there are no backward compatible aliases.
 ## Part 1: env rename
 
 Every name riku invented moves under `RIKU_`. Names another tool reads directly
-keep their standard name: `PORT`, `PATH`, `HOME`, `COMPOSE_FILE`, and app owned
+keep their standard name: `PORT`, `PATH`, `HOME`, `COMPOSE_FILE`, `UWSGI_*`
+(uWSGI reads `UWSGI_<option>` from its environment itself), and app owned
 values such as `DATABASE_URL`.
 
 | Old | New |
@@ -50,7 +51,6 @@ values such as `DATABASE_URL`.
 | `DISABLE_IPV6` | `RIKU_DISABLE_IPV6` |
 | other `NGINX_*` (cache, static paths, Cloudflare ACL, catch all, include file, IPv4/IPv6 address, WSGI, portmap, socket, document root, external port) | `RIKU_NGINX_*` |
 | `ACME_EMAIL`, `ACME_ROOT_CA`, `ACME_ROOT` | `RIKU_ACME_*` |
-| `UWSGI_*` | `RIKU_UWSGI_*` |
 | `NODE_VERSION`, `PYTHON_VERSION`, `PYTHON_PACKAGE_MANAGER` | `RIKU_NODE_VERSION`, `RIKU_PYTHON_VERSION`, `RIKU_PYTHON_PACKAGE_MANAGER` |
 | `RUNTIME` | `RIKU_RUNTIME` (already read as a second name; drop `RUNTIME`) |
 | `GHCR_USERNAME`, `GHCR_TOKEN` | `RIKU_GHCR_USERNAME`, `RIKU_GHCR_TOKEN` |
