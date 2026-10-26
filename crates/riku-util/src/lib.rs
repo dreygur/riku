@@ -2,6 +2,7 @@
 //!
 //! Organised into focused sub-modules:
 //! - [`display`]: terminal output and table formatting
+//! - [`domain`]: validated hostnames for router config
 //! - [`validation`]: app-name sanitization, path-traversal checks
 //! - [`nginx_validation`]: nginx cache config and env-var validation
 //! - [`procfile`]: Procfile parsing and cron validation
@@ -13,6 +14,7 @@
 pub mod cron;
 pub mod deploy_logger;
 pub mod display;
+pub mod domain;
 pub mod env;
 pub mod fs;
 pub mod legacy_env;
