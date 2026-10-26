@@ -6,7 +6,6 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "audit:dashboard": "nubx tsx scripts/audit-dashboard.ts",
     "hash-password": "nubx tsx scripts/hash-password.ts",
