@@ -59,6 +59,10 @@ Unchanged: `PORT`, `PATH`, `HOME`, `COMPOSE_FILE`, the `UWSGI_*` options
 (uWSGI reads them from its own environment), and names that already start
 with `RIKU_`.
 
+Lifecycle hooks now get the detected runtime as `RIKU_DETECTED_RUNTIME`
+(it was `RIKU_RUNTIME`), so it never collides with the `RIKU_RUNTIME`
+override an app sets in its ENV.
+
 ## Runtime Settings
 
 ### Auto Restart

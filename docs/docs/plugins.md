@@ -128,7 +128,7 @@ Lifecycle hooks are named with a `riku-` prefix and run automatically at deploy 
 | `riku-post-deploy` | After workers are up | Non-fatal |
 
 Hooks receive: `RIKU_APP`, `RIKU_APP_PATH`, `RIKU_ENV_PATH`, `RIKU_ROOT`,
-and `RIKU_RUNTIME` (the detected plugin name, if any).
+and `RIKU_DETECTED_RUNTIME` (the detected plugin name, if any).
 
 Example notification hook:
 
