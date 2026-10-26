@@ -185,6 +185,10 @@ pub enum Commands {
         /// Skip systemd service setup
         #[arg(long)]
         no_systemd: bool,
+        /// Run only the per-user steps. A root init passes this when it
+        /// re-runs init as the deploy user.
+        #[arg(long, hide = true)]
+        user_steps: bool,
     },
 
     /// Scaffold a sample app and print deploy instructions (runs locally)

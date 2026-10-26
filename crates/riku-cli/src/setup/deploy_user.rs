@@ -1,28 +1,32 @@
 //! The account apps deploy as, seen from a root `riku init`.
 //!
 //! Root init runs with `HOME=/root`, but git push deploys run as this user
-//! and read `~/.riku` from its home. Anything deploys must see (the
-//! `ROUTER` file, the Caddy site directory) goes into this user's tree.
+//! and read `~/.riku` from its home. Everything deploys must see (the
+//! binary, `~/.riku`, the git hook, the Caddy site directory) belongs in
+//! this user's tree.
 //!
 //! Security: the deploy user owns that tree, so it can plant symlinks in it
 //! (`~/.riku/ROUTER -> /etc/shadow`). Root must never create, write, chmod or
 //! chown a path there: a followed symlink would hand the target to the
 //! deploy user. Every such change runs as a child process with the deploy
 //! user's uid and gid (supplementary groups dropped), so it can only touch
-//! what the deploy user could already touch. Commands get a fixed argv, no
-//! shell, and file contents go through stdin.
+//! what the deploy user could already touch. Commands get a fixed argv and
+//! no shell.
 
-use std::io::Write;
+use std::env;
+use std::ffi::OsStr;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, Result};
-use nix::unistd::{Gid, Group, Uid, User};
+use nix::unistd::{setsid, Gid, Group, Uid, User};
 
 use crate::config::RikuPaths;
 
 const DEFAULT_USER: &str = "deploy";
+/// Root's environment variables a deploy user child may see.
+const PASSED_ENV: [&str; 3] = ["PATH", "TERM", "RIKU_ROUTER"];
 
 /// The deploy account, resolved from the passwd and group databases.
 pub struct DeployUser {
@@ -88,31 +92,45 @@ impl DeployUser {
         RikuPaths::from_dirs(self.home.join(".riku"), &self.home)
     }
 
-    /// Run `program` as the deploy user, feeding `input` on stdin. Returns
-    /// its stdout.
-    fn run_as(&self, program: &str, args: &[&str], input: &str) -> Result<String> {
-        let command = format!("{program} {}", args.join(" "));
-        let mut child = match Command::new(program)
-            .args(args)
+    /// A command that runs as the deploy user from its home.
+    ///
+    /// The child starts in a new session with no controlling terminal and an
+    /// allowlisted environment. Holding root's terminal would let deploy
+    /// owned code push keystrokes into root's shell (TIOCSTI) or read what
+    /// root types after init returns. Callers also pass no terminal fds: the
+    /// helpers below use null stdin and piped output. std drops
+    /// supplementary groups when a root process sets the uid.
+    fn command(&self, program: impl AsRef<OsStr>) -> Command {
+        let mut command = Command::new(program);
+        command
+            .env_clear()
+            .envs(env::vars_os().filter(|(key, _)| PASSED_ENV.iter().any(|k| key == k)))
+            .env("HOME", &self.home)
+            .env("USER", &self.name)
+            .env("LOGNAME", &self.name)
             .uid(self.uid.as_raw())
             .gid(self.gid.as_raw())
             .current_dir(&self.home)
-            .stdin(Stdio::piped())
+            .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-        {
-            Ok(child) => child,
-            Err(e) => return Err(anyhow!("failed to run {command} as {}: {e}", self.name)),
-        };
-        if let Some(mut stdin) = child.stdin.take() {
-            if let Err(e) = stdin.write_all(input.as_bytes()) {
-                return Err(anyhow!("failed to feed {command}: {e}"));
-            }
+            .stderr(Stdio::piped());
+        // SAFETY: setsid is async-signal-safe and touches no memory shared
+        // with the parent, as `pre_exec` requires.
+        unsafe {
+            command.pre_exec(|| match setsid() {
+                Ok(_) => Ok(()),
+                Err(e) => Err(std::io::Error::from(e)),
+            });
         }
-        let output = match child.wait_with_output() {
+        command
+    }
+
+    /// Run `program` as the deploy user. Returns its stdout.
+    fn run_as(&self, program: &str, args: &[&str]) -> Result<String> {
+        let command = format!("{program} {}", args.join(" "));
+        let output = match self.command(program).args(args).output() {
             Ok(output) => output,
-            Err(e) => return Err(anyhow!("failed to wait for {command}: {e}")),
+            Err(e) => return Err(anyhow!("failed to run {command} as {}: {e}", self.name)),
         };
         if !output.status.success() {
             return Err(anyhow!(
@@ -126,25 +144,39 @@ impl DeployUser {
 
     /// Create `dir` and its parents as the deploy user.
     pub fn create_dir(&self, dir: &Path) -> Result<()> {
-        self.run_as("mkdir", &["-p", &dir.to_string_lossy()], "")
+        self.run_as("mkdir", &["-p", &dir.to_string_lossy()])
             .map(drop)
     }
 
     /// Change `path`'s mode as the deploy user (`mode` in chmod syntax).
     pub fn chmod(&self, mode: &str, path: &Path) -> Result<()> {
-        self.run_as("chmod", &[mode, &path.to_string_lossy()], "")
-            .map(drop)
-    }
-
-    /// Replace `path`'s contents as the deploy user.
-    pub fn write_file(&self, path: &Path, contents: &str) -> Result<()> {
-        self.run_as("tee", &[&path.to_string_lossy()], contents)
+        self.run_as("chmod", &[mode, &path.to_string_lossy()])
             .map(drop)
     }
 
     /// Read `path` as the deploy user.
     pub fn read_file(&self, path: &Path) -> Result<String> {
-        self.run_as("cat", &[&path.to_string_lossy()], "")
+        self.run_as("cat", &[&path.to_string_lossy()])
+    }
+
+    /// Run `program` as the deploy user and replay its output on root's
+    /// terminal once it exits, failure included.
+    pub fn run_relayed(&self, program: &Path, args: &[&str]) -> Result<()> {
+        let shown = format!("{} {}", program.display(), args.join(" "));
+        let output = match self.command(program).args(args).output() {
+            Ok(output) => output,
+            Err(e) => return Err(anyhow!("failed to run {shown} as {}: {e}", self.name)),
+        };
+        print!("{}", String::from_utf8_lossy(&output.stdout));
+        eprint!("{}", String::from_utf8_lossy(&output.stderr));
+        if !output.status.success() {
+            return Err(anyhow!(
+                "{shown} as {} failed: {}",
+                self.name,
+                output.status
+            ));
+        }
+        Ok(())
     }
 }
 

@@ -1,12 +1,12 @@
-//! Router choice during `riku init`: which tree holds the `ROUTER` file,
-//! writing `RIKU_ROUTER` into it, and the router specific host setup.
+//! Router choice during `riku init`: writing `RIKU_ROUTER` into the `ROUTER`
+//! file, reading it back, and the router specific host setup.
 //!
-//! A non-root init uses the caller's own riku root. A root init uses the
-//! deploy user's, because that is the tree git push deploys read.
+//! The file is always written by the user whose tree it lives in: a plain
+//! init writes its own, and a root init hands that step to the deploy user.
 //!
-//! Security: under root, the `ROUTER` file is read and written only through
-//! [`DeployUser`], as the deploy user. Root opening a path in that tree
-//! would follow any symlink the deploy user planted there.
+//! Security: root reads the deploy user's `ROUTER` file only through
+//! [`DeployUser`], as that user. Root opening a path in that tree would
+//! follow any symlink the deploy user planted there.
 
 use std::env;
 use std::fs;
@@ -21,19 +21,35 @@ use crate::util::echo;
 use super::caddy_host::setup_caddy_host;
 use super::deploy_user::DeployUser;
 
-/// Where the host router lives and which one it is.
-pub struct RouterTarget {
-    /// The riku paths deploys read: the deploy user's under root, else ours.
-    pub paths: RikuPaths,
-    /// The deploy user, looked up only under root.
-    pub user: Option<DeployUser>,
-    pub router: Router,
+/// Write `RIKU_ROUTER` to `paths`' `ROUTER` file and return the router now in
+/// effect. Init is the only reader of the env var; unset leaves an existing
+/// choice alone.
+#[allow(clippy::question_mark)]
+pub fn persist_router(paths: &RikuPaths) -> Result<Router> {
+    let raw = env::var("RIKU_ROUTER").unwrap_or_default();
+    if raw.trim().is_empty() {
+        return Router::load(paths);
+    }
+
+    let router = Router::from(raw.as_str());
+    if let Err(e) = fs::create_dir_all(&paths.riku_root) {
+        return Err(anyhow!(
+            "failed to create {}: {e}",
+            paths.riku_root.display()
+        ));
+    }
+    if let Err(e) = router::save(paths, &router) {
+        return Err(e);
+    }
+    echo(&format!("      ✓ router: {}", router.name()), "green");
+    Ok(router)
 }
 
 /// The deploy user's router, read as that user. A missing file is nginx,
 /// matching [`Router::load`]. `symlink_metadata` does not follow links, so
 /// the existence check is safe to make as root.
-fn load_as_user(user: &DeployUser, paths: &RikuPaths) -> Result<Router> {
+pub fn deploy_router(user: &DeployUser) -> Result<Router> {
+    let paths = user.riku_paths();
     match fs::symlink_metadata(&paths.router_file) {
         Err(e) if e.kind() == ErrorKind::NotFound => return Ok(Router::Nginx),
         Err(e) => {
@@ -50,74 +66,10 @@ fn load_as_user(user: &DeployUser, paths: &RikuPaths) -> Result<Router> {
     }
 }
 
-#[allow(clippy::question_mark)]
-fn save_router(target: &RouterTarget, router: &Router) -> Result<()> {
-    let Some(user) = &target.user else {
-        return router::save(&target.paths, router);
-    };
-    if let Err(e) = user.create_dir(&target.paths.riku_root) {
-        return Err(e);
-    }
-    user.write_file(&target.paths.router_file, &format!("{}\n", router.name()))
-}
-
-/// Write `RIKU_ROUTER` to the target's `ROUTER` file. Init is the only
-/// reader of the env var; unset leaves an existing choice alone.
-#[allow(clippy::question_mark)]
-fn persist_router(target: &mut RouterTarget) -> Result<()> {
-    let raw = env::var("RIKU_ROUTER").unwrap_or_default();
-    if raw.trim().is_empty() {
-        return Ok(());
-    }
-
-    let router = Router::from(raw.as_str());
-    if let Err(e) = save_router(target, &router) {
-        return Err(e);
-    }
-    echo(&format!("      ✓ router: {}", router.name()), "green");
-    target.router = router;
-    Ok(())
-}
-
-/// Resolve the router target and apply `RIKU_ROUTER` if set.
-#[allow(clippy::question_mark)]
-pub fn resolve_router(own_paths: &RikuPaths, is_root: bool) -> Result<RouterTarget> {
-    let user = if is_root {
-        match DeployUser::lookup() {
-            Ok(user) => Some(user),
-            Err(e) => return Err(e),
-        }
-    } else {
-        None
-    };
-    let paths = match &user {
-        Some(user) => user.riku_paths(),
-        None => own_paths.clone(),
-    };
-    let loaded = match &user {
-        Some(user) => load_as_user(user, &paths),
-        None => Router::load(&paths),
-    };
-    let router = match loaded {
-        Ok(router) => router,
-        Err(e) => return Err(e),
-    };
-
-    let mut target = RouterTarget {
-        paths,
-        user,
-        router,
-    };
-    if let Err(e) = persist_router(&mut target) {
-        return Err(e);
-    }
-    Ok(target)
-}
-
 /// Router specific host setup that needs root. Only Caddy has any.
-pub fn setup_router_host(target: &RouterTarget) -> Result<()> {
-    match (&target.router, &target.user) {
-        (Router::Caddy, Some(user)) => setup_caddy_host(&target.paths, user),
-        _ => Ok(()),
+pub fn setup_router_host(router: &Router, user: &DeployUser) -> Result<()> {
+    match router {
+        Router::Caddy => setup_caddy_host(&user.riku_paths(), user),
+        Router::Nginx | Router::Plugin(_) => Ok(()),
     }
 }

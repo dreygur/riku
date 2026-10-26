@@ -8,6 +8,10 @@ use std::path::{Path, PathBuf};
 
 use crate::util::echo;
 
+/// Where riku installs itself, relative to the user's home. The git hook and
+/// the systemd unit run the binary from here.
+pub const INSTALL_DIR: &str = ".local/bin";
+
 /// Install riku binary to user's PATH
 pub fn install_riku_binary() -> Result<()> {
     let current_exe = env::current_exe()?;
@@ -119,7 +123,7 @@ fn append_once(path: &Path, line: &str, create: bool) -> bool {
 /// Get user-local installation directory (~/.local/bin)
 pub fn get_user_install_directory() -> Result<PathBuf> {
     if let Ok(home) = env::var("HOME") {
-        return Ok(PathBuf::from(&home).join(".local/bin"));
+        return Ok(PathBuf::from(&home).join(INSTALL_DIR));
     }
 
     if let Ok(cwd) = env::current_dir() {

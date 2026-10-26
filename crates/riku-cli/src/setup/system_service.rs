@@ -9,6 +9,7 @@ use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::echo;
 
+use super::binary::INSTALL_DIR;
 use super::deploy_user::{deploy_user_name, passwd_home};
 use super::router_units::{other_path_units, unit_ordering, write_router_units};
 
@@ -134,12 +135,11 @@ pub fn install_systemd_service(router: &Router) -> Result<()> {
         return Ok(());
     }
 
-    let riku_binary = match env::current_exe() {
-        Ok(path) => path,
-        Err(e) => return Err(anyhow!("failed to locate the riku binary: {e}")),
-    };
     let deploy_user = deploy_user_name();
     let deploy_home = passwd_home(&deploy_user).unwrap_or_else(|| format!("/home/{deploy_user}"));
+    // The binary init installed for the deploy user, not root's own copy:
+    // the unit runs as that user, who may not be able to reach root's.
+    let riku_binary = Path::new(&deploy_home).join(INSTALL_DIR).join("riku");
 
     let systemd_dir = Path::new(SYSTEMD_DIR);
     if let Err(e) = fs::create_dir_all(systemd_dir) {

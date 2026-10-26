@@ -232,7 +232,10 @@ mod routing_tests {
 
     #[test]
     fn init_command_returns_none() {
-        let cmd = Commands::Init { no_systemd: false };
+        let cmd = Commands::Init {
+            no_systemd: false,
+            user_steps: false,
+        };
         assert_eq!(get_plugin_command(&cmd), None);
     }
 

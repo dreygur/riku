@@ -8,6 +8,8 @@ use std::process::Command;
 use crate::config::RikuPaths;
 use crate::util::{echo, setup_authorized_keys};
 
+const ADD_KEY_LATER: &str = "      ℹ Add a key later by running riku init again";
+
 /// Interactive SSH key setup.
 pub fn setup_ssh_key_interactive(paths: &RikuPaths) -> Result<()> {
     let ssh_dir = dirs::home_dir()
@@ -62,13 +64,26 @@ fn select_key(found_keys: Vec<PathBuf>, ssh_dir: &std::path::Path) -> Result<Opt
     prompt_select_key(found_keys)
 }
 
+/// Flush the prompt and read one line of the answer.
+fn read_answer() -> Result<String> {
+    if let Err(e) = io::stdout().flush() {
+        return Err(anyhow::anyhow!("failed to show the prompt: {e}"));
+    }
+    let mut input = String::new();
+    match io::stdin().read_line(&mut input) {
+        Ok(_) => Ok(input),
+        Err(e) => Err(anyhow::anyhow!("failed to read the answer: {e}")),
+    }
+}
+
+#[allow(clippy::question_mark)]
 fn prompt_create_key(ssh_dir: &std::path::Path) -> Result<Option<PathBuf>> {
     echo("      ℹ No SSH keys found", "yellow");
     print!("      Create new SSH key? [y/N]: ");
-    io::stdout().flush()?;
-
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
+    let input = match read_answer() {
+        Ok(input) => input,
+        Err(e) => return Err(e),
+    };
 
     if input.trim().to_lowercase() == "y" {
         echo("      Generating SSH key...", "");
@@ -91,21 +106,16 @@ fn prompt_create_key(ssh_dir: &std::path::Path) -> Result<Option<PathBuf>> {
             return Ok(Some(ssh_dir.join("id_ed25519.pub")));
         } else {
             echo("      ⚠ Failed to create SSH key", "red");
-            echo(
-                "      You can add a key manually later with: riku setup ssh ~/.ssh/id_rsa.pub",
-                "yellow",
-            );
+            echo(ADD_KEY_LATER, "yellow");
         }
     } else {
-        echo(
-            "      ℹ You can add a key manually later with: riku setup ssh ~/.ssh/id_rsa.pub",
-            "yellow",
-        );
+        echo(ADD_KEY_LATER, "yellow");
     }
 
     Ok(None)
 }
 
+#[allow(clippy::question_mark)]
 fn prompt_select_key(found_keys: Vec<PathBuf>) -> Result<Option<PathBuf>> {
     echo("      Multiple SSH keys found:", "yellow");
 
@@ -114,10 +124,10 @@ fn prompt_select_key(found_keys: Vec<PathBuf>) -> Result<Option<PathBuf>> {
     }
 
     print!("      Select key (1-{}): ", found_keys.len());
-    io::stdout().flush()?;
-
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
+    let input = match read_answer() {
+        Ok(input) => input,
+        Err(e) => return Err(e),
+    };
 
     match input.trim().parse::<usize>() {
         Ok(n) if n >= 1 && n <= found_keys.len() => {
@@ -129,10 +139,7 @@ fn prompt_select_key(found_keys: Vec<PathBuf>) -> Result<Option<PathBuf>> {
         }
         _ => {
             echo("      ⚠ Invalid selection", "red");
-            echo(
-                "      You can add a key manually later with: riku setup ssh ~/.ssh/id_rsa.pub",
-                "yellow",
-            );
+            echo(ADD_KEY_LATER, "yellow");
             Ok(None)
         }
     }

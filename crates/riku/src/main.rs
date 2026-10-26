@@ -136,7 +136,10 @@ fn main() -> Result<()> {
         Commands::Rollback { app, to, list } => {
             cli::apps::cmd_rollback(&paths, &app, to.as_deref(), list)?
         }
-        Commands::Init { no_systemd } => cli::setup::cmd_init(no_systemd)?,
+        Commands::Init {
+            no_systemd,
+            user_steps,
+        } => cli::setup::cmd_init(no_systemd, user_steps)?,
         Commands::Quickstart {
             name,
             runtime,

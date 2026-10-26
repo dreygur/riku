@@ -61,9 +61,10 @@ sudo adduser --disabled-password --gecos '' deploy
 sudo ./riku init
 ```
 
-Running `riku init` as root installs the binary to `~/.local/bin`, creates a systemd
-service that starts on boot, launches the supervisor, and enables router auto-reload.
-The deploy user must exist first. Deploying as a user other than `deploy`? Pass
+Running `riku init` as root sets up the deploy user's home as that user (binary in
+`~/.local/bin`, `~/.riku`, the git hook, SSH keys), then creates a systemd service
+that starts on boot, launches the supervisor, and enables router auto-reload. The
+deploy user must exist first. Deploying as a user other than `deploy`? Pass
 `sudo RIKU_USER=myuser ./riku init`. For Caddy instead of nginx, see
 [`docs/docs/caddy.md`](docs/docs/caddy.md).
 

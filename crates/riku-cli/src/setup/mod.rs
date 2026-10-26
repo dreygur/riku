@@ -8,6 +8,7 @@ mod guidance;
 pub mod init;
 mod init_router;
 mod prerequisites;
+mod root_init;
 mod router_units;
 pub mod ssh;
 pub mod system_service;
