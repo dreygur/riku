@@ -17,6 +17,7 @@ use anyhow::Result;
 use colored::Colorize;
 
 use crate::config::RikuPaths;
+use crate::setup::deploy_user::DeployUser;
 use crate::util::display;
 
 /// Outcome of a single diagnostic check.
@@ -57,12 +58,34 @@ impl Check {
     }
 }
 
+/// The riku tree to diagnose. Under `sudo`, HOME is root's, so a root run
+/// checks the deploy user's tree instead, the one deploys and the
+/// supervisor use. Doctor only reads, so root reading that tree hands the
+/// deploy user nothing.
+fn diagnosed_paths(paths: &RikuPaths) -> Result<RikuPaths> {
+    if std::env::var("USER").unwrap_or_default() != "root" {
+        return Ok(paths.clone());
+    }
+    match DeployUser::lookup() {
+        Ok(user) => Ok(user.riku_paths()),
+        Err(e) => Err(e),
+    }
+}
+
 /// Run every diagnostic, render the report, and exit non-zero on any failure.
+#[allow(clippy::question_mark)]
 pub fn cmd_doctor(paths: &RikuPaths) -> Result<()> {
-    display::info("Running Riku diagnostics...");
+    let paths = match diagnosed_paths(paths) {
+        Ok(paths) => paths,
+        Err(e) => return Err(e),
+    };
+    display::info(&format!(
+        "Running Riku diagnostics on {}...",
+        paths.riku_root.display()
+    ));
     display::blank();
 
-    let checks = collect(paths);
+    let checks = collect(&paths);
     render(&checks);
     summarize_and_exit(&checks);
 
