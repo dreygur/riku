@@ -51,6 +51,17 @@ pub fn passwd_home(user: &str) -> Option<String> {
     }
 }
 
+/// `bytes` as text with every control character except newline and tab
+/// removed. Relayed child output reaches root's terminal, where an escape
+/// sequence could set the clipboard, retitle the window or make the
+/// terminal answer back as input.
+fn printable(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes)
+        .chars()
+        .filter(|c| !c.is_control() || matches!(c, '\n' | '\t'))
+        .collect()
+}
+
 fn group_name(gid: Gid) -> Result<String> {
     match Group::from_gid(gid) {
         Ok(Some(group)) => Ok(group.name),
@@ -108,6 +119,7 @@ impl DeployUser {
             .env("HOME", &self.home)
             .env("USER", &self.name)
             .env("LOGNAME", &self.name)
+            .env("NO_COLOR", "1")
             .uid(self.uid.as_raw())
             .gid(self.gid.as_raw())
             .current_dir(&self.home)
@@ -160,15 +172,16 @@ impl DeployUser {
     }
 
     /// Run `program` as the deploy user and replay its output on root's
-    /// terminal once it exits, failure included.
+    /// terminal once it exits, failure included, stripped of control
+    /// characters (see [`printable`]).
     pub fn run_relayed(&self, program: &Path, args: &[&str]) -> Result<()> {
         let shown = format!("{} {}", program.display(), args.join(" "));
         let output = match self.command(program).args(args).output() {
             Ok(output) => output,
             Err(e) => return Err(anyhow!("failed to run {shown} as {}: {e}", self.name)),
         };
-        print!("{}", String::from_utf8_lossy(&output.stdout));
-        eprint!("{}", String::from_utf8_lossy(&output.stderr));
+        print!("{}", printable(&output.stdout));
+        eprint!("{}", printable(&output.stderr));
         if !output.status.success() {
             return Err(anyhow!(
                 "{shown} as {} failed: {}",

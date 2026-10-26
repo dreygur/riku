@@ -47,7 +47,7 @@ fn child_gets_only_allowlisted_env_and_no_terminal() {
     let keys: Vec<&str> = env.lines().filter_map(|l| l.split('=').next()).collect();
     for key in &keys {
         assert!(
-            PASSED_ENV.contains(key) || ["HOME", "USER", "LOGNAME"].contains(key),
+            PASSED_ENV.contains(key) || ["HOME", "USER", "LOGNAME", "NO_COLOR"].contains(key),
             "{key} leaked into the child: {env}"
         );
     }
@@ -61,4 +61,13 @@ fn child_gets_only_allowlisted_env_and_no_terminal() {
         ],
     );
     assert_eq!(tty.unwrap().trim(), "no-tty");
+}
+
+#[test]
+fn relayed_output_drops_escape_sequences() {
+    let raw = "ok\x1b]52;c;cHduZWQ=\x07 done\x1b[31m\tred\r\n";
+    assert_eq!(
+        printable(raw.as_bytes()),
+        "ok]52;c;cHduZWQ= done[31m\tred\n"
+    );
 }
