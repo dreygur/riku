@@ -94,8 +94,10 @@ fn register_templates(tera: &mut tera::Tera) -> Result<()> {
         ),
     ];
 
-    for (name, content) in &templates {
-        tera.add_raw_template(name, content)?;
+    // Tera 2 resolves includes as each template is added, so registering
+    // them one by one fails on the first template that includes a later one.
+    if let Err(e) = tera.add_raw_templates(templates) {
+        return Err(anyhow::anyhow!("failed to register nginx templates: {e}"));
     }
     Ok(())
 }

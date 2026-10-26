@@ -21,9 +21,13 @@ pub struct Keypair {
 
 impl Keypair {
     /// Generate a fresh keypair from the OS CSPRNG.
+    ///
+    /// Panics if the OS RNG fails, as `OsRng` did before rand 0.10 made it
+    /// fallible. A key from any weaker source is worse than no key.
     pub fn generate() -> Self {
+        let mut os_rng = rand::rand_core::UnwrapErr(rand::rngs::SysRng);
         Self {
-            signing: SigningKey::generate(&mut rand::rngs::OsRng),
+            signing: SigningKey::generate(&mut os_rng),
         }
     }
 

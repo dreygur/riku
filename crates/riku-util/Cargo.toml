@@ -10,7 +10,7 @@ license = "MIT"
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true }
-croner = "2"
+croner = "4"
 libc = { workspace = true }
 nix = { workspace = true, features = ["resource"] }
 once_cell = { workspace = true }

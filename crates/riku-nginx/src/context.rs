@@ -228,7 +228,7 @@ pub(super) fn build_context(
     context.insert("INTERNAL_NGINX_APP_ROOT", &app_path.to_string_lossy());
 
     for (key, value) in env {
-        context.insert(key, value);
+        context.insert(key.clone(), value);
     }
 
     insert_address_context(&mut context, env, paths, app, app_path);

@@ -19,17 +19,17 @@ use super::DashboardState;
 
 pub(crate) fn router() -> Router<DashboardState> {
     Router::new()
-        .route("/api/apps/:app/restart", post(restart))
-        .route("/api/apps/:app/stop", post(stop))
-        .route("/api/apps/:app/redeploy", post(redeploy))
-        .route("/api/apps/:app/scale", post(scale))
-        .route("/api/apps/:app/rollback", post(rollback))
+        .route("/api/apps/{app}/restart", post(restart))
+        .route("/api/apps/{app}/stop", post(stop))
+        .route("/api/apps/{app}/redeploy", post(redeploy))
+        .route("/api/apps/{app}/scale", post(scale))
+        .route("/api/apps/{app}/rollback", post(rollback))
         .route(
-            "/api/apps/:app/workers/:kind/:ordinal/restart",
+            "/api/apps/{app}/workers/{kind}/{ordinal}/restart",
             post(restart_worker),
         )
         .route(
-            "/api/apps/:app/workers/:kind/:ordinal",
+            "/api/apps/{app}/workers/{kind}/{ordinal}",
             delete(delete_worker),
         )
 }
