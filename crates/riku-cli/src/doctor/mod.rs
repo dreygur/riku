@@ -3,12 +3,13 @@
 //! Solo devs have no ops team, so the tool *is* the ops team: `doctor` runs a
 //! battery of **read-only** health checks across dependencies, the `~/.riku`
 //! directory layout, the systemd supervisor service, nginx, runtime plugins,
-//! disk headroom, and SSH deploy access, then prints a summary. It never
-//! mutates state, so it is always safe to run.
+//! disk headroom, SSH deploy access, and renamed app ENV keys, then prints a
+//! summary. It never mutates state, so it is always safe to run.
 //!
 //! Exit code: `0` when nothing failed (warnings allowed), `1` when any check
 //! has [`Status::Fail`], so it composes in CI and provisioning scripts.
 
+pub mod app_env;
 pub mod checks;
 
 use anyhow::Result;
@@ -78,6 +79,7 @@ fn collect(paths: &RikuPaths) -> Vec<Check> {
     checks.push(checks::plugins(paths));
     checks.push(checks::disk(paths));
     checks.push(checks::ssh_access());
+    checks.extend(app_env::renamed_keys(paths));
     checks
 }
 

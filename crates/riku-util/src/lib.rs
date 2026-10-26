@@ -6,6 +6,7 @@
 //! - [`nginx_validation`]: nginx cache config and env-var validation
 //! - [`procfile`]: Procfile parsing and cron validation
 //! - [`env`]: KEY=VALUE file parsing, variable expansion
+//! - [`legacy_env`]: env keys renamed to the `RIKU_` prefix
 //! - [`ssh_keys`]: SSH authorized_keys management
 //! - [`process_util`]: free-port allocation, Node version validation
 
@@ -14,6 +15,7 @@ pub mod deploy_logger;
 pub mod display;
 pub mod env;
 pub mod fs;
+pub mod legacy_env;
 pub mod nginx_validation;
 pub mod process_util;
 pub mod procfile;

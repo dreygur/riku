@@ -124,6 +124,11 @@ pub fn do_deploy(
     for w in &warnings {
         dlog.log_warn(w);
     }
+    for (old, new) in crate::util::legacy_env::legacy_keys(&env) {
+        let hint = format!("ENV key {old} is no longer read, rename it to {new}");
+        echo(&hint, "yellow");
+        dlog.log_raw(&format!("[WARN] {hint}"));
+    }
 
     // pre-deploy hook (failures abort the deploy).
     dlog.log_raw("Running pre-deploy hooks");
