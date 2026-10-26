@@ -13,9 +13,9 @@ use crate::util::echo;
 
 pub(crate) use super::scaling::apply_scaling_deltas;
 
-const UWSGI_PROCESSES: &str = "4";
-const UWSGI_THREADS: &str = "4";
-const RIKU_NGINX_EXTERNAL_PORT: &str = "80";
+mod web_env;
+
+use web_env::build_worker_env;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -53,6 +53,7 @@ pub fn read_scaling_count(paths: &RikuPaths, app: &str, kind: &str) -> Result<u3
 /// `start_cmd` is an optional fallback command supplied by the runtime plugin
 /// via its `start` subcommand. It is used only when a Procfile entry has an
 /// empty command.
+#[allow(clippy::question_mark)]
 pub fn create_workers_generic(
     app: &str,
     app_path: &Path,
@@ -64,9 +65,10 @@ pub fn create_workers_generic(
         remove_stale_configs(app, paths);
     }
 
-    let entries = match parse_procfile(app_path)? {
-        Some(e) => e,
-        None => return Ok(()),
+    let entries = match parse_procfile(app_path) {
+        Ok(Some(e)) => e,
+        Ok(None) => return Ok(()),
+        Err(e) => return Err(e),
     };
 
     for (kind, command) in &entries {
@@ -75,10 +77,20 @@ pub fn create_workers_generic(
         } else {
             command.as_str()
         };
-        let count = read_scaling_count(paths, app, kind)?;
+        let count = match read_scaling_count(paths, app, kind) {
+            Ok(count) => count,
+            Err(e) => return Err(e),
+        };
         for i in 1..=count {
-            let worker_env = build_worker_env(app, kind, effective_cmd, env, paths)?;
-            write_worker_config(app, app_path, kind, effective_cmd, i, worker_env, paths)?;
+            let worker_env = match build_worker_env(app, kind, env, paths) {
+                Ok(worker_env) => worker_env,
+                Err(e) => return Err(e),
+            };
+            if let Err(e) =
+                write_worker_config(app, app_path, kind, effective_cmd, i, worker_env, paths)
+            {
+                return Err(e);
+            }
         }
     }
 
@@ -143,136 +155,6 @@ fn parse_procfile_line(line: &str) -> Option<(String, String)> {
     let kind = line[..pos].trim().to_string();
     let command = line[pos + 1..].trim().to_string();
     Some((kind, command))
-}
-
-/// Returns true when `kind` uses a WSGI unix socket (wsgi, jwsgi, rwsgi, php).
-fn is_wsgi_kind(kind: &str) -> bool {
-    matches!(kind, "wsgi" | "jwsgi" | "rwsgi" | "php")
-}
-
-/// Returns true when `kind` needs nginx wiring (web + all wsgi variants).
-fn is_web_facing(kind: &str) -> bool {
-    kind == "web" || is_wsgi_kind(kind)
-}
-
-/// Build the environment map for a single worker instance.
-///
-/// Web-facing processes get PORT/SOCKET injected; wsgi variants get uwsgi vars.
-/// Also persists nginx settings back to the app's ENV file.
-fn build_worker_env(
-    app: &str,
-    kind: &str,
-    command: &str,
-    base_env: &HashMap<String, String>,
-    paths: &RikuPaths,
-) -> Result<HashMap<String, String>> {
-    let mut env = base_env.clone();
-
-    if !is_web_facing(kind) {
-        return Ok(env);
-    }
-
-    let socket_path = paths.nginx_root.join(format!("{}.sock", app));
-
-    if is_wsgi_kind(kind) {
-        configure_wsgi_env(&socket_path, &mut env);
-    } else {
-        configure_web_env(&socket_path, &mut env, paths)?;
-    }
-
-    persist_nginx_env(app, kind, command, &socket_path, &env, paths)?;
-
-    Ok(env)
-}
-
-/// Inject uwsgi unix-socket variables into the environment.
-fn configure_wsgi_env(socket_path: &Path, env: &mut HashMap<String, String>) {
-    env.insert(
-        "SOCKET".to_string(),
-        format!("unix://{}", socket_path.to_string_lossy()),
-    );
-    env.insert(
-        "UWSGI_SOCKET".to_string(),
-        socket_path.to_string_lossy().to_string(),
-    );
-    env.insert("RIKU_NGINX_WSGI".to_string(), "true".to_string());
-    env.insert("UWSGI_PROCESSES".to_string(), UWSGI_PROCESSES.to_string());
-    env.insert("UWSGI_THREADS".to_string(), UWSGI_THREADS.to_string());
-}
-
-/// Allocate a free TCP port and inject nginx port-map variables into the environment.
-fn configure_web_env(
-    socket_path: &Path,
-    env: &mut HashMap<String, String>,
-    paths: &RikuPaths,
-) -> Result<()> {
-    use crate::util::get_free_port;
-
-    let port = get_free_port("127.0.0.1")?;
-    env.insert("PORT".to_string(), port.to_string());
-    env.insert("RIKU_NGINX_PORTMAP".to_string(), "true".to_string());
-    env.insert("RIKU_UPSTREAM_PORT".to_string(), port.to_string());
-    env.insert(
-        "RIKU_NGINX_EXTERNAL_PORT".to_string(),
-        RIKU_NGINX_EXTERNAL_PORT.to_string(),
-    );
-    env.insert(
-        "SOCKET".to_string(),
-        socket_path.to_string_lossy().to_string(),
-    );
-
-    // Suppress unused warning: paths is used by callers for socket_path resolution
-    let _ = paths;
-
-    Ok(())
-}
-
-/// Write nginx-related variables to the app's ENV file, refreshing them on
-/// every deploy.
-///
-/// `configure_web_env`/`configure_wsgi_env` allocate a fresh ephemeral port
-/// (or socket) on every single deploy, not just the first, so the values
-/// persisted here (read back by `spawn_app`'s `generate_nginx_config` call)
-/// must always be overwritten to match, never just "written once". A
-/// previous version of this function skipped the whole write whenever the
-/// ENV file already contained `RIKU_NGINX_PORTMAP`/`RIKU_NGINX_WSGI` from an earlier
-/// deploy, which left `RIKU_UPSTREAM_PORT` pinned to that first deploy's
-/// port forever: every redeploy after the first would spawn the worker on
-/// a new port while nginx kept proxying to the old, now-dead one, a
-/// guaranteed 502 on the very next deploy of any web app.
-fn persist_nginx_env(
-    app: &str,
-    kind: &str,
-    _command: &str,
-    socket_path: &Path,
-    env: &HashMap<String, String>,
-    paths: &RikuPaths,
-) -> Result<()> {
-    let env_dir = paths.env_root.join(app);
-    fs::create_dir_all(&env_dir)?;
-    let env_file = env_dir.join("ENV");
-
-    let mut persisted: HashMap<String, String> = HashMap::new();
-    crate::util::parse_settings(&env_file, &mut persisted)?;
-
-    if is_wsgi_kind(kind) {
-        persisted.insert("RIKU_NGINX_WSGI".to_string(), "true".to_string());
-        persisted.insert(
-            "UWSGI_SOCKET".to_string(),
-            socket_path.to_string_lossy().to_string(),
-        );
-    } else {
-        let port = env.get("PORT").map(|s| s.as_str()).unwrap_or("8080");
-        persisted.insert("RIKU_NGINX_PORTMAP".to_string(), "true".to_string());
-        persisted.insert("RIKU_UPSTREAM_PORT".to_string(), port.to_string());
-        persisted.insert(
-            "RIKU_NGINX_EXTERNAL_PORT".to_string(),
-            RIKU_NGINX_EXTERNAL_PORT.to_string(),
-        );
-    }
-
-    crate::util::write_config(&env_file, &persisted, "=")?;
-    Ok(())
 }
 
 /// Write a single worker TOML config to `workers_available` and symlink it into `workers_enabled`.
