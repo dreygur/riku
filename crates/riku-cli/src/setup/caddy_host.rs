@@ -6,13 +6,15 @@
 //! group traverse (not list) access to the home and riku root, and creates
 //! the site directory as `0750` owned by the deploy user.
 //!
-//! Security: every command runs with a fixed argv, no shell. The import line
-//! is built from the riku root path only; no app value reaches the
-//! Caddyfile.
+//! Security: every command runs with a fixed argv, no shell. Root only
+//! touches system paths (`/etc/caddy/Caddyfile`, the `caddy` user). Every
+//! change inside the deploy user's home runs as that user through
+//! [`DeployUser`], so a planted symlink cannot redirect a root write. The
+//! import line is built from the riku root path only; no app value reaches
+//! the Caddyfile.
 
 use std::fs;
 use std::io::ErrorKind;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 
@@ -25,7 +27,7 @@ use super::deploy_user::DeployUser;
 
 const CADDYFILE: &str = "/etc/caddy/Caddyfile";
 const CADDY_USER: &str = "caddy";
-const SITE_DIR_MODE: u32 = 0o750;
+const SITE_DIR_MODE: &str = "750";
 
 fn import_line(caddy_root: &Path) -> String {
     format!("import {}/*.caddy", caddy_root.display())
@@ -86,7 +88,7 @@ fn grant_caddy_traverse(user: &DeployUser, paths: &RikuPaths) -> Result<()> {
         return Err(e);
     }
     for dir in [&user.home, &paths.riku_root] {
-        if let Err(e) = run("chmod", &["g+x", &dir.to_string_lossy()]) {
+        if let Err(e) = user.chmod("g+x", dir) {
             return Err(e);
         }
     }
@@ -95,21 +97,18 @@ fn grant_caddy_traverse(user: &DeployUser, paths: &RikuPaths) -> Result<()> {
 
 #[allow(clippy::question_mark)]
 fn create_site_dir(user: &DeployUser, caddy_root: &Path) -> Result<()> {
-    if let Err(e) = fs::create_dir_all(caddy_root) {
-        return Err(anyhow!("failed to create {}: {e}", caddy_root.display()));
+    if let Err(e) = user.create_dir(caddy_root) {
+        return Err(e);
     }
-    let mode = fs::Permissions::from_mode(SITE_DIR_MODE);
-    if let Err(e) = fs::set_permissions(caddy_root, mode) {
-        return Err(anyhow!("failed to chmod {}: {e}", caddy_root.display()));
-    }
-    user.chown(caddy_root)
+    user.chmod(SITE_DIR_MODE, caddy_root)
 }
 
 /// Prepare this host to serve riku apps through Caddy. Root only.
 ///
-/// `paths` are the deploy user's riku paths, whose root must already exist.
-/// The usermod, chmod and chown calls are not unit tested: they need root
-/// and real users, so they are covered only by running init on a host.
+/// `paths` are the deploy user's riku paths.
+/// The usermod call and the mkdir and chmod run as the deploy user are not
+/// unit tested: they need root and real users, so they are covered only by
+/// running init on a host.
 #[allow(clippy::question_mark)]
 pub fn setup_caddy_host(paths: &RikuPaths, user: &DeployUser) -> Result<()> {
     if let Err(e) = run("caddy", &["version"]) {
@@ -118,10 +117,10 @@ pub fn setup_caddy_host(paths: &RikuPaths, user: &DeployUser) -> Result<()> {
     if let Err(e) = add_caddyfile_import(&paths.caddy_root) {
         return Err(e);
     }
-    if let Err(e) = grant_caddy_traverse(user, paths) {
+    if let Err(e) = create_site_dir(user, &paths.caddy_root) {
         return Err(e);
     }
-    if let Err(e) = create_site_dir(user, &paths.caddy_root) {
+    if let Err(e) = grant_caddy_traverse(user, paths) {
         return Err(e);
     }
     echo(

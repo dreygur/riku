@@ -3,9 +3,14 @@
 //!
 //! A non-root init uses the caller's own riku root. A root init uses the
 //! deploy user's, because that is the tree git push deploys read.
+//!
+//! Security: under root, the `ROUTER` file is read and written only through
+//! [`DeployUser`], as the deploy user. Root opening a path in that tree
+//! would follow any symlink the deploy user planted there.
 
 use std::env;
 use std::fs;
+use std::io::ErrorKind;
 
 use anyhow::{anyhow, Result};
 
@@ -25,19 +30,35 @@ pub struct RouterTarget {
     pub router: Router,
 }
 
+/// The deploy user's router, read as that user. A missing file is nginx,
+/// matching [`Router::load`]. `symlink_metadata` does not follow links, so
+/// the existence check is safe to make as root.
+fn load_as_user(user: &DeployUser, paths: &RikuPaths) -> Result<Router> {
+    match fs::symlink_metadata(&paths.router_file) {
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(Router::Nginx),
+        Err(e) => {
+            return Err(anyhow!(
+                "failed to stat {}: {e}",
+                paths.router_file.display()
+            ))
+        }
+        Ok(_) => {}
+    }
+    match user.read_file(&paths.router_file) {
+        Ok(name) => Ok(Router::from(name.as_str())),
+        Err(e) => Err(e),
+    }
+}
+
 #[allow(clippy::question_mark)]
-fn ensure_riku_root(target: &RouterTarget) -> Result<()> {
-    let root = &target.paths.riku_root;
-    if root.exists() {
-        return Ok(());
+fn save_router(target: &RouterTarget, router: &Router) -> Result<()> {
+    let Some(user) = &target.user else {
+        return router::save(&target.paths, router);
+    };
+    if let Err(e) = user.create_dir(&target.paths.riku_root) {
+        return Err(e);
     }
-    if let Err(e) = fs::create_dir_all(root) {
-        return Err(anyhow!("failed to create {}: {e}", root.display()));
-    }
-    match &target.user {
-        Some(user) => user.chown(root),
-        None => Ok(()),
-    }
+    user.write_file(&target.paths.router_file, &format!("{}\n", router.name()))
 }
 
 /// Write `RIKU_ROUTER` to the target's `ROUTER` file. Init is the only
@@ -50,16 +71,8 @@ fn persist_router(target: &mut RouterTarget) -> Result<()> {
     }
 
     let router = Router::from(raw.as_str());
-    if let Err(e) = ensure_riku_root(target) {
+    if let Err(e) = save_router(target, &router) {
         return Err(e);
-    }
-    if let Err(e) = router::save(&target.paths, &router) {
-        return Err(e);
-    }
-    if let Some(user) = &target.user {
-        if let Err(e) = user.chown(&target.paths.router_file) {
-            return Err(e);
-        }
     }
     echo(&format!("      ✓ router: {}", router.name()), "green");
     target.router = router;
@@ -81,7 +94,11 @@ pub fn resolve_router(own_paths: &RikuPaths, is_root: bool) -> Result<RouterTarg
         Some(user) => user.riku_paths(),
         None => own_paths.clone(),
     };
-    let router = match Router::load(&paths) {
+    let loaded = match &user {
+        Some(user) => load_as_user(user, &paths),
+        None => Router::load(&paths),
+    };
+    let router = match loaded {
         Ok(router) => router,
         Err(e) => return Err(e),
     };
