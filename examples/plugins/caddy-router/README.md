@@ -38,8 +38,8 @@ this plugin stays dormant.
 | `unconfigure` | - | removes `$RIKU_ROOT/caddy/sites/<app>.caddy`|
 | `reload`      | - | `caddy reload` with the generated Caddyfile |
 
-Per-app config is shaped from the app's `ENV` (`NGINX_SERVER_NAME` → domains,
-`PORT`/`NGINX_INTERNAL_PORT` → upstream port, `NGINX_HTTPS_ONLY` → https).
+Per-app config is shaped from the app's `ENV` (`RIKU_DOMAINS` → domains,
+`PORT`/`RIKU_UPSTREAM_PORT` → upstream port, `RIKU_HTTPS_ONLY` → https).
 
 ## Teardown
 

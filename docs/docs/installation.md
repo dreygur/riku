@@ -267,7 +267,7 @@ git init
 
 # Create a simple app
 echo 'web: python3 -m http.server $PORT' > Procfile
-echo 'NGINX_SERVER_NAME=test.example.com' > ENV
+echo 'RIKU_DOMAINS=test.example.com' > ENV
 
 # Commit and deploy
 git add .

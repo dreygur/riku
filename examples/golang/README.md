@@ -35,13 +35,13 @@ Edit `ENV` to configure your app:
 
 ```bash
 # Domain name
-NGINX_SERVER_NAME=example.com
+RIKU_DOMAINS=example.com
 
 # Enable HTTPS
-NGINX_HTTPS_ONLY=true
+RIKU_HTTPS_ONLY=true
 
 # Worker settings
-BIND_ADDRESS=127.0.0.1
+RIKU_BIND_ADDRESS=127.0.0.1
 ```
 
 ### Scaling

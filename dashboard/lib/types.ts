@@ -27,7 +27,7 @@ export interface NginxState {
 export interface AppState {
   app: string;
   deploy_lock: string; // "held" | "free"
-  routing: Record<string, string>; // NGINX_SERVER_NAME, NGINX_HTTPS_ONLY, ...
+  routing: Record<string, string>; // RIKU_DOMAINS, RIKU_HTTPS_ONLY, ...
   nginx: NginxState;
   workers: Worker[];
 }
@@ -101,6 +101,6 @@ export interface TrustKey {
   pubkey: string;
 }
 
-export const domainOf = (a: AppState) => a.routing?.NGINX_SERVER_NAME;
-export const httpsOf = (a: AppState) => Boolean(a.routing?.NGINX_HTTPS_ONLY);
+export const domainOf = (a: AppState) => a.routing?.RIKU_DOMAINS;
+export const httpsOf = (a: AppState) => Boolean(a.routing?.RIKU_HTTPS_ONLY);
 export const isBusy = (a: AppState) => (a.deploy_lock || "").toLowerCase() === "held";

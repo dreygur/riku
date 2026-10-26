@@ -19,7 +19,7 @@ All three landed together in `41bb349`:
 
 - [x] **One-line installer** (`scripts/install.sh`): `curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh`. Detects OS/arch, downloads and checksum-verifies the matching release binary, installs it, and prints a `riku init` hint (systemd + nginx setup still happens via `riku init` itself, not auto-run by the installer).
 - [x] **`riku quickstart`**: scaffolds a sample app and prints the exact `git remote add` line so a new user can deploy in under five minutes.
-- [x] **Better first-deploy output**: `git push` streams the deploy log line-by-line (`DeployLogger`, Heroku-style `-----> ` prefix), logs the detected runtime, and ends with a prominent `<app> deployed!` plus the live URL (from `NGINX_SERVER_NAME`) or a hint to add a domain.
+- [x] **Better first-deploy output**: `git push` streams the deploy log line-by-line (`DeployLogger`, Heroku-style `-----> ` prefix), logs the detected runtime, and ends with a prominent `<app> deployed!` plus the live URL (from `RIKU_DOMAINS`) or a hint to add a domain.
 
 ### Phase 1: Finish the Dashboard, **shipped**
 

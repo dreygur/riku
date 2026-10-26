@@ -103,7 +103,7 @@ deploy_demo_app() {
     rm -rf "$work"
 
     echo "[entrypoint] pointing '$app' at ${app}.localhost"
-    riku_as "config set $app NGINX_SERVER_NAME=${app}.localhost" >> "$LOG_DIR/demo-deploy.log" 2>&1
+    riku_as "config set $app RIKU_DOMAINS=${app}.localhost" >> "$LOG_DIR/demo-deploy.log" 2>&1
 }
 
 for dir in /opt/demo-apps/*/; do

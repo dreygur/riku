@@ -75,8 +75,8 @@ web: uv run gunicorn app:app
 ### Environment Variables
 
 ```bash
-PYTHON_VERSION=3.11.4
-PYTHON_PACKAGE_MANAGER=pip  # or poetry, uv
+RIKU_PYTHON_VERSION=3.11.4
+RIKU_PYTHON_PACKAGE_MANAGER=pip  # or poetry, uv
 ```
 
 ---
@@ -130,7 +130,7 @@ with `npm install -g @nubjs/nub`.
 ### Environment Variables
 
 ```bash
-NODE_VERSION=18.17.0
+RIKU_NODE_VERSION=18.17.0
 NODE_PACKAGE_MANAGER=npm
 PORT=3000
 ```
@@ -488,11 +488,11 @@ none.
 
 ### GHCR authentication
 
-If `GHCR_USERNAME` and `GHCR_TOKEN` are set in the app's env, riku logs in to
+If `RIKU_GHCR_USERNAME` and `RIKU_GHCR_TOKEN` are set in the app's env, riku logs in to
 `ghcr.io` before pulling:
 
 ```bash
-riku config set myapp GHCR_USERNAME=your-username GHCR_TOKEN=ghp_xxx
+riku config set myapp RIKU_GHCR_USERNAME=your-username RIKU_GHCR_TOKEN=ghp_xxx
 ```
 
 Omit these for public images: pulls work without authentication. Docker Hub
@@ -531,7 +531,7 @@ Riku detects static sites when no runtime is detected but nginx can serve files 
 ### Configuration
 
 ```bash
-riku config set myapp NGINX_STATIC_PATHS=/:public
+riku config set myapp RIKU_NGINX_STATIC_PATHS=/:public
 ```
 
 ### Directory Structure
@@ -550,7 +550,7 @@ myapp/
 For single-page applications:
 
 ```bash
-riku config set myapp NGINX_CATCH_ALL=index.html
+riku config set myapp RIKU_NGINX_CATCH_ALL=index.html
 ```
 
 ---

@@ -1,10 +1,10 @@
 server {
-  listen              {{ NGINX_IPV4_ADDRESS }}:80;
-{% if NGINX_IPV6_ADDRESS %}
-  listen              {{ NGINX_IPV6_ADDRESS }}:80;
+  listen              {{ RIKU_NGINX_IPV4_ADDRESS }}:80;
+{% if RIKU_NGINX_IPV6_ADDRESS %}
+  listen              {{ RIKU_NGINX_IPV6_ADDRESS }}:80;
 {% endif %}
-  server_name         {{ NGINX_SERVER_NAME }};
-  root                {{ NGINX_DOCUMENT_ROOT }};
+  server_name         {{ RIKU_DOMAINS }};
+  root                {{ RIKU_NGINX_DOCUMENT_ROOT }};
 
   location ~* \.(jpg|jpeg|png|gif|ico|css|js)$ {
     expires 1y;
@@ -22,11 +22,11 @@ server {
   add_header Referrer-Policy "strict-origin-when-cross-origin" always;
   add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
 
-{% if NGINX_INCLUDE_CONTENT %}
+{% if RIKU_NGINX_INCLUDE_CONTENT %}
   # Custom nginx configuration from file
-  {{ NGINX_INCLUDE_CONTENT }}
-{% elif NGINX_INCLUDE_FILE %}
+  {{ RIKU_NGINX_INCLUDE_CONTENT }}
+{% elif RIKU_NGINX_INCLUDE_FILE %}
   # Custom nginx configuration
-  include {{ NGINX_INCLUDE_FILE }};
+  include {{ RIKU_NGINX_INCLUDE_FILE }};
 {% endif %}
 }

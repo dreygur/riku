@@ -138,7 +138,7 @@ skipped (logged) and the value passes through unchanged, a filter can only
 become a no-op, never break the thing calling it.
 
 **Shipped example: `nginx.include_content`.** The nginx config generator
-already supported a raw file-based passthrough (`NGINX_INCLUDE_FILE`); that
+already supported a raw file-based passthrough (`RIKU_NGINX_INCLUDE_FILE`); that
 content is now the *seed* value run through this filter before being
 inlined into the generated `.conf`. This is the "augment the default config"
 alternative to writing a full router plugin (below), any number of

@@ -117,7 +117,7 @@ impl RikuPaths {
     pub fn from_dirs(riku_root: PathBuf, home: &Path) -> Self {
         let riku_script = env::current_exe().unwrap_or_else(|_| PathBuf::from("riku"));
 
-        let acme_root = env::var("ACME_ROOT")
+        let acme_root = env::var("RIKU_ACME_ROOT")
             .map(PathBuf::from)
             .unwrap_or_else(|_| home.join(".acme.sh"));
 

@@ -230,10 +230,10 @@ A record: *.example.com → your-server-ip
 
 ```bash
 # Set domain name
-riku config set myapp NGINX_SERVER_NAME=example.com
+riku config set myapp RIKU_DOMAINS=example.com
 
 # Enable HTTPS (after getting SSL cert)
-riku config set myapp NGINX_HTTPS_ONLY=true
+riku config set myapp RIKU_HTTPS_ONLY=true
 ```
 
 ---

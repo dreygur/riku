@@ -110,9 +110,9 @@ pub fn remove(app: &str, paths: &RikuPaths) -> Result<()> {
     Ok(())
 }
 
-/// Domains for the app, parsed from `NGINX_SERVER_NAME` (space/comma separated).
+/// Domains for the app, parsed from `RIKU_DOMAINS` (space/comma separated).
 fn domains_from_env(env: &HashMap<String, String>) -> Vec<String> {
-    env.get("NGINX_SERVER_NAME")
+    env.get("RIKU_DOMAINS")
         .map(|s| {
             s.split([',', ' '])
                 .map(str::trim)
@@ -123,17 +123,17 @@ fn domains_from_env(env: &HashMap<String, String>) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// The app's upstream port: `NGINX_INTERNAL_PORT`, then `PORT`, default 8080.
+/// The app's upstream port: `RIKU_UPSTREAM_PORT`, then `PORT`, default 8080.
 fn upstream_port_from_env(env: &HashMap<String, String>) -> u16 {
-    env.get("NGINX_INTERNAL_PORT")
+    env.get("RIKU_UPSTREAM_PORT")
         .or_else(|| env.get("PORT"))
         .and_then(|p| p.trim().parse().ok())
         .unwrap_or(8080)
 }
 
-/// Whether HTTPS-only is requested (`NGINX_HTTPS_ONLY` set to a truthy value).
+/// Whether HTTPS-only is requested (`RIKU_HTTPS_ONLY` set to a truthy value).
 fn https_from_env(env: &HashMap<String, String>) -> bool {
-    env.get("NGINX_HTTPS_ONLY")
+    env.get("RIKU_HTTPS_ONLY")
         .map(|v| {
             let v = v.trim().to_ascii_lowercase();
             !matches!(v.as_str(), "" | "0" | "false" | "no")
@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn domains_split_on_space_and_comma() {
-        let e = env(&[("NGINX_SERVER_NAME", "a.com, b.com  c.com")]);
+        let e = env(&[("RIKU_DOMAINS", "a.com, b.com  c.com")]);
         assert_eq!(domains_from_env(&e), vec!["a.com", "b.com", "c.com"]);
         assert!(domains_from_env(&env(&[])).is_empty());
     }
@@ -162,7 +162,7 @@ mod tests {
     #[test]
     fn upstream_port_prefers_internal_then_port_then_default() {
         assert_eq!(
-            upstream_port_from_env(&env(&[("NGINX_INTERNAL_PORT", "9000"), ("PORT", "3000")])),
+            upstream_port_from_env(&env(&[("RIKU_UPSTREAM_PORT", "9000"), ("PORT", "3000")])),
             9000
         );
         assert_eq!(upstream_port_from_env(&env(&[("PORT", "3000")])), 3000);
@@ -173,10 +173,10 @@ mod tests {
 
     #[test]
     fn https_truthiness() {
-        assert!(https_from_env(&env(&[("NGINX_HTTPS_ONLY", "1")])));
-        assert!(https_from_env(&env(&[("NGINX_HTTPS_ONLY", "true")])));
-        assert!(!https_from_env(&env(&[("NGINX_HTTPS_ONLY", "false")])));
-        assert!(!https_from_env(&env(&[("NGINX_HTTPS_ONLY", "0")])));
+        assert!(https_from_env(&env(&[("RIKU_HTTPS_ONLY", "1")])));
+        assert!(https_from_env(&env(&[("RIKU_HTTPS_ONLY", "true")])));
+        assert!(!https_from_env(&env(&[("RIKU_HTTPS_ONLY", "false")])));
+        assert!(!https_from_env(&env(&[("RIKU_HTTPS_ONLY", "0")])));
         assert!(!https_from_env(&env(&[])));
     }
 }

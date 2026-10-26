@@ -33,7 +33,7 @@ riku config set nodejs-example NODE_ENV=production
 
 ```bash
 # Get the app URL (if domain is configured)
-riku config get nodejs-example NGINX_SERVER_NAME
+riku config get nodejs-example RIKU_DOMAINS
 
 # Or access via server IP
 curl http://your-server-ip

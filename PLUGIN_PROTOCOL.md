@@ -137,7 +137,7 @@ Builds and runs an app. Many installed; selected per app by detection.
 
 | Verb     | Input                | Output                          | Notes |
 | -------- | -------------------- | ------------------------------- | ----- |
-| `detect` | app context (env)    | exit 0 ⇒ "I handle this app"    | Selection: `RUNTIME=<name>` override → else alphabetical, first exit-0 wins. |
+| `detect` | app context (env)    | exit 0 ⇒ "I handle this app"    | Selection: `RIKU_RUNTIME=<name>` override → else alphabetical, first exit-0 wins. |
 | `build`  | app context          | logs on stderr; non-zero aborts | Compile/install deps. |
 | `env`    | app context          | `KEY=VALUE` lines on stdout     | Injected into the app environment. |
 | `start`  | app context          | one command line on stdout      | The process the supervisor runs. |
@@ -268,7 +268,7 @@ hard failure: this is also why filters have no `gate`-equivalent mode: a
 filter can decline to transform, but never veto.
 
 **Shipped example: `nginx.include_content`.** The generated nginx config
-already supports a raw file-based passthrough (`NGINX_INCLUDE_FILE`); that
+already supports a raw file-based passthrough (`RIKU_NGINX_INCLUDE_FILE`); that
 file's content (or an empty string if unset) is now the *seed* value run
 through this filter before being inlined into the config
 (`crates/riku-nginx/src/context.rs::insert_include_file`). This is the

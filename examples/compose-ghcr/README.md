@@ -13,17 +13,17 @@ for a compose file that boots a full riku instance you can push to).
 ```bash
 cd examples/compose-ghcr/app
 
-export GHCR_USERNAME=<your-github-username>
-docker build --build-arg VERSION=v1 -t ghcr.io/$GHCR_USERNAME/riku-compose-demo:latest .
+export RIKU_GHCR_USERNAME=<your-github-username>
+docker build --build-arg VERSION=v1 -t ghcr.io/$RIKU_GHCR_USERNAME/riku-compose-demo:latest .
 
 # A classic PAT with `write:packages` (or `docker login` interactively) works too.
-echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-docker push ghcr.io/$GHCR_USERNAME/riku-compose-demo:latest
+echo "$RIKU_GHCR_TOKEN" | docker login ghcr.io -u "$RIKU_GHCR_USERNAME" --password-stdin
+docker push ghcr.io/$RIKU_GHCR_USERNAME/riku-compose-demo:latest
 ```
 
 ## 2. Point compose.yml at your image
 
-Edit `compose.yml` (one directory up from `app/`) and replace `GHCR_USERNAME`
+Edit `compose.yml` (one directory up from `app/`) and replace `RIKU_GHCR_USERNAME`
 with the same username you used above.
 
 ## 3. Deploy it to riku
@@ -40,7 +40,7 @@ If the image is private, set credentials **before** the push so the first
 build can log in and pull:
 
 ```bash
-riku config set compose-demo GHCR_USERNAME=$GHCR_USERNAME GHCR_TOKEN=$GHCR_TOKEN
+riku config set compose-demo RIKU_GHCR_USERNAME=$RIKU_GHCR_USERNAME RIKU_GHCR_TOKEN=$RIKU_GHCR_TOKEN
 ```
 
 Confirm it's up:
@@ -62,8 +62,8 @@ The supervisor now re-checks this service's image every 60 seconds.
 
 ```bash
 cd app
-docker build --build-arg VERSION=v2 -t ghcr.io/$GHCR_USERNAME/riku-compose-demo:latest .
-docker push ghcr.io/$GHCR_USERNAME/riku-compose-demo:latest
+docker build --build-arg VERSION=v2 -t ghcr.io/$RIKU_GHCR_USERNAME/riku-compose-demo:latest .
+docker push ghcr.io/$RIKU_GHCR_USERNAME/riku-compose-demo:latest
 ```
 
 Wait up to 60 seconds, no `git push` needed:

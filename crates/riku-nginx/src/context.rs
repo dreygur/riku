@@ -21,34 +21,34 @@ pub(super) fn insert_address_context(
     app_path: &Path,
 ) {
     let bind_address = env
-        .get("BIND_ADDRESS")
+        .get("RIKU_BIND_ADDRESS")
         .cloned()
         .unwrap_or("127.0.0.1".to_string());
 
     let nginx_ipv4_address = env
-        .get("NGINX_IPV4_ADDRESS")
+        .get("RIKU_NGINX_IPV4_ADDRESS")
         .cloned()
         .unwrap_or("0.0.0.0".to_string());
 
     let disable_ipv6 = env
-        .get("DISABLE_IPV6")
+        .get("RIKU_DISABLE_IPV6")
         .map(|v| v.to_lowercase() == "true" || v == "1" || v == "yes")
         .unwrap_or(false);
 
     let nginx_ipv6_address = if disable_ipv6 {
         String::new()
     } else {
-        env.get("NGINX_IPV6_ADDRESS")
+        env.get("RIKU_NGINX_IPV6_ADDRESS")
             .cloned()
             .unwrap_or("[::]".to_string())
     };
 
     let nginx_server_name = env
-        .get("NGINX_SERVER_NAME")
+        .get("RIKU_DOMAINS")
         .cloned()
         .unwrap_or(format!("{}.example.com", app));
 
-    let nginx_socket = env.get("NGINX_SOCKET").cloned().unwrap_or(
+    let nginx_socket = env.get("RIKU_NGINX_SOCKET").cloned().unwrap_or(
         paths
             .nginx_root
             .join(format!("{}.sock", app))
@@ -57,16 +57,16 @@ pub(super) fn insert_address_context(
     );
 
     let nginx_document_root = env
-        .get("NGINX_DOCUMENT_ROOT")
+        .get("RIKU_NGINX_DOCUMENT_ROOT")
         .cloned()
         .unwrap_or(format!("{}/public", app_path.to_string_lossy()));
 
-    context.insert("BIND_ADDRESS", &bind_address);
-    context.insert("NGINX_IPV4_ADDRESS", &nginx_ipv4_address);
-    context.insert("NGINX_IPV6_ADDRESS", &nginx_ipv6_address);
-    context.insert("NGINX_SERVER_NAME", &nginx_server_name);
-    context.insert("NGINX_SOCKET", &nginx_socket);
-    context.insert("NGINX_DOCUMENT_ROOT", &nginx_document_root);
+    context.insert("RIKU_BIND_ADDRESS", &bind_address);
+    context.insert("RIKU_NGINX_IPV4_ADDRESS", &nginx_ipv4_address);
+    context.insert("RIKU_NGINX_IPV6_ADDRESS", &nginx_ipv6_address);
+    context.insert("RIKU_DOMAINS", &nginx_server_name);
+    context.insert("RIKU_NGINX_SOCKET", &nginx_socket);
+    context.insert("RIKU_NGINX_DOCUMENT_ROOT", &nginx_document_root);
 }
 
 /// Insert cache-related context values.
@@ -77,47 +77,47 @@ pub(super) fn insert_cache_context(
     app: &str,
 ) {
     let nginx_cache_size = env
-        .get("NGINX_CACHE_SIZE")
+        .get("RIKU_NGINX_CACHE_SIZE")
         .cloned()
         .unwrap_or(crate::config::NGINX_CACHE_SIZE_DEFAULT.to_string());
 
     let nginx_cache_time = env
-        .get("NGINX_CACHE_TIME")
+        .get("RIKU_NGINX_CACHE_TIME")
         .cloned()
         .unwrap_or(crate::config::NGINX_CACHE_TIME_DEFAULT.to_string());
 
     let nginx_cache_redirects = env
-        .get("NGINX_CACHE_REDIRECTS")
+        .get("RIKU_NGINX_CACHE_REDIRECTS")
         .cloned()
         .unwrap_or(crate::config::NGINX_CACHE_REDIRECTS_DEFAULT.to_string());
 
     let nginx_cache_any = env
-        .get("NGINX_CACHE_ANY")
+        .get("RIKU_NGINX_CACHE_ANY")
         .cloned()
         .unwrap_or(crate::config::NGINX_CACHE_ANY_DEFAULT.to_string());
 
     let nginx_cache_control = env
-        .get("NGINX_CACHE_CONTROL")
+        .get("RIKU_NGINX_CACHE_CONTROL")
         .cloned()
         .unwrap_or(crate::config::NGINX_CACHE_CONTROL_DEFAULT.to_string());
 
     let nginx_cache_expiry = env
-        .get("NGINX_CACHE_EXPIRY")
+        .get("RIKU_NGINX_CACHE_EXPIRY")
         .cloned()
         .unwrap_or(crate::config::NGINX_CACHE_EXPIRY_DEFAULT.to_string());
 
     let nginx_cache_path = env
-        .get("NGINX_CACHE_PATH")
+        .get("RIKU_NGINX_CACHE_PATH")
         .cloned()
         .unwrap_or(paths.cache_root.join(app).to_string_lossy().to_string());
 
-    context.insert("NGINX_CACHE_SIZE", &nginx_cache_size);
-    context.insert("NGINX_CACHE_TIME", &nginx_cache_time);
-    context.insert("NGINX_CACHE_REDIRECTS", &nginx_cache_redirects);
-    context.insert("NGINX_CACHE_ANY", &nginx_cache_any);
-    context.insert("NGINX_CACHE_CONTROL", &nginx_cache_control);
-    context.insert("NGINX_CACHE_EXPIRY", &nginx_cache_expiry);
-    context.insert("NGINX_CACHE_PATH", &nginx_cache_path);
+    context.insert("RIKU_NGINX_CACHE_SIZE", &nginx_cache_size);
+    context.insert("RIKU_NGINX_CACHE_TIME", &nginx_cache_time);
+    context.insert("RIKU_NGINX_CACHE_REDIRECTS", &nginx_cache_redirects);
+    context.insert("RIKU_NGINX_CACHE_ANY", &nginx_cache_any);
+    context.insert("RIKU_NGINX_CACHE_CONTROL", &nginx_cache_control);
+    context.insert("RIKU_NGINX_CACHE_EXPIRY", &nginx_cache_expiry);
+    context.insert("RIKU_NGINX_CACHE_PATH", &nginx_cache_path);
 }
 
 /// Insert feature-flag context values (Cloudflare ACL, git folder exposure).
@@ -127,7 +127,7 @@ pub(super) fn insert_feature_flags(
     paths: &crate::config::RikuPaths,
 ) {
     let nginx_cloudflare_acl = env
-        .get("NGINX_CLOUDFLARE_ACL")
+        .get("RIKU_NGINX_CLOUDFLARE_ACL")
         .map(|v| v.to_lowercase() == "true" || v == "1" || v == "yes")
         .unwrap_or(false);
 
@@ -141,18 +141,21 @@ pub(super) fn insert_feature_flags(
     }
 
     let nginx_allow_git_folders = env
-        .get("NGINX_ALLOW_GIT_FOLDERS")
+        .get("RIKU_NGINX_ALLOW_GIT_FOLDERS")
         .map(|v| v.to_lowercase() == "true" || v == "1" || v == "yes")
         .unwrap_or(false);
 
-    context.insert("NGINX_CLOUDFLARE_ACL", &nginx_cloudflare_acl.to_string());
     context.insert(
-        "NGINX_ALLOW_GIT_FOLDERS",
+        "RIKU_NGINX_CLOUDFLARE_ACL",
+        &nginx_cloudflare_acl.to_string(),
+    );
+    context.insert(
+        "RIKU_NGINX_ALLOW_GIT_FOLDERS",
         &nginx_allow_git_folders.to_string(),
     );
 }
 
-/// Read `NGINX_INCLUDE_FILE` content (if set, guarding against path
+/// Read `RIKU_NGINX_INCLUDE_FILE` content (if set, guarding against path
 /// traversal) as the seed value, run it through the `nginx.include_content`
 /// filter chain (`PLUGIN_PROTOCOL.md` §7.3: lets an installed plugin augment
 /// the generated config without replacing it), and insert the result.
@@ -166,7 +169,7 @@ pub(super) fn insert_include_file(
 ) {
     let mut content = String::new();
 
-    if let Some(include_file) = env.get("NGINX_INCLUDE_FILE") {
+    if let Some(include_file) = env.get("RIKU_NGINX_INCLUDE_FILE") {
         let include_path = app_path.join(include_file);
         if include_path.exists() {
             match ensure_path_within(&include_path, app_path) {
@@ -178,7 +181,7 @@ pub(super) fn insert_include_file(
                 Err(_) => {
                     crate::util::echo(
                         &format!(
-                            "Warning: NGINX_INCLUDE_FILE '{}' is outside the app directory, ignoring",
+                            "Warning: RIKU_NGINX_INCLUDE_FILE '{}' is outside the app directory, ignoring",
                             include_file
                         ),
                         "yellow",
@@ -191,28 +194,28 @@ pub(super) fn insert_include_file(
     let filtered = riku_plugins::FilterBus::new(paths)
         .apply("nginx.include_content", serde_json::json!(content));
     match filtered.as_str() {
-        Some(s) => context.insert("NGINX_INCLUDE_CONTENT", s),
+        Some(s) => context.insert("RIKU_NGINX_INCLUDE_CONTENT", s),
         // A filter returned something that isn't a string (a bug in that
         // filter): degrade to the seed content rather than propagating a
         // non-string value into the template.
-        None => context.insert("NGINX_INCLUDE_CONTENT", &content),
+        None => context.insert("RIKU_NGINX_INCLUDE_CONTENT", &content),
     }
 }
 
 /// Insert portmap/proxy port context values.
 pub(super) fn insert_portmap_context(context: &mut tera::Context, env: &HashMap<String, String>) {
     let nginx_external_port = env
-        .get("NGINX_EXTERNAL_PORT")
+        .get("RIKU_NGINX_EXTERNAL_PORT")
         .cloned()
         .unwrap_or("80".to_string());
 
     let nginx_internal_port = env
-        .get("NGINX_INTERNAL_PORT")
+        .get("RIKU_UPSTREAM_PORT")
         .cloned()
         .unwrap_or_else(|| env.get("PORT").cloned().unwrap_or("8080".to_string()));
 
-    context.insert("NGINX_EXTERNAL_PORT", &nginx_external_port);
-    context.insert("NGINX_INTERNAL_PORT", &nginx_internal_port);
+    context.insert("RIKU_NGINX_EXTERNAL_PORT", &nginx_external_port);
+    context.insert("RIKU_UPSTREAM_PORT", &nginx_internal_port);
 }
 
 /// Build the full Tera context from sanitized environment variables and paths.
@@ -240,14 +243,14 @@ pub(super) fn build_context(
     context.insert("RIKU_ROOT", &paths.riku_root.to_string_lossy());
     context.insert("ACME_WWW", &paths.acme_www.to_string_lossy());
     context.insert(
-        "ACME_ROOT_CA",
-        &env.get("ACME_ROOT_CA")
+        "RIKU_ACME_ROOT_CA",
+        &env.get("RIKU_ACME_ROOT_CA")
             .cloned()
             .unwrap_or_else(|| "letsencrypt.org".to_string()),
     );
 
-    if env.contains_key("NGINX_HTTPS_ONLY") {
-        if let Some(server_name) = env.get("NGINX_SERVER_NAME") {
+    if env.contains_key("RIKU_HTTPS_ONLY") {
+        if let Some(server_name) = env.get("RIKU_DOMAINS") {
             let domains: Vec<String> = server_name
                 .split_whitespace()
                 .map(|s| s.to_string())

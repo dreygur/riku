@@ -6,7 +6,7 @@
 //! Subcommands: detect, build, env, start, pull-service.
 //!
 //! Compose apps pull their registry images, then build every service that
-//! has a `build:` section. If `GHCR_USERNAME`/`GHCR_TOKEN` are set in the
+//! has a `build:` section. If `RIKU_GHCR_USERNAME`/`RIKU_GHCR_TOKEN` are set in the
 //! app's ENV file, the plugin logs in to `ghcr.io` before pulling.
 
 mod compose_cli;
@@ -100,10 +100,11 @@ fn read_env_file(env_path: Option<&Path>) -> HashMap<String, String> {
     vars
 }
 
-/// Log in to GHCR if `GHCR_USERNAME`/`GHCR_TOKEN` are configured. No-op otherwise.
+/// Log in to GHCR if `RIKU_GHCR_USERNAME`/`RIKU_GHCR_TOKEN` are configured. No-op otherwise.
 fn ghcr_login(env_path: Option<&Path>) -> Result<()> {
     let vars = read_env_file(env_path);
-    let (Some(user), Some(token)) = (vars.get("GHCR_USERNAME"), vars.get("GHCR_TOKEN")) else {
+    let (Some(user), Some(token)) = (vars.get("RIKU_GHCR_USERNAME"), vars.get("RIKU_GHCR_TOKEN"))
+    else {
         return Ok(());
     };
 

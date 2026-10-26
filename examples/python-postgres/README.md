@@ -2,7 +2,7 @@
 
 This is a simple Riku app to demonstrate deploying a Postgres-backed Django app.
 
-During the `release` worker phase this app creates a Postgres database, as well as running the Django `collectstatic` and `migrate` tasks. The `release` worker will use the domain name (`NGINX_SERVER_NAME`) for the database name and the Django app assumes this in [settings.py](pikudjango/settings.py), so make sure you set the config variable to specify a domain name. See below for instructions.
+During the `release` worker phase this app creates a Postgres database, as well as running the Django `collectstatic` and `migrate` tasks. The `release` worker will use the domain name (`RIKU_DOMAINS`) for the database name and the Django app assumes this in [settings.py](pikudjango/settings.py), so make sure you set the config variable to specify a domain name. See below for instructions.
 
 This example pins Django 5.2 LTS, which needs Python 3.10 or newer. The Python
 runtime plugin builds the app with whatever `python3` the server provides, so on
@@ -27,10 +27,10 @@ git commit -a -m "initial commit"
 git push riku main
 ```
 
-Then you can connect a domain, set up an SSL cert, and create a database by setting the `NGINX_SERVER_NAME` config variable:
+Then you can connect a domain, set up an SSL cert, and create a database by setting the `RIKU_DOMAINS` config variable:
 
 ```bash
-riku config set pypostgres NGINX_SERVER_NAME=your_domain_name.com NGINX_HTTPS_ONLY=1
+riku config set pypostgres RIKU_DOMAINS=your_domain_name.com RIKU_HTTPS_ONLY=1
 ```
 
 You can also create a superuser and set a password like this:

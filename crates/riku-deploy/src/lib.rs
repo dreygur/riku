@@ -139,7 +139,7 @@ pub fn do_deploy(
     let runtime_plugin = crate::plugins::runtime::detect(&plugins, &app_path, &env)?
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "No runtime plugin matched '{}'. Run 'riku install-plugins' or set RUNTIME=<name> in the app env.",
+                "No runtime plugin matched '{}'. Run 'riku install-plugins' or set RIKU_RUNTIME=<name> in the app env.",
                 app
             )
         })?;
@@ -211,10 +211,10 @@ pub fn do_deploy(
 
     // Make the "it works" moment unmissable for whoever just ran `git push`.
     echo(&format!("-----> {} deployed!", app), "green");
-    match env.get("NGINX_SERVER_NAME").filter(|d| !d.is_empty()) {
+    match env.get("RIKU_DOMAINS").filter(|d| !d.is_empty()) {
         Some(domain) => {
             let https = env
-                .get("NGINX_HTTPS_ONLY")
+                .get("RIKU_HTTPS_ONLY")
                 .map(|v| matches!(v.as_str(), "1" | "true" | "yes" | "on"))
                 .unwrap_or(false);
             let scheme = if https { "https" } else { "http" };
@@ -222,7 +222,7 @@ pub fn do_deploy(
         }
         None => echo(
             &format!(
-                "       Add a domain: riku config set {} NGINX_SERVER_NAME=example.com",
+                "       Add a domain: riku config set {} RIKU_DOMAINS=example.com",
                 app
             ),
             "",

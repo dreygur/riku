@@ -126,7 +126,7 @@ riku config show myapp
 **Output:**
 ```
 DATABASE_URL=postgres://localhost/mydb
-NGINX_SERVER_NAME=example.com
+RIKU_DOMAINS=example.com
 RIKU_WORKER_TIMEOUT=3600
 ```
 

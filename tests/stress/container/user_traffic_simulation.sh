@@ -69,7 +69,7 @@ if [ "$DEPLOY_OK" -ne 1 ]; then
     exit 2
 fi
 
-# Riku's default NGINX_SERVER_NAME is "<app>.example.com" when the app's
+# Riku's default RIKU_DOMAINS is "<app>.example.com" when the app's
 # ENV has no explicit override (src/nginx/context.rs:49). The static vhost
 # in this container (riku-nginx.conf) is a catch-all default_server with
 # server_name "_", so requests WITHOUT a matching Host header land there

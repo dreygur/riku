@@ -25,11 +25,39 @@ DEBUG=false
 Environment variables support shell-style interpolation:
 
 ```bash
-BASE_URL=https://$NGINX_SERVER_NAME
+BASE_URL=https://$RIKU_DOMAINS
 API_URL=$BASE_URL/api
 ```
 
 ---
+
+## Renamed in 0.1.2
+
+Every variable riku reads now starts with `RIKU_`. The old names are no longer
+read. `riku deploy` and `riku doctor` print a hint for each old name still set
+in an app ENV.
+
+| Old name | New name |
+|----------|----------|
+| `NGINX_SERVER_NAME` | `RIKU_DOMAINS` |
+| `NGINX_HTTPS_ONLY` | `RIKU_HTTPS_ONLY` |
+| `NGINX_INTERNAL_PORT` | `RIKU_UPSTREAM_PORT` |
+| `BIND_ADDRESS` | `RIKU_BIND_ADDRESS` |
+| `DISABLE_IPV6` | `RIKU_DISABLE_IPV6` |
+| `ACME_EMAIL` | `RIKU_ACME_EMAIL` |
+| `ACME_ROOT_CA` | `RIKU_ACME_ROOT_CA` |
+| `ACME_ROOT` | `RIKU_ACME_ROOT` |
+| `NODE_VERSION` | `RIKU_NODE_VERSION` |
+| `PYTHON_VERSION` | `RIKU_PYTHON_VERSION` |
+| `PYTHON_PACKAGE_MANAGER` | `RIKU_PYTHON_PACKAGE_MANAGER` |
+| `RUNTIME` | `RIKU_RUNTIME` |
+| `GHCR_USERNAME` | `RIKU_GHCR_USERNAME` |
+| `GHCR_TOKEN` | `RIKU_GHCR_TOKEN` |
+| `NGINX_<NAME>` (cache, static, include, ACL, ...) | `RIKU_NGINX_<NAME>` |
+
+Unchanged: `PORT`, `PATH`, `HOME`, `COMPOSE_FILE`, the `UWSGI_*` options
+(uWSGI reads them from its own environment), and names that already start
+with `RIKU_`.
 
 ## Runtime Settings
 
@@ -52,7 +80,7 @@ When set to `false`, you must manually restart with `riku restart <app>`.
 ### Bind Address
 
 ```bash
-BIND_ADDRESS=127.0.0.1
+RIKU_BIND_ADDRESS=127.0.0.1
 ```
 
 - **Default:** `127.0.0.1`
@@ -62,7 +90,7 @@ BIND_ADDRESS=127.0.0.1
 ### Disable IPv6
 
 ```bash
-DISABLE_IPV6=true
+RIKU_DISABLE_IPV6=true
 ```
 
 - **Default:** `false`
@@ -72,7 +100,7 @@ DISABLE_IPV6=true
 ### Server Name
 
 ```bash
-NGINX_SERVER_NAME=example.com
+RIKU_DOMAINS=example.com
 ```
 
 - **Default:** (none)
@@ -81,13 +109,13 @@ NGINX_SERVER_NAME=example.com
 
 **Example:**
 ```bash
-riku config set myapp NGINX_SERVER_NAME=myapp.example.com
+riku config set myapp RIKU_DOMAINS=myapp.example.com
 ```
 
 ### Force HTTPS
 
 ```bash
-NGINX_HTTPS_ONLY=true
+RIKU_HTTPS_ONLY=true
 ```
 
 - **Default:** `false`
@@ -145,7 +173,7 @@ RIKU_WORKER_PROCESSES=web=2,worker=1
 ### Static Paths
 
 ```bash
-NGINX_STATIC_PATHS=/static:public,/assets:static
+RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static
 ```
 
 - **Default:** (none)
@@ -155,16 +183,16 @@ NGINX_STATIC_PATHS=/static:public,/assets:static
 **Example:**
 ```bash
 # Serve /static/* from ./public directory
-NGINX_STATIC_PATHS=/static:public
+RIKU_NGINX_STATIC_PATHS=/static:public
 
 # Multiple paths
-NGINX_STATIC_PATHS=/static:public,/assets:static,/images:img
+RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static,/images:img
 ```
 
 ### Include Custom Config
 
 ```bash
-NGINX_INCLUDE_FILE=custom.conf
+RIKU_NGINX_INCLUDE_FILE=custom.conf
 ```
 
 - **Default:** (none)
@@ -176,7 +204,7 @@ The file should be placed in `~/.riku/nginx/` or your app directory.
 ### Allow Git Folders
 
 ```bash
-NGINX_ALLOW_GIT_FOLDERS=false
+RIKU_NGINX_ALLOW_GIT_FOLDERS=false
 ```
 
 - **Default:** `false`
@@ -188,7 +216,7 @@ Setting this to `true` exposes your git history publicly.
 ### Catch-All for SPA
 
 ```bash
-NGINX_CATCH_ALL=index.html
+RIKU_NGINX_CATCH_ALL=index.html
 ```
 
 - **Default:** (none)
@@ -200,7 +228,7 @@ Useful for React, Vue, Angular single-page applications.
 ### Cloudflare ACL
 
 ```bash
-NGINX_CLOUDFLARE_ACL=true
+RIKU_NGINX_CLOUDFLARE_ACL=true
 ```
 
 - **Default:** `false`
@@ -216,7 +244,7 @@ Combine with Cloudflare's "Always Use HTTPS" page rule.
 ### Cache Prefixes
 
 ```bash
-NGINX_CACHE_PREFIXES=/api,/images,/static
+RIKU_NGINX_CACHE_PREFIXES=/api,/images,/static
 ```
 
 - **Default:** (none)
@@ -226,7 +254,7 @@ NGINX_CACHE_PREFIXES=/api,/images,/static
 ### Cache Size
 
 ```bash
-NGINX_CACHE_SIZE=1
+RIKU_NGINX_CACHE_SIZE=1
 ```
 
 - **Default:** `1`
@@ -236,7 +264,7 @@ NGINX_CACHE_SIZE=1
 ### Cache Time
 
 ```bash
-NGINX_CACHE_TIME=3600
+RIKU_NGINX_CACHE_TIME=3600
 ```
 
 - **Default:** `3600` (1 hour)
@@ -246,7 +274,7 @@ NGINX_CACHE_TIME=3600
 ### Cache Expiry
 
 ```bash
-NGINX_CACHE_EXPIRY=86400
+RIKU_NGINX_CACHE_EXPIRY=86400
 ```
 
 - **Default:** `86400` (24 hours)
@@ -260,7 +288,7 @@ NGINX_CACHE_EXPIRY=86400
 ### Node Version
 
 ```bash
-NODE_VERSION=18.17.0
+RIKU_NODE_VERSION=18.17.0
 ```
 
 - **Default:** (none, uses whatever `node` is on `$PATH`)
@@ -285,7 +313,7 @@ setting to configure. Commit a lockfile to pin your dependency versions. See
 ### Python Version
 
 ```bash
-PYTHON_VERSION=3.11.4
+RIKU_PYTHON_VERSION=3.11.4
 ```
 
 - **Default:** `"3"` (system Python 3)
@@ -295,7 +323,7 @@ PYTHON_VERSION=3.11.4
 ### Package Manager
 
 ```bash
-PYTHON_PACKAGE_MANAGER=poetry
+RIKU_PYTHON_PACKAGE_MANAGER=poetry
 ```
 
 - **Default:** `pip`
@@ -324,19 +352,19 @@ Setting it selects the container runtime even when the repo also has a `package.
 ### GHCR Username
 
 ```bash
-GHCR_USERNAME=your-username
+RIKU_GHCR_USERNAME=your-username
 ```
 
 - **Default:** (none)
 - **Description:** Username for `docker login ghcr.io`, run before pulling a compose app's images
 - **Values:** Any GitHub username
 
-Required together with `GHCR_TOKEN` only for private GHCR images; omit both for public images.
+Required together with `RIKU_GHCR_TOKEN` only for private GHCR images; omit both for public images.
 
 ### GHCR Token
 
 ```bash
-GHCR_TOKEN=ghp_xxxxxxxxxxxx
+RIKU_GHCR_TOKEN=ghp_xxxxxxxxxxxx
 ```
 
 - **Default:** (none)
@@ -345,7 +373,7 @@ GHCR_TOKEN=ghp_xxxxxxxxxxxx
 
 **Example:**
 ```bash
-riku config set myapp GHCR_USERNAME=octocat GHCR_TOKEN=ghp_xxx
+riku config set myapp RIKU_GHCR_USERNAME=octocat RIKU_GHCR_TOKEN=ghp_xxx
 ```
 
 ### Watched Services
@@ -368,7 +396,7 @@ Checked every 60 seconds. Only meaningful for compose apps (see
 ### ACME Root CA
 
 ```bash
-ACME_ROOT_CA=letsencrypt.org
+RIKU_ACME_ROOT_CA=letsencrypt.org
 ```
 
 - **Default:** `letsencrypt.org`
@@ -378,7 +406,7 @@ ACME_ROOT_CA=letsencrypt.org
 ### ACME Email
 
 ```bash
-ACME_EMAIL=admin@example.com
+RIKU_ACME_EMAIL=admin@example.com
 ```
 
 - **Default:** (none)
@@ -422,25 +450,25 @@ SECRET_KEY=supersecret123
 DEBUG=false
 
 # Domain and HTTPS
-NGINX_SERVER_NAME=myapp.example.com
-NGINX_HTTPS_ONLY=true
+RIKU_DOMAINS=myapp.example.com
+RIKU_HTTPS_ONLY=true
 
 # Worker settings
 RIKU_WORKER_TIMEOUT=3600
 RIKU_WORKER_GRACE_PERIOD=60
 
 # Static files
-NGINX_STATIC_PATHS=/static:public,/assets:static
+RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static
 
 # SPA routing
-NGINX_CATCH_ALL=index.html
+RIKU_NGINX_CATCH_ALL=index.html
 
 # Caching
-NGINX_CACHE_PREFIXES=/api,/static
-NGINX_CACHE_TIME=3600
+RIKU_NGINX_CACHE_PREFIXES=/api,/static
+RIKU_NGINX_CACHE_TIME=3600
 
 # SSL
-ACME_EMAIL=admin@example.com
+RIKU_ACME_EMAIL=admin@example.com
 ```
 
 ---

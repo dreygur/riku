@@ -44,7 +44,7 @@ SECRET_KEY = "supersecretkey1234567890abcdef"
 DEBUG = "false"
 LOG_LEVEL = "info"
 WORKERS = "4"
-BIND_ADDRESS = "127.0.0.1"
+RIKU_BIND_ADDRESS = "127.0.0.1"
 
 [options]
 working_dir = "/home/deploy/.riku/apps/myapp"
@@ -234,7 +234,7 @@ fn bench_env_map_operations(c: &mut Criterion) {
                 ("DEBUG", "false"),
                 ("LOG_LEVEL", "info"),
                 ("WORKERS", "4"),
-                ("BIND_ADDRESS", "127.0.0.1"),
+                ("RIKU_BIND_ADDRESS", "127.0.0.1"),
             ] {
                 map.insert(black_box(k.to_string()), black_box(v.to_string()));
             }

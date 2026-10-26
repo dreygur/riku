@@ -20,14 +20,14 @@ fn test_extract_routing_fields_keeps_only_allowlisted_keys() {
     env.insert("PORT".to_string(), "5000".to_string());
     env.insert("DATABASE_URL".to_string(), "postgres://secret".to_string());
     env.insert("SECRET_KEY".to_string(), "abc123".to_string());
-    env.insert("NGINX_INTERNAL_PORT".to_string(), "5000".to_string());
+    env.insert("RIKU_UPSTREAM_PORT".to_string(), "5000".to_string());
 
     let routing = extract_routing_fields(&env);
 
     assert_eq!(routing.len(), 2);
     assert_eq!(routing.get("PORT").map(String::as_str), Some("5000"));
     assert_eq!(
-        routing.get("NGINX_INTERNAL_PORT").map(String::as_str),
+        routing.get("RIKU_UPSTREAM_PORT").map(String::as_str),
         Some("5000")
     );
     assert!(

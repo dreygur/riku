@@ -6,7 +6,7 @@
 (let [app (express)
       ews (expressws app)
       port (or (aget process.env "PORT") 8000)
-      host (or (aget process.env "BIND_ADDRESS") "127.0.0.1")]
+      host (or (aget process.env "RIKU_BIND_ADDRESS") "127.0.0.1")]
 
   (app.get "/"
            (fn [req res]

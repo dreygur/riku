@@ -259,7 +259,7 @@ riku/
 Plugins in `~/.riku/plugins/` not prefixed with `riku-` are runtime plugins.
 They implement four subcommands via argv[1]: `detect`, `build`, `env`, `start`.
 Context is passed via env vars: `RIKU_APP`, `RIKU_APP_PATH`, `RIKU_ENV_PATH`, `RIKU_ROOT`.
-Detection order: `RUNTIME=<name>` env override → alphabetical first-exit-0 wins → error.
+Detection order: `RIKU_RUNTIME=<name>` env override → alphabetical first-exit-0 wins → error.
 
 ### Procfile Format
 ```
@@ -270,9 +270,9 @@ cron: 0 2 * * * /path/to/script.sh
 
 ### Environment Variables
 Set in `~/.riku/envs/<app>/ENV`:
-- `NGINX_SERVER_NAME` - Domain name
-- `NGINX_HTTPS_ONLY` - Force HTTPS
-- `NODE_VERSION` - Node.js version
+- `RIKU_DOMAINS` - Domain name
+- `RIKU_HTTPS_ONLY` - Force HTTPS
+- `RIKU_NODE_VERSION` - Node.js version
 - `RIKU_WORKER_TIMEOUT` - Worker timeout seconds
 
 ## Development Workflow

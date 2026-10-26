@@ -15,7 +15,7 @@
 //!
 //! ## Detection resolution
 //!
-//! 1. If `RUNTIME=<name>` is set in the app ENV, that plugin is used directly
+//! 1. If `RIKU_RUNTIME=<name>` is set in the app ENV, that plugin is used directly
 //!    (error if not found).
 //! 2. Otherwise plugins sorted alphabetically are tried in order; first
 //!    `detect` exit-0 wins. If multiple match, first alphabetically wins.
@@ -109,22 +109,22 @@ pub fn discover(plugin_root: &Path) -> Vec<RuntimePlugin> {
 
 /// Detect which plugin handles the app.
 ///
-/// If `RUNTIME` is set in `app_env`, that plugin is returned directly (returns an
+/// If `RIKU_RUNTIME` is set in `app_env`, that plugin is returned directly (returns an
 /// error if no plugin with that name exists). Otherwise each plugin's `detect`
 /// subcommand is run in alphabetical order; the first exit-0 result wins.
-/// Returns `None` when no plugin matches and `RUNTIME` is not set.
+/// Returns `None` when no plugin matches and `RIKU_RUNTIME` is not set.
 pub fn detect(
     plugins: &[RuntimePlugin],
     app_path: &Path,
     app_env: &HashMap<String, String>,
 ) -> Result<Option<RuntimePlugin>> {
-    if let Some(runtime_name) = app_env.get("RUNTIME") {
+    if let Some(runtime_name) = app_env.get("RIKU_RUNTIME") {
         let plugin = plugins
             .iter()
             .find(|p| p.name == *runtime_name)
             .ok_or_else(|| {
                 anyhow!(
-                    "RUNTIME='{}' is set but no plugin named '{}' was found in plugins directory",
+                    "RIKU_RUNTIME='{}' is set but no plugin named '{}' was found in plugins directory",
                     runtime_name,
                     runtime_name
                 )

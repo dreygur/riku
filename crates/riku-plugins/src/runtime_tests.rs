@@ -46,7 +46,7 @@ fn detect_runtime_override_missing_plugin_errors() {
     let tmp = TempDir::new().unwrap();
     let plugins = discover(tmp.path());
     let mut env = HashMap::new();
-    env.insert("RUNTIME".into(), "ghost".into());
+    env.insert("RIKU_RUNTIME".into(), "ghost".into());
     assert!(detect(&plugins, tmp.path(), &env).is_err());
 }
 
@@ -57,7 +57,7 @@ fn detect_runtime_override_selects_named_plugin() {
     make_plugin(tmp.path(), "node", "#!/bin/sh\nexit 0\n");
     let plugins = discover(tmp.path());
     let mut env = HashMap::new();
-    env.insert("RUNTIME".into(), "python".into());
+    env.insert("RIKU_RUNTIME".into(), "python".into());
     let result = detect(&plugins, tmp.path(), &env).unwrap();
     assert_eq!(result.unwrap().name, "python");
 }

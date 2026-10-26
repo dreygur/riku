@@ -103,7 +103,7 @@ riku open              # open app URL
 riku open /admin       # open app URL with path
 ```
 
-Uses `config:get` to fetch `NGINX_SERVER_NAME`, then opens the URL with the system browser.
+Uses `config:get` to fetch `RIKU_DOMAINS`, then opens the URL with the system browser.
 
 ### backup
 

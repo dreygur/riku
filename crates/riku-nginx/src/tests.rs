@@ -41,10 +41,7 @@ fn test_generate_nginx_config() {
 
     let mut env = HashMap::new();
     env.insert("PORT".to_string(), "8080".to_string());
-    env.insert(
-        "NGINX_SERVER_NAME".to_string(),
-        "myapp.example.com".to_string(),
-    );
+    env.insert("RIKU_DOMAINS".to_string(), "myapp.example.com".to_string());
 
     let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
 
@@ -63,8 +60,8 @@ fn test_nginx_config_with_bind_address() {
     fs::create_dir(&app_path).unwrap();
 
     let mut env = HashMap::new();
-    env.insert("BIND_ADDRESS".to_string(), "192.168.1.1".to_string());
-    env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
+    env.insert("RIKU_BIND_ADDRESS".to_string(), "192.168.1.1".to_string());
+    env.insert("RIKU_DOMAINS".to_string(), "example.com".to_string());
 
     let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
@@ -81,8 +78,11 @@ fn test_nginx_config_with_ipv4_address() {
     fs::create_dir(&app_path).unwrap();
 
     let mut env = HashMap::new();
-    env.insert("NGINX_IPV4_ADDRESS".to_string(), "192.168.1.1".to_string());
-    env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
+    env.insert(
+        "RIKU_NGINX_IPV4_ADDRESS".to_string(),
+        "192.168.1.1".to_string(),
+    );
+    env.insert("RIKU_DOMAINS".to_string(), "example.com".to_string());
 
     let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
@@ -100,8 +100,8 @@ fn test_nginx_config_disable_ipv6() {
     fs::create_dir(&app_path).unwrap();
 
     let mut env = HashMap::new();
-    env.insert("DISABLE_IPV6".to_string(), "true".to_string());
-    env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
+    env.insert("RIKU_DISABLE_IPV6".to_string(), "true".to_string());
+    env.insert("RIKU_DOMAINS".to_string(), "example.com".to_string());
 
     let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
@@ -119,13 +119,13 @@ fn test_nginx_config_with_cache() {
     fs::create_dir(&app_path).unwrap();
 
     let mut env = HashMap::new();
-    env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
+    env.insert("RIKU_DOMAINS".to_string(), "example.com".to_string());
     env.insert(
-        "NGINX_CACHE_PREFIXES".to_string(),
+        "RIKU_NGINX_CACHE_PREFIXES".to_string(),
         "/api,/images".to_string(),
     );
-    env.insert("NGINX_CACHE_SIZE".to_string(), "2".to_string());
-    env.insert("NGINX_CACHE_TIME".to_string(), "7200".to_string());
+    env.insert("RIKU_NGINX_CACHE_SIZE".to_string(), "2".to_string());
+    env.insert("RIKU_NGINX_CACHE_TIME".to_string(), "7200".to_string());
 
     let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
@@ -145,8 +145,8 @@ fn test_nginx_config_with_cloudflare_acl() {
     fs::create_dir(&app_path).unwrap();
 
     let mut env = HashMap::new();
-    env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
-    env.insert("NGINX_CLOUDFLARE_ACL".to_string(), "true".to_string());
+    env.insert("RIKU_DOMAINS".to_string(), "example.com".to_string());
+    env.insert("RIKU_NGINX_CLOUDFLARE_ACL".to_string(), "true".to_string());
 
     let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
@@ -164,8 +164,8 @@ fn test_nginx_config_https_only() {
     fs::create_dir(&app_path).unwrap();
 
     let mut env = HashMap::new();
-    env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
-    env.insert("NGINX_HTTPS_ONLY".to_string(), "true".to_string());
+    env.insert("RIKU_DOMAINS".to_string(), "example.com".to_string());
+    env.insert("RIKU_HTTPS_ONLY".to_string(), "true".to_string());
 
     let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
@@ -194,7 +194,7 @@ fn test_default_template_includes_filter_augmented_content() {
     install_augmenter_filter(&paths);
 
     let mut env = HashMap::new();
-    env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
+    env.insert("RIKU_DOMAINS".to_string(), "example.com".to_string());
 
     // Default template (no HTTPS_ONLY/WSGI/PORTMAP/STATIC flag) -> selects
     // nginx.conf.tera, which pulls in nginx_common.conf.tera via {% include %}
@@ -218,8 +218,8 @@ fn test_static_template_includes_filter_augmented_content() {
     install_augmenter_filter(&paths);
 
     let mut env = HashMap::new();
-    env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
-    env.insert("NGINX_STATIC".to_string(), "true".to_string());
+    env.insert("RIKU_DOMAINS".to_string(), "example.com".to_string());
+    env.insert("RIKU_NGINX_STATIC".to_string(), "true".to_string());
 
     let _ = generate_nginx_config("myapp", &app_path, &env, &paths);
     let config_content = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();

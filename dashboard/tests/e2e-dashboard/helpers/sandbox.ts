@@ -87,7 +87,7 @@ export function createSandboxRoot(): string {
  * directory (created via the real [CREATE] button, so the bare git repo
  * under repos/<app>.git also exists, matching real-world usage). Also
  * installs the `shell` runtime plugin into the sandbox's plugins/ dir and
- * sets RUNTIME=shell in the app's ENV file: the fixture app is a bare
+ * sets RIKU_RUNTIME=shell in the app's ENV file: the fixture app is a bare
  * shell script with no package.json/requirements.txt/etc., so none of the
  * bundled runtime plugins (node, python, ruby, go, rust-lang) would
  * `detect` it, and detection would otherwise fail with "No runtime plugin
@@ -105,7 +105,7 @@ export function installFixtureApp(rikuRoot: string, appName: string): void {
 
   const envDir = join(rikuRoot, "envs", appName);
   mkdirSync(envDir, { recursive: true });
-  writeFileSync(join(envDir, "ENV"), "RUNTIME=shell\n");
+  writeFileSync(join(envDir, "ENV"), "RIKU_RUNTIME=shell\n");
 }
 
 function spawnTracked(

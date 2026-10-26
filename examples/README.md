@@ -41,20 +41,20 @@ The `ENV` file contains environment variables for your app:
 
 ```bash
 # Basic configuration
-NGINX_SERVER_NAME=example.com
-NGINX_HTTPS_ONLY=true
+RIKU_DOMAINS=example.com
+RIKU_HTTPS_ONLY=true
 
 # Worker settings
 RIKU_AUTO_RESTART=true
-BIND_ADDRESS=127.0.0.1
+RIKU_BIND_ADDRESS=127.0.0.1
 
 # Node.js specific
-NODE_VERSION=18.17.0
+RIKU_NODE_VERSION=18.17.0
 NODE_PACKAGE_MANAGER=npm
 
 # Nginx caching
-NGINX_CACHE_PREFIXES=/api/cache
-NGINX_CACHE_TIME=3600
+RIKU_NGINX_CACHE_PREFIXES=/api/cache
+RIKU_NGINX_CACHE_TIME=3600
 ```
 
 See `../docs/ENV.md` for the complete list of environment variables.

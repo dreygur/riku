@@ -29,7 +29,7 @@ Generated automatically based on your app type and environment variables.
 You can provide custom nginx configuration:
 
 1. **App directory:** `nginx.conf`, `nginx.custom.conf`, or `.nginx.conf`
-2. **Include file:** Set `NGINX_INCLUDE_FILE=custom.conf`
+2. **Include file:** Set `RIKU_NGINX_INCLUDE_FILE=custom.conf`
 
 Custom configs are included at the end of the generated config.
 
@@ -41,50 +41,50 @@ Custom configs are included at the end of the generated config.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `NGINX_SERVER_NAME` | Domain name for the app | (none) |
-| `NGINX_HTTPS_ONLY` | Force HTTPS redirect | `false` |
-| `DISABLE_IPV6` | Disable IPv6 | `false` |
-| `BIND_ADDRESS` | Backend bind address | `127.0.0.1` |
+| `RIKU_DOMAINS` | Domain name for the app | (none) |
+| `RIKU_HTTPS_ONLY` | Force HTTPS redirect | `false` |
+| `RIKU_DISABLE_IPV6` | Disable IPv6 | `false` |
+| `RIKU_BIND_ADDRESS` | Backend bind address | `127.0.0.1` |
 
 ### Static Files
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `NGINX_STATIC_PATHS` | URL path to directory mappings | (none) |
-| `NGINX_ALLOW_GIT_FOLDERS` | Allow access to `.git` | `false` |
-| `NGINX_CATCH_ALL` | SPA catch-all file | (none) |
+| `RIKU_NGINX_STATIC_PATHS` | URL path to directory mappings | (none) |
+| `RIKU_NGINX_ALLOW_GIT_FOLDERS` | Allow access to `.git` | `false` |
+| `RIKU_NGINX_CATCH_ALL` | SPA catch-all file | (none) |
 
 **Example:**
 ```bash
 # Serve static files
-NGINX_STATIC_PATHS=/static:public,/assets:static
+RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static
 
 # SPA routing
-NGINX_CATCH_ALL=index.html
+RIKU_NGINX_CATCH_ALL=index.html
 ```
 
 ### Caching
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `NGINX_CACHE_PREFIXES` | URL prefixes to cache | (none) |
-| `NGINX_CACHE_SIZE` | Cache size in GB | `1` |
-| `NGINX_CACHE_TIME` | Cache time in seconds | `3600` |
-| `NGINX_CACHE_EXPIRY` | Max cache entry age | `86400` |
+| `RIKU_NGINX_CACHE_PREFIXES` | URL prefixes to cache | (none) |
+| `RIKU_NGINX_CACHE_SIZE` | Cache size in GB | `1` |
+| `RIKU_NGINX_CACHE_TIME` | Cache time in seconds | `3600` |
+| `RIKU_NGINX_CACHE_EXPIRY` | Max cache entry age | `86400` |
 
 **Example:**
 ```bash
-NGINX_CACHE_PREFIXES=/api,/static,/images
-NGINX_CACHE_SIZE=2
-NGINX_CACHE_TIME=7200
+RIKU_NGINX_CACHE_PREFIXES=/api,/static,/images
+RIKU_NGINX_CACHE_SIZE=2
+RIKU_NGINX_CACHE_TIME=7200
 ```
 
 ### Security
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `NGINX_CLOUDFLARE_ACL` | Restrict to Cloudflare IPs | `false` |
-| `NGINX_INCLUDE_FILE` | Custom nginx config snippet | (none) |
+| `RIKU_NGINX_CLOUDFLARE_ACL` | Restrict to Cloudflare IPs | `false` |
+| `RIKU_NGINX_INCLUDE_FILE` | Custom nginx config snippet | (none) |
 
 ---
 
@@ -118,7 +118,7 @@ server {
 
 ### HTTPS Redirect
 
-When `NGINX_HTTPS_ONLY=true`:
+When `RIKU_HTTPS_ONLY=true`:
 
 ```nginx
 server {
@@ -140,7 +140,7 @@ server {
 
 ### Static Files
 
-When `NGINX_STATIC_PATHS=/static:public`:
+When `RIKU_NGINX_STATIC_PATHS=/static:public`:
 
 ```nginx
 location /static/ {
@@ -152,7 +152,7 @@ location /static/ {
 
 ### SPA Catch-All
 
-When `NGINX_CATCH_ALL=index.html`:
+When `RIKU_NGINX_CATCH_ALL=index.html`:
 
 ```nginx
 location / {
@@ -180,7 +180,7 @@ location /api/ {
 
 ### Cloudflare ACL
 
-When `NGINX_CLOUDFLARE_ACL=true`:
+When `RIKU_NGINX_CLOUDFLARE_ACL=true`:
 
 ```nginx
 # Allow Cloudflare IPs only
@@ -222,7 +222,7 @@ location /api/ {
 
 Set in ENV:
 ```bash
-riku config set myapp NGINX_INCLUDE_FILE=myapp.custom.conf
+riku config set myapp RIKU_NGINX_INCLUDE_FILE=myapp.custom.conf
 ```
 
 ---
@@ -235,12 +235,12 @@ Riku supports ACME (Let's Encrypt) for automatic SSL certificates.
 
 1. **Set domain:**
    ```bash
-   riku config set myapp NGINX_SERVER_NAME=example.com
+   riku config set myapp RIKU_DOMAINS=example.com
    ```
 
 2. **Enable HTTPS:**
    ```bash
-   riku config set myapp NGINX_HTTPS_ONLY=true
+   riku config set myapp RIKU_HTTPS_ONLY=true
    ```
 
 3. **Obtain certificate:**
@@ -317,8 +317,8 @@ Static files not found or wrong path.
 # Check static paths
 ls -la ~/.riku/apps/myapp/public/
 
-# Verify NGINX_STATIC_PATHS
-riku config get myapp NGINX_STATIC_PATHS
+# Verify RIKU_NGINX_STATIC_PATHS
+riku config get myapp RIKU_NGINX_STATIC_PATHS
 ```
 
 #### SSL Certificate Errors

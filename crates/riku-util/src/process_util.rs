@@ -21,7 +21,7 @@ pub fn validate_node_version(version: &str) -> Result<(), String> {
     let version = version.trim();
 
     if version.is_empty() {
-        return Err("NODE_VERSION cannot be empty".to_string());
+        return Err("RIKU_NODE_VERSION cannot be empty".to_string());
     }
 
     // Accepts "18", "18.17.0", "18.x", "18.17.0-nightly". The value is only
@@ -30,7 +30,7 @@ pub fn validate_node_version(version: &str) -> Result<(), String> {
     let version_regex = Regex::new(r"^\d+(\.(\d+|[xX*]))*(-[\w.]+)?$").unwrap();
     if !version_regex.is_match(version) {
         return Err(format!(
-            "Invalid NODE_VERSION: '{}' - expected format like '18.17.0' or '18'",
+            "Invalid RIKU_NODE_VERSION: '{}' - expected format like '18.17.0' or '18'",
             version
         ));
     }

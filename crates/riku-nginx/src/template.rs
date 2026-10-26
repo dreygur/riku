@@ -104,13 +104,13 @@ fn register_templates(tera: &mut tera::Tera) -> Result<()> {
 
 /// Choose the appropriate template based on environment flags.
 fn select_template(env: &HashMap<String, String>) -> &'static str {
-    if env.contains_key("NGINX_HTTPS_ONLY") {
+    if env.contains_key("RIKU_HTTPS_ONLY") {
         "nginx_https_only.conf.tera"
-    } else if env.contains_key("NGINX_WSGI") {
+    } else if env.contains_key("RIKU_NGINX_WSGI") {
         "nginx_wsgi.conf.tera"
-    } else if env.contains_key("NGINX_PORTMAP") {
+    } else if env.contains_key("RIKU_NGINX_PORTMAP") {
         "nginx_portmap.conf.tera"
-    } else if env.contains_key("NGINX_STATIC") {
+    } else if env.contains_key("RIKU_NGINX_STATIC") {
         "nginx_static.conf.tera"
     } else {
         "nginx.conf.tera"
@@ -161,36 +161,36 @@ mod tests {
     #[test]
     fn test_select_template_https_only() {
         let mut env = HashMap::new();
-        env.insert("NGINX_HTTPS_ONLY".to_string(), "true".to_string());
+        env.insert("RIKU_HTTPS_ONLY".to_string(), "true".to_string());
         assert_eq!(select_template(&env), "nginx_https_only.conf.tera");
     }
 
     #[test]
     fn test_select_template_wsgi() {
         let mut env = HashMap::new();
-        env.insert("NGINX_WSGI".to_string(), "true".to_string());
+        env.insert("RIKU_NGINX_WSGI".to_string(), "true".to_string());
         assert_eq!(select_template(&env), "nginx_wsgi.conf.tera");
     }
 
     #[test]
     fn test_select_template_portmap() {
         let mut env = HashMap::new();
-        env.insert("NGINX_PORTMAP".to_string(), "true".to_string());
+        env.insert("RIKU_NGINX_PORTMAP".to_string(), "true".to_string());
         assert_eq!(select_template(&env), "nginx_portmap.conf.tera");
     }
 
     #[test]
     fn test_select_template_static() {
         let mut env = HashMap::new();
-        env.insert("NGINX_STATIC".to_string(), "true".to_string());
+        env.insert("RIKU_NGINX_STATIC".to_string(), "true".to_string());
         assert_eq!(select_template(&env), "nginx_static.conf.tera");
     }
 
     #[test]
     fn test_select_template_https_only_takes_precedence_over_wsgi() {
         let mut env = HashMap::new();
-        env.insert("NGINX_HTTPS_ONLY".to_string(), "true".to_string());
-        env.insert("NGINX_WSGI".to_string(), "true".to_string());
+        env.insert("RIKU_HTTPS_ONLY".to_string(), "true".to_string());
+        env.insert("RIKU_NGINX_WSGI".to_string(), "true".to_string());
         // HTTPS_ONLY is checked first
         assert_eq!(select_template(&env), "nginx_https_only.conf.tera");
     }

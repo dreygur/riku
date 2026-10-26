@@ -133,8 +133,8 @@ pub fn generate_acme_nginx_config(paths: &crate::config::RikuPaths) -> Result<()
 
     let mut context = tera::Context::new();
     context.insert("ACME_WWW", &paths.acme_www.to_string_lossy());
-    context.insert("NGINX_IPV4_ADDRESS", "0.0.0.0");
-    context.insert("NGINX_IPV6_ADDRESS", "[::]");
+    context.insert("RIKU_NGINX_IPV4_ADDRESS", "0.0.0.0");
+    context.insert("RIKU_NGINX_IPV6_ADDRESS", "[::]");
 
     let config_content = tera.render("acme.conf.tera", &context)?;
 

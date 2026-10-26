@@ -38,8 +38,8 @@ pub fn validate_env_vars(env: &HashMap<String, String>) -> Vec<String> {
         }
     }
 
-    // Validate NODE_VERSION if present
-    if let Some(version) = env.get("NODE_VERSION") {
+    // Validate RIKU_NODE_VERSION if present
+    if let Some(version) = env.get("RIKU_NODE_VERSION") {
         if let Err(e) = validate_node_version(version) {
             warnings.push(e);
         }
@@ -59,28 +59,28 @@ pub fn print_env_warnings(warnings: &[String]) {
 
 /// Append warnings for any invalid nginx cache env vars.
 fn check_nginx_cache_warnings(env: &HashMap<String, String>, warnings: &mut Vec<String>) {
-    if let Some(size_str) = env.get("NGINX_CACHE_SIZE") {
+    if let Some(size_str) = env.get("RIKU_NGINX_CACHE_SIZE") {
         if let Ok(size) = size_str.parse::<u32>() {
             if !(1..=100).contains(&size) {
                 warnings.push(format!(
-                    "Invalid NGINX_CACHE_SIZE: {} - must be between 1 and 100 GB",
+                    "Invalid RIKU_NGINX_CACHE_SIZE: {} - must be between 1 and 100 GB",
                     size
                 ));
             }
         } else {
             warnings.push(format!(
-                "Invalid NGINX_CACHE_SIZE: '{}' - must be a number between 1 and 100",
+                "Invalid RIKU_NGINX_CACHE_SIZE: '{}' - must be a number between 1 and 100",
                 size_str
             ));
         }
     }
 
     for (key, label) in &[
-        ("NGINX_CACHE_TIME", "NGINX_CACHE_TIME"),
-        ("NGINX_CACHE_EXPIRY", "NGINX_CACHE_EXPIRY"),
-        ("NGINX_CACHE_REDIRECTS", "NGINX_CACHE_REDIRECTS"),
-        ("NGINX_CACHE_ANY", "NGINX_CACHE_ANY"),
-        ("NGINX_CACHE_CONTROL", "NGINX_CACHE_CONTROL"),
+        ("RIKU_NGINX_CACHE_TIME", "RIKU_NGINX_CACHE_TIME"),
+        ("RIKU_NGINX_CACHE_EXPIRY", "RIKU_NGINX_CACHE_EXPIRY"),
+        ("RIKU_NGINX_CACHE_REDIRECTS", "RIKU_NGINX_CACHE_REDIRECTS"),
+        ("RIKU_NGINX_CACHE_ANY", "RIKU_NGINX_CACHE_ANY"),
+        ("RIKU_NGINX_CACHE_CONTROL", "RIKU_NGINX_CACHE_CONTROL"),
     ] {
         if let Some(val) = env.get(*key) {
             if val.parse::<u32>().is_err() {
@@ -111,17 +111,17 @@ mod tests {
     #[test]
     fn test_validate_env_vars_node_version_warning() {
         let mut env = HashMap::new();
-        env.insert("NODE_VERSION".to_string(), "invalid".to_string());
+        env.insert("RIKU_NODE_VERSION".to_string(), "invalid".to_string());
 
         let warnings = validate_env_vars(&env);
-        assert!(warnings.iter().any(|w| w.contains("NODE_VERSION")));
+        assert!(warnings.iter().any(|w| w.contains("RIKU_NODE_VERSION")));
     }
 
     #[test]
     fn test_validate_env_vars_clean() {
         let mut env = HashMap::new();
-        env.insert("NGINX_SERVER_NAME".to_string(), "example.com".to_string());
-        env.insert("BIND_ADDRESS".to_string(), "127.0.0.1".to_string());
+        env.insert("RIKU_DOMAINS".to_string(), "example.com".to_string());
+        env.insert("RIKU_BIND_ADDRESS".to_string(), "127.0.0.1".to_string());
 
         let warnings = validate_env_vars(&env);
         assert!(warnings.is_empty());

@@ -2,7 +2,7 @@ use std::{io::Write, net::TcpListener};
 
 fn main() -> std::io::Result<()> {
     let addr = format!("{}:{}", 
-        std::env::var("BIND_ADDRESS").expect("no addr"), 
+        std::env::var("RIKU_BIND_ADDRESS").expect("no addr"), 
         std::env::var("PORT").expect("no port"));
         
     println!("Listening on {}", addr);

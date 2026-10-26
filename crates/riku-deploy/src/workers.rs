@@ -15,7 +15,7 @@ pub(crate) use super::scaling::apply_scaling_deltas;
 
 const UWSGI_PROCESSES: &str = "4";
 const UWSGI_THREADS: &str = "4";
-const NGINX_EXTERNAL_PORT: &str = "80";
+const RIKU_NGINX_EXTERNAL_PORT: &str = "80";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -195,7 +195,7 @@ fn configure_wsgi_env(socket_path: &Path, env: &mut HashMap<String, String>) {
         "UWSGI_SOCKET".to_string(),
         socket_path.to_string_lossy().to_string(),
     );
-    env.insert("NGINX_WSGI".to_string(), "true".to_string());
+    env.insert("RIKU_NGINX_WSGI".to_string(), "true".to_string());
     env.insert("UWSGI_PROCESSES".to_string(), UWSGI_PROCESSES.to_string());
     env.insert("UWSGI_THREADS".to_string(), UWSGI_THREADS.to_string());
 }
@@ -210,11 +210,11 @@ fn configure_web_env(
 
     let port = get_free_port("127.0.0.1")?;
     env.insert("PORT".to_string(), port.to_string());
-    env.insert("NGINX_PORTMAP".to_string(), "true".to_string());
-    env.insert("NGINX_INTERNAL_PORT".to_string(), port.to_string());
+    env.insert("RIKU_NGINX_PORTMAP".to_string(), "true".to_string());
+    env.insert("RIKU_UPSTREAM_PORT".to_string(), port.to_string());
     env.insert(
-        "NGINX_EXTERNAL_PORT".to_string(),
-        NGINX_EXTERNAL_PORT.to_string(),
+        "RIKU_NGINX_EXTERNAL_PORT".to_string(),
+        RIKU_NGINX_EXTERNAL_PORT.to_string(),
     );
     env.insert(
         "SOCKET".to_string(),
@@ -235,8 +235,8 @@ fn configure_web_env(
 /// persisted here (read back by `spawn_app`'s `generate_nginx_config` call)
 /// must always be overwritten to match, never just "written once". A
 /// previous version of this function skipped the whole write whenever the
-/// ENV file already contained `NGINX_PORTMAP`/`NGINX_WSGI` from an earlier
-/// deploy, which left `NGINX_INTERNAL_PORT` pinned to that first deploy's
+/// ENV file already contained `RIKU_NGINX_PORTMAP`/`RIKU_NGINX_WSGI` from an earlier
+/// deploy, which left `RIKU_UPSTREAM_PORT` pinned to that first deploy's
 /// port forever: every redeploy after the first would spawn the worker on
 /// a new port while nginx kept proxying to the old, now-dead one, a
 /// guaranteed 502 on the very next deploy of any web app.
@@ -256,18 +256,18 @@ fn persist_nginx_env(
     crate::util::parse_settings(&env_file, &mut persisted)?;
 
     if is_wsgi_kind(kind) {
-        persisted.insert("NGINX_WSGI".to_string(), "true".to_string());
+        persisted.insert("RIKU_NGINX_WSGI".to_string(), "true".to_string());
         persisted.insert(
             "UWSGI_SOCKET".to_string(),
             socket_path.to_string_lossy().to_string(),
         );
     } else {
         let port = env.get("PORT").map(|s| s.as_str()).unwrap_or("8080");
-        persisted.insert("NGINX_PORTMAP".to_string(), "true".to_string());
-        persisted.insert("NGINX_INTERNAL_PORT".to_string(), port.to_string());
+        persisted.insert("RIKU_NGINX_PORTMAP".to_string(), "true".to_string());
+        persisted.insert("RIKU_UPSTREAM_PORT".to_string(), port.to_string());
         persisted.insert(
-            "NGINX_EXTERNAL_PORT".to_string(),
-            NGINX_EXTERNAL_PORT.to_string(),
+            "RIKU_NGINX_EXTERNAL_PORT".to_string(),
+            RIKU_NGINX_EXTERNAL_PORT.to_string(),
         );
     }
 

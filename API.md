@@ -118,7 +118,7 @@ The full contract is `PLUGIN_PROTOCOL.md`; this is the module map.
 ## `riku-nginx`: nginx config generation
 
 - `context.rs`: builds the Tera template context from sanitized env vars;
-  `insert_include_file()` reads the app's `NGINX_INCLUDE_FILE` (if any) as a
+  `insert_include_file()` reads the app's `RIKU_NGINX_INCLUDE_FILE` (if any) as a
   seed value, then runs it through the `nginx.include_content` filter chain
   before inserting it
 - `template.rs`: `generate_nginx_config_from_template()`, `select_template()`

@@ -73,7 +73,7 @@ fn print_env_summary(paths: &RikuPaths, app: &str) -> Result<()> {
         let var_count = env.len();
         display::kv("Env Variables:", &format!("{} configured", var_count));
 
-        for key in ["NGINX_SERVER_NAME", "NODE_VERSION", "PORT"] {
+        for key in ["RIKU_DOMAINS", "RIKU_NODE_VERSION", "PORT"] {
             if let Some(val) = env.get(key) {
                 display::kv(&format!("  {}:", key), val);
             }

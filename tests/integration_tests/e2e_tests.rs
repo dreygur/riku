@@ -783,10 +783,14 @@ esac
 
         let plugins = riku::plugins::runtime::discover(plugin_tmp.path());
         let mut env = HashMap::new();
-        env.insert("RUNTIME".into(), "python".into());
+        env.insert("RIKU_RUNTIME".into(), "python".into());
 
         let result = riku::plugins::runtime::detect(&plugins, app_tmp.path(), &env)?;
-        assert_eq!(result.unwrap().name, "python", "RUNTIME= override must win");
+        assert_eq!(
+            result.unwrap().name,
+            "python",
+            "RIKU_RUNTIME= override must win"
+        );
         Ok(())
     }
 

@@ -62,9 +62,9 @@ RIKU_ROOT         riku root (~/.riku)
 
 ### Detection Order
 
-1. If `RUNTIME=<name>` is set in the app ENV → use that plugin, skip detection
+1. If `RIKU_RUNTIME=<name>` is set in the app ENV → use that plugin, skip detection
 2. Otherwise → run `detect` on all non-`riku-*` plugins sorted alphabetically; first exit 0 wins
-3. If no plugin matches → deploy fails with: `"No runtime plugin matched. Run 'riku install-plugins' or set RUNTIME=<name>."`
+3. If no plugin matches → deploy fails with: `"No runtime plugin matched. Run 'riku install-plugins' or set RIKU_RUNTIME=<name>."`
 
 ### Writing a Custom Runtime Plugin
 
@@ -111,7 +111,7 @@ chmod +x ~/.riku/plugins/my-runtime
 To skip auto-detection:
 
 ```bash
-riku config set myapp RUNTIME=my-runtime
+riku config set myapp RIKU_RUNTIME=my-runtime
 ```
 
 ---
@@ -245,7 +245,7 @@ shift 3
 case "$cmd" in
     open)
         # Fetch the domain from server config
-        domain=$(ssh "$server" config:get "$app" NGINX_SERVER_NAME)
+        domain=$(ssh "$server" config:get "$app" RIKU_DOMAINS)
         if [ -n "$domain" ]; then
             # Open in browser
             xdg-open "https://$domain" 2>/dev/null || \

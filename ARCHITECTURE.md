@@ -103,7 +103,7 @@ code:
 
 #### Plugin-Based Runtime Dispatch
 
-1. If `RUNTIME=<name>` is in the app ENV → use that plugin directly
+1. If `RIKU_RUNTIME=<name>` is in the app ENV → use that plugin directly
 2. Otherwise → run `detect` on all non-`riku-*` plugins, sorted
    alphabetically; first exit 0 wins
 3. If no plugin matches → deploy fails with a clear error
@@ -160,7 +160,7 @@ Generates nginx configurations for applications:
   flags (`select_template()`)
 - **Multiple Config Types**: plain HTTP, HTTPS-only, static file serving,
   WSGI socket, external port mapping
-- **Plugin Augmentation**: `NGINX_INCLUDE_FILE` content is run through the
+- **Plugin Augmentation**: `RIKU_NGINX_INCLUDE_FILE` content is run through the
   `nginx.include_content` filter chain (§ Plugin System) before being
   inlined: any number of installed filter plugins can each contribute a
   snippet to the generated config, without replacing it wholesale
@@ -270,7 +270,7 @@ Shared, dependency-free helpers used across the workspace:
 4. **Scaling deltas applied**, then **`preflight`** command runs if present
 5. **ENV Loading**: app environment variables loaded from `~/.riku/envs/<app>/ENV`
 6. **pre-deploy hook**: aborts the deploy on failure
-7. **Plugin Discovery & Runtime Detection**: `RUNTIME=` override, or first
+7. **Plugin Discovery & Runtime Detection**: `RIKU_RUNTIME=` override, or first
    `detect`-exit-0 plugin wins; no match = error
 8. **pre-build hook**
 9. **Build**: the matched plugin's `build` subcommand; output streamed to

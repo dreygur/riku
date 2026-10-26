@@ -6,7 +6,7 @@
 //! # Why a deny-list, not an allow-list
 //!
 //! An allow-list is the generally safer default, but it was deliberately not
-//! adopted here: `NGINX_SERVER_NAME` alone has to accommodate space/comma
+//! adopted here: `RIKU_DOMAINS` alone has to accommodate space/comma
 //! separated hostname lists, IPv6 literals (`[::1]`), wildcards (`*.example.com`),
 //! and regex-anchored forms (`~^(?<sub>.+)\.example\.com$`), enumerating every
 //! legitimate character across those forms without access to real-world usage
@@ -59,19 +59,18 @@ mod tests {
     #[test]
     fn test_sanitize_nginx_value_rejects_semicolons() {
         assert!(
-            sanitize_nginx_value("NGINX_SERVER_NAME", "example.com; proxy_pass http://evil")
-                .is_err()
+            sanitize_nginx_value("RIKU_DOMAINS", "example.com; proxy_pass http://evil").is_err()
         );
     }
 
     #[test]
     fn test_sanitize_nginx_value_rejects_braces() {
-        assert!(sanitize_nginx_value("NGINX_SERVER_NAME", "example.com { evil }").is_err());
+        assert!(sanitize_nginx_value("RIKU_DOMAINS", "example.com { evil }").is_err());
     }
 
     #[test]
     fn test_sanitize_nginx_value_rejects_newlines() {
-        assert!(sanitize_nginx_value("NGINX_SERVER_NAME", "example.com\nproxy_pass evil").is_err());
+        assert!(sanitize_nginx_value("RIKU_DOMAINS", "example.com\nproxy_pass evil").is_err());
     }
 
     #[test]
@@ -81,15 +80,15 @@ mod tests {
 
     #[test]
     fn test_sanitize_nginx_value_rejects_hash() {
-        assert!(sanitize_nginx_value("NGINX_SERVER_NAME", "example.com # comment").is_err());
+        assert!(sanitize_nginx_value("RIKU_DOMAINS", "example.com # comment").is_err());
     }
 
     #[test]
     fn test_sanitize_nginx_value_allows_clean_values() {
-        assert!(sanitize_nginx_value("NGINX_SERVER_NAME", "example.com").is_ok());
+        assert!(sanitize_nginx_value("RIKU_DOMAINS", "example.com").is_ok());
         assert!(sanitize_nginx_value("PORT", "8080").is_ok());
-        assert!(sanitize_nginx_value("BIND_ADDRESS", "127.0.0.1").is_ok());
-        assert!(sanitize_nginx_value("NGINX_IPV6_ADDRESS", "[::]").is_ok());
+        assert!(sanitize_nginx_value("RIKU_BIND_ADDRESS", "127.0.0.1").is_ok());
+        assert!(sanitize_nginx_value("RIKU_NGINX_IPV6_ADDRESS", "[::]").is_ok());
     }
 
     #[test]

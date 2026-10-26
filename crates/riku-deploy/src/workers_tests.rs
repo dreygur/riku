@@ -158,9 +158,9 @@ fn test_auto_restart_false_skips_removal_of_existing_configs() -> anyhow::Result
     Ok(())
 }
 
-/// Regression test for the stale-NGINX_INTERNAL_PORT bug: every deploy
+/// Regression test for the stale-RIKU_UPSTREAM_PORT bug: every deploy
 /// allocates a fresh ephemeral port for a `web` worker, so the ENV
-/// file's NGINX_INTERNAL_PORT (read back by `spawn_app`'s nginx config
+/// file's RIKU_UPSTREAM_PORT (read back by `spawn_app`'s nginx config
 /// generation) must track the latest deploy's port, not just the
 /// first one ever persisted.
 #[test]
@@ -180,8 +180,8 @@ fn test_redeploy_refreshes_persisted_nginx_internal_port() -> anyhow::Result<()>
     let mut persisted = HashMap::new();
     crate::util::parse_settings(&env_file, &mut persisted)?;
     let first_port = persisted
-        .get("NGINX_INTERNAL_PORT")
-        .expect("first deploy should persist NGINX_INTERNAL_PORT")
+        .get("RIKU_UPSTREAM_PORT")
+        .expect("first deploy should persist RIKU_UPSTREAM_PORT")
         .clone();
 
     // Second deploy ("redeploy"): a fresh port gets allocated.
@@ -198,13 +198,13 @@ fn test_redeploy_refreshes_persisted_nginx_internal_port() -> anyhow::Result<()>
     let mut persisted_after = HashMap::new();
     crate::util::parse_settings(&env_file, &mut persisted_after)?;
     let second_port = persisted_after
-        .get("NGINX_INTERNAL_PORT")
-        .expect("redeploy should still have NGINX_INTERNAL_PORT")
+        .get("RIKU_UPSTREAM_PORT")
+        .expect("redeploy should still have RIKU_UPSTREAM_PORT")
         .clone();
 
     assert_eq!(
             second_port, actual_port,
-            "persisted NGINX_INTERNAL_PORT must match the worker actually spawned by the redeploy, not a stale port from the first deploy"
+            "persisted RIKU_UPSTREAM_PORT must match the worker actually spawned by the redeploy, not a stale port from the first deploy"
         );
     let _ = first_port; // not asserted equal/different: ports are random, could coincidentally collide
     Ok(())

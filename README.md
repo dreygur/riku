@@ -134,7 +134,7 @@ set with `riku install-plugins` (or pick some: `riku install-plugins --plugins n
 | `clojure` | `project.clj`, `deps.edn` | Leiningen / Clojure CLI |
 | `container` | `Dockerfile`, `docker-compose.yml` | Docker / Podman |
 
-Detection runs in order: set `RUNTIME=node` to skip it. To add your own language,
+Detection runs in order: set `RIKU_RUNTIME=node` to skip it. To add your own language,
 drop an executable into `~/.riku/plugins/` implementing four subcommands:
 
 | Subcommand | Does |
@@ -170,8 +170,8 @@ caddy-router, and webhook-notify bundles.
 Per-app settings live in an `ENV` file (`riku config set` writes it). A few common ones:
 
 ```bash
-NGINX_SERVER_NAME=example.com   # domain
-NGINX_HTTPS_ONLY=true           # force HTTPS
+RIKU_DOMAINS=example.com   # domain
+RIKU_HTTPS_ONLY=true           # force HTTPS
 RIKU_WORKER_TIMEOUT=3600        # kill unresponsive workers
 RIKU_ROUTER=caddy               # use a router plugin instead of nginx
 ```

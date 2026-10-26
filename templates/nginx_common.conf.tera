@@ -6,12 +6,12 @@ location ^~ /.well-known/acme-challenge {
   root {{ ACME_WWW }};
 }
 
-{% if NGINX_CLOUDFLARE_ACL == "true" %}
+{% if RIKU_NGINX_CLOUDFLARE_ACL == "true" %}
 # Cloudflare IP ACL
 include /etc/nginx/cloudflare.conf;
 {% endif %}
 
-{% if NGINX_ALLOW_GIT_FOLDERS != "true" %}
+{% if RIKU_NGINX_ALLOW_GIT_FOLDERS != "true" %}
 # Block access to .git folders
 location ~ /\.git {
   deny all;
@@ -19,9 +19,9 @@ location ~ /\.git {
 }
 {% endif %}
 
-{% if NGINX_STATIC_PATHS %}
+{% if RIKU_NGINX_STATIC_PATHS %}
 # Static path mappings
-{% for mapping in NGINX_STATIC_PATHS | split(pat=",") %}
+{% for mapping in RIKU_NGINX_STATIC_PATHS | split(pat=",") %}
 {% set parts = mapping | split(pat=":") %}
 {% if parts | length == 2 %}
 location {{ parts | first | trim }} {
@@ -33,34 +33,34 @@ location {{ parts | first | trim }} {
 {% endfor %}
 {% endif %}
 
-{% if NGINX_CACHE_PREFIXES %}
+{% if RIKU_NGINX_CACHE_PREFIXES %}
 # Proxy cache configuration
-proxy_cache_path {{ NGINX_CACHE_PATH }} levels=1:2 keys_zone={{ APP }}:{{ NGINX_CACHE_SIZE }}g inactive={{ NGINX_CACHE_EXPIRY }}s;
+proxy_cache_path {{ RIKU_NGINX_CACHE_PATH }} levels=1:2 keys_zone={{ APP }}:{{ RIKU_NGINX_CACHE_SIZE }}g inactive={{ RIKU_NGINX_CACHE_EXPIRY }}s;
 proxy_cache_key "$scheme$request_method$host$request_uri";
 
-{% for prefix in NGINX_CACHE_PREFIXES | split(pat=",") %}
+{% for prefix in RIKU_NGINX_CACHE_PREFIXES | split(pat=",") %}
 location {{ prefix | trim }} {
-  proxy_pass http://unix:{{ NGINX_SOCKET }};
+  proxy_pass http://unix:{{ RIKU_NGINX_SOCKET }};
   proxy_set_header Host $host;
   proxy_set_header X-Real-IP $remote_addr;
   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
   proxy_set_header X-Forwarded-Proto $scheme;
 
   proxy_cache {{ APP }};
-  proxy_cache_valid 200 304 {{ NGINX_CACHE_TIME }}s;
-  proxy_cache_valid 301 307 {{ NGINX_CACHE_REDIRECTS }}s;
-  proxy_cache_valid any {{ NGINX_CACHE_ANY }}s;
+  proxy_cache_valid 200 304 {{ RIKU_NGINX_CACHE_TIME }}s;
+  proxy_cache_valid 301 307 {{ RIKU_NGINX_CACHE_REDIRECTS }}s;
+  proxy_cache_valid any {{ RIKU_NGINX_CACHE_ANY }}s;
   proxy_cache_lock on;
 
   add_header X-Cache-Status $upstream_cache_status;
-  {% if NGINX_CACHE_CONTROL %}
-  add_header Cache-Control "public, max-age={{ NGINX_CACHE_CONTROL }}";
+  {% if RIKU_NGINX_CACHE_CONTROL %}
+  add_header Cache-Control "public, max-age={{ RIKU_NGINX_CACHE_CONTROL }}";
   {% endif %}
 }
 {% endfor %}
 {% else %}
 location / {
-  proxy_pass http://unix:{{ NGINX_SOCKET }};
+  proxy_pass http://unix:{{ RIKU_NGINX_SOCKET }};
   proxy_set_header Host $host;
   proxy_set_header X-Real-IP $remote_addr;
   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -71,10 +71,10 @@ location / {
 }
 {% endif %}
 
-{% if NGINX_CATCH_ALL %}
+{% if RIKU_NGINX_CATCH_ALL %}
 # Catch-all for client-side routing
 location / {
-  try_files $uri /{{ NGINX_CATCH_ALL }};
+  try_files $uri /{{ RIKU_NGINX_CATCH_ALL }};
 }
 {% endif %}
 
@@ -85,15 +85,15 @@ add_header X-XSS-Protection "1; mode=block" always;
 add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
 
-{% if NGINX_CSP %}
-# Content Security Policy (customizable via NGINX_CSP env var)
-add_header Content-Security-Policy "{{ NGINX_CSP }}" always;
+{% if RIKU_NGINX_CSP %}
+# Content Security Policy (customizable via RIKU_NGINX_CSP env var)
+add_header Content-Security-Policy "{{ RIKU_NGINX_CSP }}" always;
 {% endif %}
 
-{% if NGINX_INCLUDE_CONTENT %}
+{% if RIKU_NGINX_INCLUDE_CONTENT %}
 # Custom nginx configuration from file
-{{ NGINX_INCLUDE_CONTENT }}
-{% elif NGINX_INCLUDE_FILE %}
+{{ RIKU_NGINX_INCLUDE_CONTENT }}
+{% elif RIKU_NGINX_INCLUDE_FILE %}
 # Custom nginx configuration
-include {{ NGINX_INCLUDE_FILE }};
+include {{ RIKU_NGINX_INCLUDE_FILE }};
 {% endif %}

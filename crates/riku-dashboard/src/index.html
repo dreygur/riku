@@ -275,8 +275,8 @@
   function strip(a) {
     const el = document.createElement("section");
     el.className = "strip";
-    const domain = a.routing && a.routing.NGINX_SERVER_NAME;
-    const https = a.routing && a.routing.NGINX_HTTPS_ONLY;
+    const domain = a.routing && a.routing.RIKU_DOMAINS;
+    const https = a.routing && a.routing.RIKU_HTTPS_ONLY;
     const busy = (a.deploy_lock || "").toLowerCase() === "held";
 
     const chips = [];
