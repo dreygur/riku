@@ -25,15 +25,16 @@ use anyhow::Result;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
-use std::time::SystemTime;
 
 use crate::config::RikuPaths;
 use crate::deploy::lock;
 use crate::supervisor::stats::{AppStats, ProcessStatus};
 
 mod route;
+mod supervisor_files;
 
 use route::{route_state, RouteState};
+use supervisor_files::{load_app_stats, supervisor_uptime_seconds, unix_timestamp_now};
 
 /// Known non-secret routing/port keys an app's `ENV` file may carry.
 /// Strict allowlist: see module docs for why this isn't a blocklist.
@@ -200,41 +201,6 @@ fn extract_routing_fields(env: &HashMap<String, String>) -> BTreeMap<String, Str
         .iter()
         .filter_map(|&key| env.get(key).map(|v| (key.to_string(), v.clone())))
         .collect()
-}
-
-/// Load `stats.json` (written periodically by the running supervisor) as
-/// `app -> AppStats`, or an empty map if it doesn't exist yet / fails to
-/// parse: a dump with no worker data is still useful for inspecting
-/// routing and lock state, so this never errors the whole command out.
-fn load_app_stats(paths: &RikuPaths) -> HashMap<String, AppStats> {
-    let stats_file = paths.riku_root.join("stats.json");
-    let Ok(content) = fs::read_to_string(&stats_file) else {
-        return HashMap::new();
-    };
-    let Ok(stats_vec) = serde_json::from_str::<Vec<AppStats>>(&content) else {
-        return HashMap::new();
-    };
-    stats_vec.into_iter().map(|s| (s.app.clone(), s)).collect()
-}
-
-/// Approximate supervisor uptime from the PID file's mtime, written once,
-/// at startup, by `create_pid_file_with_lock`. This command never connects
-/// to the running supervisor process, so this is the closest available
-/// proxy for "when did it start" without one.
-fn supervisor_uptime_seconds(paths: &RikuPaths) -> Option<u64> {
-    let pid_file = paths.riku_root.join("supervisor.pid");
-    let modified = fs::metadata(&pid_file).ok()?.modified().ok()?;
-    SystemTime::now()
-        .duration_since(modified)
-        .ok()
-        .map(|d| d.as_secs())
-}
-
-fn unix_timestamp_now() -> u64 {
-    SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
 }
 
 #[cfg(test)]
