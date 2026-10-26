@@ -1,107 +1,27 @@
 /// Server initialization: directory structure, git hook, systemd, SSH, and verification.
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
 
-use crate::config::router::{self, Router};
+use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::echo;
 
 use super::binary::install_riku_binary;
 use super::git_hook::create_git_hook;
 use super::guidance::{print_first_app_guide, print_verification_summary, verify_supervisor};
+use super::init_router::{resolve_router, setup_router_host, RouterTarget};
+use super::prerequisites::{check_prerequisites, warn_not_root};
 use super::ssh::setup_ssh_key_interactive;
 use super::systemd::{install_systemd_service, setup_systemd_service};
 
-/// Initialize Riku on a server.
-/// Creates directory structure, optionally sets up systemd, and configures SSH keys.
-// Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
 #[allow(clippy::question_mark)]
-pub fn cmd_init(no_systemd: bool) -> Result<()> {
-    let paths = match RikuPaths::from_env() {
-        Ok(paths) => paths,
-        Err(e) => return Err(e),
+fn create_directory_structure(paths: &RikuPaths, router: &Router) -> Result<()> {
+    let router_dir = match router {
+        Router::Caddy => ("caddy", &paths.caddy_root),
+        Router::Nginx | Router::Plugin(_) => ("nginx", &paths.nginx_root),
     };
-
-    let is_root = env::var("USER").unwrap_or_default() == "root";
-
-    if !is_root {
-        echo("⚠ Warning: Not running as root", "yellow");
-        echo("  Some features require root privileges:", "yellow");
-        echo("    - System-wide systemd service", "yellow");
-        echo("    - Nginx configuration", "yellow");
-        echo("  Run 'sudo riku init' for full installation.", "yellow");
-        echo("", "");
-    }
-
-    check_prerequisites(is_root);
-
-    echo("-----> Initializing Riku server...", "");
-    echo("", "");
-
-    echo("[1/4] Creating directory structure...", "");
-    create_directory_structure(&paths)?;
-    if let Err(e) = persist_router(&paths) {
-        return Err(e);
-    }
-
-    install_riku_binary()?;
-    generate_acme_config(&paths);
-
-    echo("", "");
-    create_git_hook(&paths)?;
-    echo("", "");
-
-    setup_systemd_step(&paths, no_systemd, is_root)?;
-
-    echo("[3/4] SSH key setup...", "");
-    setup_ssh_key_interactive(&paths)?;
-    echo("", "");
-
-    echo("[4/4] Verifying installation...", "");
-    verify_supervisor(no_systemd);
-    echo("", "");
-
-    echo("-----> Riku server initialized successfully!", "green");
-    echo("", "");
-
-    print_verification_summary(no_systemd);
-    print_first_app_guide();
-
-    Ok(())
-}
-
-fn check_prerequisites(is_root: bool) {
-    echo("Checking prerequisites...", "");
-    let mut missing_deps = Vec::new();
-
-    if Command::new("git").arg("--version").output().is_err() {
-        missing_deps.push("git");
-    }
-
-    let has_nginx = Command::new("nginx").arg("-v").output().is_ok();
-    if !has_nginx && is_root {
-        echo("  ⚠ nginx not found - install for web serving", "yellow");
-    }
-
-    if !missing_deps.is_empty() {
-        echo(
-            &format!("  ⚠ Missing dependencies: {}", missing_deps.join(", ")),
-            "yellow",
-        );
-        echo(
-            &format!("  Install with: apt install {}", missing_deps.join(" ")),
-            "yellow",
-        );
-    } else {
-        echo("  ✓ All required dependencies found", "green");
-    }
-    echo("", "");
-}
-
-fn create_directory_structure(paths: &RikuPaths) -> Result<()> {
     let dirs: Vec<(&str, &PathBuf)> = vec![
         ("apps", &paths.app_root),
         ("cache", &paths.cache_root),
@@ -112,37 +32,22 @@ fn create_directory_structure(paths: &RikuPaths) -> Result<()> {
         ("workers-available", &paths.workers_available),
         ("workers-enabled", &paths.workers_enabled),
         ("logs", &paths.log_root),
-        ("nginx", &paths.nginx_root),
+        router_dir,
         ("acme", &paths.acme_www),
         ("plugins", &paths.plugin_root),
     ];
 
     for (name, dir) in &dirs {
-        if !dir.exists() {
-            fs::create_dir_all(dir)?;
-            echo(&format!("      ✓ ~/.riku/{}", name), "green");
-        } else {
+        if dir.exists() {
             echo(&format!("      ✓ ~/.riku/{} (exists)", name), "green");
+            continue;
         }
+        if let Err(e) = fs::create_dir_all(dir) {
+            return Err(anyhow!("failed to create {}: {e}", dir.display()));
+        }
+        echo(&format!("      ✓ ~/.riku/{}", name), "green");
     }
 
-    Ok(())
-}
-
-/// Write `RIKU_ROUTER` to the host `ROUTER` file. Init is the only reader of
-/// the env var; unset leaves an existing choice alone.
-#[allow(clippy::question_mark)]
-fn persist_router(paths: &RikuPaths) -> Result<()> {
-    let raw = env::var("RIKU_ROUTER").unwrap_or_default();
-    if raw.trim().is_empty() {
-        return Ok(());
-    }
-
-    let router = Router::from(raw.as_str());
-    if let Err(e) = router::save(paths, &router) {
-        return Err(e);
-    }
-    echo(&format!("      ✓ router: {}", router.name()), "green");
     Ok(())
 }
 
@@ -158,18 +63,105 @@ fn generate_acme_config(paths: &RikuPaths) {
     }
 }
 
-fn setup_systemd_step(paths: &RikuPaths, no_systemd: bool, is_root: bool) -> Result<()> {
-    if !no_systemd {
-        echo("[2/4] Setting up systemd service...", "");
-        if is_root {
-            install_systemd_service(paths)?;
-        } else {
-            setup_systemd_service(paths)?;
-        }
-        echo("", "");
-    } else {
+#[allow(clippy::question_mark)]
+fn setup_systemd_step(
+    paths: &RikuPaths,
+    router: &Router,
+    no_systemd: bool,
+    is_root: bool,
+) -> Result<()> {
+    if no_systemd {
         echo("[2/4] Skipping systemd setup (--no-systemd)", "yellow");
         echo("", "");
+        return Ok(());
     }
+
+    echo("[2/4] Setting up systemd service...", "");
+    let installed = if is_root {
+        install_systemd_service(router)
+    } else {
+        setup_systemd_service(paths, router)
+    };
+    if let Err(e) = installed {
+        return Err(e);
+    }
+    echo("", "");
+    Ok(())
+}
+
+/// Directories, binary, router host setup and git hook: everything up to
+/// the systemd step.
+#[allow(clippy::question_mark)]
+fn prepare_host(paths: &RikuPaths, target: &RouterTarget) -> Result<()> {
+    echo("[1/4] Creating directory structure...", "");
+    if let Err(e) = create_directory_structure(paths, &target.router) {
+        return Err(e);
+    }
+    if let Err(e) = install_riku_binary() {
+        return Err(e);
+    }
+    if target.router != Router::Caddy {
+        generate_acme_config(paths);
+    }
+    if let Err(e) = setup_router_host(target) {
+        return Err(e);
+    }
+
+    echo("", "");
+    if let Err(e) = create_git_hook(paths) {
+        return Err(e);
+    }
+    echo("", "");
+    Ok(())
+}
+
+/// Initialize Riku on a server.
+/// Creates directory structure, optionally sets up systemd, and configures SSH keys.
+// Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
+#[allow(clippy::question_mark)]
+pub fn cmd_init(no_systemd: bool) -> Result<()> {
+    let paths = match RikuPaths::from_env() {
+        Ok(paths) => paths,
+        Err(e) => return Err(e),
+    };
+
+    let is_root = env::var("USER").unwrap_or_default() == "root";
+    let target = match resolve_router(&paths, is_root) {
+        Ok(target) => target,
+        Err(e) => return Err(e),
+    };
+
+    if !is_root {
+        warn_not_root(&target.router);
+    }
+
+    check_prerequisites(is_root, &target.router);
+
+    echo("-----> Initializing Riku server...", "");
+    echo("", "");
+
+    if let Err(e) = prepare_host(&paths, &target) {
+        return Err(e);
+    }
+    if let Err(e) = setup_systemd_step(&paths, &target.router, no_systemd, is_root) {
+        return Err(e);
+    }
+
+    echo("[3/4] SSH key setup...", "");
+    if let Err(e) = setup_ssh_key_interactive(&paths) {
+        return Err(e);
+    }
+    echo("", "");
+
+    echo("[4/4] Verifying installation...", "");
+    verify_supervisor(no_systemd);
+    echo("", "");
+
+    echo("-----> Riku server initialized successfully!", "green");
+    echo("", "");
+
+    print_verification_summary(no_systemd);
+    print_first_app_guide();
+
     Ok(())
 }
