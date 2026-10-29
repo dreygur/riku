@@ -68,3 +68,31 @@ fn migrate_file_missing_is_zero() {
     let dir = TempDir::new().unwrap();
     assert_eq!(migrate_file(&dir.path().join("nope")).unwrap(), 0);
 }
+
+#[test]
+#[cfg(unix)]
+fn migrate_file_preserves_owner_and_group() {
+    use std::os::unix::fs::MetadataExt;
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("authorized_keys");
+    fs::write(&path, format!("{OLD}\n")).unwrap();
+    let before = fs::metadata(&path).unwrap();
+    migrate_file(&path).unwrap();
+    let after = fs::metadata(&path).unwrap();
+    assert_eq!((after.uid(), after.gid()), (before.uid(), before.gid()));
+}
+
+#[test]
+#[cfg(unix)]
+fn migrate_file_does_not_follow_a_symlink_at_the_temp_path() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("authorized_keys");
+    let victim = dir.path().join("victim");
+    fs::write(&path, format!("{OLD}\n")).unwrap();
+    fs::write(&victim, "precious").unwrap();
+    std::os::unix::fs::symlink(&victim, dir.path().join("authorized_keys.riku-migrate")).unwrap();
+
+    assert_eq!(migrate_file(&path).unwrap(), 1);
+    assert_eq!(fs::read_to_string(&victim).unwrap(), "precious");
+    assert_eq!(fs::read_to_string(&path).unwrap(), format!("{NEW}\n"));
+}

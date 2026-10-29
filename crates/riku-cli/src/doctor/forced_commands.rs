@@ -4,29 +4,29 @@
 //! it delegates to [`riku_util::authorized_keys::migrate_file`], which changes
 //! nothing but the old ` $SSH_ORIGINAL_COMMAND` suffix.
 
-use std::path::{Path, PathBuf};
+use std::io::ErrorKind;
+use std::path::Path;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
-use crate::util::authorized_keys::{migrate_file, migrate_text};
+use crate::util::authorized_keys::{authorized_keys_path, migrate_file, migrate_text};
 
 use super::Check;
 
-fn authorized_keys_path() -> Result<PathBuf> {
-    match std::env::var("HOME") {
-        Ok(home) => Ok(Path::new(&home).join(".ssh/authorized_keys")),
-        Err(_) => Err(anyhow!("HOME not set, cannot locate authorized_keys")),
-    }
+/// Warn when any deploy key line would be migrated by `--fix`.
+pub fn forced_commands(home: &Path) -> Check {
+    check_file(&authorized_keys_path(home))
 }
 
-/// Warn when any deploy key line would be migrated by `--fix`.
-pub fn forced_commands() -> Check {
-    let path = match authorized_keys_path() {
-        Ok(path) => path,
-        Err(e) => return Check::warn("deploy key forced commands", e.to_string()),
-    };
-    let text = std::fs::read_to_string(&path).unwrap_or_default();
-    check_text(&text)
+fn check_file(path: &Path) -> Check {
+    match std::fs::read_to_string(path) {
+        Ok(text) => check_text(&text),
+        Err(e) if e.kind() == ErrorKind::NotFound => check_text(""),
+        Err(e) => Check::warn(
+            "deploy key forced commands",
+            format!("could not read {}: {e}", path.display()),
+        ),
+    }
 }
 
 fn check_text(text: &str) -> Check {
@@ -41,13 +41,8 @@ fn check_text(text: &str) -> Check {
 }
 
 /// Migrate this user's `authorized_keys` and return the number of lines changed.
-#[allow(clippy::question_mark)]
-pub fn fix() -> Result<usize> {
-    let path = match authorized_keys_path() {
-        Ok(path) => path,
-        Err(e) => return Err(e),
-    };
-    migrate_file(&path)
+pub fn fix(home: &Path) -> Result<usize> {
+    migrate_file(&authorized_keys_path(home))
 }
 
 #[cfg(test)]

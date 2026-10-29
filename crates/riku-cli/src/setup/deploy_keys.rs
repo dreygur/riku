@@ -13,7 +13,7 @@ use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, Result};
 
-use crate::util::authorized_keys::migrate_file;
+use crate::util::authorized_keys::{authorized_keys_path, migrate_file};
 use crate::util::public_key::{parse_public_keys, PublicKey};
 use crate::util::{echo, setup_authorized_keys};
 
@@ -39,16 +39,16 @@ pub fn parse_key_args(lines: &[String]) -> Result<Vec<PublicKey>> {
         .collect()
 }
 
-fn authorized_keys_path() -> Result<PathBuf> {
+fn authorized_keys_file() -> Result<PathBuf> {
     match dirs::home_dir() {
-        Some(home) => Ok(home.join(".ssh").join("authorized_keys")),
+        Some(home) => Ok(authorized_keys_path(&home)),
         None => Err(anyhow!("could not determine the home directory")),
     }
 }
 
 #[allow(clippy::question_mark)]
 fn authorized_keys_text() -> Result<String> {
-    let path = match authorized_keys_path() {
+    let path = match authorized_keys_file() {
         Ok(path) => path,
         Err(e) => return Err(e),
     };
@@ -117,7 +117,7 @@ pub fn add_deploy_keys(keys: &[PublicKey]) -> Result<()> {
         echo(&format!("      ✓ Added deploy key {fp}"), "green");
     }
 
-    let path = match authorized_keys_path() {
+    let path = match authorized_keys_file() {
         Ok(path) => path,
         Err(e) => return Err(e),
     };

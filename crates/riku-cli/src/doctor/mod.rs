@@ -15,6 +15,8 @@ pub mod checks;
 pub mod forced_commands;
 pub mod router_check;
 
+use std::path::PathBuf;
+
 use anyhow::Result;
 use colored::Colorize;
 
@@ -60,16 +62,19 @@ impl Check {
     }
 }
 
-/// The riku tree to diagnose. Under `sudo`, HOME is root's, so a root run
-/// checks the deploy user's tree instead, the one deploys and the
-/// supervisor use. Doctor only reads, so root reading that tree hands the
-/// deploy user nothing.
-fn diagnosed_paths(paths: &RikuPaths) -> Result<RikuPaths> {
+/// The riku tree to diagnose, with the home that owns it. Under `sudo`, HOME
+/// is root's, so a root run checks the deploy user's tree instead, the one
+/// deploys and the supervisor use. Only `--fix` writes, and it writes just
+/// the `authorized_keys` of that same user.
+fn diagnosed_target(paths: &RikuPaths) -> Result<(RikuPaths, PathBuf)> {
     if std::env::var("USER").unwrap_or_default() != "root" {
-        return Ok(paths.clone());
+        return match dirs::home_dir() {
+            Some(home) => Ok((paths.clone(), home)),
+            None => Err(anyhow::anyhow!("could not determine the home directory")),
+        };
     }
     match DeployUser::lookup() {
-        Ok(user) => Ok(user.riku_paths()),
+        Ok(user) => Ok((user.riku_paths(), user.home)),
         Err(e) => Err(e),
     }
 }
@@ -77,8 +82,8 @@ fn diagnosed_paths(paths: &RikuPaths) -> Result<RikuPaths> {
 /// Run every diagnostic, render the report, and exit non-zero on any failure.
 #[allow(clippy::question_mark)]
 pub fn cmd_doctor(paths: &RikuPaths, fix: bool) -> Result<()> {
-    let paths = match diagnosed_paths(paths) {
-        Ok(paths) => paths,
+    let (paths, home) = match diagnosed_target(paths) {
+        Ok(target) => target,
         Err(e) => return Err(e),
     };
     display::info(&format!(
@@ -88,7 +93,7 @@ pub fn cmd_doctor(paths: &RikuPaths, fix: bool) -> Result<()> {
     display::blank();
 
     if fix {
-        match forced_commands::fix() {
+        match forced_commands::fix(&home) {
             Ok(count) => display::info(&format!(
                 "Migrated {count} deploy key(s) to the new forced command"
             )),
@@ -97,7 +102,8 @@ pub fn cmd_doctor(paths: &RikuPaths, fix: bool) -> Result<()> {
         display::blank();
     }
 
-    let checks = collect(&paths);
+    let mut checks = collect(&paths);
+    checks.push(forced_commands::forced_commands(&home));
     render(&checks);
     summarize_and_exit(&checks);
 
@@ -116,7 +122,6 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     checks.push(checks::plugins(paths));
     checks.push(checks::disk(paths));
     checks.push(checks::ssh_access());
-    checks.push(forced_commands::forced_commands());
     checks.extend(app_env::renamed_keys(paths));
     checks
 }
