@@ -99,6 +99,9 @@ fn main() -> Result<()> {
     }
 
     if let Some(server) = server {
+        if let Commands::Dashboard { .. } = command {
+            return cli::remote::dashboard::run_remote(server);
+        }
         let sent_hint = if hint_used { hint } else { None };
         match route::forward(&argv, server, sent_hint) {
             Ok(code) => std::process::exit(code),

@@ -4,6 +4,10 @@
 //! single embedded HTML page plus a read-only JSON API. No Node runtime, no
 //! separate web stack: the single-binary identity is preserved.
 //!
+//! Once bound, it prints `riku-dashboard-bound <port>` on its own stdout
+//! line, so a remote session (`riku dashboard -s <server>`) can learn the
+//! port behind `--bind 127.0.0.1:0`.
+//!
 //! Security posture (read-only first, per the roadmap):
 //! - Binds `127.0.0.1` by default; read-only status data is low-sensitivity and
 //!   already exposed there by the health/metrics endpoints.
@@ -31,8 +35,10 @@ mod system;
 
 use std::net::{IpAddr, SocketAddr};
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Result};
+use tokio::net::TcpListener;
 
+use crate::cli::remote::dashboard::BOUND_PREFIX;
 use crate::config::RikuPaths;
 use crate::util::display;
 
@@ -47,18 +53,19 @@ pub(crate) struct DashboardState {
 /// Run the dashboard, blocking until the process is stopped. `bind` is a
 /// `host:port` string; `token` (or `RIKU_DASHBOARD_TOKEN`) gates the API.
 pub fn run(paths: &RikuPaths, bind: &str, token: Option<String>) -> Result<()> {
-    let addr: SocketAddr = bind
-        .parse()
-        .with_context(|| format!("invalid --bind address '{bind}'"))?;
+    let addr: SocketAddr = match bind.parse() {
+        Ok(addr) => addr,
+        Err(e) => return Err(anyhow!("invalid --bind address '{bind}': {e}")),
+    };
 
     let token = token.or_else(|| std::env::var("RIKU_DASHBOARD_TOKEN").ok());
 
     // Refuse to expose the API beyond loopback without a token.
     if !is_loopback(&addr.ip()) && token.is_none() {
-        anyhow::bail!(
+        return Err(anyhow!(
             "binding {addr} is non-loopback; set RIKU_DASHBOARD_TOKEN (or pass --token) first, \
              or bind 127.0.0.1 and tunnel over SSH"
-        );
+        ));
     }
 
     let state = DashboardState {
@@ -66,31 +73,56 @@ pub fn run(paths: &RikuPaths, bind: &str, token: Option<String>) -> Result<()> {
         token,
     };
 
-    display::info(&format!("Dashboard listening on http://{addr}"));
-    if state.token.is_some() {
+    let runtime = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(e) => return Err(anyhow!("building tokio runtime: {e}")),
+    };
+    runtime.block_on(serve(addr, state))
+}
+
+/// Binds `addr` and returns the listener with the line that reports the port
+/// it really got, which is how a remote session learns the port behind `:0`.
+async fn bind_reporting(addr: SocketAddr) -> Result<(TcpListener, String)> {
+    let listener = match TcpListener::bind(addr).await {
+        Ok(listener) => listener,
+        Err(e) => return Err(anyhow!("binding {addr}: {e}")),
+    };
+    let bound = match listener.local_addr() {
+        Ok(bound) => bound,
+        Err(e) => return Err(anyhow!("reading the address bound for {addr}: {e}")),
+    };
+    Ok((listener, format!("{BOUND_PREFIX}{}", bound.port())))
+}
+
+fn print_banner(bound: SocketAddr, has_token: bool) {
+    display::info(&format!("Dashboard listening on http://{bound}"));
+    if has_token {
         display::note("Token set: API requires it, and restart/stop/redeploy actions are enabled.");
     } else {
         display::note(
             "Read-only, loopback-only, no token (actions disabled). Tunnel with: ssh -L 8088:localhost:8088 <host>",
         );
     }
-
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .context("building tokio runtime")?;
-    runtime.block_on(serve(addr, state))
 }
 
 async fn serve(addr: SocketAddr, state: DashboardState) -> Result<()> {
+    let (listener, report) = match bind_reporting(addr).await {
+        Ok(bound) => bound,
+        Err(e) => return Err(e),
+    };
+    println!("{report}");
+    match listener.local_addr() {
+        Ok(bound) => print_banner(bound, state.token.is_some()),
+        Err(e) => return Err(anyhow!("reading the address bound for {addr}: {e}")),
+    }
     let app = routes::router(state);
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await
-        .with_context(|| format!("binding {addr}"))?;
-    axum::serve(listener, app)
-        .await
-        .context("serving dashboard")?;
-    Ok(())
+    match axum::serve(listener, app).await {
+        Ok(()) => Ok(()),
+        Err(e) => Err(anyhow!("serving dashboard: {e}")),
+    }
 }
 
 fn is_loopback(ip: &IpAddr) -> bool {
@@ -99,3 +131,7 @@ fn is_loopback(ip: &IpAddr) -> bool {
         IpAddr::V6(v6) => v6.is_loopback(),
     }
 }
+
+#[cfg(test)]
+#[path = "lib_tests.rs"]
+mod tests;

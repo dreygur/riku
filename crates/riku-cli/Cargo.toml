@@ -28,7 +28,7 @@ dirs = "7"
 glob = { workspace = true }
 shlex = { workspace = true }
 reqwest = { workspace = true }
-nix = { workspace = true, features = ["signal", "process", "user", "fs"] }
+nix = { workspace = true, features = ["signal", "process", "user", "fs", "term"] }
 which = { workspace = true }
 
 [dev-dependencies]
