@@ -290,6 +290,28 @@ pub fn pull_service(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>, service: &
     Ok(())
 }
 
+/// Run `plugin destroy` before `riku destroy` deletes the app's files, so
+/// the plugin can remove what it started outside them (compose containers
+/// and networks). A failure carries the plugin's stderr.
+pub fn destroy(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result<()> {
+    let mut cmd = Command::new(&plugin.path);
+    cmd.arg("destroy")
+        .envs(ctx.build_env())
+        .current_dir(ctx.app_path);
+    let output = match super::executor::output_retrying_etxtbsy(&mut cmd) {
+        Ok(output) => output,
+        Err(e) => return Err(anyhow!("Failed to run '{} destroy': {}", plugin.name, e)),
+    };
+    if !output.status.success() {
+        return Err(anyhow!(
+            "'{} destroy' failed: {}",
+            plugin.name,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(())
+}
+
 /// Run `plugin env` and parse stdout as `KEY=VALUE` lines.
 /// Empty lines and lines beginning with `#` are ignored.
 /// A non-zero exit is logged as a warning but does not abort.

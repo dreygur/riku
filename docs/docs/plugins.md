@@ -35,14 +35,15 @@ first-party **event-subscriber** bundle `riku-notify` (`riku install-plugins
 
 ### Plugin Protocol
 
-Each runtime plugin is an executable that implements four subcommands:
+Each runtime plugin is an executable that implements four subcommands, plus an optional fifth:
 
 | Subcommand | Behaviour |
 |---|---|
 | `<plugin> detect` | exit 0 = this plugin handles the app, exit 1 = skip |
 | `<plugin> build` | install dependencies; stdout/stderr streamed to deploy log |
 | `<plugin> env` | print `KEY=VALUE` lines to stdout; merged into worker environment |
-| `<plugin> start` | print default start command; used if Procfile has no entry for a process type |
+| `<plugin> start` | print default start command; fills a Procfile entry with no command, and runs as `web` when the app has no Procfile |
+| `<plugin> destroy` | optional: remove what the plugin started outside the app directory (the container plugin runs `compose down`); called by `riku destroy` before the app's files go, and a non-zero exit is shown as a warning |
 
 Context is passed as environment variables:
 
@@ -226,7 +227,7 @@ Client plugins receive these arguments:
 
 | Argument | Description | Example |
 |----------|-------------|---------|
-| `$1` | Server | `deploy@myserver.com` |
+| `$1` | Server | `riku@myserver.com` |
 | `$2` | App name | `myapp` |
 | `$3` | Full command | `backup:data` |
 | `$4+` | Additional arguments | (varies) |
@@ -524,7 +525,7 @@ case "$cmd" in
         # Ensure tunnel is running on server
         tunnel_name=$(ssh "$server" code-tunnel:ensure "$app")
         # Launch local VS Code
-        code --remote "tunnel+$tunnel_name" "/home/deploy/.riku/apps/$app"
+        code --remote "tunnel+$tunnel_name" "/home/riku/.riku/apps/$app"
         ;;
     code:stop)
         ssh "$server" code-tunnel:stop "$app"

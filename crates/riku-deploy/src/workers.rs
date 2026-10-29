@@ -9,12 +9,20 @@ use std::fs;
 use std::path::Path;
 
 use crate::config::RikuPaths;
-use crate::util::echo;
+use crate::util::{echo, parse_procfile};
 
 pub(crate) use super::scaling::apply_scaling_deltas;
 
+/// The process kind a runtime plugin's start command runs as.
+const WEB_KIND: &str = "web";
+/// Procfile entries the deploy runs once. As workers, the supervisor would
+/// restart them every time they exit.
+const ONE_SHOT_KINDS: [&str; 2] = ["release", "preflight"];
+
+mod pinned;
 mod web_env;
 
+use pinned::check_pinned_port;
 use web_env::build_worker_env;
 
 // ---------------------------------------------------------------------------
@@ -51,8 +59,8 @@ pub fn read_scaling_count(paths: &RikuPaths, app: &str, kind: &str) -> Result<u3
 /// Create worker configs for every process entry in the app's Procfile.
 ///
 /// `start_cmd` is an optional fallback command supplied by the runtime plugin
-/// via its `start` subcommand. It is used only when a Procfile entry has an
-/// empty command.
+/// via its `start` subcommand. It fills a Procfile entry with an empty
+/// command, and runs as the one `web` process when there is no Procfile.
 #[allow(clippy::question_mark)]
 pub fn create_workers_generic(
     app: &str,
@@ -61,17 +69,30 @@ pub fn create_workers_generic(
     paths: &RikuPaths,
     start_cmd: Option<&str>,
 ) -> Result<()> {
+    if let Err(e) = check_pinned_port(app, env, paths) {
+        return Err(e);
+    }
     if should_restart(env) {
         remove_stale_configs(app, paths);
     }
 
-    let entries = match parse_procfile(app_path) {
-        Ok(Some(e)) => e,
-        Ok(None) => return Ok(()),
-        Err(e) => return Err(e),
+    let entries = match (parse_procfile(&app_path.join("Procfile")), start_cmd) {
+        (Ok(Some(e)), _) if !e.is_empty() => e,
+        (Ok(_), Some(cmd)) => HashMap::from([(WEB_KIND.to_string(), cmd.to_string())]),
+        (Ok(_), None) => {
+            echo(
+                "-----> No Procfile found, skipping process creation",
+                "yellow",
+            );
+            return Ok(());
+        }
+        (Err(e), _) => return Err(e),
     };
 
-    for (kind, command) in &entries {
+    let processes = entries
+        .iter()
+        .filter(|(kind, _)| !ONE_SHOT_KINDS.contains(&kind.as_str()));
+    for (kind, command) in processes {
         let effective_cmd = if command.is_empty() {
             start_cmd.unwrap_or(command.as_str())
         } else {
@@ -123,38 +144,6 @@ fn remove_stale_configs(app: &str, paths: &RikuPaths) {
             }
         }
     }
-}
-
-/// Parse the Procfile at `app_path/Procfile` into `(kind, command)` pairs.
-///
-/// Returns `None` (and prints a warning) when no Procfile is found.
-/// Comment lines and blank lines are skipped.
-fn parse_procfile(app_path: &Path) -> Result<Option<Vec<(String, String)>>> {
-    let procfile_path = app_path.join("Procfile");
-    if !procfile_path.exists() {
-        echo(
-            "-----> No Procfile found, skipping process creation",
-            "yellow",
-        );
-        return Ok(None);
-    }
-
-    let content = fs::read_to_string(&procfile_path)?;
-    let entries = content.lines().filter_map(parse_procfile_line).collect();
-
-    Ok(Some(entries))
-}
-
-/// Parse a single Procfile line into `(kind, command)`, or `None` for blank/comment lines.
-fn parse_procfile_line(line: &str) -> Option<(String, String)> {
-    let line = line.trim();
-    if line.is_empty() || line.starts_with('#') {
-        return None;
-    }
-    let pos = line.find(':')?;
-    let kind = line[..pos].trim().to_string();
-    let command = line[pos + 1..].trim().to_string();
-    Some((kind, command))
 }
 
 /// Write a single worker TOML config to `workers_available` and symlink it into `workers_enabled`.

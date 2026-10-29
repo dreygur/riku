@@ -136,3 +136,36 @@ fn parse_env_lines_handles_values_with_equals() {
     );
     assert_eq!(env.get("KEY").map(String::as_str), Some("val"));
 }
+
+#[test]
+fn destroy_runs_the_plugin_and_reports_its_failure() {
+    let tmp = TempDir::new().unwrap();
+    let marker = tmp.path().join("destroyed");
+    make_plugin(
+        tmp.path(),
+        "testplugin",
+        &format!(
+            "#!/bin/sh\n[ \"$1\" = destroy ] && touch '{}' && exit 0\necho 'Unknown subcommand: '$1 >&2\nexit 1\n",
+            marker.display()
+        ),
+    );
+    let plugins = discover(tmp.path());
+    let ctx = RuntimeContext {
+        app: "myapp",
+        app_path: tmp.path(),
+        env_path: tmp.path(),
+        riku_root: tmp.path(),
+        app_env: &HashMap::new(),
+    };
+
+    destroy(&plugins[0], &ctx).unwrap();
+    assert!(marker.exists(), "the plugin's destroy step did not run");
+
+    fs::write(
+        &plugins[0].path,
+        "#!/bin/sh\necho 'compose down failed' >&2\nexit 1\n",
+    )
+    .unwrap();
+    let err = destroy(&plugins[0], &ctx).unwrap_err();
+    assert!(err.to_string().contains("compose down failed"), "{err}");
+}

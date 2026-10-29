@@ -47,11 +47,28 @@ fn configure_wsgi_env(socket_path: &Path, env: &mut HashMap<String, String>) {
     env.insert("UWSGI_THREADS".to_string(), UWSGI_THREADS.to_string());
 }
 
-/// Allocate a free TCP port and inject nginx port-map variables into the environment.
+/// The `PORT` the app's ENV pins, if any. Some apps need a fixed port, such
+/// as a compose file that publishes one.
+pub(super) fn pinned_port(env: &HashMap<String, String>) -> Result<Option<u16>> {
+    let Some(value) = env.get("PORT") else {
+        return Ok(None);
+    };
+    match value.parse::<u16>() {
+        Ok(port) if port != 0 => Ok(Some(port)),
+        _ => Err(anyhow!("PORT in the app env is not a port: {value:?}")),
+    }
+}
+
+/// Use the pinned port or allocate a free one, and inject nginx port-map
+/// variables into the environment.
 fn configure_web_env(socket_path: &Path, env: &mut HashMap<String, String>) -> Result<()> {
-    let port = match crate::util::get_free_port("127.0.0.1") {
-        Ok(port) => port,
-        Err(e) => return Err(anyhow!("failed to allocate a port: {e}")),
+    let port = match pinned_port(env) {
+        Ok(Some(port)) => port,
+        Ok(None) => match crate::util::get_free_port("127.0.0.1") {
+            Ok(port) => port,
+            Err(e) => return Err(anyhow!("failed to allocate a port: {e}")),
+        },
+        Err(e) => return Err(e),
     };
     env.insert("PORT".to_string(), port.to_string());
     env.insert("RIKU_NGINX_PORTMAP".to_string(), "true".to_string());

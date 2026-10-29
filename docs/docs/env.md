@@ -81,6 +81,16 @@ When set to `false`, you must manually restart with `riku restart <app>`.
 
 ## Network Settings
 
+### Port
+
+```bash
+riku config set myapp PORT=3000
+```
+
+- **Default:** unset. Each deploy picks a free port, passes it to the `web` process as `PORT` and routes to it.
+- **Description:** pins the port instead, for an app that has to listen on a fixed one, such as a compose file that publishes `127.0.0.1:3000:3000`.
+- **Values:** 1 to 65535. A pinned port runs one `web` process: a deploy with `web` scaled above 1 is refused. So is a port another riku app uses, or one some other process on the host listens on, since the domain would otherwise be routed to that process. Both checks run before the running app is touched.
+
 ### Bind Address
 
 ```bash

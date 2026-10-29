@@ -470,7 +470,7 @@ services:
   web:
     image: ghcr.io/your-org/your-app:latest
     ports:
-      - "8080:8080"
+      - "127.0.0.1:${PORT}:8080"
   worker:
     image: ghcr.io/your-org/your-app-worker:latest
 ```
@@ -478,7 +478,11 @@ services:
 For a compose app, `riku deploy` logs in to the configured registry (see
 [GHCR authentication](#ghcr-authentication) below), runs `compose pull`, then
 `compose build`, and starts the stack with `compose up`: supervised as a
-single riku process, the same way any other app's `web` process is.
+single riku process, the same way any other app's `web` process is. No
+Procfile is needed: the plugin supplies that `compose up` command. Publish
+the web service on `${PORT}`, the port riku assigns and routes to. `riku
+destroy` runs `compose down`, which removes the containers and network and
+keeps volumes.
 
 Services with a `build:` section are built on the server from the checked out
 repo instead of pulled, so one stack can mix registry images and local builds.

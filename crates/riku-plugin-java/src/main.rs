@@ -17,6 +17,7 @@ fn main() -> Result<()> {
         "build" => build(app_path),
         "env" => print_env(app_path),
         "start" => print_start(app_path),
+        "destroy" => Ok(()),
         other => bail!("Unknown subcommand: {}", other),
     }
 }

@@ -3,7 +3,7 @@
 //! Handles apps with a `Dockerfile`, `Containerfile`, or a compose file
 //! (`compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`,
 //! or the one `COMPOSE_FILE` names). Auto-detects Docker or Podman.
-//! Subcommands: detect, build, env, start, pull-service.
+//! Subcommands: detect, build, env, start, pull-service, destroy.
 //!
 //! Compose apps pull their registry images, then build every service that
 //! has a `build:` section. If `RIKU_GHCR_USERNAME`/`RIKU_GHCR_TOKEN` are set in the
@@ -35,6 +35,7 @@ fn main() -> Result<()> {
         "build" => build(app_path, &app, env_path.as_deref()),
         "env" => print_env(app_path, &app),
         "start" => print_start(app_path, &app),
+        "destroy" => destroy(app_path),
         "pull-service" => {
             let service = arg2.ok_or_else(|| anyhow!("pull-service requires a service name"))?;
             pull_service(app_path, &service, env_path.as_deref())
@@ -193,6 +194,22 @@ fn print_start(app_path: &Path, app: &str) -> Result<()> {
     let image = format!("riku-{}", app);
     println!("{} run --rm -p $PORT:$PORT {}", rt, image);
     Ok(())
+}
+
+/// Remove a compose stack's containers and network. Volumes stay, since
+/// `riku destroy` keeps app data. A single image app runs with `--rm`, so
+/// it leaves no container behind.
+fn destroy(app_path: &Path) -> Result<()> {
+    match compose_file(app_path) {
+        Ok(Some(compose)) => run_compose(
+            app_path,
+            &compose,
+            &["down", "--remove-orphans"],
+            "compose down",
+        ),
+        Ok(None) => Ok(()),
+        Err(e) => Err(e),
+    }
 }
 
 /// Pull and recreate a single compose service, without touching the rest of
