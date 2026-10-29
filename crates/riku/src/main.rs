@@ -3,7 +3,7 @@
 //! lib) rather than being recompiled here.
 
 use anyhow::Result;
-use clap::Parser;
+use clap::FromArgMatches;
 
 use riku::cli::client_plugins;
 use riku::cli::container;
@@ -14,6 +14,9 @@ use riku::cli::{
 };
 use riku::config::RikuPaths;
 use riku::{cli, dashboard, supervisor};
+
+const FORWARDED_HEADING: &str =
+    "Forwarded commands (run on the selected server, or here with --local):";
 
 /// Initialize tracing subscriber for structured logging
 fn init_tracing() {
@@ -40,7 +43,11 @@ fn main() -> Result<()> {
         Ok(argv) => argv,
         Err(e) => return Err(e),
     };
-    let args = Cli::parse_from(argv);
+    let matches = cli::help::command(FORWARDED_HEADING).get_matches_from(argv);
+    let args = match Cli::from_arg_matches(&matches) {
+        Ok(args) => args,
+        Err(e) => e.exit(),
+    };
     let paths = match RikuPaths::from_env() {
         Ok(paths) => paths,
         Err(e) => return Err(e),
