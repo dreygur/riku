@@ -26,6 +26,7 @@ pub mod quickstart;
 pub mod routing;
 pub mod scp;
 pub mod setup;
+pub mod ssh_command;
 
 pub use cli::{Cli, Commands};
 pub use cmds::{

@@ -36,7 +36,11 @@ fn main() -> Result<()> {
     // Initialize structured logging
     init_tracing();
 
-    let args = Cli::parse();
+    let argv = match cli::ssh_command::process_argv() {
+        Ok(argv) => argv,
+        Err(e) => return Err(e),
+    };
+    let args = Cli::parse_from(argv);
     let paths = match RikuPaths::from_env() {
         Ok(paths) => paths,
         Err(e) => return Err(e),

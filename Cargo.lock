@@ -1620,6 +1620,7 @@ dependencies = [
  "riku-util",
  "serde",
  "serde_json",
+ "shlex",
  "tempfile",
  "toml",
  "tracing",
