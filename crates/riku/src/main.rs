@@ -100,6 +100,9 @@ fn main() -> Result<()> {
 
     if let Some(server) = server {
         if let Commands::Dashboard { .. } = command {
+            if let Err(e) = cli::remote::dashboard::check_remote_flags(&matches) {
+                return Err(e);
+            }
             return cli::remote::dashboard::run_remote(server);
         }
         let sent_hint = if hint_used { hint } else { None };

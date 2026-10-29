@@ -1,5 +1,4 @@
 use super::*;
-use crate::remote::dashboard::remote_script::probe_command;
 
 fn sv(words: &[&str]) -> Vec<String> {
     words.iter().map(|w| w.to_string()).collect()
@@ -14,20 +13,25 @@ fn every_step_reaches_the_admin_through_one_control_socket() {
     let host = ["--", "dreygur@solutech.local"];
     let join = |parts: &[&[&str]]| sv(&parts.concat());
 
-    assert_eq!(
-        ssh.master_args(),
-        join(&[&socket, &["-M", "-o", "ControlPersist=yes", "-N"], &host])
-    );
+    let master = [
+        "-M",
+        "-o",
+        "ControlPersist=no",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "ServerAliveInterval=15",
+        "-o",
+        "ServerAliveCountMax=3",
+        "-N",
+    ];
+    assert_eq!(ssh.master_args(), join(&[&socket, &master, &host]));
     assert_eq!(ssh.check_args(), join(&[&socket, &["-O", "check"], &host]));
-    assert_eq!(
-        ssh.command_args(&probe_command("riku")),
-        join(&[&socket, &host, &["sudo -n -u riku true"]])
-    );
     assert_eq!(
         ssh.forward_args(8088, 43121),
         join(&[
             &socket,
-            &["-O", "forward", "-L", "8088:127.0.0.1:43121"],
+            &["-O", "forward", "-L", "127.0.0.1:8088:127.0.0.1:43121"],
             &host
         ])
     );
@@ -46,5 +50,14 @@ fn remote_command_is_one_quoted_argument() {
         shlex::split(remote),
         Some(words),
         "remote command {remote:?}"
+    );
+}
+
+#[test]
+fn control_path_uses_ssh_hash_token() {
+    let ctl = control_path(Path::new("/tmp/riku-dash"));
+    assert!(
+        ctl.to_string_lossy().ends_with("/%C"),
+        "control path {ctl:?} should end with /%C"
     );
 }

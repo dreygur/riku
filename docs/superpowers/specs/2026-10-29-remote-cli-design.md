@@ -167,43 +167,75 @@ empty string.
 server selected (any rule above), it:
 
 1. Requires the server's `admin` login, and says how to add one if it is
-   missing.
+   missing. `--bind` and `--token` are refused with an error naming the
+   flag, since they only apply to a dashboard served on this machine.
 2. Generates a fresh random token for this run only. No token file.
 3. Opens one ssh connection as `admin` with OpenSSH connection sharing (a
-   control socket in a private temp dir), and on it runs, as the deploy
-   user through sudo, `riku dashboard --bind 127.0.0.1:0`. The deploy user
-   is the user part of the server's `address`. The remote binary is the
-   deploy user's `riku` on PATH, falling back to `~/.local/bin/riku`.
-   The token goes over the session's stdin and is exported as
-   `RIKU_DASHBOARD_TOKEN` by a shell running inside `sudo -u` (sudo's
-   env_reset would strip it if exported outside), so it never appears in
-   an argument list.
+   control socket in a private temp dir under `/tmp`). The master stays a
+   child of riku (`ControlPersist=no`) with `ConnectTimeout=10`,
+   `ServerAliveInterval=15` and `ServerAliveCountMax=3`, so a dead link
+   ends it. On it, one sudo call runs a shell as the deploy user:
 
-   Sudo password (owner decision: support it). Riku first tries
-   `sudo -n`. If sudo says a password is required, riku asks for it on
-   the local terminal without echo and runs `sudo -S -p ''`, sending the
-   password as the first stdin line and the token as the second. The
-   password is never stored, logged, or put in an argument list, and is
-   dropped from memory once sent. A wrong password ends the session with
-   sudo's error. Riku does not retry by itself.
+   ```sh
+   sudo -S -p 'riku-sudo-prompt:' -H -u "$1" sh -c '
+     echo riku-ready
+     IFS= read -r t || exit 1
+     export RIKU_DASHBOARD_TOKEN="$t"
+     bin=$(command -v riku || echo "$HOME/.local/bin/riku")
+     "$bin" dashboard --local --bind 127.0.0.1:0 &
+     p=$!
+     cat >/dev/null
+     kill "$p"
+   '
+   ```
+
+   The deploy user is the user part of the server's `address`, passed as
+   `$1`, never spliced into the text. `--local` keeps the server side
+   dashboard from resolving a target of its own. The token is exported
+   inside `sudo -u` (sudo's env_reset would strip it if exported outside),
+   so it never appears in an argument list.
+
+   Handshake (owner decision: support a sudo password). Riku reads the
+   session's stderr and stdout and writes nothing to stdin until told to:
+   - When the exact prompt `riku-sudo-prompt:` appears on stderr (possibly
+     split across reads), riku asks for the password on the local terminal
+     with echo off, and sends it plus a newline straight from its buffer,
+     which is then wiped. Ctrl-D at the prompt aborts; it is not an empty
+     password.
+   - If the prompt appears a second time, sudo rejected the password: riku
+     closes stdin and ends with that error, so only one failed attempt is
+     recorded. Riku does not retry.
+   - Only after the line `riku-ready` on stdout does riku send the token.
+     A NOPASSWD rule or cached credentials skip the prompt and go straight
+     to the marker; a password can never be read as the token.
+   - Each stage (connect, prompt or ready, bound line) has a deadline that
+     ends the session with a message saying which stage stalled. No
+     English sudo message is matched anywhere.
 4. Reads the port the remote dashboard actually bound, then adds the
-   forward on the same connection (`ssh -O forward -L`). No window where
-   two sessions race for a port.
+   forward on the same connection (`ssh -O forward -L
+   127.0.0.1:<local>:127.0.0.1:<remote>`). A failed forward ends the
+   session, so a process already holding the local port never receives
+   the token. No window where two sessions race for a remote port.
 5. Picks a local port: 8088 if free, otherwise any free port.
 6. Opens `http://127.0.0.1:<local>/?token=<token>` in the browser and
    prints the URL.
-7. On Ctrl-C or a dropped connection, stops its own remote dashboard and
-   the forward. Other users' sessions are untouched.
+7. On Ctrl-C, SIGHUP, SIGTERM or a dropped connection, closes stdin (which
+   stops its own remote dashboard), stops the ssh client and then the
+   master with `-O exit`, and reaps both. ssh is never SIGKILLed, since it
+   may own the terminal for a prompt; SIGTERM is the last resort. A stop
+   signal at any stage is a clean stop, not an error. Other users'
+   sessions are untouched.
 
 Each session is its own dashboard process with its own token. Two users on
 one host never share a port or a secret.
 
 Server change needed: `riku dashboard` must report the address it really
 bound (today it prints the requested `addr`, which is `:0`), in a line the
-client can parse.
+client can parse: `riku-dashboard-bound <port>` on its own stdout line.
 
 Accepted weakness: the token sits in the laptop's browser history for that
-URL. The token dies with the session, so this is accepted.
+URL, and in the argv of the local `open` or `xdg-open` process for the
+moment it runs. The token dies with the session, so this is accepted.
 
 ## Grouped help
 

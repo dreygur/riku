@@ -8,20 +8,27 @@
 //! this session, so no other local user can attach to the connection. The
 //! admin address is a validated `SshAddress` and follows `--`. The remote
 //! command is a single argument quoted with `shlex::try_join`. No builder
-//! takes the token or the password, which only ever travel on stdin.
+//! takes the token or the password, which only ever travel on stdin. The
+//! local end of the forward binds `127.0.0.1` explicitly, and a failed
+//! forward ends the session, so a process already on that port never gets
+//! the token.
 
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Command, Stdio};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 
+use super::interrupt;
+use super::stop::{quiet_ssh, Master};
 use crate::remote::SshAddress;
 
-/// Longest wait for the master to accept `-O check`.
-const READY_TIMEOUT: Duration = Duration::from_secs(10);
-const READY_POLL: Duration = Duration::from_millis(100);
+/// Longest wait for the master to accept clients. Covers typing an ssh
+/// password or passphrase; the TCP connect itself is bounded by
+/// `ConnectTimeout`.
+const CONNECT_DEADLINE: Duration = Duration::from_secs(60);
+const POLL: Duration = Duration::from_millis(100);
 
 /// ssh expands `%C` to a hash of the connection, which keeps the socket path
 /// short and unique.
@@ -51,8 +58,21 @@ impl<'a> SshControl<'a> {
         args
     }
 
+    /// The master stays a child of riku (`ControlPersist=no`), and keepalives
+    /// end it within about 45 seconds of a dead link.
     pub(super) fn master_args(&self) -> Vec<String> {
-        self.with_socket(&["-M", "-o", "ControlPersist=yes", "-N"])
+        self.with_socket(&[
+            "-M",
+            "-o",
+            "ControlPersist=no",
+            "-o",
+            "ConnectTimeout=10",
+            "-o",
+            "ServerAliveInterval=15",
+            "-o",
+            "ServerAliveCountMax=3",
+            "-N",
+        ])
     }
 
     pub(super) fn check_args(&self) -> Vec<String> {
@@ -71,7 +91,7 @@ impl<'a> SshControl<'a> {
     }
 
     pub(super) fn forward_args(&self, local: u16, remote: u16) -> Vec<String> {
-        let spec = format!("{local}:127.0.0.1:{remote}");
+        let spec = format!("127.0.0.1:{local}:127.0.0.1:{remote}");
         self.with_socket(&["-O", "forward", "-L", &spec])
     }
 
@@ -79,20 +99,10 @@ impl<'a> SshControl<'a> {
         self.with_socket(&["-O", "exit"])
     }
 
-    fn is_ready(&self) -> bool {
-        Command::new("ssh")
-            .args(self.check_args())
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .is_ok_and(|status| status.success())
-    }
-
     /// Starts the master and waits until it accepts clients. ssh may prompt
     /// on the terminal for the admin login while this waits.
-    pub(super) fn start(&self) -> Result<Child> {
-        let mut master = match Command::new("ssh")
+    pub(super) fn start(&self) -> Result<Master> {
+        let child = match Command::new("ssh")
             .args(self.master_args())
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -101,23 +111,23 @@ impl<'a> SshControl<'a> {
             Ok(child) => child,
             Err(e) => return Err(anyhow!("failed to start ssh: {e}")),
         };
+        let mut master = Master::new(child, self.exit_args());
         let started = Instant::now();
-        while !self.is_ready() {
-            if let Ok(Some(status)) = master.try_wait() {
-                if !status.success() {
-                    return Err(anyhow!("ssh to {} failed ({status})", self.admin.as_str()));
-                }
+        while !quiet_ssh(self.check_args()) {
+            if interrupt::requested() {
+                return Err(anyhow!("interrupted"));
             }
-            if started.elapsed() > READY_TIMEOUT {
-                let _ = master.kill();
-                let _ = master.wait();
+            if let Some(status) = master.exited() {
+                return Err(anyhow!("ssh to {} failed ({status})", self.admin.as_str()));
+            }
+            if started.elapsed() > CONNECT_DEADLINE {
                 return Err(anyhow!(
-                    "ssh to {} was not ready after {} seconds",
+                    "ssh to {} did not connect within {} seconds",
                     self.admin.as_str(),
-                    READY_TIMEOUT.as_secs()
+                    CONNECT_DEADLINE.as_secs()
                 ));
             }
-            sleep(READY_POLL);
+            sleep(POLL);
         }
         Ok(master)
     }
@@ -134,22 +144,11 @@ impl<'a> SshControl<'a> {
             Err(e) => return Err(anyhow!("failed to start ssh: {e}")),
         };
         if !status.success() {
-            return Err(anyhow!("ssh could not forward port {local} ({status})"));
+            return Err(anyhow!(
+                "ssh could not forward 127.0.0.1:{local} ({status}); stopping so the token goes nowhere else"
+            ));
         }
         Ok(())
-    }
-
-    /// Stops the master, which also drops its forward. A master that is
-    /// already gone, as after a dropped link, is not an error.
-    pub(super) fn stop(&self, mut master: Child) {
-        let _ = Command::new("ssh")
-            .args(self.exit_args())
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-        let _ = master.kill();
-        let _ = master.wait();
     }
 }
 

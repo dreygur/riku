@@ -1,27 +1,24 @@
-//! Sudo access on the server for the dashboard session: the non-interactive
-//! probe, and the local password prompt when sudo asks for one.
+//! The local prompt for the server's sudo password, shown when the remote
+//! sudo asks for one.
 //!
-//! Not unit tested: the probe needs a reachable host and the prompt drives
-//! the real terminal. The decision to prompt is `needs_password`, which is.
+//! Not unit tested: it drives the real terminal. When to prompt is decided
+//! by `handshake`, which is.
 //!
 //! Security model: the password is read from `/dev/tty` with echo off and
 //! the terminal mode is restored on every return, Ctrl-C included. It is
-//! held in a `Secret`, which zeroes its bytes when dropped, and it never
-//! goes into an argument list or a log line.
+//! read into a buffer allocated once, so no reallocation leaves a copy
+//! behind, written from that buffer straight to the remote stdin, and
+//! zeroed when dropped. It never goes into an argument list or a log line.
 
 use std::fs::{File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
-use std::process::{Command, Stdio};
 use std::sync::atomic::{compiler_fence, Ordering};
 
 use anyhow::{anyhow, Result};
 use nix::sys::termios::{tcgetattr, tcsetattr, LocalFlags, SetArg, Termios};
 
 use super::interrupt;
-use super::remote_script::{needs_password, probe_command, SudoMode};
-use super::ssh_master::SshControl;
 
-/// Allocated up front so the buffer never reallocates and leaves a copy behind.
 const MAX_PASSWORD_LEN: usize = 1024;
 
 fn wipe(bytes: &mut [u8]) {
@@ -32,25 +29,15 @@ fn wipe(bytes: &mut [u8]) {
     compiler_fence(Ordering::SeqCst);
 }
 
-/// Bytes that are zeroed when dropped.
+/// A password, zeroed when dropped.
 pub(super) struct Secret(Vec<u8>);
 
 impl Secret {
-    pub(super) fn as_bytes(&self) -> &[u8] {
-        &self.0
-    }
-
-    pub(super) fn as_str(&self) -> Result<&str> {
-        match std::str::from_utf8(&self.0) {
-            Ok(text) => Ok(text),
-            Err(_) => Err(anyhow!("the sudo password is not valid UTF-8")),
-        }
-    }
-}
-
-impl From<String> for Secret {
-    fn from(text: String) -> Self {
-        Secret(text.into_bytes())
+    /// Writes the password and a newline to `out` with no intermediate copy.
+    pub(super) fn write_line(&self, out: &mut impl Write) -> std::io::Result<()> {
+        out.write_all(&self.0)
+            .and_then(|()| out.write_all(b"\n"))
+            .and_then(|()| out.flush())
     }
 }
 
@@ -87,32 +74,38 @@ impl Drop for EchoOff<'_> {
     }
 }
 
-fn read_secret_line(mut tty: &File) -> Result<Secret> {
+/// One line from the terminal. `None` on end of input (Ctrl-D), which means
+/// the user gave up, not that the password is empty.
+fn read_secret_line(mut tty: &File) -> Result<Option<Secret>> {
     let mut line = Secret(Vec::with_capacity(MAX_PASSWORD_LEN));
     let mut byte = [0u8; 1];
-    loop {
+    let outcome = loop {
         match tty.read(&mut byte) {
-            Ok(0) => break,
-            Ok(_) if byte[0] == b'\n' => break,
+            Ok(0) => break Ok(None),
+            Ok(_) if byte[0] == b'\n' => break Ok(Some(())),
             Ok(_) if line.0.len() == MAX_PASSWORD_LEN => {
-                return Err(anyhow!("password longer than {MAX_PASSWORD_LEN} bytes"))
+                break Err(anyhow!("password longer than {MAX_PASSWORD_LEN} bytes"))
             }
             Ok(_) => line.0.push(byte[0]),
             Err(e) if e.kind() == ErrorKind::Interrupted => {
                 if interrupt::requested() {
-                    return Err(anyhow!("interrupted"));
+                    break Err(anyhow!("interrupted"));
                 }
             }
-            Err(e) => return Err(anyhow!("could not read the password: {e}")),
+            Err(e) => break Err(anyhow!("could not read the password: {e}")),
         }
-    }
+    };
     wipe(&mut byte);
-    Ok(line)
+    match outcome {
+        Ok(Some(())) => Ok(Some(line)),
+        Ok(None) => Ok(None),
+        Err(e) => Err(e),
+    }
 }
 
 /// Asks for `admin`'s sudo password on the terminal without echo.
 #[allow(clippy::question_mark)]
-pub(super) fn prompt_password(admin: &str) -> Result<Secret> {
+pub(super) fn prompt_password(admin: &str) -> Result<Option<Secret>> {
     let tty = match OpenOptions::new().read(true).write(true).open("/dev/tty") {
         Ok(tty) => tty,
         Err(e) => {
@@ -132,27 +125,4 @@ pub(super) fn prompt_password(admin: &str) -> Result<Secret> {
     drop(echo_off);
     let _ = (&tty).write_all(b"\n");
     password
-}
-
-/// Whether the admin may become `deploy` without a password. Any sudo
-/// failure other than a missing password ends the session with sudo's text.
-pub(super) fn probe(ssh: &SshControl, deploy: &str) -> Result<SudoMode> {
-    let output = match Command::new("ssh")
-        .args(ssh.command_args(&probe_command(deploy)))
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .output()
-    {
-        Ok(output) => output,
-        Err(e) => return Err(anyhow!("failed to start ssh: {e}")),
-    };
-    if output.status.success() {
-        return Ok(SudoMode::NoPassword);
-    }
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    if needs_password(&stderr) {
-        return Ok(SudoMode::Password);
-    }
-    Err(anyhow!("sudo to {deploy} failed: {}", stderr.trim()))
 }

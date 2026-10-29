@@ -44,8 +44,6 @@ pub fn load_or_create_token(token_file: &Path) -> io::Result<String> {
 }
 
 /// Generate a 256-bit token from the OS CSPRNG, hex-encoded (lowercase).
-///
-/// Also the per session token of a remote `riku dashboard`.
 pub fn generate_token() -> String {
     use rand::rand_core::UnwrapErr;
     use rand::rngs::SysRng;

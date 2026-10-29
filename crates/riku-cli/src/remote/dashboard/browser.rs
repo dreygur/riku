@@ -1,8 +1,10 @@
 //! The laptop end of a dashboard session: the local port and the browser.
 //!
-//! The URL carries the session token as a query parameter, so the local
-//! browser opener sees it in its arguments and the browser keeps it in its
-//! history. Both stay on this machine, and the token dies with the session.
+//! Security model: the URL carries the session token as a query parameter.
+//! It therefore appears in the argv of the local `open` or `xdg-open`
+//! process for the moment that process runs, where another local user's
+//! `ps` could see it, and the browser keeps it in its history. This is
+//! accepted: both stay on this machine and the token dies with the session.
 
 use std::net::TcpListener;
 use std::process::{Command, Stdio};
@@ -38,8 +40,9 @@ pub(super) fn dashboard_url(local_port: u16, token: &str) -> String {
     format!("http://127.0.0.1:{local_port}/?token={token}")
 }
 
-/// Opens `url` in the default browser. Failing to do so only warns, since
-/// the caller has already printed the URL.
+/// Opens `url` in the default browser, passing it, token included, as the
+/// opener's argument. Failing to do so only warns, since the caller has
+/// already printed the URL.
 pub(super) fn open(url: &str) {
     let opened = Command::new(OPENER)
         .arg(url)
