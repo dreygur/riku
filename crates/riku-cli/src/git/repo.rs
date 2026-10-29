@@ -13,7 +13,8 @@ use crate::util::echo;
 pub(crate) const POST_RECEIVE_HOOK: &str = r#"#!/usr/bin/env bash
 set -e; set -o pipefail;
 # Find riku binary from PATH or use common locations
-RIKU_BIN="${RIKU_BIN:-$(command -v riku)}"
+# `|| true`: under set -e a failed lookup would end the hook right here.
+RIKU_BIN="${RIKU_BIN:-$(command -v riku || true)}"
 if [ -z "$RIKU_BIN" ]; then
     # Fallback to common installation paths
     if [ -x "$HOME/.local/bin/riku" ]; then
@@ -164,3 +165,7 @@ pub fn extract_bare_repo_to_app(bare_repo: &Path, app: &str, paths: &RikuPaths) 
     echo("✓ Extracted files from bare repo", "green");
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "repo_tests.rs"]
+mod tests;
