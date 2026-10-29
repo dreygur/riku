@@ -24,9 +24,11 @@ use nix::unistd::{setsid, Gid, Group, Uid, User};
 
 use crate::config::RikuPaths;
 
-const DEFAULT_USER: &str = "deploy";
+use super::default_branch::BRANCH_ENV;
+
+const DEFAULT_USER: &str = "riku";
 /// Root's environment variables a deploy user child may see.
-const PASSED_ENV: [&str; 3] = ["PATH", "TERM", "RIKU_ROUTER"];
+const PASSED_ENV: [&str; 4] = ["PATH", "TERM", "RIKU_ROUTER", BRANCH_ENV];
 
 /// The deploy account, resolved from the passwd and group databases.
 pub struct DeployUser {
@@ -38,7 +40,7 @@ pub struct DeployUser {
     gid: Gid,
 }
 
-/// The `RIKU_USER` login name, `deploy` when unset.
+/// The `RIKU_USER` login name, `riku` when unset.
 pub fn deploy_user_name() -> String {
     std::env::var("RIKU_USER").unwrap_or_else(|_| DEFAULT_USER.to_string())
 }

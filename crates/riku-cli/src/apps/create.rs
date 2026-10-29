@@ -77,7 +77,7 @@ fi
     echo("", "");
     echo("Deploy your code:", "yellow");
     echo(
-        &format!("  git remote add riku deploy@your-server:{}", app),
+        &format!("  git remote add riku riku@your-server:{}", app),
         "yellow",
     );
     echo("  git push riku main", "yellow");

@@ -52,7 +52,7 @@
 
 **A:** Just like Heroku or Piku:
 ```bash
-git remote add riku deploy@your-server:myapp
+git remote add riku riku@your-server:myapp
 git push riku main
 ```
 
@@ -96,7 +96,7 @@ RIKU_NGINX_INCLUDE_FILE=custom.conf
 git init --bare ~/my-projects/myapp.git
 
 # Push to custom path
-git remote add riku deploy@server:~/my-projects/myapp.git
+git remote add riku riku@server:~/my-projects/myapp.git
 git push riku main
 
 # Riku creates: ~/.riku/repos/myapp.git → ~/my-projects/myapp.git

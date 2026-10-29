@@ -28,7 +28,7 @@ ssh-keygen -t ed25519 -C "cursor-agent@my-laptop" -f ~/.ssh/riku-cursor
 
 ```bash
 # Copy public key to server
-cat ~/.ssh/riku-cursor.pub | ssh deploy@your-server \
+cat ~/.ssh/riku-cursor.pub | ssh riku@your-server \
   "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
 ```
 
@@ -45,7 +45,7 @@ command="riku agent --scope staging",no-port-forwarding,no-pty ssh-ed25519 AAAA.
 
 ```bash
 # Test AI agent connection
-ssh -i ~/.ssh/riku-cursor deploy@your-server "riku agent --intro"
+ssh -i ~/.ssh/riku-cursor riku@your-server "riku agent --intro"
 ```
 
 ---
@@ -113,13 +113,13 @@ Configure permissions in `~/.ssh/authorized_keys`:
 
 ```bash
 # Introduction (shows permissions and hints)
-ssh deploy@server "riku agent --intro"
+ssh riku@server "riku agent --intro"
 
 # Full command schema (JSON)
-ssh deploy@server "riku agent --schema"
+ssh riku@server "riku agent --schema"
 
 # Help for specific command
-ssh deploy@server "riku agent --help deploy"
+ssh riku@server "riku agent --help deploy"
 ```
 
 ### Available Commands
@@ -146,11 +146,11 @@ AI agents should use `--json` flag for structured, parseable output:
 
 ```bash
 # Plain text (human-readable)
-ssh deploy@server "riku ps myapp"
+ssh riku@server "riku ps myapp"
 # Output: web: 2/2 running
 
 # JSON (AI agent mode)
-ssh deploy@server "riku --json ps myapp"
+ssh riku@server "riku --json ps myapp"
 # Output: {"processes": {"web": {"running": 2, "desired": 2}}}
 ```
 
@@ -216,7 +216,7 @@ Destructive operations require human confirmation:
 
 ```bash
 # AI attempts to destroy app
-ssh deploy@server "riku --json destroy myapp"
+ssh riku@server "riku --json destroy myapp"
 
 # Server responds with confirmation required
 {
@@ -227,7 +227,7 @@ ssh deploy@server "riku --json destroy myapp"
 
 # AI asks human, human confirms
 # AI sends confirmation
-ssh deploy@server "riku --json destroy myapp --confirm abc123xyz"
+ssh riku@server "riku --json destroy myapp --confirm abc123xyz"
 ```
 
 ---
@@ -238,62 +238,62 @@ ssh deploy@server "riku --json destroy myapp --confirm abc123xyz"
 
 ```bash
 # Check current apps
-ssh deploy@server "riku --json apps"
+ssh riku@server "riku --json apps"
 
 # Deploy application
-ssh deploy@server "riku --json deploy myapp"
+ssh riku@server "riku --json deploy myapp"
 
 # Check deployment status
-ssh deploy@server "riku --json ps myapp"
+ssh riku@server "riku --json ps myapp"
 
 # View logs
-ssh deploy@server "riku --json logs myapp"
+ssh riku@server "riku --json logs myapp"
 ```
 
 ### Update Configuration
 
 ```bash
 # Get current config
-ssh deploy@server "riku --json config:get myapp DATABASE_URL"
+ssh riku@server "riku --json config:get myapp DATABASE_URL"
 
 # Set new config (may require confirmation)
-ssh deploy@server "riku --json config:set myapp DATABASE_URL=postgres://new-host/db"
+ssh riku@server "riku --json config:set myapp DATABASE_URL=postgres://new-host/db"
 
 # If confirmation required, response includes confirm_token
 # AI asks human, then sends:
-ssh deploy@server "riku --json config:set myapp DATABASE_URL=... --confirm <token>"
+ssh riku@server "riku --json config:set myapp DATABASE_URL=... --confirm <token>"
 ```
 
 ### Monitor Application
 
 ```bash
 # Check process status
-ssh deploy@server "riku --json ps myapp"
+ssh riku@server "riku --json ps myapp"
 
 # Stream logs (last 100 lines)
-ssh deploy@server "riku --json logs myapp --lines 100"
+ssh riku@server "riku --json logs myapp --lines 100"
 
 # Get configuration
-ssh deploy@server "riku --json config:show myapp"
+ssh riku@server "riku --json config:show myapp"
 ```
 
 ### Multi-Step Operation
 
 ```bash
 # 1. Check current state
-STATE=$(ssh deploy@server "riku --json ps myapp")
+STATE=$(ssh riku@server "riku --json ps myapp")
 
 # 2. Stop app (requires confirmation for production)
-ssh deploy@server "riku --json stop myapp"
+ssh riku@server "riku --json stop myapp"
 
 # 3. Update config
-ssh deploy@server "riku --json config:set myapp NEW_RELIC_KEY=xyz"
+ssh riku@server "riku --json config:set myapp NEW_RELIC_KEY=xyz"
 
 # 4. Restart app
-ssh deploy@server "riku --json restart myapp"
+ssh riku@server "riku --json restart myapp"
 
 # 5. Verify healthy
-ssh deploy@server "riku --json ps myapp"
+ssh riku@server "riku --json ps myapp"
 ```
 
 ---
@@ -304,11 +304,11 @@ Long-running operations return a job ID:
 
 ```bash
 # Start deployment
-ssh deploy@server "riku --json deploy myapp"
+ssh riku@server "riku --json deploy myapp"
 # Response: {"job_id": "deploy-123", "status": "running"}
 
 # Check job status
-ssh deploy@server "riku --json job-status deploy-123"
+ssh riku@server "riku --json job-status deploy-123"
 # Response: {"job_id": "deploy-123", "status": "completed"}
 ```
 
@@ -372,7 +372,7 @@ All AI agent actions are logged:
 
 **View audit logs:**
 ```bash
-ssh deploy@server "riku agent --audit-log"
+ssh riku@server "riku agent --audit-log"
 ```
 
 ---
@@ -452,20 +452,20 @@ Exceeding rate limit returns:
 
 ```bash
 # Check your permissions
-ssh deploy@server "riku agent --intro"
+ssh riku@server "riku agent --intro"
 
 # Verify authorized_keys entry
-ssh deploy@server "cat ~/.ssh/authorized_keys"
+ssh riku@server "cat ~/.ssh/authorized_keys"
 ```
 
 ### Command Not Found
 
 ```bash
 # Get full schema
-ssh deploy@server "riku agent --schema"
+ssh riku@server "riku agent --schema"
 
 # Check command help
-ssh deploy@server "riku agent --help <command>"
+ssh riku@server "riku agent --help <command>"
 ```
 
 ### Confirmation Not Working
@@ -473,7 +473,7 @@ ssh deploy@server "riku agent --help <command>"
 ```bash
 # Confirmations expire after 5 minutes
 # Request a new confirmation token
-ssh deploy@server "riku --json destroy myapp"
+ssh riku@server "riku --json destroy myapp"
 # Use the new confirm_token immediately
 ```
 
@@ -482,7 +482,7 @@ ssh deploy@server "riku --json destroy myapp"
 ```bash
 # Wait and retry
 sleep 30
-ssh deploy@server "riku --json ps myapp"
+ssh riku@server "riku --json ps myapp"
 ```
 
 ---

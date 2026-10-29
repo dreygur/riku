@@ -50,7 +50,7 @@ pub fn cmd_apps_info(paths: &RikuPaths, app: &str) -> Result<()> {
     let git_dir = paths.git_root.join(format!("{}.git", app));
     if git_dir.exists() {
         display::kv("Git Repository:", &git_dir.display().to_string());
-        display::kv("Git Remote:", &format!("deploy@your-server:{}", app));
+        display::kv("Git Remote:", &format!("riku@your-server:{}", app));
     }
 
     print_disk_usage(&app_dir);

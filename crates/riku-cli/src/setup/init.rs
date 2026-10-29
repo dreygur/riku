@@ -8,10 +8,11 @@ use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::echo;
 
-use super::binary::install_riku_binary;
+use super::binary::{install_riku_binary, PathNote};
+use super::default_branch::{set_default_branch, BRANCH_ENV};
 use super::deploy_keys::{add_deploy_keys, parse_key_args, read_key_file};
 use super::git_hook::create_git_hook;
-use super::guidance::{print_first_app_guide, print_verification_summary, verify_supervisor};
+use super::guidance::{print_finish, InstallScope};
 use super::init_router::persist_router;
 use super::prerequisites::{check_prerequisites, warn_not_root};
 use super::root_init::root_init;
@@ -64,14 +65,24 @@ fn generate_acme_config(paths: &RikuPaths) {
         );
     }
 }
-/// Directories, binary, ACME config and git hook in `paths`' tree.
 #[allow(clippy::question_mark)]
-fn prepare_tree(paths: &RikuPaths, router: &Router) -> Result<()> {
+fn default_branch_step() -> Result<()> {
+    let home = match env::var("HOME") {
+        Ok(home) => PathBuf::from(home),
+        Err(_) => return Err(anyhow!("HOME is not set")),
+    };
+    set_default_branch(&home, env::var(BRANCH_ENV).ok())
+}
+
+/// Directories, binary, ACME config, git hook and default branch in
+/// `paths`' tree.
+#[allow(clippy::question_mark)]
+fn prepare_tree(paths: &RikuPaths, router: &Router, note: PathNote) -> Result<()> {
     echo("[1/4] Creating directory structure...", "");
     if let Err(e) = create_directory_structure(paths, router) {
         return Err(e);
     }
-    if let Err(e) = install_riku_binary() {
+    if let Err(e) = install_riku_binary(note) {
         return Err(e);
     }
     if *router != Router::Caddy {
@@ -80,6 +91,9 @@ fn prepare_tree(paths: &RikuPaths, router: &Router) -> Result<()> {
 
     echo("", "");
     if let Err(e) = create_git_hook(paths) {
+        return Err(e);
+    }
+    if let Err(e) = default_branch_step() {
         return Err(e);
     }
     echo("", "");
@@ -153,7 +167,12 @@ fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
         echo("", "");
     }
 
-    if let Err(e) = prepare_tree(paths, &router) {
+    let note = if user_steps {
+        PathNote::Skip
+    } else {
+        PathNote::Show
+    };
+    if let Err(e) = prepare_tree(paths, &router, note) {
         return Err(e);
     }
     if !user_steps {
@@ -165,16 +184,11 @@ fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
     ssh_key_step(options)
 }
 
-fn print_finish(no_systemd: bool) {
-    echo("[4/4] Verifying installation...", "");
-    verify_supervisor(no_systemd);
-    echo("", "");
-
-    echo("-----> Riku server initialized successfully!", "green");
-    echo("", "");
-
-    print_verification_summary(no_systemd);
-    print_first_app_guide();
+fn own_scope() -> InstallScope {
+    InstallScope::User {
+        user: env::var("USER").unwrap_or_default(),
+        home: PathBuf::from(env::var("HOME").unwrap_or_default()),
+    }
 }
 
 /// Initialize Riku on a server.
@@ -187,10 +201,15 @@ fn print_finish(no_systemd: bool) {
 pub fn cmd_init(options: InitOptions) -> Result<()> {
     let is_root = env::var("USER").unwrap_or_default() == "root";
     if is_root {
-        if let Err(e) = root_init(&options) {
-            return Err(e);
-        }
-        print_finish(options.no_systemd);
+        let user = match root_init(&options) {
+            Ok(user) => user,
+            Err(e) => return Err(e),
+        };
+        let scope = InstallScope::System {
+            user: user.name,
+            home: user.home,
+        };
+        print_finish(&scope, options.no_systemd);
         return Ok(());
     }
 
@@ -202,7 +221,7 @@ pub fn cmd_init(options: InitOptions) -> Result<()> {
         return Err(e);
     }
     if !options.user_steps {
-        print_finish(options.no_systemd);
+        print_finish(&own_scope(), options.no_systemd);
     }
     Ok(())
 }

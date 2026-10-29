@@ -24,8 +24,9 @@ use tempfile::TempDir;
 use crate::util::echo;
 use crate::util::public_key::PublicKey;
 
+use super::deploy_account::ensure_account;
 use super::deploy_keys::read_key_file;
-use super::deploy_user::DeployUser;
+use super::deploy_user::{deploy_user_name, DeployUser};
 use super::init::InitOptions;
 use super::init_router::{deploy_router, setup_router_host};
 use super::prerequisites::check_prerequisites;
@@ -89,12 +90,9 @@ fn run_user_steps(user: &DeployUser, keys: &[PublicKey]) -> Result<()> {
 }
 
 /// Run a root init: per-user steps as the deploy user, then host setup.
+/// Returns the deploy user it set up.
 #[allow(clippy::question_mark)]
-pub fn root_init(options: &InitOptions) -> Result<()> {
-    let user = match DeployUser::lookup() {
-        Ok(user) => user,
-        Err(e) => return Err(e),
-    };
+pub fn root_init(options: &InitOptions) -> Result<DeployUser> {
     // Read as root, before any change, so a wrong file fails the init early.
     let keys = match &options.ssh_key {
         Some(file) => read_key_file(file),
@@ -102,6 +100,14 @@ pub fn root_init(options: &InitOptions) -> Result<()> {
     };
     let keys = match keys {
         Ok(keys) => keys,
+        Err(e) => return Err(e),
+    };
+
+    if let Err(e) = ensure_account(&deploy_user_name()) {
+        return Err(e);
+    }
+    let user = match DeployUser::lookup() {
+        Ok(user) => user,
         Err(e) => return Err(e),
     };
     echo(
@@ -137,5 +143,5 @@ pub fn root_init(options: &InitOptions) -> Result<()> {
     if keys.is_empty() {
         print_ssh_hint();
     }
-    Ok(())
+    Ok(user)
 }

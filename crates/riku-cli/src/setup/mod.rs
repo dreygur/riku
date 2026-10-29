@@ -2,6 +2,8 @@
 
 pub mod binary;
 mod caddy_host;
+mod default_branch;
+mod deploy_account;
 mod deploy_keys;
 pub(crate) mod deploy_user;
 pub mod git_hook;

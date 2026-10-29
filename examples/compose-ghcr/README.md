@@ -32,7 +32,7 @@ with the same username you used above.
 cd examples/compose-ghcr
 riku apps create compose-demo
 git init -q && git add -A && git commit -q -m "compose demo v1"
-git remote add riku deploy@<your-riku-server>:compose-demo
+git remote add riku riku@<your-riku-server>:compose-demo
 git push riku main
 ```
 

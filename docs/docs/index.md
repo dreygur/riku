@@ -19,7 +19,7 @@ hide:
 </div>
 
 <div class="riku-term">
-  <div class="riku-term__bar"><i></i><i></i><i></i><span>deploy@your-server</span></div>
+  <div class="riku-term__bar"><i></i><i></i><i></i><span>riku@your-server</span></div>
 <pre><code><span class="l"><span class="p">$</span> <span class="cmd">git push riku main</span></span><span class="l"><span class="k">-----&gt;</span> Receiving push for <span class="cmd">myapp</span></span><span class="l"><span class="k">-----&gt;</span> Detecting runtime: <span class="cmd">node</span></span><span class="l"><span class="k">-----&gt;</span> Installing dependencies <span class="dim">(npm ci)</span></span><span class="l"><span class="k">-----&gt;</span> Launching <span class="cmd">web.1</span> under supervisor</span><span class="l"><span class="k">-----&gt;</span> Writing nginx config <span class="dim">+ TLS</span></span><span class="l"><span class="ok">=====&gt;</span> Deployed <span class="url">https://myapp.example.com</span> <span class="cur"></span></span></code></pre>
 </div>
 
@@ -99,7 +99,7 @@ hide:
 === "3. Push"
 
     ```bash
-    git remote add riku deploy@your-server:myapp
+    git remote add riku riku@your-server:myapp
     git push riku main
     ```
 

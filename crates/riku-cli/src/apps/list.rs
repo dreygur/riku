@@ -11,7 +11,7 @@ pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
     if !app_root.exists() {
         display::note("There are no applications deployed.");
         display::warn("Deploy your first app:");
-        display::warn("  git remote add riku deploy@your-server:myapp");
+        display::warn("  git remote add riku riku@your-server:myapp");
         display::warn("  git push riku main");
         return Ok(());
     }
@@ -25,7 +25,7 @@ pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
     if apps.is_empty() {
         display::note("There are no applications deployed.");
         display::warn("Deploy your first app:");
-        display::warn("  git remote add riku deploy@your-server:myapp");
+        display::warn("  git remote add riku riku@your-server:myapp");
         display::warn("  git push riku main");
         return Ok(());
     }

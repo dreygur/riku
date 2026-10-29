@@ -19,11 +19,10 @@ with no runtime dependencies.
 ```bash
 # on your server
 curl -LO https://github.com/dreygur/riku/releases/latest/download/riku-linux-amd64.tar.gz
-sudo adduser --disabled-password --gecos '' deploy
 tar -xzf riku-linux-amd64.tar.gz && sudo ./riku init --ssh-key ~/.ssh/authorized_keys
 
 # on your laptop
-git remote add riku deploy@your-server:myapp
+git remote add riku riku@your-server:myapp
 git push riku main      # that's the deploy
 ```
 
@@ -57,17 +56,16 @@ the scripts in [`benches/`](benches/) measure it rather than guess.
 curl -LO https://github.com/dreygur/riku/releases/latest/download/riku-linux-amd64.tar.gz
 tar -xzf riku-linux-amd64.tar.gz
 chmod +x riku
-sudo adduser --disabled-password --gecos '' deploy
 sudo ./riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
-Running `riku init` as root sets up the deploy user's home as that user (binary in
-`~/.local/bin`, `~/.riku`, the git hook, SSH keys), then creates a systemd service
-that starts on boot, launches the supervisor, and enables router auto-reload. The
-deploy user must exist first. `--ssh-key` authorizes the keys in a `.pub` or
-`authorized_keys` file (here, the ones you used to log in) for `git push`; without
-it, run the command init prints before your first push. Deploying as a user other
-than `deploy`? Pass `sudo RIKU_USER=myuser ./riku init`. For Caddy instead of
+Running `riku init` as root creates the `riku` deploy user if it is missing, sets
+up its home as that user (binary in `~/.local/bin`, `~/.riku`, the git hook, SSH
+keys), then creates a systemd service that starts on boot, launches the
+supervisor, and enables router auto-reload. `--ssh-key` authorizes the keys in a
+`.pub` or `authorized_keys` file (here, the ones you used to log in) for
+`git push`; without it, run the command init prints before your first push.
+Deploying as another user? Pass `sudo RIKU_USER=myuser ./riku init`. For Caddy instead of
 nginx, see [`docs/docs/caddy.md`](docs/docs/caddy.md).
 
 ### From source
@@ -84,9 +82,9 @@ cargo build --release
 **1. Set up the server.** Create a deploy user and initialize:
 
 ```bash
-sudo adduser deploy && sudo su - deploy
+sudo adduser riku && sudo su - riku
 riku init
-ssh-copy-id deploy@your-server      # add your SSH key
+ssh-copy-id riku@your-server      # add your SSH key
 ```
 
 **2. Deploy an app.** Add a `Procfile`, commit, and push:
@@ -98,7 +96,7 @@ worker: python worker.py
 
 ```bash
 git init && git add . && git commit -m "first deploy"
-git remote add riku deploy@your-server:myapp
+git remote add riku riku@your-server:myapp
 git push riku main
 ```
 

@@ -27,7 +27,7 @@ By default it listens on loopback, so it is only reachable from the server
 itself. Use SSH port-forwarding to view it from your laptop:
 
 ```bash
-ssh -L 8088:127.0.0.1:8088 deploy@your-server
+ssh -L 8088:127.0.0.1:8088 riku@your-server
 # then open http://localhost:8088 in your browser
 ```
 

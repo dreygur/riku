@@ -15,7 +15,7 @@ git add .
 git commit -m "Initial commit"
 
 # Deploy (replace with your server)
-git remote add riku deploy@your-server:my-go-app
+git remote add riku riku@your-server:my-go-app
 git push riku main
 ```
 

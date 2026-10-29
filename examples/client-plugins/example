@@ -16,7 +16,7 @@
 #   chmod +x ~/.riku/client-plugins/myplugin
 #
 # Plugin Interface:
-#   $1 = server (e.g., "deploy@myserver.com")
+#   $1 = server (e.g., "riku@myserver.com")
 #   $2 = app name (e.g., "myapp")
 #   $3 = full command (e.g., "example:status")
 #   $4+ = additional arguments

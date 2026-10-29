@@ -144,7 +144,7 @@ When `RIKU_NGINX_STATIC_PATHS=/static:public`:
 
 ```nginx
 location /static/ {
-    alias /home/deploy/.riku/apps/myapp/public/;
+    alias /home/riku/.riku/apps/myapp/public/;
     expires 30d;
     add_header Cache-Control "public, immutable";
 }
@@ -166,7 +166,7 @@ When caching is enabled:
 
 ```nginx
 # Cache zone definition
-proxy_cache_path /home/deploy/.riku/cache/myapp levels=1:2
+proxy_cache_path /home/riku/.riku/cache/myapp levels=1:2
     keys_zone=myapp_cache:10m max_size=2g inactive=60m;
 
 # In location block
@@ -246,7 +246,7 @@ Riku supports ACME (Let's Encrypt) for automatic SSL certificates.
 3. **Obtain certificate:**
    ```bash
    # Using acme.sh
-   acme.sh --issue -d example.com --webroot /home/deploy/.riku/acme/www
+   acme.sh --issue -d example.com --webroot /home/riku/.riku/acme/www
    ```
 
 4. **Install certificate:**

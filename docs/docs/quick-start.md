@@ -35,8 +35,8 @@ sudo cp target/release/riku /usr/local/bin/
 
 ```bash
 # Create a dedicated user for deployments
-sudo adduser --disabled-password --gecos '' deploy
-sudo su - deploy
+sudo adduser --disabled-password --gecos '' riku
+sudo su - riku
 ```
 
 ---
@@ -72,7 +72,7 @@ ssh-keygen -t ed25519 -C "your-email@example.com"
 
 ```bash
 # Copy your public key to the server
-ssh-copy-id deploy@your-server-ip
+ssh-copy-id riku@your-server-ip
 
 # Or manually add it
 cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
@@ -144,7 +144,7 @@ echo 'web: node server.js' > Procfile
 **Option 1: Standard (repo in `~/.riku/repos/`)**
 ```bash
 # Add your Riku server as a remote
-git remote add riku deploy@your-server-ip:myapp
+git remote add riku riku@your-server-ip:myapp
 
 # Deploy
 git add . && git commit -m "Initial commit"
@@ -160,7 +160,7 @@ You can create your bare git repo anywhere and Riku will automatically symlink i
 git init --bare ~/my-projects/myapp.git
 
 # On local: push to custom path
-git remote add riku deploy@your-server-ip:~/my-projects/myapp.git
+git remote add riku riku@your-server-ip:~/my-projects/myapp.git
 git push riku main
 
 # Riku will automatically:
@@ -274,10 +274,10 @@ sudo netstat -tlnp | grep :80
 git remote -v
 
 # Verify SSH access
-ssh deploy@your-server-ip
+ssh riku@your-server-ip
 
 # Check Riku logs
-ssh deploy@your-server-ip "tail ~/.riku/logs/myapp/*.log"
+ssh riku@your-server-ip "tail ~/.riku/logs/myapp/*.log"
 ```
 
 ---

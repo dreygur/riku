@@ -27,7 +27,7 @@ pub(crate) fn is_executable(path: &Path) -> bool {
 /// Execute a client plugin with the given arguments.
 ///
 /// Plugin interface:
-/// - $1: server (e.g., "deploy@server.com")
+/// - $1: server (e.g., "riku@server.com")
 /// - $2: app name
 /// - $3: full command (including subcommands)
 /// - $4+: additional arguments

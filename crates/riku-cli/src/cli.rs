@@ -201,7 +201,7 @@ pub enum Commands {
 
     /// Scaffold a sample app and print deploy instructions (runs locally)
     #[command(
-        after_help = "Examples:\n  riku quickstart\n  riku quickstart myapp --runtime node\n  riku quickstart myapp --remote deploy@example.com"
+        after_help = "Examples:\n  riku quickstart\n  riku quickstart myapp --runtime node\n  riku quickstart myapp --remote riku@example.com"
     )]
     Quickstart {
         /// App name (also the directory created)
@@ -210,7 +210,7 @@ pub enum Commands {
         /// Runtime to scaffold: python or node
         #[arg(long, default_value = "python")]
         runtime: String,
-        /// Deploy target for the git remote line, e.g. deploy@your-server
+        /// Deploy target for the git remote line, e.g. riku@your-server
         #[arg(long)]
         remote: Option<String>,
     },

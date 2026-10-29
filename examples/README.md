@@ -19,7 +19,7 @@ git add .
 git commit -m "Initial commit"
 
 # Deploy (replace with your server)
-git remote add riku deploy@your-server:my-node-app
+git remote add riku riku@your-server:my-node-app
 git push riku main
 ```
 

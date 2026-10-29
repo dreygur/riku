@@ -13,7 +13,7 @@ git add .
 git commit -m "Initial commit"
 
 # Add your Riku server as remote
-git remote add riku deploy@your-server:nodejs-example
+git remote add riku riku@your-server:nodejs-example
 
 # Deploy
 git push riku main

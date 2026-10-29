@@ -8,26 +8,25 @@ The router is a host setting, not a per-app one. It lives in `~/.riku/ROUTER` un
 
 ## Switching a Host to Caddy
 
-Install Caddy from your distribution (or Caddy's own apt repository), create the deploy user, then run init as root:
+Install Caddy from your distribution (or Caddy's own apt repository), then run init as root:
 
 ```bash
 sudo apt install caddy
-sudo adduser --disabled-password --gecos '' deploy
 sudo RIKU_ROUTER=caddy riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
 `RIKU_ROUTER` is read only by `riku init`. Deploys, the supervisor and `riku doctor` read the `ROUTER` file. Running `riku init` again without `RIKU_ROUTER` keeps the current choice.
 
-Root init fails if the deploy user does not exist. Set `RIKU_USER` when it is not called `deploy`.
+Root init creates the deploy user when it does not exist: `riku`, or the name in `RIKU_USER`.
 
 ### What init changes
 
 Under Caddy, a root `riku init`:
 
-- writes `caddy` to `/home/deploy/.riku/ROUTER`
+- writes `caddy` to `/home/riku/.riku/ROUTER`
 - appends one line to `/etc/caddy/Caddyfile`, once:
   ```
-  import /home/deploy/.riku/caddy/*.caddy
+  import /home/riku/.riku/caddy/*.caddy
   ```
 - adds the `caddy` user to the deploy user's primary group
 - gives that group traverse access (`g+x`, not listing) to the deploy home and `~/.riku`

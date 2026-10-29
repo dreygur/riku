@@ -14,7 +14,7 @@ To publish this app to Riku, make a copy of this folder and run the following co
 
 ```bash
 git init .
-git remote add riku deploy@your_server:wispchat
+git remote add riku riku@your_server:wispchat
 git add .
 git commit -a -m "initial commit"
 git push riku main

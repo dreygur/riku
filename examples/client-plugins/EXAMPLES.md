@@ -165,7 +165,7 @@ Plugins receive arguments:
 
 | Position | Variable | Example |
 |----------|----------|---------|
-| $1 | server | `deploy@server.com` |
+| $1 | server | `riku@server.com` |
 | $2 | app | `myapp` |
 | $3 | command | `backup:data` |
 | $4+ | extra | file paths, options |

@@ -385,13 +385,13 @@ machine, not the server.
 ```bash
 riku quickstart
 riku quickstart myapp --runtime node
-riku quickstart myapp --remote deploy@example.com
+riku quickstart myapp --remote riku@example.com
 ```
 
 | Option | Description |
 |--------|-------------|
 | `--runtime <RUNTIME>` | Runtime to scaffold: `python` or `node` (default: `python`) |
-| `--remote <REMOTE>` | Deploy target for the git remote line, e.g. `deploy@your-server` |
+| `--remote <REMOTE>` | Deploy target for the git remote line, e.g. `riku@your-server` |
 
 ---
 
@@ -580,7 +580,7 @@ echo 'web: python app.py' > Procfile
 git add . && git commit -m "init"
 
 # Add remote and deploy
-git remote add riku deploy@server:myapp
+git remote add riku riku@server:myapp
 git push riku main
 
 # Configure
