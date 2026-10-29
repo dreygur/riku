@@ -25,6 +25,7 @@ pub mod hooks;
 pub mod placement;
 pub mod plugins;
 pub mod quickstart;
+pub mod remote;
 pub mod routing;
 pub mod scp;
 pub mod setup;
