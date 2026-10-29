@@ -4,13 +4,15 @@
 //! battery of **read-only** health checks across dependencies, the `~/.riku`
 //! directory layout, the systemd supervisor service, the host router, runtime plugins,
 //! disk headroom, SSH deploy access, and renamed app ENV keys, then prints a
-//! summary. It never mutates state, so it is always safe to run.
+//! summary. It is read only unless run with `--fix`, which only rewrites old style
+//! deploy key forced commands in `authorized_keys`.
 //!
 //! Exit code: `0` when nothing failed (warnings allowed), `1` when any check
 //! has [`Status::Fail`], so it composes in CI and provisioning scripts.
 
 pub mod app_env;
 pub mod checks;
+pub mod forced_commands;
 pub mod router_check;
 
 use anyhow::Result;
@@ -74,7 +76,7 @@ fn diagnosed_paths(paths: &RikuPaths) -> Result<RikuPaths> {
 
 /// Run every diagnostic, render the report, and exit non-zero on any failure.
 #[allow(clippy::question_mark)]
-pub fn cmd_doctor(paths: &RikuPaths) -> Result<()> {
+pub fn cmd_doctor(paths: &RikuPaths, fix: bool) -> Result<()> {
     let paths = match diagnosed_paths(paths) {
         Ok(paths) => paths,
         Err(e) => return Err(e),
@@ -84,6 +86,16 @@ pub fn cmd_doctor(paths: &RikuPaths) -> Result<()> {
         paths.riku_root.display()
     ));
     display::blank();
+
+    if fix {
+        match forced_commands::fix() {
+            Ok(count) => display::info(&format!(
+                "Migrated {count} deploy key(s) to the new forced command"
+            )),
+            Err(e) => return Err(anyhow::anyhow!("doctor --fix failed: {e}")),
+        }
+        display::blank();
+    }
 
     let checks = collect(&paths);
     render(&checks);
@@ -104,6 +116,7 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     checks.push(checks::plugins(paths));
     checks.push(checks::disk(paths));
     checks.push(checks::ssh_access());
+    checks.push(forced_commands::forced_commands());
     checks.extend(app_env::renamed_keys(paths));
     checks
 }

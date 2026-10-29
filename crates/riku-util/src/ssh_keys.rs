@@ -23,7 +23,7 @@ pub fn setup_authorized_keys(ssh_fingerprint: &str, script_path: &str, pubkey: &
 
     writeln!(
         file,
-        "command=\"FINGERPRINT={} NAME=default {} $SSH_ORIGINAL_COMMAND\",no-agent-forwarding,no-user-rc,no-X11-forwarding,no-port-forwarding {}",
+        "command=\"FINGERPRINT={} NAME=default {}\",no-agent-forwarding,no-user-rc,no-X11-forwarding,no-port-forwarding {}",
         ssh_fingerprint, script_path, pubkey
     )?;
 
@@ -94,6 +94,19 @@ mod tests {
             assert!(content.contains("KEY1"));
             assert!(content.contains("KEY2"));
             assert_eq!(content.lines().count(), 2);
+        });
+    }
+
+    #[test]
+    fn new_keys_get_plain_forced_command() {
+        with_home(|tmp| {
+            setup_authorized_keys("fp", "/usr/bin/riku", "ssh-rsa KEY user@host").unwrap();
+            let content = fs::read_to_string(tmp.path().join(".ssh/authorized_keys")).unwrap();
+            assert!(
+                !content.contains("$SSH_ORIGINAL_COMMAND"),
+                "forced command must not expand the shell variable: {content}"
+            );
+            assert!(content.contains(r#"command="FINGERPRINT=fp NAME=default /usr/bin/riku","#));
         });
     }
 

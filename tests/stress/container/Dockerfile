@@ -2,7 +2,7 @@
 #
 # Mirrors the real deploy path verified against source before writing this:
 #   - SSH forced-command gating: src/util/ssh_keys.rs::setup_authorized_keys()
-#     writes `command="FINGERPRINT=... NAME=default <riku_script> $SSH_ORIGINAL_COMMAND"`.
+#     writes `command="FINGERPRINT=... NAME=default <riku_script>"`.
 #     git push therefore runs as: <riku_script> git-receive-pack '<app>'
 #     (src/cli/cli.rs Commands::GitReceivePack, src/cli/git/receive_pack.rs).
 #   - `riku init --no-systemd` (src/cli/setup/init.rs) auto-adds an SSH key

@@ -158,7 +158,7 @@ fn main() -> Result<()> {
         } => cli::quickstart::cmd_quickstart(&name, &runtime, remote.as_deref())?,
         Commands::Backup { app, out } => cli::backup::cmd_backup(&paths, &app, out.as_deref())?,
         Commands::Restore { app, file } => cli::backup::cmd_restore(&paths, &app, &file)?,
-        Commands::Doctor => cli::doctor::cmd_doctor(&paths)?,
+        Commands::Doctor { fix } => cli::doctor::cmd_doctor(&paths, fix)?,
         Commands::Dashboard { bind, token } => dashboard::run(&paths, &bind, token)?,
         Commands::Addon(cmd) => match cmd {
             AddonCmd::List => cli::addon::cmd_addon_list(&paths)?,

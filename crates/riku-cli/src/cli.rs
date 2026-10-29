@@ -238,7 +238,11 @@ pub enum Commands {
 
     /// Diagnose the Riku installation (deps, dirs, systemd, nginx, disk, SSH)
     #[command(after_help = "Examples:\n  riku doctor\n  sudo riku doctor")]
-    Doctor,
+    Doctor {
+        /// Rewrite old style deploy key forced commands in authorized_keys
+        #[arg(long)]
+        fix: bool,
+    },
 
     /// Serve the read-only web dashboard (embedded, single binary)
     #[command(

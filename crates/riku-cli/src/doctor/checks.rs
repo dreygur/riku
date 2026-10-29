@@ -12,11 +12,9 @@ use nix::sys::statvfs::statvfs;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 
-use super::Check;
+use crate::util::authorized_keys::RIKU_KEY_MARKER;
 
-/// `command="FINGERPRINT=...` prefix that `setup_authorized_keys` writes for
-/// every riku deploy key: used to distinguish riku keys from unrelated ones.
-const RIKU_KEY_MARKER: &str = "FINGERPRINT=";
+use super::Check;
 
 /// External tools Riku relies on: git is required, systemd is strongly
 /// recommended. The router binary is checked by [`super::router_check`].

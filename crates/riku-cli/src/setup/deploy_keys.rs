@@ -8,11 +8,12 @@
 
 use std::fs;
 use std::io::{ErrorKind, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, Result};
 
+use crate::util::authorized_keys::migrate_file;
 use crate::util::public_key::{parse_public_keys, PublicKey};
 use crate::util::{echo, setup_authorized_keys};
 
@@ -38,11 +39,19 @@ pub fn parse_key_args(lines: &[String]) -> Result<Vec<PublicKey>> {
         .collect()
 }
 
+fn authorized_keys_path() -> Result<PathBuf> {
+    match dirs::home_dir() {
+        Some(home) => Ok(home.join(".ssh").join("authorized_keys")),
+        None => Err(anyhow!("could not determine the home directory")),
+    }
+}
+
+#[allow(clippy::question_mark)]
 fn authorized_keys_text() -> Result<String> {
-    let Some(home) = dirs::home_dir() else {
-        return Err(anyhow!("could not determine the home directory"));
+    let path = match authorized_keys_path() {
+        Ok(path) => path,
+        Err(e) => return Err(e),
     };
-    let path = home.join(".ssh").join("authorized_keys");
     match fs::read_to_string(&path) {
         Ok(text) => Ok(text),
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(String::new()),
@@ -107,5 +116,20 @@ pub fn add_deploy_keys(keys: &[PublicKey]) -> Result<()> {
         }
         echo(&format!("      ✓ Added deploy key {fp}"), "green");
     }
-    Ok(())
+
+    let path = match authorized_keys_path() {
+        Ok(path) => path,
+        Err(e) => return Err(e),
+    };
+    match migrate_file(&path) {
+        Ok(0) => Ok(()),
+        Ok(count) => {
+            echo(
+                &format!("      ✓ Migrated {count} existing deploy key(s)"),
+                "green",
+            );
+            Ok(())
+        }
+        Err(e) => Err(anyhow!("failed to migrate existing deploy keys: {e}")),
+    }
 }
