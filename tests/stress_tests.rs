@@ -19,7 +19,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 #[cfg(target_os = "linux")]
 use std::path::PathBuf;
-use std::sync::{Arc, Barrier};
+use std::sync::{Arc, Barrier, RwLock};
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
@@ -32,6 +32,13 @@ use riku::plugins::manager::PluginManager;
 use riku::plugins::runtime::{RuntimeContext, RuntimePlugin};
 #[cfg(target_os = "linux")]
 use riku::util::resource_limits::ResourceLimits;
+
+/// The fd table is process wide: a child forked by one test inherits the
+/// flock fd another test is holding and keeps it until it execs, so that
+/// lock can look held after its owner dropped it (see `riku-deploy` lock.rs).
+/// The test that asserts a lock is released takes `write()`; every test that
+/// spawns processes takes `read()`, so no fork overlaps that test.
+static FORK_GATE: RwLock<()> = RwLock::new(());
 
 /// Build a `RikuPaths` rooted inside `tmp` and create every directory
 /// `do_deploy` / `PluginManager` touch.
@@ -98,6 +105,7 @@ esac
 /// read-modify-write: exactly the corruption fix #2 closes off.
 #[test]
 fn test_concurrent_deploy_lockout() {
+    let _gate = FORK_GATE.read().unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     let paths = Arc::new(make_paths(&tmp));
 
@@ -183,6 +191,7 @@ fn test_concurrent_deploy_lockout() {
 /// released when `do_deploy` returns, not held forever.
 #[test]
 fn test_deploy_lock_released_after_completion() {
+    let _gate = FORK_GATE.write().unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
 
@@ -206,6 +215,7 @@ fn test_deploy_lock_released_after_completion() {
 /// the lock is keyed per app name, not global.
 #[test]
 fn test_concurrent_deploys_of_different_apps_do_not_contend() {
+    let _gate = FORK_GATE.read().unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     let paths = Arc::new(make_paths(&tmp));
     install_slow_mock_plugin(&paths, "python", "requirements.txt", "python app.py");
@@ -259,6 +269,7 @@ fn test_concurrent_deploys_of_different_apps_do_not_contend() {
 /// group leader and `killpg`s the whole group.
 #[test]
 fn test_plugin_process_group_reaping() {
+    let _gate = FORK_GATE.read().unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
 
@@ -386,6 +397,7 @@ esac
 #[cfg(target_os = "linux")]
 #[test]
 fn test_build_phase_memory_limit_chokes_runaway_allocation() {
+    let _gate = FORK_GATE.read().unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
 
