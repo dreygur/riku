@@ -39,6 +39,7 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
         Commands::Restore { .. } => None,
         Commands::Doctor { .. } => None,
         Commands::Dashboard { .. } => None,
+        Commands::Server(_) => None,
         Commands::Addon(_) => None,
         Commands::Update => None,
         Commands::InstallPlugins { .. } => None,

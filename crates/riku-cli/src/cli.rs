@@ -2,7 +2,9 @@
 
 use clap::{Parser, Subcommand};
 
-use super::cmds::{AddonCmd, AppsCmd, ConfigCmd, HookCmd, PluginCmd, PluginsCmd, StatsCmd};
+use super::cmds::{
+    AddonCmd, AppsCmd, ConfigCmd, HookCmd, PluginCmd, PluginsCmd, ServerCmd, StatsCmd,
+};
 use super::container::ContainerSubCmd;
 
 /// riku: the smallest PaaS you've ever seen (Rust edition)
@@ -160,6 +162,13 @@ pub enum Commands {
         after_help = "Examples:\n  riku stats all\n  riku stats app myapp"
     )]
     Stats(StatsCmd),
+
+    /// Manage the list of remote riku servers
+    #[command(
+        subcommand,
+        after_help = "Examples:\n  riku server add solutech riku@solutech.example\n  riku server list\n  riku server default solutech\n  riku server remove solutech"
+    )]
+    Server(ServerCmd),
 
     /// Run a command in the app context
     #[command(

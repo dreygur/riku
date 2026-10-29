@@ -102,6 +102,7 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
             scale,
         } => app_cmds::run_ps(paths, app, verbose, &scale),
         Commands::Stats(cmd) => app_cmds::run_stats(paths, cmd),
+        Commands::Server(cmd) => crate::remote::server_cmd::run(cmd),
         Commands::Run { app, cmd } => apps::cmd_run(paths, &app, &cmd),
         Commands::Restart { app, hot } => app_cmds::run_restart(paths, app, hot),
         Commands::Stop { app } => {

@@ -308,3 +308,39 @@ pub enum MarketplaceCmd {
         name: String,
     },
 }
+
+/// Commands that manage the list of remote riku servers on this machine.
+#[derive(Subcommand, Debug)]
+pub enum ServerCmd {
+    /// Add a server to the list
+    #[command(
+        after_help = "Examples:\n  riku server add solutech riku@solutech.example\n  riku server add edge riku@edge.example --admin root@edge.example"
+    )]
+    Add {
+        /// Name to refer to the server by
+        name: String,
+        /// ssh target of the restricted riku user, as user@host
+        address: String,
+        /// ssh target of an admin account, as user@host
+        #[arg(long)]
+        admin: Option<String>,
+    },
+
+    /// List the servers, marking the default with *
+    #[command(after_help = "Examples:\n  riku server list")]
+    List,
+
+    /// Remove a server from the list
+    #[command(after_help = "Examples:\n  riku server remove edge")]
+    Remove {
+        /// Server name
+        name: String,
+    },
+
+    /// Make a server the default target
+    #[command(after_help = "Examples:\n  riku server default solutech")]
+    Default {
+        /// Server name
+        name: String,
+    },
+}

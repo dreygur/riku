@@ -35,6 +35,6 @@ pub mod ssh_command;
 
 pub use cli::{require_app, Cli, Commands};
 pub use cmds::{
-    AddonCmd, AppsCmd, ConfigCmd, HookCmd, MarketplaceCmd, PluginCmd, PluginsCmd, StatsCmd,
-    TrustCmd,
+    AddonCmd, AppsCmd, ConfigCmd, HookCmd, MarketplaceCmd, PluginCmd, PluginsCmd, ServerCmd,
+    StatsCmd, TrustCmd,
 };

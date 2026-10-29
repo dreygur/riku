@@ -8,6 +8,7 @@
 pub mod forward;
 pub mod git_remote;
 pub mod route;
+pub mod server_cmd;
 pub mod store;
 pub mod target;
 pub mod types;
