@@ -39,10 +39,10 @@ pub fn servers_path() -> Result<PathBuf> {
     Ok(servers_path_from(xdg.as_deref(), &home.to_string_lossy()))
 }
 
-/// Resolves the path from explicit values. An empty `xdg` counts as unset.
+/// Resolves the path from explicit values. An empty or relative `xdg` counts as unset, per the XDG spec.
 pub fn servers_path_from(xdg: Option<&str>, home: &str) -> PathBuf {
     let base = match xdg {
-        Some(dir) if !dir.is_empty() => PathBuf::from(dir),
+        Some(dir) if Path::new(dir).is_absolute() => PathBuf::from(dir),
         _ => Path::new(home).join(".config"),
     };
     base.join("riku").join("servers.toml")
@@ -121,13 +121,25 @@ fn to_raw(list: &ServerList) -> RawFile {
     }
 }
 
+#[allow(clippy::question_mark)]
 fn write_private(dir: &Path, path: &Path, text: &str) -> std::io::Result<()> {
-    let mut temp = tempfile::NamedTempFile::new_in(dir)?;
-    temp.as_file()
-        .set_permissions(std::fs::Permissions::from_mode(0o600))?;
-    temp.write_all(text.as_bytes())?;
-    temp.persist(path).map_err(|e| e.error)?;
-    Ok(())
+    let mut temp = match tempfile::NamedTempFile::new_in(dir) {
+        Ok(temp) => temp,
+        Err(e) => return Err(e),
+    };
+    if let Err(e) = temp
+        .as_file()
+        .set_permissions(std::fs::Permissions::from_mode(0o600))
+    {
+        return Err(e);
+    }
+    if let Err(e) = temp.write_all(text.as_bytes()) {
+        return Err(e);
+    }
+    match temp.persist(path) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e.error),
+    }
 }
 
 /// Saves the list atomically with mode 600, creating the directory with mode 700.

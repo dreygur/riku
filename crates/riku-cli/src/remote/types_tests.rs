@@ -63,3 +63,32 @@ fn duplicate_name_is_rejected() {
     assert!(list.add(server("a", "riku@b.local")).is_err());
     assert_eq!(list.iter().count(), 1);
 }
+
+#[test]
+fn rejects_option_like_or_malformed_user_and_host() {
+    for bad in [
+        "riku@-x",
+        "riku@a[b]c",
+        "riku@host:22",
+        "a:b@h",
+        "-u@h",
+        "riku@[::1]x",
+        "riku@[g::1]",
+        "riku@[]",
+        "riku@[::1",
+    ] {
+        assert!(SshAddress::try_from(bad).is_err(), "accepted {bad:?}");
+    }
+}
+
+#[test]
+fn accepts_plain_hosts_and_users() {
+    for good in [
+        "riku@solutech.local",
+        "riku@192.168.1.20",
+        "riku@[::1]",
+        "deploy_user@host-1",
+    ] {
+        assert!(SshAddress::try_from(good).is_ok(), "rejected {good:?}");
+    }
+}

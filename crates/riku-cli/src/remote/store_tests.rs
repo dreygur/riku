@@ -60,3 +60,39 @@ fn servers_path_prefers_xdg_config_home() {
         PathBuf::from("/home/me/.config/riku/servers.toml")
     );
 }
+
+#[test]
+fn relative_xdg_config_home_is_ignored() {
+    assert_eq!(
+        servers_path_from(Some("relative/cfg"), "/home/me"),
+        PathBuf::from("/home/me/.config/riku/servers.toml")
+    );
+}
+
+fn load_text(text: &str) -> String {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("servers.toml");
+    std::fs::write(&path, text).unwrap();
+    format!("{:#}", load(&path).unwrap_err())
+}
+
+#[test]
+fn default_naming_missing_server_is_an_error() {
+    let message =
+        load_text("default = \"ghost\"\n[[server]]\nname = \"a\"\naddress = \"riku@a.local\"\n");
+    assert!(
+        message.contains("servers.toml") && message.contains("ghost"),
+        "{message}"
+    );
+}
+
+#[test]
+fn duplicate_server_in_file_is_an_error() {
+    let message = load_text(
+        "[[server]]\nname = \"a\"\naddress = \"riku@a.local\"\n[[server]]\nname = \"a\"\naddress = \"riku@b.local\"\n",
+    );
+    assert!(
+        message.contains("servers.toml") && message.contains("'a'"),
+        "{message}"
+    );
+}

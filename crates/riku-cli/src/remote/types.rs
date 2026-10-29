@@ -1,11 +1,13 @@
 //! Validated server list types.
 //!
 //! Security model: `SshAddress` is later passed to the system `ssh` as an
-//! argument, so it is the trust boundary. Construction rejects a leading `-`
-//! (which ssh would read as an option), whitespace, and every character
-//! outside `[A-Za-z0-9._:-]`, `@`, `[` and `]`. That excludes shell
-//! metacharacters, quotes, and path separators. Values read from the TOML file
-//! go through the same validation as values typed on the command line.
+//! argument, so it is the trust boundary. Construction accepts exactly one `@`.
+//! The user and a hostname must match `[A-Za-z0-9._-]+` starting with an
+//! alphanumeric, so neither can be read by ssh as an option. The host may
+//! instead be one bracketed IPv6 literal, `[` + `[0-9A-Fa-f:.]+` + `]`, with
+//! nothing after it. Whitespace, shell metacharacters, quotes, and path
+//! separators are all outside the grammar. Values read from the TOML file go
+//! through the same validation as values typed on the command line.
 
 use anyhow::{anyhow, Result};
 
@@ -15,8 +17,25 @@ fn is_name_char(c: char) -> bool {
     c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-'
 }
 
-fn is_address_char(c: char) -> bool {
-    c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | ':' | '-' | '@' | '[' | ']')
+fn is_label_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-')
+}
+
+/// `[A-Za-z0-9._-]+` starting with an alphanumeric, so ssh never sees an option.
+fn is_label(s: &str) -> bool {
+    s.chars().next().is_some_and(|c| c.is_ascii_alphanumeric()) && s.chars().all(is_label_char)
+}
+
+fn is_ipv6_literal(s: &str) -> bool {
+    match s.strip_prefix('[').and_then(|rest| rest.strip_suffix(']')) {
+        Some(inner) => {
+            !inner.is_empty()
+                && inner
+                    .chars()
+                    .all(|c| c.is_ascii_hexdigit() || matches!(c, ':' | '.'))
+        }
+        None => false,
+    }
 }
 
 /// Name a server is known by locally, such as `solutech`.
@@ -54,14 +73,12 @@ impl TryFrom<&str> for SshAddress {
     type Error = anyhow::Error;
 
     fn try_from(raw: &str) -> Result<Self> {
-        let well_formed = !raw.starts_with('-')
-            && raw.chars().all(is_address_char)
-            && raw.split_once('@').is_some_and(|(user, host)| {
-                !user.is_empty() && !host.is_empty() && !host.contains('@')
-            });
+        let well_formed = raw.split_once('@').is_some_and(|(user, host)| {
+            is_label(user) && (is_label(host) || is_ipv6_literal(host))
+        });
         if !well_formed {
             return Err(anyhow!(
-                "invalid ssh address {raw:?}: expected user@host using only letters, digits and . _ : - (host may be a bracketed IPv6 literal)"
+                "invalid ssh address {raw:?}: expected user@host with letters, digits and . _ - starting with a letter or digit (host may be a bracketed IPv6 literal)"
             ));
         }
         Ok(SshAddress(raw.to_string()))
