@@ -94,6 +94,11 @@ name the owner did not type, the app is the remote's path after the colon
 (`myapp` in `riku@host:myapp`, `myapp` in `riku@host:~/x/myapp.git`). A
 typed app name always wins.
 
+`destroy` never takes its app from the repo. It does not prompt, so its app
+name must always be typed. The same goes for commands where an omitted app
+cannot be told apart from the next argument: run, restore, config get,
+config set, config unset, and the hidden git commands.
+
 ## Server side argument parsing
 
 Today every deploy key forces
@@ -141,8 +146,8 @@ Ctrl-C behave. Everything else runs without a tty so output pipes cleanly.
 
 Before every forwarded command riku prints one line to stderr naming the
 target, for example `[*] solutech (riku@solutech.local)`. No confirmation
-prompt is added. Commands that already confirm, like `destroy`, keep
-confirming, on the remote side.
+prompt is added. `destroy` does not prompt either, so it always needs the
+app name typed, never taken from the repo.
 
 Server only commands refuse with a clear message when a server is
 selected: init, supervisor, and the hidden internal ones (git-hook, scp,

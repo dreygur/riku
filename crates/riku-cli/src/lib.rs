@@ -10,6 +10,7 @@ pub(crate) use riku_util as util;
 
 pub mod addon;
 pub mod agent;
+pub mod app_hint;
 pub mod apps;
 pub mod backup;
 #[allow(clippy::module_inception)]
@@ -18,6 +19,7 @@ pub mod client_plugins;
 pub mod cmds;
 pub mod container;
 pub mod control_actions;
+pub mod dispatch;
 pub mod doctor;
 pub mod git;
 pub mod help;

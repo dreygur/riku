@@ -85,6 +85,26 @@ fn two_matching_remotes_on_different_servers_is_an_error() {
 }
 
 #[test]
+fn remotes_naming_different_apps_on_one_server_drop_the_hint() {
+    let remotes = [
+        remote("riku@prod.example", "shop"),
+        remote("riku@prod.example", "shop-staging"),
+    ];
+    let target = resolve(sel(None), &list(true), &remotes).unwrap();
+    match target {
+        Target::Remote {
+            server,
+            source: Source::GitRemote,
+            app_hint,
+        } => {
+            assert_eq!(server.name.as_str(), "prod");
+            assert_eq!(app_hint, None, "ambiguous app should give no hint");
+        }
+        other => panic!("expected prod from the git remotes, got {other:?}"),
+    }
+}
+
+#[test]
 fn unregistered_remote_host_is_ignored() {
     let remotes = [remote("riku@10.0.0.9", "x")];
     let target = resolve(sel(None), &list(true), &remotes).unwrap();

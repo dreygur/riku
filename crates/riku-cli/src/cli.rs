@@ -116,8 +116,8 @@ pub enum Commands {
     /// Remove an app (preserves data dir)
     #[command(after_help = "Examples:\n  riku destroy myapp")]
     Destroy {
-        /// App name (default: the app of this repo's riku git remote)
-        app: Option<String>,
+        /// App name. Always typed: destroy does not prompt.
+        app: String,
     },
 
     /// Tail app logs

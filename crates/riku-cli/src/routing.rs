@@ -100,7 +100,7 @@ pub fn build_plugin_args(command: &Commands, server: Option<&SshAddress>) -> Vec
             }
         }
         Commands::Destroy { app } => {
-            args.push(app.clone().unwrap_or_default());
+            args.push(app.clone());
             args.push("destroy".to_string());
         }
         Commands::Logs {
