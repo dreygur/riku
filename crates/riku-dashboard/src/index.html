@@ -108,7 +108,7 @@
   .sup .sep { color: var(--line-hover); }
   .sup-dot { width: 7px; height: 7px; background: var(--text-3); }
   .sup.live .sup-dot { background: var(--alive); animation: ping 2.4s ease-out infinite; }
-  .sup.down .sup-dot { background: var(--danger); }
+  .sup.down .sup-dot, .sup.error .sup-dot { background: var(--danger); }
   .sup.locked .sup-dot { background: var(--warn); }
   .synced { font: 400 12px/1 var(--mono); color: var(--text-3); }
   .auth { display: flex; align-items: center; gap: 8px; }
@@ -118,6 +118,11 @@
     font: 500 13px/1 var(--sans);
   }
   .unlocked > svg { color: var(--alive); }
+  .auth-note {
+    display: inline-flex; align-items: center; gap: 10px; min-height: 38px; padding: 0 12px;
+    border: 1px solid rgba(242,184,75,.35); background: rgba(242,184,75,.06); color: var(--warn);
+    font: 500 13px/1.3 var(--sans);
+  }
   .tok { display: flex; align-items: center; gap: 8px; }
   .field {
     display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px;
@@ -162,7 +167,7 @@
 
   .apps { display: flex; flex-direction: column; gap: 20px; padding-top: 0; transition: opacity .2s, filter .2s; }
   .apps.stale { opacity: .5; filter: saturate(.4); }
-  .apps:first-child { padding-top: 40px; }
+  .page-head[hidden] + .apps { padding-top: 40px; }
 
   .app { position: relative; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
   .app.is-busy { border-color: rgba(242,184,75,.32); }
@@ -462,13 +467,12 @@
   "use strict";
   const $ = (s, r) => (r || document).querySelector(s);
 
-  // /api/state carries no per-worker memory limit (RIKU_MAX_MEMORY_MB is
-  // not in its env allowlist), so meters scale against this fixed figure.
-  const MEM_LIMIT = 256 * 1024 * 1024;
   const POLL_MS = 4000, RETRY_MS = 4000, MAX_LINES = 2000, MAX_RELEASES = 20, MAX_SCALE = 32;
   const TOKEN_KEY = "riku_token";
   const NO_VALUE = "-";
   const FLAG_ON = ["1", "true", "yes", "on"];
+  const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "::1", "[::1]"];
+  const BODY_PREVIEW = 160;
 
   // Every server value that reaches innerHTML goes through this, text and
   // attributes alike.
@@ -544,10 +548,10 @@
 
   const stateOf = (s) => {
     s = String(s || "").toLowerCase();
-    if (s === "running") return { cls: "alive", label: "running" };
-    if (s === "starting" || s === "restarting") return { cls: "warn", label: s };
-    if (s === "crashed") return { cls: "dead", label: "crashed" };
-    if (s === "oom_killed") return { cls: "dead", label: "oom-killed", oom: true };
+    if (s === "running") { return { cls: "alive", label: "running" }; }
+    if (s === "starting" || s === "restarting") { return { cls: "warn", label: s }; }
+    if (s === "crashed") { return { cls: "dead", label: "crashed" }; }
+    if (s === "oom_killed") { return { cls: "dead", label: "oom-killed", oom: true }; }
     return { cls: "off", label: s || "stopped" };
   };
   const glyph = (cls) =>
@@ -565,7 +569,10 @@
     try { history.replaceState(null, "", url.pathname + url.search + url.hash); } catch (_) {}
   }
   let tokenRejected = false;
-  const q = () => (token ? "?token=" + encodeURIComponent(token) : "");
+  // Set when an action gets 403: the server runs without --token, so no
+  // token can enable mutations.
+  let actionsDisabled = false;
+  const q =() => (token ? "?token=" + encodeURIComponent(token) : "");
 
   let mode = "loading"; // loading | apps | empty | locked
 
@@ -591,6 +598,10 @@
   function renderAuth() {
     const el = $("#auth");
     if (mode === "locked") { el.innerHTML = ""; return; }
+    if (actionsDisabled) {
+      el.innerHTML = `<div class="auth-note" role="status">${I.lock}<span>Actions are disabled on this server (started without --token)</span></div>`;
+      return;
+    }
     if (token && !tokenRejected) {
       el.innerHTML = `<div class="unlocked">${I.unlock}<span>Controls unlocked</span><button type="button" class="btn sm ghost" id="lockBtn">Lock</button></div>`;
       $("#lockBtn").addEventListener("click", () => {
@@ -614,7 +625,9 @@
     let timer;
     const kill = () => { clearTimeout(timer); t.classList.add("out"); setTimeout(() => t.remove(), 180); };
     t.querySelector(".t-x").addEventListener("click", kill);
-    if (action) t.querySelector(".t-act").addEventListener("click", () => { action.run(); kill(); });
+    if (action) {
+      t.querySelector(".t-act").addEventListener("click", () => { action.run(); kill(); });
+    }
     t.addEventListener("mouseenter", () => clearTimeout(timer));
     t.addEventListener("mouseleave", () => { timer = setTimeout(kill, 2500); });
     box.appendChild(t);
@@ -641,8 +654,13 @@
         toast("err", "Token rejected", "The supervisor refused the control token (401).");
         return false;
       }
+      if (res.status === 403) {
+        actionsDisabled = true; renderAuth();
+        toast("err", `${cap(path)} failed`, "Actions are disabled on this server. Restart the dashboard with --token.");
+        return false;
+      }
       const txt = ((await res.text().catch(() => "")) || "").trim();
-      toast("err", `${cap(path)} failed`, `${res.status}${txt ? " · " + txt.slice(0, 160) : ""}`);
+      toast("err", `${cap(path)} failed`, `${res.status}${txt ? " · " + txt.slice(0, BODY_PREVIEW) : ""}`);
     } catch (e) {
       toast("err", `${cap(path)} failed`, (e && e.message) || "Network error");
     }
@@ -675,7 +693,9 @@
       : `${c.app} will be stopped.`;
     $("#cfList").innerHTML = ws.map((w) => `<span>${esc(workerName(w))}</span>`).join("");
     $("#cfOk").textContent = "Stop " + c.app;
-    if (typeof dlg.showModal !== "function") return Promise.resolve(window.confirm(`Stop ${c.app}? Its workers will be shut down.`));
+    if (typeof dlg.showModal !== "function") {
+      return Promise.resolve(window.confirm(`Stop ${c.app}? Its workers will be shut down.`));
+    }
     return new Promise((resolve) => {
       const onClose = () => { dlg.removeEventListener("close", onClose); resolve(dlg.returnValue === "ok"); };
       dlg.addEventListener("close", onClose);
@@ -689,9 +709,13 @@
   });
 
   const cards = new Map();
+  let cardSeq = 0;
 
+  // A counter, not the app name, keeps ids unique: my.app and my_app
+  // would sanitize to the same id.
   function createCard(app) {
-    const id = "app-" + app.replace(/[^a-zA-Z0-9_-]/g, "_");
+    cardSeq++;
+    const id = "app-" + cardSeq;
     const el = document.createElement("section");
     el.className = "app";
     el.setAttribute("aria-labelledby", id);
@@ -823,9 +847,9 @@
   }
 
   function setScale(c, n, fromInput) {
-    n = Math.max(0, Math.min(MAX_SCALE, n | 0));
-    c.scaleVal = n === c.webNow ? null : n;
-    syncScale(c, fromInput);
+    const clamped = Math.max(0, Math.min(MAX_SCALE, n | 0));
+    c.scaleVal = clamped === c.webNow ? null : clamped;
+    syncScale(c, fromInput && clamped === n);
   }
 
   function syncScale(c, keepInput) {
@@ -875,7 +899,9 @@
     if (doms.length) {
       const d = doms[0];
       parts.push(`<a href="${https ? "https" : "http"}://${esc(d)}" target="_blank" rel="noopener noreferrer">${https ? I.https : ""}${esc(d)}${https ? "" : '<span class="tag-http">http</span>'}${I.ext}</a>`);
-      if (doms.length > 1) parts.push(`<span class="c-dim" title="${esc(doms.slice(1).join(", "))}">+${doms.length - 1} more</span>`);
+      if (doms.length > 1) {
+        parts.push(`<span class="c-dim" title="${esc(doms.slice(1).join(", "))}">+${doms.length - 1} more</span>`);
+      }
     } else {
       parts.push('<span class="c-dim">no domain</span>');
     }
@@ -889,20 +915,41 @@
     return parts.join("");
   }
 
-  function workerRow(w) {
-    const st = stateOf(w.status);
-    const pct = Math.min(100, (num(w.memory_bytes) / MEM_LIMIT) * 100);
+  function limitMeter(used, limit) {
+    const pct = Math.min(100, (used / limit) * 100);
     const lvl = pct >= 90 ? "crit" : pct >= 75 ? "warn" : "";
+    return `<span role="cell" class="mem ${lvl}">
+        <span class="meter" role="img" aria-label="${Math.round(pct)}% of memory limit"><i style="width:${pct.toFixed(1)}%"></i></span>
+        <span class="mem-val">${fmtBytes(used)} <span>/ ${fmtBytes(limit)}</span></span>
+      </span>`;
+  }
+
+  function peakMeter(used, peak) {
+    const pct = peak ? Math.min(100, (used / peak) * 100) : 0;
+    return `<span role="cell" class="mem">
+        <span class="meter" role="img" aria-label="memory"><i style="width:${pct.toFixed(1)}%"></i></span>
+        <span class="mem-val">${fmtBytes(used)}</span>
+      </span>`;
+  }
+
+  // /api/state sends no memory limit today (RIKU_MAX_MEMORY_MB is unset by
+  // default, so most workers have none). Without one the bar is relative
+  // to the app's largest worker and carries no warn or crit level.
+  function memCell(w, peak) {
+    const used = num(w.memory_bytes);
+    const limit = num(w.memory_limit_bytes);
+    return limit ? limitMeter(used, limit) : peakMeter(used, peak);
+  }
+
+  function workerRow(w, peak) {
+    const st = stateOf(w.status);
     const rc = num(w.restart_count);
     const rlvl = rc >= 4 ? "crit" : "warn";
     const live = !!w.pid;
     return `<div class="tr ${st.cls === "dead" ? "is-bad" : ""}" role="row">
       <span role="cell" class="w-name">${esc(workerName(w))}</span>
       <span role="cell"><span class="state ${st.cls}">${glyph(st.cls)}${esc(st.label)}</span></span>
-      <span role="cell" class="mem ${lvl}">
-        <span class="meter" role="img" aria-label="${Math.round(pct)}% of memory limit"><i style="width:${pct.toFixed(1)}%"></i></span>
-        <span class="mem-val">${fmtBytes(w.memory_bytes)} <span>/ ${fmtBytes(MEM_LIMIT)}</span></span>
-      </span>
+      ${memCell(w, peak)}
       <span role="cell" class="${live ? "muted" : "dim"}">${live ? fmtCpu(w.cpu_time_ms) : NO_VALUE}</span>
       <span role="cell" class="${live ? "muted" : "dim"}">${live ? esc(w.pid) : NO_VALUE}</span>
       <span role="cell" class="r">${rc ? `<span class="rc-badge ${rlvl}" title="${rc} restarts">${I.restartSm}${rc}</span>` : '<span class="dim">0</span>'}</span>
@@ -919,12 +966,15 @@
     return badge("ok", `<span class="g-sq"></span>Healthy · ${run}/${total}`);
   }
 
-  // The API reports no memory limit, so an OOM kill is described without
-  // a figure rather than with one the page made up.
+  function oomText(w) {
+    const limit = num(w.memory_limit_bytes);
+    return limit ? `was killed for exceeding its ${fmtBytes(limit)} memory limit` : "was killed for exceeding its memory limit";
+  }
+
   function alertHtml(ws, st, dead) {
     const i = st.findIndex((s) => s.cls === "dead");
     const w = ws[i], rc = num(w.restart_count);
-    const what = st[i].oom ? "was killed for exceeding its memory limit" : "crashed";
+    const what = st[i].oom ? oomText(w) : "crashed";
     const restarts = rc ? ` and has restarted ${rc} time${rc === 1 ? "" : "s"}` : "";
     const more = dead > 1 ? ` ${dead - 1} other worker${dead > 2 ? "s are" : " is"} also down.` : "";
     const name = esc(workerName(w));
@@ -959,8 +1009,9 @@
       al.hidden = true; al.innerHTML = "";
     }
 
+    const peak = ws.reduce((max, w) => Math.max(max, num(w.memory_bytes)), 0);
     el.querySelector("[data-rows]").innerHTML = ws.length
-      ? ws.map(workerRow).join("")
+      ? ws.map((w) => workerRow(w, peak)).join("")
       : '<div class="tr empty-row" role="row"><span role="cell">No workers running.</span></div>';
 
     c.webNow = ws.filter((w) => w.kind === "web").length;
@@ -1017,8 +1068,15 @@
     return `<p class="sr" role="status">Reading the supervisor...</p>${card}${card}`;
   }
 
+  // Over an ssh tunnel the page sees a loopback name, which is not where
+  // a laptop would push to.
+  function pushHost() {
+    const host = location.hostname;
+    return !host || LOOPBACK_HOSTS.includes(host) ? "your-server" : host;
+  }
+
   function emptyHtml() {
-    const host = location.hostname || "your-host";
+    const host = pushHost();
     const cmds = [`git remote add riku riku@${host}:your-app`, "git push riku main"];
     return `<div class="panel">
       <div><h2>Nothing deployed yet</h2><p>riku picks up an app as soon as you push it.</p></div>
@@ -1051,6 +1109,8 @@
       t.innerHTML = `<b>Live</b><span class="sep">/</span>v${esc(data.riku_version)}<span class="sep">/</span>${esc(up)}`;
     } else if (state === "down") {
       t.innerHTML = "<b>Unreachable</b>";
+    } else if (state === "error" && data) {
+      t.innerHTML = `<b>HTTP ${num(data.status)}</b>`;
     } else if (state === "locked") {
       t.innerHTML = "<b>Locked</b>";
     } else {
@@ -1067,9 +1127,9 @@
     }));
     $("#pageSub").textContent = `${apps.length} app${apps.length === 1 ? "" : "s"} on this host · ${total} worker${total === 1 ? "" : "s"}`;
     const chips = [`<span class="sum ok"><i></i><b>${run}</b> running</span>`];
-    if (warn) chips.push(`<span class="sum warn"><i></i><b>${warn}</b> starting</span>`);
-    if (dead) chips.push(`<span class="sum bad"><i></i><b>${dead}</b> failed</span>`);
-    if (off) chips.push(`<span class="sum"><i></i><b>${off}</b> stopped</span>`);
+    if (warn) { chips.push(`<span class="sum warn"><i></i><b>${warn}</b> starting</span>`); }
+    if (dead) { chips.push(`<span class="sum bad"><i></i><b>${dead}</b> failed</span>`); }
+    if (off) { chips.push(`<span class="sum"><i></i><b>${off}</b> stopped</span>`); }
     $("#summary").innerHTML = chips.join("");
     $("#pageHead").hidden = false;
   }
@@ -1119,48 +1179,86 @@
     if (typed) { $("#tokInputPanel").value = typed; }
   }
 
-  let lastOk = 0, nextAt = 0, timer = null, offline = false;
+  // `failure` is null while polls succeed, { status: 0 } when the request
+  // never got an answer, and { status, body } when the server answered
+  // with an error.
+  let lastOk = 0, nextAt = 0, timer = null, failure = null;
   function schedule(ms) { clearTimeout(timer); nextAt = Date.now() + ms; timer = setTimeout(load, ms); }
   const soon = () => schedule(600);
 
+  function setFailure(f) {
+    failure = f;
+    $("#banner").hidden = !f;
+    $("#apps").classList.toggle("stale", !!f && mode === "apps");
+    if (f) { setSup(f.status ? "error" : "down", f); }
+  }
+
+  // Re-render the locked panel only on the way in, or when the token
+  // flips between missing and rejected, so a poll never steals focus
+  // from the token field.
+  function onLocked() {
+    const rejected = !!token;
+    setFailure(null);
+    if (mode !== "locked" || rejected !== tokenRejected) {
+      tokenRejected = rejected;
+      showLocked();
+    }
+  }
+
+  async function errorBody(res) {
+    const txt = await res.text().catch(() => "");
+    return (txt || "").trim().slice(0, BODY_PREVIEW);
+  }
+
+  async function fetchState() {
+    let res;
+    try {
+      res = await fetch("/api/state" + q(), { headers: { Accept: "application/json" }, cache: "no-store" });
+    } catch (_) {
+      return { failure: { status: 0 } };
+    }
+    if (res.status === 401) { return { locked: true }; }
+    if (!res.ok) { return { failure: { status: res.status, body: await errorBody(res) } }; }
+    try {
+      return { data: await res.json() };
+    } catch (_) {
+      return { failure: { status: res.status, body: "response was not JSON" } };
+    }
+  }
+
   async function load() {
     clearTimeout(timer);
-    try {
-      const res = await fetch("/api/state" + q(), { headers: { Accept: "application/json" }, cache: "no-store" });
-      if (res.status === 401) {
-        tokenRejected = !!token;
-        setOffline(false);
-        if (mode !== "locked" || tokenRejected) { showLocked(); }
-        schedule(POLL_MS);
-        return;
-      }
-      if (!res.ok) { throw new Error("HTTP " + res.status); }
-      const data = await res.json();
-      lastOk = Date.now();
-      setOffline(false);
-      render(data);
+    const got = await fetchState();
+    if (got.locked) {
+      onLocked();
       schedule(POLL_MS);
-    } catch (e) {
-      setOffline(true);
-      setSup("down");
+    } else if (got.failure) {
+      setFailure(got.failure);
       schedule(RETRY_MS);
+    } else {
+      lastOk = Date.now();
+      setFailure(null);
+      schedule(POLL_MS);
+      render(got.data);
     }
     tick();
   }
 
-  function setOffline(on) {
-    offline = on;
-    $("#banner").hidden = !on;
-    $("#apps").classList.toggle("stale", on && mode === "apps");
+  function staleNote() {
+    if (!lastOk || mode !== "apps") { return ""; }
+    const ago = fmtAgo((Date.now() - lastOk) / 1000);
+    return ago === "just now" ? " Showing the last data received." : " Showing data from " + ago + ".";
+  }
+
+  function failureText(f) {
+    if (!f.status) { return "Can't reach the supervisor."; }
+    return `The supervisor answered HTTP ${f.status}${f.body ? ": " + f.body : "."}`;
   }
 
   function tick() {
-    $("#synced").textContent = lastOk && !offline ? "synced " + fmtAgo((Date.now() - lastOk) / 1000) : "";
-    if (!offline) { return; }
-    const ago = fmtAgo((Date.now() - lastOk) / 1000);
-    $("#bannerText").textContent = lastOk && mode === "apps"
-      ? `Can't reach the supervisor. ${ago === "just now" ? "Showing the last data received." : "Showing data from " + ago + "."}`
-      : "Can't reach the supervisor.";
+    $("#synced").textContent = lastOk && !failure ? "synced " + fmtAgo((Date.now() - lastOk) / 1000) : "";
+    if (!failure) { return; }
+    $("#bannerText").textContent = failureText(failure) + staleNote();
     const s = Math.max(0, Math.ceil((nextAt - Date.now()) / 1000));
     $("#bannerRetry").textContent = s ? `retry in ${s}s` : "retrying...";
   }
@@ -1170,7 +1268,11 @@
   const drawer = $("#drawer"), con = $("#console");
   const L = { app: null, es: null, lines: [], tags: new Set(), worker: "", q: "", follow: true, paused: false, pending: [], unseen: 0, stream: "idle" };
   const TAG_COLORS = ["#72B4F6", "#B79CF2", "#5FD0C4", "#E7A3C6", "#C8D36A", "#F0A877"];
-  const tagColor = (t) => { let h = 0; for (const ch of t) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return TAG_COLORS[h % TAG_COLORS.length]; };
+  const tagColor = (t) => {
+    let h = 0;
+    for (const ch of t) { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }
+    return TAG_COLORS[h % TAG_COLORS.length];
+  };
   const baseTag = (t) => (t || "").split(/[:\s]/)[0];
   const lvlOf = (tag, text) => {
     if (/err/i.test(tag) || /\b(ERROR|ERR|FATAL|CRITICAL|PANIC|Traceback|Exception)\b/.test(text) || /^\s+at\s/.test(text)) {
@@ -1267,11 +1369,27 @@
     syncLogUi();
   }
 
+  function clearLines() {
+    L.lines.forEach((ln) => ln.el.remove());
+    L.lines = []; L.unseen = 0;
+    syncLogUi();
+  }
+
+  // Each connection starts with the server's backlog of every log file,
+  // so a reconnect would repeat lines already shown. Drop them first.
   function startStream() {
     setStream("connecting");
     const es = new EventSource(`/api/apps/${encodeURIComponent(L.app)}/logs${q()}`);
     L.es = es;
-    es.addEventListener("open", () => setStream("live"));
+    let opened = false;
+    es.addEventListener("open", () => {
+      if (opened) {
+        L.pending = [];
+        clearLines();
+      }
+      opened = true;
+      setStream("live");
+    });
     es.addEventListener("log", (ev) => {
       if (L.stream !== "live") { setStream("live"); }
       const d = ev.data, i = d.indexOf("\t");
@@ -1330,9 +1448,7 @@
     if (!L.paused) { const p = L.pending; L.pending = []; p.forEach(addLine); }
     syncLogUi();
   });
-  $("#clearBtn").addEventListener("click", () => {
-    L.lines.forEach((ln) => ln.el.remove()); L.lines = []; L.unseen = 0; syncLogUi();
-  });
+  $("#clearBtn").addEventListener("click", clearLines);
   con.addEventListener("scroll", () => {
     const bottom = atBottom();
     if (bottom && !L.follow) { L.follow = true; L.unseen = 0; syncLogUi(); }

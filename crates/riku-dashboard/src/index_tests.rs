@@ -47,3 +47,17 @@ async fn root_serves_the_embedded_page_without_a_token() {
         "page body lacks {PAGE_MARKER:?}"
     );
 }
+
+/// The page runs on hosts reached over an ssh tunnel, often offline, so
+/// it must not pull fonts or scripts from anywhere else.
+#[tokio::test]
+async fn root_page_makes_no_third_party_requests() {
+    let response = get_root(spawn_dashboard().await).await;
+
+    for needle in ["https://", "fonts.googleapis"] {
+        assert!(
+            !response.contains(needle),
+            "served page references {needle:?}"
+        );
+    }
+}
