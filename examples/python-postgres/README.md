@@ -6,8 +6,8 @@ During the `release` worker phase this app creates a Postgres database, as well 
 
 This example uses Django 6.1, which needs Python 3.12 or newer. The Python
 runtime plugin builds the app with whatever `python3` the server provides, so on
-a distro that ships an older Python (Debian 12, Ubuntu 22.04) the build fails at
-`pip install`. Ubuntu 24.04 and later, and Debian 13 and later, are fine.
+a distro that ships an older Python (Debian 12 has 3.11) the build fails at
+`pip install`. Debian 13 ships 3.13.
 
 In order for this to work you will first need to install `postgresql` on your Riku server:
 
