@@ -1,4 +1,5 @@
 use super::*;
+use clap::CommandFactory;
 
 #[test]
 fn help_lists_groups_in_order_and_each_visible_command_once() {
@@ -9,7 +10,9 @@ fn help_lists_groups_in_order_and_each_visible_command_once() {
         text.find("Forwarded commands").unwrap(),
     );
     assert!(l < s && s < f, "group order wrong:\n{text}");
-    for name in ["apps", "logs", "init", "quickstart"] {
+    let root = Cli::command();
+    for sub in root.get_subcommands().filter(|c| !c.is_hide_set()) {
+        let name = sub.get_name();
         assert_eq!(
             text.matches(&format!("\n  {name} ")).count(),
             1,

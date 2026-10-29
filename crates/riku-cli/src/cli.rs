@@ -268,9 +268,11 @@ pub enum Commands {
     #[command(after_help = "Examples:\n  riku update")]
     Update,
 
-    /// Download and install bundled plugins to ~/.riku/plugins/ (runtimes
-    /// like node/python, and first-party bundles like the riku-notify
-    /// event subscriber: not installed by default, opt in with --plugins)
+    /// Install bundled plugins to ~/.riku/plugins/
+    ///
+    /// Installs runtimes like node/python and first-party bundles like the
+    /// riku-notify event subscriber. Bundles are not installed by default,
+    /// opt in with --plugins.
     #[command(
         name = "install-plugins",
         after_help = "Examples:\n  riku install-plugins\n  riku install-plugins --plugins node,python\n  riku install-plugins --plugins riku-notify"
@@ -281,9 +283,10 @@ pub enum Commands {
         plugins: Vec<String>,
     },
 
-    /// Fire a custom plugin.custom.* event (called from within a plugin's
-    /// own script, not by hand), requires [events] emit = true in the
-    /// calling plugin's manifest
+    /// Fire a custom plugin.custom.* event
+    ///
+    /// Called from within a plugin's own script, not by hand. Requires
+    /// [events] emit = true in the calling plugin's manifest.
     #[command(
         name = "plugin-emit",
         after_help = "Examples:\n  riku plugin-emit plugin.custom.backup-done --data '{\"ok\":true}'\n  riku plugin-emit plugin.custom.backup-done --data '{}' --app myapp"
