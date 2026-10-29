@@ -9,38 +9,62 @@ mod scaffold;
 use std::path::Path;
 use std::process::Command;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 
 use crate::util::display;
 
 use scaffold::Runtime;
 
-/// Scaffold `name` (a new directory) for `runtime`, git-init it, and print
-/// deploy instructions. `remote` fills the `git remote add` line when known.
-pub fn cmd_quickstart(name: &str, runtime: &str, remote: Option<&str>) -> Result<()> {
-    let app = crate::util::validate_app_name(name)?;
-    let rt = Runtime::parse(runtime)?;
+fn write_file(path: &Path, contents: &str) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            return Err(anyhow!("failed to create {}: {e}", parent.display()));
+        }
+    }
+    match std::fs::write(path, contents) {
+        Ok(()) => Ok(()),
+        Err(e) => Err(anyhow!("failed to write {}: {e}", path.display())),
+    }
+}
 
-    let dir = Path::new(&app);
+/// Scaffold `name` under `base`. Taking the directory instead of using the
+/// process cwd keeps tests from changing a cwd every other test thread and
+/// its child processes share.
+#[allow(clippy::question_mark)]
+fn scaffold_into(base: &Path, name: &str, runtime: &str, remote: Option<&str>) -> Result<()> {
+    let app = match crate::util::validate_app_name(name) {
+        Ok(app) => app,
+        Err(e) => return Err(e),
+    };
+    let rt = match Runtime::parse(runtime) {
+        Ok(rt) => rt,
+        Err(e) => return Err(e),
+    };
+
+    let dir = base.join(&app);
     if dir.exists() {
         bail!("'{app}' already exists here, choose another name or remove it");
     }
 
     display::info(&format!("Scaffolding {} app in ./{app}...", rt.label()));
-    std::fs::create_dir_all(dir)?;
     for file in rt.files(&app) {
-        let path = dir.join(file.path);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
+        if let Err(e) = write_file(&dir.join(file.path), &file.contents) {
+            return Err(e);
         }
-        std::fs::write(&path, &file.contents)?;
         display::note(&format!("created {app}/{}", file.path));
     }
 
-    let committed = git_init_commit(dir);
+    let committed = git_init_commit(&dir);
 
     print_next_steps(&app, rt.label(), remote, committed);
     Ok(())
+}
+
+/// Scaffold `name` (a new directory in the current directory) for
+/// `runtime`, git-init it, and print deploy instructions. `remote` fills the
+/// `git remote add` line when known.
+pub fn cmd_quickstart(name: &str, runtime: &str, remote: Option<&str>) -> Result<()> {
+    scaffold_into(Path::new("."), name, runtime, remote)
 }
 
 /// Best-effort `git init` + initial commit. Returns whether a commit was made.
@@ -104,26 +128,23 @@ fn print_next_steps(app: &str, runtime: &str, remote: Option<&str>, committed: b
 mod tests {
     use super::*;
 
-    // One test owns the process-global cwd change, so it never races another
-    // chdir-ing test under a threaded runner.
     #[test]
     fn scaffolds_new_dir_and_refuses_existing() {
         let tmp = tempfile::tempdir().unwrap();
-        let prev = std::env::current_dir().unwrap();
-        std::env::set_current_dir(tmp.path()).unwrap();
 
-        let scaffolded = cmd_quickstart("demo-app", "python", Some("deploy@host"));
+        let scaffolded = scaffold_into(tmp.path(), "demo-app", "python", Some("riku@host"));
         let app_dir = tmp.path().join("demo-app");
-        let scaffold_ok = scaffolded.is_ok()
-            && app_dir.join("Procfile").exists()
-            && app_dir.join("app.py").exists()
-            && app_dir.join("requirements.txt").exists();
+        assert!(scaffolded.is_ok(), "scaffold failed: {scaffolded:?}");
+        for file in ["Procfile", "app.py", "requirements.txt"] {
+            assert!(app_dir.join(file).exists(), "missing {file}");
+        }
+        assert!(
+            app_dir.join(".git").exists() || Command::new("git").arg("--version").output().is_err(),
+            "expected a git repo in the scaffold"
+        );
 
         std::fs::create_dir(tmp.path().join("taken")).unwrap();
-        let refused = cmd_quickstart("taken", "python", None).is_err();
-
-        std::env::set_current_dir(prev).unwrap();
-        assert!(scaffold_ok, "expected a scaffolded python app");
+        let refused = scaffold_into(tmp.path(), "taken", "python", None).is_err();
         assert!(refused, "must not overwrite an existing directory");
     }
 }

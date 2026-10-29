@@ -83,16 +83,20 @@ pub fn directories(paths: &RikuPaths) -> Check {
     }
 }
 
-/// Confirm the riku binary is reachable on PATH and installed where the
-/// git post-receive hook expects it (`~/.local/bin/riku`).
+/// Confirm the riku binary is installed where the git post-receive hook
+/// expects it (`~/.local/bin/riku`), and say whether a shell finds it.
+///
+/// PATH is informational only: hooks and the systemd unit run the binary by
+/// its full path, and `ssh riku@host doctor` always runs with sshd's
+/// default PATH, which never has `~/.local/bin`.
 pub fn binary() -> Vec<Check> {
     let mut out = Vec::new();
 
     match which::which("riku") {
         Ok(p) => out.push(Check::ok("riku on PATH", p.display().to_string())),
-        Err(_) => out.push(Check::warn(
+        Err(_) => out.push(Check::ok(
             "riku on PATH",
-            "not on PATH: add ~/.local/bin to PATH",
+            "not on this PATH; hooks and services use the full path",
         )),
     }
 
