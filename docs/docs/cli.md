@@ -66,7 +66,8 @@ the host (`riku@solutech-alt`).
 `riku dashboard` uses it.
 
 The list is stored in `servers.toml` under `$XDG_CONFIG_HOME/riku/`, or
-`~/.config/riku/` when `XDG_CONFIG_HOME` is unset (also on macOS). The
+`~/.config/riku/` when `XDG_CONFIG_HOME` is unset or not an absolute path
+(also on macOS). The
 directory is mode 700 and the file mode 600. A hand edited entry is checked
 with the same rules as one typed on the command line.
 
@@ -114,6 +115,14 @@ server's address as `$1`.
 
 `run` and `logs --follow` allocate a tty on the server, so interactive
 programs and Ctrl-C behave. Everything else runs without one.
+
+Path arguments of a forwarded command resolve on the server, not on your
+machine: `deploy --from`, `backup --out` and `restore <app> <file>` all name
+server paths. Add `--local` to use a path on this machine.
+
+The plugin authoring commands `plugins keygen`, `plugins sign` and
+`plugins scaffold` always run locally, so a private signing key is never
+created on a server. Every other `plugins` subcommand is forwarded.
 
 ### App name from the repo
 
@@ -168,13 +177,14 @@ Do this on each server:
    one. **Do this first.** A migrated key passes no arguments, which an
    old binary cannot run: with the old binary and migrated keys, no command
    works over ssh.
-2. As the deploy user, run `sudo -u riku riku doctor --fix`. It rewrites the
+2. As the deploy user, run `sudo -H -u riku riku doctor --fix`. It rewrites the
    `command=` part of each old riku key in `~/.ssh/authorized_keys`, keeping
    the key, its options and its name, and replacing the file atomically with
    mode 600. It refuses to run as root.
 
 Until then `riku doctor` warns: `N deploy keys use the old forced command, run:
-riku doctor --fix`. `riku init` also migrates the keys.
+riku doctor --fix`. `riku init` also migrates the keys when it adds a key,
+but never as root: a root `init` prints the `doctor --fix` instruction instead.
 
 Update the server binary before forwarding from a new laptop binary as well.
 Older servers reject the hidden `--app-hint` option that carries the app from
@@ -626,7 +636,7 @@ Diagnose the installation (deps, dirs, systemd, nginx, disk, SSH). See
 ```bash
 riku doctor
 sudo riku doctor   # most complete report
-sudo -u riku riku doctor --fix   # rewrite old deploy key forced commands
+sudo -H -u riku riku doctor --fix   # rewrite old deploy key forced commands
 ```
 
 `--fix` is the only thing doctor writes. It must run as the deploy user, not

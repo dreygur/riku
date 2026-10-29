@@ -19,13 +19,13 @@ pub(super) fn run_apps(paths: &RikuPaths, cmd: Option<AppsCmd>) -> Result<()> {
 pub(super) fn run_config(paths: &RikuPaths, cmd: ConfigCmd) -> Result<()> {
     match cmd {
         ConfigCmd::Show { app } => {
-            require_app(app, None).and_then(|app| apps::cmd_config_show(paths, &app))
+            require_app(app).and_then(|app| apps::cmd_config_show(paths, &app))
         }
         ConfigCmd::Get { app, key } => apps::cmd_config_get(paths, &app, &key),
         ConfigCmd::Set { app, settings } => apps::cmd_config_set(paths, &app, &settings),
         ConfigCmd::Unset { app, keys } => apps::cmd_config_unset(paths, &app, &keys),
         ConfigCmd::Live { app } => {
-            require_app(app, None).and_then(|app| apps::cmd_config_live(paths, &app))
+            require_app(app).and_then(|app| apps::cmd_config_live(paths, &app))
         }
     }
 }
@@ -37,7 +37,7 @@ pub(super) fn run_logs(
     deploy: bool,
     follow: bool,
 ) -> Result<()> {
-    match require_app(app, None) {
+    match require_app(app) {
         Ok(app) if deploy => apps::cmd_deploy_logs(paths, &app, follow),
         Ok(app) => apps::cmd_logs(paths, &app, process),
         Err(e) => Err(e),
@@ -62,14 +62,12 @@ pub(super) fn run_ps(
 pub(super) fn run_stats(paths: &RikuPaths, cmd: StatsCmd) -> Result<()> {
     match cmd {
         StatsCmd::All => apps::cmd_stats_all(paths),
-        StatsCmd::App { app } => {
-            require_app(app, None).and_then(|app| apps::cmd_stats_app(paths, &app))
-        }
+        StatsCmd::App { app } => require_app(app).and_then(|app| apps::cmd_stats_app(paths, &app)),
     }
 }
 
 pub(super) fn run_restart(paths: &RikuPaths, app: Option<String>, hot: bool) -> Result<()> {
-    match require_app(app, None) {
+    match require_app(app) {
         Ok(app) if hot => apps::cmd_hot_reload(paths, &app),
         Ok(app) => apps::cmd_restart(paths, &app),
         Err(e) => Err(e),
@@ -81,10 +79,10 @@ pub(super) fn run_addon(paths: &RikuPaths, cmd: AddonCmd) -> Result<()> {
         AddonCmd::List => addon::cmd_addon_list(paths),
         AddonCmd::Create { plugin, name } => addon::cmd_addon_create(paths, &plugin, &name),
         AddonCmd::Bind { instance, app } => {
-            require_app(app, None).and_then(|app| addon::cmd_addon_bind(paths, &instance, &app))
+            require_app(app).and_then(|app| addon::cmd_addon_bind(paths, &instance, &app))
         }
         AddonCmd::Unbind { instance, app } => {
-            require_app(app, None).and_then(|app| addon::cmd_addon_unbind(paths, &instance, &app))
+            require_app(app).and_then(|app| addon::cmd_addon_unbind(paths, &instance, &app))
         }
         AddonCmd::Destroy { instance } => addon::cmd_addon_destroy(paths, &instance),
         AddonCmd::Backup { instance } => addon::cmd_addon_backup(paths, &instance),

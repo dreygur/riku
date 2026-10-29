@@ -149,11 +149,12 @@ target, for example `[*] solutech (riku@solutech.local)`. No confirmation
 prompt is added. `destroy` does not prompt either, so it always needs the
 app name typed, never taken from the repo.
 
-Server only commands refuse with a clear message when a server is
-selected: init, supervisor, and the hidden internal ones (git-hook, scp,
+Server only commands refuse with a clear message when `-s` names a
+server (a default server or a git remote never applies to them): init, supervisor, and the hidden internal ones (git-hook, scp,
 plugin-emit, ns-shim, dump-state, git-receive-pack, git-upload-pack).
 
-Always local: server, quickstart, container, plugin.
+Always local: server, quickstart, container, plugin, and the plugins
+authoring subcommands keygen, sign and scaffold.
 
 Client plugins keep working and still run first: a client plugin that
 overrides a command wins over forwarding, as it wins over the built in

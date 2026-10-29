@@ -108,7 +108,7 @@ pub fn run_remote(server: &Server) -> Result<()> {
         Some(admin) => admin,
         None => {
             return Err(anyhow!(
-                "no admin login for {name}, add one: riku server add {name} {} --admin user@host",
+                "no admin login for {name}: riku server remove {name}, then riku server add {name} {} --admin user@host",
                 server.address.as_str()
             ))
         }

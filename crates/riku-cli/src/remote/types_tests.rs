@@ -32,7 +32,6 @@ fn rejects_address_with_shell_metacharacters() {
 fn accepts_ipv6_host() {
     let address = SshAddress::try_from("riku@[::1]").expect("ipv6 literal should parse");
     assert_eq!(address.user(), "riku");
-    assert_eq!(address.host(), "[::1]");
     assert_eq!(address.as_str(), "riku@[::1]");
 }
 

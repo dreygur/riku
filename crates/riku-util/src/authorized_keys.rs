@@ -134,7 +134,7 @@ pub fn migrate_file(path: &Path) -> Result<usize> {
 pub fn migrate_file_as(path: &Path, euid: u32) -> Result<usize> {
     if euid == 0 {
         return Err(anyhow!(
-            "refusing to rewrite {} as root: run it as the deploy user, for example sudo -u <deploy user> riku doctor --fix",
+            "refusing to rewrite {} as root: run it as the deploy user, for example sudo -H -u <deploy user> riku doctor --fix",
             path.display()
         ));
     }

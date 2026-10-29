@@ -46,7 +46,7 @@ fn check_text(text: &str) -> Check {
 pub fn fix(home: &Path) -> Result<usize> {
     if nix::unistd::geteuid().is_root() {
         return Err(anyhow!(
-            "doctor --fix must run as the deploy user, not root: sudo -u {} riku doctor --fix",
+            "doctor --fix must run as the deploy user, not root: sudo -H -u {} riku doctor --fix",
             deploy_user_name()
         ));
     }

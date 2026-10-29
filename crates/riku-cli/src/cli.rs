@@ -38,12 +38,11 @@ pub struct Cli {
     pub command: Commands,
 }
 
-/// Returns the typed app name, else the app hint.
-pub fn require_app(typed: Option<String>, hint: Option<&str>) -> anyhow::Result<String> {
-    match (typed, hint) {
-        (Some(app), _) => Ok(app),
-        (None, Some(hint)) => Ok(hint.to_string()),
-        (None, None) => Err(anyhow::anyhow!("app name required")),
+/// Returns the typed app name, or an error when none was given.
+pub fn require_app(typed: Option<String>) -> anyhow::Result<String> {
+    match typed {
+        Some(app) => Ok(app),
+        None => Err(anyhow::anyhow!("app name required")),
     }
 }
 
@@ -189,7 +188,7 @@ pub enum Commands {
         /// App name (default: the app of this repo's riku git remote)
         app: Option<String>,
         /// Use hot reload (zero downtime)
-        #[arg(long, short)]
+        #[arg(long)]
         hot: bool,
     },
 

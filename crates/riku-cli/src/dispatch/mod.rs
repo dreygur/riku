@@ -87,7 +87,7 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
             container::cmd_container(container::ContainerCmd { command: cmd }, paths)
         }
         Commands::Deploy { app, from } => {
-            require_app(app, None).and_then(|app| apps::cmd_deploy(paths, &app, from.as_deref()))
+            require_app(app).and_then(|app| apps::cmd_deploy(paths, &app, from.as_deref()))
         }
         Commands::Destroy { app } => apps::cmd_destroy(paths, &app),
         Commands::Logs {
@@ -105,11 +105,10 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
         Commands::Server(cmd) => crate::remote::server_cmd::run(cmd),
         Commands::Run { app, cmd } => apps::cmd_run(paths, &app, &cmd),
         Commands::Restart { app, hot } => app_cmds::run_restart(paths, app, hot),
-        Commands::Stop { app } => {
-            require_app(app, None).and_then(|app| apps::cmd_stop(paths, &app))
+        Commands::Stop { app } => require_app(app).and_then(|app| apps::cmd_stop(paths, &app)),
+        Commands::Rollback { app, to, list } => {
+            require_app(app).and_then(|app| apps::cmd_rollback(paths, &app, to.as_deref(), list))
         }
-        Commands::Rollback { app, to, list } => require_app(app, None)
-            .and_then(|app| apps::cmd_rollback(paths, &app, to.as_deref(), list)),
         Commands::Init {
             no_systemd,
             ssh_key,
@@ -127,7 +126,7 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
             remote,
         } => quickstart::cmd_quickstart(&name, &runtime, remote.as_deref()),
         Commands::Backup { app, out } => {
-            require_app(app, None).and_then(|app| backup::cmd_backup(paths, &app, out.as_deref()))
+            require_app(app).and_then(|app| backup::cmd_backup(paths, &app, out.as_deref()))
         }
         Commands::Restore { app, file } => backup::cmd_restore(paths, &app, &file),
         Commands::Doctor { fix } => doctor::cmd_doctor(paths, fix),

@@ -70,7 +70,11 @@ fn main() -> Result<()> {
         local: args.local,
         via_ssh,
     };
-    let target = match route::target_for(matches.subcommand_name().unwrap_or(""), selection) {
+    let command_name = matches.subcommand_name().unwrap_or("");
+    let subcommand_name = matches
+        .subcommand_matches(command_name)
+        .and_then(|sub| sub.subcommand_name());
+    let target = match route::target_for(command_name, subcommand_name, selection) {
         Ok(target) => target,
         Err(e) => return Err(e),
     };
@@ -79,11 +83,13 @@ fn main() -> Result<()> {
         Err(e) => return Err(e),
     };
 
-    let (server, hint) = match &target {
+    let (server, source, hint) = match &target {
         Target::Remote {
-            server, app_hint, ..
-        } => (Some(server), app_hint.as_deref()),
-        Target::Local => (None, args.app_hint.as_deref()),
+            server,
+            source,
+            app_hint,
+        } => (Some(server), Some(*source), app_hint.as_deref()),
+        Target::Local => (None, None, args.app_hint.as_deref()),
     };
     let mut command = args.command;
     let hint_used = apply_app_hint(&mut command, hint);
@@ -98,7 +104,7 @@ fn main() -> Result<()> {
         }
     }
 
-    if let Some(server) = server {
+    if let (Some(server), Some(source)) = (server, source) {
         if let Commands::Dashboard { .. } = command {
             if let Err(e) = cli::remote::dashboard::check_remote_flags(&matches) {
                 return Err(e);
@@ -106,7 +112,7 @@ fn main() -> Result<()> {
             return cli::remote::dashboard::run_remote(server);
         }
         let sent_hint = if hint_used { hint } else { None };
-        match route::forward(&argv, server, sent_hint) {
+        match route::forward(&argv, server, source, sent_hint) {
             Ok(code) => std::process::exit(code),
             Err(e) => return Err(e),
         }

@@ -62,7 +62,7 @@ pub enum ContainerSubCmd {
         app: String,
 
         /// Path to the tar archive
-        #[arg(short, long)]
+        #[arg(long)]
         archive: PathBuf,
 
         /// Remote host (user@host)

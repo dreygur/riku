@@ -90,10 +90,6 @@ impl SshAddress {
         self.0.split_once('@').map_or("", |(user, _)| user)
     }
 
-    pub fn host(&self) -> &str {
-        self.0.split_once('@').map_or("", |(_, host)| host)
-    }
-
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -117,10 +113,12 @@ pub struct ServerList {
 }
 
 impl ServerList {
+    /// The server registered under `name`, if any.
     pub fn get(&self, name: &ServerName) -> Option<&Server> {
         self.servers.iter().find(|s| &s.name == name)
     }
 
+    /// The default server, or `None` when none is set.
     pub fn default_server(&self) -> Option<&Server> {
         self.default.as_ref().and_then(|name| self.get(name))
     }
@@ -147,6 +145,7 @@ impl ServerList {
         Ok(())
     }
 
+    /// Makes `name` the default server. It must already be registered.
     pub fn set_default(&mut self, name: &ServerName) -> Result<()> {
         if self.get(name).is_none() {
             return Err(anyhow!("no server named '{}'", name.as_str()));
@@ -155,6 +154,7 @@ impl ServerList {
         Ok(())
     }
 
+    /// Servers in the order they were added.
     pub fn iter(&self) -> impl Iterator<Item = &Server> {
         self.servers.iter()
     }

@@ -8,7 +8,7 @@
 //! exactly as before forwarding existed.
 
 use super::git_remote::read_remotes;
-use super::target::{resolve, Selection, Target};
+use super::target::{resolve, Selection, Source, Target};
 use super::{forward, store, Server};
 use crate::placement::{placement_of, Placement};
 use anyhow::{anyhow, Result};
@@ -39,11 +39,20 @@ enum Routing {
     Local,
 }
 
+/// `plugins` subcommands that create keys or sign files for the author, so
+/// they must never run on a server.
+const PLUGIN_AUTHORING: [&str; 3] = ["keygen", "sign", "scaffold"];
+
+fn is_plugin_authoring(command: &str, subcommand: Option<&str>) -> bool {
+    command == "plugins" && subcommand.is_some_and(|sub| PLUGIN_AUTHORING.contains(&sub))
+}
+
 /// Forwarded commands and `dashboard` resolve a target; a remote dashboard
 /// is opened locally rather than forwarded. Any other server only command
 /// given `-s` is refused instead of silently running here.
-fn routing(command: &str, flag_given: bool) -> Routing {
+fn routing(command: &str, subcommand: Option<&str>, flag_given: bool) -> Routing {
     match placement_of(command) {
+        Some(Placement::Forwarded) if is_plugin_authoring(command, subcommand) => Routing::Local,
         Some(Placement::Forwarded) => Routing::Resolve,
         Some(Placement::Server) if command == DASHBOARD => Routing::Resolve,
         Some(Placement::Server) if flag_given => Routing::Refuse,
@@ -51,12 +60,13 @@ fn routing(command: &str, flag_given: bool) -> Routing {
     }
 }
 
-/// Target for the top-level command `command`.
-pub fn target_for(command: &str, sel: Selection) -> Result<Target> {
+/// Target for the top-level command `command`, whose own subcommand (if
+/// any) is `subcommand`.
+pub fn target_for(command: &str, subcommand: Option<&str>, sel: Selection) -> Result<Target> {
     if sel.local || sel.via_ssh {
         return Ok(Target::Local);
     }
-    match routing(command, sel.flag.is_some()) {
+    match routing(command, subcommand, sel.flag.is_some()) {
         Routing::Resolve => resolve_from_disk(sel),
         Routing::Refuse => Err(anyhow!(
             "'{command}' runs on the server itself; use --local to run it here"
@@ -82,17 +92,31 @@ pub fn implied_server(via_ssh: bool) -> Option<Server> {
     }
 }
 
+fn target_line(server: &Server, source: Source, app_hint: Option<&str>) -> String {
+    let base = format!("[*] {} ({})", server.name.as_str(), server.address.as_str());
+    match (source, app_hint) {
+        (Source::GitRemote, Some(app)) => format!("{base} app {app} from git remote"),
+        _ => base,
+    }
+}
+
 /// Prints the target line, runs the command on `server`, and returns its
 /// exit code. `argv` is the full process argv, program name included.
+/// `source` is why `server` was chosen; `app_hint` is the app sent along.
 #[allow(clippy::question_mark)]
-pub fn forward(argv: &[String], server: &Server, app_hint: Option<&str>) -> Result<i32> {
+pub fn forward(
+    argv: &[String],
+    server: &Server,
+    source: Source,
+    app_hint: Option<&str>,
+) -> Result<i32> {
     let cli = crate::help::command(crate::help::FORWARD_HEADING);
     let consumed = match forward::server_arg_positions(&cli, argv) {
         Ok(consumed) => consumed,
         Err(e) => return Err(e),
     };
     let args = forward::strip_target_args(argv, &consumed);
-    eprintln!("[*] {} ({})", server.name.as_str(), server.address.as_str());
+    eprintln!("{}", target_line(server, source, app_hint));
     forward::run(server, args, app_hint)
 }
 

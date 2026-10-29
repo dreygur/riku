@@ -36,3 +36,8 @@ fn heading_names_the_implied_server() {
     );
     assert_eq!(forward_heading(None), FORWARD_HEADING);
 }
+
+#[test]
+fn clap_definitions_have_no_flag_clashes() {
+    Cli::command().debug_assert();
+}
