@@ -8,6 +8,178 @@ Complete reference for all Riku commands.
 riku <command> [subcommand] [options]
 ```
 
+`riku --help` groups the commands by where they run:
+
+```
+Local commands:
+  container, server, quickstart, plugin
+
+Server commands:
+  init, dashboard, plugin-emit, supervisor
+
+Forwarded commands (run on the selected server, or here with --local):
+  apps, agent, config, deploy, destroy, logs, ps, stats, run, restart, stop,
+  rollback, backup, restore, doctor, addon, update, install-plugins,
+  plugins, hook
+```
+
+When a server is implied (by the repo or the default), the forwarded heading
+names it: `Forwarded commands (run on solutech, or here with --local):`.
+
+## Remote Servers
+
+The local `riku` binary can manage any number of servers over ssh. It runs the
+system `ssh` and `git`; there is no ssh library inside riku. A forwarded
+command such as `riku ps myapp` runs on the selected server, streams its output
+back, and exits with the exit code of the remote command.
+
+### `riku server`
+
+The server list is local to your machine and always read here, never
+forwarded.
+
+```bash
+riku server add solutech riku@solutech.example
+riku server add edge riku@edge.example --admin root@edge.example
+riku server list
+riku server default solutech
+riku server remove edge
+```
+
+| Subcommand | Description |
+|------------|-------------|
+| `add <name> <user@host> [--admin <user@host>]` | Register a server. A name that already exists is an error |
+| `list` | Show name, address and admin login. The default is marked with `*` |
+| `remove <name>` | Forget a server. Removing the default leaves no default |
+| `default <name>` | Make a registered server the default |
+
+The first server you add is not made the default. Run `riku server default
+<name>` to pick one.
+
+A name is 1 to 32 characters of `a-z`, `0-9`, `_` or `-`, starting with a
+letter or digit. An address is `user@host`: the host is a hostname, an IPv4
+address, or a bracketed IPv6 literal. There is no port syntax. For a server
+on another port, define a `Host` alias in `~/.ssh/config` and use the alias as
+the host (`riku@solutech-alt`).
+
+`--admin` is a second login on the same host with sudo rights. Only
+`riku dashboard` uses it.
+
+The list is stored in `servers.toml` under `$XDG_CONFIG_HOME/riku/`, or
+`~/.config/riku/` when `XDG_CONFIG_HOME` is unset (also on macOS). The
+directory is mode 700 and the file mode 600. A hand edited entry is checked
+with the same rules as one typed on the command line.
+
+### Choosing the server
+
+For a forwarded command the first rule that applies wins:
+
+1. `-s <name>` or `--server <name>` on the command line, for that run only.
+2. The current git repo. Riku reads `git remote -v` and compares the
+   `user@host` of each scp style remote (`riku@solutech.example:myapp`)
+   exactly against the registered addresses. Two remotes that match
+   different servers are an error; choose with `-s`.
+3. The default server.
+4. No server: the command runs on this machine, as it did before.
+
+`--local` skips all of this and runs here. Outside a git repo, or without
+`git` installed, rule 2 finds nothing and selection moves on.
+
+The match is a plain string comparison. There is no DNS lookup and no ssh
+config alias resolution, so `riku@solutech.local` and `riku@192.168.1.20` are
+different servers even when they are the same machine. A remote written as an
+`ssh://` URL is not matched either. Register the address your remote uses.
+
+Before every forwarded command riku prints the target on stderr, so piped
+output stays clean:
+
+```
+[*] solutech (riku@solutech.example)
+```
+
+There is no confirmation prompt.
+
+### What runs where
+
+| Where | Commands |
+|-------|----------|
+| Local, always | `server`, `quickstart`, `container`, `plugin` |
+| Server only | `init`, `supervisor`, `plugin-emit`, and the hidden git and internal commands |
+| Forwarded | `apps`, `ps`, `logs`, `stats`, `config`, `deploy`, `restart`, `stop`, `destroy`, `rollback`, `run`, `backup`, `restore`, `addon`, `doctor`, `update`, `agent`, `install-plugins`, `plugins`, `hook` |
+
+Giving `-s` to a server only command is refused: `use --local to run it here`.
+`dashboard` is the exception, see [`riku dashboard`](#riku-dashboard). A client
+plugin that overrides a command still runs first, and it receives the selected
+server's address as `$1`.
+
+`run` and `logs --follow` allocate a tty on the server, so interactive
+programs and Ctrl-C behave. Everything else runs without one.
+
+### App name from the repo
+
+When the server was picked because of a git remote, a command that takes an
+app name can leave it out and use the remote's path. With the remote
+`riku@solutech.example:myapp`, these both act on `myapp`:
+
+```bash
+riku restart
+riku config show
+```
+
+This works for `deploy`, `logs`, `restart`, `stop`, `rollback`, `backup`,
+`config show`, `config live`, `stats app`, `addon bind` and `addon unbind`. A
+typed app name always wins. If the repo has remotes on that server naming
+different apps, no name is taken.
+
+The app is never inferred for `destroy`, `run`, `restore`, `config get`,
+`config set` and `config unset`: type it every time. `ps` without an app lists
+every app, so it does not take the name either.
+
+`riku destroy <app>` does not ask for confirmation. It deletes the app
+immediately, on whichever server is selected. Check the `[*]` line.
+
+### Quoting and the ssh command
+
+Forwarded arguments are shell quoted, so `riku run myapp echo "a b"` passes
+`a b` as one argument. The deploy key on the server no longer lets the login
+shell re-split the command; riku splits it itself with shell quoting rules and
+expands nothing (no globs, no variables). Plain `ssh` still works, and a
+leading `riku` word is accepted:
+
+```bash
+ssh riku@solutech.example ps myapp
+ssh riku@solutech.example riku ps myapp
+```
+
+### Upgrading existing servers
+
+Three changes break older setups.
+
+- `ps --scale` lost its `-s` short form, because `-s` now means `--server`.
+  Write `--scale`.
+- Quoted arguments over ssh now arrive intact. A command that relied on the
+  old splitting or glob expansion on the server behaves differently.
+- Keys installed by an older riku force `riku $SSH_ORIGINAL_COMMAND`. They
+  must be rewritten, and the order matters.
+
+Do this on each server:
+
+1. Install the new riku binary on the server, the way you installed the old
+   one. **Do this first.** A migrated key passes no arguments, which an
+   old binary cannot run: with the old binary and migrated keys, no command
+   works over ssh.
+2. As the deploy user, run `sudo -u riku riku doctor --fix`. It rewrites the
+   `command=` part of each old riku key in `~/.ssh/authorized_keys`, keeping
+   the key, its options and its name, and replacing the file atomically with
+   mode 600. It refuses to run as root.
+
+Until then `riku doctor` warns: `N deploy keys use the old forced command, run:
+riku doctor --fix`. `riku init` also migrates the keys.
+
+Update the server binary before forwarding from a new laptop binary as well.
+Older servers reject the hidden `--app-hint` option that carries the app from
+your git remote, so those commands fail until the server is updated.
+
 ## Application Management
 
 ### `riku apps`
@@ -40,7 +212,9 @@ This resets the working directory, detects the runtime, installs dependencies, a
 
 ### `riku destroy <app>`
 
-Permanently remove an application and all its data.
+Permanently remove an application and all its data. There is no confirmation
+prompt, and the app name is never taken from the git remote: type it every
+time. With a server selected, the app is removed from that server.
 
 ```bash
 riku destroy myapp
@@ -452,7 +626,12 @@ Diagnose the installation (deps, dirs, systemd, nginx, disk, SSH). See
 ```bash
 riku doctor
 sudo riku doctor   # most complete report
+sudo -u riku riku doctor --fix   # rewrite old deploy key forced commands
 ```
+
+`--fix` is the only thing doctor writes. It must run as the deploy user, not
+root, and only after the new binary is installed on the server. See
+[Upgrading existing servers](#upgrading-existing-servers).
 
 ---
 
@@ -466,12 +645,43 @@ covers the separate, fuller Next.js browser dashboard.
 ```bash
 riku dashboard
 riku dashboard --bind 0.0.0.0:8088 --token <tok>
+riku dashboard -s solutech
 ```
 
 | Option | Description |
 |--------|-------------|
 | `--bind <BIND>` | Address to bind (`host:port`). Default: `127.0.0.1:8088` |
 | `--token <TOKEN>` | Require this token on the API (also via `RIKU_DASHBOARD_TOKEN`) |
+
+With no server selected, the dashboard is served on this machine as above.
+With one selected (`-s`, the repo's git remote, or the default), it opens that
+server's dashboard in your local browser in one step:
+
+1. The server entry needs an admin login. Without one riku stops and prints
+   the command to fix it: `riku server add solutech riku@solutech.example
+   --admin root@solutech.example`. `--bind` and `--token` are refused, since
+   they only apply to a dashboard served here.
+2. Riku opens one ssh connection as the admin and runs the dashboard as the
+   deploy user (the user part of `address`) through `sudo`. The token is new
+   for each session, is never written to a file and never appears in a
+   process argument list on the server.
+3. If sudo asks for a password, riku asks for it on your terminal with echo
+   off, once. A wrong password ends the session; it is not retried. A
+   `NOPASSWD` rule or cached sudo credentials skip the prompt.
+4. Riku forwards local port 8088 to the dashboard, or a free port when 8088
+   is taken, prints the URL and opens the browser.
+
+Press Ctrl-C to end the session. This stops the remote dashboard and the ssh
+connection and leaves other people's sessions on the same server alone. Each
+session has its own dashboard process and token.
+
+The token is part of the URL, so it stays in your browser history and is
+visible in the arguments of the `open` or `xdg-open` process for the moment it
+starts. Both stay on your machine and the token stops working when the session
+ends. This is accepted.
+
+The `riku` binary must be on the deploy user's `PATH` or at
+`~/.local/bin/riku` on the server.
 
 ---
 

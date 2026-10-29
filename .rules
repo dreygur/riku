@@ -220,7 +220,7 @@ riku/
 ├── Cargo.toml              # workspace manifest (no root package, riku is one member crate)
 ├── crates/
 │   ├── riku/               # binary entry point (main.rs) + lib.rs re-exporting the others
-│   ├── riku-cli/           # CLI command handlers (apps/, agent/, doctor/, cli.rs, cmds.rs, ...)
+│   ├── riku-cli/           # CLI command handlers (apps/, agent/, doctor/, remote/ server list + forwarding + remote dashboard, dispatch/ local command execution, cli.rs, cmds.rs, ...)
 │   ├── riku-config/        # Path & environment configuration (repository layer)
 │   ├── riku-deploy/        # Deployment orchestration: git_ops, env_setup, releases, router, scaling
 │   ├── riku-nginx/         # Nginx configuration generation (context, template, sanitize, ssl)

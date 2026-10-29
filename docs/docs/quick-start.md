@@ -203,6 +203,34 @@ When you push to Riku:
 
 ---
 
+## Manage the Server from Your Laptop
+
+Register the server once and the local `riku` runs commands on it over ssh:
+
+```bash
+riku server add solutech riku@your-server-ip
+riku server default solutech
+riku ps myapp
+```
+
+Inside a repo whose git remote is `riku@your-server-ip:myapp`, the server and
+the app name are picked up from the remote, so `riku restart` is enough. Riku
+prints `[*] solutech (riku@your-server-ip)` on stderr so you can see where a
+command went. Use `-s <name>` for another server and `--local` to run on the
+current machine. `riku destroy` always needs the app name and does not ask for
+confirmation.
+
+To open the server's dashboard in your browser, register the server with an
+admin login (`--admin root@your-server-ip`) and run `riku dashboard -s
+solutech`. An existing entry has no way to be edited: remove it and add it
+again.
+
+Servers set up with an older riku need their deploy keys migrated first. See
+[Upgrading existing servers](cli.md#upgrading-existing-servers). The full
+rules are in [Remote Servers](cli.md#remote-servers).
+
+---
+
 ## Next Steps
 
 | Task | Command |
