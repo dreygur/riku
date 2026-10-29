@@ -15,7 +15,7 @@ pub mod checks;
 pub mod forced_commands;
 pub mod router_check;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use colored::Colorize;
@@ -62,15 +62,23 @@ impl Check {
     }
 }
 
+/// The invoking user's home directory.
+pub fn current_home() -> Result<PathBuf> {
+    match dirs::home_dir() {
+        Some(home) => Ok(home),
+        None => Err(anyhow::anyhow!("could not determine the home directory")),
+    }
+}
+
 /// The riku tree to diagnose, with the home that owns it. Under `sudo`, HOME
 /// is root's, so a root run checks the deploy user's tree instead, the one
 /// deploys and the supervisor use. Only `--fix` writes, and it writes just
 /// the `authorized_keys` of that same user.
 fn diagnosed_target(paths: &RikuPaths) -> Result<(RikuPaths, PathBuf)> {
     if std::env::var("USER").unwrap_or_default() != "root" {
-        return match dirs::home_dir() {
-            Some(home) => Ok((paths.clone(), home)),
-            None => Err(anyhow::anyhow!("could not determine the home directory")),
+        return match current_home() {
+            Ok(home) => Ok((paths.clone(), home)),
+            Err(e) => Err(e),
         };
     }
     match DeployUser::lookup() {
@@ -102,17 +110,17 @@ pub fn cmd_doctor(paths: &RikuPaths, fix: bool) -> Result<()> {
         display::blank();
     }
 
-    let mut checks = collect(&paths);
-    checks.push(forced_commands::forced_commands(&home));
+    let checks = collect(&paths, &home);
     render(&checks);
     summarize_and_exit(&checks);
 
     Ok(())
 }
 
-/// Gather all checks in display order. The dashboard's `/api/doctor` serves
-/// this same list.
-pub fn collect(paths: &RikuPaths) -> Vec<Check> {
+/// Gather all checks in display order. `home` is the home whose
+/// `authorized_keys` is inspected. The dashboard's `/api/doctor` serves this
+/// same list.
+pub fn collect(paths: &RikuPaths, home: &Path) -> Vec<Check> {
     let mut checks = Vec::new();
     checks.extend(checks::dependencies());
     checks.push(checks::directories(paths));
@@ -122,6 +130,7 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     checks.push(checks::plugins(paths));
     checks.push(checks::disk(paths));
     checks.push(checks::ssh_access());
+    checks.push(forced_commands::forced_commands(home));
     checks.extend(app_env::renamed_keys(paths));
     checks
 }

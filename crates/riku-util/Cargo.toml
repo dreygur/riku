@@ -12,7 +12,7 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 croner = "4"
 libc = { workspace = true }
-nix = { workspace = true, features = ["resource"] }
+nix = { workspace = true, features = ["resource", "user"] }
 once_cell = { workspace = true }
 regex = "1"
 colored = { workspace = true }

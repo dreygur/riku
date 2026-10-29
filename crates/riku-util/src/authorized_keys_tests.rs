@@ -96,3 +96,16 @@ fn migrate_file_does_not_follow_a_symlink_at_the_temp_path() {
     assert_eq!(fs::read_to_string(&victim).unwrap(), "precious");
     assert_eq!(fs::read_to_string(&path).unwrap(), format!("{NEW}\n"));
 }
+
+#[test]
+fn migrate_file_refuses_to_run_as_root_and_leaves_the_file_alone() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("authorized_keys");
+    let original = format!("{OLD}\n{FOREIGN}");
+    fs::write(&path, &original).unwrap();
+
+    let err = migrate_file_as(&path, 0).unwrap_err().to_string();
+    assert!(err.contains("deploy user"), "{err}");
+    assert_eq!(fs::read_to_string(&path).unwrap(), original);
+    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1, "no temp file");
+}

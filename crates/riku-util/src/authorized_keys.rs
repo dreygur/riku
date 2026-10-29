@@ -10,7 +10,8 @@
 //! old suffix. Only that suffix is removed; every other byte of every line,
 //! including line endings and the final newline state, is preserved. The
 //! file is replaced by renaming a mode 600 sibling, so a failed write never
-//! leaves a truncated `authorized_keys`.
+//! leaves a truncated `authorized_keys`. The migration refuses to run as root,
+//! since the file lives in a home the deploy user controls.
 
 use anyhow::{anyhow, Result};
 use std::fs;
@@ -95,7 +96,10 @@ fn replace_file(path: &Path, contents: &str) -> Result<()> {
     };
     let original = match fs::metadata(path) {
         Ok(meta) => meta,
-        Err(e) => return Err(anyhow!("failed to stat {}: {e}", path.display())),
+        Err(e) => {
+            let _ = fs::remove_file(&temp);
+            return Err(anyhow!("failed to stat {}: {e}", path.display()));
+        }
     };
     if let Err(e) = std::os::unix::fs::fchown(&file, Some(original.uid()), Some(original.gid())) {
         let _ = fs::remove_file(&temp);
@@ -115,10 +119,25 @@ fn replace_file(path: &Path, contents: &str) -> Result<()> {
     Ok(())
 }
 
+/// Migrate the file at `path` in place as the current user. See [`migrate_file_as`].
+pub fn migrate_file(path: &Path) -> Result<usize> {
+    migrate_file_as(path, nix::unistd::geteuid().as_raw())
+}
+
 /// Migrate the file at `path` in place and return how many lines changed.
 /// A missing file counts as zero. The file is rewritten only when the count
 /// is nonzero.
-pub fn migrate_file(path: &Path) -> Result<usize> {
+///
+/// Refuses `euid` 0: the path sits in a home the deploy user controls, so root
+/// canonicalizing and rewriting it could be steered through a symlink to any
+/// root owned file.
+pub fn migrate_file_as(path: &Path, euid: u32) -> Result<usize> {
+    if euid == 0 {
+        return Err(anyhow!(
+            "refusing to rewrite {} as root: run it as the deploy user, for example sudo -u <deploy user> riku doctor --fix",
+            path.display()
+        ));
+    }
     let text = match fs::read_to_string(path) {
         Ok(text) => text,
         Err(e) if e.kind() == ErrorKind::NotFound => return Ok(0),

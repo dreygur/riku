@@ -7,9 +7,11 @@
 use std::io::ErrorKind;
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use crate::util::authorized_keys::{authorized_keys_path, migrate_file, migrate_text};
+
+use crate::setup::deploy_user::deploy_user_name;
 
 use super::Check;
 
@@ -42,6 +44,12 @@ fn check_text(text: &str) -> Check {
 
 /// Migrate this user's `authorized_keys` and return the number of lines changed.
 pub fn fix(home: &Path) -> Result<usize> {
+    if nix::unistd::geteuid().is_root() {
+        return Err(anyhow!(
+            "doctor --fix must run as the deploy user, not root: sudo -u {} riku doctor --fix",
+            deploy_user_name()
+        ));
+    }
     migrate_file(&authorized_keys_path(home))
 }
 

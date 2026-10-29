@@ -34,8 +34,12 @@ pub(crate) async fn doctor(
         return denied;
     }
     let paths = state.paths.clone();
+    let home = match doctor::current_home() {
+        Ok(home) => home,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    };
     let out = tokio::task::spawn_blocking(move || {
-        doctor::collect(&paths)
+        doctor::collect(&paths, &home)
             .into_iter()
             .map(|c| json!({ "name": c.name, "status": status_str(c.status), "detail": c.detail }))
             .collect::<Vec<_>>()

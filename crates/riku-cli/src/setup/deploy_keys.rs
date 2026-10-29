@@ -121,6 +121,13 @@ pub fn add_deploy_keys(keys: &[PublicKey]) -> Result<()> {
         Ok(path) => path,
         Err(e) => return Err(e),
     };
+    if nix::unistd::geteuid().is_root() {
+        echo(
+            "      ! Skipped migrating existing deploy keys as root: run sudo -u <deploy user> riku doctor --fix",
+            "yellow",
+        );
+        return Ok(());
+    }
     match migrate_file(&path) {
         Ok(0) => Ok(()),
         Ok(count) => {
