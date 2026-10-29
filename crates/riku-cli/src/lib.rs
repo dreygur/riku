@@ -31,7 +31,7 @@ pub mod scp;
 pub mod setup;
 pub mod ssh_command;
 
-pub use cli::{Cli, Commands};
+pub use cli::{require_app, Cli, Commands};
 pub use cmds::{
     AddonCmd, AppsCmd, ConfigCmd, HookCmd, MarketplaceCmd, PluginCmd, PluginsCmd, StatsCmd,
     TrustCmd,

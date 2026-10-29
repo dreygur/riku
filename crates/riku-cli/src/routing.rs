@@ -4,6 +4,7 @@
 //! and builds the argument list passed to those plugins.
 
 use super::{Commands, ConfigCmd};
+use crate::remote::SshAddress;
 
 /// Extract the plugin command name from a CLI command.
 /// Returns None for commands that shouldn't be overridden by plugins.
@@ -54,13 +55,11 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
 
 /// Build arguments for client plugin execution.
 /// Plugin interface: $1=server, $2=app, $3=command, $4+=extra args
-pub fn build_plugin_args(command: &Commands) -> Vec<String> {
-    // For now, pass empty server (plugin can determine from git remote)
-    // and extract app name and command-specific args
-    let mut args = Vec::new();
-
-    // $1: server (empty for now, plugins can determine from git remote)
-    args.push(String::new());
+///
+/// `$1` is the selected server's address, or empty when the command runs
+/// locally. An app name the user left out is passed as empty.
+pub fn build_plugin_args(command: &Commands, server: Option<&SshAddress>) -> Vec<String> {
+    let mut args = vec![server.map(|s| s.as_str().to_string()).unwrap_or_default()];
 
     // $2: app name and $3+: command-specific args
     match command {
@@ -70,7 +69,7 @@ pub fn build_plugin_args(command: &Commands) -> Vec<String> {
         }
         Commands::Config(cmd) => match cmd {
             ConfigCmd::Show { app } => {
-                args.push(app.clone());
+                args.push(app.clone().unwrap_or_default());
                 args.push("config:show".to_string());
             }
             ConfigCmd::Get { app, key } => {
@@ -88,12 +87,12 @@ pub fn build_plugin_args(command: &Commands) -> Vec<String> {
                 args.extend(keys.clone());
             }
             ConfigCmd::Live { app } => {
-                args.push(app.clone());
+                args.push(app.clone().unwrap_or_default());
                 args.push("config:live".to_string());
             }
         },
         Commands::Deploy { app, from } => {
-            args.push(app.clone());
+            args.push(app.clone().unwrap_or_default());
             args.push("deploy".to_string());
             if let Some(from_path) = from {
                 args.push("--from".to_string());
@@ -101,7 +100,7 @@ pub fn build_plugin_args(command: &Commands) -> Vec<String> {
             }
         }
         Commands::Destroy { app } => {
-            args.push(app.clone());
+            args.push(app.clone().unwrap_or_default());
             args.push("destroy".to_string());
         }
         Commands::Logs {
@@ -110,7 +109,7 @@ pub fn build_plugin_args(command: &Commands) -> Vec<String> {
             deploy,
             follow,
         } => {
-            args.push(app.clone());
+            args.push(app.clone().unwrap_or_default());
             args.push("logs".to_string());
             if *deploy {
                 args.push("--deploy".to_string());
@@ -138,11 +137,11 @@ pub fn build_plugin_args(command: &Commands) -> Vec<String> {
             args.extend(cmd.clone());
         }
         Commands::Restart { app, .. } => {
-            args.push(app.clone());
+            args.push(app.clone().unwrap_or_default());
             args.push("restart".to_string());
         }
         Commands::Stop { app } => {
-            args.push(app.clone());
+            args.push(app.clone().unwrap_or_default());
             args.push("stop".to_string());
         }
         Commands::Container { .. } => {
@@ -154,3 +153,7 @@ pub fn build_plugin_args(command: &Commands) -> Vec<String> {
 
     args
 }
+
+#[cfg(test)]
+#[path = "routing_tests.rs"]
+mod tests;

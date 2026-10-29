@@ -26,3 +26,13 @@ fn help_lists_groups_in_order_and_each_visible_command_once() {
 fn braces_in_descriptions_do_not_break_the_template() {
     assert_eq!(escape_braces("a {b} c"), "a (b) c");
 }
+
+#[test]
+fn heading_names_the_implied_server() {
+    let name = ServerName::try_from("solutech").unwrap();
+    assert_eq!(
+        forward_heading(Some(&name)),
+        "Forwarded commands (run on solutech, or here with --local):"
+    );
+    assert_eq!(forward_heading(None), FORWARD_HEADING);
+}

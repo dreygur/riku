@@ -33,8 +33,8 @@ pub enum ConfigCmd {
     /// Show app configuration
     #[command(after_help = "Examples:\n  riku config show myapp")]
     Show {
-        /// App name
-        app: String,
+        /// App name (default: the app of this repo's riku git remote)
+        app: Option<String>,
     },
 
     /// Get a single configuration value
@@ -75,8 +75,8 @@ pub enum ConfigCmd {
     /// Show live running configuration
     #[command(after_help = "Examples:\n  riku config live myapp")]
     Live {
-        /// App name
-        app: String,
+        /// App name (default: the app of this repo's riku git remote)
+        app: Option<String>,
     },
 }
 
@@ -90,8 +90,8 @@ pub enum StatsCmd {
     /// Show stats for a specific app
     #[command(after_help = "Examples:\n  riku stats app myapp")]
     App {
-        /// App name
-        app: String,
+        /// App name (default: the app of this repo's riku git remote)
+        app: Option<String>,
     },
 }
 
@@ -148,8 +148,8 @@ pub enum AddonCmd {
     Bind {
         /// Instance name
         instance: String,
-        /// App name
-        app: String,
+        /// App name (default: the app of this repo's riku git remote)
+        app: Option<String>,
     },
 
     /// Unbind an instance from an app, removing its env
@@ -157,8 +157,8 @@ pub enum AddonCmd {
     Unbind {
         /// Instance name
         instance: String,
-        /// App name
-        app: String,
+        /// App name (default: the app of this repo's riku git remote)
+        app: Option<String>,
     },
 
     /// Destroy an instance (must be unbound first)

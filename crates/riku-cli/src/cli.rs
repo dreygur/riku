@@ -14,8 +14,35 @@ use super::container::ContainerSubCmd;
     long_about = "riku is a single-binary micro-PaaS that provides Heroku-like git push deployments.\nManage apps, config, processes, and plugins, all from one tool."
 )]
 pub struct Cli {
+    /// Run a forwarded command on this registered server
+    #[arg(
+        short = 's',
+        long = "server",
+        value_name = "NAME",
+        global = true,
+        conflicts_with = "local"
+    )]
+    pub server: Option<String>,
+
+    /// Run here, even when a server would be selected
+    #[arg(long, global = true)]
+    pub local: bool,
+
+    /// App name the client took from its git remote. Set by forwarding, not by hand.
+    #[arg(long = "app-hint", value_name = "APP", global = true, hide = true)]
+    pub app_hint: Option<String>,
+
     #[command(subcommand)]
     pub command: Commands,
+}
+
+/// Returns the typed app name, else the app hint.
+pub fn require_app(typed: Option<String>, hint: Option<&str>) -> anyhow::Result<String> {
+    match (typed, hint) {
+        (Some(app), _) => Ok(app),
+        (None, Some(hint)) => Ok(hint.to_string()),
+        (None, None) => Err(anyhow::anyhow!("app name required")),
+    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -78,8 +105,8 @@ pub enum Commands {
         after_help = "Examples:\n  riku deploy myapp\n  riku deploy myapp --from ./local-path"
     )]
     Deploy {
-        /// App name
-        app: String,
+        /// App name (default: the app of this repo's riku git remote)
+        app: Option<String>,
 
         /// Deploy from local path instead of git repo
         #[arg(long)]
@@ -89,8 +116,8 @@ pub enum Commands {
     /// Remove an app (preserves data dir)
     #[command(after_help = "Examples:\n  riku destroy myapp")]
     Destroy {
-        /// App name
-        app: String,
+        /// App name (default: the app of this repo's riku git remote)
+        app: Option<String>,
     },
 
     /// Tail app logs
@@ -98,8 +125,8 @@ pub enum Commands {
         after_help = "Examples:\n  riku logs myapp\n  riku logs myapp web\n  riku logs myapp worker\n  riku logs myapp --deploy\n  riku logs myapp --deploy --follow"
     )]
     Logs {
-        /// App name
-        app: String,
+        /// App name (default: the app of this repo's riku git remote)
+        app: Option<String>,
         /// Process filter (default: all)
         #[arg(default_value = "*")]
         process: String,
@@ -123,7 +150,7 @@ pub enum Commands {
         #[arg(long, short)]
         verbose: bool,
         /// Scale workers (e.g. web=4 worker=2)
-        #[arg(short, long, num_args = 1..)]
+        #[arg(long, num_args = 1..)]
         scale: Vec<String>,
     },
 
@@ -150,8 +177,8 @@ pub enum Commands {
     /// Restart an app (hot reload for zero downtime)
     #[command(after_help = "Examples:\n  riku restart myapp\n  riku restart myapp --hot")]
     Restart {
-        /// App name
-        app: String,
+        /// App name (default: the app of this repo's riku git remote)
+        app: Option<String>,
         /// Use hot reload (zero downtime)
         #[arg(long, short)]
         hot: bool,
@@ -160,8 +187,8 @@ pub enum Commands {
     /// Stop an app
     #[command(after_help = "Examples:\n  riku stop myapp")]
     Stop {
-        /// App name
-        app: String,
+        /// App name (default: the app of this repo's riku git remote)
+        app: Option<String>,
     },
 
     /// Roll an app back to a previous release
@@ -169,8 +196,8 @@ pub enum Commands {
         after_help = "Examples:\n  riku rollback myapp\n  riku rollback myapp --to <sha>\n  riku rollback myapp --list"
     )]
     Rollback {
-        /// App name
-        app: String,
+        /// App name (default: the app of this repo's riku git remote)
+        app: Option<String>,
         /// Roll back to a specific commit SHA (default: the previous release)
         #[arg(long)]
         to: Option<String>,
@@ -220,8 +247,8 @@ pub enum Commands {
         after_help = "Examples:\n  riku backup myapp\n  riku backup myapp --out /backups/myapp.tar.gz"
     )]
     Backup {
-        /// App name
-        app: String,
+        /// App name (default: the app of this repo's riku git remote)
+        app: Option<String>,
         /// Output path (default: ./<app>-backup-<timestamp>.tar.gz)
         #[arg(long)]
         out: Option<String>,

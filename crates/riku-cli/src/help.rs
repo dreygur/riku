@@ -7,13 +7,29 @@ use clap::{Command, CommandFactory};
 
 use crate::cli::Cli;
 use crate::placement::{placement_of, Placement};
+use crate::remote::ServerName;
 
 const LOCAL_HEADING: &str = "Local commands:";
 const SERVER_HEADING: &str = "Server commands:";
 const HELP_ABOUT: &str = "Print this message or the help of the given subcommand(s)";
 
+/// Forwarded group title when no server is implied by the repo or a default.
+pub const FORWARD_HEADING: &str =
+    "Forwarded commands (run on the selected server, or here with --local):";
+
 fn escape_braces(text: &str) -> String {
     text.replace('{', "(").replace('}', ")")
+}
+
+/// Forwarded group title naming the server a command without `-s` reaches.
+pub fn forward_heading(server: Option<&ServerName>) -> String {
+    match server {
+        Some(name) => format!(
+            "Forwarded commands (run on {}, or here with --local):",
+            name.as_str()
+        ),
+        None => FORWARD_HEADING.to_string(),
+    }
 }
 
 fn visible_in(root: &Command, placement: Placement) -> Vec<(String, String)> {

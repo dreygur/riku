@@ -7,6 +7,7 @@ mod e2e_tests;
 mod nginx_tests;
 mod plugin_tests;
 mod regression_tests;
+mod remote_tests;
 mod resilience_tests;
 mod sandbox_tests;
 mod security_tests;

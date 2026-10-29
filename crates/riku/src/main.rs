@@ -3,20 +3,20 @@
 //! lib) rather than being recompiled here.
 
 use anyhow::Result;
-use clap::FromArgMatches;
+use clap::error::ErrorKind;
+use clap::{ArgMatches, FromArgMatches};
 
 use riku::cli::client_plugins;
 use riku::cli::container;
+use riku::cli::remote::route;
+use riku::cli::remote::target::{Selection, Target};
 use riku::cli::routing::{build_plugin_args, get_plugin_command};
 use riku::cli::{
-    AddonCmd, AppsCmd, Cli, Commands, ConfigCmd, HookCmd, MarketplaceCmd, PluginCmd, PluginsCmd,
-    StatsCmd, TrustCmd,
+    require_app, AddonCmd, AppsCmd, Cli, Commands, ConfigCmd, HookCmd, MarketplaceCmd, PluginCmd,
+    PluginsCmd, StatsCmd, TrustCmd,
 };
 use riku::config::RikuPaths;
 use riku::{cli, dashboard, supervisor};
-
-const FORWARDED_HEADING: &str =
-    "Forwarded commands (run on the selected server, or here with --local):";
 
 /// Initialize tracing subscriber for structured logging
 fn init_tracing() {
@@ -33,6 +33,25 @@ fn init_tracing() {
         .init();
 }
 
+/// Parses `argv`. A help request is rendered again with a heading that names
+/// the server a bare forwarded command would reach; that render exits.
+fn parse(argv: &[String], via_ssh: bool) -> ArgMatches {
+    match cli::help::command(cli::help::FORWARD_HEADING).try_get_matches_from(argv) {
+        Ok(matches) => matches,
+        Err(e)
+            if matches!(
+                e.kind(),
+                ErrorKind::DisplayHelp | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+            ) =>
+        {
+            let server = route::implied_server(via_ssh);
+            let heading = cli::help::forward_heading(server.as_ref().map(|s| &s.name));
+            cli::help::command(&heading).get_matches_from(argv)
+        }
+        Err(e) => e.exit(),
+    }
+}
+
 // Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
 #[allow(clippy::question_mark)]
 fn main() -> Result<()> {
@@ -43,10 +62,20 @@ fn main() -> Result<()> {
         Ok(argv) => argv,
         Err(e) => return Err(e),
     };
-    let matches = cli::help::command(FORWARDED_HEADING).get_matches_from(argv);
+    let via_ssh = std::env::var_os("SSH_ORIGINAL_COMMAND").is_some();
+    let matches = parse(&argv, via_ssh);
     let args = match Cli::from_arg_matches(&matches) {
         Ok(args) => args,
         Err(e) => e.exit(),
+    };
+    let selection = Selection {
+        flag: args.server.as_deref(),
+        local: args.local,
+        via_ssh,
+    };
+    let target = match route::target_for(matches.subcommand_name().unwrap_or(""), selection) {
+        Ok(target) => target,
+        Err(e) => return Err(e),
     };
     let paths = match RikuPaths::from_env() {
         Ok(paths) => paths,
@@ -55,12 +84,27 @@ fn main() -> Result<()> {
 
     // Check for client plugins first: they can override built-in commands.
     if let Some(plugin_name) = get_plugin_command(&args.command) {
-        let plugin_args = build_plugin_args(&args.command);
+        let server = match &target {
+            Target::Remote { server, .. } => Some(&server.address),
+            Target::Local => None,
+        };
+        let plugin_args = build_plugin_args(&args.command, server);
         if client_plugins::try_execute_client_plugin(&plugin_name, &plugin_args)? {
             return Ok(());
         }
     }
 
+    if let Target::Remote {
+        server, app_hint, ..
+    } = &target
+    {
+        match route::forward(&argv, server, app_hint.as_deref()) {
+            Ok(code) => std::process::exit(code),
+            Err(e) => return Err(e),
+        }
+    }
+
+    let hint = args.app_hint.as_deref();
     match args.command {
         Commands::Agent {
             intro,
@@ -90,23 +134,39 @@ fn main() -> Result<()> {
             None => cli::apps::cmd_apps(&paths)?,
         },
         Commands::Config(cmd) => match cmd {
-            ConfigCmd::Show { app } => cli::apps::cmd_config_show(&paths, &app)?,
+            ConfigCmd::Show { app } => match require_app(app, hint) {
+                Ok(app) => cli::apps::cmd_config_show(&paths, &app)?,
+                Err(e) => return Err(e),
+            },
             ConfigCmd::Get { app, key } => cli::apps::cmd_config_get(&paths, &app, &key)?,
             ConfigCmd::Set { app, settings } => cli::apps::cmd_config_set(&paths, &app, &settings)?,
             ConfigCmd::Unset { app, keys } => cli::apps::cmd_config_unset(&paths, &app, &keys)?,
-            ConfigCmd::Live { app } => cli::apps::cmd_config_live(&paths, &app)?,
+            ConfigCmd::Live { app } => match require_app(app, hint) {
+                Ok(app) => cli::apps::cmd_config_live(&paths, &app)?,
+                Err(e) => return Err(e),
+            },
         },
         Commands::Container { cmd } => {
             cli::container::cmd_container(container::ContainerCmd { command: cmd }, &paths)?
         }
-        Commands::Deploy { app, from } => cli::apps::cmd_deploy(&paths, &app, from.as_deref())?,
-        Commands::Destroy { app } => cli::apps::cmd_destroy(&paths, &app)?,
+        Commands::Deploy { app, from } => match require_app(app, hint) {
+            Ok(app) => cli::apps::cmd_deploy(&paths, &app, from.as_deref())?,
+            Err(e) => return Err(e),
+        },
+        Commands::Destroy { app } => match require_app(app, hint) {
+            Ok(app) => cli::apps::cmd_destroy(&paths, &app)?,
+            Err(e) => return Err(e),
+        },
         Commands::Logs {
             app,
             process,
             deploy,
             follow,
         } => {
+            let app = match require_app(app, hint) {
+                Ok(app) => app,
+                Err(e) => return Err(e),
+            };
             if deploy {
                 cli::apps::cmd_deploy_logs(&paths, &app, follow)?;
             } else {
@@ -133,18 +193,32 @@ fn main() -> Result<()> {
         }
         Commands::Stats(cmd) => match cmd {
             StatsCmd::All => cli::apps::cmd_stats_all(&paths)?,
-            StatsCmd::App { app } => cli::apps::cmd_stats_app(&paths, &app)?,
+            StatsCmd::App { app } => match require_app(app, hint) {
+                Ok(app) => cli::apps::cmd_stats_app(&paths, &app)?,
+                Err(e) => return Err(e),
+            },
         },
         Commands::Run { app, cmd } => cli::apps::cmd_run(&paths, &app, &cmd)?,
         Commands::Restart { app, hot } => {
+            let app = match require_app(app, hint) {
+                Ok(app) => app,
+                Err(e) => return Err(e),
+            };
             if hot {
                 cli::apps::cmd_hot_reload(&paths, &app)?;
             } else {
                 cli::apps::cmd_restart(&paths, &app)?;
             }
         }
-        Commands::Stop { app } => cli::apps::cmd_stop(&paths, &app)?,
+        Commands::Stop { app } => match require_app(app, hint) {
+            Ok(app) => cli::apps::cmd_stop(&paths, &app)?,
+            Err(e) => return Err(e),
+        },
         Commands::Rollback { app, to, list } => {
+            let app = match require_app(app, hint) {
+                Ok(app) => app,
+                Err(e) => return Err(e),
+            };
             cli::apps::cmd_rollback(&paths, &app, to.as_deref(), list)?
         }
         Commands::Init {
@@ -163,7 +237,10 @@ fn main() -> Result<()> {
             runtime,
             remote,
         } => cli::quickstart::cmd_quickstart(&name, &runtime, remote.as_deref())?,
-        Commands::Backup { app, out } => cli::backup::cmd_backup(&paths, &app, out.as_deref())?,
+        Commands::Backup { app, out } => match require_app(app, hint) {
+            Ok(app) => cli::backup::cmd_backup(&paths, &app, out.as_deref())?,
+            Err(e) => return Err(e),
+        },
         Commands::Restore { app, file } => cli::backup::cmd_restore(&paths, &app, &file)?,
         Commands::Doctor { fix } => cli::doctor::cmd_doctor(&paths, fix)?,
         Commands::Dashboard { bind, token } => dashboard::run(&paths, &bind, token)?,
@@ -173,9 +250,17 @@ fn main() -> Result<()> {
                 cli::addon::cmd_addon_create(&paths, &plugin, &name)?
             }
             AddonCmd::Bind { instance, app } => {
+                let app = match require_app(app, hint) {
+                    Ok(app) => app,
+                    Err(e) => return Err(e),
+                };
                 cli::addon::cmd_addon_bind(&paths, &instance, &app)?
             }
             AddonCmd::Unbind { instance, app } => {
+                let app = match require_app(app, hint) {
+                    Ok(app) => app,
+                    Err(e) => return Err(e),
+                };
                 cli::addon::cmd_addon_unbind(&paths, &instance, &app)?
             }
             AddonCmd::Destroy { instance } => cli::addon::cmd_addon_destroy(&paths, &instance)?,
