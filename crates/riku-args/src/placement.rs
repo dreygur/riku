@@ -1,5 +1,9 @@
 //! Where each top-level command runs: on this machine only, on the server
-//! only, or on the selected server when one is configured.
+//! only, or on the selected server when one is configured. `client_rule` is
+//! the same question for the laptop only `rk` binary.
+
+const CONTAINER: &str = "container";
+const DASHBOARD: &str = "dashboard";
 
 /// Execution site of a top-level command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,6 +30,45 @@ pub fn placement_of(name: &str) -> Option<Placement> {
         | "rollback" | "run" | "backup" | "restore" | "addon" | "doctor" | "update" | "agent"
         | "install-plugins" | "plugins" | "hook" => Some(Placement::Forwarded),
         _ => None,
+    }
+}
+
+/// Where a command that `rk` refuses has to be run instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Elsewhere {
+    /// Only the riku on the server can run it.
+    OnServer,
+    /// Only the full riku binary can run it.
+    FullBinary,
+}
+
+/// How `rk` treats a top-level command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClientRule {
+    /// Runs on the laptop.
+    RunsHere,
+    /// Goes to the selected server.
+    Forwards,
+    /// Not part of `rk`; the payload says where to run it instead.
+    Refused(Elsewhere),
+}
+
+/// The one rule for what `rk` runs, forwards and refuses, by clap name.
+///
+/// `dashboard` is server only for riku but runs here in its remote form, and
+/// `container` is local for riku but needs the full binary. Names that are
+/// not riku commands forward, as the server reports them.
+pub fn client_rule(name: &str) -> ClientRule {
+    if name == CONTAINER {
+        return ClientRule::Refused(Elsewhere::FullBinary);
+    }
+    if name == DASHBOARD {
+        return ClientRule::RunsHere;
+    }
+    match placement_of(name) {
+        Some(Placement::Local) => ClientRule::RunsHere,
+        Some(Placement::Server) => ClientRule::Refused(Elsewhere::OnServer),
+        Some(Placement::Forwarded) | None => ClientRule::Forwards,
     }
 }
 

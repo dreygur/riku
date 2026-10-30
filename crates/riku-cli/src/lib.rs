@@ -8,7 +8,7 @@ pub(crate) use riku_nginx as nginx;
 pub(crate) use riku_supervisor as supervisor;
 pub(crate) use riku_util as util;
 
-pub use riku_args::{app_hint, cli, cmds, help, placement};
+pub use riku_args::{address, app_hint, cli, cmds, help, parse, placement};
 pub use riku_remote::{client_plugins, quickstart, remote, routing};
 
 pub mod addon;

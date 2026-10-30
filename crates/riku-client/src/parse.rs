@@ -1,9 +1,9 @@
 //! Turns `argv` into clap matches for `rk`, with the client's own help.
 
 use anyhow::Result;
-use clap::error::ErrorKind;
 use clap::ArgMatches;
 use riku_args::help::client_command;
+use riku_args::parse::parse_with_help;
 use riku_remote::remote::route::implied_server;
 
 use crate::local::check_supported;
@@ -22,17 +22,9 @@ fn refusal_behind(argv: &[String]) -> Result<()> {
 /// Parses `argv`. A help request is rendered again with a heading that names
 /// the server a bare forwarded command would reach; that render exits.
 pub fn parse(argv: &[String]) -> Result<ArgMatches> {
-    match client_command(None).try_get_matches_from(argv) {
+    let implied = || implied_server(false).map(|s| s.name);
+    match parse_with_help(argv, client_command, implied) {
         Ok(matches) => Ok(matches),
-        Err(e)
-            if matches!(
-                e.kind(),
-                ErrorKind::DisplayHelp | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
-            ) =>
-        {
-            let server = implied_server(false);
-            Ok(client_command(server.as_ref().map(|s| &s.name)).get_matches_from(argv))
-        }
         Err(e) => match refusal_behind(argv) {
             Ok(()) => e.exit(),
             Err(refusal) => Err(refusal),

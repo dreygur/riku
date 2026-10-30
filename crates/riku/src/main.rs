@@ -3,11 +3,12 @@
 //! lib) rather than being recompiled here.
 
 use anyhow::Result;
-use clap::error::ErrorKind;
 use clap::{ArgMatches, FromArgMatches};
 
+use riku::cli::address::ServerName;
 use riku::cli::app_hint::apply_app_hint;
 use riku::cli::client_plugins;
+use riku::cli::parse::parse_with_help;
 use riku::cli::remote::route;
 use riku::cli::remote::target::{Selection, Target};
 use riku::cli::routing::{build_plugin_args, get_plugin_command};
@@ -33,18 +34,11 @@ fn init_tracing() {
 /// Parses `argv`. A help request is rendered again with a heading that names
 /// the server a bare forwarded command would reach; that render exits.
 fn parse(argv: &[String], via_ssh: bool) -> ArgMatches {
-    match cli::help::command(cli::help::FORWARD_HEADING).try_get_matches_from(argv) {
+    let build =
+        |server: Option<&ServerName>| cli::help::command(&cli::help::forward_heading(server));
+    let implied = || route::implied_server(via_ssh).map(|s| s.name);
+    match parse_with_help(argv, build, implied) {
         Ok(matches) => matches,
-        Err(e)
-            if matches!(
-                e.kind(),
-                ErrorKind::DisplayHelp | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
-            ) =>
-        {
-            let server = route::implied_server(via_ssh);
-            let heading = cli::help::forward_heading(server.as_ref().map(|s| &s.name));
-            cli::help::command(&heading).get_matches_from(argv)
-        }
         Err(e) => e.exit(),
     }
 }

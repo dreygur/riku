@@ -7,13 +7,11 @@ use clap::{Command, CommandFactory};
 
 use crate::address::ServerName;
 use crate::cli::Cli;
-use crate::placement::{placement_of, Placement};
+use crate::placement::{client_rule, placement_of, ClientRule, Placement};
 
 const LOCAL_HEADING: &str = "Local commands:";
 const SERVER_HEADING: &str = "Server commands:";
 const HELP_ABOUT: &str = "Print this message or the help of the given subcommand(s)";
-const CONTAINER: &str = "container";
-const DASHBOARD: &str = "dashboard";
 const CLIENT_FORWARD_HEADING: &str = "Forwarded commands (run on the selected server):";
 
 type Row = (String, String);
@@ -77,12 +75,12 @@ pub fn client_command(server: Option<&ServerName>) -> Command {
     let root = Cli::command().name("rk").mut_arg("local", |a| a.hide(true));
     let mut local: Vec<_> = visible_in(&root, Placement::Local)
         .into_iter()
-        .filter(|(name, _)| name != CONTAINER)
+        .filter(|(name, _)| client_rule(name) == ClientRule::RunsHere)
         .collect();
     local.extend(
         visible_in(&root, Placement::Server)
             .into_iter()
-            .filter(|(name, _)| name == DASHBOARD),
+            .filter(|(name, _)| client_rule(name) == ClientRule::RunsHere),
     );
     local.push(("help".to_string(), HELP_ABOUT.to_string()));
     let forwarded = visible_in(&root, Placement::Forwarded);

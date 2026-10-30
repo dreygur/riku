@@ -6,7 +6,7 @@
 
 use anyhow::{anyhow, Error, Result};
 use riku_args::cli::Commands;
-use riku_args::placement::{placement_of, Placement};
+use riku_args::placement::{client_rule, placement_of, ClientRule, Elsewhere, Placement};
 use riku_remote::plugin_cmd::run_plugin;
 use riku_remote::quickstart::cmd_quickstart;
 use riku_remote::remote::route::is_plugin_authoring;
@@ -17,14 +17,6 @@ use riku_remote::remote::target::registered_names;
 const NO_LOCAL_MODE: &str = "rk has no local mode; run the command with riku";
 const NO_SERVER: &str =
     "no server selected; add one with rk server add <name> <user@host>, or pass -s <name>";
-const CONTAINER: &str = "container";
-const DASHBOARD: &str = "dashboard";
-
-/// Where a command that `rk` refuses has to be run instead.
-pub enum Elsewhere {
-    OnServer,
-    FullBinary,
-}
 
 /// The error for a command that is not part of `rk`.
 pub fn not_part_of_rk(command: &str, elsewhere: Elsewhere) -> Error {
@@ -43,13 +35,10 @@ pub fn no_local_mode() -> Error {
 /// Refuses `container` and the server only commands. `dashboard` passes: its
 /// remote form runs here.
 pub fn check_supported(command: &str) -> Result<()> {
-    if command == CONTAINER {
-        return Err(not_part_of_rk(command, Elsewhere::FullBinary));
+    match client_rule(command) {
+        ClientRule::Refused(elsewhere) => Err(not_part_of_rk(command, elsewhere)),
+        ClientRule::RunsHere | ClientRule::Forwards => Ok(()),
     }
-    if placement_of(command) == Some(Placement::Server) && command != DASHBOARD {
-        return Err(not_part_of_rk(command, Elsewhere::OnServer));
-    }
-    Ok(())
 }
 
 /// The error for a command that needs a server when none was selected,
