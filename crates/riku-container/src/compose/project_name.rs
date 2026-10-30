@@ -28,9 +28,10 @@ const ENV_KEY: &str = "COMPOSE_PROJECT_NAME";
 /// overlaid by the app env), else the compose file's top level `name`, else
 /// the name of `compose_dir`.
 ///
-/// Only a directory name taken from `app_path` itself is `Derived`. A name
-/// taken from a subdirectory can collide with another app's, so it is
-/// `Declared` like the other sources.
+/// Only a directory name taken from `app_path` itself, and left unchanged by
+/// normalisation, is `Derived`. A name taken from a subdirectory, or one that
+/// normalising changed, can collide with another app's, so it is `Declared`
+/// like the other sources.
 pub(super) fn resolve_project_name(
     vars: &BTreeMap<String, String>,
     declared: Option<&str>,
@@ -51,18 +52,39 @@ pub(super) fn resolve_project_name(
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
+    let name = match checked(normalise(&dir), &dir, "compose directory name") {
+        Ok(name) => name,
+        Err(e) => return Err(e),
+    };
     let source = if compose_dir == app_path {
-        ProjectNameSource::Derived
+        own_name_source(&name, &dir)
     } else {
         ProjectNameSource::Declared
     };
-    checked(normalise(&dir), &dir, "compose directory name").map(|n| (n, source))
+    Ok((name, source))
 }
 
 /// The project name for an app with no compose file: its riku app name,
 /// normalised and checked like every other project name.
-pub(super) fn project_name_for_app(app: &str) -> Result<String> {
-    checked(normalise(app), app, "app name")
+pub(super) fn project_name_for_app(app: &str) -> Result<(String, ProjectNameSource)> {
+    match checked(normalise(app), app, "app name") {
+        Ok(name) => {
+            let source = own_name_source(&name, app);
+            Ok((name, source))
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// `Derived` only when normalising left the app's name as it was. Apps
+/// `Shop`, `sh.op` and `shop` all normalise to `shop`, and only the last one
+/// owns that name without the state aware check.
+fn own_name_source(name: &str, app_name: &str) -> ProjectNameSource {
+    if name == app_name {
+        ProjectNameSource::Derived
+    } else {
+        ProjectNameSource::Declared
+    }
 }
 
 fn normalise(raw: &str) -> String {
@@ -78,3 +100,7 @@ fn checked(name: String, raw: &str, origin: &str) -> Result<String> {
     }
     Ok(name)
 }
+
+#[cfg(test)]
+#[path = "project_name_tests.rs"]
+mod tests;

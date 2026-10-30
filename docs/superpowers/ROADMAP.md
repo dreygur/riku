@@ -112,8 +112,10 @@ work they describe.
   CLI scale and logs, `rk deploy --build`. Mostly sequential; dashboard and
   CLI tasks in parallel once the state API exists.
 - Compose migration duty from B4: a `Declared` project name (compose `name`,
-  `COMPOSE_PROJECT_NAME`, or the directory of a `COMPOSE_FILE` below the app
-  root) must be refused when it equals another riku app's name or its
+  `COMPOSE_PROJECT_NAME`, the directory of a `COMPOSE_FILE` below the app
+  root, or an app name that normalisation changes, such as `Shop` or `sh.op`)
+  must be refused when it equals another riku app's name after both are
+  normalised (`Shop`, `sh.op` and `shop` all compare as `shop`) or its
   existing volumes lack the matching compose project label, and only then may
   `ComposeProject::confirm_declared_name` be called.
 - Sync receive runs under a process level deadline; a stalled client is killed

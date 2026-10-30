@@ -29,8 +29,10 @@ pub enum VolumeDecl {
 /// Where the project name came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProjectNameSource {
-    /// Taken from the directory holding the compose file. For an app that was
-    /// deployed from its own directory this is the app's own name.
+    /// The app's own name, unchanged by normalisation: taken from the app
+    /// directory holding the compose file, or from the app name of a
+    /// Dockerfile app. An app whose name normalisation changes (`Shop`,
+    /// `sh.op`) gets `Declared` instead, since several apps share the result.
     Derived,
     /// Chosen by the compose file (`name`) or the app env
     /// (`COMPOSE_PROJECT_NAME`), so it can be any name, including another
@@ -146,14 +148,15 @@ pub fn read_project(
 
 /// The project for the riku app `app` when it has a Dockerfile and no compose
 /// file: one service `app` built from the app directory, publishing no ports.
-/// The project name is the app's own name, so two apps never share one.
+/// The project name is the app's name normalised; it is `Derived` only when
+/// normalising left the name unchanged, since `Shop` and `shop` share `shop`.
 pub fn single_image_project(
     app: &str,
     app_path: &Path,
     dockerfile: &Path,
 ) -> Result<ComposeProject> {
-    let project_name = match project_name_for_app(app) {
-        Ok(name) => name,
+    let (project_name, name_source) = match project_name_for_app(app) {
+        Ok(resolved) => resolved,
         Err(e) => return Err(e),
     };
     let name = ServiceName::try_from("app").expect("'app' is a valid service name");
@@ -183,7 +186,7 @@ pub fn single_image_project(
         services: vec![service],
         volumes: BTreeMap::new(),
         project_name,
-        name_source: ProjectNameSource::Derived,
+        name_source,
         warnings: Vec::new(),
     })
 }
