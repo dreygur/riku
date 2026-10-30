@@ -3,8 +3,9 @@
 //! Security: the request is built from a [`RoutePlan`], so domains are already
 //! validated, and is sent as JSON on the plugin's stdin with no shell
 //! interpolation. A plugin that does not declare router protocol 2 is refused
-//! before any verb runs, so an old plugin never receives a request it would
-//! misread.
+//! before `configure` runs, so an old plugin never receives a request it would
+//! misread. Removal sends `unconfigure` and `reload`, which carry no request,
+//! to a plugin of any protocol.
 
 use std::collections::HashMap;
 

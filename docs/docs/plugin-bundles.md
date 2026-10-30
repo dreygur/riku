@@ -59,8 +59,10 @@ graceful_reload = false          # true only if reload keeps in-flight
 ```
 
 A router plugin without a `[router]` table, or with a `protocol` other than 2,
-is refused before any verb runs. See `PLUGIN_PROTOCOL.md` section 6.2 for the
-`configure` request it receives.
+is refused for `configure`: riku fails the route before sending it any verb.
+Removing an app's route still sends `unconfigure` and `reload` to a router
+plugin of any protocol, so an old plugin can drop the app it served. See
+`PLUGIN_PROTOCOL.md` section 6.2 for the `configure` request it receives.
 
 The kernel sets `RIKU_PLUGIN_API`, `RIKU_ROOT`, `RIKU_PLUGIN_NAME` (the
 manifest's own `name`), and `RIKU_PLUGIN_DATA_PATH` (a scratch directory the
