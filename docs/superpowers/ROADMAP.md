@@ -79,12 +79,31 @@ work they describe.
   5. Ask the owner before merging into `feat/caddy-router`, pushing, or
      touching the test server (engine detection and a sync round trip into
      a temporary directory there).
-- Step 1 nginx fix: done (commit pending). nginx 1.27 confirmed the HTTPS
+- Step 1 nginx fix: done (cf89ff3). nginx 1.27 confirmed the HTTPS
   only template never rendered (`RIKU_NGINX_ROOT` unset), and its parts
   failed `nginx -t`: a bare socket upstream and a duplicate ACME location.
   It also ignored the port map and uWSGI. The wsgi template passed a bare
   socket to `uwsgi_pass`. All fixed; rendered configs pass `nginx -t`.
-- Task status: Task 0 not started.
+- Plan `plans/2026-10-30-container-foundations.md`. Task status:
+- Task 0 Shared types: done
+
+- A1 Engine detection and the engine setting: pending
+- A2 Engine identity and command probe: pending
+- A3 Run and control containers: pending
+- A4 Container state and stats: pending
+
+- B1 Move compose file lookup into the library: pending
+- B2 Read compose YAML with interpolation and key checks: pending
+- B3 Parse service fields: pending
+- B4 Project rules: order, routing, scale, replacement, volume names: pending
+
+- C1 RoutePlan and Caddy rendering: pending
+- C2 nginx upstream from backends: pending
+- C3 Router plugin protocol 2: pending
+
+- D1 Crate, wire types and manifest scan: pending
+- D2 Transfer plan, bundle and verified apply: pending
+- D3 The sync conversation over a byte stream: pending
 
 ### Phase 3: container integration (after phase 2)
 

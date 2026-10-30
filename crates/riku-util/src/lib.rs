@@ -1,6 +1,8 @@
 //! Utility functions for Riku.
 //!
 //! Organised into focused sub-modules:
+//! - [`backend`]: where a router sends an app's traffic
+//! - [`spawn`]: process spawning that tolerates the transient ETXTBSY race
 //! - [`display`]: terminal output and table formatting
 //! - [`domain`]: validated hostnames for router config
 //! - [`validation`]: app-name sanitization, path-traversal checks
@@ -13,6 +15,7 @@
 //! - [`process_util`]: free-port allocation, Node version validation
 
 pub mod authorized_keys;
+pub mod backend;
 pub mod cron;
 pub mod deploy_logger;
 pub mod display;
@@ -27,6 +30,7 @@ pub mod procfile;
 pub mod public_key;
 pub mod resource_limits;
 pub mod secure;
+pub mod spawn;
 pub mod ssh_keys;
 pub mod token;
 pub mod validation;

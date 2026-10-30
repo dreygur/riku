@@ -1670,6 +1670,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "riku-container"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "riku-config",
+ "riku-util",
+ "serde",
+ "serde_json",
+ "shlex",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
 name = "riku-dashboard"
 version = "0.1.0"
 dependencies = [

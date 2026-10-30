@@ -1,0 +1,144 @@
+//! Container, service and network names.
+//!
+//! Every constructor enforces the character set an engine accepts for a name
+//! (`[a-zA-Z0-9][a-zA-Z0-9_.-]*`), so a value of these types cannot start with
+//! `-` and be read as an option, or carry a path separator or whitespace.
+
+use std::fmt;
+
+/// Label keys riku sets on containers and reads from compose services.
+pub mod labels {
+    /// Owning app, set by riku on every container.
+    pub const APP: &str = "riku.app";
+    /// Service name within the app, set by riku on every container.
+    pub const SERVICE: &str = "riku.service";
+    /// Copy number of the service, set by riku on every container.
+    pub const COPY: &str = "riku.copy";
+    /// Compose opt-in (`"true"`) to publish a service's ports on all interfaces.
+    pub const PUBLIC: &str = "riku.public";
+    /// Compose label naming the published port that carries routed HTTP.
+    pub const HTTP: &str = "riku.http";
+    /// Compose label that overrides how riku checks a service's health.
+    pub const HEALTH: &str = "riku.health";
+}
+
+const SERVICE_NAME_MAX: usize = 63;
+
+fn is_engine_safe(name: &str) -> bool {
+    let mut chars = name.chars();
+    let first_ok = chars.next().is_some_and(|c| c.is_ascii_alphanumeric());
+    first_ok && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
+}
+
+/// Name of a service within an app, as written in the compose file.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ServiceName(String);
+
+impl ServiceName {
+    /// The validated name.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<&str> for ServiceName {
+    type Error = anyhow::Error;
+
+    fn try_from(raw: &str) -> anyhow::Result<Self> {
+        if raw.len() > SERVICE_NAME_MAX || !is_engine_safe(raw) {
+            return Err(anyhow::anyhow!(
+                "invalid service name {raw:?}: use 1 to {SERVICE_NAME_MAX} letters, digits, '_', '.' or '-', starting with a letter or digit"
+            ));
+        }
+        Ok(ServiceName(raw.to_string()))
+    }
+}
+
+impl fmt::Display for ServiceName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// Position of a container among the copies of one service, counted from 1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CopyIndex(u32);
+
+impl CopyIndex {
+    /// Returns `None` for 0, because copies are numbered from 1.
+    pub fn new(n: u32) -> Option<CopyIndex> {
+        if n == 0 {
+            None
+        } else {
+            Some(CopyIndex(n))
+        }
+    }
+
+    /// The copy number, at least 1.
+    pub fn get(self) -> u32 {
+        self.0
+    }
+}
+
+impl fmt::Display for CopyIndex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// Engine name of one container, `<app>-<service>-<copy>`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ContainerName(String);
+
+impl ContainerName {
+    /// Joins the three parts. Fails when `app` is not a name
+    /// `riku_util::validate_app_name` returns unchanged, or when it uses a
+    /// character the engine does not accept in a container name (that
+    /// validator allows a leading `_`, `.` or `-` and non-ASCII letters).
+    pub fn new(app: &str, service: &ServiceName, copy: CopyIndex) -> anyhow::Result<ContainerName> {
+        let validated = match riku_util::validate_app_name(app) {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(anyhow::anyhow!(
+                    "cannot name a container for app {app:?}: {e}"
+                ))
+            }
+        };
+        if validated != app {
+            return Err(anyhow::anyhow!(
+                "cannot name a container for app {app:?}: not a valid app name as written"
+            ));
+        }
+        if !is_engine_safe(app) {
+            return Err(anyhow::anyhow!(
+                "app name {app:?} cannot be used in a container name: it must start with an ASCII letter or digit and use only ASCII letters, digits, '_', '.' and '-'"
+            ));
+        }
+        Ok(ContainerName(format!("{app}-{service}-{copy}")))
+    }
+
+    /// The name to pass to the engine.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Engine network that holds all containers of one app.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct NetworkName(String);
+
+impl NetworkName {
+    /// The network is `riku-<app>`. `app` must already be validated.
+    pub fn for_app(app: &str) -> NetworkName {
+        NetworkName(format!("riku-{app}"))
+    }
+
+    /// The name to pass to the engine.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[cfg(test)]
+#[path = "names_tests.rs"]
+mod tests;
