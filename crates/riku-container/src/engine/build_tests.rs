@@ -68,6 +68,7 @@ fn build_refuses_a_relative_or_flag_like_context() {
 #[test]
 fn build_refuses_a_dockerfile_that_leaves_the_context() {
     for dockerfile in [
+        "",
         "../../etc/passwd",
         "a/../../b",
         "/etc/passwd",

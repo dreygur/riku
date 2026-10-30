@@ -37,7 +37,7 @@ fn dockerfile_path(context: &Path, dockerfile: &Path) -> Result<PathBuf> {
         .components()
         .any(|c| matches!(c, Component::ParentDir));
     let joined = context.join(dockerfile);
-    if climbs || !joined.starts_with(context) {
+    if dockerfile.as_os_str().is_empty() || climbs || !joined.starts_with(context) {
         return Err(anyhow!(
             "dockerfile {} must be inside the build context {}",
             dockerfile.display(),

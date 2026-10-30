@@ -4,7 +4,8 @@
 //! the value of a flag (`--user x`) and cannot become a flag themselves. The
 //! exceptions are the image, which is positional, and the colon separated
 //! `-v` and `--label` forms, where an extra `:` or `=` changes what is mounted
-//! or labelled. Those are checked here before any argument is built.
+//! or labelled, and `--mount`, whose value the engine parses as CSV and cuts
+//! at the first newline. Those are checked here before any argument is built.
 
 use std::path::Path;
 
@@ -29,9 +30,10 @@ pub(crate) fn check_positional(what: &str, value: &str) -> Result<()> {
 
 fn check_absolute(what: &str, path: &Path) -> Result<()> {
     let text = path.to_string_lossy();
-    if !path.is_absolute() || text.contains(':') {
+    let bad_char = |c: char| c == ':' || c.is_whitespace() || c.is_control();
+    if !path.is_absolute() || text.chars().any(bad_char) {
         return Err(anyhow!(
-            "{what} {text:?} must be an absolute path without ':'"
+            "{what} {text:?} must be an absolute path without ':', whitespace or control characters"
         ));
     }
     Ok(())

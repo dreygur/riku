@@ -62,6 +62,12 @@ fn refuses_mounts_that_smuggle_options_or_change_kind() {
         mount(MountSource::Bind(PathBuf::from("/srv/a:b")), "/x"),
         mount(MountSource::Anonymous, "relative"),
         mount(MountSource::Anonymous, "/x,dst=/etc"),
+        Mount {
+            read_only: true,
+            ..mount(MountSource::Anonymous, "/x\n")
+        },
+        mount(MountSource::Volume("data".into()), "/x\nreadonly=false"),
+        mount(MountSource::Bind(PathBuf::from("/srv/a\tb")), "/x"),
     ];
     for m in bad {
         let mut spec = sample_spec();

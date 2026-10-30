@@ -26,7 +26,7 @@ pub(crate) fn is_valid_name(key: &str) -> bool {
 fn check_entry(key: &str, value: &str) -> Result<()> {
     if !is_valid_name(key) || key.starts_with('#') {
         return Err(anyhow!(
-            "environment variable name {key:?} is not allowed: it must be non-empty, not start with '#', and hold no '=', whitespace or NUL"
+            "environment variable name {key:?} is not allowed: it must be non-empty, not start with '#', and hold no '=', whitespace or control characters"
         ));
     }
     if value.contains(['\n', '\r', '\0']) {
