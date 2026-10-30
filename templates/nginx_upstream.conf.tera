@@ -1,3 +1,3 @@
-upstream {{ APP }}_UPSTREAM {
+upstream {{ APP_UPSTREAM }} {
 {% for backend in RIKU_BACKENDS %}  server {{ backend }};
 {% endfor %}}

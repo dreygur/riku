@@ -31,6 +31,18 @@ pub(crate) fn upstream_port(env: &HashMap<String, String>) -> String {
     upstream_port_entry(env).1.to_string()
 }
 
+/// The name of the app's nginx `upstream` block: `riku_` and the lowercase hex
+/// of the app name's bytes.
+///
+/// nginx compares upstream names case-insensitively across every included
+/// site, while riku app names keep their case, so `MyApp` and `myapp` must not
+/// map to names that differ only in case. Hex is case-free and only uses
+/// characters nginx accepts in a name.
+pub(crate) fn upstream_name(app: &str) -> String {
+    let hex: String = app.bytes().map(|byte| format!("{byte:02x}")).collect();
+    format!("riku_{hex}")
+}
+
 /// The app's unix socket: `RIKU_NGINX_SOCKET`, else `<nginx_root>/<app>.sock`.
 pub(crate) fn socket_path(
     app: &str,

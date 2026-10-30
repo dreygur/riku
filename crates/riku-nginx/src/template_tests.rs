@@ -113,13 +113,41 @@ fn portmap_proxies_to_every_backend() {
 
     assert!(
         config.contains(
-            "upstream myapp_UPSTREAM {\n  server 127.0.0.1:5001;\n  server 127.0.0.1:5002;\n}"
+            "upstream riku_6d79617070 {\n  server 127.0.0.1:5001;\n  server 127.0.0.1:5002;\n}"
         ),
         "upstream block missing or malformed:\n{config}"
     );
     assert!(
-        config.contains("proxy_pass http://myapp_UPSTREAM;"),
+        config.contains("proxy_pass http://riku_6d79617070;"),
         "location not proxied to the upstream:\n{config}"
+    );
+}
+
+#[test]
+fn apps_differing_only_in_case_get_distinct_upstreams() {
+    // nginx compares upstream names case-insensitively, so `MyApp_UPSTREAM`
+    // and `myapp_UPSTREAM` would be a duplicate and fail every reload.
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
+    let env = HashMap::from([("RIKU_NGINX_PORTMAP".to_string(), "true".to_string())]);
+    let backends = [Backend::loopback(5001)];
+    let render_for =
+        |app: &str| render_nginx_config(app, temp_dir.path(), &env, &backends, &paths).unwrap();
+
+    let upper = render_for("MyApp");
+    let lower = render_for("myapp");
+
+    assert!(
+        upper.contains("upstream riku_4d79417070 {"),
+        "MyApp:\n{upper}"
+    );
+    assert!(
+        lower.contains("upstream riku_6d79617070 {"),
+        "myapp:\n{lower}"
+    );
+    assert!(
+        upper.contains("proxy_pass http://riku_4d79417070;"),
+        "MyApp not proxied to its own upstream:\n{upper}"
     );
 }
 
@@ -136,11 +164,11 @@ fn https_only_web_app_proxies_to_its_ports() {
         "upstream does not list both backends:\n{config}"
     );
     assert!(
-        config.contains("proxy_pass http://myapp_UPSTREAM;"),
+        config.contains("proxy_pass http://riku_6d79617070;"),
         "web app not proxied to its upstream:\n{config}"
     );
     assert!(
-        config.find("upstream myapp_UPSTREAM") < config.find("server {"),
+        config.find("upstream riku_6d79617070") < config.find("server {"),
         "upstream must sit outside the server blocks:\n{config}"
     );
 }
@@ -154,7 +182,7 @@ fn https_only_socket_app_never_uses_a_bare_socket_path() {
         "upstream does not name the socket:\n{config}"
     );
     assert!(
-        config.contains("proxy_pass http://myapp_UPSTREAM;"),
+        config.contains("proxy_pass http://riku_6d79617070;"),
         "socket app not proxied to its upstream:\n{config}"
     );
     assert_socket_always_prefixed(&config);

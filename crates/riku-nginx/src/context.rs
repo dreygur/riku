@@ -219,6 +219,7 @@ pub(super) fn build_context(
     let mut context = tera::Context::new();
 
     context.insert("APP", app);
+    context.insert("APP_UPSTREAM", &crate::backends::upstream_name(app));
     context.insert("INTERNAL_NGINX_APP_ROOT", &app_path.to_string_lossy());
 
     for (key, value) in env {
