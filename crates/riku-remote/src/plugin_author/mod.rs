@@ -7,9 +7,6 @@
 //! written with mode 0600 and never printed. Signing covers the entry file
 //! only, as described in `riku-bundle`.
 
-// Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
-#![allow(clippy::question_mark)]
-
 mod keys;
 mod scaffold;
 mod skeleton;
@@ -31,6 +28,25 @@ impl Program {
         match self {
             Program::Riku => "riku",
             Program::Rk => "rk",
+        }
+    }
+
+    /// What to do between editing a bundle and installing it. Empty for
+    /// `riku`, which installs from the local path. `rk` installs on the
+    /// server, which takes a local path on the server or a git URL, so the
+    /// bundle has to get there first.
+    fn before_install(self) -> &'static str {
+        match self {
+            Program::Riku => "",
+            Program::Rk => " push the bundle to a git repository or copy it to the server,",
+        }
+    }
+
+    /// The install command for the bundle at `path` on this machine.
+    fn install_command(self, path: &str) -> String {
+        match self {
+            Program::Riku => format!("riku plugins install {path}"),
+            Program::Rk => "rk -s <server> plugins install <git-url or path on server>".to_string(),
         }
     }
 

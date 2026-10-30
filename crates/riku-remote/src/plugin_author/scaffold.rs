@@ -33,8 +33,9 @@ fn write_bundle(
         return Err(e.into());
     }
     let readme = format!(
-        "# {name}\n\nA Riku {plugin_type} plugin. Edit `bin/{name}`, then:\n\n    {} plugins install ./{name}\n",
-        program.name()
+        "# {name}\n\nA Riku {plugin_type} plugin. Edit `bin/{name}`,{} then:\n\n    {}\n",
+        program.before_install(),
+        program.install_command(&format!("./{name}"))
     );
     if let Err(e) = fs::write(bundle.join("README.md"), readme) {
         return Err(e.into());
@@ -44,6 +45,7 @@ fn write_bundle(
 
 /// `plugins scaffold <name> --type <type>`. `dir` is the directory the
 /// bundle is created in, the current directory when `None`.
+#[allow(clippy::question_mark)]
 pub fn cmd_plugins_scaffold(
     program: Program,
     name: &str,
@@ -70,15 +72,16 @@ pub fn cmd_plugins_scaffold(
         return Err(e);
     }
 
-    let program = program.name();
     display::success(&format!(
         "Scaffolded {plugin_type} plugin in ./{}",
         bundle.display()
     ));
     display::note(&format!(
-        "Edit bin/{name}, then: {program} plugins install ./{}",
-        bundle.display()
+        "Edit bin/{name},{} then: {}",
+        program.before_install(),
+        program.install_command(&format!("./{}", bundle.display()))
     ));
+    let program = program.name();
     display::note(&format!(
         "Sign it for distribution: {program} plugins keygen && {program} plugins sign ./<dir> --key <file>"
     ));

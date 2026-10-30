@@ -136,6 +136,11 @@ fn scaffold_creates_a_bundle_with_no_server_registered() {
         .mode();
     assert_eq!(mode & 0o777, 0o755);
     assert!(stdout(&out).contains("rk plugins keygen && rk plugins sign"));
+    assert!(
+        stdout(&out).contains("copy it to the server, then: rk -s <server> plugins install"),
+        "{}",
+        stdout(&out)
+    );
     PluginManifest::from_dir(&bundle).expect("scaffolded manifest should validate");
 }
 
