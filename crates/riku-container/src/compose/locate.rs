@@ -7,7 +7,8 @@
 use anyhow::{bail, Result};
 use std::path::{Component, Path, PathBuf};
 
-const COMPOSE_FILE_NAMES: [&str; 4] = [
+/// Default compose file names, in docker compose's own precedence order.
+pub const COMPOSE_FILE_NAMES: [&str; 4] = [
     "compose.yaml",
     "compose.yml",
     "docker-compose.yaml",
@@ -19,22 +20,23 @@ const COMPOSE_FILE_NAMES: [&str; 4] = [
 /// Every compose command runs with the app directory as its working directory,
 /// so this relative form is what gets passed to `-f`.
 #[derive(Debug, PartialEq)]
-pub(crate) struct ComposeFile(PathBuf);
+pub struct ComposeFile(PathBuf);
 
 impl ComposeFile {
-    pub(crate) fn arg(&self) -> String {
+    /// The path as a `-f` argument.
+    pub fn arg(&self) -> String {
         self.0.to_string_lossy().into_owned()
     }
-}
 
-/// The `COMPOSE_FILE` value from the app's ENV, if set and non-empty.
-pub(crate) fn requested_compose_file() -> Option<String> {
-    std::env::var("COMPOSE_FILE").ok().filter(|v| !v.is_empty())
+    /// The path relative to the app directory.
+    pub fn relative(&self) -> &Path {
+        &self.0
+    }
 }
 
 /// First of the default compose file names present, following docker
 /// compose's own precedence.
-pub(crate) fn default_compose_file(app_path: &Path) -> Option<ComposeFile> {
+pub fn default_compose_file(app_path: &Path) -> Option<ComposeFile> {
     COMPOSE_FILE_NAMES
         .iter()
         .find(|name| app_path.join(name).exists())
@@ -75,19 +77,15 @@ fn validate_compose_file(app_path: &Path, requested: &str) -> Result<ComposeFile
     Ok(ComposeFile(relative.to_path_buf()))
 }
 
-fn find_compose_file(app_path: &Path, requested: Option<&str>) -> Result<Option<ComposeFile>> {
+/// Find the app's compose file: `requested` (the app's `COMPOSE_FILE` value,
+/// read by the caller) when given, otherwise the first default name present.
+pub fn find_compose_file(app_path: &Path, requested: Option<&str>) -> Result<Option<ComposeFile>> {
     match requested {
         Some(name) => validate_compose_file(app_path, name).map(Some),
         None => Ok(default_compose_file(app_path)),
     }
 }
 
-/// Find the app's compose file: `COMPOSE_FILE` when set, otherwise the first
-/// default name present.
-pub(crate) fn compose_file(app_path: &Path) -> Result<Option<ComposeFile>> {
-    find_compose_file(app_path, requested_compose_file().as_deref())
-}
-
 #[cfg(test)]
-#[path = "compose_file_tests.rs"]
+#[path = "locate_tests.rs"]
 mod tests;

@@ -92,7 +92,7 @@ work they describe.
 - A3 Run and control containers: pending
 - A4 Container state and stats: pending
 
-- B1 Move compose file lookup into the library: pending
+- B1 Move compose file lookup into the library: done
 - B2 Read compose YAML with interpolation and key checks: pending
 - B3 Parse service fields: pending
 - B4 Project rules: order, routing, scale, replacement, volume names: pending

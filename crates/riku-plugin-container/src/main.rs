@@ -10,7 +10,6 @@
 //! app's ENV file, the plugin logs in to `ghcr.io` before pulling.
 
 mod compose_cli;
-mod compose_file;
 
 use anyhow::{anyhow, bail, Result};
 use std::collections::HashMap;
@@ -20,7 +19,18 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use compose_cli::{compose_cmd, compose_cmd_display, pull_and_build, run_compose};
-use compose_file::{compose_file, default_compose_file, requested_compose_file};
+use riku_container::compose::{default_compose_file, find_compose_file, ComposeFile};
+
+/// The `COMPOSE_FILE` value from the app's ENV, if set and non-empty.
+fn requested_compose_file() -> Option<String> {
+    std::env::var("COMPOSE_FILE").ok().filter(|v| !v.is_empty())
+}
+
+/// Find the app's compose file: `COMPOSE_FILE` when set, otherwise the first
+/// default name present.
+fn compose_file(app_path: &Path) -> Result<Option<ComposeFile>> {
+    find_compose_file(app_path, requested_compose_file().as_deref())
+}
 
 fn main() -> Result<()> {
     let cmd = std::env::args().nth(1).unwrap_or_default();
