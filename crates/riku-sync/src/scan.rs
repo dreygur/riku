@@ -120,7 +120,7 @@ fn record(path: &Path, rel: &str, out: &mut Vec<Entry>) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn hash_file(path: &Path) -> anyhow::Result<String> {
+pub(crate) fn hash_file(path: &Path) -> anyhow::Result<String> {
     let mut file = match fs::File::open(path) {
         Ok(file) => file,
         Err(e) => return Err(anyhow::anyhow!("cannot open {}: {e}", path.display())),

@@ -102,7 +102,7 @@ work they describe.
 - C3 Router plugin protocol 2: pending
 
 - D1 Crate, wire types and manifest scan: done
-- D2 Transfer plan, bundle and verified apply: pending
+- D2 Transfer plan, bundle and verified apply: done
 - D3 The sync conversation over a byte stream: pending
 
 ### Phase 3: container integration (after phase 2)
