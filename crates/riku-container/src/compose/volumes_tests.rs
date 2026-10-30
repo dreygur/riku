@@ -1,5 +1,5 @@
 use super::*;
-use crate::types::MountSource;
+use crate::compose::ServiceMountSource;
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -20,7 +20,7 @@ impl Fixture {
         }
     }
 
-    fn parse(&self, value: Value) -> anyhow::Result<Vec<Mount>> {
+    fn parse(&self, value: Value) -> anyhow::Result<Vec<ServiceMount>> {
         let ctx = ServiceContext {
             app_path: self.app.path(),
             compose_dir: self.app.path(),
@@ -31,8 +31,8 @@ impl Fixture {
     }
 }
 
-fn mount(source: MountSource, target: &str, read_only: bool) -> Mount {
-    Mount {
+fn mount(source: ServiceMountSource, target: &str, read_only: bool) -> ServiceMount {
+    ServiceMount {
         source,
         target: Path::new(target).to_path_buf(),
         read_only,
@@ -56,14 +56,18 @@ fn short_and_long_forms() {
         mounts,
         vec![
             mount(
-                MountSource::Volume("pgdata".into()),
+                ServiceMountSource::Volume(VolumeKey::declared("pgdata")),
                 "/var/lib/postgresql/data",
                 false
             ),
-            mount(MountSource::Bind(app.join("conf")), "/etc/app", true),
-            mount(MountSource::Anonymous, "/scratch", false),
-            mount(MountSource::Bind(app.join("static")), "/srv", true),
-            mount(MountSource::Volume("pgdata".into()), "/more", false),
+            mount(ServiceMountSource::Bind(app.join("conf")), "/etc/app", true),
+            mount(ServiceMountSource::Anonymous, "/scratch", false),
+            mount(ServiceMountSource::Bind(app.join("static")), "/srv", true),
+            mount(
+                ServiceMountSource::Volume(VolumeKey::declared("pgdata")),
+                "/more",
+                false
+            ),
         ]
     );
 }

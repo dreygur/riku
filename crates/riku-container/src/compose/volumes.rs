@@ -9,12 +9,12 @@
 use super::paths::resolve_inside;
 use super::scalar::reject_unknown;
 use super::{Mapping, ServiceContext, Value};
-use crate::types::{Mount, MountSource};
+use super::{ServiceMount, ServiceMountSource, VolumeKey};
 use anyhow::{bail, Result};
 use std::path::PathBuf;
 
 /// Parse the `volumes` list.
-pub(super) fn parse_volumes(ctx: &ServiceContext, value: &Value) -> Result<Vec<Mount>> {
+pub(super) fn parse_volumes(ctx: &ServiceContext, value: &Value) -> Result<Vec<ServiceMount>> {
     let Value::Array(entries) = value else {
         bail!("volumes must be a list");
     };
@@ -39,20 +39,20 @@ fn is_volume_name(name: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
 }
 
-fn named_volume(ctx: &ServiceContext, name: &str) -> Result<MountSource> {
+fn named_volume(ctx: &ServiceContext, name: &str) -> Result<ServiceMountSource> {
     if !is_volume_name(name) {
         bail!("volume source {name:?} is not a volume name or a relative or absolute path");
     }
     if !ctx.declared_volumes.contains(name) {
         bail!("volume {name:?} is not declared under the top level volumes key");
     }
-    Ok(MountSource::Volume(name.to_string()))
+    Ok(ServiceMountSource::Volume(VolumeKey::declared(name)))
 }
 
-fn bind_or_named(ctx: &ServiceContext, source: &str) -> Result<MountSource> {
+fn bind_or_named(ctx: &ServiceContext, source: &str) -> Result<ServiceMountSource> {
     if source.starts_with(['/', '.']) {
         return match resolve_inside(ctx.app_path, ctx.compose_dir, source, "bind source") {
-            Ok(path) => Ok(MountSource::Bind(path)),
+            Ok(path) => Ok(ServiceMountSource::Bind(path)),
             Err(e) => Err(e),
         };
     }
@@ -66,7 +66,7 @@ fn container_path(raw: &str) -> Result<PathBuf> {
     Ok(PathBuf::from(raw))
 }
 
-fn parse_short(ctx: &ServiceContext, text: &str) -> Result<Mount> {
+fn parse_short(ctx: &ServiceContext, text: &str) -> Result<ServiceMount> {
     let parts: Vec<&str> = text.split(':').collect();
     let (source, target, read_only) = match parts.as_slice() {
         [target] => (None, *target, false),
@@ -80,13 +80,13 @@ fn parse_short(ctx: &ServiceContext, text: &str) -> Result<Mount> {
             Ok(source) => source,
             Err(e) => return Err(e),
         },
-        None => MountSource::Anonymous,
+        None => ServiceMountSource::Anonymous,
     };
     let target = match container_path(target) {
         Ok(target) => target,
         Err(e) => return Err(e),
     };
-    Ok(Mount {
+    Ok(ServiceMount {
         source,
         target,
         read_only,
@@ -101,18 +101,18 @@ fn text_field<'a>(fields: &'a Mapping, key: &str) -> Result<Option<&'a str>> {
     }
 }
 
-fn parse_long(ctx: &ServiceContext, fields: &Mapping) -> Result<Mount> {
+fn parse_long(ctx: &ServiceContext, fields: &Mapping) -> Result<ServiceMount> {
     if let Err(e) = reject_unknown(fields, &["type", "source", "target", "read_only"], "volume") {
         return Err(e);
     }
     let source = match (text_field(fields, "type"), text_field(fields, "source")) {
         (Ok(Some("bind")), Ok(Some(source))) => {
             resolve_inside(ctx.app_path, ctx.compose_dir, source, "bind source")
-                .map(MountSource::Bind)
+                .map(ServiceMountSource::Bind)
         }
         (Ok(Some("bind")), Ok(None)) => bail!("a bind volume needs a source"),
         (Ok(Some("volume")), Ok(Some(source))) => named_volume(ctx, source),
-        (Ok(Some("volume")), Ok(None)) => Ok(MountSource::Anonymous),
+        (Ok(Some("volume")), Ok(None)) => Ok(ServiceMountSource::Anonymous),
         (Ok(other), Ok(_)) => bail!("volume type {other:?} is not supported; use volume or bind"),
         (Err(e), _) | (_, Err(e)) => Err(e),
     };
@@ -133,7 +133,7 @@ fn parse_long(ctx: &ServiceContext, fields: &Mapping) -> Result<Mount> {
         Some(Value::Bool(flag)) => *flag,
         Some(_) => bail!("volume read_only must be true or false"),
     };
-    Ok(Mount {
+    Ok(ServiceMount {
         source,
         target,
         read_only,

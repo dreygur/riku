@@ -2,7 +2,8 @@
 //! how each is replaced during a deploy.
 
 use super::{ComposeProject, ServiceDef};
-use crate::types::{labels, Mount, MountSource, PortBinding, Protocol, ServiceName};
+use super::{ServiceMount, ServiceMountSource};
+use crate::types::{labels, PortBinding, Protocol, ServiceName};
 use anyhow::{anyhow, bail, Result};
 
 /// The one port binding that carries the app's HTTP traffic.
@@ -125,12 +126,12 @@ fn protocol_name(protocol: Protocol) -> &'static str {
     }
 }
 
-fn describe_mount(mount: &Mount) -> String {
+fn describe_mount(mount: &ServiceMount) -> String {
     let target = mount.target.display();
     match &mount.source {
-        MountSource::Volume(name) => format!("volume {name} at {target}"),
-        MountSource::Bind(path) => format!("bind mount {} at {target}", path.display()),
-        MountSource::Anonymous => format!("anonymous volume at {target}"),
+        ServiceMountSource::Volume(name) => format!("volume {name} at {target}"),
+        ServiceMountSource::Bind(path) => format!("bind mount {} at {target}", path.display()),
+        ServiceMountSource::Anonymous => format!("anonymous volume at {target}"),
     }
 }
 
@@ -192,7 +193,7 @@ pub fn replace_order(project: &ComposeProject, service: &ServiceName) -> Replace
         .services
         .iter()
         .find(|s| &s.name == service)
-        .is_some_and(|s| !s.mounts.iter().any(Mount::is_writable));
+        .is_some_and(|s| !s.mounts.iter().any(ServiceMount::is_writable));
     if is_routed && stateless {
         ReplaceOrder::Overlap
     } else {

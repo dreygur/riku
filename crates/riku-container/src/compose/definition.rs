@@ -4,7 +4,8 @@
 //! lists variable, environment and build arg names but never values, which may
 //! be secrets.
 
-use crate::types::{HealthCheck, Mount, PortBinding, RestartPolicy, ServiceName, StopSignal};
+use super::ServiceMount;
+use crate::types::{HealthCheck, PortBinding, RestartPolicy, ServiceName, StopSignal};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -81,7 +82,8 @@ pub struct ServiceDef {
     /// `env_file` values overlaid by `environment`. May hold secrets.
     pub environment: BTreeMap<String, String>,
     pub ports: Vec<PortBinding>,
-    pub mounts: Vec<Mount>,
+    /// Volume keys are not engine names; see [`super::ComposeProject::engine_mounts`].
+    pub mounts: Vec<ServiceMount>,
     pub depends_on: Vec<Dependency>,
     pub healthcheck: Option<HealthCheck>,
     pub restart: RestartPolicy,
