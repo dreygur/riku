@@ -3,6 +3,7 @@ members = [
     "crates/riku",
     "crates/riku-config",
     "crates/riku-util",
+    "crates/riku-args",
     "crates/riku-error",
     "crates/riku-nginx",
     "crates/riku-caddy",

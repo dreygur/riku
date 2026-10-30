@@ -2,10 +2,10 @@
 
 use clap::{Parser, Subcommand};
 
-use super::cmds::{
+use crate::cmds::{
     AddonCmd, AppsCmd, ConfigCmd, HookCmd, PluginCmd, PluginsCmd, ServerCmd, StatsCmd,
 };
-use super::container::ContainerSubCmd;
+use crate::container_args::ContainerSubCmd;
 
 /// riku: the smallest PaaS you've ever seen (Rust edition)
 #[derive(Parser, Debug)]

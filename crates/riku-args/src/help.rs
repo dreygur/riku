@@ -5,9 +5,9 @@
 
 use clap::{Command, CommandFactory};
 
+use crate::address::ServerName;
 use crate::cli::Cli;
 use crate::placement::{placement_of, Placement};
-use crate::remote::ServerName;
 
 const LOCAL_HEADING: &str = "Local commands:";
 const SERVER_HEADING: &str = "Server commands:";

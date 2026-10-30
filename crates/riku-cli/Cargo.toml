@@ -11,6 +11,7 @@ license = "MIT"
 tempfile = { workspace = true }
 riku-config = { path = "../riku-config" }
 riku-util = { path = "../riku-util" }
+riku-args = { path = "../riku-args" }
 riku-nginx = { path = "../riku-nginx" }
 riku-caddy = { path = "../riku-caddy" }
 riku-plugins = { path = "../riku-plugins" }

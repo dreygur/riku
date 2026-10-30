@@ -8,23 +8,19 @@ pub(crate) use riku_nginx as nginx;
 pub(crate) use riku_supervisor as supervisor;
 pub(crate) use riku_util as util;
 
+pub use riku_args::{app_hint, cli, cmds, help, placement};
+
 pub mod addon;
 pub mod agent;
-pub mod app_hint;
 pub mod apps;
 pub mod backup;
-#[allow(clippy::module_inception)]
-pub mod cli;
 pub mod client_plugins;
-pub mod cmds;
 pub mod container;
 pub mod control_actions;
 pub mod dispatch;
 pub mod doctor;
 pub mod git;
-pub mod help;
 pub mod hooks;
-pub mod placement;
 pub mod plugins;
 pub mod quickstart;
 pub mod remote;
@@ -33,8 +29,8 @@ pub mod scp;
 pub mod setup;
 pub mod ssh_command;
 
-pub use cli::{require_app, Cli, Commands};
-pub use cmds::{
+pub use riku_args::cli::{require_app, Cli, Commands};
+pub use riku_args::cmds::{
     AddonCmd, AppsCmd, ConfigCmd, HookCmd, MarketplaceCmd, PluginCmd, PluginsCmd, ServerCmd,
     StatsCmd, TrustCmd,
 };

@@ -1,0 +1,12 @@
+[package]
+name = "riku-args"
+version = "0.1.0"
+edition = "2021"
+description = "Riku command line definitions shared by the riku and rk binaries"
+authors = ["Rakibul Yeasin"]
+repository = "https://github.com/dreygur/riku"
+license = "MIT"
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true }
