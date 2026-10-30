@@ -225,8 +225,9 @@ hidden internal commands) are refused with `run it with riku on the server`.
 `container` and `plugins keygen|sign|scaffold` are refused with `run it with
 the full riku binary`.
 
-The server list is the same file `riku server` uses, `servers.toml` under
-`$XDG_CONFIG_HOME/riku/`, so both binaries share it. Client plugins live in
+The server list is the same file `riku server` uses,
+`${XDG_CONFIG_HOME:-$HOME/.config}/riku/servers.toml`, so both binaries share
+it. Client plugins live in
 `~/.riku/client-plugins`.
 
 `riku` keeps working as before: with `-s`, a repo remote or a default server it

@@ -22,28 +22,23 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact: riku-linux-amd64
-            rk_artifact: rk-linux-amd64
+            platform: linux-amd64
             deps: ''
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            artifact: riku-linux-arm64
-            rk_artifact: rk-linux-arm64
+            platform: linux-arm64
             deps: gcc-aarch64-linux-gnu
           - os: ubuntu-latest
             target: armv7-unknown-linux-gnueabihf
-            artifact: riku-linux-armv7
-            rk_artifact: rk-linux-armv7
+            platform: linux-armv7
             deps: gcc-arm-linux-gnueabihf
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact: riku-macos-amd64
-            rk_artifact: rk-macos-amd64
+            platform: macos-amd64
             deps: ''
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact: riku-macos-arm64
-            rk_artifact: rk-macos-arm64
+            platform: macos-arm64
             deps: ''
 
     steps:
@@ -105,15 +100,10 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ${{ matrix.artifact }}
-          path: target/${{ matrix.target }}/release/riku
-          retention-days: 30
-
-      - name: Upload rk artifact
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ${{ matrix.rk_artifact }}
-          path: target/${{ matrix.target }}/release/rk
+          name: release-${{ matrix.platform }}
+          path: |
+            target/${{ matrix.target }}/release/riku
+            target/${{ matrix.target }}/release/rk
           retention-days: 30
 
       # Binary runtime plugins (downloaded by `riku install-plugins java|clojure|container`,
@@ -158,9 +148,11 @@ jobs:
                 sha256sum "$asset" > "$asset.sha256"
               done
             else
-              bin="${name%%-*}"
-              tar -czvf "${name}.tar.gz" -C "$dir" "$bin"
-              sha256sum "${name}.tar.gz" > "${name}.sha256"
+              platform="${name#release-}"
+              for bin in riku rk; do
+                tar -czf "$bin-$platform.tar.gz" -C "$dir" "$bin"
+                sha256sum "$bin-$platform.tar.gz" > "$bin-$platform.sha256"
+              done
             fi
           done
           rm -rf */
