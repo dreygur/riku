@@ -132,3 +132,7 @@ pub(super) fn parse_inspect(json: &str) -> Result<Vec<ContainerInfo>> {
     };
     raws.into_iter().map(into_info).collect()
 }
+
+#[cfg(test)]
+#[path = "inspect_parse_tests.rs"]
+mod tests;

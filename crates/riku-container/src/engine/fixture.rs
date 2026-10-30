@@ -59,6 +59,18 @@ pub fn sample_spec() -> RunSpec {
     }
 }
 
+/// Two full container ids for tests that need one or two containers.
+pub const ID: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+pub const ID_B: &str = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+
+/// `inspect` output for one container named `myapp-web-2` running image
+/// `shop/web:1.4`, with the given `State` and `Labels` JSON.
+pub fn inspect_json(id: &str, state: &str, labels: &str) -> String {
+    format!(
+        r#"[{{"Id":"{id}","Name":"/myapp-web-2","Config":{{"Image":"shop/web:1.4","Labels":{labels}}},"State":{state}}}]"#
+    )
+}
+
 /// The recorded command lines, one per engine call.
 pub fn logged(log: &Path) -> Vec<String> {
     fs::read_to_string(log)
