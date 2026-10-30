@@ -8,12 +8,12 @@ fn round_trips_through_toml_with_mode_600() {
     let path = dir.path().join("riku").join("servers.toml");
     let mut list = ServerList::default();
     list.add(Server {
-        name: ServerName::try_from("solutech").unwrap(),
-        address: SshAddress::try_from("riku@solutech.local").unwrap(),
-        admin: Some(SshAddress::try_from("dreygur@solutech.local").unwrap()),
+        name: ServerName::try_from("edge").unwrap(),
+        address: SshAddress::try_from("riku@edge.example").unwrap(),
+        admin: Some(SshAddress::try_from("admin@edge.example").unwrap()),
     })
     .unwrap();
-    list.set_default(&ServerName::try_from("solutech").unwrap())
+    list.set_default(&ServerName::try_from("edge").unwrap())
         .unwrap();
 
     save(&path, &list).unwrap();

@@ -40,7 +40,7 @@ fn rejects_server_name_with_bad_characters() {
     for bad in ["", "-lead", "Upper", "has space", "a/b", &"x".repeat(33)] {
         assert!(ServerName::try_from(bad).is_err(), "accepted {bad:?}");
     }
-    assert!(ServerName::try_from("solutech_2-a").is_ok());
+    assert!(ServerName::try_from("edge_2-a").is_ok());
 }
 
 #[test]
@@ -83,7 +83,7 @@ fn rejects_option_like_or_malformed_user_and_host() {
 #[test]
 fn accepts_plain_hosts_and_users() {
     for good in [
-        "riku@solutech.local",
+        "riku@edge.example",
         "riku@192.168.1.20",
         "riku@[::1]",
         "deploy_user@host-1",

@@ -12,10 +12,10 @@ fn server(name: &str, address: &str) -> Server {
 
 fn list(with_default: bool) -> ServerList {
     let mut list = ServerList::default();
-    list.add(server("solutech", "riku@solutech.local")).unwrap();
+    list.add(server("edge", "riku@edge.example")).unwrap();
     list.add(server("prod", "riku@prod.example")).unwrap();
     if with_default {
-        list.set_default(&ServerName::try_from("solutech").unwrap())
+        list.set_default(&ServerName::try_from("edge").unwrap())
             .unwrap();
     }
     list
@@ -45,7 +45,7 @@ fn remote_name(target: &Target) -> Option<&str> {
 
 #[test]
 fn flag_beats_git_remote_and_default() {
-    let remotes = [remote("riku@solutech.local", "shop")];
+    let remotes = [remote("riku@edge.example", "shop")];
     let target = resolve(sel(Some("prod")), &list(true), &remotes).unwrap();
     match target {
         Target::Remote {
@@ -78,7 +78,7 @@ fn git_remote_beats_default_and_gives_app() {
 fn two_matching_remotes_on_different_servers_is_an_error() {
     let remotes = [
         remote("riku@prod.example", "shop"),
-        remote("riku@solutech.local", "shop"),
+        remote("riku@edge.example", "shop"),
     ];
     let err = resolve(sel(None), &list(true), &remotes).unwrap_err();
     assert!(err.to_string().contains("-s"), "{err}");
@@ -118,7 +118,7 @@ fn unregistered_remote_host_is_ignored() {
         ),
         "{target:?}"
     );
-    assert_eq!(remote_name(&target), Some("solutech"));
+    assert_eq!(remote_name(&target), Some("edge"));
 }
 
 #[test]
@@ -155,5 +155,5 @@ fn ssh_invocation_never_forwards() {
 fn unknown_flag_server_is_an_error_listing_servers() {
     let err = resolve(sel(Some("nope")), &list(true), &[]).unwrap_err();
     let text = err.to_string();
-    assert!(text.contains("solutech") && text.contains("prod"), "{text}");
+    assert!(text.contains("edge") && text.contains("prod"), "{text}");
 }

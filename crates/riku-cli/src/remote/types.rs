@@ -38,7 +38,7 @@ fn is_ipv6_literal(s: &str) -> bool {
     }
 }
 
-/// Name a server is known by locally, such as `solutech`.
+/// Name a server is known by locally, such as `edge`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServerName(String);
 

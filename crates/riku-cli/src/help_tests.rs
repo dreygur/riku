@@ -29,10 +29,10 @@ fn braces_in_descriptions_do_not_break_the_template() {
 
 #[test]
 fn heading_names_the_implied_server() {
-    let name = ServerName::try_from("solutech").unwrap();
+    let name = ServerName::try_from("edge").unwrap();
     assert_eq!(
         forward_heading(Some(&name)),
-        "Forwarded commands (run on solutech, or here with --local):"
+        "Forwarded commands (run on edge, or here with --local):"
     );
     assert_eq!(forward_heading(None), FORWARD_HEADING);
 }

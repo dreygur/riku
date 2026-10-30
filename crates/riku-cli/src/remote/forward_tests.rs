@@ -5,10 +5,10 @@ fn sv(words: &[&str]) -> Vec<String> {
     words.iter().map(|w| w.to_string()).collect()
 }
 
-fn solutech() -> Server {
+fn edge() -> Server {
     Server {
-        name: ServerName::try_from("solutech").unwrap(),
-        address: SshAddress::try_from("riku@solutech.local").unwrap(),
+        name: ServerName::try_from("edge").unwrap(),
+        address: SshAddress::try_from("riku@edge.example").unwrap(),
         admin: None,
     }
 }
@@ -42,25 +42,25 @@ fn finds_the_server_option_clap_consumed() {
 #[test]
 fn ssh_args_quote_each_argument_and_skip_riku_word() {
     let a = ssh_args(
-        &solutech(),
+        &edge(),
         &sv(&["run", "myapp", "echo", "a b"]),
         true,
         None,
     );
     assert_eq!(
         a,
-        sv(&["-t", "--", "riku@solutech.local", "run myapp echo 'a b'"])
+        sv(&["-t", "--", "riku@edge.example", "run myapp echo 'a b'"])
     );
 }
 
 #[test]
 fn app_hint_added_only_when_present() {
-    let with = ssh_args(&solutech(), &sv(&["logs"]), false, Some("shop"));
+    let with = ssh_args(&edge(), &sv(&["logs"]), false, Some("shop"));
     assert_eq!(
         with,
-        sv(&["--", "riku@solutech.local", "--app-hint shop logs"])
+        sv(&["--", "riku@edge.example", "--app-hint shop logs"])
     );
-    let without = ssh_args(&solutech(), &sv(&["logs"]), false, None);
+    let without = ssh_args(&edge(), &sv(&["logs"]), false, None);
     assert!(
         !without.last().unwrap().contains("--app-hint"),
         "{without:?}"

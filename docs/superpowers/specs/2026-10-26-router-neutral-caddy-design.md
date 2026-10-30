@@ -106,7 +106,7 @@ service and port and pointing at the fix: drop the `ports` mapping or the
 profile that adds it, and point `RIKU_UPSTREAM_PORT` at the app's own proxy.
 
 Docs gain a short "app ships its own proxy" section, using
-compliance-management's `proxy` service as the example.
+a private compose app's `proxy` service as the example.
 
 ## Order
 

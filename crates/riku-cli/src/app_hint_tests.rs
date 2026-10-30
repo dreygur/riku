@@ -36,7 +36,7 @@ fn destroy_requires_a_typed_app() {
 
 #[test]
 fn client_plugin_sees_the_hinted_app() {
-    let addr = SshAddress::try_from("riku@solutech.local").unwrap();
+    let addr = SshAddress::try_from("riku@edge.example").unwrap();
     let mut cmd = Commands::Restart {
         app: None,
         hot: false,

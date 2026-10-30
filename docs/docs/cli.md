@@ -24,7 +24,7 @@ Forwarded commands (run on the selected server, or here with --local):
 ```
 
 When a server is implied (by the repo or the default), the forwarded heading
-names it: `Forwarded commands (run on solutech, or here with --local):`.
+names it: `Forwarded commands (run on edge, or here with --local):`.
 
 ## Remote Servers
 
@@ -39,10 +39,10 @@ The server list is local to your machine and always read here, never
 forwarded.
 
 ```bash
-riku server add solutech riku@solutech.example
+riku server add edge riku@edge.example
 riku server add edge riku@edge.example --admin root@edge.example
 riku server list
-riku server default solutech
+riku server default edge
 riku server remove edge
 ```
 
@@ -60,7 +60,7 @@ A name is 1 to 32 characters of `a-z`, `0-9`, `_` or `-`, starting with a
 letter or digit. An address is `user@host`: the host is a hostname, an IPv4
 address, or a bracketed IPv6 literal. There is no port syntax. For a server
 on another port, define a `Host` alias in `~/.ssh/config` and use the alias as
-the host (`riku@solutech-alt`).
+the host (`riku@edge-alt`).
 
 `--admin` is a second login on the same host with sudo rights. Only
 `riku dashboard` uses it.
@@ -77,7 +77,7 @@ For a forwarded command the first rule that applies wins:
 
 1. `-s <name>` or `--server <name>` on the command line, for that run only.
 2. The current git repo. Riku reads `git remote -v` and compares the
-   `user@host` of each scp style remote (`riku@solutech.example:myapp`)
+   `user@host` of each scp style remote (`riku@edge.example:myapp`)
    exactly against the registered addresses. Two remotes that match
    different servers are an error; choose with `-s`.
 3. The default server.
@@ -87,7 +87,7 @@ For a forwarded command the first rule that applies wins:
 `git` installed, rule 2 finds nothing and selection moves on.
 
 The match is a plain string comparison. There is no DNS lookup and no ssh
-config alias resolution, so `riku@solutech.local` and `riku@192.168.1.20` are
+config alias resolution, so `riku@edge.example` and `riku@192.168.1.20` are
 different servers even when they are the same machine. A remote written as an
 `ssh://` URL is not matched either. Register the address your remote uses.
 
@@ -95,7 +95,7 @@ Before every forwarded command riku prints the target on stderr, so piped
 output stays clean:
 
 ```
-[*] solutech (riku@solutech.example)
+[*] edge (riku@edge.example)
 ```
 
 There is no confirmation prompt.
@@ -128,7 +128,7 @@ created on a server. Every other `plugins` subcommand is forwarded.
 
 When the server was picked because of a git remote, a command that takes an
 app name can leave it out and use the remote's path. With the remote
-`riku@solutech.example:myapp`, these both act on `myapp`:
+`riku@edge.example:myapp`, these both act on `myapp`:
 
 ```bash
 riku restart
@@ -156,8 +156,8 @@ expands nothing (no globs, no variables). Plain `ssh` still works, and a
 leading `riku` word is accepted:
 
 ```bash
-ssh riku@solutech.example ps myapp
-ssh riku@solutech.example riku ps myapp
+ssh riku@edge.example ps myapp
+ssh riku@edge.example riku ps myapp
 ```
 
 ### Upgrading existing servers
@@ -655,7 +655,7 @@ covers the separate, fuller Next.js browser dashboard.
 ```bash
 riku dashboard
 riku dashboard --bind 0.0.0.0:8088 --token <tok>
-riku dashboard -s solutech
+riku dashboard -s edge
 ```
 
 | Option | Description |
@@ -668,8 +668,8 @@ With one selected (`-s`, the repo's git remote, or the default), it opens that
 server's dashboard in your local browser in one step:
 
 1. The server entry needs an admin login. Without one riku stops and prints
-   the command to fix it: `riku server add solutech riku@solutech.example
-   --admin root@solutech.example`. `--bind` and `--token` are refused, since
+   the command to fix it: `riku server add edge riku@edge.example
+   --admin root@edge.example`. `--bind` and `--token` are refused, since
    they only apply to a dashboard served here.
 2. Riku opens one ssh connection as the admin and runs the dashboard as the
    deploy user (the user part of `address`) through `sudo`. The token is new

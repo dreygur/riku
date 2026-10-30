@@ -208,21 +208,21 @@ When you push to Riku:
 Register the server once and the local `riku` runs commands on it over ssh:
 
 ```bash
-riku server add solutech riku@your-server-ip
-riku server default solutech
+riku server add edge riku@your-server-ip
+riku server default edge
 riku ps myapp
 ```
 
 Inside a repo whose git remote is `riku@your-server-ip:myapp`, the server and
 the app name are picked up from the remote, so `riku restart` is enough. Riku
-prints `[*] solutech (riku@your-server-ip)` on stderr so you can see where a
+prints `[*] edge (riku@your-server-ip)` on stderr so you can see where a
 command went. Use `-s <name>` for another server and `--local` to run on the
 current machine. `riku destroy` always needs the app name and does not ask for
 confirmation.
 
 To open the server's dashboard in your browser, register the server with an
 admin login (`--admin root@your-server-ip`) and run `riku dashboard -s
-solutech`. An existing entry has no way to be edited: remove it and add it
+edge`. An existing entry has no way to be edited: remove it and add it
 again.
 
 Servers set up with an older riku need their deploy keys migrated first. See

@@ -232,7 +232,7 @@ Expected: FAIL, module missing.
 - [ ] **Step 4: Verify**
 
 Run: `cargo test -q && cargo clippy --all-targets -- -D warnings`
-Expected: PASS. Then on solutech, with the new binary installed: `riku doctor` shows the warning, `riku doctor --fix` reports the count, `git push` and `ssh riku@solutech.local 'run myapp echo "a b"'` print `a b`. If solutech is unreachable, record that as not verified.
+Expected: PASS. Then on edge, with the new binary installed: `riku doctor` shows the warning, `riku doctor --fix` reports the count, `git push` and `ssh riku@edge.example 'run myapp echo "a b"'` print `a b`. If edge is unreachable, record that as not verified.
 
 - [ ] **Step 5: Commit** `Let riku parse the SSH command itself`
 
@@ -339,15 +339,15 @@ Optional app rule: `app` becomes `Option<String>` only where no required positio
 - [ ] **Step 1: Write failing tests**
 
 ```rust
-// target_tests.rs, list has solutech=riku@solutech.local (default) and prod=riku@prod.example
-#[test] fn flag_beats_git_remote_and_default() { /* flag prod, remote solutech -> prod, Source::Flag, no hint */ }
+// target_tests.rs, list has edge=riku@edge.example (default) and prod=riku@prod.example
+#[test] fn flag_beats_git_remote_and_default() { /* flag prod, remote edge -> prod, Source::Flag, no hint */ }
 #[test] fn git_remote_beats_default_and_gives_app() { /* remote riku@prod.example:shop -> prod, hint Some("shop") */ }
 #[test] fn two_matching_remotes_on_different_servers_is_an_error() { /* err text contains "-s" */ }
-#[test] fn unregistered_remote_host_is_ignored() { /* remote riku@10.0.0.9:x -> default solutech */ }
+#[test] fn unregistered_remote_host_is_ignored() { /* remote riku@10.0.0.9:x -> default edge */ }
 #[test] fn ip_does_not_match_registered_hostname() { /* remote riku@192.168.1.20:x, no default -> Local */ }
 #[test] fn local_flag_forces_local() { /* local: true -> Local */ }
 #[test] fn ssh_invocation_never_forwards() { /* via_ssh: true with default set -> Local */ }
-#[test] fn unknown_flag_server_is_an_error_listing_servers() { /* flag "nope" -> err contains "solutech" and "prod" */ }
+#[test] fn unknown_flag_server_is_an_error_listing_servers() { /* flag "nope" -> err contains "edge" and "prod" */ }
 
 // git_remote_tests.rs
 #[test] fn parses_scp_style_and_home_path_remotes() {
@@ -362,12 +362,12 @@ Optional app rule: `app` becomes `Option<String>` only where no required positio
     assert_eq!(strip_target_args(&argv, &[1, 2]), sv(&["run", "myapp", "grep", "-s", "x"]));
 }
 #[test] fn ssh_args_quote_each_argument_and_skip_riku_word() {
-    let a = ssh_args(&solutech(), &sv(&["run", "myapp", "echo", "a b"]), true, None);
-    assert_eq!(a, sv(&["-t", "--", "riku@solutech.local", "run myapp echo 'a b'"]));
+    let a = ssh_args(&edge(), &sv(&["run", "myapp", "echo", "a b"]), true, None);
+    assert_eq!(a, sv(&["-t", "--", "riku@edge.example", "run myapp echo 'a b'"]));
 }
 #[test] fn app_hint_added_only_when_present() { /* Some("shop") -> remote string starts with "--app-hint shop " ; None -> no "--app-hint" */ }
 #[test] fn tty_only_for_run_and_follow() { /* run -> true, logs -f -> true, logs -> false, ps -> false */ }
-#[test] fn client_plugin_receives_selected_server() { /* routing: build_plugin_args(cmd, Some(&addr))[0] == "riku@solutech.local" */ }
+#[test] fn client_plugin_receives_selected_server() { /* routing: build_plugin_args(cmd, Some(&addr))[0] == "riku@edge.example" */ }
 ```
 
 `strip_target_args` drops argv[0] and the consumed indices; callers compute indices from `ArgMatches::indices_of("server")` (and the flag token before a separate value, when argv[i-1] is `-s` or `--server`) and `indices_of("local")`. `ssh_args` joins the remote words with `shlex::try_join`.
@@ -380,7 +380,7 @@ Optional app rule: `app` becomes `Option<String>` only where no required positio
 
 - [ ] **Step 4: Verify**
 
-Run: `cargo test -q`. Then manual: `riku server add` is Task 7, so seed `servers.toml` by hand, `cargo run -q -- -s solutech ps`, and `cargo run -q -- -s solutech run myapp echo "a b"` prints `a b` with the stderr target line. Report unverified if solutech is unreachable.
+Run: `cargo test -q`. Then manual: `riku server add` is Task 7, so seed `servers.toml` by hand, `cargo run -q -- -s edge ps`, and `cargo run -q -- -s edge run myapp echo "a b"` prints `a b` with the stderr target line. Report unverified if edge is unreachable.
 
 - [ ] **Step 5: Commit** `Forward commands to a selected server`
 
@@ -458,7 +458,7 @@ Plus in `riku-dashboard`: `reports_real_port_when_binding_zero` binds `127.0.0.1
 
 - [ ] **Step 4: Verify on a real host**
 
-Run from the laptop: `cargo run -q -- server add solutech riku@solutech.local --admin dreygur@solutech.local`, then `cargo run -q -- dashboard -s solutech`. Expected: browser opens, a restart action works, `ps aux | grep RIKU` on the server shows no token, a second terminal running the same command gets its own port, Ctrl-C in one leaves the other running and removes its own remote process. Repeat once with sudo NOPASSWD removed to exercise the password path (this also confirms `sudo -S` reads only the first line, which this plan has not verified). If solutech is unavailable, report Task 8 as unverified.
+Run from the laptop: `cargo run -q -- server add edge riku@edge.example --admin admin@edge.example`, then `cargo run -q -- dashboard -s edge`. Expected: browser opens, a restart action works, `ps aux | grep RIKU` on the server shows no token, a second terminal running the same command gets its own port, Ctrl-C in one leaves the other running and removes its own remote process. Repeat once with sudo NOPASSWD removed to exercise the password path (this also confirms `sudo -S` reads only the first line, which this plan has not verified). If edge is unavailable, report Task 8 as unverified.
 
 - [ ] **Step 5: Commit** `Open a remote dashboard in one command`
 

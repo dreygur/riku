@@ -165,7 +165,7 @@ pub enum Commands {
     /// Manage the list of remote riku servers
     #[command(
         subcommand,
-        after_help = "Examples:\n  riku server add solutech riku@solutech.example\n  riku server list\n  riku server default solutech\n  riku server remove solutech"
+        after_help = "Examples:\n  riku server add edge riku@edge.example\n  riku server list\n  riku server default edge\n  riku server remove edge"
     )]
     Server(ServerCmd),
 

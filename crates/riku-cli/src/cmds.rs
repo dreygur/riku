@@ -314,7 +314,7 @@ pub enum MarketplaceCmd {
 pub enum ServerCmd {
     /// Add a server to the list
     #[command(
-        after_help = "Examples:\n  riku server add solutech riku@solutech.example\n  riku server add edge riku@edge.example --admin root@edge.example"
+        after_help = "Examples:\n  riku server add edge riku@edge.example\n  riku server add edge riku@edge.example --admin root@edge.example"
     )]
     Add {
         /// Name to refer to the server by
@@ -338,7 +338,7 @@ pub enum ServerCmd {
     },
 
     /// Make a server the default target
-    #[command(after_help = "Examples:\n  riku server default solutech")]
+    #[command(after_help = "Examples:\n  riku server default edge")]
     Default {
         /// Server name
         name: String,
