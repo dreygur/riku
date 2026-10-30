@@ -164,16 +164,10 @@ services:
 }
 
 #[test]
-fn fixed_host_port_blocks_scaling() {
-    let message = scale_error(
-        "services:\n  web: {image: app, ports: [\"8080:80\"]}\n",
-        "web",
-        2,
-    );
-    assert!(
-        message.contains("web") && message.contains("8080"),
-        "{message}"
-    );
+fn routed_service_with_fixed_host_port_can_scale() {
+    let project = project_of("services:\n  web: {image: app, ports: [\"8080:80\"]}\n").unwrap();
+    check_scale(&project, &service("web"), 3)
+        .expect("phase 3 gives each copy of the routed service its own host port");
 }
 
 #[test]

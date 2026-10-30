@@ -9,7 +9,6 @@
 //! The remaining way to reach another app's volumes is the project name, which
 //! is why [`ProjectNameSource`] exists.
 
-use super::environment::read_dotenv;
 use super::order::start_order;
 use super::project_name::resolve_project_name;
 use super::volume_decl::parse_volume_decls;
@@ -19,15 +18,12 @@ use anyhow::{anyhow, Result};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-/// How a top level volume is named in the engine.
+/// How a top level volume is named in the engine. The compose file cannot
+/// choose an engine name, so there is one kind.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VolumeDecl {
     /// Named `<project>_<key>`.
     Managed,
-    /// Carries an explicit engine name.
-    Named(String),
-    /// Exists outside the project; `None` means the engine name is the key.
-    External(Option<String>),
 }
 
 /// Where the project name came from.
@@ -47,6 +43,9 @@ pub enum ProjectNameSource {
 
 /// The validated contents of a compose project.
 ///
+/// The fields that decide volume names are private and read through getters,
+/// so nothing outside this module can mark a name `Derived`.
+///
 /// A `Declared` project name is only safe once the state aware migration step
 /// has refused one that equals another riku app's name, or whose existing
 /// volumes lack the matching compose project label. This crate has no server
@@ -57,16 +56,30 @@ pub enum ProjectNameSource {
 pub struct ComposeProject {
     /// Services in start order: dependencies first, ties by name.
     pub services: Vec<ServiceDef>,
-    pub volumes: BTreeMap<String, VolumeDecl>,
-    /// Compose project name, lowercase and engine safe. It prefixes managed
-    /// volume names.
-    pub project_name: String,
-    pub name_source: ProjectNameSource,
     /// Non fatal findings, such as unset variables.
     pub warnings: Vec<String>,
+    volumes: BTreeMap<String, VolumeDecl>,
+    project_name: String,
+    name_source: ProjectNameSource,
 }
 
 impl ComposeProject {
+    /// Declared top level volumes by key.
+    pub fn volumes(&self) -> &BTreeMap<String, VolumeDecl> {
+        &self.volumes
+    }
+
+    /// Compose project name, lowercase and engine safe. It prefixes managed
+    /// volume names.
+    pub fn project_name(&self) -> &str {
+        &self.project_name
+    }
+
+    /// Where the project name came from.
+    pub fn name_source(&self) -> ProjectNameSource {
+        self.name_source
+    }
+
     /// Record that the migration step checked the declared project name
     /// against the other apps and their volumes. Does nothing for a derived
     /// name.
@@ -95,12 +108,6 @@ pub fn read_project(
         .parent()
         .unwrap_or(app_path)
         .to_path_buf();
-    let mut vars = match read_dotenv(app_path, &compose_dir.join(".env")) {
-        Ok(vars) => vars,
-        Err(e) => return Err(e),
-    };
-    vars.extend(app_env.iter().map(|(k, v)| (k.clone(), v.clone())));
-
     let volumes = match parse_volume_decls(&raw.volumes) {
         Ok(volumes) => volumes,
         Err(e) => return Err(e),
@@ -109,7 +116,7 @@ pub fn read_project(
     let ctx = ServiceContext {
         app_path,
         compose_dir: &compose_dir,
-        vars: &vars,
+        vars: &raw.vars,
         declared_volumes: &declared_volumes,
     };
     let mut services = Vec::with_capacity(raw.services.len());
@@ -124,7 +131,7 @@ pub fn read_project(
         Err(e) => return Err(e),
     };
     let (project_name, name_source) =
-        match resolve_project_name(app_env, raw.name.as_deref(), &compose_dir) {
+        match resolve_project_name(&raw.vars, raw.name.as_deref(), app_path, &compose_dir) {
             Ok(resolved) => resolved,
             Err(e) => return Err(e),
         };
@@ -182,8 +189,6 @@ pub fn existing_volume_name(project: &ComposeProject, key: &str) -> Result<Optio
         return Ok(None);
     };
     match decl {
-        VolumeDecl::Named(name) | VolumeDecl::External(Some(name)) => Ok(Some(name.clone())),
-        VolumeDecl::External(None) => Ok(Some(key.to_string())),
         VolumeDecl::Managed if project.name_source == ProjectNameSource::Declared => Err(anyhow!(
             "volume '{key}' would be named after the declared project name '{}', which is not confirmed as this app's own",
             project.project_name

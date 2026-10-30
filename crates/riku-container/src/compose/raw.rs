@@ -15,11 +15,13 @@ use super::keys::check_keys;
 use super::{ComposeFile, Mapping, Value};
 use anyhow::{anyhow, bail, Result};
 use std::collections::BTreeMap;
+use std::fmt;
 use std::path::Path;
 
 /// A compose file after merge keys, key checks and interpolation. Service
 /// fields are still raw YAML; later stages turn them into typed values.
-#[derive(Debug)]
+///
+/// The `Debug` output lists variable names, never values, which may be secrets.
 pub struct RawProject {
     /// Service definitions by service name.
     pub services: BTreeMap<String, Value>,
@@ -31,6 +33,21 @@ pub struct RawProject {
     pub name: Option<String>,
     /// Non fatal findings, such as unset variables.
     pub warnings: Vec<String>,
+    /// The variables interpolation used: the `.env` next to the compose file
+    /// overlaid by the app env. May hold secrets.
+    pub vars: BTreeMap<String, String>,
+}
+
+impl fmt::Debug for RawProject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RawProject")
+            .field("services", &self.services)
+            .field("volumes", &self.volumes)
+            .field("name", &self.name)
+            .field("warnings", &self.warnings)
+            .field("var_names", &self.vars.keys().collect::<Vec<_>>())
+            .finish()
+    }
 }
 
 /// Read, check and interpolate the compose file.
@@ -75,7 +92,7 @@ pub fn read_raw(
     let Value::Object(project) = document else {
         bail!("the top level must be a mapping");
     };
-    split_project(project, warnings)
+    split_project(project, warnings, vars)
 }
 
 fn interpolate_values(
@@ -109,7 +126,11 @@ fn interpolate_values(
     Ok(())
 }
 
-fn split_project(mut project: Mapping, warnings: Vec<String>) -> Result<RawProject> {
+fn split_project(
+    mut project: Mapping,
+    warnings: Vec<String>,
+    vars: BTreeMap<String, String>,
+) -> Result<RawProject> {
     let name = match project.remove("name") {
         None | Some(Value::Null) => None,
         Some(Value::String(name)) => Some(name),
@@ -128,6 +149,7 @@ fn split_project(mut project: Mapping, warnings: Vec<String>) -> Result<RawProje
         volumes,
         name,
         warnings,
+        vars,
     })
 }
 

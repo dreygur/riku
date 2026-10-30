@@ -24,15 +24,22 @@ fn derived_name_qualifies_volumes_directly() {
         existing_volume_name(&project, "pgdata").unwrap().as_deref(),
         Some("shop_pgdata")
     );
+    assert_eq!(existing_volume_name(&project, "undeclared").unwrap(), None);
 }
 
 #[test]
-fn project_name_follows_compose_file_directory() {
+fn project_name_follows_compose_file_directory_but_needs_confirmation() {
     let app = TestApp::new("myapp");
     app.write("deploy/compose.yml", WITH_PGDATA);
 
-    let project = app.read(Some("deploy/compose.yml"), &[]).unwrap();
+    let mut project = app.read(Some("deploy/compose.yml"), &[]).unwrap();
 
+    assert_eq!(
+        project.name_source,
+        ProjectNameSource::Declared,
+        "another app with deploy/compose.yml would get the same project name"
+    );
+    project.confirm_declared_name();
     assert_eq!(
         existing_volume_name(&project, "pgdata").unwrap().as_deref(),
         Some("deploy_pgdata"),
@@ -96,24 +103,33 @@ fn junk_project_names_are_refused_naming_the_value() {
 }
 
 #[test]
-fn recorded_volume_names_map_to_their_existing_engine_names() {
-    let mut project = project_of(WITH_PGDATA).unwrap();
-    project
-        .volumes
-        .insert("media".into(), VolumeDecl::Named("shop_media".into()));
-    project
-        .volumes
-        .insert("shared".into(), VolumeDecl::External(None));
-    project.volumes.insert(
-        "legacy".into(),
-        VolumeDecl::External(Some("old_data".into())),
-    );
+fn compose_project_name_in_dotenv_is_declared() {
+    let app = TestApp::new("myapp");
+    app.write("compose.yaml", WITH_PGDATA);
+    app.write(".env", "COMPOSE_PROJECT_NAME=Shop.Prod\n");
 
-    let name = |key: &str| existing_volume_name(&project, key).unwrap();
-    assert_eq!(name("media").as_deref(), Some("shop_media"));
-    assert_eq!(name("shared").as_deref(), Some("shared"));
-    assert_eq!(name("legacy").as_deref(), Some("old_data"));
-    assert_eq!(name("undeclared"), None);
+    let mut project = app.read(None, &[]).unwrap();
+
+    assert_eq!(project.project_name, "shopprod");
+    assert_eq!(project.name_source, ProjectNameSource::Declared);
+    project.confirm_declared_name();
+    assert_eq!(
+        existing_volume_name(&project, "pgdata").unwrap().as_deref(),
+        Some("shopprod_pgdata")
+    );
+}
+
+#[test]
+fn app_env_overrides_dotenv_project_name() {
+    let app = TestApp::new("myapp");
+    app.write("compose.yaml", WITH_PGDATA);
+    app.write(".env", "COMPOSE_PROJECT_NAME=fromdotenv\n");
+
+    let project = app
+        .read(None, &[("COMPOSE_PROJECT_NAME", "fromenv")])
+        .unwrap();
+
+    assert_eq!(project.project_name, "fromenv");
 }
 
 #[test]

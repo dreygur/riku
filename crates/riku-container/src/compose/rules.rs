@@ -112,9 +112,9 @@ fn describe_mount(mount: &Mount) -> String {
 ///
 /// One copy always passes. More are refused for a service that mounts writable
 /// storage, publishes any port other than the routed HTTP one (routers only
-/// balance HTTP), or publishes a fixed host port that a second copy could not
-/// bind. Only `ports: ["80"]` style bindings, where the engine picks the host
-/// port, can scale.
+/// balance HTTP). The routed service may carry a fixed host mapping such as
+/// `"8080:80"`: phase 3 gives each copy its own host port on 127.0.0.1 and
+/// lists every copy as a router backend.
 pub fn check_scale(project: &ComposeProject, service: &ServiceName, copies: u32) -> Result<()> {
     if copies == 0 {
         bail!("service '{service}': copies must be at least 1");
@@ -145,9 +145,6 @@ pub fn check_scale(project: &ComposeProject, service: &ServiceName, copies: u32)
                 published(binding)
             );
         }
-    }
-    if let Some(port) = def.ports.iter().find_map(|b| b.host_port) {
-        bail!("service '{service}' publishes fixed host port {port}; a second copy cannot bind it");
     }
     Ok(())
 }

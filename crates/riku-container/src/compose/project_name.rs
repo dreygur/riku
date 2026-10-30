@@ -13,7 +13,8 @@
 //! The project name prefixes every engine volume name, so it decides which
 //! volumes an app can reach. Every name is checked with the engine safe
 //! character set before it is stored, and a name taken from the compose file
-//! or the app env is reported as `Declared`, never as `Derived`.
+//! or the app env, or from a subdirectory of the app, is reported as
+//! `Declared`, never as `Derived`.
 
 use super::project::ProjectNameSource;
 use crate::types::is_engine_safe;
@@ -23,14 +24,20 @@ use std::path::Path;
 
 const ENV_KEY: &str = "COMPOSE_PROJECT_NAME";
 
-/// Pick the project name: `COMPOSE_PROJECT_NAME` in `app_env`, else the
-/// compose file's top level `name`, else the name of `compose_dir`.
+/// Pick the project name: `COMPOSE_PROJECT_NAME` in `vars` (the project `.env`
+/// overlaid by the app env), else the compose file's top level `name`, else
+/// the name of `compose_dir`.
+///
+/// Only a directory name taken from `app_path` itself is `Derived`. A name
+/// taken from a subdirectory can collide with another app's, so it is
+/// `Declared` like the other sources.
 pub(super) fn resolve_project_name(
-    app_env: &BTreeMap<String, String>,
+    vars: &BTreeMap<String, String>,
     declared: Option<&str>,
+    app_path: &Path,
     compose_dir: &Path,
 ) -> Result<(String, ProjectNameSource)> {
-    if let Some(raw) = app_env.get(ENV_KEY).filter(|raw| !raw.is_empty()) {
+    if let Some(raw) = vars.get(ENV_KEY).filter(|raw| !raw.is_empty()) {
         return checked(normalise(raw), raw, ENV_KEY).map(|n| (n, ProjectNameSource::Declared));
     }
     if let Some(raw) = declared {
@@ -44,8 +51,12 @@ pub(super) fn resolve_project_name(
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
-    checked(normalise(&dir), &dir, "compose directory name")
-        .map(|n| (n, ProjectNameSource::Derived))
+    let source = if compose_dir == app_path {
+        ProjectNameSource::Derived
+    } else {
+        ProjectNameSource::Declared
+    };
+    checked(normalise(&dir), &dir, "compose directory name").map(|n| (n, source))
 }
 
 fn normalise(raw: &str) -> String {
