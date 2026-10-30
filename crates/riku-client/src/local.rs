@@ -1,15 +1,18 @@
 //! What `rk` runs on the laptop itself, and the errors for what it will not.
 //!
-//! Nothing here touches a server: `server`, `plugin` and `quickstart` come
-//! from riku-remote, and every other command is either forwarded by the
-//! caller or refused here.
+//! Nothing here touches a server: `server`, `plugin`, `quickstart` and the
+//! plugin authoring commands come from riku-remote, and every other command
+//! is either forwarded by the caller or refused here.
 
 use anyhow::{anyhow, Error, Result};
 use riku_args::cli::Commands;
+use riku_args::cmds::PluginsCmd;
 use riku_args::placement::{client_rule, ClientRule, Elsewhere};
+use riku_remote::plugin_author::{
+    cmd_plugins_keygen, cmd_plugins_scaffold, cmd_plugins_sign, Program,
+};
 use riku_remote::plugin_cmd::run_plugin;
 use riku_remote::quickstart::cmd_quickstart;
-use riku_remote::remote::route::is_plugin_authoring;
 use riku_remote::remote::server_cmd;
 use riku_remote::remote::store;
 use riku_remote::remote::target::registered_names;
@@ -52,11 +55,10 @@ fn no_server_selected() -> Error {
     }
 }
 
-/// Handles a command that resolved to no server. `name` and `sub` are the
-/// clap names of the command and its subcommand. `server`, `plugin` and
-/// `quickstart` run here, plugin authoring is refused, and anything else is
-/// the no server error.
-pub(crate) fn run_without_server(command: Commands, name: &str, sub: Option<&str>) -> Result<()> {
+/// Handles a command that resolved to no server. `server`, `plugin`,
+/// `quickstart` and the plugin authoring commands run here, and anything else
+/// is the no server error.
+pub(crate) fn run_without_server(command: Commands) -> Result<()> {
     match command {
         Commands::Server(cmd) => server_cmd::run(cmd),
         Commands::Plugin(cmd) => run_plugin(cmd),
@@ -65,13 +67,13 @@ pub(crate) fn run_without_server(command: Commands, name: &str, sub: Option<&str
             runtime,
             remote,
         } => cmd_quickstart(&app, &runtime, remote.as_deref()),
-        _ if is_plugin_authoring(name, sub) => {
-            let refused = match sub {
-                Some(sub) => format!("{name} {sub}"),
-                None => name.to_string(),
-            };
-            Err(not_part_of_rk(&refused, Elsewhere::FullBinary))
-        }
+        Commands::Plugins(PluginsCmd::Scaffold {
+            name,
+            plugin_type,
+            dir,
+        }) => cmd_plugins_scaffold(Program::Rk, &name, &plugin_type, dir.as_deref()),
+        Commands::Plugins(PluginsCmd::Keygen { out }) => cmd_plugins_keygen(Program::Rk, &out),
+        Commands::Plugins(PluginsCmd::Sign { bundle, key }) => cmd_plugins_sign(&bundle, &key),
         _ => Err(no_server_selected()),
     }
 }

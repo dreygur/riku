@@ -12,6 +12,7 @@ use anyhow::Result;
 use clap::FromArgMatches;
 use riku_args::cli::Cli;
 use riku_args::parse::command_names;
+use riku_remote::plugin_author::Program;
 use riku_remote::remote::flow::{run_or_forward, Outcome};
 use riku_remote::remote::route::target_for;
 use riku_remote::remote::target::Selection;
@@ -19,7 +20,7 @@ use riku_remote::remote::target::Selection;
 use local::{check_supported, no_local_mode, run_without_server};
 use parse::parse;
 
-const PROGRAM: &str = "rk";
+const PROGRAM: &str = Program::Rk.name();
 
 fn run(argv: Vec<String>) -> Result<()> {
     let matches = match parse(&argv) {
@@ -48,7 +49,7 @@ fn run(argv: Vec<String>) -> Result<()> {
     };
     match run_or_forward(&argv, &matches, args, &target, PROGRAM) {
         Ok(Outcome::Done) => Ok(()),
-        Ok(Outcome::Local(command)) => run_without_server(command, name, sub),
+        Ok(Outcome::Local(command)) => run_without_server(command),
         Err(e) => Err(e),
     }
 }

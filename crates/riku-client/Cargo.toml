@@ -21,4 +21,5 @@ anyhow = { workspace = true }
 clap = { workspace = true }
 
 [dev-dependencies]
+riku-bundle = { path = "../riku-bundle" }
 tempfile = { workspace = true }

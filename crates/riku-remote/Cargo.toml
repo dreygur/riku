@@ -9,6 +9,7 @@ license = "MIT"
 
 [dependencies]
 riku-args = { path = "../riku-args" }
+riku-bundle = { path = "../riku-bundle" }
 riku-util = { path = "../riku-util" }
 anyhow = { workspace = true }
 clap = { workspace = true }

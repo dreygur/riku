@@ -1,7 +1,7 @@
-//! Skeleton generator for `riku plugins scaffold` (ROADMAP E0).
+//! Skeleton text for `plugins scaffold` (ROADMAP E0).
 //!
-//! Produces a working bundle directory for one of the implemented seam types,
-//! so a new author starts from something that already parses and runs.
+//! Produces the manifest and entry script for one of the implemented seam
+//! types, so a new author starts from something that already parses and runs.
 
 use anyhow::{bail, Result};
 
@@ -13,6 +13,7 @@ pub enum SeamType {
 }
 
 impl SeamType {
+    /// Reads the `--type` value, case insensitively.
     pub fn parse(s: &str) -> Result<Self> {
         match s.to_lowercase().as_str() {
             "runtime" => Ok(SeamType::Runtime),

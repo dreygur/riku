@@ -226,8 +226,12 @@ no server selected; add one with rk server add <name> <user@host>, or pass -s <n
 
 Commands that only make sense on the server (`init`, `supervisor` and the
 hidden internal commands) are refused with `run it with riku on the server`.
-`container` and `plugins keygen|sign|scaffold` are refused with `run it with
-the full riku binary`.
+`container` is refused with `run it with the full riku binary`.
+
+`plugins keygen`, `plugins sign` and `plugins scaffold` are plugin author
+commands and run on your machine in `rk`, exactly as in `riku`, whether or not
+a server is selected. They never reach a server. The hint that tells you to
+trust a new key on a server names `rk -s <server> plugins trust add`.
 
 The server list is the same file `riku server` uses,
 `${XDG_CONFIG_HOME:-$HOME/.config}/riku/servers.toml`, so both binaries share

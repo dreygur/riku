@@ -5,6 +5,9 @@ use anyhow::Result;
 use crate::cmds::{HookCmd, MarketplaceCmd, PluginsCmd, TrustCmd};
 use crate::config::RikuPaths;
 use crate::{hooks, plugins};
+use riku_remote::plugin_author::{
+    cmd_plugins_keygen, cmd_plugins_scaffold, cmd_plugins_sign, Program,
+};
 
 fn run_trust(paths: &RikuPaths, cmd: TrustCmd) -> Result<()> {
     match cmd {
@@ -31,14 +34,14 @@ pub(super) fn run_plugins(paths: &RikuPaths, cmd: PluginsCmd) -> Result<()> {
             name,
             plugin_type,
             dir,
-        } => plugins::cmd_plugins_scaffold(&name, &plugin_type, dir.as_deref()),
+        } => cmd_plugins_scaffold(Program::Riku, &name, &plugin_type, dir.as_deref()),
         PluginsCmd::List => plugins::cmd_plugins_list(paths),
         PluginsCmd::Remove { name } => plugins::cmd_plugins_remove(paths, &name),
         PluginsCmd::Search { query } => plugins::cmd_plugins_search(paths, &query),
         PluginsCmd::Add { spec } => plugins::cmd_plugins_add(paths, &spec),
         PluginsCmd::Doctor => plugins::cmd_plugins_doctor(paths),
-        PluginsCmd::Keygen { out } => plugins::cmd_plugins_keygen(&out),
-        PluginsCmd::Sign { bundle, key } => plugins::cmd_plugins_sign(&bundle, &key),
+        PluginsCmd::Keygen { out } => cmd_plugins_keygen(Program::Riku, &out),
+        PluginsCmd::Sign { bundle, key } => cmd_plugins_sign(&bundle, &key),
         PluginsCmd::Trust(cmd) => run_trust(paths, cmd),
         PluginsCmd::Marketplace(cmd) => run_marketplace(paths, cmd),
     }

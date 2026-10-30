@@ -8,6 +8,7 @@ pub(crate) use riku_args::{cmds, help, placement};
 pub(crate) use riku_util as util;
 
 pub mod client_plugins;
+pub mod plugin_author;
 pub mod plugin_cmd;
 pub mod quickstart;
 pub mod remote;

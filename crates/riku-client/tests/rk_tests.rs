@@ -7,6 +7,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use riku_bundle::signing::verify;
+use riku_bundle::PluginManifest;
 use tempfile::TempDir;
 
 const NO_SERVER: &str =
@@ -112,17 +114,83 @@ fn refusal_wins_over_a_help_request() {
     }
 }
 
+fn public_key_line(output: &Output) -> String {
+    stdout(output)
+        .lines()
+        .map(str::trim)
+        .find(|line| line.len() == 64 && line.chars().all(|c| c.is_ascii_hexdigit()))
+        .unwrap_or_else(|| panic!("no public key in: {}", stdout(output)))
+        .to_string()
+}
+
 #[test]
-fn plugin_authoring_is_refused_naming_the_subcommand() {
+fn scaffold_creates_a_bundle_with_no_server_registered() {
     let home = TempDir::new().unwrap();
-    let out = rk(&home, &["plugins", "keygen"]);
-    assert_eq!(out.status.code(), Some(1));
-    assert!(
-        stderr(&out)
-            .contains("'plugins keygen' is not part of rk; run it with the full riku binary"),
-        "{}",
-        stderr(&out)
+    let out = rk(&home, &["plugins", "scaffold", "demo", "--type", "runtime"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    let bundle = home.path().join("demo");
+    assert!(bundle.join("riku-plugin.toml").is_file());
+    let mode = fs::metadata(bundle.join("bin/demo"))
+        .unwrap()
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o755);
+    assert!(stdout(&out).contains("rk plugins keygen && rk plugins sign"));
+    PluginManifest::from_dir(&bundle).expect("scaffolded manifest should validate");
+}
+
+#[test]
+fn keygen_writes_a_private_key_and_prints_the_public_key() {
+    let home = TempDir::new().unwrap();
+    let ssh_record = mock_ssh(&home);
+    let added = rk(&home, &["server", "add", "t", UNREACHABLE]);
+    assert!(added.status.success(), "{}", stderr(&added));
+
+    let key = home.path().join("k");
+    let out = rk(
+        &home,
+        &["plugins", "keygen", "--out", key.to_str().unwrap()],
     );
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(
+        fs::metadata(&key).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    assert_eq!(public_key_line(&out).len(), 64);
+    assert!(stdout(&out).contains("rk -s <server> plugins trust add <name> <pubkey>"));
+    assert!(!ssh_record.exists(), "keygen must not reach a server");
+}
+
+#[test]
+fn sign_writes_a_signature_the_bundle_crate_verifies() {
+    let home = TempDir::new().unwrap();
+    let scaffold = rk(&home, &["plugins", "scaffold", "demo", "--type", "addon"]);
+    assert!(scaffold.status.success(), "{}", stderr(&scaffold));
+    let key = home.path().join("k");
+    let keygen = rk(
+        &home,
+        &["plugins", "keygen", "--out", key.to_str().unwrap()],
+    );
+    let bundle = home.path().join("demo");
+
+    let out = rk(
+        &home,
+        &[
+            "plugins",
+            "sign",
+            bundle.to_str().unwrap(),
+            "--key",
+            key.to_str().unwrap(),
+        ],
+    );
+    assert!(out.status.success(), "{}", stderr(&out));
+    let manifest = PluginManifest::from_dir(&bundle).unwrap();
+    let signature = manifest
+        .signature
+        .as_deref()
+        .expect("manifest has a signature");
+    let entry = fs::read(manifest.entry_path(&bundle)).unwrap();
+    assert!(verify(&entry, signature, &public_key_line(&keygen)));
 }
 
 #[test]

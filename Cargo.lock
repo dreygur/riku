@@ -1656,6 +1656,7 @@ dependencies = [
  "anyhow",
  "clap",
  "riku-args",
+ "riku-bundle",
  "riku-remote",
  "tempfile",
 ]
@@ -1787,6 +1788,7 @@ dependencies = [
  "dirs",
  "nix",
  "riku-args",
+ "riku-bundle",
  "riku-util",
  "serde",
  "shlex",
