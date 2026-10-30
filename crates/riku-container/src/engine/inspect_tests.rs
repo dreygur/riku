@@ -6,8 +6,9 @@ const ID: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd
 const ID_B: &str = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
 
 /// Captured from `docker inspect` (docker 29.8.2) of a running alpine container
-/// started with the three riku labels. Host paths, ids, network ids and the
-/// container name were replaced; every other field is kept as the engine sent it.
+/// started with the three riku labels. The capture was trimmed and scrubbed:
+/// host paths, ids, network details, the pid and the container name were
+/// removed or replaced.
 const DOCKER_RUNNING: &str = r#"[
     {
         "Id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -21,7 +22,7 @@ const DOCKER_RUNNING: &str = r#"[
             "Restarting": false,
             "OOMKilled": false,
             "Dead": false,
-            "Pid": 6861,
+            "Pid": 1234,
             "ExitCode": 0,
             "Error": "",
             "StartedAt": "2026-10-30T13:27:17.273819223Z",
@@ -40,7 +41,7 @@ const DOCKER_RUNNING: &str = r#"[
             "Entrypoint": null,
             "Labels": {"riku.app": "myapp", "riku.copy": "2", "riku.service": "web"}
         },
-        "NetworkSettings": {"Ports": {}, "Networks": {"bridge": {"IPAddress": "192.168.215.2"}}}
+        "NetworkSettings": {"Ports": {}, "Networks": {"bridge": {"IPAddress": "172.17.0.2"}}}
     }
 ]"#;
 
@@ -120,7 +121,12 @@ fn podman_shape_without_labels_has_no_service_or_copy() {
 
     assert_eq!(info.id.as_str(), ID_B);
     assert_eq!(info.name, "scratch");
-    assert!(info.service.is_none() && info.copy.is_none());
+    assert!(
+        info.service.is_none() && info.copy.is_none(),
+        "unlabelled container got service {:?} copy {:?}",
+        info.service,
+        info.copy
+    );
     assert_eq!(info.state, ContainerState::Created);
 }
 
@@ -188,7 +194,55 @@ fn list_refuses_engine_output_that_is_not_an_id() {
     let dir = tempfile::tempdir().unwrap();
     let (engine, _log) = logging_engine(dir.path(), "echo --all");
 
-    assert!(engine.list("myapp").is_err());
+    let err = engine.list("myapp").unwrap_err().to_string();
+
+    assert!(err.contains("container id"), "unexpected error: {err}");
+}
+
+/// Batch inspect fails (a container is gone), single inspect works for A and
+/// fails for B. `ps` answers the fresh listing with `listed`.
+fn racing_engine(
+    dir: &std::path::Path,
+    listed: &str,
+) -> (crate::engine::Engine, std::path::PathBuf) {
+    let json_a = container(ID, r#"{"Status":"running"}"#, "{}");
+    logging_engine(
+        dir,
+        &format!(
+            "case \"$1\" in\n\
+             ps) printf '%s\\n' {listed};;\n\
+             inspect) if [ \"$#\" -gt 4 ] || [ \"$4\" = {ID_B} ]; then echo gone >&2; exit 1; fi; echo '{json_a}';;\n\
+             esac"
+        ),
+    )
+}
+
+fn both() -> [ContainerId; 2] {
+    [
+        ContainerId::try_from(ID).unwrap(),
+        ContainerId::try_from(ID_B).unwrap(),
+    ]
+}
+
+#[test]
+fn inspect_drops_a_container_removed_during_the_snapshot() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _log) = racing_engine(dir.path(), ID);
+
+    let infos = engine.inspect(&both()).unwrap();
+
+    assert_eq!(infos.len(), 1, "got {infos:?}");
+    assert_eq!(infos[0].id.as_str(), ID);
+}
+
+#[test]
+fn inspect_fails_when_a_container_that_still_exists_cannot_be_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _log) = racing_engine(dir.path(), &format!("{ID} {ID_B}"));
+
+    let err = engine.inspect(&both()).unwrap_err().to_string();
+
+    assert!(err.contains("gone"), "unexpected error: {err}");
 }
 
 #[test]

@@ -11,6 +11,7 @@ use std::ffi::OsString;
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 
+use super::snapshot::fetch_present;
 use super::{ContainerId, Engine};
 
 /// One sample of a container's resource use.
@@ -51,7 +52,10 @@ fn parse_cpu(raw: &str) -> Result<f64> {
 }
 
 fn parse_memory(usage: &str) -> Result<u64> {
-    let used = usage.split(" / ").next().unwrap_or_default().trim();
+    let used = usage
+        .split_once(" / ")
+        .map_or(usage, |(used, _)| used)
+        .trim();
     let split = used
         .find(|c: char| !(c.is_ascii_digit() || c == '.'))
         .unwrap_or(used.len());
@@ -114,22 +118,26 @@ pub(crate) fn parse_stats(output: &str) -> Result<Vec<ContainerStats>> {
 }
 
 impl Engine {
-    /// One sample for each container in `ids`. Returns an empty list without
-    /// running the engine when `ids` is empty.
+    /// One sample for each container in `ids`.
+    ///
+    /// Returns an empty list without running the engine when `ids` is empty.
+    /// Pass running containers: the engine cannot sample a stopped one. A
+    /// container removed after it was listed is left out of the result; any
+    /// other failure is an error. See [`super::snapshot`] for how the two are
+    /// told apart.
     pub fn stats(&self, ids: &[ContainerId]) -> Result<Vec<ContainerStats>> {
-        if ids.is_empty() {
-            return Ok(Vec::new());
-        }
-        let mut args: Vec<OsString> = ["stats", "--no-stream", "--format", "json"]
-            .into_iter()
-            .map(OsString::from)
-            .collect();
-        args.extend(ids.iter().map(|id| OsString::from(id.as_str())));
-        let stdout = match self.output(&args) {
-            Ok(stdout) => stdout,
-            Err(e) => return Err(anyhow!("cannot read container stats: {e}")),
+        let run = |ids: &[ContainerId]| {
+            let mut args: Vec<OsString> = ["stats", "--no-stream", "--format", "json"]
+                .into_iter()
+                .map(OsString::from)
+                .collect();
+            args.extend(ids.iter().map(|id| OsString::from(id.as_str())));
+            self.output(&args)
         };
-        parse_stats(&stdout)
+        match fetch_present(self, ids, run, parse_stats) {
+            Ok(stats) => Ok(stats),
+            Err(e) => Err(anyhow!("cannot read container stats: {e}")),
+        }
     }
 }
 

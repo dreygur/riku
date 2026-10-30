@@ -17,9 +17,11 @@ mod fixture;
 mod identity;
 mod ids;
 mod inspect;
+mod inspect_parse;
 mod probe;
 mod resources;
 mod run_args;
+mod snapshot;
 mod spec_check;
 mod stats;
 

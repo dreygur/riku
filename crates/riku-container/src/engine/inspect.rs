@@ -1,17 +1,16 @@
 //! Container state as the engine reports it.
 //!
-//! Security model: engine output is untrusted. Ids are parsed into
-//! [`ContainerId`], service and copy labels into their validated types, and a
-//! missing or malformed required field is an error, never a default. The app
-//! name that selects containers must pass the same check as a container name
-//! before it reaches the `--filter` argument.
+//! Security model: the app name that selects containers must pass the same
+//! check as a container name before it reaches the `--filter` argument, and
+//! engine output is parsed by [`super::inspect_parse`], which treats it as
+//! untrusted.
 
-use std::collections::HashMap;
 use std::ffi::OsString;
 
 use anyhow::{anyhow, Result};
-use serde::Deserialize;
 
+use super::inspect_parse::parse_inspect;
+use super::snapshot::fetch_present;
 use super::{ContainerId, Engine};
 use crate::types::{check_app_name, labels, CopyIndex, ServiceName};
 
@@ -48,126 +47,6 @@ pub struct ContainerInfo {
     pub state: ContainerState,
 }
 
-#[derive(Deserialize)]
-struct RawContainer {
-    #[serde(rename = "Id")]
-    id: String,
-    #[serde(rename = "Name")]
-    name: String,
-    #[serde(rename = "Config")]
-    config: RawConfig,
-    #[serde(rename = "State")]
-    state: RawState,
-}
-
-#[derive(Deserialize)]
-struct RawConfig {
-    #[serde(rename = "Image")]
-    image: String,
-    #[serde(rename = "Labels")]
-    labels: Option<HashMap<String, String>>,
-}
-
-#[derive(Deserialize)]
-struct RawState {
-    #[serde(rename = "Status")]
-    status: String,
-    #[serde(rename = "ExitCode")]
-    exit_code: Option<i64>,
-    #[serde(rename = "Health")]
-    health: Option<RawHealth>,
-}
-
-#[derive(Deserialize)]
-struct RawHealth {
-    #[serde(rename = "Status")]
-    status: Option<String>,
-}
-
-fn container_state(state: &RawState) -> Result<ContainerState> {
-    match state.status.as_str() {
-        "running" => {
-            let health = state.health.as_ref().and_then(|h| h.status.as_deref());
-            if health == Some("unhealthy") {
-                Ok(ContainerState::Unhealthy)
-            } else {
-                Ok(ContainerState::Running)
-            }
-        }
-        "restarting" => Ok(ContainerState::Restarting),
-        "created" => Ok(ContainerState::Created),
-        "exited" => match state.exit_code.map(i32::try_from) {
-            Some(Ok(code)) => Ok(ContainerState::Exited { code }),
-            _ => Err(anyhow!("exited without a usable State.ExitCode")),
-        },
-        other => Ok(ContainerState::Other(other.to_string())),
-    }
-}
-
-fn service_label(label_map: &HashMap<String, String>) -> Result<Option<ServiceName>> {
-    match label_map.get(labels::SERVICE) {
-        None => Ok(None),
-        Some(raw) => match ServiceName::try_from(raw.as_str()) {
-            Ok(service) => Ok(Some(service)),
-            Err(e) => Err(anyhow!("label {}: {e}", labels::SERVICE)),
-        },
-    }
-}
-
-fn copy_label(label_map: &HashMap<String, String>) -> Result<Option<CopyIndex>> {
-    match label_map.get(labels::COPY) {
-        None => Ok(None),
-        Some(raw) => match raw.parse::<u32>().ok().and_then(CopyIndex::new) {
-            Some(copy) => Ok(Some(copy)),
-            None => Err(anyhow!(
-                "label {} is {raw:?}, expected a number from 1",
-                labels::COPY
-            )),
-        },
-    }
-}
-
-fn into_info(raw: RawContainer) -> Result<ContainerInfo> {
-    let name = raw.name.trim_start_matches('/').to_string();
-    let id = match ContainerId::try_from(raw.id.as_str()) {
-        Ok(id) => id,
-        Err(e) => return Err(anyhow!("container {name}: {e}")),
-    };
-    let state = match container_state(&raw.state) {
-        Ok(state) => state,
-        Err(e) => return Err(anyhow!("container {name}: {e}")),
-    };
-    let label_map = raw.config.labels.unwrap_or_default();
-    let service = match service_label(&label_map) {
-        Ok(service) => service,
-        Err(e) => return Err(anyhow!("container {name}: {e}")),
-    };
-    let copy = match copy_label(&label_map) {
-        Ok(copy) => copy,
-        Err(e) => return Err(anyhow!("container {name}: {e}")),
-    };
-    Ok(ContainerInfo {
-        id,
-        name,
-        service,
-        copy,
-        image: raw.config.image,
-        state,
-    })
-}
-
-pub(crate) fn parse_inspect(json: &str) -> Result<Vec<ContainerInfo>> {
-    let raws: Vec<RawContainer> = match serde_json::from_str(json) {
-        Ok(raws) => raws,
-        Err(e) => {
-            return Err(anyhow!(
-                "engine inspect output is not the expected JSON: {e}"
-            ))
-        }
-    };
-    raws.into_iter().map(into_info).collect()
-}
-
 fn parse_ids(output: &str) -> Result<Vec<ContainerId>> {
     output
         .lines()
@@ -178,6 +57,22 @@ fn parse_ids(output: &str) -> Result<Vec<ContainerId>> {
 }
 
 impl Engine {
+    fn list_with_filter(&self, filter: &str) -> Result<Vec<ContainerId>> {
+        let args: Vec<OsString> = ["ps", "-a", "-q", "--no-trunc", "--filter", filter]
+            .into_iter()
+            .map(OsString::from)
+            .collect();
+        match self.output(&args) {
+            Ok(stdout) => parse_ids(&stdout),
+            Err(e) => Err(anyhow!("cannot list containers: {e}")),
+        }
+    }
+
+    /// Every container carrying a `riku.app` label, whatever the app.
+    pub(super) fn list_riku_containers(&self) -> Result<Vec<ContainerId>> {
+        self.list_with_filter(&format!("label={}", labels::APP))
+    }
+
     /// Full ids of every container of `app`, running or not.
     ///
     /// Selection is by the `riku.app` label, so containers riku did not create
@@ -187,34 +82,28 @@ impl Engine {
             Ok(()) => {}
             Err(e) => return Err(e),
         }
-        let filter = format!("label={}={app}", labels::APP);
-        let args: Vec<OsString> = ["ps", "-a", "-q", "--no-trunc", "--filter", &filter]
-            .into_iter()
-            .map(OsString::from)
-            .collect();
-        let stdout = match self.output(&args) {
-            Ok(stdout) => stdout,
-            Err(e) => return Err(anyhow!("cannot list containers of {app}: {e}")),
-        };
-        parse_ids(&stdout)
+        self.list_with_filter(&format!("label={}={app}", labels::APP))
     }
 
-    /// State of each container in `ids`. Returns an empty list without running
-    /// the engine when `ids` is empty.
+    /// State of each container in `ids`.
+    ///
+    /// Returns an empty list without running the engine when `ids` is empty.
+    /// A container removed after it was listed is left out of the result; any
+    /// other failure is an error. See [`super::snapshot`] for how the two are
+    /// told apart.
     pub fn inspect(&self, ids: &[ContainerId]) -> Result<Vec<ContainerInfo>> {
-        if ids.is_empty() {
-            return Ok(Vec::new());
-        }
-        let mut args: Vec<OsString> = ["inspect", "--type", "container"]
-            .into_iter()
-            .map(OsString::from)
-            .collect();
-        args.extend(ids.iter().map(|id| OsString::from(id.as_str())));
-        let stdout = match self.output(&args) {
-            Ok(stdout) => stdout,
-            Err(e) => return Err(anyhow!("cannot inspect containers: {e}")),
+        let run = |ids: &[ContainerId]| {
+            let mut args: Vec<OsString> = ["inspect", "--type", "container"]
+                .into_iter()
+                .map(OsString::from)
+                .collect();
+            args.extend(ids.iter().map(|id| OsString::from(id.as_str())));
+            self.output(&args)
         };
-        parse_inspect(&stdout)
+        match fetch_present(self, ids, run, parse_inspect) {
+            Ok(infos) => Ok(infos),
+            Err(e) => Err(anyhow!("cannot inspect containers: {e}")),
+        }
     }
 }
 
