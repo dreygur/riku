@@ -40,12 +40,15 @@ pub fn file_entry(path: &str, body: &str) -> Entry {
 pub fn dir_entry(path: &str) -> Entry {
     Entry {
         path: rel(path),
-        kind: EntryKind::Dir,
+        kind: EntryKind::Dir { mode: 0o755 },
     }
 }
 
 pub fn manifest_of(entries: Vec<Entry>) -> Manifest {
-    Manifest { entries }
+    Manifest {
+        root_mode: 0o755,
+        entries,
+    }
 }
 
 pub fn plan_needing(paths: &[&str]) -> TransferPlan {

@@ -82,7 +82,10 @@ pub enum EntryKind {
         target: String,
     },
     /// A directory.
-    Dir,
+    Dir {
+        /// Unix permission bits, masked with `0o777`.
+        mode: u32,
+    },
 }
 
 /// One path in a manifest.
@@ -99,24 +102,38 @@ pub struct Entry {
 ///
 /// Parsing enforces what the receiver relies on: paths strictly increasing (so
 /// sorted and unique), every entry's parent listed as a directory (so nothing
-/// sits under a symlink or an undeclared directory), and file modes within
-/// `0o777` (no setuid, setgid or sticky bits).
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+/// sits under a symlink or an undeclared directory), and file, directory and
+/// root modes within `0o777` (no setuid, setgid or sticky bits).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "RawManifest")]
 pub struct Manifest {
+    /// Unix permission bits of the sync root itself, masked with `0o777`.
+    pub root_mode: u32,
     /// Entries in path order; the root itself is not listed.
     pub entries: Vec<Entry>,
 }
 
 #[derive(Deserialize)]
 struct RawManifest {
+    root_mode: u32,
     entries: Vec<Entry>,
+}
+
+/// Refuses permission bits above `0o777`. `what` names the entry.
+pub(crate) fn check_mode(what: &str, mode: u32) -> anyhow::Result<()> {
+    if mode & !0o777 != 0 {
+        return Err(anyhow::anyhow!("{what} has mode {mode:o}, outside 0o777"));
+    }
+    Ok(())
 }
 
 impl TryFrom<RawManifest> for Manifest {
     type Error = anyhow::Error;
 
     fn try_from(raw: RawManifest) -> anyhow::Result<Self> {
+        if let Err(e) = check_mode("manifest root", raw.root_mode) {
+            return Err(e);
+        }
         let mut dirs: HashSet<&str> = HashSet::new();
         let mut previous: Option<&RelPath> = None;
         for entry in &raw.entries {
@@ -139,20 +156,25 @@ impl TryFrom<RawManifest> for Manifest {
                     ));
                 }
             }
-            match &entry.kind {
-                EntryKind::Dir => {
+            let checked = match &entry.kind {
+                EntryKind::Dir { mode } => {
                     dirs.insert(entry.path.as_str());
+                    check_mode(
+                        &format!("manifest directory {:?}", entry.path.as_str()),
+                        *mode,
+                    )
                 }
-                EntryKind::File { mode, .. } if mode & !0o777 != 0 => {
-                    return Err(anyhow::anyhow!(
-                        "manifest file {:?} has mode {mode:o}, outside 0o777",
-                        entry.path.as_str()
-                    ));
+                EntryKind::File { mode, .. } => {
+                    check_mode(&format!("manifest file {:?}", entry.path.as_str()), *mode)
                 }
-                EntryKind::File { .. } | EntryKind::Symlink { .. } => {}
+                EntryKind::Symlink { .. } => Ok(()),
+            };
+            if let Err(e) = checked {
+                return Err(e);
             }
         }
         Ok(Manifest {
+            root_mode: raw.root_mode,
             entries: raw.entries,
         })
     }

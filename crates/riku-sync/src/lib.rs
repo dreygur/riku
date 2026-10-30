@@ -26,6 +26,7 @@ mod check;
 mod guard;
 mod line;
 mod lock;
+mod modes;
 mod receive;
 mod send;
 mod serve;

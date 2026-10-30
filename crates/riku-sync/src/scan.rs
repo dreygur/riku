@@ -14,14 +14,19 @@ use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-/// Scans `root` into a manifest sorted by path. The root itself is not listed.
+/// Scans `root` into a manifest sorted by path. The root itself is not listed
+/// as an entry; its mode is the manifest's `root_mode`.
 pub fn scan(root: &Path) -> anyhow::Result<Manifest> {
+    let root_mode = match fs::metadata(root) {
+        Ok(meta) => meta.permissions().mode() & 0o777,
+        Err(e) => return Err(anyhow::anyhow!("cannot stat {}: {e}", root.display())),
+    };
     let mut entries = Vec::new();
     if let Err(e) = walk(root, "", &mut entries) {
         return Err(e);
     }
     entries.sort_by(|a, b| a.path.cmp(&b.path));
-    Ok(Manifest { entries })
+    Ok(Manifest { root_mode, entries })
 }
 
 fn walk(dir: &Path, prefix: &str, out: &mut Vec<Entry>) -> anyhow::Result<()> {
@@ -74,7 +79,9 @@ fn record(path: &Path, rel: &str, out: &mut Vec<Entry>) -> anyhow::Result<()> {
     if file_type.is_dir() {
         out.push(Entry {
             path: rel_path,
-            kind: EntryKind::Dir,
+            kind: EntryKind::Dir {
+                mode: meta.permissions().mode() & 0o777,
+            },
         });
         return walk(path, rel, out);
     }

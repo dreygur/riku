@@ -27,25 +27,25 @@ fn rel_path_parent_and_to_path() {
 
 #[test]
 fn manifest_json_with_escape_fails_because_of_the_path() {
-    let raw = r#"{"entries":[{"path":"../x","kind":"dir"}]}"#;
+    let raw = r#"{"root_mode":493,"entries":[{"path":"../x","kind":"dir","mode":493}]}"#;
     let err = serde_json::from_str::<Manifest>(raw)
         .unwrap_err()
         .to_string();
     assert!(err.contains("../x"), "error does not name the path: {err}");
 
-    let clean = r#"{"entries":[{"path":"x","kind":"dir"}]}"#;
+    let clean = r#"{"root_mode":493,"entries":[{"path":"x","kind":"dir","mode":493}]}"#;
     let manifest: Manifest = serde_json::from_str(clean).unwrap();
     assert_eq!(manifest.entries[0].path.as_str(), "x");
-    assert_eq!(manifest.entries[0].kind, EntryKind::Dir);
+    assert_eq!(manifest.entries[0].kind, EntryKind::Dir { mode: 0o755 });
 }
 
 fn parse_entries(entries: &str) -> Result<Manifest, String> {
-    let raw = format!(r#"{{"entries":[{entries}]}}"#);
+    let raw = format!(r#"{{"root_mode":493,"entries":[{entries}]}}"#);
     serde_json::from_str::<Manifest>(&raw).map_err(|e| e.to_string())
 }
 
-const DIR_A: &str = r#"{"path":"a","kind":"dir"}"#;
-const DIR_B: &str = r#"{"path":"b","kind":"dir"}"#;
+const DIR_A: &str = r#"{"path":"a","kind":"dir","mode":493}"#;
+const DIR_B: &str = r#"{"path":"b","kind":"dir","mode":493}"#;
 
 #[test]
 fn manifest_refuses_unsorted_entries_naming_the_path() {
@@ -69,7 +69,7 @@ fn manifest_refuses_entry_under_a_symlink() {
 
 #[test]
 fn manifest_refuses_entry_whose_parent_is_not_listed() {
-    let err = parse_entries(r#"{"path":"a/b","kind":"dir"}"#).unwrap_err();
+    let err = parse_entries(r#"{"path":"a/b","kind":"dir","mode":493}"#).unwrap_err();
     assert!(err.contains("a/b"), "got: {err}");
 }
 
@@ -78,6 +78,19 @@ fn manifest_refuses_mode_bits_outside_0o777() {
     let file = r#"{"path":"run","kind":"file","size":1,"sha256":"ab","mode":2541}"#;
     let err = parse_entries(file).unwrap_err();
     assert!(err.contains("run") && err.contains("4755"), "got: {err}");
+}
+
+#[test]
+fn manifest_refuses_directory_and_root_modes_outside_0o777() {
+    let setuid_dir = r#"{"path":"bin","kind":"dir","mode":2541}"#;
+    let err = parse_entries(setuid_dir).unwrap_err();
+    assert!(err.contains("bin") && err.contains("4755"), "got: {err}");
+
+    let sticky_root = r#"{"root_mode":1023,"entries":[]}"#;
+    let err = serde_json::from_str::<Manifest>(sticky_root)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("root") && err.contains("1777"), "got: {err}");
 }
 
 #[test]

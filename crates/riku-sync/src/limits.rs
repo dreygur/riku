@@ -45,7 +45,7 @@ pub(crate) fn tree_bytes(manifest: &Manifest) -> u64 {
         .iter()
         .fold(0u64, |total, entry| match &entry.kind {
             EntryKind::File { size, .. } => total.saturating_add(*size),
-            EntryKind::Dir | EntryKind::Symlink { .. } => total,
+            EntryKind::Dir { .. } | EntryKind::Symlink { .. } => total,
         })
 }
 

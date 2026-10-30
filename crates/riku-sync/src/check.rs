@@ -5,7 +5,7 @@
 //! directory listed earlier, sane modes and hashes, and a plan that asks only
 //! for files the manifest lists.
 
-use crate::wire::{EntryKind, Manifest, TransferPlan};
+use crate::wire::{check_mode, EntryKind, Manifest, TransferPlan};
 use std::collections::HashMap;
 
 /// Returns the declared size of every file in `plan.need`, keyed by path.
@@ -13,6 +13,9 @@ pub(crate) fn wanted_sizes<'a>(
     manifest: &'a Manifest,
     plan: &'a TransferPlan,
 ) -> anyhow::Result<HashMap<&'a str, u64>> {
+    if let Err(e) = check_mode("manifest root", manifest.root_mode) {
+        return Err(e);
+    }
     let mut seen: HashMap<&str, bool> = HashMap::new();
     let mut sizes: HashMap<&str, u64> = HashMap::new();
     for entry in &manifest.entries {
@@ -26,10 +29,15 @@ pub(crate) fn wanted_sizes<'a>(
             }
         }
         if seen
-            .insert(path, matches!(entry.kind, EntryKind::Dir))
+            .insert(path, matches!(entry.kind, EntryKind::Dir { .. }))
             .is_some()
         {
             return Err(anyhow::anyhow!("manifest lists {path:?} twice"));
+        }
+        if let EntryKind::Dir { mode } = &entry.kind {
+            if let Err(e) = check_mode(&format!("manifest directory {path:?}"), *mode) {
+                return Err(e);
+            }
         }
         if let EntryKind::File { size, sha256, mode } = &entry.kind {
             if !is_sha256_hex(sha256) {
@@ -37,10 +45,8 @@ pub(crate) fn wanted_sizes<'a>(
                     "manifest file {path:?} has a malformed sha256"
                 ));
             }
-            if mode & !0o777 != 0 {
-                return Err(anyhow::anyhow!(
-                    "manifest file {path:?} has mode {mode:o}, outside 0o777"
-                ));
+            if let Err(e) = check_mode(&format!("manifest file {path:?}"), *mode) {
+                return Err(e);
             }
             sizes.insert(path, *size);
         }

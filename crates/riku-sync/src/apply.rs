@@ -6,6 +6,7 @@
 
 use crate::check::wanted_sizes;
 use crate::lock::{acquire, SyncLock};
+use crate::modes::apply_dir_modes;
 use crate::receive::receive_bundle;
 use crate::staging::Staging;
 use crate::swap::{recover, remove_tree, sibling, swap_in, STAGING_SUFFIX};
@@ -92,7 +93,7 @@ fn fill_and_verify(
 ) -> anyhow::Result<()> {
     for entry in &manifest.entries {
         let made = match &entry.kind {
-            EntryKind::Dir => staging.make_dir(&entry.path),
+            EntryKind::Dir { .. } => staging.make_dir(&entry.path),
             EntryKind::File { .. } if !wanted.contains_key(entry.path.as_str()) => {
                 staging.copy_from_live(live, &entry.path)
             }
@@ -108,7 +109,7 @@ fn fill_and_verify(
     for entry in &manifest.entries {
         let finished = match &entry.kind {
             EntryKind::Symlink { target } => staging.symlink(&entry.path, target),
-            EntryKind::Dir | EntryKind::File { .. } => Ok(()),
+            EntryKind::Dir { .. } | EntryKind::File { .. } => Ok(()),
         };
         if let Err(e) = finished {
             return Err(e);
@@ -126,7 +127,10 @@ fn fill_and_verify(
         .iter()
         .map(|entry| entry.path.as_str())
         .collect();
-    staging.ensure_only(&listed)
+    if let Err(e) = staging.ensure_only(&listed) {
+        return Err(e);
+    }
+    apply_dir_modes(staging.root(), manifest)
 }
 
 #[cfg(test)]
@@ -140,3 +144,7 @@ mod hostile_tests;
 #[cfg(test)]
 #[path = "apply_limits_tests.rs"]
 mod limits_tests;
+
+#[cfg(test)]
+#[path = "apply_modes_tests.rs"]
+mod modes_tests;

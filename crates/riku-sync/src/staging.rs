@@ -37,6 +37,10 @@ impl Staging {
         }
     }
 
+    pub(crate) fn root(&self) -> &Path {
+        &self.root
+    }
+
     pub(crate) fn make_dir(&self, path: &RelPath) -> anyhow::Result<()> {
         if let Err(e) = ensure_real_dirs(&self.root, path) {
             return Err(e);

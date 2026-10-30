@@ -14,6 +14,7 @@ use crate::lock::SyncLock;
 use std::ffi::OsString;
 use std::fs;
 use std::io;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 pub(crate) const STAGING_SUFFIX: &str = "..sync-new";
@@ -42,11 +43,45 @@ pub(crate) fn remove_tree(path: &Path) -> io::Result<()> {
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
         Err(e) => return Err(e),
     };
-    if meta.file_type().is_dir() {
-        fs::remove_dir_all(path)
-    } else {
-        fs::remove_file(path)
+    if !meta.file_type().is_dir() {
+        return fs::remove_file(path);
     }
+    if let Err(e) = open_up(path, meta.permissions().mode()) {
+        return Err(e);
+    }
+    fs::remove_dir_all(path)
+}
+
+/// Gives the owner read, write and search permission on `dir` and every
+/// directory below it, so `remove_dir_all` can empty directories a synced tree
+/// made read only (a `0555` directory in the manifest). Symlinks are never
+/// followed.
+fn open_up(dir: &Path, mode: u32) -> io::Result<()> {
+    if mode & 0o700 != 0o700 {
+        if let Err(e) = fs::set_permissions(dir, fs::Permissions::from_mode(mode | 0o700)) {
+            return Err(e);
+        }
+    }
+    let items = match fs::read_dir(dir) {
+        Ok(items) => items,
+        Err(e) => return Err(e),
+    };
+    for item in items {
+        let item = match item {
+            Ok(item) => item,
+            Err(e) => return Err(e),
+        };
+        let meta = match fs::symlink_metadata(item.path()) {
+            Ok(meta) => meta,
+            Err(e) => return Err(e),
+        };
+        if meta.file_type().is_dir() {
+            if let Err(e) = open_up(&item.path(), meta.permissions().mode()) {
+                return Err(e);
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Restores a parked tree when live is missing, then removes any leftover

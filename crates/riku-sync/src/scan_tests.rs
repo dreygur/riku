@@ -19,8 +19,11 @@ fn scan_records_files_dirs_and_symlinks_sorted() {
     fs::create_dir_all(root.join("venv/bin")).unwrap();
     symlink("/usr/bin/python3", root.join("venv/bin/python")).unwrap();
     fs::create_dir(root.join("logs")).unwrap();
+    set_mode(&root.join("logs"), 0o750);
+    set_mode(root, 0o710);
 
     let manifest = scan(root).unwrap();
+    assert_eq!(manifest.root_mode, 0o710);
     let wire = serde_json::to_string(&manifest).unwrap();
     let reparsed: crate::wire::Manifest = serde_json::from_str(&wire)
         .unwrap_or_else(|e| panic!("scan output fails manifest validation: {e}"));
@@ -65,7 +68,7 @@ fn scan_records_files_dirs_and_symlinks_sorted() {
             mode: 0o644,
         }
     );
-    assert_eq!(got[3].1, &EntryKind::Dir);
+    assert_eq!(got[3].1, &EntryKind::Dir { mode: 0o750 });
     assert_eq!(
         got[6].1,
         &EntryKind::Symlink {
