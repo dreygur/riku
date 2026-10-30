@@ -102,8 +102,9 @@ pub struct Entry {
 ///
 /// Parsing enforces what the receiver relies on: paths strictly increasing (so
 /// sorted and unique), every entry's parent listed as a directory (so nothing
-/// sits under a symlink or an undeclared directory), and file, directory and
-/// root modes within `0o777` (no setuid, setgid or sticky bits).
+/// sits under a symlink or an undeclared directory), file, directory and root
+/// modes within `0o777` (no setuid, setgid or sticky bits), and directory and
+/// root modes that keep owner read and search.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "RawManifest")]
 pub struct Manifest {
@@ -127,11 +128,27 @@ pub(crate) fn check_mode(what: &str, mode: u32) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Refuses a directory mode above `0o777` or without owner read and search.
+///
+/// Applying such a mode would leave a directory the receiver cannot list, so
+/// every later sync and the recovery of a parked tree would fail on it.
+pub(crate) fn check_dir_mode(what: &str, mode: u32) -> anyhow::Result<()> {
+    if let Err(e) = check_mode(what, mode) {
+        return Err(e);
+    }
+    if mode & 0o500 != 0o500 {
+        return Err(anyhow::anyhow!(
+            "{what} has mode {mode:03o}, without owner read and search (0o500)"
+        ));
+    }
+    Ok(())
+}
+
 impl TryFrom<RawManifest> for Manifest {
     type Error = anyhow::Error;
 
     fn try_from(raw: RawManifest) -> anyhow::Result<Self> {
-        if let Err(e) = check_mode("manifest root", raw.root_mode) {
+        if let Err(e) = check_dir_mode("manifest root", raw.root_mode) {
             return Err(e);
         }
         let mut dirs: HashSet<&str> = HashSet::new();
@@ -159,7 +176,7 @@ impl TryFrom<RawManifest> for Manifest {
             let checked = match &entry.kind {
                 EntryKind::Dir { mode } => {
                     dirs.insert(entry.path.as_str());
-                    check_mode(
+                    check_dir_mode(
                         &format!("manifest directory {:?}", entry.path.as_str()),
                         *mode,
                     )

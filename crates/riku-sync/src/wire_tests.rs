@@ -94,6 +94,27 @@ fn manifest_refuses_directory_and_root_modes_outside_0o777() {
 }
 
 #[test]
+fn manifest_refuses_directory_modes_the_owner_cannot_list() {
+    let closed_dir = r#"{"path":"locked","kind":"dir","mode":0}"#;
+    let err = parse_entries(closed_dir).unwrap_err();
+    assert!(err.contains("locked") && err.contains("000"), "got: {err}");
+
+    let write_search_root = r#"{"root_mode":192,"entries":[]}"#;
+    let err = serde_json::from_str::<Manifest>(write_search_root)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("root") && err.contains("300"), "got: {err}");
+}
+
+#[test]
+fn manifest_accepts_directory_modes_with_owner_read_and_search() {
+    let read_only = r#"{"root_mode":448,"entries":[{"path":"ro","kind":"dir","mode":320}]}"#;
+    let manifest = serde_json::from_str::<Manifest>(read_only).unwrap();
+    assert_eq!(manifest.root_mode, 0o700);
+    assert_eq!(manifest.entries[0].kind, EntryKind::Dir { mode: 0o500 });
+}
+
+#[test]
 fn manifest_accepts_nested_dirs_and_files() {
     let nested = r#"{"path":"a/f","kind":"file","size":1,"sha256":"ab","mode":493}"#;
     let manifest = parse_entries(&format!("{DIR_A},{nested}")).unwrap();

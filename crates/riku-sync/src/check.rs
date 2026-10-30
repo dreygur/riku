@@ -5,7 +5,7 @@
 //! directory listed earlier, sane modes and hashes, and a plan that asks only
 //! for files the manifest lists.
 
-use crate::wire::{check_mode, EntryKind, Manifest, TransferPlan};
+use crate::wire::{check_dir_mode, check_mode, EntryKind, Manifest, TransferPlan};
 use std::collections::HashMap;
 
 /// Returns the declared size of every file in `plan.need`, keyed by path.
@@ -13,7 +13,7 @@ pub(crate) fn wanted_sizes<'a>(
     manifest: &'a Manifest,
     plan: &'a TransferPlan,
 ) -> anyhow::Result<HashMap<&'a str, u64>> {
-    if let Err(e) = check_mode("manifest root", manifest.root_mode) {
+    if let Err(e) = check_dir_mode("manifest root", manifest.root_mode) {
         return Err(e);
     }
     let mut seen: HashMap<&str, bool> = HashMap::new();
@@ -35,7 +35,7 @@ pub(crate) fn wanted_sizes<'a>(
             return Err(anyhow::anyhow!("manifest lists {path:?} twice"));
         }
         if let EntryKind::Dir { mode } = &entry.kind {
-            if let Err(e) = check_mode(&format!("manifest directory {path:?}"), *mode) {
+            if let Err(e) = check_dir_mode(&format!("manifest directory {path:?}"), *mode) {
                 return Err(e);
             }
         }

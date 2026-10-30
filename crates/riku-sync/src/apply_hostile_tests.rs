@@ -196,3 +196,19 @@ fn malformed_sha256_is_refused_plainly() {
 
     assert!(err.contains("malformed sha256"), "error was: {err}");
 }
+
+#[test]
+fn unchecked_manifest_with_an_unlistable_directory_is_refused() {
+    let f = fixture();
+    let manifest = manifest_of(vec![Entry {
+        path: rel("locked"),
+        kind: EntryKind::Dir { mode: 0o300 },
+    }]);
+
+    let err = assert_refused_untouched(&f, &manifest, &plan_needing(&[]), raw_bundle(&[]));
+
+    assert!(
+        err.contains("locked") && err.contains("300"),
+        "error was: {err}"
+    );
+}
