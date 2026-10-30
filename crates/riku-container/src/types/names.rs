@@ -30,6 +30,26 @@ fn is_engine_safe(name: &str) -> bool {
     first_ok && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
 }
 
+/// Accepts an app name that `riku_util::validate_app_name` returns unchanged
+/// and that the engine accepts inside a container name or a label filter.
+pub(crate) fn check_app_name(app: &str) -> anyhow::Result<()> {
+    let validated = match riku_util::validate_app_name(app) {
+        Ok(v) => v,
+        Err(e) => return Err(anyhow::anyhow!("invalid app name {app:?}: {e}")),
+    };
+    if validated != app {
+        return Err(anyhow::anyhow!(
+            "invalid app name {app:?}: not a valid app name as written"
+        ));
+    }
+    if !is_engine_safe(app) {
+        return Err(anyhow::anyhow!(
+            "app name {app:?} cannot be used with the container engine: it must start with an ASCII letter or digit and use only ASCII letters, digits, '_', '.' and '-'"
+        ));
+    }
+    Ok(())
+}
+
 /// Name of a service within an app, as written in the compose file.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ServiceName(String);
@@ -96,23 +116,9 @@ impl ContainerName {
     /// character the engine does not accept in a container name (that
     /// validator allows a leading `_`, `.` or `-` and non-ASCII letters).
     pub fn new(app: &str, service: &ServiceName, copy: CopyIndex) -> anyhow::Result<ContainerName> {
-        let validated = match riku_util::validate_app_name(app) {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(anyhow::anyhow!(
-                    "cannot name a container for app {app:?}: {e}"
-                ))
-            }
-        };
-        if validated != app {
-            return Err(anyhow::anyhow!(
-                "cannot name a container for app {app:?}: not a valid app name as written"
-            ));
-        }
-        if !is_engine_safe(app) {
-            return Err(anyhow::anyhow!(
-                "app name {app:?} cannot be used in a container name: it must start with an ASCII letter or digit and use only ASCII letters, digits, '_', '.' and '-'"
-            ));
+        match check_app_name(app) {
+            Ok(()) => {}
+            Err(e) => return Err(e),
         }
         Ok(ContainerName(format!("{app}-{service}-{copy}")))
     }
