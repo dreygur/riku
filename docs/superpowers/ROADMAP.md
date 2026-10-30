@@ -97,7 +97,7 @@ work they describe.
 - B3 Parse service fields: pending
 - B4 Project rules: order, routing, scale, replacement, volume names: pending
 
-- C1 RoutePlan and Caddy rendering: pending
+- C1 RoutePlan and Caddy rendering: done
 - C2 nginx upstream from backends: pending
 - C3 Router plugin protocol 2: pending
 

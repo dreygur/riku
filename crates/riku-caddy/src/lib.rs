@@ -8,4 +8,5 @@ mod host;
 mod site;
 
 pub use host::{has_import, import_line, SYSTEM_CADDYFILE};
-pub use site::{remove_site, render_site, site_path, write_site, HttpsPolicy, SiteRequest};
+pub use riku_util::route_plan::HttpsPolicy;
+pub use site::{remove_site, render_site, site_path, write_site};

@@ -24,7 +24,10 @@ use serde::Serialize;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::plugins::{bundles, router};
+use crate::util::backend::Backend;
+use crate::util::domain::parse_domains;
 use crate::util::flag::https_only;
+use crate::util::route_plan::{HttpsPolicy, RoutePlan};
 
 mod caddy;
 
@@ -156,6 +159,36 @@ fn upstream_port_from_env(env: &HashMap<String, String>) -> u16 {
         .or_else(|| env.get("PORT"))
         .and_then(|p| p.trim().parse().ok())
         .unwrap_or(8080)
+}
+
+/// The backends of an app's routed service. Until the supervisor reports its
+/// copies this is the single port named by the app's ENV.
+fn env_backends(env: &HashMap<String, String>) -> Vec<Backend> {
+    vec![Backend::Tcp(upstream_port_from_env(env))]
+}
+
+/// The routing plan for an app, built from its ENV. A malformed
+/// `RIKU_DOMAINS` is an error, so nothing unvalidated reaches a router.
+#[allow(clippy::question_mark)]
+fn route_plan(env: &HashMap<String, String>) -> Result<RoutePlan> {
+    let raw = env
+        .get("RIKU_DOMAINS")
+        .map(String::as_str)
+        .unwrap_or_default();
+    let domains = match parse_domains(raw) {
+        Ok(domains) => domains,
+        Err(e) => return Err(e),
+    };
+    let https = if https_only(env) {
+        HttpsPolicy::Only
+    } else {
+        HttpsPolicy::AlsoPlainHttp
+    };
+    Ok(RoutePlan {
+        domains,
+        https,
+        backends: env_backends(env),
+    })
 }
 
 #[cfg(test)]
