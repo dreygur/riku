@@ -218,13 +218,14 @@ pub(super) fn build_context(
 ) -> anyhow::Result<tera::Context> {
     let mut context = tera::Context::new();
 
-    context.insert("APP", app);
-    context.insert("APP_UPSTREAM", &crate::backends::upstream_name(app));
-    context.insert("INTERNAL_NGINX_APP_ROOT", &app_path.to_string_lossy());
-
     for (key, value) in env {
         context.insert(key.clone(), value);
     }
+    // Inserted after the ENV copy so an app ENV key of the same name cannot
+    // rename the upstream, the cache zone or the certificate files.
+    context.insert("APP", app);
+    context.insert("APP_UPSTREAM", &crate::backends::upstream_name(app));
+    context.insert("INTERNAL_NGINX_APP_ROOT", &app_path.to_string_lossy());
 
     insert_address_context(&mut context, env, paths, app, app_path);
     insert_cache_context(&mut context, env, paths, app);

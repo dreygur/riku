@@ -174,6 +174,29 @@ fn https_only_web_app_proxies_to_its_ports() {
 }
 
 #[test]
+fn app_env_cannot_override_the_generated_names() {
+    let config = render_with(
+        &[
+            ("RIKU_HTTPS_ONLY", "true"),
+            ("RIKU_NGINX_PORTMAP", "true"),
+            ("APP_UPSTREAM", "proxy"),
+            ("APP", "shop"),
+        ],
+        Some(&[Backend::loopback(5001)]),
+    );
+
+    assert!(
+        config.contains("upstream riku_6d79617070 {")
+            && config.contains("proxy_pass http://riku_6d79617070;"),
+        "ENV replaced the generated upstream name:\n{config}"
+    );
+    assert!(
+        config.contains("/myapp.crt;") && !config.contains("shop"),
+        "ENV replaced the app name:\n{config}"
+    );
+}
+
+#[test]
 fn https_only_socket_app_never_uses_a_bare_socket_path() {
     let config = render(&[("RIKU_HTTPS_ONLY", "true"), ("RIKU_NGINX_SOCKET", SOCKET)]);
 
