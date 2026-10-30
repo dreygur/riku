@@ -57,20 +57,23 @@ fn parse_ids(output: &str) -> Result<Vec<ContainerId>> {
 }
 
 impl Engine {
-    fn list_with_filter(&self, filter: &str) -> Result<Vec<ContainerId>> {
-        let args: Vec<OsString> = ["ps", "-a", "-q", "--no-trunc", "--filter", filter]
+    fn list_with_filter(&self, filter: Option<&str>) -> Result<Vec<ContainerId>> {
+        let mut args: Vec<OsString> = ["ps", "-a", "-q", "--no-trunc"]
             .into_iter()
             .map(OsString::from)
             .collect();
+        if let Some(filter) = filter {
+            args.extend(["--filter", filter].map(OsString::from));
+        }
         match self.output(&args) {
             Ok(stdout) => parse_ids(&stdout),
             Err(e) => Err(anyhow!("cannot list containers: {e}")),
         }
     }
 
-    /// Every container carrying a `riku.app` label, whatever the app.
-    pub(super) fn list_riku_containers(&self) -> Result<Vec<ContainerId>> {
-        self.list_with_filter(&format!("label={}", labels::APP))
+    /// Full ids of every container the engine knows, riku's or not.
+    pub(super) fn list_all_containers(&self) -> Result<Vec<ContainerId>> {
+        self.list_with_filter(None)
     }
 
     /// Full ids of every container of `app`, running or not.
@@ -82,7 +85,7 @@ impl Engine {
             Ok(()) => {}
             Err(e) => return Err(e),
         }
-        self.list_with_filter(&format!("label={}={app}", labels::APP))
+        self.list_with_filter(Some(&format!("label={}={app}", labels::APP)))
     }
 
     /// State of each container in `ids`.

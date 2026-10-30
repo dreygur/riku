@@ -235,6 +235,66 @@ fn inspect_drops_a_container_removed_during_the_snapshot() {
     assert_eq!(infos[0].id.as_str(), ID);
 }
 
+/// Every inspect fails. `ps` lists `ID` only when asked without a label
+/// filter, and fails when `ps_fails` is set.
+fn failing_inspect_engine(
+    dir: &std::path::Path,
+    ps_fails: bool,
+) -> (crate::engine::Engine, std::path::PathBuf) {
+    let ps = if ps_fails {
+        "echo daemon down >&2; exit 1".to_string()
+    } else {
+        format!("case \"$*\" in *label*) ;; *) echo {ID};; esac")
+    };
+    logging_engine(
+        dir,
+        &format!(
+            "case \"$1\" in\n\
+             ps) {ps};;\n\
+             inspect) echo gone >&2; exit 1;;\n\
+             esac"
+        ),
+    )
+}
+
+#[test]
+fn a_short_id_that_fails_is_an_error_while_a_container_has_that_prefix() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _log) = failing_inspect_engine(dir.path(), false);
+    let short = ContainerId::try_from(&ID[..12]).unwrap();
+
+    let err = engine.inspect(&[short]).unwrap_err().to_string();
+
+    assert!(err.contains("gone"), "unexpected error: {err}");
+}
+
+#[test]
+fn a_failing_container_riku_did_not_label_is_not_dropped() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _log) = failing_inspect_engine(dir.path(), false);
+    let ids = [
+        ContainerId::try_from(ID).unwrap(),
+        ContainerId::try_from(ID_B).unwrap(),
+    ];
+
+    let err = engine.inspect(&ids).unwrap_err().to_string();
+
+    assert!(err.contains("gone"), "unexpected error: {err}");
+}
+
+#[test]
+fn a_failing_listing_turns_into_an_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _log) = failing_inspect_engine(dir.path(), true);
+
+    let err = engine.inspect(&both()).unwrap_err().to_string();
+
+    assert!(
+        err.contains("listing containers also failed"),
+        "unexpected error: {err}"
+    );
+}
+
 #[test]
 fn inspect_fails_when_a_container_that_still_exists_cannot_be_read() {
     let dir = tempfile::tempdir().unwrap();

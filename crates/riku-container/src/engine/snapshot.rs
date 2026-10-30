@@ -3,10 +3,11 @@
 //! A rolling deploy removes old copies while the supervisor polls, so a
 //! container can vanish between listing it and asking for its state. The
 //! engine then fails the whole batch command. [`fetch_present`] retries each
-//! id on its own and drops only ids that a fresh listing of riku containers no
-//! longer contains. If the listing fails, or still shows the id, the original
-//! error is returned: a daemon failure is never mistaken for a removed
-//! container. No engine error text is inspected.
+//! id on its own and drops only ids that a fresh listing of every container no
+//! longer contains. A short id counts as present when any listed full id starts
+//! with it. If the listing fails, or still shows the id, the original error is
+//! returned: a daemon failure is never mistaken for a removed container. No
+//! engine error text is inspected.
 
 use std::slice;
 
@@ -22,7 +23,7 @@ fn error_unless_gone(
     error: anyhow::Error,
 ) -> Option<anyhow::Error> {
     if listed.is_none() {
-        match engine.list_riku_containers() {
+        match engine.list_all_containers() {
             Ok(all) => *listed = Some(all),
             Err(list_error) => {
                 return Some(anyhow!(
@@ -31,7 +32,12 @@ fn error_unless_gone(
             }
         }
     }
-    if listed.iter().flatten().any(|present| present == id) {
+    let requested = id.as_str();
+    if listed
+        .iter()
+        .flatten()
+        .any(|present| present.as_str().starts_with(requested))
+    {
         Some(error)
     } else {
         None
