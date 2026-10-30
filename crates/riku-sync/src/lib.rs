@@ -17,13 +17,16 @@ pub mod apply;
 pub mod bundle;
 pub mod plan;
 pub mod scan;
+pub mod session;
 pub mod wire;
 
 mod capped;
 mod check;
 mod guard;
+mod line;
 mod lock;
 mod receive;
+mod serve;
 mod staging;
 mod swap;
 
@@ -34,4 +37,6 @@ pub use apply::apply;
 pub use bundle::write_bundle;
 pub use plan::plan_transfer;
 pub use scan::scan;
+pub use serve::receive;
+pub use session::{send, SendReport, MAX_LINE_BYTES, SYNC_PROTOCOL};
 pub use wire::{Entry, EntryKind, Manifest, RelPath, TransferPlan};

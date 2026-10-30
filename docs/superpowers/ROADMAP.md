@@ -103,7 +103,7 @@ work they describe.
 
 - D1 Crate, wire types and manifest scan: done
 - D2 Transfer plan, bundle and verified apply: done
-- D3 The sync conversation over a byte stream: pending
+- D3 The sync conversation over a byte stream: done
 
 ### Phase 3: container integration (after phase 2)
 

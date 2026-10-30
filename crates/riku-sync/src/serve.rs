@@ -1,0 +1,128 @@
+//! Server side of the sync conversation, see [`crate::session`].
+//!
+//! Security model: the peer is hostile. The manifest line is length capped
+//! before parsing, the version is checked before the manifest is, and the
+//! bundle goes through [`crate::apply`]. The peer is sent only the plan and
+//! fixed error texts (plus the version number it sent, parsed as an integer);
+//! nothing it supplied and nothing from this server's filesystem, such as a
+//! path or an OS error, is put into an error line. The full cause goes to the
+//! server log and to the caller.
+
+use crate::apply::apply;
+use crate::line::read_line;
+use crate::plan::plan_transfer;
+use crate::session::{write_line, MAX_LINE_BYTES, SYNC_PROTOCOL};
+use crate::wire::Manifest;
+use serde::Deserialize;
+use std::io::{BufRead, Write};
+use std::path::Path;
+
+#[derive(Deserialize)]
+struct RequestVersion {
+    sync: u64,
+}
+
+#[derive(Deserialize)]
+struct RequestManifest {
+    manifest: Manifest,
+}
+
+/// Why the server stopped: `public` is the only text the peer is told, `cause`
+/// is the full reason for the server's own log and caller.
+struct Refusal {
+    public: String,
+    cause: anyhow::Error,
+}
+
+impl Refusal {
+    fn new(public: &str, cause: anyhow::Error) -> Refusal {
+        Refusal {
+            public: public.to_string(),
+            cause,
+        }
+    }
+
+    fn plain(text: String) -> Refusal {
+        Refusal {
+            cause: anyhow::anyhow!(text.clone()),
+            public: text,
+        }
+    }
+}
+
+/// Serves one sync of `live` from the client on the other end of the streams.
+///
+/// Reads the manifest, answers with the plan, applies the bundle that follows
+/// until the client closes its side, and confirms. On any failure the peer gets
+/// a fixed error line, `live` is as it was before, and the cause is returned.
+pub fn receive(
+    live: &Path,
+    mut from_client: impl BufRead,
+    mut to_client: impl Write,
+) -> anyhow::Result<()> {
+    match converse(live, &mut from_client, &mut to_client) {
+        Ok(()) => write_line(&mut to_client, &serde_json::json!({ "ok": true })),
+        Err(refusal) => {
+            tracing::warn!("sync refused: {:#}", refusal.cause);
+            let told = write_line(
+                &mut to_client,
+                &serde_json::json!({ "error": refusal.public }),
+            );
+            if let Err(e) = told {
+                tracing::debug!("could not tell the peer about the refusal: {e}");
+            }
+            Err(refusal.cause)
+        }
+    }
+}
+
+fn converse(
+    live: &Path,
+    from_client: &mut impl BufRead,
+    to_client: &mut impl Write,
+) -> Result<(), Refusal> {
+    let manifest = match read_request(from_client) {
+        Ok(manifest) => manifest,
+        Err(refusal) => return Err(refusal),
+    };
+    let plan = match plan_transfer(live, &manifest) {
+        Ok(plan) => plan,
+        Err(e) => return Err(Refusal::new("cannot work out a transfer plan", e)),
+    };
+    if let Err(e) = write_line(to_client, &plan) {
+        return Err(Refusal::new("cannot send the transfer plan", e));
+    }
+    match apply(live, &manifest, &plan, from_client) {
+        Ok(()) => Ok(()),
+        Err(e) => Err(Refusal::new("the bundle was refused", e)),
+    }
+}
+
+fn read_request(from_client: &mut impl BufRead) -> Result<Manifest, Refusal> {
+    let line = match read_line(from_client, MAX_LINE_BYTES, "manifest line") {
+        Ok(line) => line,
+        Err(e) => return Err(Refusal::plain(e.to_string())),
+    };
+    let version: RequestVersion = match serde_json::from_slice(&line) {
+        Ok(version) => version,
+        Err(e) => {
+            return Err(Refusal::new(
+                "the first line is not a sync request",
+                anyhow::anyhow!("first line is not a sync request: {e}"),
+            ))
+        }
+    };
+    if version.sync != u64::from(SYNC_PROTOCOL) {
+        return Err(Refusal::plain(format!(
+            "sync protocol {} is not supported, this server speaks {SYNC_PROTOCOL}",
+            version.sync
+        )));
+    }
+    match serde_json::from_slice::<RequestManifest>(&line) {
+        Ok(request) => Ok(request.manifest),
+        Err(e) => Err(Refusal::new(
+            "the manifest is not valid",
+            anyhow::anyhow!("manifest refused: {e}"),
+        )),
+    }
+}
