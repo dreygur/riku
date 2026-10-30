@@ -7,7 +7,6 @@
 //! again, so a variable cannot smuggle in a further expansion.
 
 use anyhow::{anyhow, bail, Result};
-use std::collections::BTreeMap;
 
 /// The expanded text would pass the byte cap given to [`interpolate_capped`].
 /// Callers tell it apart from a syntax error with `downcast_ref`.
@@ -22,21 +21,12 @@ impl std::fmt::Display for TooLarge {
 
 impl std::error::Error for TooLarge {}
 
-/// Expand every variable reference in `text`.
+/// Expand every variable reference in `text`, with variables from `lookup`,
+/// failing with [`TooLarge`] as soon as the output would pass `cap` bytes,
+/// before it is allocated.
 ///
 /// An unset variable expands to an empty string and adds one warning per
 /// variable name to `warnings`.
-pub(crate) fn interpolate(
-    text: &str,
-    vars: &BTreeMap<String, String>,
-    warnings: &mut Vec<String>,
-) -> Result<String> {
-    let lookup = |name: &str| vars.get(name).map(String::as_str);
-    interpolate_capped(text, &lookup, usize::MAX, warnings)
-}
-
-/// [`interpolate`] with variables from `lookup`, failing with [`TooLarge`]
-/// as soon as the output would pass `cap` bytes, before it is allocated.
 pub(crate) fn interpolate_capped<'t, 'v>(
     text: &'t str,
     lookup: &dyn Fn(&str) -> Option<&'v str>,

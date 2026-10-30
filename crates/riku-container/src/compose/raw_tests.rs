@@ -41,6 +41,27 @@ fn default_and_dotenv_values_are_interpolated() {
 }
 
 #[test]
+fn many_references_to_a_large_value_are_refused_at_the_document_cap() {
+    // Each value stays under the cap; only the document total passes it.
+    let big = format!("BIG={}\n", "x".repeat(1000 * 1000));
+    let mut compose = String::from("services:\n  web:\n    image: shop/web\n    environment:\n");
+    for i in 0..64 {
+        compose.push_str(&format!("      - V{i}=${{BIG}}\n"));
+    }
+    let app = app_with(&compose, Some(&big));
+
+    let err = match read(&app, &[]) {
+        Ok(_) => panic!("64 MB of interpolated values accepted"),
+        Err(e) => e.to_string(),
+    };
+
+    assert!(
+        err.contains("compose.yaml") && err.contains("4194304 bytes"),
+        "{err}"
+    );
+}
+
+#[test]
 fn app_env_overrides_dotenv() {
     let app = app_with(INTERPOLATED, Some("TAG=1.4\n"));
     let project = read(&app, &[("TAG", "1.5")]).unwrap();

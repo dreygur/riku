@@ -1,10 +1,20 @@
 use super::*;
+use std::collections::BTreeMap;
 
 fn vars(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
     pairs
         .iter()
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect()
+}
+
+fn interpolate(
+    text: &str,
+    vars: &BTreeMap<String, String>,
+    warnings: &mut Vec<String>,
+) -> Result<String> {
+    let lookup = |name: &str| vars.get(name).map(String::as_str);
+    interpolate_capped(text, &lookup, usize::MAX, warnings)
 }
 
 #[test]

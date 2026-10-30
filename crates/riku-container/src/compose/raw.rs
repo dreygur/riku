@@ -9,14 +9,21 @@
 //! touches string values only, never keys, and runs once, so a variable value
 //! is never re-expanded.
 
-use super::environment::{read_app_file, read_dotenv};
-use super::interpolate::interpolate;
+use super::environment::{read_app_file, read_dotenv, MAX_APP_FILE_BYTES};
+use super::interpolate::{interpolate_capped, TooLarge};
 use super::keys::check_keys;
 use super::{ComposeFile, Mapping, Value};
 use anyhow::{anyhow, bail, Result};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
+
+/// Cap on every string value of the compose file together, after
+/// interpolation. The file and the `.env` are each at most 1 MiB, so four
+/// times that leaves room for the whole file plus a large value used a few
+/// times, while a 1 MiB value referenced many times is refused before the
+/// expansion is built.
+const MAX_INTERPOLATED_BYTES: usize = 4 * MAX_APP_FILE_BYTES as usize;
 
 /// A compose file after merge keys, key checks and interpolation. Service
 /// fields are still raw YAML; later stages turn them into typed values.
@@ -86,8 +93,14 @@ pub fn read_raw(
     };
     vars.extend(app_env.iter().map(|(k, v)| (k.clone(), v.clone())));
 
-    if let Err(e) = interpolate_values(&mut document, &vars, &mut warnings) {
-        return Err(e);
+    let mut budget = MAX_INTERPOLATED_BYTES;
+    match interpolate_values(&mut document, &vars, &mut budget, &mut warnings) {
+        Ok(()) => {}
+        Err(e) if e.downcast_ref::<TooLarge>().is_some() => bail!(
+            "{}: values expand past {MAX_INTERPOLATED_BYTES} bytes",
+            compose.relative().display()
+        ),
+        Err(e) => return Err(e),
     }
     let Value::Object(project) = document else {
         bail!("the top level must be a mapping");
@@ -95,28 +108,33 @@ pub fn read_raw(
     split_project(project, warnings, vars)
 }
 
+/// Interpolates every string in `value`, taking each expanded string's length
+/// from `budget` and failing with [`TooLarge`] once the total would pass it.
 fn interpolate_values(
     value: &mut Value,
     vars: &BTreeMap<String, String>,
+    budget: &mut usize,
     warnings: &mut Vec<String>,
 ) -> Result<()> {
     match value {
         Value::String(text) => {
-            *text = match interpolate(text, vars, warnings) {
+            let lookup = |name: &str| vars.get(name).map(String::as_str);
+            *text = match interpolate_capped(text, &lookup, *budget, warnings) {
                 Ok(expanded) => expanded,
                 Err(e) => return Err(e),
             };
+            *budget -= text.len();
         }
         Value::Array(items) => {
             for item in items {
-                if let Err(e) = interpolate_values(item, vars, warnings) {
+                if let Err(e) = interpolate_values(item, vars, budget, warnings) {
                     return Err(e);
                 }
             }
         }
         Value::Object(fields) => {
             for field in fields.values_mut() {
-                if let Err(e) = interpolate_values(field, vars, warnings) {
+                if let Err(e) = interpolate_values(field, vars, budget, warnings) {
                     return Err(e);
                 }
             }

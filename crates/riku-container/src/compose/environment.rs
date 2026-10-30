@@ -30,7 +30,8 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
-const MAX_APP_FILE_BYTES: u64 = 1024 * 1024;
+/// Size cap on a compose or `.env` file read from the pushed app.
+pub(super) const MAX_APP_FILE_BYTES: u64 = 1024 * 1024;
 
 /// Cap on the parsed values of one file together, after expansion. Without
 /// it, lines that each double the previous value (`B=${A}${A}`) turn a 1 MiB
