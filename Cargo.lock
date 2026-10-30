@@ -1638,6 +1638,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "riku-client"
+version = "3.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "riku-args",
+ "riku-remote",
+ "tempfile",
+]
+
+[[package]]
 name = "riku-config"
 version = "0.1.0"
 dependencies = [

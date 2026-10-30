@@ -43,7 +43,8 @@ enum Routing {
 /// they must never run on a server.
 const PLUGIN_AUTHORING: [&str; 3] = ["keygen", "sign", "scaffold"];
 
-fn is_plugin_authoring(command: &str, subcommand: Option<&str>) -> bool {
+/// True for the `plugins` subcommands that only make sense on the author's machine.
+pub fn is_plugin_authoring(command: &str, subcommand: Option<&str>) -> bool {
     command == "plugins" && subcommand.is_some_and(|sub| PLUGIN_AUTHORING.contains(&sub))
 }
 

@@ -35,7 +35,8 @@ pub struct Selection<'a> {
     pub via_ssh: bool,
 }
 
-fn registered_names(list: &ServerList) -> String {
+/// The server names in `list` as a phrase for error messages.
+pub fn registered_names(list: &ServerList) -> String {
     let names: Vec<&str> = list.iter().map(|s| s.name.as_str()).collect();
     if names.is_empty() {
         return "none are registered".to_string();

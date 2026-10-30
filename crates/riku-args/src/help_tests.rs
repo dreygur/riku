@@ -23,6 +23,17 @@ fn help_lists_groups_in_order_and_each_visible_command_once() {
 }
 
 #[test]
+fn client_help_leaves_out_what_a_laptop_cannot_run() {
+    let text = client_command(None).render_help().to_string();
+    for shown in ["\n  server ", "\n  dashboard ", "\n  apps "] {
+        assert!(text.contains(shown), "{shown:?} missing:\n{text}");
+    }
+    for hidden in ["\n  init ", "\n  container ", "Server commands:", "--local"] {
+        assert!(!text.contains(hidden), "{hidden:?} shown:\n{text}");
+    }
+}
+
+#[test]
 fn braces_in_descriptions_do_not_break_the_template() {
     assert_eq!(escape_braces("a {b} c"), "a (b) c");
 }

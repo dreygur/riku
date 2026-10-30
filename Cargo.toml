@@ -5,6 +5,7 @@ members = [
     "crates/riku-util",
     "crates/riku-args",
     "crates/riku-remote",
+    "crates/riku-client",
     "crates/riku-error",
     "crates/riku-nginx",
     "crates/riku-caddy",
