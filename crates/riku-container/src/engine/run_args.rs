@@ -5,46 +5,25 @@
 //! so secrets stay out of the process list. Callers run
 //! [`super::spec_check::check_spec`] first; [`super::Engine::run`] does.
 
-use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 
+use super::run_spec::RunSpec;
 use super::spec_check::exec_command_line;
-use crate::types::{
-    ContainerName, HealthCheck, HealthTest, HostIp, Mount, MountSource, NetworkName, PortBinding,
-    Protocol, ServiceName, StopSignal,
-};
+use crate::types::{HealthCheck, HealthTest, HostIp, Mount, MountSource, PortBinding, Protocol};
 
-/// Everything needed to start one container.
-///
-/// An `Exec` health check is joined into a shell line because the engine CLI
-/// has no exec form, so an image without `/bin/sh` reports unhealthy.
-#[derive(Debug, Clone)]
-pub struct RunSpec {
-    pub name: ContainerName,
-    /// Image reference, checked by `Engine::run` before use.
-    pub image: String,
-    pub network: NetworkName,
-    /// Name other containers on the network resolve this one by.
-    pub alias: ServiceName,
-    /// Label keys must be non-empty and hold no `=`. The caller sets the app,
-    /// service and copy labels.
-    pub labels: BTreeMap<String, String>,
-    /// Delivered through an env file, never on the command line.
-    pub env: BTreeMap<String, String>,
-    pub ports: Vec<PortBinding>,
-    pub mounts: Vec<Mount>,
-    /// First element becomes `--entrypoint`, the rest lead the arguments.
-    pub entrypoint: Option<Vec<String>>,
-    pub command: Option<Vec<String>>,
-    pub working_dir: Option<String>,
-    pub user: Option<String>,
-    pub stop_signal: StopSignal,
-    pub stop_grace: Duration,
-    pub healthcheck: Option<HealthCheck>,
+/// `d` in whole seconds, rounded up. The engine CLI takes whole seconds, and
+/// rounding down would turn `500ms` into `0`, which means the engine default
+/// for a health duration and an immediate kill for a stop grace.
+pub(crate) fn whole_seconds_up(d: Duration) -> u64 {
+    if d.subsec_nanos() == 0 {
+        d.as_secs()
+    } else {
+        d.as_secs() + 1
+    }
 }
 
 fn pair(args: &mut Vec<OsString>, flag: &str, value: impl AsRef<OsStr>) {
@@ -92,7 +71,7 @@ fn push_mount(args: &mut Vec<OsString>, mount: &Mount) {
 }
 
 fn seconds(d: Duration) -> String {
-    format!("{}s", d.as_secs())
+    format!("{}s", whole_seconds_up(d))
 }
 
 fn health_flags(args: &mut Vec<OsString>, health: &HealthCheck) -> Result<()> {
@@ -148,7 +127,7 @@ pub(crate) fn run_args(spec: &RunSpec, env_file: &Path) -> Result<Vec<OsString>>
     pair(
         &mut args,
         "--stop-timeout",
-        spec.stop_grace.as_secs().to_string(),
+        whole_seconds_up(spec.stop_grace).to_string(),
     );
     if let Some(health) = &spec.healthcheck {
         match health_flags(&mut args, health) {
@@ -173,3 +152,7 @@ pub(crate) fn run_args(spec: &RunSpec, env_file: &Path) -> Result<Vec<OsString>>
 #[cfg(test)]
 #[path = "run_args_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "run_args_health_tests.rs"]
+mod health_tests;

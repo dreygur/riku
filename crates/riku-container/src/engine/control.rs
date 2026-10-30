@@ -15,7 +15,8 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 
 use super::env_file::write_env_file;
-use super::run_args::{run_args, RunSpec};
+use super::run_args::{run_args, whole_seconds_up};
+use super::run_spec::RunSpec;
 use super::spec_check::{check_positional, check_spec};
 use super::{ContainerId, Engine};
 use crate::types::StopSignal;
@@ -47,9 +48,10 @@ impl Engine {
         ContainerId::try_from(stdout.trim())
     }
 
-    /// Send the stop signal, then kill after `grace`.
+    /// Send the stop signal, then kill after `grace`, rounded up to a whole
+    /// second.
     pub fn stop(&self, id: &ContainerId, grace: Duration) -> Result<()> {
-        let secs = grace.as_secs().to_string();
+        let secs = whole_seconds_up(grace).to_string();
         self.output(&args_of(["stop", "-t", &secs, id.as_str()]))
             .map(|_| ())
     }

@@ -11,7 +11,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 
-use super::run_args::RunSpec;
+use super::run_spec::RunSpec;
 use crate::types::{HealthTest, Mount, MountSource};
 
 /// An image reference or build context that is not empty, does not start with

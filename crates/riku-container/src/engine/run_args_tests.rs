@@ -1,14 +1,11 @@
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use super::run_args;
 use crate::engine::fixture::sample_spec;
 use crate::engine::RunSpec;
-use crate::types::{
-    HealthCheck, HealthTest, HostIp, Mount, MountSource, PortBinding, Protocol, StopSignal,
-};
+use crate::types::{HostIp, Mount, MountSource, PortBinding, Protocol, StopSignal};
 
-fn argv(spec: &RunSpec) -> Vec<String> {
+pub(super) fn argv(spec: &RunSpec) -> Vec<String> {
     run_args(spec, Path::new("/scratch/env-1"))
         .unwrap()
         .into_iter()
@@ -108,80 +105,6 @@ fn entrypoint_list_splits_into_flag_and_leading_args() {
 }
 
 #[test]
-fn entrypoint_and_health_command_starting_with_a_dash_stay_flag_values() {
-    let mut spec = sample_spec();
-    spec.entrypoint = Some(vec!["-sh".into()]);
-    spec.healthcheck = Some(HealthCheck {
-        test: HealthTest::Shell("-x".into()),
-        interval: None,
-        timeout: None,
-        retries: None,
-        start_period: None,
-    });
-
-    let args = argv(&spec);
-
-    for flag in ["--entrypoint", "--health-cmd"] {
-        let at = args.iter().position(|a| a == flag).unwrap();
-        assert!(args[at + 1].starts_with('-'), "{args:?}");
-        assert!(
-            at + 1
-                < args
-                    .iter()
-                    .position(|a| a == "registry.example/myapp:1")
-                    .unwrap()
-        );
-    }
-}
-
-#[test]
-fn exec_health_check_without_a_program_or_with_nul_is_an_error() {
-    let mut spec = sample_spec();
-    for exec in [vec![], vec!["curl\0".to_string()]] {
-        spec.healthcheck = Some(HealthCheck {
-            test: HealthTest::Exec(exec.clone()),
-            interval: None,
-            timeout: None,
-            retries: None,
-            start_period: None,
-        });
-        assert!(
-            run_args(&spec, Path::new("/scratch/env-1")).is_err(),
-            "{exec:?} was accepted"
-        );
-    }
-}
-
-#[test]
-fn health_check_renders_shell_exec_and_disabled_forms() {
-    let mut spec = sample_spec();
-    spec.healthcheck = Some(HealthCheck {
-        test: HealthTest::Exec(vec!["curl".into(), "-f".into(), "http://x/a b".into()]),
-        interval: Some(Duration::from_secs(10)),
-        timeout: None,
-        retries: Some(3),
-        start_period: Some(Duration::from_secs(5)),
-    });
-    let args = argv(&spec).join(" ");
-    assert!(
-        args.contains("--health-cmd curl -f 'http://x/a b'"),
-        "{args}"
-    );
-    assert!(args.contains("--health-interval 10s"), "{args}");
-    assert!(args.contains("--health-retries 3"), "{args}");
-    assert!(args.contains("--health-start-period 5s"), "{args}");
-
-    spec.healthcheck = Some(HealthCheck {
-        test: HealthTest::Disabled,
-        interval: None,
-        timeout: None,
-        retries: None,
-        start_period: None,
-    });
-    assert!(argv(&spec).contains(&"--no-healthcheck".to_string()));
-}
-
-#[test]
 fn secrets_never_appear_in_argv() {
     let mut spec = sample_spec();
     spec.env
@@ -196,4 +119,19 @@ fn secrets_never_appear_in_argv() {
     );
     assert!(args.iter().all(|a| !a.contains("DATABASE_URL")), "{args:?}");
     assert!(args.contains(&"--env-file".to_string()), "{args:?}");
+}
+
+#[test]
+fn debug_output_lists_env_names_but_never_values() {
+    let mut spec = sample_spec();
+    spec.env
+        .insert("DATABASE_URL".into(), "postgres://u:secret@db/x".into());
+
+    let shown = format!("{spec:?}");
+
+    assert!(
+        shown.contains("DATABASE_URL"),
+        "names should be listed: {shown}"
+    );
+    assert!(!shown.contains("secret"), "Debug leaked a value: {shown}");
 }

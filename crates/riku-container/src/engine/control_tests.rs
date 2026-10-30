@@ -19,10 +19,15 @@ fn stop_passes_grace_seconds() {
 
     engine.stop(&id(), DEFAULT_STOP_GRACE).unwrap();
     engine.stop(&id(), Duration::from_secs(5)).unwrap();
+    engine.stop(&id(), Duration::from_millis(500)).unwrap();
 
     assert_eq!(
         logged(&log),
-        [format!("stop -t 30 {ID}"), format!("stop -t 5 {ID}")]
+        [
+            format!("stop -t 30 {ID}"),
+            format!("stop -t 5 {ID}"),
+            format!("stop -t 1 {ID}")
+        ]
     );
 }
 
