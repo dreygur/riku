@@ -120,6 +120,17 @@ work they describe.
   `ComposeProject::confirm_declared_name` be called.
 - Sync receive runs under a process level deadline; a stalled client is killed
   so the app's sync lock is released.
+- Before `run`, a container that already has the name but a different
+  `riku.app` label is refused with a clear message (names can collide across
+  apps: app `a-b` service `c` and app `a` service `b-c`).
+- Compose migration removes compose's old containers by their compose project
+  label before riku starts its own.
+- The bind source symlink walk is repeated at container start.
+- Each copy's host port is stored (as a label) so backends can be rebuilt
+  after a supervisor restart.
+- The sync size limit and free space margin (`ReceiveLimits`) are wired to a
+  server setting.
+- The ssh sync entry point logs the refusal cause `receive` returns.
 
 ### Phase 4: one rk managing many servers
 

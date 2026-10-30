@@ -431,7 +431,13 @@ Riku detects container apps by the presence of a `Dockerfile`, `Containerfile`,
 or a compose file (`compose.yaml`, `compose.yml`, `docker-compose.yaml`,
 `docker-compose.yml`, checked in that order). It auto-detects whether Docker or
 Podman is installed and uses whichever is available (Podman preferred if both
-are present).
+are present). Docker must be version 23 or newer (or an engine with a
+compatible CLI), since riku reads engine output with `--format json`.
+
+The compose file, or a folder on its path, may be a symlink as long as its
+real target stays inside the app directory (for example
+`docker-compose.yml -> deploy/prod.yml`). A link that leaves the app is
+refused, naming the path.
 
 To deploy with a compose file under another name, set `COMPOSE_FILE` in the
 app's env. It wins over the default names and claims the app for the container

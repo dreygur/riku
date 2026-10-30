@@ -51,7 +51,16 @@ uninstall   = true               # `riku plugins remove` calls on_uninstall
 
 [ui]                              # optional, any plugin type: dashboard panel
 nav_label   = "My Plugin"        # Next.js dashboard only, not the embedded one
+
+[router]                         # required for type = "router"
+protocol        = 2              # riku refuses a router without protocol = 2
+graceful_reload = false          # true only if reload keeps in-flight
+                                 # connections (default false)
 ```
+
+A router plugin without a `[router]` table, or with a `protocol` other than 2,
+is refused before any verb runs. See `PLUGIN_PROTOCOL.md` section 6.2 for the
+`configure` request it receives.
 
 The kernel sets `RIKU_PLUGIN_API`, `RIKU_ROOT`, `RIKU_PLUGIN_NAME` (the
 manifest's own `name`), and `RIKU_PLUGIN_DATA_PATH` (a scratch directory the
