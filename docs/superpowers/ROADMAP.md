@@ -108,8 +108,8 @@ work they describe.
 
 - Tracks merged at b22d010, 50cafa6, 44f0173, c747d31. Final review fixes
   c747d31..ad2b81c, residual fixes ad2b81c..34ccc44. Gate on 34ccc44: 1110
-  passed, 0 failed, 2 ignored. Not merged into `feat/caddy-router`, not
-  pushed.
+  passed, 0 failed, 2 ignored. Merged into `feat/caddy-router` at 10e956b
+  (gate green there too), not pushed.
 
 ### Phase 3: container integration (after phase 2)
 
