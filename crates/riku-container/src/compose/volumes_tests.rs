@@ -93,6 +93,43 @@ fn bind_source_may_be_missing_but_may_not_leave_the_app() {
 }
 
 #[test]
+fn outside_bind_source_says_it_must_be_inside_the_app() {
+    let err = Fixture::new()
+        .parse(json!(["/etc:/x"]))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("bind sources must be inside the app directory") && err.contains("/etc"),
+        "{err}"
+    );
+}
+
+#[test]
+fn symlink_components_are_refused_and_missing_tails_are_allowed() {
+    let fx = Fixture::new();
+    let outside = TempDir::new().unwrap();
+    std::fs::create_dir(fx.app.path().join("real")).unwrap();
+    std::os::unix::fs::symlink(outside.path(), fx.app.path().join("data")).unwrap();
+    std::os::unix::fs::symlink("real", fx.app.path().join("alias")).unwrap();
+
+    for source in ["./data/sub", "./data", "./alias"] {
+        let err = fx
+            .parse(json!([format!("{source}:/x")]))
+            .unwrap_err()
+            .to_string();
+        let component = source.trim_start_matches("./").split('/').next().unwrap();
+        assert!(
+            err.contains("symlink") && err.contains(component),
+            "{source}: {err}"
+        );
+    }
+    assert!(fx.parse(json!(["./real/not-created-yet:/x"])).is_ok());
+    assert!(fx
+        .parse(json!([{"type": "bind", "source": "./data", "target": "/x"}]))
+        .is_err());
+}
+
+#[test]
 fn bind_path_never_resolves_to_a_sibling_with_the_same_prefix() {
     let fx = Fixture::new();
     let sibling = PathBuf::from(format!("{}-evil/data", fx.app.path().display()));

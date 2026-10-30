@@ -1,7 +1,8 @@
 //! The typed result of parsing a service, and the context it is parsed in.
 //!
-//! The `Debug` output of [`ServiceDef`] and [`BuildDef`] lists environment and
-//! build arg names but never values, which may be secrets.
+//! The `Debug` output of [`ServiceContext`], [`ServiceDef`] and [`BuildDef`]
+//! lists variable, environment and build arg names but never values, which may
+//! be secrets.
 
 use crate::types::{HealthCheck, Mount, PortBinding, RestartPolicy, ServiceName, StopSignal};
 use std::collections::{BTreeMap, BTreeSet};
@@ -10,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 /// What `parse_service` needs to know about the project around a service.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct ServiceContext<'a> {
     /// The app checkout. Nothing a service names may resolve outside it.
     pub app_path: &'a Path,
@@ -22,6 +23,17 @@ pub struct ServiceContext<'a> {
     pub vars: &'a BTreeMap<String, String>,
     /// Names under the top level `volumes` key.
     pub declared_volumes: &'a BTreeSet<String>,
+}
+
+impl fmt::Debug for ServiceContext<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ServiceContext")
+            .field("app_path", &self.app_path)
+            .field("compose_dir", &self.compose_dir)
+            .field("var_names", &self.vars.keys().collect::<Vec<_>>())
+            .field("declared_volumes", &self.declared_volumes)
+            .finish()
+    }
 }
 
 /// How a service is built. `context` and `dockerfile` are absolute paths

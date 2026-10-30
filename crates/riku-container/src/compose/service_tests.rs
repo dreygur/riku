@@ -149,6 +149,69 @@ fn environment_map_skips_null_and_refuses_floats() {
 }
 
 #[test]
+fn environment_value_with_a_line_break_is_refused_naming_the_key() {
+    let fx = Fixture::new();
+    for environment in [json!(["TOKEN=x\ny"]), json!({"TOKEN": "x\ny"})] {
+        let err = error_of(fx.parse("web", json!({"image": "myapp", "environment": environment})));
+        assert!(
+            err.contains("service 'web'") && err.contains("TOKEN") && !err.contains("x\ny"),
+            "{err}"
+        );
+    }
+}
+
+#[test]
+fn leading_zero_numbers_are_refused_because_yaml_reads_them_as_floats() {
+    let doc: Value = serde_saphyr::from_str("image: myapp\nenvironment:\n  UMASK: 022\n").unwrap();
+    let err = error_of(Fixture::new().parse("web", doc));
+    assert!(
+        err.contains("service 'web'") && err.contains("UMASK") && err.contains("quote"),
+        "{err}"
+    );
+}
+
+#[test]
+fn context_debug_output_omits_variable_values() {
+    let fx = Fixture::new();
+    let mut vars = BTreeMap::new();
+    vars.insert("DB_PASSWORD".to_string(), "hunter2".to_string());
+    let ctx = ServiceContext {
+        app_path: fx.app.path(),
+        compose_dir: fx.app.path(),
+        vars: &vars,
+        declared_volumes: &fx.volumes,
+    };
+    let shown = format!("{ctx:?}");
+    assert!(
+        shown.contains("DB_PASSWORD") && !shown.contains("hunter2"),
+        "{shown}"
+    );
+}
+
+#[test]
+fn build_context_may_not_pass_through_a_symlink() {
+    let fx = Fixture::new();
+    let outside = TempDir::new().unwrap();
+    std::os::unix::fs::symlink(outside.path(), fx.app.path().join("src")).unwrap();
+    std::fs::create_dir(fx.app.path().join("real")).unwrap();
+
+    for build in [
+        json!("./src"),
+        json!({"context": "./src/api"}),
+        json!({"context": "./real", "dockerfile": "../src/Dockerfile"}),
+    ] {
+        let err = error_of(fx.parse("web", json!({ "build": build })));
+        assert!(
+            err.contains("service 'web'") && err.contains("symlink") && err.contains("src"),
+            "{build}: {err}"
+        );
+    }
+    assert!(fx
+        .parse("web", json!({"build": "./real/not-created-yet"}))
+        .is_ok());
+}
+
+#[test]
 fn env_file_outside_app_is_refused() {
     let err = error_of(Fixture::new().parse(
         "web",
