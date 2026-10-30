@@ -1,3 +1,5 @@
+use std::os::unix::fs::PermissionsExt;
+
 use crate::engine::detect::EngineBinary;
 use crate::engine::fake::fake_engine;
 use crate::engine::Engine;
@@ -14,12 +16,27 @@ fn binary(dir: &std::path::Path, script: &str) -> EngineBinary {
 #[test]
 fn open_refuses_engine_missing_a_command() {
     let dir = tempfile::tempdir().unwrap();
-    let bin = binary(dir.path(), "case \"$1\" in stats) exit 1;; esac; exit 0");
+    let bin = binary(
+        dir.path(),
+        "case \"$1\" in stats) echo 'unknown command' >&2; exit 1;; esac; exit 0",
+    );
 
     let err = Engine::open(bin).unwrap_err().to_string();
 
     assert!(err.contains("does not answer 'stats'"), "{err}");
     assert!(err.contains("riku needs: pull, build, run"), "{err}");
+    assert!(err.contains("unknown command"), "stderr missing: {err}");
+}
+
+#[test]
+fn open_reports_spawn_failure_instead_of_blaming_a_command() {
+    let dir = tempfile::tempdir().unwrap();
+    let bin = binary(dir.path(), "exit 0");
+    std::fs::set_permissions(&bin.program, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+    let err = Engine::open(bin).unwrap_err().to_string();
+
+    assert!(err.contains("Permission denied"), "{err}");
 }
 
 #[test]

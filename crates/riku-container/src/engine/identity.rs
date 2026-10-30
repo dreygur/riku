@@ -57,9 +57,9 @@ pub struct Engine {
 impl Engine {
     /// Probe the engine's commands, then read its identity.
     pub fn open(binary: EngineBinary) -> Result<Engine> {
-        if let Some(command) = first_unanswered(&binary.program) {
+        if let Some((command, reason)) = first_unanswered(&binary.program) {
             return Err(anyhow!(
-                "container engine {} does not answer '{command}'; riku needs: {}",
+                "container engine {} does not answer '{command}'; riku needs: {} ({reason})",
                 binary.program.display(),
                 REQUIRED_COMMANDS.join(", ")
             ));

@@ -17,14 +17,20 @@ pub const REQUIRED_COMMANDS: [&str; 13] = [
 /// Run `<program> <command> --help` for every required command.
 ///
 /// Capability is judged by the command answering, never by the engine's name.
-/// Returns the first command that failed or could not be spawned, if any.
-pub fn first_unanswered(program: &Path) -> Option<&'static str> {
-    REQUIRED_COMMANDS.into_iter().find(|command| {
+/// Returns the first command that failed or could not be spawned, with the
+/// reason: the spawn error, or the exit status plus trimmed stderr.
+pub fn first_unanswered(program: &Path) -> Option<(&'static str, String)> {
+    for command in REQUIRED_COMMANDS {
         match output_retrying_etxtbsy(Command::new(program).args([command, "--help"])) {
-            Ok(out) => !out.status.success(),
-            Err(_) => true,
+            Ok(out) if out.status.success() => {}
+            Ok(out) => {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                return Some((command, format!("{}: {}", out.status, stderr.trim())));
+            }
+            Err(e) => return Some((command, e.to_string())),
         }
-    })
+    }
+    None
 }
 
 #[cfg(test)]
