@@ -11,6 +11,7 @@ license = "MIT"
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde-saphyr = { version = "2", default-features = false, features = ["deserialize"] }
 shlex = { workspace = true }
 tempfile = { workspace = true }
 tracing = { workspace = true }
