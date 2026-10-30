@@ -39,6 +39,54 @@ fn manifest_json_with_escape_fails_because_of_the_path() {
     assert_eq!(manifest.entries[0].kind, EntryKind::Dir);
 }
 
+fn parse_entries(entries: &str) -> Result<Manifest, String> {
+    let raw = format!(r#"{{"entries":[{entries}]}}"#);
+    serde_json::from_str::<Manifest>(&raw).map_err(|e| e.to_string())
+}
+
+const DIR_A: &str = r#"{"path":"a","kind":"dir"}"#;
+const DIR_B: &str = r#"{"path":"b","kind":"dir"}"#;
+
+#[test]
+fn manifest_refuses_unsorted_entries_naming_the_path() {
+    let err = parse_entries(&format!("{DIR_B},{DIR_A}")).unwrap_err();
+    assert!(err.contains("\"a\"") && err.contains("order"), "got: {err}");
+}
+
+#[test]
+fn manifest_refuses_duplicate_paths() {
+    let err = parse_entries(&format!("{DIR_A},{DIR_A}")).unwrap_err();
+    assert!(err.contains("\"a\""), "got: {err}");
+}
+
+#[test]
+fn manifest_refuses_entry_under_a_symlink() {
+    let link = r#"{"path":"x","kind":"symlink","target":"/etc"}"#;
+    let file = r#"{"path":"x/y","kind":"file","size":1,"sha256":"ab","mode":420}"#;
+    let err = parse_entries(&format!("{link},{file}")).unwrap_err();
+    assert!(err.contains("x/y"), "got: {err}");
+}
+
+#[test]
+fn manifest_refuses_entry_whose_parent_is_not_listed() {
+    let err = parse_entries(r#"{"path":"a/b","kind":"dir"}"#).unwrap_err();
+    assert!(err.contains("a/b"), "got: {err}");
+}
+
+#[test]
+fn manifest_refuses_mode_bits_outside_0o777() {
+    let file = r#"{"path":"run","kind":"file","size":1,"sha256":"ab","mode":2541}"#;
+    let err = parse_entries(file).unwrap_err();
+    assert!(err.contains("run") && err.contains("4755"), "got: {err}");
+}
+
+#[test]
+fn manifest_accepts_nested_dirs_and_files() {
+    let nested = r#"{"path":"a/f","kind":"file","size":1,"sha256":"ab","mode":493}"#;
+    let manifest = parse_entries(&format!("{DIR_A},{nested}")).unwrap();
+    assert_eq!(manifest.entries.len(), 2);
+}
+
 #[test]
 fn file_entry_round_trips_in_the_flat_wire_shape() {
     let raw = r#"{"path":"app.py","kind":"file","size":6,"sha256":"ab","mode":420}"#;

@@ -21,6 +21,11 @@ fn scan_records_files_dirs_and_symlinks_sorted() {
     fs::create_dir(root.join("logs")).unwrap();
 
     let manifest = scan(root).unwrap();
+    let wire = serde_json::to_string(&manifest).unwrap();
+    let reparsed: crate::wire::Manifest = serde_json::from_str(&wire)
+        .unwrap_or_else(|e| panic!("scan output fails manifest validation: {e}"));
+    assert_eq!(reparsed, manifest);
+
     let got: Vec<(&str, &EntryKind)> = manifest
         .entries
         .iter()

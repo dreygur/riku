@@ -6,6 +6,7 @@
 //! [`Manifest`] never holds a path that leaves the sync root.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 /// A validated path relative to the sync root, always `/` separated.
@@ -94,11 +95,67 @@ pub struct Entry {
     pub kind: EntryKind,
 }
 
-/// Everything under a sync root, sorted by path.
+/// Everything under a sync root.
+///
+/// Parsing enforces what the receiver relies on: paths strictly increasing (so
+/// sorted and unique), every entry's parent listed as a directory (so nothing
+/// sits under a symlink or an undeclared directory), and file modes within
+/// `0o777` (no setuid, setgid or sticky bits).
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(try_from = "RawManifest")]
 pub struct Manifest {
     /// Entries in path order; the root itself is not listed.
     pub entries: Vec<Entry>,
+}
+
+#[derive(Deserialize)]
+struct RawManifest {
+    entries: Vec<Entry>,
+}
+
+impl TryFrom<RawManifest> for Manifest {
+    type Error = anyhow::Error;
+
+    fn try_from(raw: RawManifest) -> anyhow::Result<Self> {
+        let mut dirs: HashSet<&str> = HashSet::new();
+        let mut previous: Option<&RelPath> = None;
+        for entry in &raw.entries {
+            if let Some(prev) = previous {
+                if entry.path <= *prev {
+                    return Err(anyhow::anyhow!(
+                        "manifest entry {:?} is duplicated or out of order after {:?}",
+                        entry.path.as_str(),
+                        prev.as_str()
+                    ));
+                }
+            }
+            previous = Some(&entry.path);
+            if let Some(parent) = entry.path.parent() {
+                if !dirs.contains(parent.as_str()) {
+                    return Err(anyhow::anyhow!(
+                        "manifest entry {:?} has no listed directory {:?} above it",
+                        entry.path.as_str(),
+                        parent.as_str()
+                    ));
+                }
+            }
+            match &entry.kind {
+                EntryKind::Dir => {
+                    dirs.insert(entry.path.as_str());
+                }
+                EntryKind::File { mode, .. } if mode & !0o777 != 0 => {
+                    return Err(anyhow::anyhow!(
+                        "manifest file {:?} has mode {mode:o}, outside 0o777",
+                        entry.path.as_str()
+                    ));
+                }
+                EntryKind::File { .. } | EntryKind::Symlink { .. } => {}
+            }
+        }
+        Ok(Manifest {
+            entries: raw.entries,
+        })
+    }
 }
 
 /// The receiver's answer to a manifest.
