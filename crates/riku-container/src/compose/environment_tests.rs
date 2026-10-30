@@ -56,6 +56,29 @@ fn unterminated_quote_names_file_and_starting_line() {
 }
 
 #[test]
+fn doubling_chain_is_refused_at_the_cap() {
+    // Each line doubles the one before; unchecked, 30 lines of this reach
+    // a terabyte from a file of under 1 KiB.
+    let mut text = format!("V0={}\n", "x".repeat(1000));
+    for i in 1..13 {
+        text.push_str(&format!("V{i}=${{V{prev}}}${{V{prev}}}\n", prev = i - 1));
+    }
+
+    let err = match parse_dotenv("/app/.env", &text) {
+        Ok(vars) => panic!(
+            "doubling chain accepted, last value {} bytes",
+            vars["V12"].len()
+        ),
+        Err(e) => e.to_string(),
+    };
+
+    assert!(
+        err.starts_with("/app/.env:") && err.contains("1048576 bytes"),
+        "{err}"
+    );
+}
+
+#[test]
 fn values_expand_earlier_lines_and_the_app_env_but_not_single_quotes() {
     let text =
         "HOST=db\nURL=postgres://${HOST}/$NAME\nQUOTED=\"${HOST}:5432\"\nLITERAL='${HOST}'\n";

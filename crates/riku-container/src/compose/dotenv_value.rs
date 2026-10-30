@@ -6,8 +6,7 @@
 //! [`super::interpolate`], so `.env` and the compose file accept the same
 //! `$VAR`, `${VAR}`, `${VAR:-default}` and `$$` forms.
 
-use super::interpolate::interpolate;
-use std::collections::BTreeMap;
+use super::interpolate::{interpolate_capped, TooLarge};
 
 /// True while `raw` opens a quote it has not closed yet, so the value goes on
 /// to the next line.
@@ -21,17 +20,24 @@ pub(super) fn quote_is_open(raw: &str) -> bool {
     false
 }
 
-/// The value written as `raw`, expanded against `scope` where its quoting
+/// The value written as `raw`, expanded through `lookup` where its quoting
 /// allows. Unset variables become empty strings and are noted in `warnings`.
-pub(super) fn parse_value(
+/// A value longer than `cap` bytes is refused with [`ValueError::TooLarge`],
+/// before an expansion past the cap is allocated.
+pub(super) fn parse_value<'v>(
     raw: &str,
-    scope: &BTreeMap<String, String>,
+    lookup: &dyn Fn(&str) -> Option<&'v str>,
+    cap: usize,
     warnings: &mut Vec<String>,
-) -> Result<String, String> {
+) -> Result<String, ValueError> {
     if let Some(quoted) = raw.strip_prefix('\'') {
         return match quoted.split_once('\'') {
-            Some((inner, after)) if is_blank_or_comment(after) => Ok(inner.to_string()),
-            _ => Err("unterminated single quote".to_string()),
+            Some((inner, after)) if is_blank_or_comment(after) => {
+                within_cap(inner.to_string(), cap)
+            }
+            _ => Err(ValueError::Malformed(
+                "unterminated single quote".to_string(),
+            )),
         };
     }
     let text = if let Some(quoted) = raw.strip_prefix('"') {
@@ -39,19 +45,43 @@ pub(super) fn parse_value(
             Some(end) if is_blank_or_comment(&quoted[end + 1..]) => {
                 match unescape_double_quoted(&quoted[..end]) {
                     Ok(text) => text,
-                    Err(reason) => return Err(reason),
+                    Err(reason) => return Err(ValueError::Malformed(reason)),
                 }
             }
-            _ => return Err("unterminated double quote".to_string()),
+            _ => {
+                return Err(ValueError::Malformed(
+                    "unterminated double quote".to_string(),
+                ))
+            }
         }
     } else {
         let end = raw.find(" #").unwrap_or(raw.len());
         raw[..end].trim_end().to_string()
     };
     if !text.contains('$') {
-        return Ok(text);
+        return within_cap(text, cap);
     }
-    interpolate(&text, scope, warnings).map_err(|e| e.to_string())
+    match interpolate_capped(&text, lookup, cap, warnings) {
+        Ok(value) => Ok(value),
+        Err(e) if e.downcast_ref::<TooLarge>().is_some() => Err(ValueError::TooLarge),
+        Err(e) => Err(ValueError::Malformed(e.to_string())),
+    }
+}
+
+/// Why a value was refused.
+#[derive(Debug)]
+pub(super) enum ValueError {
+    /// Bad quoting, escapes or interpolation syntax.
+    Malformed(String),
+    /// The value, expanded, would pass the byte cap.
+    TooLarge,
+}
+
+fn within_cap(value: String, cap: usize) -> Result<String, ValueError> {
+    if value.len() > cap {
+        return Err(ValueError::TooLarge);
+    }
+    Ok(value)
 }
 
 fn is_blank_or_comment(after_quote: &str) -> bool {

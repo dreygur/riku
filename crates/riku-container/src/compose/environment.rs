@@ -23,7 +23,7 @@
 //! one is refused when the service is parsed, naming the key, and so is a
 //! label.
 
-use super::dotenv_value::{parse_value, quote_is_open};
+use super::dotenv_value::{parse_value, quote_is_open, ValueError};
 use anyhow::{anyhow, bail, Result};
 use riku_util::ensure_path_within;
 use std::collections::BTreeMap;
@@ -31,6 +31,11 @@ use std::fs;
 use std::path::Path;
 
 const MAX_APP_FILE_BYTES: u64 = 1024 * 1024;
+
+/// Cap on the parsed values of one file together, after expansion. Without
+/// it, lines that each double the previous value (`B=${A}${A}`) turn a 1 MiB
+/// file into gigabytes. Same number as the file cap.
+const MAX_EXPANDED_BYTES: usize = MAX_APP_FILE_BYTES as usize;
 
 /// Read the `.env` file at `path` inside `app_path`. A missing file is an
 /// empty map. `outside` is the app's ENV (see [`parse_dotenv`]).
@@ -80,6 +85,7 @@ pub(crate) fn parse_dotenv(
 ) -> Result<BTreeMap<String, String>> {
     let lines: Vec<&str> = text.lines().collect();
     let mut vars = BTreeMap::new();
+    let mut total = 0usize;
     let mut next = 0;
     while next < lines.len() {
         let start = next;
@@ -109,30 +115,29 @@ pub(crate) fn parse_dotenv(
             raw.push_str(lines[next]);
             next += 1;
         }
-        let scope = expansion_scope(&vars, outside, &raw);
-        match parse_value(raw.trim_end(), &scope, warnings) {
+        let budget = MAX_EXPANDED_BYTES.saturating_sub(total);
+        let parsed = {
+            let lookup = |name: &str| {
+                outside
+                    .get(name)
+                    .or_else(|| vars.get(name))
+                    .map(String::as_str)
+            };
+            parse_value(raw.trim_end(), &lookup, budget, warnings)
+        };
+        match parsed {
             Ok(value) => {
+                total = total.saturating_add(value.len());
                 vars.insert(key.to_string(), value);
             }
-            Err(reason) => bail!("{source}:{}: {key}: {reason}", start + 1),
+            Err(ValueError::TooLarge) => bail!(
+                "{source}:{}: {key}: values expand past {MAX_EXPANDED_BYTES} bytes",
+                start + 1
+            ),
+            Err(ValueError::Malformed(reason)) => bail!("{source}:{}: {key}: {reason}", start + 1),
         }
     }
     Ok(vars)
-}
-
-/// Earlier lines overlaid by the app's ENV, built only for a value that has
-/// something to expand.
-fn expansion_scope(
-    earlier: &BTreeMap<String, String>,
-    outside: &BTreeMap<String, String>,
-    raw: &str,
-) -> BTreeMap<String, String> {
-    if !raw.contains('$') {
-        return BTreeMap::new();
-    }
-    let mut scope = earlier.clone();
-    scope.extend(outside.iter().map(|(k, v)| (k.clone(), v.clone())));
-    scope
 }
 
 pub(crate) fn is_valid_key(key: &str) -> bool {

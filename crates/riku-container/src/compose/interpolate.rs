@@ -9,6 +9,19 @@
 use anyhow::{anyhow, bail, Result};
 use std::collections::BTreeMap;
 
+/// The expanded text would pass the byte cap given to [`interpolate_capped`].
+/// Callers tell it apart from a syntax error with `downcast_ref`.
+#[derive(Debug)]
+pub(crate) struct TooLarge;
+
+impl std::fmt::Display for TooLarge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("the expanded value is too large")
+    }
+}
+
+impl std::error::Error for TooLarge {}
+
 /// Expand every variable reference in `text`.
 ///
 /// An unset variable expands to an empty string and adds one warning per
@@ -18,22 +31,49 @@ pub(crate) fn interpolate(
     vars: &BTreeMap<String, String>,
     warnings: &mut Vec<String>,
 ) -> Result<String> {
-    let mut out = String::with_capacity(text.len());
+    let lookup = |name: &str| vars.get(name).map(String::as_str);
+    interpolate_capped(text, &lookup, usize::MAX, warnings)
+}
+
+/// [`interpolate`] with variables from `lookup`, failing with [`TooLarge`]
+/// as soon as the output would pass `cap` bytes, before it is allocated.
+pub(crate) fn interpolate_capped<'t, 'v>(
+    text: &'t str,
+    lookup: &dyn Fn(&str) -> Option<&'v str>,
+    cap: usize,
+    warnings: &mut Vec<String>,
+) -> Result<String> {
+    let mut out = String::new();
     let mut rest = text;
     while let Some(at) = rest.find('$') {
-        out.push_str(&rest[..at]);
+        if let Err(e) = push_capped(&mut out, &rest[..at], cap) {
+            return Err(e);
+        }
         let expression = match expression_at(&rest[at..]) {
             Ok(expression) => expression,
             Err(e) => return Err(e),
         };
-        match expand(expression, vars, warnings) {
-            Ok(value) => out.push_str(&value),
+        let value = match expand(expression, lookup, warnings) {
+            Ok(value) => value,
             Err(e) => return Err(e),
+        };
+        if let Err(e) = push_capped(&mut out, value, cap) {
+            return Err(e);
         }
         rest = &rest[at + expression.len()..];
     }
-    out.push_str(rest);
-    Ok(out)
+    match push_capped(&mut out, rest, cap) {
+        Ok(()) => Ok(out),
+        Err(e) => Err(e),
+    }
+}
+
+fn push_capped(out: &mut String, piece: &str, cap: usize) -> Result<()> {
+    if out.len().saturating_add(piece.len()) > cap {
+        return Err(anyhow::Error::new(TooLarge));
+    }
+    out.push_str(piece);
+    Ok(())
 }
 
 fn is_name_char(c: char) -> bool {
@@ -79,19 +119,19 @@ fn braced_expression(s: &str) -> Result<&str> {
     Err(anyhow!("unterminated interpolation '{s}'"))
 }
 
-fn expand(
-    expression: &str,
-    vars: &BTreeMap<String, String>,
+fn expand<'x, 't: 'x, 'v: 'x>(
+    expression: &'t str,
+    lookup: &dyn Fn(&str) -> Option<&'v str>,
     warnings: &mut Vec<String>,
-) -> Result<String> {
+) -> Result<&'x str> {
     if expression == "$$" {
-        return Ok("$".to_string());
+        return Ok("$");
     }
     let Some(body) = expression
         .strip_prefix("${")
         .and_then(|b| b.strip_suffix('}'))
     else {
-        return Ok(lookup(&expression[1..], vars, warnings));
+        return Ok(value_or_warn(&expression[1..], lookup, warnings));
     };
 
     let name_len = body.find(|c| !is_name_char(c)).unwrap_or(body.len());
@@ -100,27 +140,29 @@ fn expand(
         bail!("unsupported interpolation '{expression}'");
     }
     if tail.is_empty() {
-        return Ok(lookup(name, vars, warnings));
+        return Ok(value_or_warn(name, lookup, warnings));
     }
     match tail.strip_prefix(":-") {
-        Some(default) if !default.contains('$') => Ok(vars
-            .get(name)
-            .filter(|value| !value.is_empty())
-            .cloned()
-            .unwrap_or_else(|| default.to_string())),
+        Some(default) if !default.contains('$') => {
+            Ok(lookup(name).filter(|value| !value.is_empty()).unwrap_or(default))
+        }
         _ => bail!("unsupported interpolation '{expression}'; only ${{VAR}} and ${{VAR:-default}} are supported"),
     }
 }
 
-fn lookup(name: &str, vars: &BTreeMap<String, String>, warnings: &mut Vec<String>) -> String {
-    if let Some(value) = vars.get(name) {
-        return value.clone();
+fn value_or_warn<'v>(
+    name: &str,
+    lookup: &dyn Fn(&str) -> Option<&'v str>,
+    warnings: &mut Vec<String>,
+) -> &'v str {
+    if let Some(value) = lookup(name) {
+        return value;
     }
     let warning = format!("variable {name} is not set; using an empty string");
     if !warnings.contains(&warning) {
         warnings.push(warning);
     }
-    String::new()
+    ""
 }
 
 #[cfg(test)]
