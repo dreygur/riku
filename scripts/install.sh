@@ -2,13 +2,15 @@
 # Riku one-line installer.
 #
 #   curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh -s -- --rk
 #
 # Detects OS/arch, downloads the matching release binary, verifies its
-# checksum, and installs it. Override with env vars:
+# checksum, and installs it. The default installs riku; --rk installs the rk
+# laptop client instead. Override with env vars:
 #   RIKU_VERSION      release tag to install (default: latest)
 #   RIKU_INSTALL_DIR  install directory (default: ~/.local/bin, or
 #                     /usr/local/bin when running as root)
-#   RIKU_NO_INIT=1    skip the post-install `riku init` hint
+#   RIKU_NO_INIT=1    skip the post-install next-step hint
 set -eu
 
 REPO="dreygur/riku"
@@ -17,6 +19,15 @@ VERSION="${RIKU_VERSION:-latest}"
 say()  { printf '%s\n' "$*"; }
 err()  { printf 'error: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
+
+bin="riku"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --rk) bin="rk" ;;
+    *)    err "unknown argument '$1'" ;;
+  esac
+  shift
+done
 
 # --- detect platform ---------------------------------------------------------
 os="$(uname -s)"
@@ -39,7 +50,7 @@ if [ "$os" = "macos" ] && [ "$arch" = "armv7" ]; then
   err "no macOS build for armv7"
 fi
 
-asset="riku-${os}-${arch}.tar.gz"
+asset="${bin}-${os}-${arch}.tar.gz"
 
 if [ "$VERSION" = "latest" ]; then
   base="https://github.com/${REPO}/releases/latest/download"
@@ -73,7 +84,7 @@ say "-----> Downloading $asset ($VERSION)..."
 download "${base}/${asset}" "${tmp}/${asset}" \
   || err "download failed: ${base}/${asset}"
 
-if download "${base}/riku-${os}-${arch}.sha256" "${tmp}/sum" 2>/dev/null; then
+if download "${base}/${bin}-${os}-${arch}.sha256" "${tmp}/sum" 2>/dev/null; then
   say "-----> Verifying checksum..."
   expected="$(awk '{print $1}' "${tmp}/sum")"
   if have sha256sum; then
@@ -91,13 +102,13 @@ else
   say " !     no checksum published for $asset; skipping verification"
 fi
 
-say "-----> Installing to ${install_dir}/riku..."
+say "-----> Installing to ${install_dir}/${bin}..."
 tar -xzf "${tmp}/${asset}" -C "$tmp"
 mkdir -p "$install_dir"
-mv "${tmp}/riku" "${install_dir}/riku"
-chmod +x "${install_dir}/riku"
+mv "${tmp}/${bin}" "${install_dir}/${bin}"
+chmod +x "${install_dir}/${bin}"
 
-say "✓ riku installed: ${install_dir}/riku"
+say "✓ ${bin} installed: ${install_dir}/${bin}"
 
 # --- next steps --------------------------------------------------------------
 case ":${PATH}:" in
@@ -108,8 +119,15 @@ esac
 
 if [ "${RIKU_NO_INIT:-0}" != "1" ]; then
   say ""
-  say "Next: initialize the server"
-  say "  ${install_dir}/riku init"
-  say "Then scaffold and deploy your first app:"
-  say "  ${install_dir}/riku quickstart"
+  if [ "$bin" = "rk" ]; then
+    say "Next: add a server"
+    say "  ${install_dir}/rk server add myserver riku@your-server-ip"
+    say "Then run a command on it:"
+    say "  ${install_dir}/rk -s myserver apps"
+  else
+    say "Next: initialize the server"
+    say "  ${install_dir}/riku init"
+    say "Then scaffold and deploy your first app:"
+    say "  ${install_dir}/riku quickstart"
+  fi
 fi

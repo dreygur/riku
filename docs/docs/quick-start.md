@@ -225,6 +225,21 @@ admin login (`--admin root@your-server-ip`) and run `riku dashboard -s
 edge`. An existing entry has no way to be edited: remove it and add it
 again.
 
+### Using `rk` instead
+
+`rk` is a small client that only talks to servers, so it is the lighter install
+for a laptop. Install it and register the server:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh -s -- --rk
+rk server add edge riku@your-server-ip
+rk -s edge ps myapp
+```
+
+`rk` never runs server code and has no `--local`. Without a selected server it
+exits with `no server selected; add one with rk server add <name> <user@host>,
+or pass -s <name>`. See [The rk Client](cli.md#the-rk-client).
+
 Servers set up with an older riku need their deploy keys migrated first. See
 [Upgrading existing servers](cli.md#upgrading-existing-servers). The full
 rules are in [Remote Servers](cli.md#remote-servers).

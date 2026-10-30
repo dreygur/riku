@@ -190,6 +190,48 @@ Update the server binary before forwarding from a new laptop binary as well.
 Older servers reject the hidden `--app-hint` option that carries the app from
 your git remote, so those commands fail until the server is updated.
 
+## The `rk` Client
+
+`rk` runs riku commands on your servers from your laptop. Start with:
+
+```bash
+rk server add edge riku@edge.example
+rk -s edge apps
+```
+
+`rk` is a separate, smaller binary. It parses the same commands as `riku`, but
+it never runs server code: every server command is sent over ssh to the
+`riku` installed on the server. It runs only these commands itself: `server`,
+`plugin` (client plugins), `quickstart`, `help`, and `dashboard -s <name>`,
+which tunnels to the server's dashboard.
+
+Install it with the install script, which fetches `rk-<os>-<arch>.tar.gz` from
+the release and checks its `.sha256`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh -s -- --rk
+```
+
+The server is chosen as in [Choosing the server](#choosing-the-server), minus
+the last rule: `rk` has no `--local` and never falls back to this machine. When
+no server is selected it stops with:
+
+```
+no server selected; add one with rk server add <name> <user@host>, or pass -s <name>
+```
+
+Commands that only make sense on the server (`init`, `supervisor` and the
+hidden internal commands) are refused with `run it with riku on the server`.
+`container` and `plugins keygen|sign|scaffold` are refused with `run it with
+the full riku binary`.
+
+The server list is the same file `riku server` uses, `servers.toml` under
+`$XDG_CONFIG_HOME/riku/`, so both binaries share it. Client plugins live in
+`~/.riku/client-plugins`.
+
+`riku` keeps working as before: with `-s`, a repo remote or a default server it
+forwards over ssh, and without one it runs the command on the current machine.
+
 ## Application Management
 
 ### `riku apps`
