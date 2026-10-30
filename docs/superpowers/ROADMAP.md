@@ -16,6 +16,15 @@ work they describe.
 - Owner rules for agents: no python, perl or other script interpreters for
   reading or editing files; no AI attribution in commits; follow
   `.claude/CLAUDE.md`.
+- Implementers and reviewers run on Claude (Sonnet by default, Opus for
+  reviews of trust boundaries and the final review), not through agy, which
+  was too slow here.
+- The owner's real servers, organisation and projects are confidential. The
+  repository is public. Never write their names in code, tests, docs, commit
+  messages or PR text; use neutral names (`edge`, `prod`, `edge.example`,
+  `myapp`). Tell every subagent this rule, and search the diff before every
+  commit and push. Ask the owner for the names to search for; they are not
+  written down anywhere.
 
 ## Status
 
@@ -46,14 +55,31 @@ work they describe.
   strict build passes. The supervisor there still runs the old binary
   until `riku.service` restarts.
 
-### Phase 2: container services foundations (after phase 1)
+### Phase 2: container services foundations (next)
 
-- Spec `specs/2026-10-30-container-services-design.md` (owner decisions
-  recorded, no open questions). Plan not written yet: write it after phase 1
-  lands, because phase 1 moves the files it would name.
-- Planned as four parallel tracks in separate worktrees after one small shared
-  types task: A engine driver, B compose reader, C routing plan for nginx,
-  Caddy and router plugins, D riku file sync.
+- Spec `specs/2026-10-30-container-services-design.md`, plan
+  `plans/2026-10-30-container-foundations.md` (owner answered its three
+  open questions on 2026-10-30; recorded in its Global Constraints).
+- How the owner wants it run (agreed 2026-10-30):
+  1. First, as its own small fix on `feat/caddy-router`: confirm with a
+     failing test, then fix, the suspected nginx bug:
+     `templates/nginx_https_only.conf.tera:1-3` writes the upstream socket
+     path without the `unix:` prefix, and
+     `crates/riku-nginx/src/template.rs:107-117` picks the HTTPS only
+     template before the port map, so an HTTPS only Procfile web app may
+     proxy to the wrong upstream. Not yet checked against real nginx.
+  2. Task 0 on a new branch `feat/container-foundations` off
+     `feat/caddy-router`, reviewed before anything else starts.
+  3. Tracks A, B, C, D at the same time, each in its own worktree from Task
+     0; tasks inside a track in order, a review after each. Reviews: Opus
+     for tracks A (engine argv) and D (sync receiver is a trust boundary),
+     Sonnet for B, C and Task 0. At most 4 agents at a time.
+  4. Merge the tracks into `feat/container-foundations` (only `Cargo.lock`
+     should conflict), final whole branch review on Opus, gate.
+  5. Ask the owner before merging into `feat/caddy-router`, pushing, or
+     touching the test server (engine detection and a sync round trip into
+     a temporary directory there).
+- Task status: not started.
 
 ### Phase 3: container integration (after phase 2)
 
