@@ -19,65 +19,19 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
-use serde::Serialize;
 
 use crate::config::router::Router;
 use crate::config::RikuPaths;
-use crate::plugins::{bundles, router};
 use crate::util::backend::Backend;
 use crate::util::domain::parse_domains;
 use crate::util::flag::https_only;
 use crate::util::route_plan::{HttpsPolicy, RoutePlan};
 
 mod caddy;
+mod plugin;
 
 use caddy::configure_caddy;
-
-/// The request handed to a router plugin's `configure` verb (one JSON line on
-/// stdin). Mirrors `PLUGIN_PROTOCOL.md` §6.2.
-#[derive(Serialize)]
-struct ConfigureRequest {
-    app: String,
-    domains: Vec<String>,
-    upstream_port: u16,
-    https: bool,
-}
-
-#[allow(clippy::question_mark)]
-fn configure_plugin(
-    name: &str,
-    app: &str,
-    env: &HashMap<String, String>,
-    paths: &RikuPaths,
-) -> Result<()> {
-    let (bundle, manifest) = match bundles::find_router(&paths.plugin_root, name) {
-        Some(found) => found,
-        None => return Err(anyhow!("router plugin '{name}' not installed")),
-    };
-
-    let request = ConfigureRequest {
-        app: app.to_string(),
-        domains: domains_from_env(env),
-        upstream_port: upstream_port_from_env(env),
-        https: https_only(env),
-    };
-    let request = match serde_json::to_value(&request) {
-        Ok(value) => value,
-        Err(e) => return Err(anyhow!("failed to encode router request: {e}")),
-    };
-
-    if let Err(e) = router::run_verb(
-        paths,
-        &bundle,
-        &manifest,
-        "configure",
-        Some(app),
-        Some(&request),
-    ) {
-        return Err(e);
-    }
-    router::run_verb(paths, &bundle, &manifest, "reload", None, None)
-}
+use plugin::{configure_plugin, remove_plugin};
 
 /// Configure the active router so `app` is reachable.
 ///
@@ -110,18 +64,6 @@ pub fn configure(
     }
 }
 
-fn remove_plugin(name: &str, app: &str, paths: &RikuPaths) -> Result<()> {
-    let (bundle, manifest) = match bundles::find_router(&paths.plugin_root, name) {
-        Some(found) => found,
-        None => return Ok(()),
-    };
-
-    if let Err(e) = router::run_verb(paths, &bundle, &manifest, "unconfigure", Some(app), None) {
-        tracing::warn!(router = %name, "unconfigure failed, relying on reload: {e}");
-    }
-    router::run_verb(paths, &bundle, &manifest, "reload", None, None)
-}
-
 /// Remove `app` from the active router.
 ///
 /// nginx removal is built-in. For a plugin router this dispatches `unconfigure`
@@ -146,19 +88,6 @@ pub fn remove(app: &str, paths: &RikuPaths) -> Result<()> {
     }
 }
 
-/// Domains for the app, parsed from `RIKU_DOMAINS` (space/comma separated).
-fn domains_from_env(env: &HashMap<String, String>) -> Vec<String> {
-    env.get("RIKU_DOMAINS")
-        .map(|s| {
-            s.split([',', ' '])
-                .map(str::trim)
-                .filter(|d| !d.is_empty())
-                .map(String::from)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
 /// The app's upstream port: `RIKU_UPSTREAM_PORT`, then `PORT`, default 8080.
 fn upstream_port_from_env(env: &HashMap<String, String>) -> u16 {
     env.get("RIKU_UPSTREAM_PORT")
@@ -175,7 +104,6 @@ fn env_backends(env: &HashMap<String, String>) -> Vec<Backend> {
 
 /// The routing plan for an app, built from its ENV. A malformed
 /// `RIKU_DOMAINS` is an error, so nothing unvalidated reaches a router.
-#[allow(clippy::question_mark)]
 fn route_plan(env: &HashMap<String, String>) -> Result<RoutePlan> {
     let raw = env
         .get("RIKU_DOMAINS")
@@ -183,7 +111,7 @@ fn route_plan(env: &HashMap<String, String>) -> Result<RoutePlan> {
         .unwrap_or_default();
     let domains = match parse_domains(raw) {
         Ok(domains) => domains,
-        Err(e) => return Err(e),
+        Err(e) => return Err(anyhow!("invalid RIKU_DOMAINS: {e}")),
     };
     let https = if https_only(env) {
         HttpsPolicy::Only

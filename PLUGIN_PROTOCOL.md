@@ -173,16 +173,48 @@ chosen by the `<riku root>/ROUTER` file (`nginx`, `caddy`, or a router plugin
 name; written by `RIKU_ROUTER=<name> riku init`; default `nginx`). nginx and
 Caddy are built in; this seam is for third party routers.
 
-| Verb          | Input (stdin JSON)                                 | Output           |
-| ------------- | -------------------------------------------------- | ---------------- |
-| `configure`   | `{app, domains, upstream_port, https, …}`          | writes config    |
-| `unconfigure` | -                                                  | drops app config |
-| `reload`      | -                                                  | reloads router   |
+| Verb          | Input (stdin JSON)                                      | Output           |
+| ------------- | ------------------------------------------------------- | ---------------- |
+| `configure`   | `{protocol, app, domains, https, backends}`             | writes config    |
+| `unconfigure` | -                                                       | drops app config |
+| `reload`      | -                                                       | reloads router   |
+
+A `configure` request looks like this. `https` is true when the app is
+HTTPS only. `backends` lists every copy of the routed service, and the router
+balances across all of them. A backend is either `{"kind":"tcp","host":...,
+"port":...}` or `{"kind":"unix","path":...}`.
+
+```json
+{"protocol":2,"app":"shop","domains":["shop.example.com"],"https":true,"backends":[{"kind":"tcp","host":"127.0.0.1","port":5001},{"kind":"unix","path":"/srv/riku/nginx/shop.sock"}]}
+```
+
+Router protocol 2 replaces protocol 1, which sent one `upstream_port`. A
+router plugin declares the protocol it speaks in its manifest:
+
+```toml
+[router]
+protocol = 2
+graceful_reload = true
+```
+
+A router plugin with no `[router]` table, or a `protocol` other than 2, is
+refused before any verb runs, with the message `router plugin '<name>' speaks
+router protocol <n>; this riku needs protocol 2`. A plugin without the table
+counts as protocol 1.
+
+`graceful_reload` defaults to false. Set it to true only when `reload` swaps
+configuration without dropping connections that are in flight. A router that
+does not say so is treated as not graceful, and riku will not drain old copies
+behind it during a rolling deploy.
+
+`domains` come from `RIKU_DOMAINS` after validation. An invalid value fails the
+deploy before the plugin is called.
 
 Owns its config directory. Env: `RIKU_APP` (for `configure`/`unconfigure`),
 `RIKU_ROOT`. `unconfigure` was added within API v1; the kernel treats a
 non-zero exit as "not implemented" and falls back to a plain `reload`, so older
-routers keep working.
+routers keep working. This holds for any protocol version, so an old plugin can
+still be unconfigured.
 
 ## 7. Event bus _(new)_
 

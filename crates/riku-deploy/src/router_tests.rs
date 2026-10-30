@@ -8,13 +8,6 @@ pub(super) fn env(pairs: &[(&str, &str)]) -> HashMap<String, String> {
 }
 
 #[test]
-fn domains_split_on_space_and_comma() {
-    let e = env(&[("RIKU_DOMAINS", "a.com, b.com  c.com")]);
-    assert_eq!(domains_from_env(&e), vec!["a.com", "b.com", "c.com"]);
-    assert!(domains_from_env(&env(&[])).is_empty());
-}
-
-#[test]
 fn route_plan_carries_domains_policy_and_the_env_backend() {
     let e = env(&[
         ("RIKU_DOMAINS", "shop.example.com"),

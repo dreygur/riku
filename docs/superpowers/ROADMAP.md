@@ -99,7 +99,7 @@ work they describe.
 
 - C1 RoutePlan and Caddy rendering: done
 - C2 nginx upstream from backends: done
-- C3 Router plugin protocol 2: pending
+- C3 Router plugin protocol 2: done
 
 - D1 Crate, wire types and manifest scan: pending
 - D2 Transfer plan, bundle and verified apply: pending
