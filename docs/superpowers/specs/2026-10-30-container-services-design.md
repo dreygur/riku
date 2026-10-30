@@ -207,18 +207,21 @@ It is file level, not block level: a changed file moves whole. A compiled
 binary that changes every build moves every deploy, compressed. The size
 cost of this code in the binaries is measured when built.
 
-## Open questions for the owner
+## Ports and workers (owner decisions 2026-10-30)
 
-1. Published ports. Riku gives each copy of an HTTP service its own
-   127.0.0.1 port. What counts as the HTTP port of a service (a label, or the
-   first published port of the service with domains), and what happens to a
-   published non HTTP port on an unscaled service, for example a database's
-   `5432:5432`: kept on all interfaces as compose does today, moved to
-   127.0.0.1, or dropped? This affects a private compose app.
-2. Singleton workers. During a rolling deploy two copies briefly run. A
-   scheduler (a Procfile `cron` worker, celery beat) would fire jobs twice.
-   Should non web workers stop first, then start, or should services be
-   marked singleton?
+1. Published ports bind to 127.0.0.1 by default, so a database's
+   `5432:5432` is no longer reachable from outside the server. A service is
+   exposed on all interfaces only when its compose file opts in with the label
+   `riku.public: "true"`. The routed HTTP port is the published port of the
+   service that has the app's domains; a `riku.http: "<port>"` label picks it
+   when that is ambiguous, and an ambiguous service without the label is a
+   deploy error. Nothing on a private compose app needs outside access other
+   than through the router (owner).
+2. Services that are not routed (workers, schedulers) are replaced stop
+   first during a rolling deploy: the old copy stops, then the new one
+   starts, with no overlap, so scheduled jobs never fire twice. Only routed
+   web copies overlap. A few seconds' pause in background work during a
+   deploy is accepted (owner).
 
 ## Builder questions settled by the designer
 
