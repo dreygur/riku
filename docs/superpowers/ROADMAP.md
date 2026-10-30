@@ -113,28 +113,21 @@ work they describe.
 
 ### Phase 3: container integration (next)
 
-- Same spec. Supervisor runs containers, rolling replacement, compose
-  migration, per copy ports for Procfile apps, state API and dashboard rows,
-  CLI scale and logs, `rk deploy --build`. Mostly sequential; dashboard and
-  CLI tasks in parallel once the state API exists.
-- How to start (fresh session): work on `feat/caddy-router` (phase 2 merged
-  at 10e956b, local only, not pushed). No plan exists yet: write
-  `plans/<date>-container-integration.md` from the spec with
-  superpowers:writing-plans, folding in every duty below, then ask the owner
-  any open questions before running it the same way as phase 2 (implementer
-  per task, review after each, Opus for trust boundaries and the final
-  review). Ask the owner before pushing, merging elsewhere or touching the
-  test server; ask for the confidential names before the first commit.
+- Same spec, split in two plans (owner, 2026-10-31). 3a server side: plan
+  `plans/2026-10-30-container-integration.md` (owner approved), 16 tasks,
+  run like phase 2 on a branch `feat/container-integration` off
+  `feat/caddy-router`. 3b `rk deploy --build` and riku-sync wiring: no plan
+  yet, written after 3a. Owner decisions for 3a are in its Global
+  Constraints. Ask the owner before pushing, merging elsewhere or touching
+  the test server; ask for the confidential names before the first commit.
+- 3a task status: none started.
+- Docs tunnel fix (first small item): done.
 - Phase 2 run ledger with every ruling, owner decision and about 60 deferred
   minor findings (several name phase 3 work):
   `.superpowers/sdd/2026-10-30-container-foundations/progress.md` (git
   ignored, this machine only). Read its "minor (deferred)", "Owner decided"
   and "Phase 3 note" lines while writing the plan.
-- Small first item: `docs/docs/dashboard.md:30` and `docs/docs/plugins.md`
-  (the `ssh -N -L` rows) say to tunnel through the deploy key, which has
-  always had `no-port-forwarding`. Document the admin login form instead
-  (`ssh -t -L 8088:127.0.0.1:8088 admin@edge.example sudo -u riku -H riku
-  dashboard`, owner confirmed it works) or `rk dashboard`.
+- Duties from phase 2, each owned by a 3a task unless marked 3b:
 - Compose migration duty from B4: a `Declared` project name (compose `name`,
   `COMPOSE_PROJECT_NAME`, the directory of a `COMPOSE_FILE` below the app
   root, or an app name that normalisation changes, such as `Shop` or `sh.op`)
@@ -142,7 +135,7 @@ work they describe.
   normalised (`Shop`, `sh.op` and `shop` all compare as `shop`) or its
   existing volumes lack the matching compose project label, and only then may
   `ComposeProject::confirm_declared_name` be called.
-- Sync receive runs under a process level deadline; a stalled client is killed
+- (3b) Sync receive runs under a process level deadline; a stalled client is killed
   so the app's sync lock is released.
 - Before `run`, a container that already has the name but a different
   `riku.app` label is refused with a clear message (names can collide across
@@ -152,9 +145,9 @@ work they describe.
 - The bind source symlink walk is repeated at container start.
 - Each copy's host port is stored (as a label) so backends can be rebuilt
   after a supervisor restart.
-- The sync size limit and free space margin (`ReceiveLimits`) are wired to a
+- (3b) The sync size limit and free space margin (`ReceiveLimits`) are wired to a
   server setting.
-- The ssh sync entry point logs the refusal cause `receive` returns.
+- (3b) The ssh sync entry point logs the refusal cause `receive` returns.
 
 ### Phase 4: one rk managing many servers
 
