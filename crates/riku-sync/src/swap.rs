@@ -102,9 +102,12 @@ pub(crate) fn swap_in(live: &Path, staging: &Path) -> anyhow::Result<()> {
         ));
     }
     if had_live {
-        // The swap is done. A failure here only leaves a parked copy that the
-        // next apply removes in `recover`.
-        let _ = remove_tree(&parked);
+        if let Err(e) = remove_tree(&parked) {
+            tracing::warn!(
+                "sync swapped in, but cannot remove {}: {e}; the next sync removes it",
+                parked.display()
+            );
+        }
     }
     Ok(())
 }

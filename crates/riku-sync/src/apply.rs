@@ -5,11 +5,12 @@
 //! error before the swap removes staging and leaves `live` as it was.
 
 use crate::check::wanted_sizes;
+use crate::lock::acquire;
 use crate::receive::receive_bundle;
 use crate::staging::Staging;
 use crate::swap::{recover, remove_tree, sibling, swap_in, STAGING_SUFFIX};
 use crate::wire::{EntryKind, Manifest, TransferPlan};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::Path;
 
@@ -19,12 +20,22 @@ use std::path::Path;
 /// `bundle` is the zstd compressed tar made by `write_bundle` for `plan.need`.
 /// A missing `live` is valid (first sync). Leftovers of an interrupted earlier
 /// apply are cleaned up first.
+///
+/// Everything in `live` that the manifest does not list is removed at the swap,
+/// so state the running app writes must live outside the synced directory.
+///
+/// An exclusive lock on `<live>.sync-lock` is held throughout; a second apply to
+/// the same `live` fails at once instead of waiting.
 pub fn apply(
     live: &Path,
     manifest: &Manifest,
     plan: &TransferPlan,
     bundle: impl Read,
 ) -> anyhow::Result<()> {
+    let _lock = match acquire(live) {
+        Ok(lock) => lock,
+        Err(e) => return Err(e),
+    };
     let wanted = match wanted_sizes(manifest, plan) {
         Ok(wanted) => wanted,
         Err(e) => return Err(e),
@@ -95,9 +106,18 @@ fn fill_and_verify(
             }
         }
     }
-    Ok(())
+    let listed: HashSet<&str> = manifest
+        .entries
+        .iter()
+        .map(|entry| entry.path.as_str())
+        .collect();
+    staging.ensure_only(&listed)
 }
 
 #[cfg(test)]
 #[path = "apply_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "apply_hostile_tests.rs"]
+mod hostile_tests;

@@ -1878,6 +1878,7 @@ dependencies = [
  "sha2",
  "tar",
  "tempfile",
+ "tracing",
  "zstd",
 ]
 

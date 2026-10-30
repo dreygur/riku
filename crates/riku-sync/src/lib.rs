@@ -19,8 +19,10 @@ pub mod plan;
 pub mod scan;
 pub mod wire;
 
+mod capped;
 mod check;
 mod guard;
+mod lock;
 mod receive;
 mod staging;
 mod swap;

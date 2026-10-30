@@ -5,10 +5,17 @@
 //! are created with `create_new`, so an existing path or a symlink at the
 //! target is never opened. Symlinks from the manifest are created as links and
 //! their targets are never resolved or read.
+//!
+//! Residual risk: the checks are path based (check, then open), so a process
+//! running as the same user that can write inside staging or live could swap a
+//! directory for a symlink between the check and the write. Staging is private
+//! to a locked apply and only this process writes there, so this needs a local
+//! attacker with the receiver's own uid, who could edit live directly anyway.
 
 use crate::guard::{ensure_real_dirs, real_file};
 use crate::scan::hash_file;
 use crate::wire::RelPath;
+use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::os::unix::fs::PermissionsExt;
@@ -98,6 +105,12 @@ impl Staging {
         }
     }
 
+    /// Fails if staging holds any path not in `listed`, so nothing outside the
+    /// manifest can reach live.
+    pub(crate) fn ensure_only(&self, listed: &HashSet<&str>) -> anyhow::Result<()> {
+        audit_dir(&self.root, "", listed)
+    }
+
     /// Checks size and SHA-256 of a staged file against the manifest, then sets
     /// its mode. A malformed `sha256` never equals a computed hex digest.
     pub(crate) fn verify(
@@ -134,3 +147,51 @@ impl Staging {
         }
     }
 }
+
+fn audit_dir(dir: &Path, prefix: &str, listed: &HashSet<&str>) -> anyhow::Result<()> {
+    let items = match fs::read_dir(dir) {
+        Ok(items) => items,
+        Err(e) => {
+            return Err(anyhow::anyhow!(
+                "cannot read staging {}: {e}",
+                dir.display()
+            ))
+        }
+    };
+    for item in items {
+        let item = match item {
+            Ok(item) => item,
+            Err(e) => {
+                return Err(anyhow::anyhow!(
+                    "cannot list staging {}: {e}",
+                    dir.display()
+                ))
+            }
+        };
+        let name = item.file_name().to_string_lossy().into_owned();
+        let rel = if prefix.is_empty() {
+            name
+        } else {
+            format!("{prefix}/{name}")
+        };
+        if !listed.contains(rel.as_str()) {
+            return Err(anyhow::anyhow!(
+                "staging holds {rel:?}, which the manifest does not list"
+            ));
+        }
+        let is_dir = match item.file_type() {
+            Ok(kind) => kind.is_dir(),
+            Err(e) => return Err(anyhow::anyhow!("cannot stat staging {rel:?}: {e}")),
+        };
+        if is_dir {
+            if let Err(e) = audit_dir(&item.path(), &rel, listed) {
+                return Err(e);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "staging_tests.rs"]
+mod tests;

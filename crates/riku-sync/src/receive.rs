@@ -4,15 +4,28 @@
 //! checked as [`RelPath`]s; the tar is never unpacked by the tar library. An
 //! entry must be a regular file that the plan asked for, seen once, and is
 //! written with at most its manifest size plus one byte read. Anything else
-//! aborts the whole transfer. Trailing data after the archive is bounded and the
+//! aborts the whole transfer.
+//!
+//! Memory and decompression bounds: the tar library reads GNU long name, long
+//! link, pax and sparse headers whole into memory before any check here runs, so
+//! the decompressed stream is capped at the wanted sizes plus per entry slack
+//! ([`ENTRY_SLACK`]) plus end blocks and record padding ([`END_SLACK`]); crossing
+//! the cap is an error. The zstd window is limited to [`WINDOW_LOG_MAX`]. The
 //! compressed frame must end cleanly, so a cut stream is an error.
 
+use crate::capped::CappedReader;
 use crate::staging::Staging;
 use crate::wire::RelPath;
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Read};
 
-const TRAILER_LIMIT: u64 = 1 << 20;
+/// Header block, data padding and long name slack allowed per wanted file.
+const ENTRY_SLACK: u64 = 1536;
+/// Two end blocks plus padding to a 10 KiB tar record, rounded up.
+const END_SLACK: u64 = 16 * 1024;
+/// `write_bundle` compresses at level 3, which uses a 2 MiB window (log 21).
+/// 23 leaves headroom for other zstd encoders and caps decoder memory at 8 MiB.
+const WINDOW_LOG_MAX: u32 = 23;
 
 /// Writes every file in `bundle` into `staging`. `wanted` maps each requested
 /// path to its manifest size; every one must arrive.
@@ -21,11 +34,21 @@ pub(crate) fn receive_bundle(
     wanted: &HashMap<&str, u64>,
     bundle: impl Read,
 ) -> anyhow::Result<()> {
-    let decoder = match zstd::Decoder::new(bundle) {
+    let mut decoder = match zstd::Decoder::new(bundle) {
         Ok(decoder) => decoder,
         Err(e) => return Err(anyhow::anyhow!("bundle is not a zstd stream: {e}")),
     };
-    let mut archive = tar::Archive::new(decoder);
+    if let Err(e) = decoder.window_log_max(WINDOW_LOG_MAX) {
+        return Err(anyhow::anyhow!("cannot limit the zstd window: {e}"));
+    }
+    let payload: u64 = wanted
+        .values()
+        .fold(0, |sum, size| sum.saturating_add(*size));
+    let slack = ENTRY_SLACK
+        .saturating_mul(wanted.len() as u64)
+        .saturating_add(END_SLACK);
+    let capped = CappedReader::new(decoder, payload.saturating_add(slack));
+    let mut archive = tar::Archive::new(capped);
     let mut arrived: HashSet<String> = HashSet::new();
     {
         let entries = match archive.entries() {
@@ -100,10 +123,7 @@ fn store_entry(
 }
 
 fn drain_trailer(mut rest: impl Read) -> anyhow::Result<()> {
-    match io::copy(&mut (&mut rest).take(TRAILER_LIMIT + 1), &mut io::sink()) {
-        Ok(read) if read > TRAILER_LIMIT => {
-            Err(anyhow::anyhow!("bundle has data after the archive"))
-        }
+    match io::copy(&mut rest, &mut io::sink()) {
         Ok(_) => Ok(()),
         Err(e) => Err(anyhow::anyhow!("bundle stream is damaged: {e}")),
     }
