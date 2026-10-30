@@ -10,7 +10,7 @@
 //! is why [`ProjectNameSource`] exists.
 
 use super::order::start_order;
-use super::project_name::resolve_project_name;
+use super::project_name::{project_name_for_app, resolve_project_name};
 use super::volume_decl::parse_volume_decls;
 use super::{parse_service, read_raw, BuildDef, ComposeFile, ServiceContext, ServiceDef};
 use crate::types::{RestartPolicy, ServiceName, StopSignal, DEFAULT_STOP_GRACE};
@@ -144,9 +144,18 @@ pub fn read_project(
     })
 }
 
-/// The project for an app that has a Dockerfile and no compose file: one
-/// service `app` built from the app directory, publishing no ports.
-pub fn single_image_project(app_path: &Path, dockerfile: &Path) -> ComposeProject {
+/// The project for the riku app `app` when it has a Dockerfile and no compose
+/// file: one service `app` built from the app directory, publishing no ports.
+/// The project name is the app's own name, so two apps never share one.
+pub fn single_image_project(
+    app: &str,
+    app_path: &Path,
+    dockerfile: &Path,
+) -> Result<ComposeProject> {
+    let project_name = match project_name_for_app(app) {
+        Ok(name) => name,
+        Err(e) => return Err(e),
+    };
     let name = ServiceName::try_from("app").expect("'app' is a valid service name");
     let service = ServiceDef {
         name,
@@ -170,13 +179,13 @@ pub fn single_image_project(app_path: &Path, dockerfile: &Path) -> ComposeProjec
         working_dir: None,
         user: None,
     };
-    ComposeProject {
+    Ok(ComposeProject {
         services: vec![service],
         volumes: BTreeMap::new(),
-        project_name: "app".to_string(),
+        project_name,
         name_source: ProjectNameSource::Derived,
         warnings: Vec::new(),
-    }
+    })
 }
 
 /// The engine name an existing compose project gave the volume `key`, so a

@@ -1,6 +1,6 @@
 use super::*;
 use crate::compose::test_support::project_of;
-use crate::types::ServiceName;
+use crate::types::{Protocol, ServiceName};
 
 fn service(name: &str) -> ServiceName {
     ServiceName::try_from(name).unwrap()
@@ -46,6 +46,8 @@ services:
     let routed = routed_http(&project).unwrap().expect("one port is routed");
     assert_eq!(routed.service, service("web"));
     assert_eq!(routed.container_port, 80);
+    assert_eq!(routed.protocol, Protocol::Tcp);
+    assert_eq!(routed.host_port, Some(8080));
 }
 
 #[test]
@@ -161,6 +163,20 @@ services:
         message.contains("9000") && message.contains("not routed HTTP"),
         "{message}"
     );
+}
+
+#[test]
+fn extra_binding_on_the_routed_container_port_blocks_scaling() {
+    for extra in ["9090:80/udp", "9091:80"] {
+        let text = format!(
+            "services:\n  web:\n    image: app\n    labels: {{riku.http: \"8080\"}}\n    ports: [\"8080:80\", \"{extra}\"]\n"
+        );
+        let message = scale_error(&text, "web", 3);
+        assert!(
+            message.contains("web") && message.contains("not routed HTTP"),
+            "binding {extra} should block scaling: {message}"
+        );
+    }
 }
 
 #[test]

@@ -2,14 +2,39 @@
 //! how each is replaced during a deploy.
 
 use super::{ComposeProject, ServiceDef};
-use crate::types::{labels, Mount, MountSource, PortBinding, ServiceName};
+use crate::types::{labels, Mount, MountSource, PortBinding, Protocol, ServiceName};
 use anyhow::{anyhow, bail, Result};
 
-/// The service and container port that carry the app's HTTP traffic.
+/// The one port binding that carries the app's HTTP traffic.
+///
+/// `container_port`, `protocol` and `host_port` are copied from that binding
+/// of the compose file, so a later step can tell it from any other binding of
+/// the service and replace its host port per copy.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RoutedPort {
     pub service: ServiceName,
     pub container_port: u16,
+    pub protocol: Protocol,
+    /// The host port the compose file gave, `None` when the engine picks it.
+    pub host_port: Option<u16>,
+}
+
+impl RoutedPort {
+    fn new(service: &ServiceDef, binding: &PortBinding) -> RoutedPort {
+        RoutedPort {
+            service: service.name.clone(),
+            container_port: binding.container_port,
+            protocol: binding.protocol,
+            host_port: binding.host_port,
+        }
+    }
+
+    fn is(&self, service: &ServiceName, binding: &PortBinding) -> bool {
+        &self.service == service
+            && self.container_port == binding.container_port
+            && self.protocol == binding.protocol
+            && self.host_port == binding.host_port
+    }
 }
 
 /// How a service is swapped for its new version during a rolling deploy.
@@ -61,10 +86,7 @@ fn route_from_label(service: &ServiceDef) -> Result<RoutedPort> {
         );
     };
     match service.ports.iter().find(|b| b.host_port == Some(port)) {
-        Some(binding) => Ok(RoutedPort {
-            service: service.name.clone(),
-            container_port: binding.container_port,
-        }),
+        Some(binding) => Ok(RoutedPort::new(service, binding)),
         None => bail!(
             "service '{}': label {} is {port}, which is not one of its published ports",
             service.name,
@@ -81,10 +103,7 @@ fn route_without_label(project: &ComposeProject) -> Result<Option<RoutedPort>> {
         .collect();
     match ports.as_slice() {
         [] => Ok(None),
-        [(service, binding)] => Ok(Some(RoutedPort {
-            service: service.name.clone(),
-            container_port: binding.container_port,
-        })),
+        [(service, binding)] => Ok(Some(RoutedPort::new(service, binding))),
         several => {
             let listed: Vec<String> = several
                 .iter()
@@ -96,6 +115,13 @@ fn route_without_label(project: &ComposeProject) -> Result<Option<RoutedPort>> {
                 labels::HTTP
             )
         }
+    }
+}
+
+fn protocol_name(protocol: Protocol) -> &'static str {
+    match protocol {
+        Protocol::Tcp => "tcp",
+        Protocol::Udp => "udp",
     }
 }
 
@@ -136,13 +162,21 @@ pub fn check_scale(project: &ComposeProject, service: &ServiceName, copies: u32)
         Err(e) => return Err(e),
     };
     for binding in &def.ports {
-        let is_routed = routed
-            .as_ref()
-            .is_some_and(|r| &r.service == service && r.container_port == binding.container_port);
+        let shares_container_port = def
+            .ports
+            .iter()
+            .filter(|other| other.container_port == binding.container_port)
+            .count()
+            > 1;
+        let is_routed = binding.protocol == Protocol::Tcp
+            && !shares_container_port
+            && routed.as_ref().is_some_and(|r| r.is(service, binding));
         if !is_routed {
             bail!(
-                "service '{service}' publishes port {}, which is not routed HTTP; only routed HTTP services can scale",
-                published(binding)
+                "service '{service}' publishes port {} ({}/{}), which is not routed HTTP; only routed HTTP services can scale",
+                published(binding),
+                binding.container_port,
+                protocol_name(binding.protocol)
             );
         }
     }

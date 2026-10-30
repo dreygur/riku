@@ -59,6 +59,12 @@ pub(super) fn resolve_project_name(
     checked(normalise(&dir), &dir, "compose directory name").map(|n| (n, source))
 }
 
+/// The project name for an app with no compose file: its riku app name,
+/// normalised and checked like every other project name.
+pub(super) fn project_name_for_app(app: &str) -> Result<String> {
+    checked(normalise(app), app, "app name")
+}
+
 fn normalise(raw: &str) -> String {
     raw.to_lowercase()
         .chars()

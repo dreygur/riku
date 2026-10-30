@@ -172,8 +172,37 @@ services:
 }
 
 #[test]
+fn debug_output_never_shows_environment_or_build_arg_values() {
+    let app = TestApp::new("myapp");
+    app.write(
+        "compose.yaml",
+        "
+services:
+  web:
+    build:
+      context: .
+      args: {TOKEN: build-secret-value}
+    environment: {DB_PASSWORD: env-secret-value}
+",
+    );
+
+    let project = app.read(None, &[]).unwrap();
+    let shown = format!("{project:?}");
+
+    assert!(
+        shown.contains("DB_PASSWORD"),
+        "names should be listed: {shown}"
+    );
+    assert!(
+        !shown.contains("env-secret-value") && !shown.contains("build-secret-value"),
+        "Debug leaked a secret value: {shown}"
+    );
+}
+
+#[test]
 fn dockerfile_app_is_one_service_named_app() {
-    let project = single_image_project(Path::new("/srv/myapp"), Path::new("Dockerfile"));
+    let project =
+        single_image_project("myapp", Path::new("/srv/myapp"), Path::new("Dockerfile")).unwrap();
 
     assert_eq!(project.services.len(), 1);
     let service = &project.services[0];
@@ -182,4 +211,15 @@ fn dockerfile_app_is_one_service_named_app() {
     assert_eq!(build.context, Path::new("/srv/myapp"));
     assert_eq!(build.dockerfile.as_deref(), Some(Path::new("Dockerfile")));
     assert!(service.ports.is_empty());
+}
+
+#[test]
+fn dockerfile_apps_get_project_names_of_their_own() {
+    let dockerfile = Path::new("Dockerfile");
+    let first = single_image_project("myapp", Path::new("/srv/myapp"), dockerfile).unwrap();
+    let second = single_image_project("shop", Path::new("/srv/shop"), dockerfile).unwrap();
+
+    assert_eq!(first.project_name(), "myapp");
+    assert_ne!(first.project_name(), second.project_name());
+    assert!(single_image_project("-bad", Path::new("/srv/x"), dockerfile).is_err());
 }
