@@ -8,9 +8,13 @@ repository = "https://github.com/dreygur/riku"
 license = "MIT"
 
 [dependencies]
+tempfile = { workspace = true }
 riku-config = { path = "../riku-config" }
 riku-util = { path = "../riku-util" }
+riku-args = { path = "../riku-args" }
+riku-remote = { path = "../riku-remote" }
 riku-nginx = { path = "../riku-nginx" }
+riku-caddy = { path = "../riku-caddy" }
 riku-plugins = { path = "../riku-plugins" }
 riku-supervisor = { path = "../riku-supervisor" }
 riku-deploy = { path = "../riku-deploy" }
@@ -24,9 +28,9 @@ chrono = { workspace = true }
 colored = { workspace = true }
 dirs = "7"
 glob = { workspace = true }
+shlex = { workspace = true }
 reqwest = { workspace = true }
-nix = { workspace = true, features = ["signal", "process", "user", "fs"] }
+nix = { workspace = true, features = ["signal", "process", "user", "fs", "term"] }
 which = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }

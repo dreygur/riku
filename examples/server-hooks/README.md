@@ -36,14 +36,14 @@ running), but a non-zero exit is still recorded in the logs.
 
 Every hook receives the following variables:
 
-| Variable        | Description                                      | Example                          |
-|-----------------|--------------------------------------------------|----------------------------------|
-| `RIKU_APP`      | Application name                                 | `myapp`                          |
-| `RIKU_HOOK`     | Hook name                                        | `pre-deploy`                     |
-| `RIKU_APP_PATH` | Path to the checked-out source code              | `/home/deploy/.riku/apps/myapp`  |
-| `RIKU_ENV_PATH` | Path to the app's env directory                  | `/home/deploy/.riku/envs/myapp`  |
-| `RIKU_ROOT`     | Riku root directory                              | `/home/deploy/.riku`             |
-| `RIKU_RUNTIME`  | Detected runtime (empty in `pre-deploy`)         | `Python`                         |
+| Variable                | Description                                      | Example                          |
+|-------------------------|--------------------------------------------------|----------------------------------|
+| `RIKU_APP`              | Application name                                 | `myapp`                          |
+| `RIKU_HOOK`             | Hook name                                        | `pre-deploy`                     |
+| `RIKU_APP_PATH`         | Path to the checked-out source code              | `/home/riku/.riku/apps/myapp`  |
+| `RIKU_ENV_PATH`         | Path to the app's env directory                  | `/home/riku/.riku/envs/myapp`  |
+| `RIKU_ROOT`             | Riku root directory                              | `/home/riku/.riku`             |
+| `RIKU_DETECTED_RUNTIME` | Detected runtime (empty in `pre-deploy`)         | `Python`                         |
 
 All variables from the app's `ENV` file are also passed through, so
 `DATABASE_URL`, `SECRET_KEY`, etc. are available directly.

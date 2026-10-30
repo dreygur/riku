@@ -35,10 +35,8 @@
 //! | `post-build`   | `riku-post-build`   | After build, before workers start  |
 //! | `post-deploy`  | `riku-post-deploy`  | After workers are started          |
 
-/// The plugin protocol version this kernel implements. Set in every plugin
-/// invocation's environment as `RIKU_PLUGIN_API` and stamped into every event
-/// envelope. See `PLUGIN_PROTOCOL.md` §2.
-pub const RIKU_PLUGIN_API: u32 = 1;
+pub use riku_bundle::manifest;
+pub use riku_bundle::RIKU_PLUGIN_API;
 
 // Dependency crates aliased as their former module names so internal
 // `crate::config::` / `crate::util::` / `crate::error::` paths resolve.
@@ -56,7 +54,6 @@ pub mod hooks;
 pub mod install;
 pub mod lockfile;
 pub mod manager;
-pub mod manifest;
 pub mod marketplace;
 pub mod plugin_data;
 pub mod router;

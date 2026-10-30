@@ -11,6 +11,7 @@ pub mod maintenance;
 
 use anyhow::Result;
 use notify::{RecursiveMode, Watcher};
+use riku_config::router::Router;
 use std::collections::HashMap;
 use std::fs;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -53,6 +54,8 @@ pub struct Supervisor {
     pub(super) stats_file: std::path::PathBuf,
     pub(super) pid_file: std::path::PathBuf,
     pub(super) control_token_file: std::path::PathBuf,
+    /// `<riku root>/ROUTER`, read on every SIGHUP to pick the router reload.
+    pub(super) router_file: std::path::PathBuf,
     pub(super) last_stats_write: std::time::SystemTime,
     pub(super) stats_write_interval: Duration,
     pub(super) cron_scheduler: CronScheduler,
@@ -250,6 +253,21 @@ impl Supervisor {
         Ok(())
     }
 
+    /// Refresh the router's config too, so a SIGHUP-triggered reload
+    /// reconciles both halves of "live config" together. `nginx -s reload` is
+    /// itself graceful (finishes in-flight connections on old workers), so
+    /// this never drops traffic for unaffected apps either.
+    fn reload_router(&self) {
+        match Router::load_file(&self.router_file) {
+            Ok(Router::Nginx) => {
+                crate::nginx::reload_nginx();
+            }
+            // The riku-caddy.path unit reloads Caddy; a router plugin reloads itself.
+            Ok(Router::Caddy | Router::Plugin(_)) => {}
+            Err(e) => tracing::error!("not reloading the router: {e}"),
+        }
+    }
+
     /// Reload all worker configs if a SIGHUP was received since the last
     /// check. Uses `swap` to atomically get-and-reset the counter, so a
     /// signal delivered between ticks is never lost.
@@ -268,12 +286,7 @@ impl Supervisor {
                 return Err(e);
             }
 
-            // Refresh nginx's routing config too, so a SIGHUP-triggered
-            // reload reconciles both halves of "live config" together.
-            // `nginx -s reload` is itself graceful (finishes in-flight
-            // connections on old workers), so this never drops traffic
-            // for unaffected apps either.
-            crate::nginx::reload_nginx();
+            self.reload_router();
         }
         Ok(())
     }

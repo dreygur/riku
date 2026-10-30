@@ -19,16 +19,18 @@ export interface Worker {
   cpu_time_ms: number;
 }
 
-export interface NginxState {
-  config_exists: boolean;
-  enabled: boolean;
-}
+// Mirrors `RouteState` in crates/riku-cli/src/apps/dump_state/route.rs.
+export type RouteState =
+  | { router: "nginx"; config_exists: boolean; enabled: boolean }
+  | { router: "caddy"; site: string | null }
+  | { router: "plugin"; name: string }
+  | { router: "unknown"; error: string };
 
 export interface AppState {
   app: string;
   deploy_lock: string; // "held" | "free"
-  routing: Record<string, string>; // NGINX_SERVER_NAME, NGINX_HTTPS_ONLY, ...
-  nginx: NginxState;
+  routing: Record<string, string>; // RIKU_DOMAINS, RIKU_HTTPS_ONLY, ...
+  route: RouteState;
   workers: Worker[];
 }
 
@@ -101,6 +103,25 @@ export interface TrustKey {
   pubkey: string;
 }
 
-export const domainOf = (a: AppState) => a.routing?.NGINX_SERVER_NAME;
-export const httpsOf = (a: AppState) => Boolean(a.routing?.NGINX_HTTPS_ONLY);
+export const domainOf = (a: AppState) => a.routing?.RIKU_DOMAINS;
+// Same on values as `riku_util::flag::is_on`; anything else, "false" included, is off.
+const ON_VALUES = ["1", "true", "yes", "on"];
+export const httpsOf = (a: AppState) =>
+  ON_VALUES.includes((a.routing?.RIKU_HTTPS_ONLY ?? "").trim().toLowerCase());
+// The app card badge: router name plus whether its config is serving.
+export function routeBadge(route: RouteState): { label: string; live: boolean } {
+  switch (route.router) {
+    case "nginx":
+      return {
+        label: `nginx ${route.enabled ? "live" : route.config_exists ? "staged" : "off"}`,
+        live: route.enabled,
+      };
+    case "caddy":
+      return { label: `caddy ${route.site ? "live" : "off"}`, live: route.site !== null };
+    case "plugin":
+      return { label: route.name, live: true };
+    case "unknown":
+      return { label: "router unreadable", live: false };
+  }
+}
 export const isBusy = (a: AppState) => (a.deploy_lock || "").toLowerCase() === "held";

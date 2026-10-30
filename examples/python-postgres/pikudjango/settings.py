@@ -25,7 +25,7 @@ SECRET_KEY = 'eu0^r0ilw-vkeh&n6%4mdkz0b+#e@tw1orypf)lcw5=#!z(6j1'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = [os.environ.get("NGINX_SERVER_NAME", "")]
+ALLOWED_HOSTS = [os.environ.get("RIKU_DOMAINS", "")]
 
 
 # Application definition
@@ -80,7 +80,7 @@ DATABASES = {
     }
 }
 
-DB = os.environ.get("NGINX_SERVER_NAME", None)
+DB = os.environ.get("RIKU_DOMAINS", None)
 if DB:
     DATABASES["default"]["ENGINE"] = 'django.db.backends.postgresql_psycopg2'
     DATABASES["default"]["NAME"] = DB

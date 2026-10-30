@@ -23,6 +23,9 @@
 
 use colored::Colorize;
 
+/// The prefix of a deploy step line, Heroku style.
+const ARROW: &str = "-----> ";
+
 /// Build a formatted table from headers and rows.
 pub fn format_table(headers: &[&str], rows: &[Vec<String>], column_spacing: usize) -> String {
     if headers.is_empty() {
@@ -138,16 +141,34 @@ pub fn blank() {
 /// - Errors: " !     " prefix, red, stderr
 pub fn echo(msg: &str, color: &str) {
     match color {
-        "green" => println!("-----> {}", msg.green()),
-        "yellow" => eprintln!(" !     {}", msg.yellow()),
-        "red" => eprintln!(" !     {}", msg.red()),
+        "green" => println!("{ARROW}{}", without_arrow(msg).green()),
+        "yellow" => eprintln!(" !     {}", without_arrow(msg).yellow()),
+        "red" => eprintln!(" !     {}", without_arrow(msg).red()),
         _ => println!("{}", msg),
     }
+}
+
+/// `msg` without a leading [`ARROW`]. Many callers write one into the text
+/// themselves, and the colored styles add their own prefix.
+fn without_arrow(msg: &str) -> &str {
+    msg.strip_prefix(ARROW).unwrap_or(msg)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_message_that_already_has_the_arrow_gets_only_one() {
+        assert_eq!(
+            without_arrow("-----> Deploying app 'shop'"),
+            "Deploying app 'shop'"
+        );
+        assert_eq!(
+            without_arrow("Deploying app 'shop'"),
+            "Deploying app 'shop'"
+        );
+    }
 
     #[test]
     fn test_format_table_empty_headers_returns_empty() {

@@ -1,7 +1,7 @@
 //! Individual diagnostic checks for `riku doctor`.
 //!
 //! Every function is **read-only**: it inspects the host (PATH, filesystem,
-//! `systemctl`/`nginx` status) and reports, but never mutates Riku state.
+//! `systemctl` status) and reports, but never mutates Riku state.
 //! Each returns one or more [`Check`] results carrying a remediation hint on
 //! anything that is not [`Status::Ok`].
 
@@ -9,16 +9,15 @@ use std::process::Command;
 
 use nix::sys::statvfs::statvfs;
 
+use crate::config::router::Router;
 use crate::config::RikuPaths;
+
+use crate::util::authorized_keys::RIKU_KEY_MARKER;
 
 use super::Check;
 
-/// `command="FINGERPRINT=...` prefix that `setup_authorized_keys` writes for
-/// every riku deploy key: used to distinguish riku keys from unrelated ones.
-const RIKU_KEY_MARKER: &str = "FINGERPRINT=";
-
-/// External tools Riku relies on: git is required, nginx and systemd are
-/// strongly recommended but Riku degrades gracefully without them.
+/// External tools Riku relies on: git is required, systemd is strongly
+/// recommended. The router binary is checked by [`super::router_check`].
 pub fn dependencies() -> Vec<Check> {
     let mut out = Vec::new();
 
@@ -28,15 +27,6 @@ pub fn dependencies() -> Vec<Check> {
         out.push(Check::fail(
             "git",
             "not found: git is required (apt install git)",
-        ));
-    }
-
-    if which::which("nginx").is_ok() {
-        out.push(Check::ok("nginx", "found on PATH"));
-    } else {
-        out.push(Check::warn(
-            "nginx",
-            "not found: web serving disabled (apt install nginx)",
         ));
     }
 
@@ -53,15 +43,21 @@ pub fn dependencies() -> Vec<Check> {
 }
 
 /// Verify the `~/.riku/` directory tree exists. A missing tree almost always
-/// means `riku init` has not been run.
+/// means `riku init` has not been run. The router directory follows the
+/// `ROUTER` file; a read error there is reported by the router check, so
+/// this one falls back to the nginx directory.
 pub fn directories(paths: &RikuPaths) -> Check {
+    let router_dir = match Router::load(paths) {
+        Ok(Router::Caddy) => ("caddy", paths.caddy_root.as_path()),
+        _ => ("nginx", paths.nginx_root.as_path()),
+    };
     let dirs: [(&str, &std::path::Path); 8] = [
         ("apps", &paths.app_root),
         ("data", &paths.data_root),
         ("envs", &paths.env_root),
         ("repos", &paths.git_root),
         ("logs", &paths.log_root),
-        ("nginx", &paths.nginx_root),
+        router_dir,
         ("plugins", &paths.plugin_root),
         ("workers-enabled", &paths.workers_enabled),
     ];
@@ -85,16 +81,20 @@ pub fn directories(paths: &RikuPaths) -> Check {
     }
 }
 
-/// Confirm the riku binary is reachable on PATH and installed where the
-/// git post-receive hook expects it (`~/.local/bin/riku`).
+/// Confirm the riku binary is installed where the git post-receive hook
+/// expects it (`~/.local/bin/riku`), and say whether a shell finds it.
+///
+/// PATH is informational only: hooks and the systemd unit run the binary by
+/// its full path, and `ssh riku@host doctor` always runs with sshd's
+/// default PATH, which never has `~/.local/bin`.
 pub fn binary() -> Vec<Check> {
     let mut out = Vec::new();
 
     match which::which("riku") {
         Ok(p) => out.push(Check::ok("riku on PATH", p.display().to_string())),
-        Err(_) => out.push(Check::warn(
+        Err(_) => out.push(Check::ok(
             "riku on PATH",
-            "not on PATH: add ~/.local/bin to PATH",
+            "not on this PATH; hooks and services use the full path",
         )),
     }
 
@@ -146,44 +146,6 @@ pub fn systemd_service() -> Check {
         "supervisor service",
         "riku.service not active, start with: systemctl --user start riku",
     )
-}
-
-/// Validate the generated nginx configuration via `nginx -t`. Skipped (empty
-/// result) when nginx is absent: `dependencies` already reports that.
-pub fn nginx() -> Vec<Check> {
-    if which::which("nginx").is_err() {
-        return Vec::new();
-    }
-
-    match Command::new("nginx").arg("-t").output() {
-        Ok(o) if o.status.success() => vec![Check::ok("nginx config", "nginx -t passed")],
-        Ok(o) => {
-            let stderr = String::from_utf8_lossy(&o.stderr);
-            // Without root, `nginx -t` cannot read its config and fails on a
-            // permission error rather than an actual config problem.
-            if stderr.to_lowercase().contains("permission denied") {
-                vec![Check::warn(
-                    "nginx config",
-                    "cannot validate without root, re-run: sudo riku doctor",
-                )]
-            } else {
-                let last = stderr
-                    .lines()
-                    .rev()
-                    .find(|l| !l.trim().is_empty())
-                    .unwrap_or("invalid configuration")
-                    .trim();
-                vec![Check::fail(
-                    "nginx config",
-                    format!("nginx -t failed: {last}"),
-                )]
-            }
-        }
-        Err(e) => vec![Check::warn(
-            "nginx config",
-            format!("could not run nginx -t: {e}"),
-        )],
-    }
 }
 
 /// Count installed runtime plugins. Zero usually means `install-plugins`

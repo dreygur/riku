@@ -119,15 +119,17 @@ pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
     let env_file = paths.env_root.join(app).join("ENV");
     let mut env: HashMap<String, String> = HashMap::new();
     if env_file.exists() {
-        crate::util::parse_settings(&env_file, &mut env)?;
+        if let Err(e) = crate::util::parse_settings(&env_file, &mut env) {
+            return Err(anyhow::anyhow!(
+                "failed to read {}: {e}",
+                env_file.display()
+            ));
+        }
     }
 
     // Configure the active router (built-in nginx, or a router plugin)
     if let Err(e) = crate::router::configure(app, &app_path, &env, paths) {
-        echo(
-            &format!("Warning: Failed to configure router: {}", e),
-            "yellow",
-        );
+        return Err(anyhow::anyhow!("failed to configure router: {e}"));
     }
 
     // Ensure supervisor is running, start if not

@@ -28,11 +28,11 @@ fn test_address_defaults_applied_when_env_empty() {
     let mut ctx = tera::Context::new();
     insert_address_context(&mut ctx, &env, &paths, "myapp", &app_path);
 
-    assert_eq!(ctx_str(&ctx, "BIND_ADDRESS"), "127.0.0.1");
-    assert_eq!(ctx_str(&ctx, "NGINX_IPV4_ADDRESS"), "0.0.0.0");
-    assert_eq!(ctx_str(&ctx, "NGINX_IPV6_ADDRESS"), "[::]");
+    assert_eq!(ctx_str(&ctx, "RIKU_BIND_ADDRESS"), "127.0.0.1");
+    assert_eq!(ctx_str(&ctx, "RIKU_NGINX_IPV4_ADDRESS"), "0.0.0.0");
+    assert_eq!(ctx_str(&ctx, "RIKU_NGINX_IPV6_ADDRESS"), "[::]");
     assert!(ctx
-        .get("NGINX_SERVER_NAME")
+        .get("RIKU_DOMAINS")
         .unwrap()
         .to_string()
         .contains("myapp"));
@@ -43,12 +43,12 @@ fn test_address_custom_bind_address_used() {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
     let mut env = HashMap::new();
-    env.insert("BIND_ADDRESS".to_string(), "10.0.0.5".to_string());
+    env.insert("RIKU_BIND_ADDRESS".to_string(), "10.0.0.5".to_string());
 
     let mut ctx = tera::Context::new();
     insert_address_context(&mut ctx, &env, &paths, "app", &tmp.path().join("app"));
 
-    assert_eq!(ctx_str(&ctx, "BIND_ADDRESS"), "10.0.0.5");
+    assert_eq!(ctx_str(&ctx, "RIKU_BIND_ADDRESS"), "10.0.0.5");
 }
 
 #[test]
@@ -56,12 +56,12 @@ fn test_address_disable_ipv6_clears_ipv6_address() {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
     let mut env = HashMap::new();
-    env.insert("DISABLE_IPV6".to_string(), "true".to_string());
+    env.insert("RIKU_DISABLE_IPV6".to_string(), "true".to_string());
 
     let mut ctx = tera::Context::new();
     insert_address_context(&mut ctx, &env, &paths, "app", &tmp.path().join("app"));
 
-    assert_eq!(ctx_str(&ctx, "NGINX_IPV6_ADDRESS"), "");
+    assert_eq!(ctx_str(&ctx, "RIKU_NGINX_IPV6_ADDRESS"), "");
 }
 
 #[test]
@@ -69,12 +69,12 @@ fn test_address_disable_ipv6_with_one_value() {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
     let mut env = HashMap::new();
-    env.insert("DISABLE_IPV6".to_string(), "1".to_string());
+    env.insert("RIKU_DISABLE_IPV6".to_string(), "1".to_string());
 
     let mut ctx = tera::Context::new();
     insert_address_context(&mut ctx, &env, &paths, "app", &tmp.path().join("app"));
 
-    assert_eq!(ctx_str(&ctx, "NGINX_IPV6_ADDRESS"), "");
+    assert_eq!(ctx_str(&ctx, "RIKU_NGINX_IPV6_ADDRESS"), "");
 }
 
 // insert_portmap_context
@@ -85,8 +85,8 @@ fn test_portmap_defaults_to_80_and_8080() {
     let mut ctx = tera::Context::new();
     insert_portmap_context(&mut ctx, &env);
 
-    assert_eq!(ctx_str(&ctx, "NGINX_EXTERNAL_PORT"), "80");
-    assert_eq!(ctx_str(&ctx, "NGINX_INTERNAL_PORT"), "8080");
+    assert_eq!(ctx_str(&ctx, "RIKU_NGINX_EXTERNAL_PORT"), "80");
+    assert_eq!(ctx_str(&ctx, "RIKU_UPSTREAM_PORT"), "8080");
 }
 
 #[test]
@@ -97,19 +97,19 @@ fn test_portmap_port_env_var_used_as_internal_port() {
     let mut ctx = tera::Context::new();
     insert_portmap_context(&mut ctx, &env);
 
-    assert_eq!(ctx_str(&ctx, "NGINX_INTERNAL_PORT"), "5000");
+    assert_eq!(ctx_str(&ctx, "RIKU_UPSTREAM_PORT"), "5000");
 }
 
 #[test]
 fn test_portmap_explicit_internal_port_overrides_port() {
     let mut env = HashMap::new();
     env.insert("PORT".to_string(), "5000".to_string());
-    env.insert("NGINX_INTERNAL_PORT".to_string(), "9000".to_string());
+    env.insert("RIKU_UPSTREAM_PORT".to_string(), "9000".to_string());
 
     let mut ctx = tera::Context::new();
     insert_portmap_context(&mut ctx, &env);
 
-    assert_eq!(ctx_str(&ctx, "NGINX_INTERNAL_PORT"), "9000");
+    assert_eq!(ctx_str(&ctx, "RIKU_UPSTREAM_PORT"), "9000");
 }
 
 // insert_cache_context
@@ -123,9 +123,9 @@ fn test_cache_defaults_inserted() {
     let mut ctx = tera::Context::new();
     insert_cache_context(&mut ctx, &env, &paths, "app");
 
-    assert!(ctx.get("NGINX_CACHE_SIZE").is_some());
-    assert!(ctx.get("NGINX_CACHE_TIME").is_some());
-    assert!(ctx.get("NGINX_CACHE_PATH").is_some());
+    assert!(ctx.get("RIKU_NGINX_CACHE_SIZE").is_some());
+    assert!(ctx.get("RIKU_NGINX_CACHE_TIME").is_some());
+    assert!(ctx.get("RIKU_NGINX_CACHE_PATH").is_some());
 }
 
 // insert_include_file
@@ -140,14 +140,14 @@ fn test_include_file_within_app_dir_is_inserted() {
     let paths = make_paths(&tmp);
     let mut env = HashMap::new();
     env.insert(
-        "NGINX_INCLUDE_FILE".to_string(),
+        "RIKU_NGINX_INCLUDE_FILE".to_string(),
         "nginx_extra.conf".to_string(),
     );
 
     let mut ctx = tera::Context::new();
     insert_include_file(&mut ctx, &env, &app_path, &paths);
 
-    let val = ctx.get("NGINX_INCLUDE_CONTENT").unwrap().to_string();
+    let val = ctx.get("RIKU_NGINX_INCLUDE_CONTENT").unwrap().to_string();
     assert!(val.contains("proxy_read_timeout"));
 }
 
@@ -161,7 +161,7 @@ fn test_include_file_outside_app_dir_is_rejected() {
     let mut env = HashMap::new();
     // Path traversal attempt
     env.insert(
-        "NGINX_INCLUDE_FILE".to_string(),
+        "RIKU_NGINX_INCLUDE_FILE".to_string(),
         "../secret.conf".to_string(),
     );
 
@@ -170,7 +170,7 @@ fn test_include_file_outside_app_dir_is_rejected() {
 
     // The key is always present (so templates never see an undefined
     // variable), but a rejected traversal attempt leaves it empty.
-    assert_eq!(ctx_str(&ctx, "NGINX_INCLUDE_CONTENT"), "");
+    assert_eq!(ctx_str(&ctx, "RIKU_NGINX_INCLUDE_CONTENT"), "");
 }
 
 #[test]
@@ -208,6 +208,6 @@ fn test_include_file_content_runs_through_the_filter_chain() {
     let mut ctx = tera::Context::new();
     insert_include_file(&mut ctx, &env, &app_path, &paths);
 
-    let val = ctx.get("NGINX_INCLUDE_CONTENT").unwrap().to_string();
+    let val = ctx.get("RIKU_NGINX_INCLUDE_CONTENT").unwrap().to_string();
     assert!(val.contains("augmented"), "got: {val}");
 }

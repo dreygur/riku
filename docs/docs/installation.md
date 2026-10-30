@@ -14,14 +14,35 @@ chmod +x riku
 ./riku init
 
 # Create deploy user
-sudo adduser --disabled-password --gecos '' deploy
-sudo su - deploy
+sudo adduser --disabled-password --gecos '' riku
+sudo su - riku
 
 # Add your SSH public key
 cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
 ```
 
 After running `riku init`, the binary will be installed to `~/.local/bin/riku` and you can use `riku` from anywhere.
+
+## The rk laptop client
+
+`rk` is a separate binary for your laptop (Linux or macOS). It runs riku commands on your servers over ssh and never runs server code. The server still needs the full `riku` from the steps above.
+
+Install it with the install script and the `--rk` flag:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh -s -- --rk
+```
+
+The script downloads the release asset `rk-<os>-<arch>.tar.gz`, checks it against the release `.sha256` when one is published, and installs to `~/.local/bin` (or `/usr/local/bin` as root). `RIKU_INSTALL_DIR` and `RIKU_VERSION` override the directory and release tag. Without `--rk` the same script installs `riku`.
+
+First use:
+
+```bash
+rk server add myserver riku@your-server-ip
+rk -s myserver apps
+```
+
+See [The rk client](cli.md#the-rk-client) for the full description.
 
 ## Installation Methods
 
@@ -82,20 +103,27 @@ sudo chmod +x /usr/local/bin/riku
 
 ### Step 4: Create Deploy User
 
-Riku requires a separate user account. The default is `deploy`, but you can use any username:
+Riku runs as a separate user account, `riku` by default. A root `sudo riku init` creates it when it is missing. To set up as that user yourself instead:
 
 ```bash
-# Default: deploy user
-sudo adduser --disabled-password --gecos '' deploy
-sudo su - deploy
-
-# Or use a custom username
 sudo adduser --disabled-password --gecos '' riku
 sudo su - riku
-export RIKU_USER=riku  # Tell riku to use this username
+
+# Or a custom username
+sudo adduser --disabled-password --gecos '' deployer
+sudo su - deployer
+export RIKU_USER=deployer  # Tell riku to use this username
 ```
 
 If using a custom username, set `RIKU_USER` before running `riku init` so systemd services are configured correctly.
+
+App repos start on `main`. Init writes that as `init.defaultBranch` in the deploy user's `~/.gitconfig`, so push the branch with that name. For another branch, run init with `RIKU_DEFAULT_BRANCH`:
+
+```bash
+sudo RIKU_DEFAULT_BRANCH=master riku init
+```
+
+Without `RIKU_DEFAULT_BRANCH`, init keeps a default branch the deploy user already set. Repos created before the change keep the branch they started with.
 
 ### Step 5: Initialize Riku
 
@@ -129,7 +157,7 @@ ssh-keygen -t ed25519 -C "riku@your-email.com"
 Copy your public key to the server:
 
 ```bash
-ssh-copy-id deploy@your-server
+ssh-copy-id riku@your-server
 ```
 
 Or manually add it on the server:
@@ -167,8 +195,8 @@ cargo build --release
 sudo cp target/release/riku /usr/local/bin/
 
 # Create user
-sudo adduser --disabled-password --gecos '' deploy
-sudo su - deploy
+sudo adduser --disabled-password --gecos '' riku
+sudo su - riku
 
 # Initialize
 riku init
@@ -193,8 +221,8 @@ cargo build --release
 sudo cp target/release/riku /usr/local/bin/
 
 # Create user
-sudo adduser -m deploy
-sudo su - deploy
+sudo adduser -m riku
+sudo su - riku
 
 # Initialize
 riku init
@@ -213,8 +241,8 @@ cargo build --release
 sudo cp target/release/riku /usr/local/bin/
 
 # Create user
-sudo useradd -m deploy
-sudo su - deploy
+sudo useradd -m riku
+sudo su - riku
 
 # Initialize
 riku init
@@ -267,12 +295,12 @@ git init
 
 # Create a simple app
 echo 'web: python3 -m http.server $PORT' > Procfile
-echo 'NGINX_SERVER_NAME=test.example.com' > ENV
+echo 'RIKU_DOMAINS=test.example.com' > ENV
 
 # Commit and deploy
 git add .
 git commit -m "test"
-git remote add riku deploy@your-server:test-app
+git remote add riku riku@your-server:test-app
 git push riku main
 ```
 
@@ -311,7 +339,7 @@ sudo rm /usr/local/bin/riku
 rm -rf ~/.riku
 
 # Remove user (optional)
-sudo userdel -r deploy
+sudo userdel -r riku
 ```
 
 ## Troubleshooting
@@ -329,7 +357,7 @@ export PATH=$PATH:/usr/local/bin
 Make sure you're running as the deploy user:
 
 ```bash
-su - deploy
+su - riku
 ```
 
 ### Build fails

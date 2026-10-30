@@ -4,7 +4,7 @@ Documentation=https://dreygur.github.io/riku/
 PartOf=riku.service
 
 [Path]
-PathModified=/home/deploy/.riku/nginx
+PathModified=/home/riku/.riku/nginx
 Unit=riku-nginx-reload.service
 
 [Install]

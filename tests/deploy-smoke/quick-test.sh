@@ -50,8 +50,8 @@ EOF
 
 cat > ENV <<EOF
 RIKU_AUTO_RESTART=true
-BIND_ADDRESS=127.0.0.1
-NGINX_SERVER_NAME=${APP_NAME}.example.com
+RIKU_BIND_ADDRESS=127.0.0.1
+RIKU_DOMAINS=${APP_NAME}.example.com
 EOF
 
 cat > SCALING <<EOF
@@ -64,7 +64,7 @@ echo ""
 echo "To deploy:"
 echo "  cd $TEST_DIR"
 echo "  git init && git add . && git commit -m 'test'"
-echo "  git remote add riku deploy@your-server:$APP_NAME"
+echo "  git remote add riku riku@your-server:$APP_NAME"
 echo "  git push riku main"
 echo ""
 echo "To cleanup:"

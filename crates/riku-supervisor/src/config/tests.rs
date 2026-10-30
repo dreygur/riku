@@ -88,9 +88,9 @@ fn test_create_worker_config_with_riku_vars() {
     assert_eq!(config.options.grace_period, 60);
     assert_eq!(config.options.max_restarts, 10);
 
-    // BIND_ADDRESS should be added automatically
+    // RIKU_BIND_ADDRESS should be added automatically
     assert_eq!(
-        config.env.get("BIND_ADDRESS"),
+        config.env.get("RIKU_BIND_ADDRESS"),
         Some(&"127.0.0.1".to_string())
     );
 }

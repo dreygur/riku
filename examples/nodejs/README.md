@@ -13,7 +13,7 @@ git add .
 git commit -m "Initial commit"
 
 # Add your Riku server as remote
-git remote add riku deploy@your-server:nodejs-example
+git remote add riku riku@your-server:nodejs-example
 
 # Deploy
 git push riku main
@@ -33,7 +33,7 @@ riku config set nodejs-example NODE_ENV=production
 
 ```bash
 # Get the app URL (if domain is configured)
-riku config get nodejs-example NGINX_SERVER_NAME
+riku config get nodejs-example RIKU_DOMAINS
 
 # Or access via server IP
 curl http://your-server-ip

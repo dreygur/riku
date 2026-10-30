@@ -160,6 +160,10 @@ fn bearer(headers: &HeaderMap) -> Option<&str> {
 }
 
 #[cfg(test)]
+#[path = "index_tests.rs"]
+mod index_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::config::RikuPaths;

@@ -1,7 +1,7 @@
 server {
-  listen              {{ NGINX_IPV4_ADDRESS }}:80;
-  listen              {{ NGINX_IPV6_ADDRESS }}:80;
-  server_name         {{ NGINX_SERVER_NAME }};
+  listen              {{ RIKU_NGINX_IPV4_ADDRESS }}:80;
+  listen              {{ RIKU_NGINX_IPV6_ADDRESS }}:80;
+  server_name         {{ RIKU_DOMAINS }};
 
   location ^~ /.well-known/acme-challenge {
     allow all;

@@ -1,5 +1,5 @@
 /// Binary installation: install riku binary to user's PATH.
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use std::env;
 use std::fs;
 use std::io::Write;
@@ -8,11 +8,52 @@ use std::path::{Path, PathBuf};
 
 use crate::util::echo;
 
-/// Install riku binary to user's PATH
-pub fn install_riku_binary() -> Result<()> {
-    let current_exe = env::current_exe()?;
+/// Where riku installs itself, relative to the user's home. The git hook and
+/// the systemd unit run the binary from here.
+pub const INSTALL_DIR: &str = ".local/bin";
+/// The new binary's name in `INSTALL_DIR` until it is renamed into place.
+const STAGED_NAME: &str = ".riku.new";
+const BINARY_MODE: u32 = 0o755;
 
-    let target_dir = get_user_install_directory()?;
+/// Swap `target` for a copy of `source` by rename, never writing into
+/// `target`: a running supervisor holds it open, and Linux refuses writes
+/// to a busy executable (ETXTBSY). The old inode lives on until it exits.
+fn replace_binary(source: &Path, target: &Path) -> Result<()> {
+    let staged = target.with_file_name(STAGED_NAME);
+    if let Err(e) = fs::copy(source, &staged) {
+        return Err(anyhow!("failed to copy riku to {}: {e}", staged.display()));
+    }
+    if let Err(e) = fs::set_permissions(&staged, fs::Permissions::from_mode(BINARY_MODE)) {
+        return Err(anyhow!("failed to chmod {}: {e}", staged.display()));
+    }
+    if let Err(e) = fs::rename(&staged, target) {
+        return Err(anyhow!(
+            "failed to move riku into {}: {e}",
+            target.display()
+        ));
+    }
+    Ok(())
+}
+
+/// Whether install explains a missing PATH entry. A root init runs the
+/// deploy user's steps, and the note is for a person at that user's shell.
+pub enum PathNote {
+    Show,
+    Skip,
+}
+
+/// Install riku binary to user's PATH
+#[allow(clippy::question_mark)]
+pub fn install_riku_binary(note: PathNote) -> Result<()> {
+    let current_exe = match env::current_exe() {
+        Ok(exe) => exe,
+        Err(e) => return Err(anyhow!("failed to find the running riku binary: {e}")),
+    };
+
+    let target_dir = match get_user_install_directory() {
+        Ok(dir) => dir,
+        Err(e) => return Err(e),
+    };
     let target_path = target_dir.join("riku");
 
     // Already installed in correct location
@@ -21,18 +62,18 @@ pub fn install_riku_binary() -> Result<()> {
     }
 
     if !target_dir.exists() {
-        fs::create_dir_all(&target_dir)?;
+        if let Err(e) = fs::create_dir_all(&target_dir) {
+            return Err(anyhow!("failed to create {}: {e}", target_dir.display()));
+        }
     }
 
     echo(
         &format!("Installing riku to '{}'...", target_path.display()),
         "green",
     );
-    fs::copy(&current_exe, &target_path)?;
-
-    let mut perms = fs::metadata(&target_path)?.permissions();
-    perms.set_mode(0o755);
-    fs::set_permissions(&target_path, perms)?;
+    if let Err(e) = replace_binary(&current_exe, &target_path) {
+        return Err(e);
+    }
 
     echo(
         &format!("✓ Installed to {}", target_path.display()),
@@ -40,28 +81,35 @@ pub fn install_riku_binary() -> Result<()> {
     );
 
     if !is_in_path(&target_dir) {
-        echo("", "");
-        echo(
-            &format!("⚠ Note: {} is not in your PATH.", target_dir.display()),
-            "",
-        );
-
-        if !try_add_to_shell_config() {
-            echo(
-                "Add it manually to your shell config (~/.bashrc, ~/.zshrc):",
-                "",
-            );
-            echo("  export PATH=\"$HOME/.local/bin:$PATH\"", "");
+        let added = try_add_to_shell_config();
+        if matches!(note, PathNote::Show) {
+            print_path_note(&target_dir, &target_path, added);
         }
-
-        echo("", "");
-        echo("Or reload your shell, or use the full path:", "");
-        echo(&format!("  {}", target_path.display()), "");
-        echo("", "");
-        echo("After adding to PATH, run: exec $SHELL -l", "");
     }
 
     Ok(())
+}
+
+fn print_path_note(target_dir: &Path, target_path: &Path, added: bool) {
+    echo("", "");
+    echo(
+        &format!("Note: {} is not in your PATH.", target_dir.display()),
+        "",
+    );
+
+    if !added {
+        echo(
+            "Add it manually to your shell config (~/.bashrc, ~/.zshrc):",
+            "",
+        );
+        echo("  export PATH=\"$HOME/.local/bin:$PATH\"", "");
+    }
+
+    echo("", "");
+    echo("Or reload your shell, or use the full path:", "");
+    echo(&format!("  {}", target_path.display()), "");
+    echo("", "");
+    echo("After adding to PATH, run: exec $SHELL -l", "");
 }
 
 /// Attempt to add ~/.local/bin to shell config files; returns true if added.
@@ -119,7 +167,7 @@ fn append_once(path: &Path, line: &str, create: bool) -> bool {
 /// Get user-local installation directory (~/.local/bin)
 pub fn get_user_install_directory() -> Result<PathBuf> {
     if let Ok(home) = env::var("HOME") {
-        return Ok(PathBuf::from(&home).join(".local/bin"));
+        return Ok(PathBuf::from(&home).join(INSTALL_DIR));
     }
 
     if let Ok(cwd) = env::current_dir() {
@@ -140,3 +188,7 @@ pub fn is_in_path(dir: &Path) -> bool {
     }
     false
 }
+
+#[cfg(test)]
+#[path = "binary_tests.rs"]
+mod tests;

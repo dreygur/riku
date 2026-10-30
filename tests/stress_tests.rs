@@ -19,10 +19,11 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 #[cfg(target_os = "linux")]
 use std::path::PathBuf;
-use std::sync::{Arc, Barrier};
+use std::sync::{Arc, Barrier, RwLock};
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
+use riku::config::router::{self, Router};
 use riku::config::RikuPaths;
 use riku::error::DeployError;
 use riku::plugins::hooks::{HookContext, PluginHook};
@@ -32,8 +33,18 @@ use riku::plugins::runtime::{RuntimeContext, RuntimePlugin};
 #[cfg(target_os = "linux")]
 use riku::util::resource_limits::ResourceLimits;
 
+/// The fd table is process wide: a child forked by one test inherits the
+/// flock fd another test is holding and keeps it until it execs, so that
+/// lock can look held after its owner dropped it (see `riku-deploy` lock.rs).
+/// The test that asserts a lock is released takes `write()`; every test that
+/// spawns processes takes `read()`, so no fork overlaps that test.
+static FORK_GATE: RwLock<()> = RwLock::new(());
+
 /// Build a `RikuPaths` rooted inside `tmp` and create every directory
 /// `do_deploy` / `PluginManager` touch.
+///
+/// The host router is Caddy: with no `RIKU_DOMAINS` set, routing is a file
+/// removal, so deploys here need no `nginx` binary for `nginx -t`.
 fn make_paths(tmp: &TempDir) -> RikuPaths {
     let paths = RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
     for dir in &[
@@ -50,6 +61,7 @@ fn make_paths(tmp: &TempDir) -> RikuPaths {
     ] {
         fs::create_dir_all(dir).expect("create riku dir");
     }
+    router::save(&paths, &Router::Caddy).expect("write router file");
     paths
 }
 
@@ -89,10 +101,11 @@ esac
 /// #2 (the per-app `flock` in `deploy::lock`) doesn't touch.
 ///
 /// Without the lock, all five threads would race on `git_reset` (skipped
-/// here), worker TOML writes, and the ENV file's `NGINX_INTERNAL_PORT`
+/// here), worker TOML writes, and the ENV file's `RIKU_UPSTREAM_PORT`
 /// read-modify-write: exactly the corruption fix #2 closes off.
 #[test]
 fn test_concurrent_deploy_lockout() {
+    let _gate = FORK_GATE.read().unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     let paths = Arc::new(make_paths(&tmp));
 
@@ -178,6 +191,7 @@ fn test_concurrent_deploy_lockout() {
 /// released when `do_deploy` returns, not held forever.
 #[test]
 fn test_deploy_lock_released_after_completion() {
+    let _gate = FORK_GATE.write().unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
 
@@ -201,6 +215,7 @@ fn test_deploy_lock_released_after_completion() {
 /// the lock is keyed per app name, not global.
 #[test]
 fn test_concurrent_deploys_of_different_apps_do_not_contend() {
+    let _gate = FORK_GATE.read().unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     let paths = Arc::new(make_paths(&tmp));
     install_slow_mock_plugin(&paths, "python", "requirements.txt", "python app.py");
@@ -254,6 +269,7 @@ fn test_concurrent_deploys_of_different_apps_do_not_contend() {
 /// group leader and `killpg`s the whole group.
 #[test]
 fn test_plugin_process_group_reaping() {
+    let _gate = FORK_GATE.read().unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
 
@@ -381,6 +397,7 @@ esac
 #[cfg(target_os = "linux")]
 #[test]
 fn test_build_phase_memory_limit_chokes_runaway_allocation() {
+    let _gate = FORK_GATE.read().unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
 

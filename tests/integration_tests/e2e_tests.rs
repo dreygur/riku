@@ -25,6 +25,9 @@ mod tests {
     // -------------------------------------------------------------------------
 
     /// Build a `RikuPaths` rooted inside `tmp` and create all required directories.
+    ///
+    /// The host router is Caddy: with no `RIKU_DOMAINS` set, routing is a
+    /// file removal, so deploys here need no `nginx` binary for `nginx -t`.
     fn make_paths(tmp: &TempDir) -> riku::config::RikuPaths {
         let paths = riku::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
         for dir in &[
@@ -41,6 +44,8 @@ mod tests {
         ] {
             fs::create_dir_all(dir).expect("Failed to create riku dir");
         }
+        riku::config::router::save(&paths, &riku::config::router::Router::Caddy)
+            .expect("Failed to write router file");
         paths
     }
 
@@ -318,57 +323,64 @@ esac
     }
 
     // -------------------------------------------------------------------------
-    // Test 4: nginx config is created at the expected path after deploy
-    //
-    // `generate_nginx_config` calls `nginx -t` internally for validation, which
-    // requires nginx to be installed. Rather than depending on nginx, this test
-    // verifies the naming convention and path contract by writing the config
-    // file directly: the same file path that the real generator would produce.
-    // The template rendering itself is covered by the nginx unit tests.
+    // Test 4: the Caddy site file follows RIKU_DOMAINS across deploys
     // -------------------------------------------------------------------------
 
+    fn configure_route(
+        paths: &riku::config::RikuPaths,
+        app: &str,
+        domains: Option<&str>,
+    ) -> Result<()> {
+        let mut env = HashMap::new();
+        riku::util::parse_settings(&paths.env_root.join(app).join("ENV"), &mut env)
+            .expect("read app ENV");
+        if let Some(domains) = domains {
+            env.insert("RIKU_DOMAINS".to_string(), domains.to_string());
+        }
+        riku::deploy::router::configure(app, &paths.app_root.join(app), &env, paths)
+    }
+
     #[test]
-    fn test_deploy_creates_nginx_config() -> Result<()> {
-        let tmp = TempDir::new()?;
+    fn caddy_site_follows_domains() {
+        let tmp = TempDir::new().unwrap();
         let paths = make_paths(&tmp);
-
-        let app = "nginxapp";
+        let app = "shop";
         let app_dir = paths.app_root.join(app);
-        fs::create_dir_all(&app_dir)?;
-        fs::create_dir_all(paths.env_root.join(app))?;
-        fs::create_dir_all(paths.log_root.join(app))?;
+        fs::create_dir_all(&app_dir).unwrap();
+        fs::create_dir_all(paths.log_root.join(app)).unwrap();
+        fs::write(app_dir.join("Procfile"), "web: node server.js\n").unwrap();
+        riku::deploy::workers::create_workers_generic(app, &app_dir, &HashMap::new(), &paths, None)
+            .unwrap();
+        let site_file = paths.caddy_root.join("shop.caddy");
 
-        fs::write(app_dir.join("Procfile"), "web: node server.js\n")?;
-        fs::write(app_dir.join("package.json"), r#"{"name":"nginxapp"}"#)?;
-
-        // Create worker configs (simulate the deploy step)
-        let env: HashMap<String, String> = HashMap::new();
-        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
-
-        // Write the nginx config to the expected path, simulating what
-        // spawn_app → generate_nginx_config would produce.  The naming
-        // convention "{app}.conf" inside nginx_root is what we verify here.
-        let nginx_conf = paths.nginx_root.join(format!("{}.conf", app));
-        let config_content = format!(
-            "server {{\n    listen 80;\n    server_name {}.example.com;\n}}\n",
-            app
-        );
-        fs::write(&nginx_conf, &config_content)?;
-
-        // Assert the file exists at the correct path
+        configure_route(&paths, app, Some("shop.example.com")).unwrap();
+        let site = fs::read_to_string(&site_file).expect("site file written");
+        let mut env = HashMap::new();
+        riku::util::parse_settings(&paths.env_root.join(app).join("ENV"), &mut env).unwrap();
+        let upstream = format!("reverse_proxy 127.0.0.1:{}", env["RIKU_UPSTREAM_PORT"]);
+        assert!(site.contains("shop.example.com"), "{site}");
         assert!(
-            nginx_conf.exists(),
-            "nginx config must be created at nginx_root/{}.conf",
-            app
+            site.contains(&upstream),
+            "site should proxy to the worker port ({upstream}): {site}"
         );
 
-        let content = fs::read_to_string(&nginx_conf)?;
+        let err = configure_route(&paths, app, Some("a.com {"))
+            .expect_err("a domain with Caddyfile syntax must fail the deploy");
         assert!(
-            content.contains("nginxapp") || content.contains("server"),
-            "nginx config must contain app name or 'server'"
+            err.to_string().contains("a.com {"),
+            "error should name the value: {err}"
+        );
+        assert_eq!(
+            fs::read_to_string(&site_file).unwrap(),
+            site,
+            "a rejected domain must leave the previous site untouched"
         );
 
-        Ok(())
+        configure_route(&paths, app, None).unwrap();
+        assert!(
+            !site_file.exists(),
+            "dropping RIKU_DOMAINS must remove the stale site"
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -783,10 +795,14 @@ esac
 
         let plugins = riku::plugins::runtime::discover(plugin_tmp.path());
         let mut env = HashMap::new();
-        env.insert("RUNTIME".into(), "python".into());
+        env.insert("RIKU_RUNTIME".into(), "python".into());
 
         let result = riku::plugins::runtime::detect(&plugins, app_tmp.path(), &env)?;
-        assert_eq!(result.unwrap().name, "python", "RUNTIME= override must win");
+        assert_eq!(
+            result.unwrap().name,
+            "python",
+            "RIKU_RUNTIME= override must win"
+        );
         Ok(())
     }
 

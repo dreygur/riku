@@ -186,6 +186,18 @@
     - The fix is to make the test hermetic: give it its own temp dir, its own env scope, no dependency on run order or on what another test left behind. Serialize tests against shared state only as a last resort, and only for the specific tests that must share it
     - Banned as a "fix": `#[ignore]`-ing the test, adding a retry wrapper, loosening the assertion to stop noticing the divergence, or re-running until it's green and calling that resolved. A single green run does not prove a flake is fixed; if you suspect one is gone, run the suspect test repeatedly, including with a different `--test-threads` count, before saying so
 
+21. **Native Tools Over Bash for Files** - Read, write and search files with the assistant's own tools, not the shell:
+    - Read files with `Read`, edit with `Edit`, create or replace with `Write`, search with `Grep` and `Glob`
+    - No `cat`, `head`, `tail`, `sed -n`, `echo >`, `cat >>` or heredocs to read, write or append to files. This covers scratch and ledger files too
+    - Search with `Grep` and `Glob` when the session has them. When it does not, `grep` and `find` through the shell are allowed for search only, never to read a file's body
+    - Never use python, perl or any other script interpreter to read, edit or search files
+    - Bash is for what has no native tool: `git` (including `git mv` and commits), `cargo`, test and build scripts, `docker`. A mechanical rename across many files may use `sed`, and only after `Grep` has located every match
+    - Subagents follow the same rule; every dispatch states it
+
+## Ongoing Work
+
+Read `docs/superpowers/ROADMAP.md` at the start of a session. It lists what is done, the next phase, its spec and plan, and per task status. Update its status lines in the same commit as the work.
+
 ## Project Overview
 
 Riku is a complete Rust port of the Piku micro-PaaS, providing Heroku-like git push deployments. It's a single binary written in Rust with no runtime dependencies.
@@ -220,7 +232,10 @@ riku/
 ├── Cargo.toml              # workspace manifest (no root package, riku is one member crate)
 ├── crates/
 │   ├── riku/               # binary entry point (main.rs) + lib.rs re-exporting the others
-│   ├── riku-cli/           # CLI command handlers (apps/, agent/, doctor/, cli.rs, cmds.rs, ...)
+│   ├── riku-args/          # clap command tree, help, command placement (client_rule), shared parse_with_help
+│   ├── riku-remote/        # Laptop side: server list, forwarding, dashboard client, client plugins, quickstart, plugin_cmd
+│   ├── riku-client/        # Package riku-client, builds the rk binary (forwards server commands over ssh)
+│   ├── riku-cli/           # CLI command handlers (apps/, agent/, doctor/, dispatch/ local command execution, ssh_command, setup, ...)
 │   ├── riku-config/        # Path & environment configuration (repository layer)
 │   ├── riku-deploy/        # Deployment orchestration: git_ops, env_setup, releases, router, scaling
 │   ├── riku-nginx/         # Nginx configuration generation (context, template, sanitize, ssl)
@@ -259,7 +274,7 @@ riku/
 Plugins in `~/.riku/plugins/` not prefixed with `riku-` are runtime plugins.
 They implement four subcommands via argv[1]: `detect`, `build`, `env`, `start`.
 Context is passed via env vars: `RIKU_APP`, `RIKU_APP_PATH`, `RIKU_ENV_PATH`, `RIKU_ROOT`.
-Detection order: `RUNTIME=<name>` env override → alphabetical first-exit-0 wins → error.
+Detection order: `RIKU_RUNTIME=<name>` env override → alphabetical first-exit-0 wins → error.
 
 ### Procfile Format
 ```
@@ -270,9 +285,9 @@ cron: 0 2 * * * /path/to/script.sh
 
 ### Environment Variables
 Set in `~/.riku/envs/<app>/ENV`:
-- `NGINX_SERVER_NAME` - Domain name
-- `NGINX_HTTPS_ONLY` - Force HTTPS
-- `NODE_VERSION` - Node.js version
+- `RIKU_DOMAINS` - Domain name
+- `RIKU_HTTPS_ONLY` - Force HTTPS
+- `RIKU_NODE_VERSION` - Node.js version
 - `RIKU_WORKER_TIMEOUT` - Worker timeout seconds
 
 ## Development Workflow

@@ -547,7 +547,7 @@ echo "Plugin: $plugin_name v$version"
             .env("RIKU_APP_PATH", "/tmp/myapp")
             .env("RIKU_ENV_PATH", "/tmp/envs/myapp")
             .env("RIKU_ROOT", riku_root.to_str().unwrap())
-            .env("RIKU_RUNTIME", "Python")
+            .env("RIKU_DETECTED_RUNTIME", "Python")
             .status()?;
 
         let content = fs::read_to_string(&output_file)?;
@@ -557,8 +557,8 @@ echo "Plugin: $plugin_name v$version"
             "Missing RIKU_HOOK"
         );
         assert!(
-            content.contains("RIKU_RUNTIME=Python"),
-            "Missing RIKU_RUNTIME"
+            content.contains("RIKU_DETECTED_RUNTIME=Python"),
+            "Missing RIKU_DETECTED_RUNTIME"
         );
 
         Ok(())

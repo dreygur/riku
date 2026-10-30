@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Riku runtime plugin: shell
-# Matches apps that set RUNTIME=shell explicitly (see detect: always exit 1
+# Matches apps that set RIKU_RUNTIME=shell explicitly (see detect: always exit 1
 # so it is never auto-detected; this plugin only exists to satisfy the
 # E2E stress suite's fixture app, which is a bare shell script with no
 # package.json/requirements.txt/etc. for the bundled plugins to key off).

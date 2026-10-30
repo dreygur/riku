@@ -9,6 +9,7 @@ pub mod commands;
 pub mod execute;
 pub mod help;
 pub mod schema;
+pub mod state;
 pub mod types;
 
 pub use execute::cmd_agent_execute;

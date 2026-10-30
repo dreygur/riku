@@ -186,9 +186,9 @@ pub fn create_worker_config(
     let grace_period = parse_env_or!(env, "RIKU_WORKER_GRACE_PERIOD", u64, default_grace_period);
     let max_restarts = parse_env_or!(env, "RIKU_MAX_RESTARTS", u32, default_max_restarts);
 
-    // Add BIND_ADDRESS to worker env if not already set
-    if !env.contains_key("BIND_ADDRESS") {
-        env.insert("BIND_ADDRESS".to_string(), "127.0.0.1".to_string());
+    // Add RIKU_BIND_ADDRESS to worker env if not already set
+    if !env.contains_key("RIKU_BIND_ADDRESS") {
+        env.insert("RIKU_BIND_ADDRESS".to_string(), "127.0.0.1".to_string());
     }
 
     // Read health check settings from environment

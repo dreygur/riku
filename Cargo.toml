@@ -3,8 +3,13 @@ members = [
     "crates/riku",
     "crates/riku-config",
     "crates/riku-util",
+    "crates/riku-args",
+    "crates/riku-remote",
+    "crates/riku-client",
     "crates/riku-error",
     "crates/riku-nginx",
+    "crates/riku-caddy",
+    "crates/riku-bundle",
     "crates/riku-plugins",
     "crates/riku-supervisor",
     "crates/riku-deploy",
@@ -22,6 +27,7 @@ chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 colored = "3"
 glob = "0.3"
+shlex = "2"
 hex = "0.4"
 libc = "0.2"
 nix = { version = "0.31" }

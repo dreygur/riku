@@ -35,8 +35,8 @@ sudo cp target/release/riku /usr/local/bin/
 
 ```bash
 # Create a dedicated user for deployments
-sudo adduser --disabled-password --gecos '' deploy
-sudo su - deploy
+sudo adduser --disabled-password --gecos '' riku
+sudo su - riku
 ```
 
 ---
@@ -72,7 +72,7 @@ ssh-keygen -t ed25519 -C "your-email@example.com"
 
 ```bash
 # Copy your public key to the server
-ssh-copy-id deploy@your-server-ip
+ssh-copy-id riku@your-server-ip
 
 # Or manually add it
 cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
@@ -144,7 +144,7 @@ echo 'web: node server.js' > Procfile
 **Option 1: Standard (repo in `~/.riku/repos/`)**
 ```bash
 # Add your Riku server as a remote
-git remote add riku deploy@your-server-ip:myapp
+git remote add riku riku@your-server-ip:myapp
 
 # Deploy
 git add . && git commit -m "Initial commit"
@@ -160,7 +160,7 @@ You can create your bare git repo anywhere and Riku will automatically symlink i
 git init --bare ~/my-projects/myapp.git
 
 # On local: push to custom path
-git remote add riku deploy@your-server-ip:~/my-projects/myapp.git
+git remote add riku riku@your-server-ip:~/my-projects/myapp.git
 git push riku main
 
 # Riku will automatically:
@@ -203,6 +203,49 @@ When you push to Riku:
 
 ---
 
+## Manage the Server from Your Laptop
+
+Register the server once and the local `riku` runs commands on it over ssh:
+
+```bash
+riku server add edge riku@your-server-ip
+riku server default edge
+riku ps myapp
+```
+
+Inside a repo whose git remote is `riku@your-server-ip:myapp`, the server and
+the app name are picked up from the remote, so `riku restart` is enough. Riku
+prints `[*] edge (riku@your-server-ip)` on stderr so you can see where a
+command went. Use `-s <name>` for another server and `--local` to run on the
+current machine. `riku destroy` always needs the app name and does not ask for
+confirmation.
+
+To open the server's dashboard in your browser, register the server with an
+admin login (`--admin root@your-server-ip`) and run `riku dashboard -s
+edge`. An existing entry has no way to be edited: remove it and add it
+again.
+
+### Using `rk` instead
+
+`rk` is a small client that only talks to servers, so it is the lighter install
+for a laptop. Install it and register the server:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh -s -- --rk
+rk server add edge riku@your-server-ip
+rk -s edge ps myapp
+```
+
+`rk` never runs server code and has no `--local`. Without a selected server it
+exits with `no server selected; add one with rk server add <name> <user@host>,
+or pass -s <name>`. See [The rk Client](cli.md#the-rk-client).
+
+Servers set up with an older riku need their deploy keys migrated first. See
+[Upgrading existing servers](cli.md#upgrading-existing-servers). The full
+rules are in [Remote Servers](cli.md#remote-servers).
+
+---
+
 ## Next Steps
 
 | Task | Command |
@@ -230,10 +273,10 @@ A record: *.example.com → your-server-ip
 
 ```bash
 # Set domain name
-riku config set myapp NGINX_SERVER_NAME=example.com
+riku config set myapp RIKU_DOMAINS=example.com
 
 # Enable HTTPS (after getting SSL cert)
-riku config set myapp NGINX_HTTPS_ONLY=true
+riku config set myapp RIKU_HTTPS_ONLY=true
 ```
 
 ---
@@ -274,10 +317,10 @@ sudo netstat -tlnp | grep :80
 git remote -v
 
 # Verify SSH access
-ssh deploy@your-server-ip
+ssh riku@your-server-ip
 
 # Check Riku logs
-ssh deploy@your-server-ip "tail ~/.riku/logs/myapp/*.log"
+ssh riku@your-server-ip "tail ~/.riku/logs/myapp/*.log"
 ```
 
 ---

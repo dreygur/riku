@@ -19,7 +19,7 @@ All three landed together in `41bb349`:
 
 - [x] **One-line installer** (`scripts/install.sh`): `curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh`. Detects OS/arch, downloads and checksum-verifies the matching release binary, installs it, and prints a `riku init` hint (systemd + nginx setup still happens via `riku init` itself, not auto-run by the installer).
 - [x] **`riku quickstart`**: scaffolds a sample app and prints the exact `git remote add` line so a new user can deploy in under five minutes.
-- [x] **Better first-deploy output**: `git push` streams the deploy log line-by-line (`DeployLogger`, Heroku-style `-----> ` prefix), logs the detected runtime, and ends with a prominent `<app> deployed!` plus the live URL (from `NGINX_SERVER_NAME`) or a hint to add a domain.
+- [x] **Better first-deploy output**: `git push` streams the deploy log line-by-line (`DeployLogger`, Heroku-style `-----> ` prefix), logs the detected runtime, and ends with a prominent `<app> deployed!` plus the live URL (from `RIKU_DOMAINS`) or a hint to add a domain.
 
 ### Phase 1: Finish the Dashboard, **shipped**
 
@@ -91,7 +91,7 @@ original table didn't anticipate:
 | Runtime                   | `detect` / `build` / `env` / `start`                            | shipped |
 | Addon / Resource          | `provision` / `bind` / `unbind` / `deprovision` / `backup`      | shipped |
 | Legacy hook                | `pre`/`post` `deploy`/`build` (fixed, 4 stages)                 | shipped (predates the event bus below) |
-| Router                     | `configure` / `reload`                                          | shipped, host-level singleton (`RIKU_ROUTER=<name>`), swaps nginx entirely |
+| Router                     | `configure` / `reload`                                          | shipped, host-level singleton named in `<riku root>/ROUTER`; nginx and Caddy are built in |
 | Event subscriber            | `on_event`: `subscribe`/`mode`/`priority` in `[events]`        | shipped, `deploy.*`, `build.*`, `app.restarted`, `app.failed`; `riku-notify` (webhook/Discord/Slack/Telegram) is the shipped first-party example |
 | Custom events               | `riku plugin-emit <plugin.custom.*>` (opt-in `events.emit`)     | shipped, namespaced, kernel-stamps `source_plugin` so a subscriber can tell a real kernel event from a plugin-claimed one |
 | Filter (value-transform)   | `on_filter`: `subscribe`/`priority` in `[filters]`             | shipped, chains, always degrades to passthrough on failure; `nginx.include_content` (augments the generated nginx config) is the shipped example |
@@ -110,7 +110,7 @@ What turns plugins into an *ecosystem*. The model is adapted directly from Claud
 
 All of the below is shipped, including a real starter marketplace: this
 repo's own `marketplace.toml` indexes `examples/plugins/{sqlite-volume,
-postgres, redis, caddy-router, webhook-notify}`, `riku plugins
+postgres, redis, webhook-notify}`, `riku plugins
 marketplace add github:dreygur/riku` registers it directly.
 
 **Bundle layout**: a plugin is a directory (git repo or subdir), not a single file:

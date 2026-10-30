@@ -23,6 +23,7 @@ use crate::config::RikuPaths;
 use crate::util::{deploy_logger::DeployLogger, echo, parse_procfile};
 
 // Dependency crates aliased as their former module names.
+pub(crate) use riku_caddy as caddy;
 pub(crate) use riku_config as config;
 pub(crate) use riku_error as error;
 pub(crate) use riku_nginx as nginx;
@@ -42,6 +43,7 @@ pub mod router;
 pub mod scaling;
 pub mod service_update;
 pub mod supervisor_ctl;
+pub mod teardown;
 pub mod worker_control;
 pub mod workers;
 
@@ -49,6 +51,7 @@ pub use supervisor_ctl::spawn_app;
 pub use workers::create_workers_generic;
 
 /// Deploy an app: sync repo, detect runtime plugin, build, create workers, start processes.
+#[allow(clippy::question_mark)]
 pub fn do_deploy(
     app: &str,
     paths: &RikuPaths,
@@ -69,41 +72,48 @@ pub fn do_deploy(
     // the *same* app (e.g. a second git push landing mid-deploy, or a
     // dashboard-triggered redeploy racing a git push) without blocking
     // deploys of other apps. See lock.rs for what breaks without this.
-    let _deploy_lock = lock::acquire(app, paths)?;
+    let _deploy_lock = match lock::acquire(app, paths) {
+        Ok(lock) => lock,
+        Err(e) => return Err(e),
+    };
 
     let deploy_log_path = paths.deploy_log_file(app);
-    let mut dlog = DeployLogger::new(&deploy_log_path)?;
+    let mut dlog = match DeployLogger::new(&deploy_log_path) {
+        Ok(dlog) => dlog,
+        Err(e) => return Err(e),
+    };
 
     dlog.log(&format!("Deploying app '{}'", app));
-    echo(&format!("-----> Deploying app '{}'", app), "green");
 
     // Sync working tree with the pushed revision.
     dlog.log_raw(&format!("Syncing repo to {}", newrev.unwrap_or("HEAD")));
-    git_ops::sync_app_repo(&app_path, newrev)?;
+    if let Err(e) = git_ops::sync_app_repo(&app_path, newrev) {
+        return Err(e);
+    }
 
     // Ensure log directory exists.
     let log_path = paths.log_root.join(app);
     if !log_path.exists() {
-        fs::create_dir_all(&log_path)?;
+        if let Err(e) = fs::create_dir_all(&log_path) {
+            return Err(e.into());
+        }
     }
 
-    // Parse Procfile (needed for preflight/release commands and deploy abort guard).
+    // An app with no Procfile runs its runtime plugin's start command as
+    // `web`; whether it has one is checked once the plugin is known.
     let mut workers = match parse_procfile(&app_path.join("Procfile")) {
-        Some(w) if !w.is_empty() => w,
-        _ => {
-            dlog.log_error(&format!(
-                "Invalid or missing Procfile for app '{}'. Deploy aborted.",
-                app
-            ));
-            return Err(anyhow::anyhow!(
-                "Invalid or missing Procfile for app '{}'. Deploy aborted.",
-                app
-            ));
+        Ok(workers) => workers.unwrap_or_default(),
+        Err(e) => {
+            let reason = format!("Invalid Procfile for app '{app}': {e}. Deploy aborted.");
+            dlog.log_error(&reason);
+            return Err(anyhow::anyhow!(reason));
         }
     };
 
     // Apply scaling deltas if any.
-    workers::apply_scaling_deltas(app, paths, deltas, &workers)?;
+    if let Err(e) = workers::apply_scaling_deltas(app, paths, deltas, &workers) {
+        return Err(e);
+    }
 
     // Run preflight command if present.
     if let Some(preflight_cmd) = workers.remove("preflight") {
@@ -115,7 +125,9 @@ pub fn do_deploy(
     let env_file = paths.env_root.join(app).join("ENV");
     let mut env: HashMap<String, String> = HashMap::new();
     if env_file.exists() {
-        crate::util::parse_settings(&env_file, &mut env)?;
+        if let Err(e) = crate::util::parse_settings(&env_file, &mut env) {
+            return Err(e);
+        }
     }
 
     // Validate environment variables and print warnings.
@@ -124,20 +136,30 @@ pub fn do_deploy(
     for w in &warnings {
         dlog.log_warn(w);
     }
+    for (old, new) in crate::util::legacy_env::legacy_keys(&env) {
+        let hint = format!("ENV key {old} is no longer read, rename it to {new}");
+        echo(&hint, "yellow");
+        dlog.log_raw(&format!("[WARN] {hint}"));
+    }
 
     // pre-deploy hook (failures abort the deploy).
     dlog.log_raw("Running pre-deploy hooks");
-    hooks::run_pre_deploy(app, &app_path, paths, &env)?;
+    if let Err(e) = hooks::run_pre_deploy(app, &app_path, paths, &env) {
+        return Err(e);
+    }
 
     // Detect runtime plugin.
     let plugins = crate::plugins::runtime::discover(&paths.plugin_root);
-    let runtime_plugin = crate::plugins::runtime::detect(&plugins, &app_path, &env)?
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "No runtime plugin matched '{}'. Run 'riku install-plugins' or set RUNTIME=<name> in the app env.",
+    let runtime_plugin = match crate::plugins::runtime::detect(&plugins, &app_path, &env) {
+        Ok(Some(plugin)) => plugin,
+        Ok(None) => {
+            return Err(anyhow::anyhow!(
+                "No runtime plugin matched '{}'. Run 'riku install-plugins' or set RIKU_RUNTIME=<name> in the app env.",
                 app
-            )
-        })?;
+            ))
+        }
+        Err(e) => return Err(e),
+    };
 
     let runtime_name = runtime_plugin.name.clone();
     dlog.log(&format!("Detected runtime: {}", runtime_name));
@@ -155,41 +177,69 @@ pub fn do_deploy(
 
         // pre-build hook (failures abort the deploy).
         dlog.log_raw("Running pre-build hooks");
-        hooks::run_pre_build(app, &app_path, paths, Some(&runtime_name), &env)?;
+        if let Err(e) = hooks::run_pre_build(app, &app_path, paths, Some(&runtime_name), &env) {
+            return Err(e);
+        }
 
         // Build via runtime plugin.
         dlog.log_raw("Building application");
-        crate::plugins::runtime::build(&runtime_plugin, &ctx)?;
+        if let Err(e) = crate::plugins::runtime::build(&runtime_plugin, &ctx) {
+            return Err(e);
+        }
 
-        let plugin_env = crate::plugins::runtime::get_env(&runtime_plugin, &ctx)?;
-        let start_cmd = crate::plugins::runtime::get_start_cmd(&runtime_plugin, &ctx)?;
+        let plugin_env = match crate::plugins::runtime::get_env(&runtime_plugin, &ctx) {
+            Ok(plugin_env) => plugin_env,
+            Err(e) => return Err(e),
+        };
+        let start_cmd = match crate::plugins::runtime::get_start_cmd(&runtime_plugin, &ctx) {
+            Ok(start_cmd) => start_cmd,
+            Err(e) => return Err(e),
+        };
 
         (plugin_env, start_cmd)
         // ctx (and its &env borrow) is dropped here
     };
+
+    if workers.is_empty() && start_cmd.is_none() {
+        let reason = format!(
+            "No Procfile for app '{app}' and runtime '{runtime_name}' gave no start command. Deploy aborted."
+        );
+        dlog.log_error(&reason);
+        return Err(anyhow::anyhow!(reason));
+    }
 
     // Merge plugin-provided env vars into the app env.
     env.extend(plugin_env);
 
     // post-build hook (failures abort the deploy, sees merged env).
     dlog.log_raw("Running post-build hooks");
-    hooks::run_post_build(app, &app_path, paths, Some(&runtime_name), &env)?;
+    if let Err(e) = hooks::run_post_build(app, &app_path, paths, Some(&runtime_name), &env) {
+        return Err(e);
+    }
 
     // Run release command if present.
     if let Some(release_cmd) = workers.get("release") {
         dlog.log("Running release command");
-        env_setup::run_release(release_cmd, &app_path)?;
+        if let Err(e) = env_setup::run_release(release_cmd, &app_path) {
+            return Err(e);
+        }
     }
 
     // Write LIVE_ENV with resolved environment.
-    env_setup::write_live_env(app, paths, &env)?;
+    if let Err(e) = env_setup::write_live_env(app, paths, &env) {
+        return Err(e);
+    }
 
     // Create supervisor worker configs.
-    create_workers_generic(app, &app_path, &env, paths, start_cmd.as_deref())?;
+    if let Err(e) = create_workers_generic(app, &app_path, &env, paths, start_cmd.as_deref()) {
+        return Err(e);
+    }
 
     // Start the application processes.
     dlog.log("Starting application processes");
-    spawn_app(app, paths)?;
+    if let Err(e) = spawn_app(app, paths) {
+        return Err(e);
+    }
 
     // post-deploy hook (non-fatal: failures are warnings only).
     dlog.log_raw("Running post-deploy hooks");
@@ -206,18 +256,18 @@ pub fn do_deploy(
 
     // Make the "it works" moment unmissable for whoever just ran `git push`.
     echo(&format!("-----> {} deployed!", app), "green");
-    match env.get("NGINX_SERVER_NAME").filter(|d| !d.is_empty()) {
+    match env.get("RIKU_DOMAINS").filter(|d| !d.is_empty()) {
         Some(domain) => {
-            let https = env
-                .get("NGINX_HTTPS_ONLY")
-                .map(|v| matches!(v.as_str(), "1" | "true" | "yes" | "on"))
-                .unwrap_or(false);
-            let scheme = if https { "https" } else { "http" };
+            let scheme = if crate::util::flag::https_only(&env) {
+                "https"
+            } else {
+                "http"
+            };
             echo(&format!("       Live at {}://{}", scheme, domain), "green");
         }
         None => echo(
             &format!(
-                "       Add a domain: riku config set {} NGINX_SERVER_NAME=example.com",
+                "       Add a domain: riku config set {} RIKU_DOMAINS=example.com",
                 app
             ),
             "",

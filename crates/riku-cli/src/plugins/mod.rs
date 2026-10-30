@@ -1,8 +1,6 @@
 //! `riku plugins` provider layer: install/list/remove manifest-based plugin
 //! bundles via [`PluginInstaller`]. Handles user-facing output only.
 
-mod scaffold;
-
 use anyhow::Result;
 
 use crate::config::RikuPaths;
@@ -201,110 +199,6 @@ pub fn cmd_marketplace_remove(paths: &RikuPaths, name: &str) -> Result<()> {
     MarketplaceService::new(paths).remove(name)?;
     display::success(&format!("Removed marketplace '{name}'."));
     Ok(())
-}
-
-/// `riku plugins scaffold <name> --type <type>`
-pub fn cmd_plugins_scaffold(name: &str, plugin_type: &str, dir: Option<&str>) -> Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-
-    let name = crate::util::validate_app_name(name)?;
-    let seam = scaffold::SeamType::parse(plugin_type)?;
-
-    let base = dir.map(std::path::PathBuf::from).unwrap_or_default();
-    let bundle = base.join(&name);
-    if bundle.exists() {
-        anyhow::bail!(
-            "'{}' already exists, choose another name or path",
-            bundle.display()
-        );
-    }
-
-    std::fs::create_dir_all(bundle.join("bin"))?;
-    std::fs::write(bundle.join("riku-plugin.toml"), seam.manifest(&name))?;
-    let entry = bundle.join("bin").join(&name);
-    std::fs::write(&entry, seam.entry_script(&name))?;
-    std::fs::set_permissions(&entry, std::fs::Permissions::from_mode(0o755))?;
-    std::fs::write(
-        bundle.join("README.md"),
-        format!("# {name}\n\nA Riku {plugin_type} plugin. Edit `bin/{name}`, then:\n\n    riku plugins install ./{name}\n"),
-    )?;
-
-    display::success(&format!(
-        "Scaffolded {plugin_type} plugin in ./{}",
-        bundle.display()
-    ));
-    display::note(&format!(
-        "Edit bin/{name}, then: riku plugins install ./{}",
-        bundle.display()
-    ));
-    display::note(
-        "Sign it for distribution: riku plugins keygen && riku plugins sign ./<dir> --key <file>",
-    );
-    Ok(())
-}
-
-/// `riku plugins keygen --out <file>`
-pub fn cmd_plugins_keygen(out: &str) -> Result<()> {
-    use riku_plugins::signing::Keypair;
-    use std::os::unix::fs::PermissionsExt;
-
-    let path = std::path::Path::new(out);
-    if path.exists() {
-        anyhow::bail!("'{out}' already exists, choose another --out path");
-    }
-    let kp = Keypair::generate();
-    std::fs::write(path, format!("{}\n", kp.secret_hex()))?;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
-
-    display::success(&format!("Secret key written to {out} (keep it private)."));
-    display::section("Public key (share this so servers can trust you)");
-    println!("  {}", kp.public_hex());
-    display::note("Trust it on a server with: riku plugins trust add <name> <pubkey>");
-    Ok(())
-}
-
-/// `riku plugins sign <bundle> --key <file>`
-pub fn cmd_plugins_sign(bundle: &str, key_file: &str) -> Result<()> {
-    use riku_plugins::signing::Keypair;
-
-    let kp = Keypair::from_secret_hex(&std::fs::read_to_string(key_file)?)?;
-    let dir = std::path::Path::new(bundle);
-    let manifest = riku_plugins::PluginManifest::from_dir(dir)?;
-    let entry = manifest.entry_path(dir);
-    let signature = kp.sign_hex(&std::fs::read(&entry)?);
-
-    write_manifest_signature(dir, &signature)?;
-    display::success(&format!("Signed {} ({})", manifest.name, manifest.entry));
-    Ok(())
-}
-
-/// Set the top-level `signature = "..."` key in a bundle's manifest. The line
-/// is inserted among the top-level keys (before the first `[table]`), never
-/// appended at the end where TOML would nest it inside the last table.
-fn write_manifest_signature(dir: &std::path::Path, signature: &str) -> Result<()> {
-    let path = dir.join("riku-plugin.toml");
-    let existing = std::fs::read_to_string(&path)?;
-    let sig_line = format!("signature = \"{signature}\"\n");
-
-    let mut out = String::new();
-    let mut inserted = false;
-    for line in existing.lines() {
-        // Drop any prior signature line, wherever it sat.
-        if line.trim_start().starts_with("signature") {
-            continue;
-        }
-        // Insert before the first table header so it stays top-level.
-        if !inserted && line.trim_start().starts_with('[') {
-            out.push_str(&sig_line);
-            inserted = true;
-        }
-        out.push_str(line);
-        out.push('\n');
-    }
-    if !inserted {
-        out.push_str(&sig_line);
-    }
-    crate::util::write_atomic(&path, out.as_bytes())
 }
 
 /// `riku plugins trust add <name> <pubkey>`

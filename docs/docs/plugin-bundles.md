@@ -75,7 +75,7 @@ neither verb is ever invoked.
 | **runtime** | `detect` / `build` / `env` / `start` | shipped (buildpacks) |
 | **addon** | `provision` / `bind` / `unbind` / `deprovision` / `backup` | shipped |
 | **notifier / hook** | `on_event` (subscribes to lifecycle events) | shipped |
-| **router** | `configure` / `reload` | shipped: singleton, full-replace (`RIKU_ROUTER=<name>`) |
+| **router** | `configure` / `reload` | shipped: singleton named in `<riku root>/ROUTER`, for third party routers (nginx and Caddy are built in) |
 | **filter** (any type) | `on_filter` (`[filters]` block, any plugin type) | shipped, chained, augment-only |
 | **UI panel** (any type) | `ui_panel` (`[ui]` block, any plugin type) | shipped, Next.js dashboard only, read-only |
 
@@ -138,7 +138,7 @@ skipped (logged) and the value passes through unchanged, a filter can only
 become a no-op, never break the thing calling it.
 
 **Shipped example: `nginx.include_content`.** The nginx config generator
-already supported a raw file-based passthrough (`NGINX_INCLUDE_FILE`); that
+already supported a raw file-based passthrough (`RIKU_NGINX_INCLUDE_FILE`); that
 content is now the *seed* value run through this filter before being
 inlined into the generated `.conf`. This is the "augment the default config"
 alternative to writing a full router plugin (below), any number of

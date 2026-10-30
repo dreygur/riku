@@ -6,8 +6,8 @@
 //! instead of reaching into nginx directly, so swapping the router is a config
 //! change, not a code change. See `PLUGIN_PROTOCOL.md` §6.2.
 //!
-//! The router is a **host-level singleton**, chosen by the `RIKU_ROUTER`
-//! environment variable (default `nginx`): not a per-app setting. Per-app
+//! The router is a **host-level singleton**, read from `<riku root>/ROUTER`
+//! (see [`Router::load`], default `nginx`): not a per-app setting. Per-app
 //! `ENV` still shapes the *contents* of a router config (domains, port, TLS),
 //! but never which router is active.
 //!
@@ -18,14 +18,17 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Result};
 use serde::Serialize;
 
+use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::plugins::{bundles, router};
+use crate::util::flag::https_only;
 
-/// The built-in router; also the default when `RIKU_ROUTER` is unset.
-const DEFAULT_ROUTER: &str = "nginx";
+mod caddy;
+
+use caddy::configure_caddy;
 
 /// The request handed to a router plugin's `configure` verb (one JSON line on
 /// stdin). Mirrors `PLUGIN_PROTOCOL.md` §6.2.
@@ -37,13 +40,40 @@ struct ConfigureRequest {
     https: bool,
 }
 
-/// The active router name: host-level `RIKU_ROUTER`, else the built-in default.
-fn active_router() -> String {
-    std::env::var("RIKU_ROUTER")
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| DEFAULT_ROUTER.to_string())
+#[allow(clippy::question_mark)]
+fn configure_plugin(
+    name: &str,
+    app: &str,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+) -> Result<()> {
+    let (bundle, manifest) = match bundles::find_router(&paths.plugin_root, name) {
+        Some(found) => found,
+        None => return Err(anyhow!("router plugin '{name}' not installed")),
+    };
+
+    let request = ConfigureRequest {
+        app: app.to_string(),
+        domains: domains_from_env(env),
+        upstream_port: upstream_port_from_env(env),
+        https: https_only(env),
+    };
+    let request = match serde_json::to_value(&request) {
+        Ok(value) => value,
+        Err(e) => return Err(anyhow!("failed to encode router request: {e}")),
+    };
+
+    if let Err(e) = router::run_verb(
+        paths,
+        &bundle,
+        &manifest,
+        "configure",
+        Some(app),
+        Some(&request),
+    ) {
+        return Err(e);
+    }
+    router::run_verb(paths, &bundle, &manifest, "reload", None, None)
 }
 
 /// Configure the active router so `app` is reachable.
@@ -52,37 +82,35 @@ fn active_router() -> String {
 /// supervisor daemon performs the graceful `nginx -s reload` when it observes
 /// the changed config (unchanged legacy behavior). With a plugin router there
 /// is no daemon watcher, so this dispatches `configure` then `reload`.
+#[allow(clippy::question_mark)]
 pub fn configure(
     app: &str,
     app_path: &Path,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
 ) -> Result<()> {
-    let router_name = active_router();
-    if router_name == DEFAULT_ROUTER {
-        return crate::nginx::generate_nginx_config(app, app_path, env, paths);
-    }
-
-    let (bundle, manifest) = bundles::find_router(&paths.plugin_root, &router_name)
-        .with_context(|| format!("router plugin '{router_name}' not installed"))?;
-
-    let request = ConfigureRequest {
-        app: app.to_string(),
-        domains: domains_from_env(env),
-        upstream_port: upstream_port_from_env(env),
-        https: https_from_env(env),
+    let active = match Router::load(paths) {
+        Ok(router) => router,
+        Err(e) => return Err(e),
     };
-    let request = serde_json::to_value(&request)?;
-    router::run_verb(
-        paths,
-        &bundle,
-        &manifest,
-        "configure",
-        Some(app),
-        Some(&request),
-    )?;
-    router::run_verb(paths, &bundle, &manifest, "reload", None, None)?;
-    Ok(())
+
+    match active {
+        Router::Nginx => crate::nginx::generate_nginx_config(app, app_path, env, paths),
+        Router::Caddy => configure_caddy(app, env, paths),
+        Router::Plugin(name) => configure_plugin(&name, app, env, paths),
+    }
+}
+
+fn remove_plugin(name: &str, app: &str, paths: &RikuPaths) -> Result<()> {
+    let (bundle, manifest) = match bundles::find_router(&paths.plugin_root, name) {
+        Some(found) => found,
+        None => return Ok(()),
+    };
+
+    if let Err(e) = router::run_verb(paths, &bundle, &manifest, "unconfigure", Some(app), None) {
+        tracing::warn!(router = %name, "unconfigure failed, relying on reload: {e}");
+    }
+    router::run_verb(paths, &bundle, &manifest, "reload", None, None)
 }
 
 /// Remove `app` from the active router.
@@ -95,24 +123,23 @@ pub fn configure(
 /// predating it may not implement the verb and will exit non-zero, in that
 /// case the following `reload` lets the plugin reconcile the orphaned upstream
 /// on its own. See `PLUGIN_PROTOCOL.md` §6.2.
+#[allow(clippy::question_mark)]
 pub fn remove(app: &str, paths: &RikuPaths) -> Result<()> {
-    let router_name = active_router();
-    if router_name == DEFAULT_ROUTER {
-        return crate::nginx::remove_nginx_config(app, paths);
+    let active = match Router::load(paths) {
+        Ok(router) => router,
+        Err(e) => return Err(e),
+    };
+
+    match active {
+        Router::Nginx => crate::nginx::remove_nginx_config(app, paths),
+        Router::Caddy => crate::caddy::remove_site(app, paths),
+        Router::Plugin(name) => remove_plugin(&name, app, paths),
     }
-    if let Some((bundle, manifest)) = bundles::find_router(&paths.plugin_root, &router_name) {
-        if let Err(e) = router::run_verb(paths, &bundle, &manifest, "unconfigure", Some(app), None)
-        {
-            tracing::warn!(router = %router_name, "unconfigure failed, relying on reload: {e}");
-        }
-        router::run_verb(paths, &bundle, &manifest, "reload", None, None)?;
-    }
-    Ok(())
 }
 
-/// Domains for the app, parsed from `NGINX_SERVER_NAME` (space/comma separated).
+/// Domains for the app, parsed from `RIKU_DOMAINS` (space/comma separated).
 fn domains_from_env(env: &HashMap<String, String>) -> Vec<String> {
-    env.get("NGINX_SERVER_NAME")
+    env.get("RIKU_DOMAINS")
         .map(|s| {
             s.split([',', ' '])
                 .map(str::trim)
@@ -123,60 +150,14 @@ fn domains_from_env(env: &HashMap<String, String>) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// The app's upstream port: `NGINX_INTERNAL_PORT`, then `PORT`, default 8080.
+/// The app's upstream port: `RIKU_UPSTREAM_PORT`, then `PORT`, default 8080.
 fn upstream_port_from_env(env: &HashMap<String, String>) -> u16 {
-    env.get("NGINX_INTERNAL_PORT")
+    env.get("RIKU_UPSTREAM_PORT")
         .or_else(|| env.get("PORT"))
         .and_then(|p| p.trim().parse().ok())
         .unwrap_or(8080)
 }
 
-/// Whether HTTPS-only is requested (`NGINX_HTTPS_ONLY` set to a truthy value).
-fn https_from_env(env: &HashMap<String, String>) -> bool {
-    env.get("NGINX_HTTPS_ONLY")
-        .map(|v| {
-            let v = v.trim().to_ascii_lowercase();
-            !matches!(v.as_str(), "" | "0" | "false" | "no")
-        })
-        .unwrap_or(false)
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn env(pairs: &[(&str, &str)]) -> HashMap<String, String> {
-        pairs
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect()
-    }
-
-    #[test]
-    fn domains_split_on_space_and_comma() {
-        let e = env(&[("NGINX_SERVER_NAME", "a.com, b.com  c.com")]);
-        assert_eq!(domains_from_env(&e), vec!["a.com", "b.com", "c.com"]);
-        assert!(domains_from_env(&env(&[])).is_empty());
-    }
-
-    #[test]
-    fn upstream_port_prefers_internal_then_port_then_default() {
-        assert_eq!(
-            upstream_port_from_env(&env(&[("NGINX_INTERNAL_PORT", "9000"), ("PORT", "3000")])),
-            9000
-        );
-        assert_eq!(upstream_port_from_env(&env(&[("PORT", "3000")])), 3000);
-        assert_eq!(upstream_port_from_env(&env(&[])), 8080);
-        // Garbage falls back to the default rather than panicking.
-        assert_eq!(upstream_port_from_env(&env(&[("PORT", "nope")])), 8080);
-    }
-
-    #[test]
-    fn https_truthiness() {
-        assert!(https_from_env(&env(&[("NGINX_HTTPS_ONLY", "1")])));
-        assert!(https_from_env(&env(&[("NGINX_HTTPS_ONLY", "true")])));
-        assert!(!https_from_env(&env(&[("NGINX_HTTPS_ONLY", "false")])));
-        assert!(!https_from_env(&env(&[("NGINX_HTTPS_ONLY", "0")])));
-        assert!(!https_from_env(&env(&[])));
-    }
-}
+#[path = "router_tests.rs"]
+mod tests;

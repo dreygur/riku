@@ -75,8 +75,8 @@ web: uv run gunicorn app:app
 ### Environment Variables
 
 ```bash
-PYTHON_VERSION=3.11.4
-PYTHON_PACKAGE_MANAGER=pip  # or poetry, uv
+RIKU_PYTHON_VERSION=3.11.4
+RIKU_PYTHON_PACKAGE_MANAGER=pip  # or poetry, uv
 ```
 
 ---
@@ -130,7 +130,7 @@ with `npm install -g @nubjs/nub`.
 ### Environment Variables
 
 ```bash
-NODE_VERSION=18.17.0
+RIKU_NODE_VERSION=18.17.0
 NODE_PACKAGE_MANAGER=npm
 PORT=3000
 ```
@@ -470,7 +470,7 @@ services:
   web:
     image: ghcr.io/your-org/your-app:latest
     ports:
-      - "8080:8080"
+      - "127.0.0.1:${PORT}:8080"
   worker:
     image: ghcr.io/your-org/your-app-worker:latest
 ```
@@ -478,7 +478,11 @@ services:
 For a compose app, `riku deploy` logs in to the configured registry (see
 [GHCR authentication](#ghcr-authentication) below), runs `compose pull`, then
 `compose build`, and starts the stack with `compose up`: supervised as a
-single riku process, the same way any other app's `web` process is.
+single riku process, the same way any other app's `web` process is. No
+Procfile is needed: the plugin supplies that `compose up` command. Publish
+the web service on `${PORT}`, the port riku assigns and routes to. `riku
+destroy` runs `compose down`, which removes the containers and network and
+keeps volumes.
 
 Services with a `build:` section are built on the server from the checked out
 repo instead of pulled, so one stack can mix registry images and local builds.
@@ -488,11 +492,11 @@ none.
 
 ### GHCR authentication
 
-If `GHCR_USERNAME` and `GHCR_TOKEN` are set in the app's env, riku logs in to
+If `RIKU_GHCR_USERNAME` and `RIKU_GHCR_TOKEN` are set in the app's env, riku logs in to
 `ghcr.io` before pulling:
 
 ```bash
-riku config set myapp GHCR_USERNAME=your-username GHCR_TOKEN=ghp_xxx
+riku config set myapp RIKU_GHCR_USERNAME=your-username RIKU_GHCR_TOKEN=ghp_xxx
 ```
 
 Omit these for public images: pulls work without authentication. Docker Hub
@@ -531,7 +535,7 @@ Riku detects static sites when no runtime is detected but nginx can serve files 
 ### Configuration
 
 ```bash
-riku config set myapp NGINX_STATIC_PATHS=/:public
+riku config set myapp RIKU_NGINX_STATIC_PATHS=/:public
 ```
 
 ### Directory Structure
@@ -550,7 +554,7 @@ myapp/
 For single-page applications:
 
 ```bash
-riku config set myapp NGINX_CATCH_ALL=index.html
+riku config set myapp RIKU_NGINX_CATCH_ALL=index.html
 ```
 
 ---

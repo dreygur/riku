@@ -48,6 +48,10 @@ Organized by subcommand area, one directory per area:
 - `quickstart/`: `riku quickstart` app scaffolding
 - `setup/`: `riku init`/setup: binary install, SSH, systemd/user-service units
 - `agent/`: machine-readable agent-mode CLI surface (schema, auth, execute)
+- `remote/`: the local server list (`servers.toml`), target selection (flag, git remote, default, local), ssh forwarding of commands, and `dashboard/` for `riku dashboard -s`
+- `dispatch/`: runs a parsed command on this machine once target resolution has decided it runs here
+- `placement.rs`, `help.rs`: which commands are local, server only or forwarded, and the grouped `--help`
+- `app_hint.rs`, `ssh_command.rs`: fill an omitted app from the git remote; recover argv from `SSH_ORIGINAL_COMMAND`
 - `cli.rs`: all clap command/subcommand definitions
 - `routing.rs`: dispatches client-plugin overrides of built-in commands
 - `hooks.rs`, `backup.rs`, `container.rs`, `control_actions.rs`, `cmds.rs`, `scp.rs`, supporting handlers
@@ -118,7 +122,7 @@ The full contract is `PLUGIN_PROTOCOL.md`; this is the module map.
 ## `riku-nginx`: nginx config generation
 
 - `context.rs`: builds the Tera template context from sanitized env vars;
-  `insert_include_file()` reads the app's `NGINX_INCLUDE_FILE` (if any) as a
+  `insert_include_file()` reads the app's `RIKU_NGINX_INCLUDE_FILE` (if any) as a
   seed value, then runs it through the `nginx.include_content` filter chain
   before inserting it
 - `template.rs`: `generate_nginx_config_from_template()`, `select_template()`

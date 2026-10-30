@@ -20,14 +20,14 @@ fn test_extract_routing_fields_keeps_only_allowlisted_keys() {
     env.insert("PORT".to_string(), "5000".to_string());
     env.insert("DATABASE_URL".to_string(), "postgres://secret".to_string());
     env.insert("SECRET_KEY".to_string(), "abc123".to_string());
-    env.insert("NGINX_INTERNAL_PORT".to_string(), "5000".to_string());
+    env.insert("RIKU_UPSTREAM_PORT".to_string(), "5000".to_string());
 
     let routing = extract_routing_fields(&env);
 
     assert_eq!(routing.len(), 2);
     assert_eq!(routing.get("PORT").map(String::as_str), Some("5000"));
     assert_eq!(
-        routing.get("NGINX_INTERNAL_PORT").map(String::as_str),
+        routing.get("RIKU_UPSTREAM_PORT").map(String::as_str),
         Some("5000")
     );
     assert!(
@@ -100,12 +100,14 @@ fn test_build_app_entry_nginx_state() {
     fs::create_dir_all(paths.app_root.join(app)).unwrap();
     fs::create_dir_all(paths.env_root.join(app)).unwrap();
 
-    let before = build_app_entry(app, &paths, &HashMap::new());
-    assert!(!before.nginx.config_exists);
+    let route = |paths: &RikuPaths| {
+        serde_json::to_value(build_app_entry(app, paths, &HashMap::new()).route).unwrap()
+    };
+    assert_eq!(route(&paths)["config_exists"], false);
 
     fs::write(paths.nginx_root.join(format!("{}.conf", app)), "# conf").unwrap();
-    let after = build_app_entry(app, &paths, &HashMap::new());
-    assert!(after.nginx.config_exists);
+    assert_eq!(route(&paths)["router"], "nginx");
+    assert_eq!(route(&paths)["config_exists"], true);
 }
 
 #[test]
@@ -178,4 +180,23 @@ fn test_build_state_dump_end_to_end_no_panic() {
     assert_eq!(dump.apps.len(), 1);
     assert!(serialized.contains("3000"));
     assert!(!serialized.contains("hide"));
+}
+
+#[test]
+fn dump_state_reports_caddy_site() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let app = "shop";
+    fs::create_dir_all(paths.env_root.join(app)).unwrap();
+    fs::write(&paths.router_file, "caddy\n").unwrap();
+    fs::create_dir_all(&paths.caddy_root).unwrap();
+    let site = paths.caddy_root.join("shop.caddy");
+    fs::write(&site, "# riku app: shop\n").unwrap();
+
+    let route = serde_json::to_value(build_app_entry(app, &paths, &HashMap::new()).route).unwrap();
+    assert_eq!(
+        route,
+        serde_json::json!({ "router": "caddy", "site": site.display().to_string() }),
+        "caddy route should carry the site path and no nginx fields"
+    );
 }

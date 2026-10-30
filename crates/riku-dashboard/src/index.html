@@ -3,204 +3,519 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
 <title>riku</title>
 <style>
   :root {
-    --bg: #0d0f12;
-    --panel: #15181d;
-    --panel-2: #1a1e24;
-    --line: #242a33;
-    --text: #c8ced6;
-    --dim: #6b7480;
-    --faint: #444c57;
-    --alive: #3fd07f;
-    --warn: #e8b54a;
-    --danger: #f25f5c;
-    --info: #5b9dd9;
-    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Menlo", "Consolas", monospace;
-    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --bg: #0A0C0F;
+    --deep: #07090B;
+    --inset: #0E1115;
+    --surface: #111419;
+    --raised: #161A20;
+    --hover: #1D222A;
+    --ghost-hover: #1A1E25;
+    --disabled: #13161B;
+    --track: #1E232B;
+    --line-soft: #1B2028;
+    --line: #222832;
+    --line-strong: #2F3642;
+    --line-hover: #3A4250;
+    --text: #E8EBF0;
+    --text-2: #A6AEBB;
+    --text-3: #808998;
+    --log: #C9CED6;
+    --alive: #45D483;
+    --warn: #F2B84B;
+    --danger: #FF6F69;
+    --danger-text: #FF8A85;
+    --info: #72B4F6;
+    --sans: Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; }
+  *, *::before, *::after { box-sizing: border-box; border-radius: 0; }
+  html, body { margin: 0; }
   body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    font-size: 14px;
-    line-height: 1.5;
+    min-height: 100vh;
+    background: var(--bg); color: var(--text);
+    font-family: var(--sans); font-size: 14px; line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
+  [hidden] { display: none !important; }
   .mono { font-family: var(--mono); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .grow { flex: 1; }
+  a { color: var(--info); }
+  a:hover { color: #A9D0FA; }
+  :focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  svg { flex: none; }
+  .c-ok { color: var(--alive); } .c-warn { color: var(--warn); } .c-bad { color: var(--danger-text); } .c-dim { color: var(--text-3); }
   .label {
-    font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase;
-    color: var(--dim); font-weight: 600;
+    margin: 0; font: 600 11px/1 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--text-3);
   }
 
-  /* ---- top bar ---- */
-  header {
-    position: sticky; top: 0; z-index: 5;
-    display: flex; align-items: center; gap: 20px;
-    padding: 14px 22px;
-    background: rgba(13,15,18,.86); backdrop-filter: blur(8px);
-    border-bottom: 1px solid var(--line);
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: 36px; padding: 0 14px; white-space: nowrap;
+    border: 1px solid var(--line-strong); background: var(--raised); color: var(--text);
+    font: 500 13px/1 var(--sans); cursor: pointer;
+    transition: background .12s, border-color .12s, color .12s;
   }
-  .brand { font-family: var(--mono); font-weight: 700; font-size: 19px; letter-spacing: -.01em; }
-  .brand .cursor { color: var(--alive); animation: blink 1.1s steps(1) infinite; }
+  .btn:hover:not(:disabled) { background: var(--hover); border-color: var(--line-hover); }
+  .btn.primary { background: var(--text); border-color: var(--text); color: var(--bg); font-weight: 600; }
+  .btn.primary:hover:not(:disabled) { background: #fff; border-color: #fff; }
+  .btn.danger { background: transparent; border-color: rgba(255,111,105,.35); color: var(--danger-text); }
+  .btn.danger:hover:not(:disabled) { background: rgba(255,111,105,.12); border-color: rgba(255,111,105,.6); }
+  .btn.danger-solid { background: var(--danger); border-color: var(--danger); color: var(--bg); font-weight: 600; }
+  .btn.danger-solid:hover:not(:disabled) { background: #FF8A85; border-color: #FF8A85; }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--text-2); }
+  .btn.ghost:hover:not(:disabled) { background: var(--ghost-hover); border-color: transparent; color: var(--text); }
+  .btn:disabled { background: var(--disabled); border-color: var(--line); color: var(--text-3); cursor: not-allowed; }
+  .btn.ghost:disabled, .btn.danger:disabled { background: transparent; }
+  .btn[aria-busy="true"] { cursor: progress; }
+  .btn.primary[aria-busy="true"] { background: var(--text); border-color: var(--text); color: var(--bg); opacity: .85; }
+  .btn.sm { height: 30px; padding: 0 10px; font-size: 12px; gap: 7px; }
+  .btn.icon { width: 32px; padding: 0; }
+  .btn .delta { font: 500 12px/1 var(--mono); color: #3A4250; }
+  .link {
+    display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 4px;
+    border: 0; background: none; color: var(--info); font: 500 13px/1 var(--sans); cursor: pointer;
+  }
+  .link:hover { color: #A9D0FA; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { animation: spin .9s linear infinite; }
   @keyframes blink { 50% { opacity: 0; } }
-  .readout { font-family: var(--mono); font-size: 12px; color: var(--dim); }
-  .readout b { color: var(--text); font-weight: 600; }
-  .spacer { flex: 1; }
-  .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--alive); animation: ping 2.4s ease-out infinite; }
-  @keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(63,208,127,.45);} 70%,100% { box-shadow: 0 0 0 7px rgba(63,208,127,0);} }
-  input.token {
-    font-family: var(--mono); font-size: 12px;
-    background: var(--panel); border: 1px solid var(--line); color: var(--text);
-    padding: 6px 9px; border-radius: 6px; width: 150px; outline: none;
-  }
-  input.token:focus { border-color: var(--faint); }
+  @keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(69,212,131,.5); } 70%, 100% { box-shadow: 0 0 0 6px rgba(69,212,131,0); } }
+  @keyframes indet { from { transform: translateX(-100%); } to { transform: translateX(350%); } }
+  @keyframes shim { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+  @keyframes rise { from { transform: translateY(8px); opacity: 0; } }
 
-  /* ---- layout ---- */
-  main { max-width: 1080px; margin: 0 auto; padding: 26px 22px 120px; }
+  .top {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
+    min-height: 64px; padding: 12px 24px;
+    background: rgba(10,12,15,.88); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .brand { display: flex; align-items: center; font: 700 19px/1 var(--mono); letter-spacing: -.02em; }
+  .brand .cursor { color: var(--alive); margin-left: 1px; animation: blink 1.1s steps(1) infinite; }
+  .sup {
+    display: inline-flex; align-items: center; gap: 10px; height: 30px; padding: 0 12px;
+    border: 1px solid var(--line); background: var(--surface);
+    font: 500 12px/1 var(--mono); color: var(--text-2);
+  }
+  .sup b { color: var(--text); font-weight: 500; }
+  .sup .sep { color: var(--line-hover); }
+  .sup-dot { width: 7px; height: 7px; background: var(--text-3); }
+  .sup.live .sup-dot { background: var(--alive); animation: ping 2.4s ease-out infinite; }
+  .sup.down .sup-dot, .sup.error .sup-dot { background: var(--danger); }
+  .sup.locked .sup-dot { background: var(--warn); }
+  .synced { font: 400 12px/1 var(--mono); color: var(--text-3); }
+  .auth { display: flex; align-items: center; gap: 8px; }
+  .unlocked {
+    display: inline-flex; align-items: center; gap: 10px; height: 38px; padding: 0 4px 0 12px;
+    border: 1px solid rgba(69,212,131,.28); background: rgba(69,212,131,.06);
+    font: 500 13px/1 var(--sans);
+  }
+  .unlocked > svg { color: var(--alive); }
+  .auth-note {
+    display: inline-flex; align-items: center; gap: 10px; min-height: 38px; padding: 0 12px;
+    border: 1px solid rgba(242,184,75,.35); background: rgba(242,184,75,.06); color: var(--warn);
+    font: 500 13px/1.3 var(--sans);
+  }
+  .tok { display: flex; align-items: center; gap: 8px; }
+  .field {
+    display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px;
+    border: 1px solid var(--line-strong); background: var(--inset); color: var(--text-3);
+  }
+  .field:focus-within { border-color: var(--info); }
+  .field input {
+    flex: 1; min-width: 0; width: 190px; border: 0; background: transparent; outline: none;
+    color: var(--text); font: 400 13px/1 var(--mono);
+  }
+  .field input::placeholder, .search input::placeholder { color: var(--text-3); }
+  .tok.bad .field { border-color: var(--danger); color: var(--danger-text); }
+  .tok-err { font-size: 12px; color: var(--danger-text); }
 
-  .strip {
-    border: 1px solid var(--line); border-radius: 10px;
-    background: linear-gradient(180deg, var(--panel) 0%, #131619 100%);
-    margin-bottom: 16px; overflow: hidden;
+  .banner {
+    position: sticky; top: 64px; z-index: 9;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 24px;
+    background: #1B1710; border-bottom: 1px solid rgba(242,184,75,.35); color: var(--warn);
   }
-  .strip-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 15px 18px 13px; }
-  .app-name { font-family: var(--mono); font-weight: 700; font-size: 16px; }
-  .chips { display: flex; gap: 7px; flex-wrap: wrap; }
-  .chip {
-    font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 999px;
-    border: 1px solid var(--line); color: var(--dim); white-space: nowrap;
-  }
-  .chip.dom { color: var(--info); border-color: rgba(91,157,217,.3); }
-  .chip.on { color: var(--alive); border-color: rgba(63,208,127,.3); }
-  .chip.busy { color: var(--warn); border-color: rgba(232,181,74,.35); }
+  .banner p { margin: 0; flex: 1; min-width: 200px; font-size: 13px; color: #FBE3B4; }
+  .banner .btn { border-color: rgba(242,184,75,.45); background: transparent; color: var(--warn); }
+  .banner .btn:hover { background: rgba(242,184,75,.1); border-color: var(--warn); }
+  .banner .retry { font: 400 12px/1 var(--mono); }
 
-  /* ---- worker readouts ---- */
-  .workers { border-top: 1px solid var(--line); }
-  .wk {
-    display: grid;
-    grid-template-columns: 16px 150px 1fr 1fr 64px;
-    align-items: center; gap: 14px;
-    padding: 10px 18px; border-bottom: 1px solid rgba(36,42,51,.5);
-    font-family: var(--mono); font-size: 12.5px;
+  main { max-width: 1136px; margin: 0 auto; padding: 0 24px 96px; transition: padding-bottom .26s; }
+  body.drawer-open main { padding-bottom: calc(50vh + 32px); }
+  .page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 40px 0 24px; }
+  .page-head h1 { margin: 0; font: 600 28px/1.15 var(--sans); letter-spacing: -.025em; }
+  .page-head p { margin: 8px 0 0; color: var(--text-2); font-size: 14px; }
+  .summary { display: flex; flex-wrap: wrap; gap: 8px; font: 500 12px/1 var(--mono); }
+  .sum {
+    display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px;
+    background: var(--surface); border: 1px solid var(--line); color: var(--text-2);
   }
-  .wk:last-child { border-bottom: 0; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); }
-  .dot.alive { background: var(--alive); animation: hb 2s ease-in-out infinite; }
-  .dot.warn { background: var(--warn); }
-  .dot.dead { background: var(--danger); }
-  @keyframes hb { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
-  .wk .who b { color: var(--text); } .wk .who span { color: var(--dim); }
-  .wk .meta { color: var(--dim); }
-  .bar { position: relative; height: 5px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
-  .bar > i { position: absolute; inset: 0 100% 0 0; background: var(--info); transition: right .4s; }
-  .barwrap { display: grid; grid-template-columns: 30px 1fr 58px; gap: 7px; align-items: center; }
-  .barwrap .label { font-size: 9.5px; }
-  .barwrap .val { text-align: right; color: var(--dim); font-size: 11.5px; }
-  .restarts { text-align: right; color: var(--dim); }
-  .restarts.hot { color: var(--warn); }
+  .sum b { color: var(--text); font-weight: 600; }
+  .sum i { width: 7px; height: 7px; background: var(--text-3); }
+  .sum.ok i { background: var(--alive); }
+  .sum.warn i { background: var(--warn); }
+  .sum.bad { background: rgba(255,111,105,.08); border-color: rgba(255,111,105,.3); color: #FFB3AF; }
+  .sum.bad i { background: var(--danger); }
+  .sum.bad b { color: #FFD9D7; }
 
-  /* ---- actions ---- */
-  .bar-actions {
-    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-    padding: 12px 18px; border-top: 1px solid var(--line); background: rgba(0,0,0,.12);
-  }
-  button.btn {
-    font-family: var(--sans); font-size: 12.5px; font-weight: 500;
-    background: var(--panel-2); color: var(--text);
-    border: 1px solid var(--line); border-radius: 7px; padding: 6px 12px; cursor: pointer;
-    transition: border-color .15s, background .15s;
-  }
-  button.btn:hover { border-color: var(--faint); background: #20252c; }
-  button.btn:disabled { opacity: .4; cursor: not-allowed; }
-  button.btn.danger:hover { border-color: rgba(242,95,92,.5); color: var(--danger); }
-  button.btn.go { border-color: rgba(63,208,127,.3); }
-  .scaler { display: inline-flex; align-items: center; gap: 6px; }
-  .scaler input { width: 46px; font-family: var(--mono); font-size: 12px; text-align: center;
-    background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 5px; }
-  select.rel {
-    font-family: var(--mono); font-size: 11.5px; background: var(--panel); color: var(--text);
-    border: 1px solid var(--line); border-radius: 6px; padding: 5px 6px; max-width: 160px;
-  }
-  .gap { flex: 1; }
+  .apps { display: flex; flex-direction: column; gap: 20px; padding-top: 0; transition: opacity .2s, filter .2s; }
+  .apps.stale { opacity: .5; filter: saturate(.4); }
+  .page-head[hidden] + .apps { padding-top: 40px; }
 
-  .empty { text-align: center; color: var(--dim); padding: 70px 20px; }
-  .empty code { font-family: var(--mono); color: var(--alive); background: var(--panel); padding: 2px 7px; border-radius: 5px; }
+  .app { position: relative; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
+  .app.is-busy { border-color: rgba(242,184,75,.32); }
+  .app.is-bad { border-color: rgba(255,111,105,.32); }
+  .progress { height: 2px; background: rgba(242,184,75,.14); overflow: hidden; display: none; }
+  .progress i { display: block; width: 28%; height: 2px; background: var(--warn); animation: indet 1.6s cubic-bezier(.4,0,.2,1) infinite; }
+  .app.is-busy .progress { display: block; }
+  .app-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 20px 20px 18px; }
+  .app.is-busy .app-head { padding-top: 18px; }
+  .app-id { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .app-title { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .app-title h2 { margin: 0; font: 600 18px/1.2 var(--mono); letter-spacing: -.01em; word-break: break-all; }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; font: 400 13px/1.2 var(--mono); color: var(--text-2); }
+  .meta > span, .meta > a { display: inline-flex; align-items: center; gap: 6px; }
+  .meta a { text-decoration: none; }
+  .meta b { color: var(--text); font-weight: 400; }
+  .tag-http { font-size: 11px; padding: 2px 6px; background: rgba(242,184,75,.12); color: var(--warn); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
-  /* ---- console drawer ---- */
+  .badge {
+    display: inline-flex; align-items: center; gap: 7px; height: 24px; padding: 0 10px;
+    border: 1px solid var(--line-strong); color: var(--text-2); font: 500 12px/1 var(--sans); white-space: nowrap;
+  }
+  .badge.ok { background: rgba(69,212,131,.1); border-color: rgba(69,212,131,.28); color: var(--alive); }
+  .badge.warn { background: rgba(242,184,75,.1); border-color: rgba(242,184,75,.32); color: var(--warn); }
+  .badge.bad { background: rgba(255,111,105,.1); border-color: rgba(255,111,105,.34); color: var(--danger-text); }
+  .badge .g-sq { width: 6px; height: 6px; background: currentColor; }
+  .badge .g-ring { width: 7px; height: 7px; border: 1.5px solid var(--text-3); }
+  .badge .spin { width: 11px; height: 11px; }
+
+  .alert {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 20px;
+    border-top: 1px solid rgba(255,111,105,.22); background: rgba(255,111,105,.07); color: var(--danger-text);
+  }
+  .alert p { margin: 0; flex: 1; min-width: 240px; font-size: 13px; color: #FFD9D7; }
+  .alert p b { font-family: var(--mono); font-weight: 600; }
+  .alert .link { color: #FFB3AF; text-decoration: underline; text-underline-offset: 3px; }
+
+  .table-wrap { overflow-x: auto; border-top: 1px solid var(--line-soft); }
+  .table { min-width: 820px; }
+  .tr {
+    display: grid; grid-template-columns: minmax(110px,1fr) 150px minmax(220px,2.2fr) 100px 80px 84px;
+    align-items: center; column-gap: 16px; height: 52px; padding: 0 20px;
+    border-top: 1px solid var(--line-soft); font: 400 13px/1.2 var(--mono);
+  }
+  .tr.th {
+    height: 36px; border-top: 0; background: var(--inset);
+    font: 600 10.5px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--text-3);
+  }
+  .tr.is-bad { background: rgba(255,111,105,.035); }
+  .tr .r { text-align: right; justify-self: end; }
+  .tr .w-name { font-weight: 500; }
+  .tr .muted { color: var(--text-2); }
+  .tr .dim { color: var(--text-3); }
+  .tr.empty-row { color: var(--text-3); grid-template-columns: 1fr; }
+  .state { display: inline-flex; align-items: center; gap: 9px; color: var(--text-2); }
+  .state.alive { color: var(--alive); }
+  .state.warn { color: var(--warn); }
+  .state.dead { color: var(--danger-text); }
+  .g-dot { width: 8px; height: 8px; background: var(--alive); box-shadow: 0 0 0 3px rgba(69,212,131,.16); }
+  .g-off { width: 8px; height: 8px; border: 1.5px solid var(--text-3); }
+  .mem { display: flex; align-items: center; gap: 12px; }
+  .meter { flex: 1; height: 6px; background: var(--track); overflow: hidden; }
+  .meter i { display: block; height: 100%; background: var(--info); transition: width .4s; }
+  .mem.warn .meter i { background: var(--warn); } .mem.warn .mem-val { color: var(--warn); }
+  .mem.crit .meter i { background: var(--danger); } .mem.crit .mem-val { color: var(--danger-text); }
+  .mem-val { min-width: 96px; text-align: right; }
+  .mem-val span { color: var(--text-3); }
+  .rc-badge { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; }
+  .rc-badge.warn { background: rgba(242,184,75,.12); color: var(--warn); }
+  .rc-badge.crit { background: rgba(255,111,105,.14); color: var(--danger-text); }
+
+  .app-foot { border-top: 1px solid var(--line-soft); background: var(--inset); }
+  .controls, .busy-note { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 14px 20px; }
+  .busy-note { gap: 12px 14px; color: var(--warn); }
+  .busy-note p { margin: 0; font-size: 13px; color: var(--text-2); }
+  .ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .ctl-label { font: 500 12px/1 var(--sans); color: var(--text-2); }
+  .vsep { width: 1px; height: 24px; background: var(--line); }
+  .stepper { display: inline-flex; align-items: stretch; height: 36px; border: 1px solid var(--line-strong); background: var(--raised); }
+  .stepper.dirty { border-color: var(--info); }
+  .st-btn { width: 34px; display: grid; place-items: center; border: 0; background: transparent; color: var(--text-2); cursor: pointer; }
+  .st-btn:hover:not(:disabled) { background: var(--ghost-hover); color: var(--text); }
+  .st-btn:disabled { color: var(--line-hover); cursor: not-allowed; }
+  .stepper input {
+    width: 44px; border: 0; border-left: 1px solid var(--line-strong); border-right: 1px solid var(--line-strong);
+    background: var(--inset); color: var(--text); text-align: center; font: 600 13px/1 var(--mono);
+    -moz-appearance: textfield; appearance: textfield;
+  }
+  .stepper input::-webkit-inner-spin-button, .stepper input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .select { position: relative; display: inline-flex; }
+  .select select {
+    appearance: none; -webkit-appearance: none; height: 36px; min-width: 230px; padding: 0 34px 0 12px;
+    border: 1px solid var(--line-strong); background: var(--raised); color: var(--text);
+    font: 400 13px/1 var(--mono); cursor: pointer;
+  }
+  .select select:hover:not(:disabled) { border-color: var(--line-hover); }
+  .select select:disabled { color: var(--text-3); cursor: not-allowed; }
+  .select svg { position: absolute; right: 12px; top: 11px; pointer-events: none; color: var(--text-3); }
+
+  .sk { background: var(--track); animation: shim 1.6s ease-in-out infinite; }
+  .sk.lo { background: var(--ghost-hover); }
+  .sk-head { display: flex; align-items: center; gap: 12px; padding: 18px 20px; }
+  .sk-row { display: grid; grid-template-columns: 80px 100px 1fr; gap: 16px; align-items: center; padding: 18px 20px; border-top: 1px solid var(--line-soft); }
+  .panel {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 20px;
+    max-width: 640px; margin: 64px auto 0; padding: 32px; border: 1px solid var(--line); background: var(--surface);
+  }
+  .panel h2 { margin: 0; font: 600 20px/1.25 var(--sans); letter-spacing: -.015em; }
+  .panel p { margin: 6px 0 0; font-size: 13px; color: var(--text-2); }
+  .panel-ico { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid var(--line-strong); background: var(--inset); color: var(--text-2); }
+  .cmds { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+  .cmd { display: flex; align-items: stretch; border: 1px solid var(--line-strong); background: var(--deep); }
+  .cmd .n { width: 36px; display: grid; place-items: center; border-right: 1px solid var(--line-strong); font: 600 12px/1 var(--mono); color: var(--text-3); }
+  .cmd code { flex: 1; min-width: 0; padding: 0 12px; font: 400 13px/40px var(--mono); white-space: nowrap; overflow-x: auto; }
+  .cmd button { border: 0; border-left: 1px solid var(--line-strong); background: transparent; color: var(--text-2); padding: 0 14px; font: 500 12px/1 var(--sans); cursor: pointer; }
+  .cmd button:hover { background: var(--ghost-hover); color: var(--text); }
+  .panel .tok { width: 100%; }
+  .panel .field { flex: 1; }
+  .panel .field input { width: auto; }
+
   .drawer {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
-    height: 46vh; transform: translateY(100%); transition: transform .26s cubic-bezier(.2,.8,.2,1);
-    background: #0a0c0e; border-top: 1px solid var(--line);
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; height: 48vh; min-height: 280px;
     display: flex; flex-direction: column;
+    background: var(--deep); border-top: 1px solid var(--line-strong);
+    box-shadow: 0 -24px 60px rgba(0,0,0,.5);
+    transform: translateY(100%); visibility: hidden;
+    transition: transform .26s cubic-bezier(.2,.8,.2,1), visibility 0s linear .26s;
   }
-  .drawer.open { transform: translateY(0); }
-  .drawer-head { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid var(--line); }
-  .drawer-head .label { color: var(--text); }
-  .console { flex: 1; overflow-y: auto; padding: 10px 16px; font-family: var(--mono); font-size: 12px; line-height: 1.55; }
-  .console .ln { white-space: pre-wrap; word-break: break-word; }
-  .console .tag { color: var(--faint); margin-right: 10px; user-select: none; }
-  .x { margin-left: auto; cursor: pointer; color: var(--dim); border: 1px solid var(--line); border-radius: 6px; padding: 3px 9px; }
-  .x:hover { color: var(--text); }
+  .drawer.open { transform: translateY(0); visibility: visible; transition: transform .26s cubic-bezier(.2,.8,.2,1); }
+  .drawer-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 10px 14px; border-bottom: 1px solid var(--line-soft); background: var(--inset); }
+  .dh-title { display: flex; align-items: baseline; gap: 10px; }
+  .dh-title .label { color: var(--text-2); }
+  .dh-title .mono { font-weight: 600; font-size: 14px; }
+  .seg { display: inline-flex; max-width: 100%; overflow-x: auto; border: 1px solid var(--line-strong); font: 500 12px/1 var(--mono); }
+  .seg button { height: 30px; padding: 0 10px; border: 0; border-left: 1px solid var(--line-strong); background: transparent; color: var(--text-2); font: inherit; cursor: pointer; white-space: nowrap; }
+  .seg button:first-child { border-left: 0; }
+  .seg button:hover { color: var(--text); background: var(--ghost-hover); }
+  .seg button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+  .search { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; flex: 1; min-width: 140px; border: 1px solid var(--line-strong); background: var(--deep); color: var(--text-3); }
+  .search:focus-within { border-color: var(--info); }
+  .search input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; color: var(--text); font: 400 12px/1 var(--mono); }
+  .btn.follow[aria-pressed="true"] { border-color: rgba(69,212,131,.35); background: rgba(69,212,131,.08); color: var(--alive); }
+  .console { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 0; font: 400 12.5px/1.75 var(--mono); }
+  .ln { display: grid; grid-template-columns: 104px minmax(64px, max-content) 1fr; gap: 12px; padding: 0 14px; }
+  .ln:hover { background: rgba(255,255,255,.025); }
+  .ln-t { color: var(--text-3); user-select: none; }
+  .ln-tag { user-select: none; }
+  .ln-x { color: var(--log); white-space: pre-wrap; word-break: break-word; }
+  .ln.warn { background: rgba(242,184,75,.06); } .ln.warn .ln-x { color: var(--warn); }
+  .ln.err { background: rgba(255,111,105,.08); } .ln.err .ln-x { color: #FF9D98; }
+  .console-empty { padding: 24px 14px; color: var(--text-3); font: 400 12.5px/1.6 var(--mono); }
+  .drawer-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 6px 14px; min-height: 36px; border-top: 1px solid var(--line-soft); background: var(--inset); font: 400 11.5px/1.4 var(--mono); color: var(--text-3); }
+  .stream { display: inline-flex; align-items: center; gap: 7px; }
+  .stream i { width: 6px; height: 6px; background: var(--text-3); }
+  .stream.live { color: var(--alive); } .stream.live i { background: var(--alive); }
+  .stream.warn { color: var(--warn); } .stream.warn i { background: var(--warn); }
+  .stream.bad { color: var(--danger-text); } .stream.bad i { background: var(--danger); }
+  .drawer-foot .link { height: 24px; font-size: 12px; }
 
-  /* ---- toasts ---- */
-  #toasts { position: fixed; right: 18px; bottom: 18px; z-index: 40; display: flex; flex-direction: column; gap: 8px; }
+  dialog {
+    width: min(440px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line-strong);
+    background: var(--surface); color: var(--text); box-shadow: 0 24px 60px rgba(0,0,0,.55);
+  }
+  dialog::backdrop { background: rgba(5,6,8,.7); backdrop-filter: blur(2px); }
+  .dlg-body { display: flex; flex-direction: column; gap: 12px; padding: 22px 22px 18px; }
+  .dlg-title { display: flex; align-items: center; gap: 10px; }
+  .dlg-ico { width: 32px; height: 32px; display: grid; place-items: center; background: rgba(255,111,105,.12); border: 1px solid rgba(255,111,105,.35); color: var(--danger-text); }
+  .dlg-title h3 { margin: 0; font: 600 16px/1.3 var(--sans); word-break: break-all; }
+  .dlg-body p { margin: 0; font-size: 13px; color: var(--text-2); }
+  .dlg-list { display: flex; flex-wrap: wrap; gap: 6px; font: 500 12px/1 var(--mono); }
+  .dlg-list span { padding: 6px 8px; border: 1px solid var(--line-strong); background: var(--inset); }
+  .dlg-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 22px; border-top: 1px solid var(--line-soft); background: var(--inset); }
+
+  #toasts { position: fixed; right: 18px; bottom: 18px; z-index: 40; display: flex; flex-direction: column; gap: 10px; width: min(380px, calc(100vw - 36px)); }
+  body.drawer-open #toasts { bottom: calc(48vh + 18px); }
   .toast {
-    font-family: var(--mono); font-size: 12.5px; padding: 9px 13px; border-radius: 8px;
-    background: var(--panel); border: 1px solid var(--line); color: var(--text);
-    animation: rise .2s ease-out;
+    display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: start;
+    padding: 12px 10px 12px 14px; background: var(--raised); border: 1px solid var(--line-strong);
+    box-shadow: 0 12px 30px rgba(0,0,0,.4); animation: rise .2s ease-out; transition: opacity .18s, transform .18s;
   }
-  .toast.ok { border-color: rgba(63,208,127,.4); }
-  .toast.err { border-color: rgba(242,95,92,.5); color: #ffd9d8; }
-  @keyframes rise { from { transform: translateY(6px); opacity: 0; } }
+  .toast.out { opacity: 0; transform: translateY(6px); }
+  .t-ico { margin-top: 3px; width: 16px; height: 16px; display: grid; place-items: center; background: var(--info); color: var(--bg); }
+  .toast.ok .t-ico { background: var(--alive); }
+  .toast.err { background: #1A1416; border-color: rgba(255,111,105,.45); }
+  .toast.err .t-ico { background: var(--danger); }
+  .t-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .t-title { font: 600 13px/1.4 var(--sans); }
+  .t-msg { font-size: 12px; color: var(--text-2); word-break: break-word; }
+  .toast.err .t-title { color: #FFD9D7; }
+  .toast.err .t-msg { font-family: var(--mono); color: #FFB3AF; }
+  .t-act { align-self: flex-start; height: 24px; padding: 0; margin-top: 4px; font-size: 12px; }
+  .t-x { width: 28px; height: 28px; display: grid; place-items: center; border: 0; background: transparent; color: var(--text-3); cursor: pointer; }
+  .t-x:hover { color: var(--text); background: var(--ghost-hover); }
 
-  @media (max-width: 620px) {
-    .wk { grid-template-columns: 14px 1fr; gap: 8px; }
-    .wk .pidcol, .wk .barwrap { display: none; }
+  @media (max-width: 720px) {
+    .top { padding: 10px 16px; }
+    .synced { display: none; }
+    .auth { width: 100%; }
+    .auth .tok, .auth .field { flex: 1; }
+    .field input { width: auto; }
+    .banner { top: 0; position: relative; padding: 10px 16px; }
+    main { padding: 0 16px 80px; }
+    .page-head { padding-top: 28px; }
+    .app-head, .controls, .busy-note, .alert { padding-left: 16px; padding-right: 16px; }
+    .vsep { display: none; }
+    .controls .grow { display: none; }
+    .select select { min-width: 0; width: 100%; }
+    .drawer { height: 72vh; }
+    body.drawer-open main { padding-bottom: calc(72vh + 32px); }
+    body.drawer-open #toasts { bottom: calc(72vh + 18px); }
+    .ln { grid-template-columns: 1fr; gap: 0; padding: 4px 14px; }
+    .ln-t { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .pulse, .dot.alive, .brand .cursor { animation: none; }
-    .drawer { transition: none; }
+    *, *::before, *::after { animation: none !important; transition: none !important; }
   }
 </style>
 </head>
 <body>
-<header>
-  <div class="brand">riku<span class="cursor">&#9612;</span></div>
-  <div class="readout" id="readout">connecting&hellip;</div>
-  <div class="spacer"></div>
-  <div class="pulse" id="pulse" title="live"></div>
-  <input class="token" id="token" type="password" placeholder="control token" autocomplete="off" spellcheck="false" />
+
+<header class="top">
+  <div class="brand" aria-label="riku">riku<span class="cursor" aria-hidden="true">&#9612;</span></div>
+  <div class="sup" id="sup" role="status"><span class="sup-dot"></span><span id="supText">connecting...</span></div>
+  <span class="grow"></span>
+  <span class="synced" id="synced"></span>
+  <div class="auth" id="auth"></div>
 </header>
 
-<main id="main"><div class="empty">Reading the supervisor&hellip;</div></main>
-
-<div class="drawer" id="drawer">
-  <div class="drawer-head">
-    <span class="label" id="drawerTitle">logs</span>
-    <span class="x" id="drawerClose">close</span>
-  </div>
-  <div class="console" id="console"></div>
+<div class="banner" id="banner" role="alert" hidden>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5"/><path d="M12 17.5v.01"/></svg>
+  <p id="bannerText">Can't reach the supervisor.</p>
+  <span class="retry" id="bannerRetry"></span>
+  <button type="button" class="btn sm" id="retryBtn">Retry now</button>
 </div>
+
+<main>
+  <div class="page-head" id="pageHead" hidden>
+    <div>
+      <h1>Apps</h1>
+      <p id="pageSub"></p>
+    </div>
+    <div class="summary" id="summary"></div>
+  </div>
+  <div class="apps" id="apps"></div>
+</main>
+
+<section class="drawer" id="drawer" aria-labelledby="drawerTitle" inert>
+  <div class="drawer-head">
+    <div class="dh-title"><h2 class="label" id="drawerTitle">Logs</h2><span class="mono" id="drawerApp"></span></div>
+    <div class="seg" id="logFilter" role="group" aria-label="Filter by worker"></div>
+    <label class="search">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><rect x="3" y="3" width="13" height="13"/><path d="M16 16l5 5"/></svg>
+      <span class="sr">Filter lines</span>
+      <input id="logQ" type="search" placeholder="Filter lines" autocomplete="off" spellcheck="false" />
+    </label>
+    <button type="button" class="btn sm follow" id="followBtn" aria-pressed="true">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" aria-hidden="true"><path d="M12 4v15"/><path d="M6 13l6 6 6-6"/></svg>Following
+    </button>
+    <button type="button" class="btn sm" id="pauseBtn">Pause</button>
+    <button type="button" class="btn sm ghost" id="clearBtn">Clear</button>
+    <button type="button" class="btn sm icon" id="drawerClose" aria-label="Close logs">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="console" id="console" role="log" aria-live="off" tabindex="0"></div>
+  <div class="drawer-foot">
+    <span class="stream" id="streamState"><i></i><span>connecting</span></span>
+    <span id="lineCount">0 lines</span>
+    <span>keeps the last 2,000</span>
+    <span class="grow"></span>
+    <button type="button" class="link" id="jumpBtn" hidden>Jump to latest</button>
+  </div>
+</section>
+
+<dialog id="confirm" aria-labelledby="cfTitle" aria-describedby="cfDesc">
+  <form method="dialog">
+    <div class="dlg-body">
+      <div class="dlg-title">
+        <span class="dlg-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="miter" aria-hidden="true"><rect x="6" y="6" width="12" height="12"/></svg></span>
+        <h3 id="cfTitle"></h3>
+      </div>
+      <p id="cfDesc"></p>
+      <div class="dlg-list" id="cfList"></div>
+    </div>
+    <div class="dlg-foot">
+      <button type="submit" value="cancel" class="btn" id="cfCancel">Cancel</button>
+      <button type="submit" value="ok" class="btn danger-solid" id="cfOk">Stop</button>
+    </div>
+  </form>
+</dialog>
 
 <div id="toasts"></div>
 
 <script>
 (function () {
+  "use strict";
   const $ = (s, r) => (r || document).querySelector(s);
-  const url = new URL(location.href);
-  const tokenInput = $("#token");
-  tokenInput.value = url.searchParams.get("token") || localStorage.getItem("riku_token") || "";
-  tokenInput.addEventListener("change", () => localStorage.setItem("riku_token", tokenInput.value.trim()));
-  const tok = () => tokenInput.value.trim();
-  const q = () => (tok() ? "?token=" + encodeURIComponent(tok()) : "");
-  const escapeHtml = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+  const POLL_MS = 4000, RETRY_MS = 4000, MAX_LINES = 2000, MAX_RELEASES = 20, MAX_SCALE = 32;
+  const TOKEN_KEY = "riku_token";
+  const NO_VALUE = "-";
+  const FLAG_ON = ["1", "true", "yes", "on"];
+  const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "::1", "[::1]"];
+  const BODY_PREVIEW = 160;
+
+  // Every server value that reaches innerHTML goes through this, text and
+  // attributes alike.
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+  const num = (n) => Number(n) || 0;
+  const isOn = (v) => FLAG_ON.includes(String(v == null ? "" : v).trim().toLowerCase());
+  const store = {
+    get(k) { try { return localStorage.getItem(k) || ""; } catch (_) { return ""; } },
+    set(k, v) { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch (_) {} },
+  };
+
+  const sv = (p, w, sw) => `<svg width="${w || 15}" height="${w || 15}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw || 1.9}" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">${p}</svg>`;
+  const I = {
+    term: sv('<path d="M4 17l6-5-6-5"/><path d="M12 19h8"/>'),
+    restart: sv('<path d="M9 4h11v16H4v-9"/><path d="M1 8l3 3 3-3"/>'),
+    restartSm: sv('<path d="M9 4h11v16H4v-9"/><path d="M1 8l3 3 3-3"/>', 11, 2.4),
+    deploy: sv('<path d="M12 15V4"/><path d="M7 9l5-5 5 5"/><path d="M4 15v6h16v-6"/>', 15, 2),
+    rollback: sv('<path d="M9 4h11v16H4v-9"/><path d="M1 8l3 3 3-3"/><path d="M12 8v5h3"/>'),
+    stop: sv('<rect x="6" y="6" width="12" height="12"/>', 14, 2),
+    minus: sv('<path d="M5 12h14"/>', 14, 2),
+    plus: sv('<path d="M5 12h14M12 5v14"/>', 14, 2),
+    chev: sv('<path d="M6 9l6 6 6-6"/>', 14, 2),
+    lock: sv('<rect x="4" y="11" width="16" height="10"/><path d="M8 11V4h8v7"/>'),
+    lockLg: sv('<rect x="4" y="11" width="16" height="10"/><path d="M8 11V4h8v7"/>', 18),
+    unlock: sv('<rect x="4" y="11" width="16" height="10"/><path d="M8 11V4h8v2"/>'),
+    https: sv('<rect x="5" y="11" width="14" height="10"/><path d="M8 11V5h8v6"/>', 13, 2),
+    ext: sv('<path d="M7 17L17 7"/><path d="M8 7h9v9"/>', 12, 2),
+    server: sv('<rect x="3" y="4" width="18" height="7"/><rect x="3" y="13" width="18" height="7"/>', 13),
+    commit: sv('<rect x="8.5" y="8.5" width="7" height="7"/><path d="M3 12h5.5M15.5 12H21"/>', 13),
+    alert: sv('<path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5"/><path d="M12 17.5v.01"/>', 16, 2),
+    cross: sv('<path d="M6 6l12 12M18 6L6 18"/>', 12, 3),
+    x: sv('<path d="M6 6l12 12M18 6L6 18"/>', 12, 2.4),
+    arrow: sv('<path d="M5 12h14"/><path d="M13 6l6 6-6 6"/>', 14, 2),
+    check: sv('<path d="M5 12l5 5 9-10"/>', 10, 4),
+    bang: sv('<path d="M12 5v8"/><path d="M12 18v1"/>', 10, 4),
+    info: sv('<path d="M12 11v8"/><path d="M12 5v1"/>', 10, 4),
+    spin: '<svg class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square" aria-hidden="true"><path d="M4 9V4h16v16H4"/></svg>',
+  };
 
   const fmtBytes = (b) => {
-    if (!b) return "0";
+    b = num(b);
+    if (!b) { return "0"; }
     const u = ["B", "K", "M", "G"]; let i = 0; let n = b;
     while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
     return (n >= 100 || i === 0 ? Math.round(n) : n.toFixed(1)) + u[i];
@@ -208,183 +523,948 @@
   const fmtDur = (s) => {
     s = Math.max(0, s | 0);
     const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
-    if (d) return d + "d" + h + "h"; if (h) return h + "h" + m + "m"; return m + "m";
+    if (d) { return d + "d " + h + "h"; }
+    if (h) { return h + "h " + m + "m"; }
+    return m + "m";
   };
-  const stateOf = (s) => {
-    s = (s || "").toLowerCase();
-    if (s === "running") return ["alive", "running"];
-    if (s === "starting" || s === "restarting") return ["warn", s];
-    if (s === "crashed" || s === "oom_killed") return ["dead", s === "oom_killed" ? "oom-killed" : "crashed"];
-    return ["", s || "stopped"];
+  const pad = (n, l) => String(n).padStart(l || 2, "0");
+  const fmtCpu = (ms) => {
+    let s = Math.round(num(ms) / 1000);
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); s %= 60;
+    return h ? h + "h " + pad(m) + "m" : m + "m " + pad(s) + "s";
   };
-  const cap = (s) => s[0].toUpperCase() + s.slice(1);
+  const fmtAgo = (sec) => {
+    const s = Math.max(0, Math.round(sec));
+    if (s < 60) { return s <= 2 ? "just now" : s + "s ago"; }
+    if (s < 3600) { return Math.floor(s / 60) + "m ago"; }
+    if (s < 86400) { return Math.floor(s / 3600) + "h ago"; }
+    return Math.floor(s / 86400) + "d ago";
+  };
+  const fmtWhen = (ts) => {
+    try { return new Date(ts * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); }
+    catch (_) { return new Date(ts * 1000).toLocaleString(); }
+  };
+  const fmtClock = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
 
-  async function act(app, path, opts) {
-    if (!tok()) { toast("Set the control token first.", "err"); return false; }
+  const stateOf = (s) => {
+    s = String(s || "").toLowerCase();
+    if (s === "running") { return { cls: "alive", label: "running" }; }
+    if (s === "starting" || s === "restarting") { return { cls: "warn", label: s }; }
+    if (s === "crashed") { return { cls: "dead", label: "crashed" }; }
+    if (s === "oom_killed") { return { cls: "dead", label: "oom-killed", oom: true }; }
+    return { cls: "off", label: s || "stopped" };
+  };
+  const glyph = (cls) =>
+    cls === "alive" ? '<span class="g-dot"></span>' :
+    cls === "warn" ? I.spin :
+    cls === "dead" ? I.cross : '<span class="g-off"></span>';
+  const workerName = (w) => `${w.kind}.${w.ordinal}`;
+  const domainsOf = (a) => String((a.routing && a.routing.RIKU_DOMAINS) || "").split(/[\s,]+/).filter(Boolean);
+
+  const url = new URL(location.href);
+  let token = (url.searchParams.get("token") || store.get(TOKEN_KEY) || "").trim();
+  if (url.searchParams.has("token")) {
+    if (token) { store.set(TOKEN_KEY, token); }
+    url.searchParams.delete("token");
+    try { history.replaceState(null, "", url.pathname + url.search + url.hash); } catch (_) {}
+  }
+  let tokenRejected = false;
+  // Set when an action gets 403: the server runs without --token, so no
+  // token can enable mutations.
+  let actionsDisabled = false;
+  const q =() => (token ? "?token=" + encodeURIComponent(token) : "");
+
+  let mode = "loading"; // loading | apps | empty | locked
+
+  function tokenForm(idSuffix) {
+    return `<form class="tok ${tokenRejected ? "bad" : ""}" data-tok>
+      <label class="field">${I.lock}<span class="sr">Control token</span>
+        <input id="tokInput${idSuffix}" type="password" placeholder="Paste control token" autocomplete="off" spellcheck="false" ${tokenRejected ? 'aria-invalid="true" aria-describedby="tokErr' + idSuffix + '"' : ""} />
+      </label>
+      <button type="submit" class="btn primary">Unlock</button>
+    </form>
+    ${tokenRejected ? `<span class="tok-err" id="tokErr${idSuffix}">Token rejected (401)</span>` : ""}`;
+  }
+  function wireTokenForms(root) {
+    root.querySelectorAll("[data-tok]").forEach((f) => f.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const v = f.querySelector("input").value.trim();
+      if (!v) { f.querySelector("input").focus(); return; }
+      token = v; tokenRejected = false; store.set(TOKEN_KEY, v);
+      if (mode === "locked") { mode = "loading"; $("#apps").innerHTML = skeletonHtml(); }
+      renderAuth(); load();
+    }));
+  }
+  function renderAuth() {
+    const el = $("#auth");
+    if (mode === "locked") { el.innerHTML = ""; return; }
+    if (actionsDisabled) {
+      el.innerHTML = `<div class="auth-note" role="status">${I.lock}<span>Actions are disabled on this server (started without --token)</span></div>`;
+      return;
+    }
+    if (token && !tokenRejected) {
+      el.innerHTML = `<div class="unlocked">${I.unlock}<span>Controls unlocked</span><button type="button" class="btn sm ghost" id="lockBtn">Lock</button></div>`;
+      $("#lockBtn").addEventListener("click", () => {
+        token = ""; tokenRejected = false; store.set(TOKEN_KEY, "");
+        renderAuth(); load();
+      });
+      return;
+    }
+    el.innerHTML = tokenForm("");
+    wireTokenForms(el);
+  }
+
+  function toast(kind, title, msg, action) {
+    const box = $("#toasts");
+    const t = document.createElement("div");
+    t.className = "toast " + (kind || "");
+    t.setAttribute("role", kind === "err" ? "alert" : "status");
+    t.innerHTML = `<span class="t-ico">${kind === "ok" ? I.check : kind === "err" ? I.bang : I.info}</span>
+      <div class="t-body"><span class="t-title">${esc(title)}</span>${msg ? `<span class="t-msg">${esc(msg)}</span>` : ""}${action ? `<button type="button" class="link t-act">${esc(action.label)}</button>` : ""}</div>
+      <button type="button" class="t-x" aria-label="Dismiss">${I.x}</button>`;
+    let timer;
+    const kill = () => { clearTimeout(timer); t.classList.add("out"); setTimeout(() => t.remove(), 180); };
+    t.querySelector(".t-x").addEventListener("click", kill);
+    if (action) {
+      t.querySelector(".t-act").addEventListener("click", () => { action.run(); kill(); });
+    }
+    t.addEventListener("mouseenter", () => clearTimeout(timer));
+    t.addEventListener("mouseleave", () => { timer = setTimeout(kill, 2500); });
+    box.appendChild(t);
+    while (box.children.length > 4) { box.firstElementChild.remove(); }
+    timer = setTimeout(kill, kind === "err" ? 8000 : 5000);
+  }
+
+  async function act(app, path, body) {
+    if (!token) {
+      toast("err", "Controls are locked", "Paste the control token to run actions.");
+      const i = $("#tokInput");
+      if (i) { i.focus(); }
+      return false;
+    }
     try {
-      const res = await fetch(`/api/apps/${encodeURIComponent(app)}/${path}`, Object.assign({
+      const res = await fetch(`/api/apps/${encodeURIComponent(app)}/${path}`, {
         method: "POST",
-        headers: { Authorization: "Bearer " + tok(), "Content-Type": "application/json" },
-      }, opts || {}));
-      if (res.ok) return true;
-      toast(`${path}: ${(await res.text()) || res.status}`, "err");
-    } catch (e) { toast(`${path}: ${e.message}`, "err"); }
+        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (res.ok) { return true; }
+      if (res.status === 401) {
+        tokenRejected = true; renderAuth();
+        toast("err", "Token rejected", "The supervisor refused the control token (401).");
+        return false;
+      }
+      if (res.status === 403) {
+        actionsDisabled = true; renderAuth();
+        toast("err", `${cap(path)} failed`, "Actions are disabled on this server. Restart the dashboard with --token.");
+        return false;
+      }
+      const txt = ((await res.text().catch(() => "")) || "").trim();
+      toast("err", `${cap(path)} failed`, `${res.status}${txt ? " · " + txt.slice(0, BODY_PREVIEW) : ""}`);
+    } catch (e) {
+      toast("err", `${cap(path)} failed`, (e && e.message) || "Network error");
+    }
     return false;
   }
 
-  // ---- live logs ----
-  const drawer = $("#drawer"), consoleEl = $("#console");
-  let es = null;
-  function openLogs(app) {
-    closeLogs();
-    $("#drawerTitle").textContent = "logs · " + app;
-    consoleEl.innerHTML = "";
-    drawer.classList.add("open");
-    es = new EventSource(`/api/apps/${encodeURIComponent(app)}/logs${q()}`);
-    es.addEventListener("log", (ev) => {
-      const tab = ev.data.indexOf("\t");
-      const tag = tab > 0 ? ev.data.slice(0, tab) : "";
-      const line = tab > 0 ? ev.data.slice(tab + 1) : ev.data;
-      const atBottom = consoleEl.scrollHeight - consoleEl.scrollTop - consoleEl.clientHeight < 40;
-      const div = document.createElement("div");
-      div.className = "ln";
-      div.innerHTML = `<span class="tag">${escapeHtml(tag)}</span>${escapeHtml(line)}`;
-      consoleEl.appendChild(div);
-      while (consoleEl.childNodes.length > 2000) consoleEl.removeChild(consoleEl.firstChild);
-      if (atBottom) consoleEl.scrollTop = consoleEl.scrollHeight;
-    });
-    es.onerror = () => {};
+  async function withBusy(c, btn, label, fn) {
+    const html = btn.innerHTML;
+    btn.style.minWidth = btn.offsetWidth + "px";
+    btn.disabled = true;
+    btn.setAttribute("aria-busy", "true");
+    btn.innerHTML = I.spin + esc(label);
+    try { return await fn(); }
+    finally {
+      btn.removeAttribute("aria-busy");
+      btn.style.minWidth = "";
+      btn.innerHTML = html;
+      btn.disabled = false;
+      if (c.data) { updateCard(c, c.data); }
+    }
   }
-  function closeLogs() { if (es) { es.close(); es = null; } drawer.classList.remove("open"); }
-  $("#drawerClose").addEventListener("click", closeLogs);
 
-  // ---- render ----
-  const main = $("#main");
-  const webCount = (ws) => ws.filter((w) => w.kind === "web").length || 1;
+  function confirmStop(c) {
+    const dlg = $("#confirm");
+    const ws = (c.data && c.data.workers) || [];
+    const dom = c.data ? domainsOf(c.data)[0] : "";
+    $("#cfTitle").innerHTML = `Stop <span class="mono">${esc(c.app)}</span>?`;
+    $("#cfDesc").textContent = ws.length
+      ? `${ws.length === 1 ? "This worker" : "These " + ws.length + " workers"} will be shut down${dom ? ", and " + dom + " stops serving traffic" : ""} until the app is started again.`
+      : `${c.app} will be stopped.`;
+    $("#cfList").innerHTML = ws.map((w) => `<span>${esc(workerName(w))}</span>`).join("");
+    $("#cfOk").textContent = "Stop " + c.app;
+    if (typeof dlg.showModal !== "function") {
+      return Promise.resolve(window.confirm(`Stop ${c.app}? Its workers will be shut down.`));
+    }
+    return new Promise((resolve) => {
+      const onClose = () => { dlg.removeEventListener("close", onClose); resolve(dlg.returnValue === "ok"); };
+      dlg.addEventListener("close", onClose);
+      dlg.returnValue = "";
+      dlg.showModal();
+      $("#cfCancel").focus();
+    });
+  }
+  $("#confirm").addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) { e.currentTarget.close("cancel"); }
+  });
 
-  function render(data) {
-    $("#readout").innerHTML = `<b>v${escapeHtml(data.riku_version)}</b> · up ${fmtDur(data.supervisor_uptime_seconds)} · <b>${data.apps.length}</b> app${data.apps.length === 1 ? "" : "s"}`;
-    if (!data.apps.length) {
-      main.innerHTML = `<div class="empty">No apps deployed yet.<br><br>Push one: <code>git push riku main</code></div>`;
+  const cards = new Map();
+  let cardSeq = 0;
+
+  // A counter, not the app name, keeps ids unique: my.app and my_app
+  // would sanitize to the same id.
+  function createCard(app) {
+    cardSeq++;
+    const id = "app-" + cardSeq;
+    const el = document.createElement("section");
+    el.className = "app";
+    el.setAttribute("aria-labelledby", id);
+    el.innerHTML = `
+      <div class="progress" aria-hidden="true"><i></i></div>
+      <div class="app-head">
+        <div class="app-id">
+          <div class="app-title"><h2 id="${id}">${esc(app)}</h2><span data-health></span></div>
+          <div class="meta" data-meta></div>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn" data-do="logs">${I.term}Logs</button>
+          <button type="button" class="btn" data-do="restart">${I.restart}Restart</button>
+          <button type="button" class="btn primary" data-do="redeploy">${I.deploy}Redeploy</button>
+        </div>
+      </div>
+      <div class="alert" data-alert hidden></div>
+      <div class="table-wrap">
+        <div class="table" role="table" aria-label="${esc(app)} workers">
+          <div class="tr th" role="row">
+            <span role="columnheader">Worker</span><span role="columnheader">State</span><span role="columnheader">Memory</span>
+            <span role="columnheader">CPU time</span><span role="columnheader">PID</span><span role="columnheader" class="r">Restarts</span>
+          </div>
+          <div role="rowgroup" data-rows></div>
+        </div>
+      </div>
+      <div class="app-foot">
+        <div class="controls" data-controls>
+          <div class="ctl">
+            <label class="ctl-label" for="${id}-scale">Web processes</label>
+            <div class="stepper" data-stepper>
+              <button type="button" class="st-btn" data-step="-1" aria-label="Fewer web processes">${I.minus}</button>
+              <input id="${id}-scale" type="number" min="0" max="${MAX_SCALE}" inputmode="numeric" data-scale />
+              <button type="button" class="st-btn" data-step="1" aria-label="More web processes">${I.plus}</button>
+            </div>
+            <button type="button" class="btn" data-do="scale" disabled>Apply</button>
+            <button type="button" class="btn ghost" data-do="reset" hidden>Reset</button>
+          </div>
+          <span class="vsep" aria-hidden="true"></span>
+          <div class="ctl">
+            <label class="ctl-label" for="${id}-rel">Release</label>
+            <div class="select"><select id="${id}-rel" data-rel><option value="">loading...</option></select>${I.chev}</div>
+            <button type="button" class="btn" data-do="rollback">${I.rollback}Roll back</button>
+          </div>
+          <span class="grow"></span>
+          <button type="button" class="btn danger" data-do="stop">${I.stop}Stop app</button>
+        </div>
+        <div class="busy-note" data-busynote hidden>
+          ${I.spin}
+          <p>Deploy in progress. Scaling, rollback and stop unlock when it finishes.</p>
+          <span class="grow"></span>
+          <button type="button" class="link" data-do="logs">Follow deploy output ${I.arrow}</button>
+        </div>
+      </div>`;
+    const c = { app, id, el, data: null, releases: [], webNow: 0, scaleVal: null, wasBusy: false };
+    wire(c);
+    loadReleases(c);
+    return c;
+  }
+
+  function wire(c) {
+    const el = c.el;
+    const input = el.querySelector("[data-scale]");
+    el.addEventListener("click", async (e) => {
+      const step = e.target.closest("[data-step]");
+      if (step) {
+        if (!step.disabled) { setScale(c, (c.scaleVal == null ? c.webNow : c.scaleVal) + Number(step.dataset.step)); }
+        return;
+      }
+      const btn = e.target.closest("[data-do]");
+      if (!btn || btn.disabled) { return; }
+      const app = c.app, what = btn.dataset.do;
+      const viewLogs = { label: "View logs", run: () => openLogs(app) };
+
+      if (what === "logs") { openLogs(app, btn.dataset.worker || ""); return; }
+      if (what === "reset") { c.scaleVal = null; syncScale(c); return; }
+      if (what === "scale") {
+        const n = c.scaleVal;
+        if (n == null) { return; }
+        await withBusy(c, btn, "Applying...", async () => {
+          if (await act(app, "scale", { web: n })) {
+            toast("ok", `Scaling ${app} web to ${n}`, "Workers appear as they start.", viewLogs);
+            c.scaleVal = null; soon();
+          }
+        });
+        return;
+      }
+      if (what === "rollback") {
+        const to = el.querySelector("[data-rel]").value;
+        await withBusy(c, btn, "Rolling back...", async () => {
+          if (await act(app, "rollback", to ? { to } : {})) {
+            toast("ok", `Rolling back ${app}`, to ? `To ${to.slice(0, 8)}.` : "To the previous release.", viewLogs);
+            soon(); setTimeout(() => loadReleases(c), 3000);
+          }
+        });
+        return;
+      }
+      if (what === "stop") {
+        if (!(await confirmStop(c))) { return; }
+        await withBusy(c, btn, "Stopping...", async () => {
+          if (await act(app, "stop")) { toast("ok", `Stopping ${app}`, "Its workers are shutting down."); soon(); }
+        });
+        return;
+      }
+      if (what === "restart") {
+        await withBusy(c, btn, "Restarting...", async () => {
+          if (await act(app, "restart")) { toast("ok", `Restarting ${app}`, "Workers will be back in a moment.", viewLogs); soon(); }
+        });
+        return;
+      }
+      if (what === "redeploy") {
+        await withBusy(c, btn, "Redeploying...", async () => {
+          if (await act(app, "redeploy")) {
+            toast("ok", `Redeploying ${app}`, "Controls lock until the deploy finishes.", { label: "Follow output", run: () => openLogs(app) });
+            soon();
+          }
+        });
+      }
+    });
+    input.addEventListener("input", () => {
+      const n = parseInt(input.value, 10);
+      if (!isNaN(n)) { setScale(c, n, true); }
+    });
+    input.addEventListener("blur", () => syncScale(c));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); el.querySelector('[data-do="scale"]').click(); }
+      if (e.key === "Escape") { c.scaleVal = null; syncScale(c); }
+    });
+  }
+
+  function setScale(c, n, fromInput) {
+    const clamped = Math.max(0, Math.min(MAX_SCALE, n | 0));
+    c.scaleVal = clamped === c.webNow ? null : clamped;
+    syncScale(c, fromInput && clamped === n);
+  }
+
+  function syncScale(c, keepInput) {
+    const el = c.el;
+    const input = el.querySelector("[data-scale]");
+    const apply = el.querySelector('[data-do="scale"]');
+    const reset = el.querySelector('[data-do="reset"]');
+    const val = c.scaleVal == null ? c.webNow : c.scaleVal;
+    const dirty = c.scaleVal != null;
+    if (!keepInput) { input.value = val; }
+    el.querySelector("[data-stepper]").classList.toggle("dirty", dirty);
+    el.querySelector('[data-step="-1"]').disabled = val <= 0;
+    el.querySelector('[data-step="1"]').disabled = val >= MAX_SCALE;
+    reset.hidden = !dirty;
+    if (apply.hasAttribute("aria-busy")) { return; }
+    apply.disabled = !dirty;
+    apply.classList.toggle("primary", dirty);
+    apply.innerHTML = dirty ? `Apply <span class="delta">${c.webNow} → ${c.scaleVal}</span>` : "Apply";
+  }
+
+  function badge(kind, html) { return `<span class="badge ${kind}">${html}</span>`; }
+
+  function routeTag(router, word, cls) {
+    return `<span>${I.server}${esc(router)} <span class="${cls}">${esc(word)}</span></span>`;
+  }
+
+  // `route` is tagged by `router`: nginx carries enabled/config_exists,
+  // caddy the site file path (null without one), plugin its name, and
+  // unknown the error from reading the ROUTER file.
+  function routeHtml(route) {
+    const r = route || {};
+    if (r.router === "nginx") {
+      if (r.enabled) { return routeTag("nginx", "live", "c-ok"); }
+      return r.config_exists ? routeTag("nginx", "staged", "c-warn") : routeTag("nginx", "off", "c-dim");
+    }
+    if (r.router === "caddy") {
+      return r.site ? routeTag("caddy", "configured", "c-ok") : routeTag("caddy", "off", "c-dim");
+    }
+    if (r.router === "plugin") { return routeTag(r.name, "plugin", "c-dim"); }
+    return `<span title="${esc(r.error || "")}">${I.server}router <span class="c-bad">unknown</span></span>`;
+  }
+
+  function metaHtml(c, a, busy) {
+    const https = isOn((a.routing || {}).RIKU_HTTPS_ONLY);
+    const doms = domainsOf(a);
+    const parts = [];
+    if (doms.length) {
+      const d = doms[0];
+      parts.push(`<a href="${https ? "https" : "http"}://${esc(d)}" target="_blank" rel="noopener noreferrer">${https ? I.https : ""}${esc(d)}${https ? "" : '<span class="tag-http">http</span>'}${I.ext}</a>`);
+      if (doms.length > 1) {
+        parts.push(`<span class="c-dim" title="${esc(doms.slice(1).join(", "))}">+${doms.length - 1} more</span>`);
+      }
+    } else {
+      parts.push('<span class="c-dim">no domain</span>');
+    }
+    parts.push(routeHtml(a.route));
+    const cur = c.releases[0];
+    if (busy) {
+      parts.push(`<span>${I.commit}${cur ? `<b>${esc(String(cur.sha).slice(0, 8))}</b><span class="c-dim">→</span>` : ""}<span class="c-warn">deploying</span></span>`);
+    } else if (cur) {
+      parts.push(`<span>${I.commit}<b>${esc(String(cur.sha).slice(0, 8))}</b> deployed ${esc(fmtAgo(Date.now() / 1000 - num(cur.ts)))}</span>`);
+    }
+    return parts.join("");
+  }
+
+  function limitMeter(used, limit) {
+    const pct = Math.min(100, (used / limit) * 100);
+    const lvl = pct >= 90 ? "crit" : pct >= 75 ? "warn" : "";
+    return `<span role="cell" class="mem ${lvl}">
+        <span class="meter" role="img" aria-label="${Math.round(pct)}% of memory limit"><i style="width:${pct.toFixed(1)}%"></i></span>
+        <span class="mem-val">${fmtBytes(used)} <span>/ ${fmtBytes(limit)}</span></span>
+      </span>`;
+  }
+
+  function peakMeter(used, peak) {
+    const pct = peak ? Math.min(100, (used / peak) * 100) : 0;
+    return `<span role="cell" class="mem">
+        <span class="meter" role="img" aria-label="memory"><i style="width:${pct.toFixed(1)}%"></i></span>
+        <span class="mem-val">${fmtBytes(used)}</span>
+      </span>`;
+  }
+
+  // /api/state sends no memory limit today (RIKU_MAX_MEMORY_MB is unset by
+  // default, so most workers have none). Without one the bar is relative
+  // to the app's largest worker and carries no warn or crit level.
+  function memCell(w, peak) {
+    const used = num(w.memory_bytes);
+    const limit = num(w.memory_limit_bytes);
+    return limit ? limitMeter(used, limit) : peakMeter(used, peak);
+  }
+
+  function workerRow(w, peak) {
+    const st = stateOf(w.status);
+    const rc = num(w.restart_count);
+    const rlvl = rc >= 4 ? "crit" : "warn";
+    const live = !!w.pid;
+    return `<div class="tr ${st.cls === "dead" ? "is-bad" : ""}" role="row">
+      <span role="cell" class="w-name">${esc(workerName(w))}</span>
+      <span role="cell"><span class="state ${st.cls}">${glyph(st.cls)}${esc(st.label)}</span></span>
+      ${memCell(w, peak)}
+      <span role="cell" class="${live ? "muted" : "dim"}">${live ? fmtCpu(w.cpu_time_ms) : NO_VALUE}</span>
+      <span role="cell" class="${live ? "muted" : "dim"}">${live ? esc(w.pid) : NO_VALUE}</span>
+      <span role="cell" class="r">${rc ? `<span class="rc-badge ${rlvl}" title="${rc} restarts">${I.restartSm}${rc}</span>` : '<span class="dim">0</span>'}</span>
+    </div>`;
+  }
+
+  function healthBadge(busy, st) {
+    const run = st.filter((s) => s.cls === "alive").length;
+    const total = st.length;
+    if (busy) { return badge("warn", I.spin + "Deploying"); }
+    if (!total || st.every((s) => s.cls === "off")) { return badge("", '<span class="g-ring"></span>Stopped'); }
+    if (st.some((s) => s.cls === "dead")) { return badge("bad", `<span class="g-sq"></span>Degraded · ${run}/${total}`); }
+    if (st.some((s) => s.cls === "warn")) { return badge("warn", `${I.spin}Starting · ${run}/${total}`); }
+    return badge("ok", `<span class="g-sq"></span>Healthy · ${run}/${total}`);
+  }
+
+  function oomText(w) {
+    const limit = num(w.memory_limit_bytes);
+    return limit ? `was killed for exceeding its ${fmtBytes(limit)} memory limit` : "was killed for exceeding its memory limit";
+  }
+
+  function alertHtml(ws, st, dead) {
+    const i = st.findIndex((s) => s.cls === "dead");
+    const w = ws[i], rc = num(w.restart_count);
+    const what = st[i].oom ? oomText(w) : "crashed";
+    const restarts = rc ? ` and has restarted ${rc} time${rc === 1 ? "" : "s"}` : "";
+    const more = dead > 1 ? ` ${dead - 1} other worker${dead > 2 ? "s are" : " is"} also down.` : "";
+    const name = esc(workerName(w));
+    return `${I.alert}<p><b>${name}</b> ${what}${restarts}.${more}</p>
+      <button type="button" class="link" data-do="logs" data-worker="${name}">View ${name} logs</button>`;
+  }
+
+  function updateCard(c, a) {
+    c.data = a;
+    const el = c.el;
+    const busy = String(a.deploy_lock || "").toLowerCase() === "held";
+    if (c.wasBusy && !busy) { loadReleases(c); }
+    c.wasBusy = busy;
+
+    const ws = (a.workers || []).slice().sort((x, y) =>
+      String(x.kind).localeCompare(String(y.kind)) || (num(x.ordinal) - num(y.ordinal)));
+    const st = ws.map((w) => stateOf(w.status));
+    const dead = st.filter((s) => s.cls === "dead").length;
+
+    el.querySelector("[data-health]").innerHTML = healthBadge(busy, st);
+    el.classList.toggle("is-busy", busy);
+    el.classList.toggle("is-bad", !busy && dead > 0);
+    el.setAttribute("aria-busy", busy ? "true" : "false");
+
+    el.querySelector("[data-meta]").innerHTML = metaHtml(c, a, busy);
+
+    const al = el.querySelector("[data-alert]");
+    if (dead && !busy) {
+      al.innerHTML = alertHtml(ws, st, dead);
+      al.hidden = false;
+    } else {
+      al.hidden = true; al.innerHTML = "";
+    }
+
+    const peak = ws.reduce((max, w) => Math.max(max, num(w.memory_bytes)), 0);
+    el.querySelector("[data-rows]").innerHTML = ws.length
+      ? ws.map((w) => workerRow(w, peak)).join("")
+      : '<div class="tr empty-row" role="row"><span role="cell">No workers running.</span></div>';
+
+    c.webNow = ws.filter((w) => w.kind === "web").length;
+    if (c.scaleVal === c.webNow) { c.scaleVal = null; }
+
+    el.querySelector("[data-controls]").hidden = busy;
+    el.querySelector("[data-busynote]").hidden = !busy;
+    el.querySelectorAll('[data-do="restart"],[data-do="redeploy"],[data-do="stop"]').forEach((b) => {
+      if (!b.hasAttribute("aria-busy")) { b.disabled = busy; }
+    });
+    const rb = el.querySelector('[data-do="rollback"]');
+    if (!rb.hasAttribute("aria-busy")) { rb.disabled = busy || c.releases.length < 2; }
+    syncScale(c);
+  }
+
+  // The releases API lists oldest first; the select wants newest first.
+  async function loadReleases(c) {
+    try {
+      const res = await fetch(`/api/apps/${encodeURIComponent(c.app)}/releases${q()}`, { headers: { Accept: "application/json" }, cache: "no-store" });
+      if (res.ok) {
+        const rels = await res.json();
+        c.releases = Array.isArray(rels) ? rels.slice().reverse().slice(0, MAX_RELEASES) : [];
+      }
+    } catch (_) {}
+    renderReleases(c);
+    if (c.data) { updateCard(c, c.data); }
+  }
+
+  function renderReleases(c) {
+    const sel = c.el.querySelector("[data-rel]");
+    const prev = sel.value;
+    if (!c.releases.length) {
+      sel.innerHTML = '<option value="">no releases yet</option>';
+      sel.disabled = true;
       return;
     }
-    main.innerHTML = "";
-    for (const a of data.apps) main.appendChild(strip(a));
+    sel.disabled = false;
+    sel.innerHTML = c.releases.map((r, i) => {
+      const sha = String(r.sha || "");
+      return i === 0
+        ? `<option value="" disabled>${esc(sha.slice(0, 8))} · current</option>`
+        : `<option value="${esc(sha)}">${esc(sha.slice(0, 8))} · ${esc(fmtWhen(num(r.ts)))}</option>`;
+    }).join("");
+    const keep = prev && c.releases.some((r, i) => i && r.sha === prev);
+    sel.value = keep ? prev : (c.releases[1] ? String(c.releases[1].sha) : "");
   }
 
-  function strip(a) {
-    const el = document.createElement("section");
-    el.className = "strip";
-    const domain = a.routing && a.routing.NGINX_SERVER_NAME;
-    const https = a.routing && a.routing.NGINX_HTTPS_ONLY;
-    const busy = (a.deploy_lock || "").toLowerCase() === "held";
-
-    const chips = [];
-    if (domain) chips.push(`<span class="chip dom">${https ? "https://" : "http://"}${escapeHtml(domain)}</span>`);
-    const nx = a.nginx || {};
-    chips.push(`<span class="chip ${nx.enabled ? "on" : ""}">nginx ${nx.enabled ? "live" : nx.config_exists ? "staged" : "off"}</span>`);
-    if (busy) chips.push(`<span class="chip busy">deploying&hellip;</span>`);
-
-    const workers = (a.workers || []).slice().sort((x, y) => (x.kind + x.ordinal).localeCompare(y.kind + y.ordinal));
-    const rows = workers.length ? workers.map((w) => {
-      const [cls, txt] = stateOf(w.status);
-      const memPct = Math.min(100, (w.memory_bytes || 0) / (256 * 1024 * 1024) * 100);
-      return `<div class="wk">
-        <span class="dot ${cls}" title="${escapeHtml(txt)}"></span>
-        <span class="who"><b>${escapeHtml(w.kind)}.${w.ordinal}</b> <span>${escapeHtml(txt)}</span></span>
-        <span class="barwrap"><span class="label">mem</span><span class="bar"><i style="right:${100 - memPct}%"></i></span><span class="val">${fmtBytes(w.memory_bytes)}</span></span>
-        <span class="meta pidcol">${w.pid ? "pid " + w.pid : "&mdash;"} · cpu ${Math.round((w.cpu_time_ms || 0) / 1000)}s</span>
-        <span class="restarts ${w.restart_count > 0 ? "hot" : ""}">&#8635;${w.restart_count}</span>
-      </div>`;
-    }).join("") : `<div class="wk"><span></span><span class="meta">no workers running</span></div>`;
-
-    el.innerHTML = `
-      <div class="strip-head">
-        <span class="app-name">${escapeHtml(a.app)}</span>
-        <div class="chips">${chips.join("")}</div>
-      </div>
-      <div class="workers">${rows}</div>
-      <div class="bar-actions">
-        <button class="btn" data-do="logs">logs</button>
-        <button class="btn" data-do="restart" ${busy ? "disabled" : ""}>restart</button>
-        <button class="btn go" data-do="redeploy" ${busy ? "disabled" : ""}>redeploy</button>
-        <span class="scaler">
-          <span class="label">scale web</span>
-          <input type="number" min="0" max="32" value="${webCount(workers)}" data-scale />
-          <button class="btn" data-do="scale">set</button>
-        </span>
-        <span class="gap"></span>
-        <select class="rel" data-rel><option value="">roll back to&hellip;</option></select>
-        <button class="btn" data-do="rollback">go</button>
-        <button class="btn danger" data-do="stop" ${busy ? "disabled" : ""}>stop</button>
-      </div>`;
-
-    wire(el, a.app);
-    loadReleases(el, a.app);
-    return el;
+  function skeletonHtml() {
+    const card = `<div class="app" aria-hidden="true">
+      <div class="sk-head"><span class="sk" style="width:140px;height:16px"></span><span class="sk lo" style="width:80px;height:16px"></span><span class="grow"></span><span class="sk lo" style="width:72px;height:32px"></span><span class="sk lo" style="width:96px;height:32px"></span></div>
+      <div class="sk-row"><span class="sk" style="height:10px"></span><span class="sk lo" style="height:10px"></span><span class="sk lo" style="height:6px"></span></div>
+      <div class="sk-row"><span class="sk" style="height:10px"></span><span class="sk lo" style="height:10px"></span><span class="sk lo" style="height:6px"></span></div>
+    </div>`;
+    return `<p class="sr" role="status">Reading the supervisor...</p>${card}${card}`;
   }
 
-  function wire(el, app) {
-    el.querySelectorAll("[data-do]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const what = btn.dataset.do;
-        if (what === "logs") return openLogs(app);
-        if (what === "scale") {
-          const n = parseInt(el.querySelector("[data-scale]").value, 10);
-          if (await act(app, "scale", { body: JSON.stringify({ web: isNaN(n) ? 1 : n }) })) { toast(`Scaling ${app} web to ${n}.`, "ok"); soon(); }
-          return;
-        }
-        if (what === "rollback") {
-          const to = el.querySelector("[data-rel]").value;
-          if (await act(app, "rollback", { body: JSON.stringify(to ? { to } : {}) })) { toast(`Rolling back ${app}.`, "ok"); soon(); }
-          return;
-        }
-        if (what === "stop" && !confirm(`Stop ${app}? Its workers will be shut down.`)) return;
-        if (await act(app, what, {})) { toast(`${cap(what)} ${app}.`, "ok"); soon(); }
-      });
+  // Over an ssh tunnel the page sees a loopback name, which is not where
+  // a laptop would push to.
+  function pushHost() {
+    const host = location.hostname;
+    return !host || LOOPBACK_HOSTS.includes(host) ? "your-server" : host;
+  }
+
+  function emptyHtml() {
+    const host = pushHost();
+    const cmds = [`git remote add riku riku@${host}:your-app`, "git push riku main"];
+    return `<div class="panel">
+      <div><h2>Nothing deployed yet</h2><p>riku picks up an app as soon as you push it.</p></div>
+      <div class="cmds">${cmds.map((c, i) => `<div class="cmd"><span class="n">${i + 1}</span><code${i ? ' class="c-ok"' : ""}>${esc(c)}</code><button type="button" data-copy="${esc(c)}">Copy</button></div>`).join("")}</div>
+    </div>`;
+  }
+
+  function lockedHtml() {
+    return `<div class="panel">
+      <span class="panel-ico">${I.lockLg}</span>
+      <div><h2>This supervisor is locked</h2><p>Enter the control token to see apps and run actions. It is kept in this browser only.</p></div>
+      ${tokenForm("Panel")}
+    </div>`;
+  }
+
+  $("#apps").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-copy]");
+    if (!b) { return; }
+    try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "Copied"; }
+    catch (_) { b.textContent = "Select & copy"; }
+    setTimeout(() => { b.textContent = "Copy"; }, 1600);
+  });
+
+  function setSup(state, data) {
+    const el = $("#sup");
+    el.className = "sup " + state;
+    const t = $("#supText");
+    if (state === "live" && data) {
+      const up = data.supervisor_uptime_seconds == null ? "uptime unknown" : "up " + fmtDur(data.supervisor_uptime_seconds);
+      t.innerHTML = `<b>Live</b><span class="sep">/</span>v${esc(data.riku_version)}<span class="sep">/</span>${esc(up)}`;
+    } else if (state === "down") {
+      t.innerHTML = "<b>Unreachable</b>";
+    } else if (state === "error" && data) {
+      t.innerHTML = `<b>HTTP ${num(data.status)}</b>`;
+    } else if (state === "locked") {
+      t.innerHTML = "<b>Locked</b>";
+    } else {
+      t.textContent = "connecting...";
+    }
+  }
+
+  function renderSummary(apps) {
+    let total = 0, run = 0, warn = 0, dead = 0, off = 0;
+    apps.forEach((a) => (a.workers || []).forEach((w) => {
+      total++;
+      const s = stateOf(w.status).cls;
+      if (s === "alive") { run++; } else if (s === "warn") { warn++; } else if (s === "dead") { dead++; } else { off++; }
+    }));
+    $("#pageSub").textContent = `${apps.length} app${apps.length === 1 ? "" : "s"} on this host · ${total} worker${total === 1 ? "" : "s"}`;
+    const chips = [`<span class="sum ok"><i></i><b>${run}</b> running</span>`];
+    if (warn) { chips.push(`<span class="sum warn"><i></i><b>${warn}</b> starting</span>`); }
+    if (dead) { chips.push(`<span class="sum bad"><i></i><b>${dead}</b> failed</span>`); }
+    if (off) { chips.push(`<span class="sum"><i></i><b>${off}</b> stopped</span>`); }
+    $("#summary").innerHTML = chips.join("");
+    $("#pageHead").hidden = false;
+  }
+
+  function render(data) {
+    setSup("live", data);
+    const apps = data.apps || [];
+    const wrap = $("#apps");
+    if (!apps.length) {
+      if (mode !== "empty") { cards.clear(); wrap.innerHTML = emptyHtml(); mode = "empty"; renderAuth(); }
+      $("#pageHead").hidden = true;
+      if (L.app) { closeLogs(); }
+      return;
+    }
+    if (mode !== "apps") { wrap.innerHTML = ""; cards.clear(); mode = "apps"; renderAuth(); }
+
+    const seen = new Set();
+    apps.forEach((a, i) => {
+      seen.add(a.app);
+      let c = cards.get(a.app);
+      if (!c) { c = createCard(a.app); cards.set(a.app, c); }
+      updateCard(c, a);
+      if (wrap.children[i] !== c.el) { wrap.insertBefore(c.el, wrap.children[i] || null); }
+    });
+    for (const [k, c] of cards) {
+      if (!seen.has(k)) { c.el.remove(); cards.delete(k); }
+    }
+
+    renderSummary(apps);
+    if (L.app) {
+      if (cards.has(L.app)) { renderSeg(); } else { closeLogs(); }
+    }
+  }
+
+  function showLocked() {
+    setSup("locked");
+    $("#pageHead").hidden = true;
+    if (L.app) { closeLogs(); }
+    cards.clear();
+    const wasLocked = mode === "locked";
+    mode = "locked";
+    renderAuth();
+    const wrap = $("#apps");
+    const typed = wasLocked && $("#tokInputPanel") ? $("#tokInputPanel").value : "";
+    wrap.innerHTML = lockedHtml();
+    wireTokenForms(wrap);
+    if (typed) { $("#tokInputPanel").value = typed; }
+  }
+
+  // `failure` is null while polls succeed, { status: 0 } when the request
+  // never got an answer, and { status, body } when the server answered
+  // with an error.
+  let lastOk = 0, nextAt = 0, timer = null, failure = null;
+  function schedule(ms) { clearTimeout(timer); nextAt = Date.now() + ms; timer = setTimeout(load, ms); }
+  const soon = () => schedule(600);
+
+  function setFailure(f) {
+    failure = f;
+    $("#banner").hidden = !f;
+    $("#apps").classList.toggle("stale", !!f && mode === "apps");
+    if (f) { setSup(f.status ? "error" : "down", f); }
+  }
+
+  // Re-render the locked panel only on the way in, or when the token
+  // flips between missing and rejected, so a poll never steals focus
+  // from the token field.
+  function onLocked() {
+    const rejected = !!token;
+    setFailure(null);
+    if (mode !== "locked" || rejected !== tokenRejected) {
+      tokenRejected = rejected;
+      showLocked();
+    }
+  }
+
+  async function errorBody(res) {
+    const txt = await res.text().catch(() => "");
+    return (txt || "").trim().slice(0, BODY_PREVIEW);
+  }
+
+  async function fetchState() {
+    let res;
+    try {
+      res = await fetch("/api/state" + q(), { headers: { Accept: "application/json" }, cache: "no-store" });
+    } catch (_) {
+      return { failure: { status: 0 } };
+    }
+    if (res.status === 401) { return { locked: true }; }
+    if (!res.ok) { return { failure: { status: res.status, body: await errorBody(res) } }; }
+    try {
+      return { data: await res.json() };
+    } catch (_) {
+      return { failure: { status: res.status, body: "response was not JSON" } };
+    }
+  }
+
+  async function load() {
+    clearTimeout(timer);
+    const got = await fetchState();
+    if (got.locked) {
+      onLocked();
+      schedule(POLL_MS);
+    } else if (got.failure) {
+      setFailure(got.failure);
+      schedule(RETRY_MS);
+    } else {
+      lastOk = Date.now();
+      setFailure(null);
+      schedule(POLL_MS);
+      render(got.data);
+    }
+    tick();
+  }
+
+  function staleNote() {
+    if (!lastOk || mode !== "apps") { return ""; }
+    const ago = fmtAgo((Date.now() - lastOk) / 1000);
+    return ago === "just now" ? " Showing the last data received." : " Showing data from " + ago + ".";
+  }
+
+  function failureText(f) {
+    if (!f.status) { return "Can't reach the supervisor."; }
+    return `The supervisor answered HTTP ${f.status}${f.body ? ": " + f.body : "."}`;
+  }
+
+  function tick() {
+    $("#synced").textContent = lastOk && !failure ? "synced " + fmtAgo((Date.now() - lastOk) / 1000) : "";
+    if (!failure) { return; }
+    $("#bannerText").textContent = failureText(failure) + staleNote();
+    const s = Math.max(0, Math.ceil((nextAt - Date.now()) / 1000));
+    $("#bannerRetry").textContent = s ? `retry in ${s}s` : "retrying...";
+  }
+  $("#retryBtn").addEventListener("click", () => { $("#bannerRetry").textContent = "retrying..."; load(); });
+  setInterval(tick, 1000);
+
+  const drawer = $("#drawer"), con = $("#console");
+  const L = { app: null, es: null, lines: [], tags: new Set(), worker: "", q: "", follow: true, paused: false, pending: [], unseen: 0, stream: "idle" };
+  const TAG_COLORS = ["#72B4F6", "#B79CF2", "#5FD0C4", "#E7A3C6", "#C8D36A", "#F0A877"];
+  const tagColor = (t) => {
+    let h = 0;
+    for (const ch of t) { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }
+    return TAG_COLORS[h % TAG_COLORS.length];
+  };
+  const baseTag = (t) => (t || "").split(/[:\s]/)[0];
+  const lvlOf = (tag, text) => {
+    if (/err/i.test(tag) || /\b(ERROR|ERR|FATAL|CRITICAL|PANIC|Traceback|Exception)\b/.test(text) || /^\s+at\s/.test(text)) {
+      return "err";
+    }
+    if (/\b(WARN|WARNING)\b/.test(text)) { return "warn"; }
+    return "";
+  };
+  const visible = (ln) => (!L.worker || ln.base === L.worker) && (!L.q || ln.hay.includes(L.q));
+  const atBottom = () => con.scrollHeight - con.scrollTop - con.clientHeight < 40;
+
+  function setStream(s) { L.stream = s; syncLogUi(); }
+
+  let syncQueued = false;
+  function syncLogUi() {
+    if (syncQueued) { return; }
+    syncQueued = true;
+    requestAnimationFrame(() => {
+      syncQueued = false;
+      $("#followBtn").setAttribute("aria-pressed", String(L.follow));
+      $("#pauseBtn").textContent = L.paused ? (L.pending.length ? `Resume (${L.pending.length})` : "Resume") : "Pause";
+      const map = {
+        live: ["live", "streaming"], connecting: ["", "connecting"], reconnecting: ["warn", "reconnecting"],
+        closed: ["bad", "disconnected"], idle: ["", "idle"],
+      };
+      let [cls, txt] = map[L.stream] || map.idle;
+      if (L.paused) { cls = "warn"; txt = `paused · ${L.pending.length} buffered`; }
+      const ss = $("#streamState");
+      ss.className = "stream " + cls;
+      ss.lastElementChild.textContent = txt;
+      $("#lineCount").textContent = `${L.lines.length.toLocaleString()} line${L.lines.length === 1 ? "" : "s"}`;
+      const jb = $("#jumpBtn");
+      jb.hidden = L.follow;
+      jb.textContent = L.unseen ? `${L.unseen} new · jump to latest` : "Jump to latest";
+      const empty = con.querySelector(".console-empty");
+      if (!L.lines.length && !empty) {
+        con.insertAdjacentHTML("afterbegin", '<div class="console-empty">Waiting for output...</div>');
+      } else if (L.lines.length && empty) {
+        empty.remove();
+      }
     });
   }
 
-  async function loadReleases(el, app) {
-    try {
-      const res = await fetch(`/api/apps/${encodeURIComponent(app)}/releases${q()}`, { headers: { Accept: "application/json" } });
-      if (!res.ok) return;
-      const rels = await res.json();
-      const sel = el.querySelector("[data-rel]");
-      rels.slice(0, 20).forEach((r) => {
-        const o = document.createElement("option");
-        o.value = r.sha;
-        o.textContent = r.sha.slice(0, 8) + " · " + new Date(r.ts * 1000).toLocaleString();
-        sel.appendChild(o);
-      });
-    } catch (_) {}
+  function renderSeg() {
+    const c = cards.get(L.app);
+    const names = new Set(((c && c.data && c.data.workers) || []).map(workerName));
+    L.tags.forEach((t) => names.add(t));
+    const list = [...names].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    if (L.worker && !names.has(L.worker)) { list.push(L.worker); }
+    $("#logFilter").innerHTML = [["", "all"], ...list.map((n) => [n, n])]
+      .map(([v, l]) => `<button type="button" data-w="${esc(v)}" aria-pressed="${L.worker === v}">${esc(l)}</button>`).join("");
   }
 
-  function toast(msg, kind) {
-    const t = document.createElement("div");
-    t.className = "toast " + (kind || "");
-    t.textContent = msg;
-    $("#toasts").appendChild(t);
-    setTimeout(() => t.remove(), 4200);
+  function applyFilter() {
+    L.lines.forEach((ln) => { ln.el.hidden = !visible(ln); });
+    if (L.follow) { con.scrollTop = con.scrollHeight; }
   }
 
-  // ---- poll ----
-  async function load() {
-    try {
-      const res = await fetch("/api/state" + q(), { headers: { Accept: "application/json" } });
-      if (res.status === 401) { $("#readout").textContent = "token required"; return; }
-      if (!res.ok) throw new Error(res.status);
-      $("#pulse").style.opacity = "1";
-      render(await res.json());
-    } catch (e) {
-      $("#pulse").style.opacity = ".2";
-      $("#readout").textContent = "supervisor unreachable, retrying";
+  function textSpan(cls, text) {
+    const s = document.createElement("span");
+    s.className = cls;
+    s.textContent = text;
+    return s;
+  }
+
+  // Log lines are arbitrary app output, so they are built with textContent
+  // and never pass through innerHTML.
+  function lineEl(ln) {
+    const div = document.createElement("div");
+    div.className = "ln" + (ln.lvl ? " " + ln.lvl : "");
+    const tag = textSpan("ln-tag", ln.tag);
+    tag.style.color = tagColor(ln.base || "-");
+    div.append(textSpan("ln-t", fmtClock(ln.ts)), tag, textSpan("ln-x", ln.text));
+    return div;
+  }
+
+  function addLine(ln) {
+    ln.base = baseTag(ln.tag);
+    if (ln.base && !L.tags.has(ln.base)) {
+      L.tags.add(ln.base);
+      renderSeg();
     }
+    ln.hay = (ln.tag + " " + ln.text).toLowerCase();
+    ln.el = lineEl(ln);
+    ln.el.hidden = !visible(ln);
+    con.appendChild(ln.el);
+    L.lines.push(ln);
+    while (L.lines.length > MAX_LINES) { L.lines.shift().el.remove(); }
+    if (L.follow) {
+      con.scrollTop = con.scrollHeight;
+    } else if (!ln.el.hidden) {
+      L.unseen++;
+    }
+    syncLogUi();
   }
-  const soon = () => setTimeout(load, 600);
+
+  function clearLines() {
+    L.lines.forEach((ln) => ln.el.remove());
+    L.lines = []; L.unseen = 0;
+    syncLogUi();
+  }
+
+  // Each connection starts with the server's backlog of every log file,
+  // so a reconnect would repeat lines already shown. Drop them first.
+  function startStream() {
+    setStream("connecting");
+    const es = new EventSource(`/api/apps/${encodeURIComponent(L.app)}/logs${q()}`);
+    L.es = es;
+    let opened = false;
+    es.addEventListener("open", () => {
+      if (opened) {
+        L.pending = [];
+        clearLines();
+      }
+      opened = true;
+      setStream("live");
+    });
+    es.addEventListener("log", (ev) => {
+      if (L.stream !== "live") { setStream("live"); }
+      const d = ev.data, i = d.indexOf("\t");
+      const tag = i > 0 ? d.slice(0, i) : "", text = i > 0 ? d.slice(i + 1) : d;
+      const ln = { tag, text, ts: new Date(), lvl: lvlOf(tag, text) };
+      if (L.paused) {
+        L.pending.push(ln);
+        if (L.pending.length > MAX_LINES) { L.pending.shift(); }
+        syncLogUi();
+        return;
+      }
+      addLine(ln);
+    });
+    es.onerror = () => setStream(es.readyState === EventSource.CLOSED ? "closed" : "reconnecting");
+  }
+
+  function openLogs(app, worker) {
+    if (L.app !== app) {
+      if (L.es) { L.es.close(); L.es = null; }
+      L.app = app; L.lines = []; L.tags = new Set(); L.pending = []; L.paused = false; L.follow = true; L.unseen = 0;
+      con.replaceChildren();
+      startStream();
+    }
+    L.worker = worker || "";
+    $("#drawerApp").textContent = app;
+    renderSeg(); applyFilter(); syncLogUi();
+    drawer.removeAttribute("inert");
+    drawer.classList.add("open");
+    document.body.classList.add("drawer-open");
+    con.focus({ preventScroll: true });
+  }
+
+  function closeLogs() {
+    if (L.es) { L.es.close(); L.es = null; }
+    L.app = null; L.stream = "idle";
+    drawer.classList.remove("open");
+    drawer.setAttribute("inert", "");
+    document.body.classList.remove("drawer-open");
+  }
+
+  $("#drawerClose").addEventListener("click", closeLogs);
+  $("#logFilter").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-w]");
+    if (!b) { return; }
+    L.worker = b.dataset.w; renderSeg(); applyFilter();
+  });
+  $("#logQ").addEventListener("input", (e) => { L.q = e.target.value.trim().toLowerCase(); applyFilter(); });
+  $("#followBtn").addEventListener("click", () => {
+    L.follow = !L.follow;
+    if (L.follow) { L.unseen = 0; con.scrollTop = con.scrollHeight; }
+    syncLogUi();
+  });
+  $("#jumpBtn").addEventListener("click", () => { L.follow = true; L.unseen = 0; con.scrollTop = con.scrollHeight; syncLogUi(); });
+  $("#pauseBtn").addEventListener("click", () => {
+    L.paused = !L.paused;
+    if (!L.paused) { const p = L.pending; L.pending = []; p.forEach(addLine); }
+    syncLogUi();
+  });
+  $("#clearBtn").addEventListener("click", clearLines);
+  con.addEventListener("scroll", () => {
+    const bottom = atBottom();
+    if (bottom && !L.follow) { L.follow = true; L.unseen = 0; syncLogUi(); }
+    else if (!bottom && L.follow) { L.follow = false; syncLogUi(); }
+  }, { passive: true });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !drawer.classList.contains("open")) { return; }
+    if ($("#confirm").open) { return; }
+    if (e.target && e.target.matches && e.target.matches("[data-scale]")) { return; }
+    if (e.target === $("#logQ") && $("#logQ").value) { $("#logQ").value = ""; L.q = ""; applyFilter(); return; }
+    closeLogs();
+  });
+
+  $("#apps").innerHTML = skeletonHtml();
+  renderAuth();
   load();
-  setInterval(load, 4000);
-  tokenInput.addEventListener("change", load);
 })();
 </script>
 </body>

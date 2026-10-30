@@ -35,14 +35,15 @@ first-party **event-subscriber** bundle `riku-notify` (`riku install-plugins
 
 ### Plugin Protocol
 
-Each runtime plugin is an executable that implements four subcommands:
+Each runtime plugin is an executable that implements four subcommands, plus an optional fifth:
 
 | Subcommand | Behaviour |
 |---|---|
 | `<plugin> detect` | exit 0 = this plugin handles the app, exit 1 = skip |
 | `<plugin> build` | install dependencies; stdout/stderr streamed to deploy log |
 | `<plugin> env` | print `KEY=VALUE` lines to stdout; merged into worker environment |
-| `<plugin> start` | print default start command; used if Procfile has no entry for a process type |
+| `<plugin> start` | print default start command; fills a Procfile entry with no command, and runs as `web` when the app has no Procfile |
+| `<plugin> destroy` | optional: remove what the plugin started outside the app directory (the container plugin runs `compose down`); called by `riku destroy` before the app's files go, and a non-zero exit is shown as a warning |
 
 Context is passed as environment variables:
 
@@ -62,9 +63,9 @@ RIKU_ROOT         riku root (~/.riku)
 
 ### Detection Order
 
-1. If `RUNTIME=<name>` is set in the app ENV → use that plugin, skip detection
+1. If `RIKU_RUNTIME=<name>` is set in the app ENV → use that plugin, skip detection
 2. Otherwise → run `detect` on all non-`riku-*` plugins sorted alphabetically; first exit 0 wins
-3. If no plugin matches → deploy fails with: `"No runtime plugin matched. Run 'riku install-plugins' or set RUNTIME=<name>."`
+3. If no plugin matches → deploy fails with: `"No runtime plugin matched. Run 'riku install-plugins' or set RIKU_RUNTIME=<name>."`
 
 ### Writing a Custom Runtime Plugin
 
@@ -111,7 +112,7 @@ chmod +x ~/.riku/plugins/my-runtime
 To skip auto-detection:
 
 ```bash
-riku config set myapp RUNTIME=my-runtime
+riku config set myapp RIKU_RUNTIME=my-runtime
 ```
 
 ---
@@ -128,7 +129,7 @@ Lifecycle hooks are named with a `riku-` prefix and run automatically at deploy 
 | `riku-post-deploy` | After workers are up | Non-fatal |
 
 Hooks receive: `RIKU_APP`, `RIKU_APP_PATH`, `RIKU_ENV_PATH`, `RIKU_ROOT`,
-and `RIKU_RUNTIME` (the detected plugin name, if any).
+and `RIKU_DETECTED_RUNTIME` (the detected plugin name, if any).
 
 Example notification hook:
 
@@ -226,7 +227,7 @@ Client plugins receive these arguments:
 
 | Argument | Description | Example |
 |----------|-------------|---------|
-| `$1` | Server | `deploy@myserver.com` |
+| `$1` | Server | `riku@myserver.com` |
 | `$2` | App name | `myapp` |
 | `$3` | Full command | `backup:data` |
 | `$4+` | Additional arguments | (varies) |
@@ -245,7 +246,7 @@ shift 3
 case "$cmd" in
     open)
         # Fetch the domain from server config
-        domain=$(ssh "$server" config:get "$app" NGINX_SERVER_NAME)
+        domain=$(ssh "$server" config:get "$app" RIKU_DOMAINS)
         if [ -n "$domain" ]; then
             # Open in browser
             xdg-open "https://$domain" 2>/dev/null || \
@@ -524,7 +525,7 @@ case "$cmd" in
         # Ensure tunnel is running on server
         tunnel_name=$(ssh "$server" code-tunnel:ensure "$app")
         # Launch local VS Code
-        code --remote "tunnel+$tunnel_name" "/home/deploy/.riku/apps/$app"
+        code --remote "tunnel+$tunnel_name" "/home/riku/.riku/apps/$app"
         ;;
     code:stop)
         ssh "$server" code-tunnel:stop "$app"

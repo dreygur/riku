@@ -430,3 +430,112 @@ release: python migrate.py
         Ok(())
     }
 }
+
+mod server_cmd {
+    use std::path::Path;
+    use std::process::{Command, Output, Stdio};
+
+    fn riku(config: &Path, args: &[&str]) -> Output {
+        Command::new(env!("CARGO_BIN_EXE_riku"))
+            .args(args)
+            .env("XDG_CONFIG_HOME", config)
+            .env_remove("SSH_ORIGINAL_COMMAND")
+            .current_dir(config)
+            .stdin(Stdio::null())
+            .output()
+            .unwrap()
+    }
+
+    fn stdout(out: &Output) -> String {
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    fn line_for<'a>(listing: &'a str, name: &str) -> &'a str {
+        listing
+            .lines()
+            .find(|l| l.contains(name))
+            .unwrap_or_else(|| panic!("no row for {name} in:\n{listing}"))
+    }
+
+    #[test]
+    fn server_add_list_default_remove_round_trip() {
+        let config = tempfile::tempdir().unwrap();
+        let dir = config.path();
+
+        let first = riku(dir, &["server", "add", "prod", "riku@prod.example"]);
+        assert!(
+            first.status.success(),
+            "{}",
+            String::from_utf8_lossy(&first.stderr)
+        );
+        let second = riku(
+            dir,
+            &[
+                "server",
+                "add",
+                "edge",
+                "riku@edge.example",
+                "--admin",
+                "root@edge.example",
+            ],
+        );
+        assert!(
+            second.status.success(),
+            "{}",
+            String::from_utf8_lossy(&second.stderr)
+        );
+
+        let set = riku(dir, &["server", "default", "edge"]);
+        assert!(
+            set.status.success(),
+            "{}",
+            String::from_utf8_lossy(&set.stderr)
+        );
+
+        let listing = stdout(&riku(dir, &["server", "list"]));
+        assert!(
+            line_for(&listing, "edge").contains('*'),
+            "default not marked:\n{listing}"
+        );
+        assert!(
+            !line_for(&listing, "prod").contains('*'),
+            "wrong row marked:\n{listing}"
+        );
+        assert!(
+            listing.contains("root@edge.example"),
+            "admin missing:\n{listing}"
+        );
+
+        let removed = riku(dir, &["server", "remove", "edge"]);
+        assert!(
+            removed.status.success(),
+            "{}",
+            String::from_utf8_lossy(&removed.stderr)
+        );
+
+        let after = stdout(&riku(dir, &["server", "list"]));
+        assert!(!after.contains('*'), "a default is still marked:\n{after}");
+        assert!(
+            !after.contains("edge"),
+            "removed server still listed:\n{after}"
+        );
+    }
+
+    #[test]
+    fn server_add_rejects_bad_address() {
+        let config = tempfile::tempdir().unwrap();
+
+        let out = riku(config.path(), &["server", "add", "bad", "not-an-address"]);
+
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            matches!(out.status.code(), Some(1) | Some(2)),
+            "unexpected status {:?}:\n{stderr}",
+            out.status
+        );
+        assert!(
+            stderr.contains("not-an-address"),
+            "bad value not named:\n{stderr}"
+        );
+    }
+}

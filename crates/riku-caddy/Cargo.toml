@@ -1,0 +1,16 @@
+[package]
+name = "riku-caddy"
+version = "0.1.0"
+edition = "2021"
+description = "Riku Caddy site file generation (service layer)"
+authors = ["Rakibul Yeasin"]
+repository = "https://github.com/dreygur/riku"
+license = "MIT"
+
+[dependencies]
+riku-config = { path = "../riku-config" }
+riku-util = { path = "../riku-util" }
+anyhow = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

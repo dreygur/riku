@@ -46,6 +46,8 @@ The binary is installed at `~/.local/bin/riku` (i.e., `%h/.local/bin/riku` in sy
 
 ## Nginx Auto-Reload
 
+A root `riku init` installs this watcher system-wide for the active router (see [Caddy](caddy.md) for the Caddy one). The steps below are for a user-level install.
+
 To automatically reload nginx when Riku generates new configurations, enable a path watcher. Create `~/.config/systemd/user/riku-nginx.path`:
 
 ```ini

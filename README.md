@@ -19,10 +19,10 @@ with no runtime dependencies.
 ```bash
 # on your server
 curl -LO https://github.com/dreygur/riku/releases/latest/download/riku-linux-amd64.tar.gz
-tar -xzf riku-linux-amd64.tar.gz && sudo ./riku init
+tar -xzf riku-linux-amd64.tar.gz && sudo ./riku init --ssh-key ~/.ssh/authorized_keys
 
 # on your laptop
-git remote add riku deploy@your-server:myapp
+git remote add riku riku@your-server:myapp
 git push riku main      # that's the deploy
 ```
 
@@ -35,7 +35,7 @@ git push riku main      # that's the deploy
 - **Rollback & backups**: `riku rollback`, `riku backup`/`riku restore`.
 - **Managed datastores as plugins**: attach Postgres, Redis, or a SQLite volume with `riku addon`; the connection string is injected into your app's env.
 - **A plugin ecosystem**: a versioned plugin protocol, a git-native marketplace, signed bundles, and capability sandboxing (Landlock) for plugins you install.
-- **Swappable router**: nginx by default; drop in a Caddy/Traefik router plugin without touching core.
+- **Swappable router**: nginx by default, Caddy built in (`sudo RIKU_ROUTER=caddy riku init`), or a third party router plugin without touching core.
 - **Embedded dashboard**: `riku dashboard` serves a status UI straight from the binary, no Node runtime on the host.
 - **`riku doctor`**: diagnoses nginx, systemd, permissions, disk, and certs when something's off.
 
@@ -56,12 +56,17 @@ the scripts in [`benches/`](benches/) measure it rather than guess.
 curl -LO https://github.com/dreygur/riku/releases/latest/download/riku-linux-amd64.tar.gz
 tar -xzf riku-linux-amd64.tar.gz
 chmod +x riku
-sudo ./riku init
+sudo ./riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
-Running `riku init` as root installs the binary to `~/.local/bin`, creates a systemd
-service that starts on boot, launches the supervisor, and enables nginx auto-reload.
-Deploying as a user other than `deploy`? Pass `sudo RIKU_USER=myuser ./riku init`.
+Running `riku init` as root creates the `riku` deploy user if it is missing, sets
+up its home as that user (binary in `~/.local/bin`, `~/.riku`, the git hook, SSH
+keys), then creates a systemd service that starts on boot, launches the
+supervisor, and enables router auto-reload. `--ssh-key` authorizes the keys in a
+`.pub` or `authorized_keys` file (here, the ones you used to log in) for
+`git push`; without it, run the command init prints before your first push.
+Deploying as another user? Pass `sudo RIKU_USER=myuser ./riku init`. For Caddy instead of
+nginx, see [`docs/docs/caddy.md`](docs/docs/caddy.md).
 
 ### From source
 
@@ -77,9 +82,9 @@ cargo build --release
 **1. Set up the server.** Create a deploy user and initialize:
 
 ```bash
-sudo adduser deploy && sudo su - deploy
+sudo adduser riku && sudo su - riku
 riku init
-ssh-copy-id deploy@your-server      # add your SSH key
+ssh-copy-id riku@your-server      # add your SSH key
 ```
 
 **2. Deploy an app.** Add a `Procfile`, commit, and push:
@@ -91,7 +96,7 @@ worker: python worker.py
 
 ```bash
 git init && git add . && git commit -m "first deploy"
-git remote add riku deploy@your-server:myapp
+git remote add riku riku@your-server:myapp
 git push riku main
 ```
 
@@ -134,7 +139,7 @@ set with `riku install-plugins` (or pick some: `riku install-plugins --plugins n
 | `clojure` | `project.clj`, `deps.edn` | Leiningen / Clojure CLI |
 | `container` | `Dockerfile`, `docker-compose.yml` | Docker / Podman |
 
-Detection runs in order: set `RUNTIME=node` to skip it. To add your own language,
+Detection runs in order: set `RIKU_RUNTIME=node` to skip it. To add your own language,
 drop an executable into `~/.riku/plugins/` implementing four subcommands:
 
 | Subcommand | Does |
@@ -163,21 +168,23 @@ Installed plugins are pinned in a lockfile, can carry Ed25519 author signatures,
 run under capability sandboxing (filesystem/network limits via Landlock) based on
 what their manifest declares. Managed datastores ship this way, see
 [`examples/plugins/`](examples/plugins/) for working postgres, redis, sqlite-volume,
-caddy-router, and webhook-notify bundles.
+and webhook-notify bundles.
 
 ## Configuration
 
 Per-app settings live in an `ENV` file (`riku config set` writes it). A few common ones:
 
 ```bash
-NGINX_SERVER_NAME=example.com   # domain
-NGINX_HTTPS_ONLY=true           # force HTTPS
+RIKU_DOMAINS=example.com   # domain
+RIKU_HTTPS_ONLY=true           # force HTTPS
 RIKU_WORKER_TIMEOUT=3600        # kill unresponsive workers
-RIKU_ROUTER=caddy               # use a router plugin instead of nginx
 ```
 
 See [`docs/docs/env.md`](docs/docs/env.md) for the full reference, and `Procfile`
 for `web:` / `worker:` / `cron:` process definitions.
+
+The router is a host setting, not an `ENV` key. To serve apps through Caddy
+instead of nginx, see [`docs/docs/caddy.md`](docs/docs/caddy.md).
 
 ## How it works
 

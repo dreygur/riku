@@ -1,9 +1,9 @@
 server {
-  listen              {{ NGINX_IPV4_ADDRESS }}:{{ NGINX_EXTERNAL_PORT }};
-{% if NGINX_IPV6_ADDRESS %}
-  listen              {{ NGINX_IPV6_ADDRESS }}:{{ NGINX_EXTERNAL_PORT }};
+  listen              {{ RIKU_NGINX_IPV4_ADDRESS }}:{{ RIKU_NGINX_EXTERNAL_PORT }};
+{% if RIKU_NGINX_IPV6_ADDRESS %}
+  listen              {{ RIKU_NGINX_IPV6_ADDRESS }}:{{ RIKU_NGINX_EXTERNAL_PORT }};
 {% endif %}
-  server_name         {{ NGINX_SERVER_NAME }};
+  server_name         {{ RIKU_DOMAINS }};
 
   location ^~ /.well-known/acme-challenge {
     allow all;
@@ -46,11 +46,11 @@ server {
   add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
   add_header X-Deployed-By "Riku" always;
 
-{% if NGINX_INCLUDE_CONTENT %}
+{% if RIKU_NGINX_INCLUDE_CONTENT %}
   # Custom nginx configuration from file
-  {{ NGINX_INCLUDE_CONTENT }}
-{% elif NGINX_INCLUDE_FILE %}
+  {{ RIKU_NGINX_INCLUDE_CONTENT }}
+{% elif RIKU_NGINX_INCLUDE_FILE %}
   # Custom nginx configuration
-  include {{ NGINX_INCLUDE_FILE }};
+  include {{ RIKU_NGINX_INCLUDE_FILE }};
 {% endif %}
 }

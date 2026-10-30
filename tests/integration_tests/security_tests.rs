@@ -270,7 +270,7 @@ mod tests {
         fs::create_dir_all(&env_dir)?;
         fs::write(
             env_dir.join("ENV"),
-            "NGINX_SERVER_NAME=safe.example.com\nPORT=8080\n",
+            "RIKU_DOMAINS=safe.example.com\nPORT=8080\n",
         )?;
 
         // Verify clean server name produces clean config

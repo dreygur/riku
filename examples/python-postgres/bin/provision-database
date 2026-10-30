@@ -1,12 +1,12 @@
 #!/bin/sh
 
-echo "Db/server name: [${NGINX_SERVER_NAME}]"
+echo "Db/server name: [${RIKU_DOMAINS}]"
 
-if [ "${NGINX_SERVER_NAME}" = "" ]
+if [ "${RIKU_DOMAINS}" = "" ]
 then
-  echo "Skipping db creation as NGINX_SERVER_NAME is not set."
+  echo "Skipping db creation as RIKU_DOMAINS is not set."
 else
-  psql "${NGINX_SERVER_NAME}" -c ";" 2>/dev/null && echo "Database ${NGINX_SERVER_NAME} already exists" || createdb "${NGINX_SERVER_NAME}"
+  psql "${RIKU_DOMAINS}" -c ";" 2>/dev/null && echo "Database ${RIKU_DOMAINS} already exists" || createdb "${RIKU_DOMAINS}"
 fi
 
 ./manage.py migrate --no-input

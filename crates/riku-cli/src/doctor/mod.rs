@@ -2,19 +2,26 @@
 //!
 //! Solo devs have no ops team, so the tool *is* the ops team: `doctor` runs a
 //! battery of **read-only** health checks across dependencies, the `~/.riku`
-//! directory layout, the systemd supervisor service, nginx, runtime plugins,
-//! disk headroom, and SSH deploy access, then prints a summary. It never
-//! mutates state, so it is always safe to run.
+//! directory layout, the systemd supervisor service, the host router, runtime plugins,
+//! disk headroom, SSH deploy access, and renamed app ENV keys, then prints a
+//! summary. It is read only unless run with `--fix`, which only rewrites old style
+//! deploy key forced commands in `authorized_keys`.
 //!
 //! Exit code: `0` when nothing failed (warnings allowed), `1` when any check
 //! has [`Status::Fail`], so it composes in CI and provisioning scripts.
 
+pub mod app_env;
 pub mod checks;
+pub mod forced_commands;
+pub mod router_check;
+
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use colored::Colorize;
 
 use crate::config::RikuPaths;
+use crate::setup::deploy_user::{running_as_root, DeployUser};
 use crate::util::display;
 
 /// Outcome of a single diagnostic check.
@@ -55,29 +62,76 @@ impl Check {
     }
 }
 
+/// The invoking user's home directory.
+pub fn current_home() -> Result<PathBuf> {
+    match dirs::home_dir() {
+        Some(home) => Ok(home),
+        None => Err(anyhow::anyhow!("could not determine the home directory")),
+    }
+}
+
+/// The riku tree to diagnose, with the home that owns it. Under `sudo`, HOME
+/// is root's, so a root run checks the deploy user's tree instead, the one
+/// deploys and the supervisor use. Only `--fix` writes, and it writes just
+/// the `authorized_keys` of that same user.
+fn diagnosed_target(paths: &RikuPaths) -> Result<(RikuPaths, PathBuf)> {
+    if !running_as_root() {
+        return match current_home() {
+            Ok(home) => Ok((paths.clone(), home)),
+            Err(e) => Err(e),
+        };
+    }
+    match DeployUser::lookup() {
+        Ok(user) => Ok((user.riku_paths(), user.home)),
+        Err(e) => Err(e),
+    }
+}
+
 /// Run every diagnostic, render the report, and exit non-zero on any failure.
-pub fn cmd_doctor(paths: &RikuPaths) -> Result<()> {
-    display::info("Running Riku diagnostics...");
+#[allow(clippy::question_mark)]
+pub fn cmd_doctor(paths: &RikuPaths, fix: bool) -> Result<()> {
+    let (paths, home) = match diagnosed_target(paths) {
+        Ok(target) => target,
+        Err(e) => return Err(e),
+    };
+    display::info(&format!(
+        "Running Riku diagnostics on {}...",
+        paths.riku_root.display()
+    ));
     display::blank();
 
-    let checks = collect(paths);
+    if fix {
+        match forced_commands::fix(&home) {
+            Ok(count) => display::info(&format!(
+                "Migrated {count} deploy key(s) to the new forced command"
+            )),
+            Err(e) => return Err(anyhow::anyhow!("doctor --fix failed: {e}")),
+        }
+        display::blank();
+    }
+
+    let checks = collect(&paths, &home);
     render(&checks);
     summarize_and_exit(&checks);
 
     Ok(())
 }
 
-/// Gather all checks in display order.
-fn collect(paths: &RikuPaths) -> Vec<Check> {
+/// Gather all checks in display order. `home` is the home whose
+/// `authorized_keys` is inspected. The dashboard's `/api/doctor` serves this
+/// same list.
+pub fn collect(paths: &RikuPaths, home: &Path) -> Vec<Check> {
     let mut checks = Vec::new();
     checks.extend(checks::dependencies());
     checks.push(checks::directories(paths));
     checks.extend(checks::binary());
     checks.push(checks::systemd_service());
-    checks.extend(checks::nginx());
+    checks.extend(router_check::router(paths));
     checks.push(checks::plugins(paths));
     checks.push(checks::disk(paths));
     checks.push(checks::ssh_access());
+    checks.push(forced_commands::forced_commands(home));
+    checks.extend(app_env::renamed_keys(paths));
     checks
 }
 

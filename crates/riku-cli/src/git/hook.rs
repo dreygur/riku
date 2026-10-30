@@ -1,6 +1,6 @@
 //! Git post-receive hook handler: triggers deployment on push.
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::fs;
 use std::io::{self, BufRead};
 use std::path::Path;
@@ -9,21 +9,66 @@ use std::process::Command;
 use crate::config::RikuPaths;
 use crate::util::echo;
 
+/// Whether `app_path` still needs its first clone. Only a missing checkout
+/// counts: an app without a Procfile is still a checkout, and cloning into
+/// it again fails on the non-empty directory.
+fn needs_clone(app_path: &Path) -> bool {
+    !app_path.join(".git").exists()
+}
+
+fn clone_app(paths: &RikuPaths, app: &str) -> Result<()> {
+    let repo_path = paths.git_root.join(app);
+    let app_path = paths.app_root.join(app);
+    let data_path = paths.data_root.join(app);
+
+    echo(&format!("-----> Creating app '{}'", app), "green");
+    for dir in [&app_path, &data_path] {
+        if let Err(e) = fs::create_dir_all(dir) {
+            return Err(anyhow!("failed to create {}: {e}", dir.display()));
+        }
+    }
+    let status = Command::new("git")
+        .arg("clone")
+        .arg("--quiet")
+        .arg(&repo_path)
+        .arg(app)
+        .current_dir(&paths.app_root)
+        .status();
+    // B6: abort this ref's deploy when the clone fails. Continuing would
+    // run do_deploy against an empty/half-created app directory.
+    match status {
+        Ok(status) if status.success() => Ok(()),
+        Ok(_) => Err(anyhow!(
+            "git clone failed for app '{}' from repo '{}'",
+            app,
+            repo_path.display()
+        )),
+        Err(e) => Err(anyhow!("failed to run git clone for app '{app}': {e}")),
+    }
+}
+
 /// Post-receive git hook handler.
+#[allow(clippy::question_mark)]
 pub fn cmd_git_hook(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> Result<()> {
-    let app = crate::util::validate_app_name(app)?;
+    let app = match crate::util::validate_app_name(app) {
+        Ok(app) => app,
+        Err(e) => return Err(e),
+    };
 
     if let Some(actual_repo) = repo_path {
-        link_external_repo(paths, &app, actual_repo)?;
+        if let Err(e) = link_external_repo(paths, &app, actual_repo) {
+            return Err(e);
+        }
     }
 
-    let repo_path = paths.git_root.join(&app);
     let app_path = paths.app_root.join(&app);
-    let data_path = paths.data_root.join(&app);
 
     let stdin = io::stdin();
     for line in stdin.lock().lines() {
-        let line = line?;
+        let line = match line {
+            Ok(line) => line,
+            Err(e) => return Err(anyhow!("failed to read pushed refs: {e}")),
+        };
         let line = line.trim().to_string();
         if line.is_empty() {
             continue;
@@ -37,34 +82,16 @@ pub fn cmd_git_hook(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> Re
         let newrev = parts[1];
         let _refname = parts[2];
 
-        // Clone repo if app directory doesn't exist or is empty (no Procfile)
-        if !app_path.exists() || !app_path.join("Procfile").exists() {
-            echo(&format!("-----> Creating app '{}'", app), "green");
-            fs::create_dir_all(&app_path)?;
-            if !data_path.exists() {
-                fs::create_dir_all(&data_path)?;
-            }
-            let status = Command::new("git")
-                .arg("clone")
-                .arg("--quiet")
-                .arg(&repo_path)
-                .arg(&app)
-                .current_dir(&paths.app_root)
-                .status()?;
-            // B6: abort this ref's deploy when the clone fails. Continuing would
-            // run do_deploy against an empty/half-created app directory.
-            if !status.success() {
-                return Err(anyhow::anyhow!(
-                    "git clone failed for app '{}' from repo '{}'",
-                    app,
-                    repo_path.display()
-                ));
+        if needs_clone(&app_path) {
+            if let Err(e) = clone_app(paths, &app) {
+                return Err(e);
             }
         }
 
-        // Call the actual deploy function
         let deltas: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
-        crate::deploy::do_deploy(&app, paths, &deltas, Some(newrev))?;
+        if let Err(e) = crate::deploy::do_deploy(&app, paths, &deltas, Some(newrev)) {
+            return Err(e);
+        }
     }
 
     Ok(())
@@ -173,6 +200,19 @@ mod tests {
         let git_root = root.join("repos");
         fs::create_dir_all(&git_root).unwrap();
         RikuPaths::from_dirs(root.to_path_buf(), Path::new("/home/test"))
+    }
+
+    #[test]
+    fn clones_only_when_the_app_dir_is_not_a_checkout() {
+        let tmp = TempDir::new().unwrap();
+        let app_path = tmp.path().join("myapp");
+        assert!(needs_clone(&app_path), "a missing app dir needs a clone");
+
+        fs::create_dir_all(app_path.join(".git")).unwrap();
+        assert!(
+            !needs_clone(&app_path),
+            "a checkout without a Procfile must not be cloned again"
+        );
     }
 
     #[test]

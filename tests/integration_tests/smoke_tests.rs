@@ -156,7 +156,7 @@ mod routing_tests {
     #[test]
     fn deploy_command_maps_to_deploy() {
         let cmd = Commands::Deploy {
-            app: "myapp".to_string(),
+            app: Some("myapp".to_string()),
             from: None,
         };
         assert_eq!(get_plugin_command(&cmd), Some("deploy".to_string()));
@@ -165,7 +165,7 @@ mod routing_tests {
     #[test]
     fn logs_command_maps_to_logs() {
         let cmd = Commands::Logs {
-            app: "myapp".to_string(),
+            app: Some("myapp".to_string()),
             process: "*".to_string(),
             deploy: false,
             follow: false,
@@ -186,7 +186,7 @@ mod routing_tests {
     #[test]
     fn config_command_maps_to_config() {
         let cmd = Commands::Config(ConfigCmd::Show {
-            app: "myapp".to_string(),
+            app: Some("myapp".to_string()),
         });
         assert_eq!(get_plugin_command(&cmd), Some("config".to_string()));
     }
@@ -202,7 +202,7 @@ mod routing_tests {
     #[test]
     fn restart_command_maps_to_restart() {
         let cmd = Commands::Restart {
-            app: "myapp".to_string(),
+            app: Some("myapp".to_string()),
             hot: false,
         };
         assert_eq!(get_plugin_command(&cmd), Some("restart".to_string()));
@@ -211,7 +211,7 @@ mod routing_tests {
     #[test]
     fn stop_command_maps_to_stop() {
         let cmd = Commands::Stop {
-            app: "myapp".to_string(),
+            app: Some("myapp".to_string()),
         };
         assert_eq!(get_plugin_command(&cmd), Some("stop".to_string()));
     }
@@ -232,7 +232,12 @@ mod routing_tests {
 
     #[test]
     fn init_command_returns_none() {
-        let cmd = Commands::Init { no_systemd: false };
+        let cmd = Commands::Init {
+            no_systemd: false,
+            ssh_key: None,
+            add_key: Vec::new(),
+            user_steps: false,
+        };
         assert_eq!(get_plugin_command(&cmd), None);
     }
 
@@ -253,7 +258,7 @@ mod routing_tests {
     #[test]
     fn build_plugin_args_apps_has_server_placeholder() {
         let cmd = Commands::Apps { cmd: None };
-        let args = build_plugin_args(&cmd);
+        let args = build_plugin_args(&cmd, None);
         // $1 is always an empty server placeholder
         assert_eq!(args[0], "", "first arg should be empty server placeholder");
         assert!(args.contains(&"apps".to_string()));
@@ -262,10 +267,10 @@ mod routing_tests {
     #[test]
     fn build_plugin_args_deploy_includes_app_and_command() {
         let cmd = Commands::Deploy {
-            app: "testapp".to_string(),
+            app: Some("testapp".to_string()),
             from: None,
         };
-        let args = build_plugin_args(&cmd);
+        let args = build_plugin_args(&cmd, None);
         assert_eq!(args[0], "");
         assert!(args.contains(&"testapp".to_string()));
         assert!(args.contains(&"deploy".to_string()));
@@ -274,10 +279,10 @@ mod routing_tests {
     #[test]
     fn build_plugin_args_deploy_with_from_includes_path() {
         let cmd = Commands::Deploy {
-            app: "testapp".to_string(),
+            app: Some("testapp".to_string()),
             from: Some("./local-path".to_string()),
         };
-        let args = build_plugin_args(&cmd);
+        let args = build_plugin_args(&cmd, None);
         assert!(args.contains(&"--from".to_string()));
         assert!(args.contains(&"./local-path".to_string()));
     }
@@ -285,12 +290,12 @@ mod routing_tests {
     #[test]
     fn build_plugin_args_logs_without_process_filter_omits_star() {
         let cmd = Commands::Logs {
-            app: "myapp".to_string(),
+            app: Some("myapp".to_string()),
             process: "*".to_string(),
             deploy: false,
             follow: false,
         };
-        let args = build_plugin_args(&cmd);
+        let args = build_plugin_args(&cmd, None);
         // When process is "*", it should not be appended
         assert!(!args.contains(&"*".to_string()));
         assert!(args.contains(&"logs".to_string()));
@@ -299,12 +304,12 @@ mod routing_tests {
     #[test]
     fn build_plugin_args_logs_with_process_filter_includes_it() {
         let cmd = Commands::Logs {
-            app: "myapp".to_string(),
+            app: Some("myapp".to_string()),
             process: "web".to_string(),
             deploy: false,
             follow: false,
         };
-        let args = build_plugin_args(&cmd);
+        let args = build_plugin_args(&cmd, None);
         assert!(args.contains(&"web".to_string()));
     }
 
@@ -314,7 +319,7 @@ mod routing_tests {
             app: "myapp".to_string(),
             settings: vec!["KEY=VAL".to_string(), "OTHER=X".to_string()],
         });
-        let args = build_plugin_args(&cmd);
+        let args = build_plugin_args(&cmd, None);
         assert!(args.contains(&"KEY=VAL".to_string()));
         assert!(args.contains(&"OTHER=X".to_string()));
     }
@@ -326,7 +331,7 @@ mod routing_tests {
             verbose: false,
             scale: vec!["web=2".to_string()],
         };
-        let args = build_plugin_args(&cmd);
+        let args = build_plugin_args(&cmd, None);
         assert!(args.contains(&"ps:scale".to_string()));
     }
 
@@ -337,7 +342,7 @@ mod routing_tests {
             verbose: false,
             scale: vec![],
         };
-        let args = build_plugin_args(&cmd);
+        let args = build_plugin_args(&cmd, None);
         assert!(args.contains(&"ps:show".to_string()));
     }
 }

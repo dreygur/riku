@@ -37,6 +37,10 @@ case "$CMD" in
     echo "./app"
     ;;
 
+  destroy)
+    # Nothing runs outside the app directory.
+    exit 0
+    ;;
   *)
     echo "Unknown subcommand: $CMD" >&2
     exit 1

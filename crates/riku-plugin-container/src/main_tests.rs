@@ -17,13 +17,13 @@ fn read_env_file_parses_ghcr_credentials() {
     let dir = tmp.path();
     fs::write(
         dir.join("ENV"),
-        "GHCR_USERNAME=octocat\nGHCR_TOKEN=ghp_abc123\n# comment\n\n",
+        "RIKU_GHCR_USERNAME=octocat\nRIKU_GHCR_TOKEN=ghp_abc123\n# comment\n\n",
     )
     .unwrap();
 
     let vars = read_env_file(Some(dir));
-    assert_eq!(vars.get("GHCR_USERNAME").unwrap(), "octocat");
-    assert_eq!(vars.get("GHCR_TOKEN").unwrap(), "ghp_abc123");
+    assert_eq!(vars.get("RIKU_GHCR_USERNAME").unwrap(), "octocat");
+    assert_eq!(vars.get("RIKU_GHCR_TOKEN").unwrap(), "ghp_abc123");
 }
 
 #[test]

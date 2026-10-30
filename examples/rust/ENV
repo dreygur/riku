@@ -16,20 +16,20 @@ PIKU_AUTO_RESTART=true
 PORT=4000
 
 # IP address for workers to bind
-BIND_ADDRESS=127.0.0.1
+RIKU_BIND_ADDRESS=127.0.0.1
 
 # Disable IPv6 (optional)
-# DISABLE_IPV6=false
+# RIKU_DISABLE_IPV6=false
 
 # =============================================================================
 # Nginx Settings
 # =============================================================================
 
 # Your domain name (required for production)
-# NGINX_SERVER_NAME=example.com
+# RIKU_DOMAINS=example.com
 
 # Redirect HTTP to HTTPS (requires SSL cert)
-# NGINX_HTTPS_ONLY=false
+# RIKU_HTTPS_ONLY=false
 
 # =============================================================================
 # Worker Management

@@ -31,15 +31,15 @@
 //!
 //! ## Environment Variables Available to Hook Plugins
 //!
-//! | Variable        | Description                          |
-//! |-----------------|--------------------------------------|
-//! | `RIKU_APP`      | Application name                     |
-//! | `RIKU_HOOK`     | Hook name (e.g. `pre-deploy`)        |
-//! | `RIKU_APP_PATH` | Path to the checked-out source code  |
-//! | `RIKU_ENV_PATH` | Path to the app's env directory      |
-//! | `RIKU_ROOT`     | Riku root directory (`~/.riku`)      |
-//! | `RIKU_RUNTIME`  | Detected runtime (e.g. `Python`)     |
-//! | All app env vars from the ENV file                          |
+//! | Variable                | Description                          |
+//! |-------------------------|--------------------------------------|
+//! | `RIKU_APP`              | Application name                     |
+//! | `RIKU_HOOK`             | Hook name (e.g. `pre-deploy`)        |
+//! | `RIKU_APP_PATH`         | Path to the checked-out source code  |
+//! | `RIKU_ENV_PATH`         | Path to the app's env directory      |
+//! | `RIKU_ROOT`             | Riku root directory (`~/.riku`)      |
+//! | `RIKU_DETECTED_RUNTIME` | Detected runtime (e.g. `Python`)     |
+//! | All app env vars from the ENV file                                  |
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -121,7 +121,7 @@ impl<'a> HookContext<'a> {
             self.riku_root.to_string_lossy().to_string(),
         );
         if let Some(rt) = self.runtime {
-            env.insert("RIKU_RUNTIME".to_string(), rt.to_string());
+            env.insert("RIKU_DETECTED_RUNTIME".to_string(), rt.to_string());
         }
         env
     }
@@ -184,7 +184,7 @@ mod tests {
         assert_eq!(env["RIKU_APP_PATH"], "/home/deploy/.riku/apps/myapp");
         assert_eq!(env["RIKU_ENV_PATH"], "/home/deploy/.riku/envs/myapp");
         assert_eq!(env["RIKU_ROOT"], "/home/deploy/.riku");
-        assert_eq!(env["RIKU_RUNTIME"], "Python");
+        assert_eq!(env["RIKU_DETECTED_RUNTIME"], "Python");
         // App env vars are included
         assert_eq!(env["DATABASE_URL"], "postgres://localhost/mydb");
         assert_eq!(env["SECRET_KEY"], "abc123");
@@ -209,8 +209,8 @@ mod tests {
 
         let env = ctx.build_env();
         assert!(
-            !env.contains_key("RIKU_RUNTIME"),
-            "No RIKU_RUNTIME when unknown"
+            !env.contains_key("RIKU_DETECTED_RUNTIME"),
+            "No RIKU_DETECTED_RUNTIME when unknown"
         );
     }
 

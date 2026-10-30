@@ -3,39 +3,67 @@ use anyhow::Result;
 
 use crate::config::RikuPaths;
 
-use super::auth::{check_rate_limit, get_agent_identity, get_agent_scope, log_agent_action};
+use super::auth::{check_rate_limit_now, log_agent_action, AgentSession};
 use super::commands::{
     cmd_agent_apps, cmd_agent_config_get, cmd_agent_config_set, cmd_agent_config_show,
     cmd_agent_deploy, cmd_agent_destroy_confirm, cmd_agent_destroy_request, cmd_agent_logs,
     cmd_agent_ps, cmd_agent_restart, cmd_agent_run, cmd_agent_stats, cmd_agent_stop,
     cmd_agent_stop_confirm,
 };
+use super::state::agent_dir;
 use super::types::AgentResponse;
+
+fn print_response(response: &AgentResponse) -> Result<()> {
+    match serde_json::to_string(&response.to_json()) {
+        Ok(text) => {
+            println!("{text}");
+            Ok(())
+        }
+        Err(e) => Err(anyhow::anyhow!("failed to encode the agent response: {e}")),
+    }
+}
 
 /// Execute agent command
 pub fn cmd_agent_execute(
     paths: &RikuPaths,
+    session: &AgentSession,
     command: &str,
     args: &[String],
     confirm_token: Option<&str>,
 ) -> Result<()> {
-    let agent_id = get_agent_identity().unwrap_or_else(|| "unknown-agent".to_string());
-    let scope = get_agent_scope();
+    let AgentSession {
+        id: agent_id,
+        scope,
+    } = session;
 
-    if !check_rate_limit(&agent_id, &scope) {
-        let response = AgentResponse::error(
-            "RATE_LIMIT_EXCEEDED",
-            "Too many requests. Try again in 30 seconds.",
-        );
-        println!("{}", serde_json::to_string(&response.to_json())?);
-        return Ok(());
+    let state = match agent_dir(&paths.riku_root) {
+        Ok(dir) => dir,
+        Err(e) => {
+            let message = format!("Agent state is unavailable: {e}");
+            return print_response(&AgentResponse::error("STATE_UNAVAILABLE", &message));
+        }
+    };
+
+    match check_rate_limit_now(&state, agent_id, scope) {
+        Ok(true) => {}
+        Ok(false) => {
+            return print_response(&AgentResponse::error(
+                "RATE_LIMIT_EXCEEDED",
+                "Too many requests. Try again in 30 seconds.",
+            ));
+        }
+        Err(e) => {
+            let message = format!("Agent state is unavailable: {e}");
+            return print_response(&AgentResponse::error("STATE_UNAVAILABLE", &message));
+        }
     }
 
     if !scope.allows(command) {
-        log_agent_action(&agent_id, command, "", false);
-        let response = AgentResponse::error("PERMISSION_DENIED", "Agent lacks required permission");
-        println!("{}", serde_json::to_string(&response.to_json())?);
-        return Ok(());
+        log_agent_action(&state, agent_id, command, "", false);
+        return print_response(&AgentResponse::error(
+            "PERMISSION_DENIED",
+            "Agent lacks required permission",
+        ));
     }
 
     let response = match command {
@@ -130,12 +158,12 @@ pub fn cmd_agent_execute(
     };
 
     log_agent_action(
-        &agent_id,
+        &state,
+        agent_id,
         command,
         args.first().map(|s| s.as_str()).unwrap_or(""),
         response.success,
     );
 
-    println!("{}", serde_json::to_string(&response.to_json())?);
-    Ok(())
+    print_response(&response)
 }

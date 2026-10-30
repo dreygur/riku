@@ -52,7 +52,7 @@
 
 **A:** Just like Heroku or Piku:
 ```bash
-git remote add riku deploy@your-server:myapp
+git remote add riku riku@your-server:myapp
 git push riku main
 ```
 
@@ -84,7 +84,7 @@ Or create an `ENV` file in `~/.riku/envs/myapp/ENV`.
 
 **A:** Yes. Place `nginx.conf`, `nginx.custom.conf`, or `.nginx.conf` in your app directory, or use:
 ```bash
-NGINX_INCLUDE_FILE=custom.conf
+RIKU_NGINX_INCLUDE_FILE=custom.conf
 ```
 
 **Q: Can I store my bare git repo in a custom location?**
@@ -96,7 +96,7 @@ NGINX_INCLUDE_FILE=custom.conf
 git init --bare ~/my-projects/myapp.git
 
 # Push to custom path
-git remote add riku deploy@server:~/my-projects/myapp.git
+git remote add riku riku@server:~/my-projects/myapp.git
 git push riku main
 
 # Riku creates: ~/.riku/repos/myapp.git → ~/my-projects/myapp.git
@@ -149,13 +149,13 @@ tar -czf backup.tar.gz ~/.riku/apps/myapp
 
 **Q: Can I run multiple apps on the same domain?**
 
-**A:** Yes, use different subdomains or paths with `NGINX_SERVER_NAME` and `NGINX_STATIC_PATHS`.
+**A:** Yes, use different subdomains or paths with `RIKU_DOMAINS` and `RIKU_NGINX_STATIC_PATHS`.
 
 **Q: How do I enable HTTPS?**
 
 **A:** Set the domain and enable HTTPS redirect:
 ```bash
-riku config set myapp NGINX_SERVER_NAME=example.com NGINX_HTTPS_ONLY=true
+riku config set myapp RIKU_DOMAINS=example.com RIKU_HTTPS_ONLY=true
 ```
 
 Then obtain SSL certificates (ACME support is built-in).
@@ -164,7 +164,7 @@ Then obtain SSL certificates (ACME support is built-in).
 
 **A:** Yes. Set:
 ```bash
-NGINX_CLOUDFLARE_ACL=true
+RIKU_NGINX_CLOUDFLARE_ACL=true
 ```
 
 And create a Cloudflare Page Rule to "Always Use HTTPS".

@@ -10,6 +10,7 @@
 //! one definition of what a valid schedule is, and they are interpreted in
 //! **UTC** at run time (see that module for the time-zone contract).
 
+use anyhow::{anyhow, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
@@ -37,59 +38,75 @@ fn is_valid_cron_command(command: &str) -> bool {
     validate_cron_expression(&schedule)
 }
 
-/// Parse a Heroku-style Procfile. Skip comments/blanks. Validate cron entries.
-/// WSGI trumps web workers. Returns None if file missing.
-pub fn parse_procfile(filename: &Path) -> Option<HashMap<String, String>> {
+/// A process kind names worker config and log files, so it is limited to
+/// letters, digits, `_` and `-`.
+fn is_valid_kind(kind: &str) -> bool {
+    !kind.is_empty()
+        && kind
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+/// One Procfile line as `(kind, command)`, `None` for a blank or comment
+/// line, or why the line is invalid.
+fn parse_line(line: &str) -> Result<Option<(String, String)>, String> {
+    let line = line.trim();
+    if line.is_empty() || line.starts_with('#') {
+        return Ok(None);
+    }
+    let Some((kind, command)) = line.split_once(':') else {
+        return Err("expected `kind: command`".to_string());
+    };
+    let (kind, command) = (kind.trim(), command.trim());
+    if !is_valid_kind(kind) {
+        return Err(format!("invalid process type {kind:?}"));
+    }
+    // The supervisor's cron engine decides, so the Procfile and the
+    // scheduler agree on what a valid schedule is.
+    if kind.starts_with("cron") && !is_valid_cron_command(command) {
+        return Err("invalid cron schedule".to_string());
+    }
+    Ok(Some((kind.to_string(), command.to_string())))
+}
+
+/// Parse a Heroku-style Procfile. Skips comments and blank lines, so a file
+/// with only those has no processes. Any other line that is not a valid
+/// `kind: command` fails the whole parse: deploying part of a broken
+/// Procfile would run something the author did not write. WSGI trumps web
+/// workers. Returns `None` if the file is missing.
+pub fn parse_procfile(filename: &Path) -> Result<Option<HashMap<String, String>>> {
     if !filename.exists() {
-        return None;
+        return Ok(None);
     }
 
-    let content = fs::read_to_string(filename).ok()?;
+    let content = match fs::read_to_string(filename) {
+        Ok(content) => content,
+        Err(e) => return Err(anyhow!("failed to read {}: {e}", filename.display())),
+    };
     let mut workers: HashMap<String, String> = HashMap::new();
 
-    for (line_number, line) in content.lines().enumerate() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        if let Some(colon_pos) = line.find(':') {
-            let kind = line[..colon_pos].trim().to_string();
-            let command = line[colon_pos + 1..].trim().to_string();
-
-            // Validate cron entries through the shared supervisor cron engine
-            // so the Procfile and the scheduler agree on what is valid (ranges,
-            // lists, steps are all accepted; out-of-range and unsatisfiable
-            // schedules are rejected).
-            if kind.starts_with("cron") && !is_valid_cron_command(&command) {
-                echo(
-                    &format!(
-                        "Warning: misformatted Procfile entry '{}' at line {}",
-                        line, line_number
-                    ),
-                    "yellow",
-                );
-                continue;
+    for (index, line) in content.lines().enumerate() {
+        let (kind, command) = match parse_line(line) {
+            Ok(Some(entry)) => entry,
+            Ok(None) => continue,
+            Err(reason) => {
+                return Err(anyhow!(
+                    "Procfile line {}: {reason}: {:?}",
+                    index + 1,
+                    line.trim()
+                ))
             }
-
-            if workers.contains_key(&kind) {
-                echo(
-                    &format!(
-                        "Warning: found multiple {} workers, only the last one will be used.",
-                        kind
-                    ),
-                    "yellow",
-                );
-            }
-            workers.insert(kind, command);
-        } else {
+        };
+        if workers.contains_key(&kind) {
             echo(
                 &format!(
-                    "Warning: misformatted Procfile entry '{}' at line {}",
-                    line, line_number
+                    "Warning: found multiple {} workers, only the last one will be used.",
+                    kind
                 ),
                 "yellow",
             );
         }
+        workers.insert(kind, command);
     }
 
     // WSGI trumps regular web workers
@@ -105,7 +122,7 @@ pub fn parse_procfile(filename: &Path) -> Option<HashMap<String, String>> {
         workers.remove("web");
     }
 
-    Some(workers)
+    Ok(Some(workers))
 }
 
 #[cfg(test)]
@@ -119,7 +136,7 @@ mod tests {
         let mut f = NamedTempFile::new().unwrap();
         writeln!(f, "web: python app.py").unwrap();
         writeln!(f, "worker: celery -A tasks").unwrap();
-        let workers = parse_procfile(f.path()).unwrap();
+        let workers = parse_procfile(f.path()).unwrap().unwrap();
         assert_eq!(workers.get("web").unwrap(), "python app.py");
         assert_eq!(workers.get("worker").unwrap(), "celery -A tasks");
     }
@@ -132,7 +149,7 @@ mod tests {
         writeln!(f, "web: python app.py").unwrap();
         writeln!(f).unwrap();
         writeln!(f, "# Another comment").unwrap();
-        let workers = parse_procfile(f.path()).unwrap();
+        let workers = parse_procfile(f.path()).unwrap().unwrap();
         assert_eq!(workers.len(), 1);
         assert_eq!(workers.get("web").unwrap(), "python app.py");
     }
@@ -142,14 +159,14 @@ mod tests {
         let mut f = NamedTempFile::new().unwrap();
         writeln!(f, "web: python app.py").unwrap();
         writeln!(f, "wsgi: app:application").unwrap();
-        let workers = parse_procfile(f.path()).unwrap();
+        let workers = parse_procfile(f.path()).unwrap().unwrap();
         assert!(!workers.contains_key("web"));
         assert!(workers.contains_key("wsgi"));
     }
 
     #[test]
     fn test_parse_procfile_missing_file() {
-        let result = parse_procfile(Path::new("/nonexistent/Procfile"));
+        let result = parse_procfile(Path::new("/nonexistent/Procfile")).unwrap();
         assert!(result.is_none());
     }
 
@@ -157,7 +174,7 @@ mod tests {
     fn test_parse_procfile_cron_valid() {
         let mut f = NamedTempFile::new().unwrap();
         writeln!(f, "cron: */5 * * * * /usr/bin/task").unwrap();
-        let workers = parse_procfile(f.path()).unwrap();
+        let workers = parse_procfile(f.path()).unwrap().unwrap();
         assert!(workers.contains_key("cron"));
     }
 
@@ -165,16 +182,20 @@ mod tests {
     fn test_parse_procfile_cron_invalid_value() {
         let mut f = NamedTempFile::new().unwrap();
         writeln!(f, "cron: 60 * * * * /usr/bin/task").unwrap();
-        let workers = parse_procfile(f.path()).unwrap();
-        assert!(!workers.contains_key("cron"));
+        assert!(
+            parse_procfile(f.path()).is_err(),
+            "a bad schedule must fail the parse"
+        );
     }
 
     #[test]
     fn test_parse_procfile_cron_rejects_hour_24() {
         let mut f = NamedTempFile::new().unwrap();
         writeln!(f, "cron: 0 24 * * * /usr/bin/task").unwrap();
-        let workers = parse_procfile(f.path()).unwrap();
-        assert!(!workers.contains_key("cron"));
+        assert!(
+            parse_procfile(f.path()).is_err(),
+            "a bad schedule must fail the parse"
+        );
     }
 
     #[test]
@@ -183,8 +204,10 @@ mod tests {
         // out of range and must be rejected by the shared engine.
         let mut f = NamedTempFile::new().unwrap();
         writeln!(f, "cron: 0 0 * * 8 /usr/bin/task").unwrap();
-        let workers = parse_procfile(f.path()).unwrap();
-        assert!(!workers.contains_key("cron"));
+        assert!(
+            parse_procfile(f.path()).is_err(),
+            "a bad schedule must fail the parse"
+        );
     }
 
     #[test]
@@ -193,7 +216,7 @@ mod tests {
         // validator wrongly rejected it; the engine accepts it.
         let mut f = NamedTempFile::new().unwrap();
         writeln!(f, "cron: 0 0 * * 7 /usr/bin/task").unwrap();
-        let workers = parse_procfile(f.path()).unwrap();
+        let workers = parse_procfile(f.path()).unwrap().unwrap();
         assert!(workers.contains_key("cron"));
     }
 
@@ -201,7 +224,7 @@ mod tests {
     fn test_parse_procfile_cron_accepts_valid_bounds() {
         let mut f = NamedTempFile::new().unwrap();
         writeln!(f, "cron: 59 23 31 12 6 /usr/bin/task").unwrap();
-        let workers = parse_procfile(f.path()).unwrap();
+        let workers = parse_procfile(f.path()).unwrap().unwrap();
         assert!(workers.contains_key("cron"));
     }
 
@@ -211,15 +234,44 @@ mod tests {
         let mut f = NamedTempFile::new().unwrap();
         writeln!(f, "cron: 0 9 * * 1-5 /usr/bin/weekday-task").unwrap();
         writeln!(f, "cron2: 0,15,30,45 * * * * /usr/bin/quarter-hour").unwrap();
-        let workers = parse_procfile(f.path()).unwrap();
+        let workers = parse_procfile(f.path()).unwrap().unwrap();
         assert!(workers.contains_key("cron"));
         assert!(workers.contains_key("cron2"));
     }
 
     #[test]
+    fn whitespace_and_comments_only_mean_no_processes() {
+        let mut f = NamedTempFile::new().unwrap();
+        writeln!(f, "   \n\t\n# nothing here").unwrap();
+        let workers = parse_procfile(f.path()).unwrap().unwrap();
+        assert!(workers.is_empty(), "got {workers:?}");
+    }
+
+    #[test]
+    fn rejects_a_line_that_is_not_kind_colon_command() {
+        let mut f = NamedTempFile::new().unwrap();
+        writeln!(f, "web: python app.py").unwrap();
+        writeln!(f, "worker python worker.py").unwrap();
+        let err = parse_procfile(f.path()).unwrap_err();
+        assert!(err.to_string().contains("line 2"), "{err}");
+    }
+
+    #[test]
+    fn rejects_a_process_kind_that_is_not_a_plain_name() {
+        for line in ["../x: rm -rf ~", "foo bar: baz", ": python app.py"] {
+            let mut f = NamedTempFile::new().unwrap();
+            writeln!(f, "{line}").unwrap();
+            assert!(
+                parse_procfile(f.path()).is_err(),
+                "{line:?} should be rejected"
+            );
+        }
+    }
+
+    #[test]
     fn test_parse_procfile_empty_file() {
         let f = NamedTempFile::new().unwrap();
-        let workers = parse_procfile(f.path()).unwrap();
+        let workers = parse_procfile(f.path()).unwrap().unwrap();
         assert!(workers.is_empty());
     }
 }

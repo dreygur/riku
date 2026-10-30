@@ -19,7 +19,7 @@ if ! command -v curl &>/dev/null; then
     exit 0
 fi
 
-RUNTIME="${RIKU_RUNTIME:-unknown}"
+RUNTIME="${RIKU_DETECTED_RUNTIME:-unknown}"
 PAYLOAD="{\"text\": \"Deployed *${RIKU_APP}* (${RUNTIME}) at $(date -u '+%Y-%m-%d %H:%M UTC')\"}"
 
 curl -sf -X POST \

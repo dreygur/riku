@@ -427,3 +427,167 @@ max_restarts = 5
         std::env::remove_var(KEY);
     }
 }
+
+#[cfg(test)]
+mod init_privilege_tests {
+    use tempfile::TempDir;
+
+    fn riku_bin() -> std::path::PathBuf {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku")
+    }
+
+    /// A stale `USER=root` must not send an unprivileged `riku init` down the
+    /// root path, which creates the deploy account.
+    #[test]
+    fn init_ignores_user_env_when_not_root() {
+        let uid = std::process::Command::new("id").arg("-u").output().unwrap();
+        if String::from_utf8_lossy(&uid.stdout).trim() == "0" {
+            return;
+        }
+        let home = TempDir::new().unwrap();
+        let out = std::process::Command::new(riku_bin())
+            .args(["init", "--no-systemd"])
+            .env("HOME", home.path())
+            .env("USER", "root")
+            .env_remove("RIKU_ROOT")
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            !stderr.contains("useradd"),
+            "init took the root path for a non-root uid:\n{stderr}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod agent_scope_tests {
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn intro(home: &TempDir, scope_flag: Option<&str>) -> String {
+        let bin =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku");
+        let mut cmd = std::process::Command::new(bin);
+        cmd.arg("agent");
+        if let Some(scope) = scope_flag {
+            cmd.args(["--scope", scope]);
+        }
+        let out = cmd
+            .arg("--intro")
+            .env("HOME", home.path())
+            .env_remove("RIKU_AGENT_SCOPE")
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first");
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    fn home_with_other_keys_scope() -> TempDir {
+        let home = TempDir::new().unwrap();
+        fs::create_dir_all(home.path().join(".ssh")).unwrap();
+        fs::write(
+            home.path().join(".ssh/authorized_keys"),
+            "command=\"riku agent --scope production --json\",no-pty ssh-ed25519 AAAA other-key\n",
+        )
+        .unwrap();
+        home
+    }
+
+    #[test]
+    fn agent_without_scope_is_readonly_whatever_other_keys_allow() {
+        let text = intro(&home_with_other_keys_scope(), None);
+        assert!(
+            text.contains("\"apps\""),
+            "intro printed no permissions:\n{text}"
+        );
+        assert!(
+            !text.contains("\"deploy\""),
+            "inherited another key's scope:\n{text}"
+        );
+    }
+
+    #[test]
+    fn scope_flag_sets_the_permissions_the_agent_gets() {
+        let text = intro(&home_with_other_keys_scope(), Some("staging"));
+        assert!(
+            text.contains("\"deploy\""),
+            "staging scope not applied:\n{text}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod agent_env_tests {
+    use tempfile::TempDir;
+
+    fn intro_with_env(vars: &[(&str, &str)], args: &[&str]) -> String {
+        let home = TempDir::new().unwrap();
+        let bin =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku");
+        let out = std::process::Command::new(bin)
+            .arg("agent")
+            .args(args)
+            .arg("--intro")
+            .env("HOME", home.path())
+            .envs(vars.iter().copied())
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first");
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    /// With sshd AcceptEnv a client can send any variable; only the forced
+    /// command's own arguments may choose the scope.
+    #[test]
+    fn agent_scope_is_not_taken_from_the_environment() {
+        let text = intro_with_env(&[("RIKU_AGENT_SCOPE", "production")], &[]);
+        assert!(
+            text.contains("\"readonly\""),
+            "env chose the scope:\n{text}"
+        );
+    }
+
+    #[test]
+    fn agent_id_is_not_taken_from_the_environment() {
+        let text = intro_with_env(&[("RIKU_AGENT_ID", "forged")], &[]);
+        assert!(!text.contains("forged"), "env chose the identity:\n{text}");
+    }
+
+    #[test]
+    fn agent_id_comes_from_the_forced_command() {
+        let text = intro_with_env(&[], &["--agent-id", "cursor-staging"]);
+        assert!(text.contains("\"cursor-staging\""), "{text}");
+    }
+}
+
+#[cfg(test)]
+mod agent_state_tests {
+    use std::os::unix::fs::PermissionsExt;
+    use tempfile::TempDir;
+
+    #[test]
+    fn agent_audit_log_is_private_and_under_the_riku_root() {
+        let home = TempDir::new().unwrap();
+        let bin =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku");
+        std::process::Command::new(bin)
+            .args([
+                "agent",
+                "--scope",
+                "readonly",
+                "--agent-id",
+                "state-test",
+                "apps",
+            ])
+            .env("HOME", home.path())
+            .env_remove("RIKU_ROOT")
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first");
+        let dir = home.path().join(".riku/state/agent");
+        let mode = |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&dir), 0o700);
+        let log = dir.join("audit.log");
+        assert_eq!(mode(&log), 0o600);
+        let text = std::fs::read_to_string(&log).unwrap();
+        assert!(text.contains("state-test apps"), "{text}");
+    }
+}

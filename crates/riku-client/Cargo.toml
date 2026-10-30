@@ -1,0 +1,25 @@
+[package]
+name = "riku-client"
+version = "3.0.0"
+edition = "2021"
+description = "rk, the laptop only client for riku servers"
+authors = ["Rakibul Yeasin"]
+repository = "https://github.com/dreygur/riku"
+homepage = "https://github.com/dreygur/riku"
+license = "MIT"
+keywords = ["paas", "deployment", "git", "ssh"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "rk"
+path = "src/main.rs"
+
+[dependencies]
+riku-args = { path = "../riku-args" }
+riku-remote = { path = "../riku-remote" }
+anyhow = { workspace = true }
+clap = { workspace = true }
+
+[dev-dependencies]
+riku-bundle = { path = "../riku-bundle" }
+tempfile = { workspace = true }

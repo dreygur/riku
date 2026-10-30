@@ -15,7 +15,7 @@
 //!
 //! ## Detection resolution
 //!
-//! 1. If `RUNTIME=<name>` is set in the app ENV, that plugin is used directly
+//! 1. If `RIKU_RUNTIME=<name>` is set in the app ENV, that plugin is used directly
 //!    (error if not found).
 //! 2. Otherwise plugins sorted alphabetically are tried in order; first
 //!    `detect` exit-0 wins. If multiple match, first alphabetically wins.
@@ -109,22 +109,22 @@ pub fn discover(plugin_root: &Path) -> Vec<RuntimePlugin> {
 
 /// Detect which plugin handles the app.
 ///
-/// If `RUNTIME` is set in `app_env`, that plugin is returned directly (returns an
+/// If `RIKU_RUNTIME` is set in `app_env`, that plugin is returned directly (returns an
 /// error if no plugin with that name exists). Otherwise each plugin's `detect`
 /// subcommand is run in alphabetical order; the first exit-0 result wins.
-/// Returns `None` when no plugin matches and `RUNTIME` is not set.
+/// Returns `None` when no plugin matches and `RIKU_RUNTIME` is not set.
 pub fn detect(
     plugins: &[RuntimePlugin],
     app_path: &Path,
     app_env: &HashMap<String, String>,
 ) -> Result<Option<RuntimePlugin>> {
-    if let Some(runtime_name) = app_env.get("RUNTIME") {
+    if let Some(runtime_name) = app_env.get("RIKU_RUNTIME") {
         let plugin = plugins
             .iter()
             .find(|p| p.name == *runtime_name)
             .ok_or_else(|| {
                 anyhow!(
-                    "RUNTIME='{}' is set but no plugin named '{}' was found in plugins directory",
+                    "RIKU_RUNTIME='{}' is set but no plugin named '{}' was found in plugins directory",
                     runtime_name,
                     runtime_name
                 )
@@ -286,6 +286,28 @@ pub fn pull_service(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>, service: &
             plugin.name,
             status.code().unwrap_or(-1)
         );
+    }
+    Ok(())
+}
+
+/// Run `plugin destroy` before `riku destroy` deletes the app's files, so
+/// the plugin can remove what it started outside them (compose containers
+/// and networks). A failure carries the plugin's stderr.
+pub fn destroy(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result<()> {
+    let mut cmd = Command::new(&plugin.path);
+    cmd.arg("destroy")
+        .envs(ctx.build_env())
+        .current_dir(ctx.app_path);
+    let output = match super::executor::output_retrying_etxtbsy(&mut cmd) {
+        Ok(output) => output,
+        Err(e) => return Err(anyhow!("Failed to run '{} destroy': {}", plugin.name, e)),
+    };
+    if !output.status.success() {
+        return Err(anyhow!(
+            "'{} destroy' failed: {}",
+            plugin.name,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
     }
     Ok(())
 }

@@ -2,7 +2,7 @@
 name = "riku-util"
 version = "0.1.0"
 edition = "2021"
-description = "Riku shared utilities: fs, env, procfile, cron parsing, resource limits"
+description = "Riku shared utilities: fs, env, procfile, cron parsing, resource limits, token generation"
 authors = ["Rakibul Yeasin"]
 repository = "https://github.com/dreygur/riku"
 license = "MIT"
@@ -11,8 +11,10 @@ license = "MIT"
 anyhow = { workspace = true }
 chrono = { workspace = true }
 croner = "4"
+hex = { workspace = true }
+rand = { workspace = true }
 libc = { workspace = true }
-nix = { workspace = true, features = ["resource"] }
+nix = { workspace = true, features = ["resource", "user"] }
 once_cell = { workspace = true }
 regex = "1"
 colored = { workspace = true }

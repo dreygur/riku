@@ -59,7 +59,7 @@ riku open myapp /admin
 - Auto-detects browser (Chrome, Firefox, Safari, etc.)
 - Cross-platform (macOS, Linux, Windows)
 - Uses HTTPS by default
-- Falls back to app name if NGINX_SERVER_NAME not set
+- Falls back to app name if RIKU_DOMAINS not set
 
 ### backup
 
@@ -165,7 +165,7 @@ Plugins receive arguments:
 
 | Position | Variable | Example |
 |----------|----------|---------|
-| $1 | server | `deploy@server.com` |
+| $1 | server | `riku@server.com` |
 | $2 | app | `myapp` |
 | $3 | command | `backup:data` |
 | $4+ | extra | file paths, options |

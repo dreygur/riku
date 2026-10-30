@@ -2,26 +2,36 @@
 use anyhow::Result;
 use std::process::Command;
 
+use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::echo;
 
+use super::binary::INSTALL_DIR;
+
 /// Setup systemd service for Riku supervisor (user-level, no root required).
-pub fn setup_systemd_service(paths: &RikuPaths) -> Result<()> {
-    let home_dir =
-        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+pub fn setup_systemd_service(paths: &RikuPaths, router: &Router) -> Result<()> {
+    let Some(home_dir) = dirs::home_dir() else {
+        return Err(anyhow::anyhow!("Could not determine home directory"));
+    };
     let systemd_dir = home_dir.join(".config/systemd/user");
 
-    std::fs::create_dir_all(&systemd_dir)?;
+    if let Err(e) = std::fs::create_dir_all(&systemd_dir) {
+        return Err(anyhow::anyhow!(
+            "failed to create {}: {e}",
+            systemd_dir.display()
+        ));
+    }
 
-    let riku_binary_path = paths.riku_script.to_string_lossy();
+    // The copy init installed, not wherever init was launched from.
+    let riku_binary = home_dir.join(INSTALL_DIR).join("riku");
+    let riku_binary_path = riku_binary.to_string_lossy();
     let riku_root_abs = paths.riku_root.to_string_lossy();
 
     let service_content = format!(
         r#"[Unit]
 Description=Riku Process Supervisor
 Documentation=https://dreygur.github.io/riku/
-After=network.target nginx.service
-Wants=nginx.service
+{ordering}
 
 [Service]
 Type=simple
@@ -51,10 +61,16 @@ WantedBy=default.target
 "#,
         riku_path = riku_binary_path,
         riku_root = riku_root_abs,
+        ordering = super::router_units::unit_ordering(router),
     );
 
     let service_file = systemd_dir.join("riku.service");
-    std::fs::write(&service_file, &service_content)?;
+    if let Err(e) = std::fs::write(&service_file, &service_content) {
+        return Err(anyhow::anyhow!(
+            "failed to write {}: {e}",
+            service_file.display()
+        ));
+    }
     echo("      ✓ Service file created", "green");
 
     let _ = Command::new("systemctl")

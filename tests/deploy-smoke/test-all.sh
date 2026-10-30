@@ -141,8 +141,8 @@ test_env_vars() {
     # Test basic env vars
     cat > "$app_dir/ENV" <<'EOF'
 RIKU_AUTO_RESTART=true
-BIND_ADDRESS=127.0.0.1
-DISABLE_IPV6=true
+RIKU_BIND_ADDRESS=127.0.0.1
+RIKU_DISABLE_IPV6=true
 RIKU_WORKER_TIMEOUT=3600
 RIKU_WORKER_GRACE_PERIOD=60
 RIKU_MAX_RESTARTS=10
@@ -155,14 +155,14 @@ EOF
 test_node_version() {
     local app_dir="$1"
 
-    log_info "Testing NODE_VERSION env var"
+    log_info "Testing RIKU_NODE_VERSION env var"
 
     cat >> "$app_dir/ENV" <<'EOF'
-NODE_VERSION=18.17.0
+RIKU_NODE_VERSION=18.17.0
 NODE_PACKAGE_MANAGER=npm
 EOF
 
-    log_info "✓ NODE_VERSION test passed"
+    log_info "✓ RIKU_NODE_VERSION test passed"
     PASSED=$((PASSED + 1))
 }
 
@@ -172,15 +172,15 @@ test_nginx_vars() {
     log_info "Testing NGINX_* env vars"
 
     cat >> "$app_dir/ENV" <<'EOF'
-NGINX_SERVER_NAME=test.example.com
-NGINX_HTTPS_ONLY=false
-NGINX_STATIC_PATHS=/static:public/static
-NGINX_CACHE_PREFIXES=/api/cache
-NGINX_CACHE_SIZE=1
-NGINX_CACHE_TIME=3600
-NGINX_CLOUDFLARE_ACL=false
-NGINX_ALLOW_GIT_FOLDERS=false
-NGINX_CATCH_ALL=index.html
+RIKU_DOMAINS=test.example.com
+RIKU_HTTPS_ONLY=false
+RIKU_NGINX_STATIC_PATHS=/static:public/static
+RIKU_NGINX_CACHE_PREFIXES=/api/cache
+RIKU_NGINX_CACHE_SIZE=1
+RIKU_NGINX_CACHE_TIME=3600
+RIKU_NGINX_CLOUDFLARE_ACL=false
+RIKU_NGINX_ALLOW_GIT_FOLDERS=false
+RIKU_NGINX_CATCH_ALL=index.html
 EOF
 
     log_info "✓ NGINX_* env vars test passed"

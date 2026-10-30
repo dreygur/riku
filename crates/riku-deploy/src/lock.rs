@@ -6,7 +6,7 @@
 //! Two deploys for the same app racing (a second `git push` landing while
 //! the first `post-receive` hook is still running, or a dashboard-triggered
 //! redeploy firing mid-push) corrupt that shared state, e.g. a lost update
-//! on `NGINX_INTERNAL_PORT` leaves nginx proxying to a port no worker is
+//! on `RIKU_UPSTREAM_PORT` leaves nginx proxying to a port no worker is
 //! bound to. An advisory `flock` keyed by app name serializes deploys of the
 //! same app without affecting deploys of different apps.
 

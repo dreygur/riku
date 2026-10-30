@@ -1,38 +1,65 @@
 //! SSH authorized_keys management utilities.
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::Path;
 
+use crate::authorized_keys::authorized_keys_path;
+
 /// Append to ~/.ssh/authorized_keys with SSH restrictions.
 /// Set directory permissions to 700, file permissions to 600.
 pub fn setup_authorized_keys(ssh_fingerprint: &str, script_path: &str, pubkey: &str) -> Result<()> {
-    let home = std::env::var("HOME")?;
-    let ssh_dir = Path::new(&home).join(".ssh");
-    let authorized_keys = ssh_dir.join("authorized_keys");
+    let home = match std::env::var("HOME") {
+        Ok(home) => home,
+        Err(e) => return Err(anyhow!("HOME is not usable: {e}")),
+    };
+    let authorized_keys = authorized_keys_path(Path::new(&home));
+    let ssh_dir = match authorized_keys.parent() {
+        Some(dir) => dir.to_path_buf(),
+        None => {
+            return Err(anyhow!(
+                "no parent directory for {}",
+                authorized_keys.display()
+            ))
+        }
+    };
 
     if !ssh_dir.exists() {
-        fs::create_dir_all(&ssh_dir)?;
+        if let Err(e) = fs::create_dir_all(&ssh_dir) {
+            return Err(anyhow!("failed to create {}: {e}", ssh_dir.display()));
+        }
     }
 
-    let mut file = OpenOptions::new()
+    let mut file = match OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&authorized_keys)?;
+        .open(&authorized_keys)
+    {
+        Ok(file) => file,
+        Err(e) => return Err(anyhow!("failed to open {}: {e}", authorized_keys.display())),
+    };
 
-    writeln!(
+    if let Err(e) = writeln!(
         file,
-        "command=\"FINGERPRINT={} NAME=default {} $SSH_ORIGINAL_COMMAND\",no-agent-forwarding,no-user-rc,no-X11-forwarding,no-port-forwarding {}",
+        "command=\"FINGERPRINT={} NAME=default {}\",no-agent-forwarding,no-user-rc,no-X11-forwarding,no-port-forwarding {}",
         ssh_fingerprint, script_path, pubkey
-    )?;
+    ) {
+        return Err(anyhow!("failed to write {}: {e}", authorized_keys.display()));
+    }
 
-    // Set permissions: dir 700, file 600
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&ssh_dir, fs::Permissions::from_mode(0o700))?;
-        fs::set_permissions(&authorized_keys, fs::Permissions::from_mode(0o600))?;
+        if let Err(e) = fs::set_permissions(&ssh_dir, fs::Permissions::from_mode(0o700)) {
+            return Err(anyhow!("failed to chmod {}: {e}", ssh_dir.display()));
+        }
+        if let Err(e) = fs::set_permissions(&authorized_keys, fs::Permissions::from_mode(0o600)) {
+            return Err(anyhow!(
+                "failed to chmod {}: {e}",
+                authorized_keys.display()
+            ));
+        }
     }
 
     Ok(())
@@ -94,6 +121,19 @@ mod tests {
             assert!(content.contains("KEY1"));
             assert!(content.contains("KEY2"));
             assert_eq!(content.lines().count(), 2);
+        });
+    }
+
+    #[test]
+    fn new_keys_get_plain_forced_command() {
+        with_home(|tmp| {
+            setup_authorized_keys("fp", "/usr/bin/riku", "ssh-rsa KEY user@host").unwrap();
+            let content = fs::read_to_string(tmp.path().join(".ssh/authorized_keys")).unwrap();
+            assert!(
+                !content.contains("$SSH_ORIGINAL_COMMAND"),
+                "forced command must not expand the shell variable: {content}"
+            );
+            assert!(content.contains(r#"command="FINGERPRINT=fp NAME=default /usr/bin/riku","#));
         });
     }
 

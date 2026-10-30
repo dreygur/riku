@@ -6,10 +6,10 @@ Wants=nginx.service
 
 [Service]
 Type=simple
-User=deploy
-Group=deploy
-WorkingDirectory=/home/deploy
-ExecStart=/home/deploy/.local/bin/riku supervisor
+User=riku
+Group=riku
+WorkingDirectory=/home/riku
+ExecStart=/home/riku/.local/bin/riku supervisor
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -23,7 +23,7 @@ ProtectHome=read-only
 PrivateTmp=true
 
 # Allow writing to riku directories
-ReadWritePaths=/home/deploy/.riku
+ReadWritePaths=/home/riku/.riku
 
 # Resource limits
 MemoryMax=512M

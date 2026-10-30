@@ -5,24 +5,34 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::Command;
 
-use crate::config::RikuPaths;
-use crate::util::{echo, setup_authorized_keys};
+use crate::util::echo;
 
-/// Interactive SSH key setup.
-pub fn setup_ssh_key_interactive(paths: &RikuPaths) -> Result<()> {
-    let ssh_dir = dirs::home_dir()
-        .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?
-        .join(".ssh");
+use super::deploy_keys::{add_deploy_keys, read_key_file};
 
-    let found_keys = find_public_keys(&ssh_dir)?;
+const ADD_KEY_LATER: &str = "      ℹ Add a key later by running riku init again";
 
-    let key_to_add = select_key(found_keys, &ssh_dir)?;
+/// Interactive SSH key setup: pick or create one of this user's keys and
+/// authorize it, through the same validation as `riku init --ssh-key`.
+#[allow(clippy::question_mark)]
+pub fn setup_ssh_key_interactive() -> Result<()> {
+    let Some(home) = dirs::home_dir() else {
+        return Err(anyhow::anyhow!("Could not determine home directory"));
+    };
+    let ssh_dir = home.join(".ssh");
 
-    if let Some(key_path) = key_to_add {
-        add_key_to_authorized_keys(paths, &key_path)?;
+    let found_keys = match find_public_keys(&ssh_dir) {
+        Ok(keys) => keys,
+        Err(e) => return Err(e),
+    };
+    let key_path = match select_key(found_keys, &ssh_dir) {
+        Ok(Some(path)) => path,
+        Ok(None) => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    match read_key_file(&key_path) {
+        Ok(keys) => add_deploy_keys(&keys),
+        Err(e) => Err(e),
     }
-
-    Ok(())
 }
 
 fn find_public_keys(ssh_dir: &std::path::Path) -> Result<Vec<PathBuf>> {
@@ -62,28 +72,41 @@ fn select_key(found_keys: Vec<PathBuf>, ssh_dir: &std::path::Path) -> Result<Opt
     prompt_select_key(found_keys)
 }
 
+/// Flush the prompt and read one line of the answer.
+fn read_answer() -> Result<String> {
+    if let Err(e) = io::stdout().flush() {
+        return Err(anyhow::anyhow!("failed to show the prompt: {e}"));
+    }
+    let mut input = String::new();
+    match io::stdin().read_line(&mut input) {
+        Ok(_) => Ok(input),
+        Err(e) => Err(anyhow::anyhow!("failed to read the answer: {e}")),
+    }
+}
+
+#[allow(clippy::question_mark)]
 fn prompt_create_key(ssh_dir: &std::path::Path) -> Result<Option<PathBuf>> {
     echo("      ℹ No SSH keys found", "yellow");
     print!("      Create new SSH key? [y/N]: ");
-    io::stdout().flush()?;
-
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
+    let input = match read_answer() {
+        Ok(input) => input,
+        Err(e) => return Err(e),
+    };
 
     if input.trim().to_lowercase() == "y" {
         echo("      Generating SSH key...", "");
 
+        if let Err(e) = fs::create_dir_all(ssh_dir) {
+            return Err(anyhow::anyhow!(
+                "failed to create {}: {e}",
+                ssh_dir.display()
+            ));
+        }
+        // No shell runs this, so the path must be absolute: a literal `~`
+        // would make ssh-keygen write into a directory named `~`.
         let status = Command::new("ssh-keygen")
-            .args([
-                "-t",
-                "ed25519",
-                "-C",
-                "riku@server",
-                "-f",
-                "~/.ssh/id_ed25519",
-                "-N",
-                "",
-            ])
+            .args(["-t", "ed25519", "-C", "riku@server", "-N", "", "-f"])
+            .arg(ssh_dir.join("id_ed25519"))
             .status();
 
         if status.is_ok_and(|s| s.success()) {
@@ -91,21 +114,16 @@ fn prompt_create_key(ssh_dir: &std::path::Path) -> Result<Option<PathBuf>> {
             return Ok(Some(ssh_dir.join("id_ed25519.pub")));
         } else {
             echo("      ⚠ Failed to create SSH key", "red");
-            echo(
-                "      You can add a key manually later with: riku setup ssh ~/.ssh/id_rsa.pub",
-                "yellow",
-            );
+            echo(ADD_KEY_LATER, "yellow");
         }
     } else {
-        echo(
-            "      ℹ You can add a key manually later with: riku setup ssh ~/.ssh/id_rsa.pub",
-            "yellow",
-        );
+        echo(ADD_KEY_LATER, "yellow");
     }
 
     Ok(None)
 }
 
+#[allow(clippy::question_mark)]
 fn prompt_select_key(found_keys: Vec<PathBuf>) -> Result<Option<PathBuf>> {
     echo("      Multiple SSH keys found:", "yellow");
 
@@ -114,10 +132,10 @@ fn prompt_select_key(found_keys: Vec<PathBuf>) -> Result<Option<PathBuf>> {
     }
 
     print!("      Select key (1-{}): ", found_keys.len());
-    io::stdout().flush()?;
-
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
+    let input = match read_answer() {
+        Ok(input) => input,
+        Err(e) => return Err(e),
+    };
 
     match input.trim().parse::<usize>() {
         Ok(n) if n >= 1 && n <= found_keys.len() => {
@@ -129,43 +147,8 @@ fn prompt_select_key(found_keys: Vec<PathBuf>) -> Result<Option<PathBuf>> {
         }
         _ => {
             echo("      ⚠ Invalid selection", "red");
-            echo(
-                "      You can add a key manually later with: riku setup ssh ~/.ssh/id_rsa.pub",
-                "yellow",
-            );
+            echo(ADD_KEY_LATER, "yellow");
             Ok(None)
         }
     }
-}
-
-fn add_key_to_authorized_keys(paths: &RikuPaths, key_path: &PathBuf) -> Result<()> {
-    if !key_path.exists() {
-        return Ok(());
-    }
-
-    let pubkey = fs::read_to_string(key_path)?.trim().to_string();
-
-    let output = Command::new("ssh-keygen").arg("-lf").arg(key_path).output();
-
-    let fingerprint = if let Ok(out) = output {
-        String::from_utf8_lossy(&out.stdout)
-            .split_whitespace()
-            .nth(1)
-            .unwrap_or("")
-            .to_string()
-    } else {
-        "unknown".to_string()
-    };
-
-    echo(
-        &format!("      Adding key '{}' to authorized_keys...", fingerprint),
-        "",
-    );
-
-    let script_path = paths.riku_script.to_string_lossy().to_string();
-    setup_authorized_keys(&fingerprint, &script_path, &pubkey)?;
-
-    echo("      ✓ Key added to authorized_keys", "green");
-
-    Ok(())
 }

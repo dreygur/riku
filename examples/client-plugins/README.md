@@ -24,7 +24,7 @@ Plugins receive these arguments:
 
 | Argument | Description | Example |
 |----------|-------------|---------|
-| `$1` | Server | `deploy@myserver.com` |
+| `$1` | Server | `riku@myserver.com` |
 | `$2` | App name | `myapp` |
 | `$3` | Full command | `backup:data` |
 | `$4+` | Additional arguments | (varies) |
@@ -103,7 +103,7 @@ riku open              # open app URL
 riku open /admin       # open app URL with path
 ```
 
-Uses `config:get` to fetch `NGINX_SERVER_NAME`, then opens the URL with the system browser.
+Uses `config:get` to fetch `RIKU_DOMAINS`, then opens the URL with the system browser.
 
 ### backup
 
@@ -178,7 +178,7 @@ case "$cmd" in
         # Call server-side plugin to ensure tunnel is running
         tunnel_name=$(ssh "$server" code-tunnel:ensure "$app")
         # Launch local VS Code connected to the tunnel
-        code --remote "tunnel+$tunnel_name" "/home/deploy/.riku/apps/$app"
+        code --remote "tunnel+$tunnel_name" "/home/riku/.riku/apps/$app"
         ;;
     code:stop)
         ssh "$server" code-tunnel:stop "$app"

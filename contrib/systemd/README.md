@@ -103,10 +103,10 @@ sudo systemctl status riku
 sudo journalctl -u riku -n 100
 
 # Verify binary exists
-ls -la /home/deploy/.local/bin/riku
+ls -la /home/riku/.local/bin/riku
 
 # Test binary manually
-sudo -u deploy /home/deploy/.local/bin/riku --help
+sudo -u riku /home/riku/.local/bin/riku --help
 ```
 
 ### Nginx Not Reloading
@@ -137,7 +137,7 @@ CPUQuota=100%
 ## Security
 
 The service includes security hardening:
-- Runs as `deploy` user (not root)
+- Runs as `riku` user (not root)
 - `NoNewPrivileges=true` - Prevents privilege escalation
 - `ProtectSystem=strict` - Read-only system directories
 - `ProtectHome=read-only` - Read-only home directories

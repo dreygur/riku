@@ -1294,9 +1294,9 @@ dependencies = [
 
 [[package]]
 name = "notify-types"
-version = "2.1.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42b8cfee0e339a0337359f3c88165702ac6e600dc01c0cc9579a92d62b08477a"
+checksum = "0a437a9308232ce794b1e7fdf540d38ea37efc3c73492640c13b4c8568b8f108"
 dependencies = [
  "bitflags",
 ]
@@ -1590,6 +1590,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "riku-args"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+]
+
+[[package]]
+name = "riku-bundle"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ed25519-dalek",
+ "hex",
+ "rand",
+ "serde",
+ "toml",
+]
+
+[[package]]
+name = "riku-caddy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "riku-config",
+ "riku-util",
+ "tempfile",
+]
+
+[[package]]
 name = "riku-cli"
 version = "0.1.0"
 dependencies = [
@@ -1601,14 +1631,18 @@ dependencies = [
  "glob",
  "nix",
  "reqwest",
+ "riku-args",
+ "riku-caddy",
  "riku-config",
  "riku-deploy",
  "riku-nginx",
  "riku-plugins",
+ "riku-remote",
  "riku-supervisor",
  "riku-util",
  "serde",
  "serde_json",
+ "shlex",
  "tempfile",
  "toml",
  "tracing",
@@ -1616,10 +1650,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "riku-client"
+version = "3.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "riku-args",
+ "riku-bundle",
+ "riku-remote",
+ "tempfile",
+]
+
+[[package]]
 name = "riku-config"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "tempfile",
 ]
 
 [[package]]
@@ -1650,6 +1697,7 @@ dependencies = [
  "glob",
  "libc",
  "nix",
+ "riku-caddy",
  "riku-config",
  "riku-error",
  "riku-nginx",
@@ -1713,14 +1761,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "ed25519-dalek",
  "hex",
  "landlock",
  "libc",
  "nix",
  "once_cell",
- "rand",
  "reqwest",
+ "riku-bundle",
  "riku-config",
  "riku-error",
  "riku-util",
@@ -1733,6 +1780,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "riku-remote"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "dirs",
+ "nix",
+ "riku-args",
+ "riku-bundle",
+ "riku-util",
+ "serde",
+ "shlex",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
 name = "riku-supervisor"
 version = "0.1.0"
 dependencies = [
@@ -1740,12 +1804,10 @@ dependencies = [
  "axum",
  "chrono",
  "futures",
- "hex",
  "libc",
  "nix",
  "notify",
  "once_cell",
- "rand",
  "reqwest",
  "riku-config",
  "riku-error",
@@ -1771,9 +1833,11 @@ dependencies = [
  "chrono",
  "colored",
  "croner",
+ "hex",
  "libc",
  "nix",
  "once_cell",
+ "rand",
  "regex",
  "subtle",
  "tempfile",
@@ -1791,9 +1855,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "1.1.5"
+version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d"
+checksum = "e5e76742e5294153d4dde1207dbec5bdd81eef6fabdc0d2118babadabfd858aa"
 dependencies = [
  "bitflags",
  "errno",

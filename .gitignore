@@ -128,6 +128,9 @@ SCALING
 authorized_keys
 authorized_keys.*
 
+# riku source files that share the name
+!crates/riku-util/src/authorized_keys.rs
+
 # Rate limiting and audit logs
 /tmp/riku-agent-*.log
 /tmp/riku-confirm-*

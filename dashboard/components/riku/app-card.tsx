@@ -18,7 +18,7 @@ import { confirmDialog } from "./confirm-dialog";
 import { api, fmtBytes } from "@/lib/api";
 import { usePendingRun } from "@/lib/use-pending-run";
 import { statusMeta } from "@/lib/status";
-import { domainOf, httpsOf, isBusy, type AppState, type Release } from "@/lib/types";
+import { domainOf, httpsOf, isBusy, routeBadge, type AppState, type Release } from "@/lib/types";
 
 const MEM_CEIL = 256 * 1024 * 1024;
 
@@ -30,6 +30,7 @@ export function AppCard({ app, onChanged }: { app: AppState; onChanged: () => vo
   const busy = isBusy(app);
   const domain = domainOf(app);
   const https = httpsOf(app);
+  const badge = routeBadge(app.route);
   const webCount = app.workers.filter((w) => w.kind === "web").length || 1;
   const [scaleN, setScaleN] = useState(webCount);
   const { isPending, run: runPending } = usePendingRun();
@@ -77,12 +78,12 @@ export function AppCard({ app, onChanged }: { app: AppState; onChanged: () => vo
         )}
         <span
           className={`border px-2 py-0.5 font-mono text-[11px] ${
-            app.nginx.enabled
+            badge.live
               ? "border-primary/30 text-primary"
               : "border-border text-muted-foreground"
           }`}
         >
-          nginx {app.nginx.enabled ? "live" : app.nginx.config_exists ? "staged" : "off"}
+          {badge.label}
         </span>
         {busy && (
           <span className="border border-warn/40 px-2 py-0.5 font-mono text-[11px] text-warn">

@@ -2,24 +2,33 @@
 //!
 //! Organised into focused sub-modules:
 //! - [`display`]: terminal output and table formatting
+//! - [`domain`]: validated hostnames for router config
 //! - [`validation`]: app-name sanitization, path-traversal checks
 //! - [`nginx_validation`]: nginx cache config and env-var validation
 //! - [`procfile`]: Procfile parsing and cron validation
 //! - [`env`]: KEY=VALUE file parsing, variable expansion
+//! - [`legacy_env`]: env keys renamed to the `RIKU_` prefix
+//! - [`authorized_keys`]: migration of old deploy key forced commands
 //! - [`ssh_keys`]: SSH authorized_keys management
 //! - [`process_util`]: free-port allocation, Node version validation
 
+pub mod authorized_keys;
 pub mod cron;
 pub mod deploy_logger;
 pub mod display;
+pub mod domain;
 pub mod env;
+pub mod flag;
 pub mod fs;
+pub mod legacy_env;
 pub mod nginx_validation;
 pub mod process_util;
 pub mod procfile;
+pub mod public_key;
 pub mod resource_limits;
 pub mod secure;
 pub mod ssh_keys;
+pub mod token;
 pub mod validation;
 
 // Re-export items used via `crate::util::*` call-sites.

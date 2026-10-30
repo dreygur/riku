@@ -1,0 +1,16 @@
+[package]
+name = "riku-bundle"
+version = "0.1.0"
+edition = "2021"
+description = "Riku plugin bundle format: manifest and author signatures"
+authors = ["Rakibul Yeasin"]
+repository = "https://github.com/dreygur/riku"
+license = "MIT"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+toml = { workspace = true }
+rand = { workspace = true }
+ed25519-dalek = { version = "3", features = ["rand_core"] }
+hex = { workspace = true }

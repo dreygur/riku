@@ -1,103 +1,31 @@
 /// Server initialization: directory structure, git hook, systemd, SSH, and verification.
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
 
+use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::echo;
 
-use super::binary::install_riku_binary;
+use super::binary::{install_riku_binary, PathNote};
+use super::default_branch::{set_default_branch, BRANCH_ENV};
+use super::deploy_keys::{add_deploy_keys, parse_key_args, read_key_file};
+use super::deploy_user::running_as_root;
 use super::git_hook::create_git_hook;
-use super::guidance::{print_first_app_guide, print_verification_summary, verify_supervisor};
+use super::guidance::{print_finish, InstallScope};
+use super::init_router::persist_router;
+use super::prerequisites::{check_prerequisites, warn_not_root};
+use super::root_init::root_init;
 use super::ssh::setup_ssh_key_interactive;
-use super::systemd::{install_systemd_service, setup_systemd_service};
+use super::systemd::setup_systemd_service;
 
-/// Initialize Riku on a server.
-/// Creates directory structure, optionally sets up systemd, and configures SSH keys.
-// Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
 #[allow(clippy::question_mark)]
-pub fn cmd_init(no_systemd: bool) -> Result<()> {
-    let paths = match RikuPaths::from_env() {
-        Ok(paths) => paths,
-        Err(e) => return Err(e),
+fn create_directory_structure(paths: &RikuPaths, router: &Router) -> Result<()> {
+    let router_dir = match router {
+        Router::Caddy => ("caddy", &paths.caddy_root),
+        Router::Nginx | Router::Plugin(_) => ("nginx", &paths.nginx_root),
     };
-
-    let is_root = env::var("USER").unwrap_or_default() == "root";
-
-    if !is_root {
-        echo("⚠ Warning: Not running as root", "yellow");
-        echo("  Some features require root privileges:", "yellow");
-        echo("    - System-wide systemd service", "yellow");
-        echo("    - Nginx configuration", "yellow");
-        echo("  Run 'sudo riku init' for full installation.", "yellow");
-        echo("", "");
-    }
-
-    check_prerequisites(is_root);
-
-    echo("-----> Initializing Riku server...", "");
-    echo("", "");
-
-    echo("[1/4] Creating directory structure...", "");
-    create_directory_structure(&paths)?;
-
-    install_riku_binary()?;
-    generate_acme_config(&paths);
-
-    echo("", "");
-    create_git_hook(&paths)?;
-    echo("", "");
-
-    setup_systemd_step(&paths, no_systemd, is_root)?;
-
-    echo("[3/4] SSH key setup...", "");
-    setup_ssh_key_interactive(&paths)?;
-    echo("", "");
-
-    echo("[4/4] Verifying installation...", "");
-    verify_supervisor(no_systemd);
-    echo("", "");
-
-    echo("-----> Riku server initialized successfully!", "green");
-    echo("", "");
-
-    print_verification_summary(no_systemd);
-    print_first_app_guide();
-
-    Ok(())
-}
-
-fn check_prerequisites(is_root: bool) {
-    echo("Checking prerequisites...", "");
-    let mut missing_deps = Vec::new();
-
-    if Command::new("git").arg("--version").output().is_err() {
-        missing_deps.push("git");
-    }
-
-    let has_nginx = Command::new("nginx").arg("-v").output().is_ok();
-    if !has_nginx && is_root {
-        echo("  ⚠ nginx not found - install for web serving", "yellow");
-    }
-
-    if !missing_deps.is_empty() {
-        echo(
-            &format!("  ⚠ Missing dependencies: {}", missing_deps.join(", ")),
-            "yellow",
-        );
-        echo(
-            &format!("  Install with: apt install {}", missing_deps.join(" ")),
-            "yellow",
-        );
-    } else {
-        echo("  ✓ All required dependencies found", "green");
-    }
-    echo("", "");
-}
-
-fn create_directory_structure(paths: &RikuPaths) -> Result<()> {
     let dirs: Vec<(&str, &PathBuf)> = vec![
         ("apps", &paths.app_root),
         ("cache", &paths.cache_root),
@@ -108,18 +36,20 @@ fn create_directory_structure(paths: &RikuPaths) -> Result<()> {
         ("workers-available", &paths.workers_available),
         ("workers-enabled", &paths.workers_enabled),
         ("logs", &paths.log_root),
-        ("nginx", &paths.nginx_root),
+        router_dir,
         ("acme", &paths.acme_www),
         ("plugins", &paths.plugin_root),
     ];
 
     for (name, dir) in &dirs {
-        if !dir.exists() {
-            fs::create_dir_all(dir)?;
-            echo(&format!("      ✓ ~/.riku/{}", name), "green");
-        } else {
+        if dir.exists() {
             echo(&format!("      ✓ ~/.riku/{} (exists)", name), "green");
+            continue;
         }
+        if let Err(e) = fs::create_dir_all(dir) {
+            return Err(anyhow!("failed to create {}: {e}", dir.display()));
+        }
+        echo(&format!("      ✓ ~/.riku/{}", name), "green");
     }
 
     Ok(())
@@ -136,19 +66,162 @@ fn generate_acme_config(paths: &RikuPaths) {
         );
     }
 }
+#[allow(clippy::question_mark)]
+fn default_branch_step() -> Result<()> {
+    let home = match env::var("HOME") {
+        Ok(home) => PathBuf::from(home),
+        Err(_) => return Err(anyhow!("HOME is not set")),
+    };
+    set_default_branch(&home, env::var(BRANCH_ENV).ok())
+}
 
-fn setup_systemd_step(paths: &RikuPaths, no_systemd: bool, is_root: bool) -> Result<()> {
-    if !no_systemd {
-        echo("[2/4] Setting up systemd service...", "");
-        if is_root {
-            install_systemd_service(paths)?;
-        } else {
-            setup_systemd_service(paths)?;
-        }
-        echo("", "");
-    } else {
+/// Directories, binary, ACME config, git hook and default branch in
+/// `paths`' tree.
+#[allow(clippy::question_mark)]
+fn prepare_tree(paths: &RikuPaths, router: &Router, note: PathNote) -> Result<()> {
+    echo("[1/4] Creating directory structure...", "");
+    if let Err(e) = create_directory_structure(paths, router) {
+        return Err(e);
+    }
+    if let Err(e) = install_riku_binary(note) {
+        return Err(e);
+    }
+    if *router != Router::Caddy {
+        generate_acme_config(paths);
+    }
+
+    echo("", "");
+    if let Err(e) = create_git_hook(paths) {
+        return Err(e);
+    }
+    if let Err(e) = default_branch_step() {
+        return Err(e);
+    }
+    echo("", "");
+    Ok(())
+}
+
+fn setup_user_service(paths: &RikuPaths, router: &Router, no_systemd: bool) -> Result<()> {
+    if no_systemd {
         echo("[2/4] Skipping systemd setup (--no-systemd)", "yellow");
         echo("", "");
+        return Ok(());
+    }
+    echo("[2/4] Setting up systemd service...", "");
+    let installed = setup_systemd_service(paths, router);
+    echo("", "");
+    installed
+}
+
+/// What `riku init` was asked to do.
+pub struct InitOptions {
+    pub no_systemd: bool,
+    /// Set by a root init when it runs the per-user steps as the deploy user.
+    pub user_steps: bool,
+    /// `--ssh-key`: a `.pub` or `authorized_keys` file whose keys to authorize.
+    pub ssh_key: Option<PathBuf>,
+    /// Keys a root init already read and validated, for the per-user run.
+    pub add_keys: Vec<String>,
+}
+
+/// Authorize the keys given on the command line, or else prompt for one.
+/// A root init gives the per-user run no terminal, so that run never
+/// prompts; root prints how to add a key instead.
+#[allow(clippy::question_mark)]
+fn ssh_key_step(options: &InitOptions) -> Result<()> {
+    let keys = match &options.ssh_key {
+        Some(file) => read_key_file(file),
+        None => parse_key_args(&options.add_keys),
+    };
+    let keys = match keys {
+        Ok(keys) => keys,
+        Err(e) => return Err(e),
+    };
+    if keys.is_empty() && options.user_steps {
+        return Ok(());
+    }
+
+    echo("[3/4] SSH key setup...", "");
+    let added = if keys.is_empty() {
+        setup_ssh_key_interactive()
+    } else {
+        add_deploy_keys(&keys)
+    };
+    echo("", "");
+    added
+}
+
+/// Init for the user running it, in that user's own tree. With
+/// `user_steps`, a root init is driving: the warning, prerequisites and
+/// systemd step are root's to do, and root prints the summary.
+#[allow(clippy::question_mark)]
+fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
+    let user_steps = options.user_steps;
+    let router = match persist_router(paths) {
+        Ok(router) => router,
+        Err(e) => return Err(e),
+    };
+    if !user_steps {
+        warn_not_root(&router);
+        check_prerequisites(false, &router);
+        echo("-----> Initializing Riku server...", "");
+        echo("", "");
+    }
+
+    let note = if user_steps {
+        PathNote::Skip
+    } else {
+        PathNote::Show
+    };
+    if let Err(e) = prepare_tree(paths, &router, note) {
+        return Err(e);
+    }
+    if !user_steps {
+        if let Err(e) = setup_user_service(paths, &router, options.no_systemd) {
+            return Err(e);
+        }
+    }
+
+    ssh_key_step(options)
+}
+
+fn own_scope() -> InstallScope {
+    InstallScope::User {
+        user: env::var("USER").unwrap_or_default(),
+        home: PathBuf::from(env::var("HOME").unwrap_or_default()),
+    }
+}
+
+/// Initialize Riku on a server.
+///
+/// As root, the per-user steps run as the deploy user (see
+/// [`super::root_init`]) and root adds the host setup. Otherwise everything
+/// happens in the caller's own tree.
+// Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
+#[allow(clippy::question_mark)]
+pub fn cmd_init(options: InitOptions) -> Result<()> {
+    if running_as_root() {
+        let user = match root_init(&options) {
+            Ok(user) => user,
+            Err(e) => return Err(e),
+        };
+        let scope = InstallScope::System {
+            user: user.name,
+            home: user.home,
+        };
+        print_finish(&scope, options.no_systemd);
+        return Ok(());
+    }
+
+    let paths = match RikuPaths::from_env() {
+        Ok(paths) => paths,
+        Err(e) => return Err(e),
+    };
+    if let Err(e) = user_init(&paths, &options) {
+        return Err(e);
+    }
+    if !options.user_steps {
+        print_finish(&own_scope(), options.no_systemd);
     }
     Ok(())
 }
