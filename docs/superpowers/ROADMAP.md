@@ -89,7 +89,7 @@ work they describe.
 
 - A1 Engine detection and the engine setting: done
 - A2 Engine identity and command probe: done
-- A3 Run and control containers: pending
+- A3 Run and control containers: done
 - A4 Container state and stats: pending
 
 - B1 Move compose file lookup into the library: pending

@@ -92,7 +92,6 @@ impl Engine {
         &self.identity
     }
 
-    #[allow(dead_code)]
     pub(crate) fn program(&self) -> &Path {
         &self.program
     }
