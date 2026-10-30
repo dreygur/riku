@@ -1748,6 +1748,7 @@ dependencies = [
  "glob",
  "libc",
  "nix",
+ "riku-bundle",
  "riku-caddy",
  "riku-config",
  "riku-error",

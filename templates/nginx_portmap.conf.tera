@@ -1,3 +1,5 @@
+{% include "nginx_upstream.conf.tera" %}
+
 server {
   listen              {{ RIKU_NGINX_IPV4_ADDRESS }}:{{ RIKU_NGINX_EXTERNAL_PORT }};
 {% if RIKU_NGINX_IPV6_ADDRESS %}
@@ -11,7 +13,7 @@ server {
   }
 
   location / {
-    proxy_pass http://{{ RIKU_BIND_ADDRESS }}:{{ RIKU_UPSTREAM_PORT }};
+    proxy_pass http://{{ APP }}_UPSTREAM;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";

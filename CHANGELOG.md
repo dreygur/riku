@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-07-08
 
+### Router Plugin Protocol 2
+
+The `configure` request sent to a router plugin now carries a `backends` list
+(each a TCP host and port, or a unix socket path) and a `protocol` field, in
+place of the single `upstream_port`. A router plugin must declare
+`[router] protocol = 2` in its manifest. A plugin without that table, or with
+another protocol number, is refused before any verb runs. `unconfigure` still
+runs for any protocol. A plugin may set `graceful_reload = true` under
+`[router]` to say its `reload` keeps connections alive. See
+`PLUGIN_PROTOCOL.md` section 6.2.
+
+`RIKU_DOMAINS` now goes through domain validation for plugin routers, as it
+already did for Caddy. An invalid value fails a plugin router deploy.
+
 ### Dashboard Authentication
 
 The Next.js browser dashboard (`dashboard/`) gets its own login, independent
