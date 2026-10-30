@@ -10,6 +10,7 @@ use crate::types::{
 
 fn argv(spec: &RunSpec) -> Vec<String> {
     run_args(spec, Path::new("/scratch/env-1"))
+        .unwrap()
         .into_iter()
         .map(|a| a.to_string_lossy().into_owned())
         .collect()
@@ -73,6 +74,11 @@ fn mounts_render_volume_bind_anonymous_and_read_only() {
             target: PathBuf::from("/cache"),
             read_only: false,
         },
+        Mount {
+            source: MountSource::Anonymous,
+            target: PathBuf::from("/seed"),
+            read_only: true,
+        },
     ];
 
     let args = argv(&spec).join(" ");
@@ -80,7 +86,8 @@ fn mounts_render_volume_bind_anonymous_and_read_only() {
     for flag in [
         "-v shop_data:/var/lib/data",
         "-v /srv/conf:/etc/conf:ro",
-        "-v /cache",
+        "-v /cache ",
+        "--mount type=volume,dst=/seed,readonly ",
     ] {
         assert!(args.contains(flag), "{flag} missing from {args}");
     }
@@ -98,6 +105,51 @@ fn entrypoint_list_splits_into_flag_and_leading_args() {
         args.ends_with("--entrypoint python registry.example/myapp:1 -u app.py"),
         "{args}"
     );
+}
+
+#[test]
+fn entrypoint_and_health_command_starting_with_a_dash_stay_flag_values() {
+    let mut spec = sample_spec();
+    spec.entrypoint = Some(vec!["-sh".into()]);
+    spec.healthcheck = Some(HealthCheck {
+        test: HealthTest::Shell("-x".into()),
+        interval: None,
+        timeout: None,
+        retries: None,
+        start_period: None,
+    });
+
+    let args = argv(&spec);
+
+    for flag in ["--entrypoint", "--health-cmd"] {
+        let at = args.iter().position(|a| a == flag).unwrap();
+        assert!(args[at + 1].starts_with('-'), "{args:?}");
+        assert!(
+            at + 1
+                < args
+                    .iter()
+                    .position(|a| a == "registry.example/myapp:1")
+                    .unwrap()
+        );
+    }
+}
+
+#[test]
+fn exec_health_check_without_a_program_or_with_nul_is_an_error() {
+    let mut spec = sample_spec();
+    for exec in [vec![], vec!["curl\0".to_string()]] {
+        spec.healthcheck = Some(HealthCheck {
+            test: HealthTest::Exec(exec.clone()),
+            interval: None,
+            timeout: None,
+            retries: None,
+            start_period: None,
+        });
+        assert!(
+            run_args(&spec, Path::new("/scratch/env-1")).is_err(),
+            "{exec:?} was accepted"
+        );
+    }
 }
 
 #[test]

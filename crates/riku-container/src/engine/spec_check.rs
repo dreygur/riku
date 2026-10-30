@@ -53,6 +53,12 @@ fn check_mount(mount: &Mount) -> Result<()> {
         Ok(()) => {}
         Err(e) => return Err(e),
     }
+    if mount.target.to_string_lossy().contains(',') {
+        return Err(anyhow!(
+            "mount target {:?} must not hold ',', which would add mount options",
+            mount.target
+        ));
+    }
     match &mount.source {
         MountSource::Volume(name) => check_volume_name(name),
         MountSource::Bind(path) => check_absolute("bind mount source", path),
@@ -69,16 +75,31 @@ pub(crate) fn check_spec(spec: &RunSpec) -> Result<()> {
     if let Some(key) = spec.labels.keys().find(|k| k.is_empty() || k.contains('=')) {
         return Err(anyhow!("label key {key:?} is empty or holds '='"));
     }
-    if let Some(mount) = spec.mounts.iter().find(|m| check_mount(m).is_err()) {
-        return check_mount(mount);
+    match spec.mounts.iter().try_for_each(check_mount) {
+        Ok(()) => {}
+        Err(e) => return Err(e),
     }
-    let exec = spec.healthcheck.as_ref().map(|h| &h.test);
-    if let Some(HealthTest::Exec(argv)) = exec {
-        if argv.iter().any(|a| a.contains('\0')) {
-            return Err(anyhow!("health check command holds a NUL character"));
+    if let Some(HealthTest::Exec(argv)) = spec.healthcheck.as_ref().map(|h| &h.test) {
+        match exec_command_line(argv) {
+            Ok(_) => {}
+            Err(e) => return Err(e),
         }
     }
     Ok(())
+}
+
+/// Join an exec form health check into the shell line the engine CLI takes.
+///
+/// Refuses an empty command, which would silently keep the image's own check,
+/// and an argument the quoting cannot represent (a NUL character).
+pub(crate) fn exec_command_line(argv: &[String]) -> Result<String> {
+    if argv.is_empty() {
+        return Err(anyhow!("health check command is empty"));
+    }
+    match shlex::try_join(argv.iter().map(String::as_str)) {
+        Ok(line) => Ok(line),
+        Err(e) => Err(anyhow!("health check command cannot be quoted: {e}")),
+    }
 }
 
 #[cfg(test)]

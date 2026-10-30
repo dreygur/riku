@@ -1,9 +1,7 @@
-use std::collections::BTreeMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
-use super::BuildSpec;
 use crate::engine::fixture::{logged, logging_engine, sample_spec};
 use crate::engine::ContainerId;
 use crate::types::{StopSignal, DEFAULT_STOP_GRACE};
@@ -113,39 +111,11 @@ fn run_refuses_an_env_value_with_a_newline_before_calling_the_engine() {
 }
 
 #[test]
-fn build_orders_flags_before_the_context() {
+fn pull_refuses_an_image_that_looks_like_a_flag() {
     let dir = tempfile::tempdir().unwrap();
     let (engine, log) = logging_engine(dir.path(), "");
-    let spec = BuildSpec {
-        context: PathBuf::from("/srv/app"),
-        dockerfile: Some(PathBuf::from("Dockerfile.prod")),
-        tag: "myapp-web:1".into(),
-        args: BTreeMap::from([("RUBY_VERSION".to_string(), "3.3".to_string())]),
-        platform: Some("linux/amd64".into()),
-    };
-
-    engine.build(&spec).unwrap();
-
-    assert_eq!(
-        logged(&log),
-        ["build -t myapp-web:1 -f Dockerfile.prod --build-arg RUBY_VERSION=3.3 --platform linux/amd64 /srv/app"]
-    );
-}
-
-#[test]
-fn refuses_image_and_build_context_that_look_like_flags() {
-    let dir = tempfile::tempdir().unwrap();
-    let (engine, log) = logging_engine(dir.path(), "");
-    let spec = BuildSpec {
-        context: PathBuf::from("--output=/etc"),
-        dockerfile: None,
-        tag: "myapp-web:1".into(),
-        args: BTreeMap::new(),
-        platform: None,
-    };
 
     assert!(engine.pull("--all-tags").is_err());
-    assert!(engine.build(&spec).is_err());
     assert!(
         logged(&log).is_empty(),
         "engine was called: {:?}",

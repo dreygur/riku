@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use super::check_spec;
 use crate::engine::fixture::sample_spec;
-use crate::types::{Mount, MountSource};
+use crate::types::{HealthCheck, HealthTest, Mount, MountSource};
 
 fn mount(source: MountSource, target: &str) -> Mount {
     Mount {
@@ -38,6 +38,22 @@ fn refuses_label_key_with_equals() {
 }
 
 #[test]
+fn refuses_an_empty_exec_health_check_before_any_work() {
+    let mut spec = sample_spec();
+    spec.healthcheck = Some(HealthCheck {
+        test: HealthTest::Exec(Vec::new()),
+        interval: None,
+        timeout: None,
+        retries: None,
+        start_period: None,
+    });
+
+    let err = check_spec(&spec).unwrap_err().to_string();
+
+    assert!(err.contains("health check"), "{err}");
+}
+
+#[test]
 fn refuses_mounts_that_smuggle_options_or_change_kind() {
     let bad = [
         mount(MountSource::Volume("data:/etc:rw".into()), "/x"),
@@ -45,6 +61,7 @@ fn refuses_mounts_that_smuggle_options_or_change_kind() {
         mount(MountSource::Bind(PathBuf::from("relative/dir")), "/x"),
         mount(MountSource::Bind(PathBuf::from("/srv/a:b")), "/x"),
         mount(MountSource::Anonymous, "relative"),
+        mount(MountSource::Anonymous, "/x,dst=/etc"),
     ];
     for m in bad {
         let mut spec = sample_spec();

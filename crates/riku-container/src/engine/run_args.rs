@@ -10,6 +10,9 @@ use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::time::Duration;
 
+use anyhow::{anyhow, Result};
+
+use super::spec_check::exec_command_line;
 use crate::types::{
     ContainerName, HealthCheck, HealthTest, HostIp, Mount, MountSource, NetworkName, PortBinding,
     Protocol, ServiceName, StopSignal,
@@ -62,7 +65,16 @@ fn port_flag(port: &PortBinding) -> String {
     format!("{host_ip}{host_port}:{}/{protocol}", port.container_port)
 }
 
-fn mount_flag(mount: &Mount) -> OsString {
+/// `-v` cannot express a read only anonymous volume (`-v /x:ro` names a
+/// volume called `/x`), so that one case uses `--mount`.
+fn push_mount(args: &mut Vec<OsString>, mount: &Mount) {
+    if mount.source == MountSource::Anonymous && mount.read_only {
+        let mut spec = OsString::from("type=volume,dst=");
+        spec.push(mount.target.as_os_str());
+        spec.push(",readonly");
+        pair(args, "--mount", spec);
+        return;
+    }
     let mut flag = match &mount.source {
         MountSource::Volume(name) => OsString::from(format!("{name}:")),
         MountSource::Bind(path) => {
@@ -73,23 +85,23 @@ fn mount_flag(mount: &Mount) -> OsString {
         MountSource::Anonymous => OsString::new(),
     };
     flag.push(mount.target.as_os_str());
-    if mount.read_only && mount.source != MountSource::Anonymous {
+    if mount.read_only {
         flag.push(":ro");
     }
-    flag
+    pair(args, "-v", flag);
 }
 
 fn seconds(d: Duration) -> String {
     format!("{}s", d.as_secs())
 }
 
-fn health_flags(args: &mut Vec<OsString>, health: &HealthCheck) {
+fn health_flags(args: &mut Vec<OsString>, health: &HealthCheck) -> Result<()> {
     match &health.test {
         HealthTest::Shell(line) => pair(args, "--health-cmd", line),
-        HealthTest::Exec(argv) => {
-            let line = shlex::try_join(argv.iter().map(String::as_str)).unwrap_or_default();
-            pair(args, "--health-cmd", line);
-        }
+        HealthTest::Exec(argv) => match exec_command_line(argv) {
+            Ok(line) => pair(args, "--health-cmd", line),
+            Err(e) => return Err(anyhow!("invalid health check: {e}")),
+        },
         HealthTest::Disabled => args.push("--no-healthcheck".into()),
     }
     if let Some(d) = health.interval {
@@ -104,10 +116,13 @@ fn health_flags(args: &mut Vec<OsString>, health: &HealthCheck) {
     if let Some(d) = health.start_period {
         pair(args, "--health-start-period", seconds(d));
     }
+    Ok(())
 }
 
 /// Build the argument list for `engine run`, after the program name.
-pub(crate) fn run_args(spec: &RunSpec, env_file: &Path) -> Vec<OsString> {
+///
+/// Fails when an exec form health check is empty or cannot be quoted.
+pub(crate) fn run_args(spec: &RunSpec, env_file: &Path) -> Result<Vec<OsString>> {
     let mut args: Vec<OsString> = vec!["run".into(), "-d".into()];
     pair(&mut args, "--name", spec.name.as_str());
     pair(&mut args, "--restart", "no");
@@ -121,7 +136,7 @@ pub(crate) fn run_args(spec: &RunSpec, env_file: &Path) -> Vec<OsString> {
         pair(&mut args, "-p", port_flag(port));
     }
     for mount in &spec.mounts {
-        pair(&mut args, "-v", mount_flag(mount));
+        push_mount(&mut args, mount);
     }
     if let Some(dir) = &spec.working_dir {
         pair(&mut args, "--workdir", dir);
@@ -136,7 +151,10 @@ pub(crate) fn run_args(spec: &RunSpec, env_file: &Path) -> Vec<OsString> {
         spec.stop_grace.as_secs().to_string(),
     );
     if let Some(health) = &spec.healthcheck {
-        health_flags(&mut args, health);
+        match health_flags(&mut args, health) {
+            Ok(()) => {}
+            Err(e) => return Err(e),
+        }
     }
     let entrypoint = spec.entrypoint.as_deref().unwrap_or_default();
     if let Some(program) = spec.entrypoint.as_ref() {
@@ -149,7 +167,7 @@ pub(crate) fn run_args(spec: &RunSpec, env_file: &Path) -> Vec<OsString> {
     args.push((&spec.image).into());
     args.extend(entrypoint.iter().skip(1).map(OsString::from));
     args.extend(spec.command.iter().flatten().map(OsString::from));
-    args
+    Ok(args)
 }
 
 #[cfg(test)]

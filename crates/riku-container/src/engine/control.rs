@@ -7,9 +7,8 @@
 //! directory (see [`super::env_file`]) that is deleted before `run` returns.
 //! Removal never passes a volume flag.
 
-use std::collections::BTreeMap;
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
@@ -21,40 +20,8 @@ use super::spec_check::{check_positional, check_spec};
 use super::{ContainerId, Engine};
 use crate::types::StopSignal;
 
-/// An image to build from a directory.
-///
-/// Build arguments are passed on the command line, so they are visible in the
-/// process list while the build runs. Do not put secrets in them.
-#[derive(Debug, Clone)]
-pub struct BuildSpec {
-    pub context: PathBuf,
-    /// Dockerfile path; `None` uses the engine's default in the context.
-    pub dockerfile: Option<PathBuf>,
-    pub tag: String,
-    pub args: BTreeMap<String, String>,
-    pub platform: Option<String>,
-}
-
 fn args_of<const N: usize>(parts: [&str; N]) -> Vec<OsString> {
     parts.into_iter().map(OsString::from).collect()
-}
-
-fn build_args(spec: &BuildSpec) -> Vec<OsString> {
-    let mut args = args_of(["build", "-t", &spec.tag]);
-    if let Some(dockerfile) = &spec.dockerfile {
-        args.push("-f".into());
-        args.push(dockerfile.into());
-    }
-    for (key, value) in &spec.args {
-        args.push("--build-arg".into());
-        args.push(format!("{key}={value}").into());
-    }
-    if let Some(platform) = &spec.platform {
-        args.push("--platform".into());
-        args.push(platform.into());
-    }
-    args.push((&spec.context).into());
-    args
 }
 
 impl Engine {
@@ -69,7 +36,11 @@ impl Engine {
             Ok(file) => file,
             Err(e) => return Err(anyhow!("cannot run {}: {e}", spec.name.as_str())),
         };
-        let stdout = match self.output(&run_args(spec, &env_file)) {
+        let args = match run_args(spec, &env_file) {
+            Ok(args) => args,
+            Err(e) => return Err(anyhow!("cannot run {}: {e}", spec.name.as_str())),
+        };
+        let stdout = match self.output(&args) {
             Ok(stdout) => stdout,
             Err(e) => return Err(anyhow!("cannot start {}: {e}", spec.name.as_str())),
         };
@@ -101,15 +72,6 @@ impl Engine {
             Err(e) => return Err(e),
         }
         self.output(&args_of(["pull", image])).map(|_| ())
-    }
-
-    /// Build an image from `spec.context`.
-    pub fn build(&self, spec: &BuildSpec) -> Result<()> {
-        match check_positional("build context", &spec.context.to_string_lossy()) {
-            Ok(()) => {}
-            Err(e) => return Err(e),
-        }
-        self.output(&build_args(spec)).map(|_| ())
     }
 
     /// A `logs` command for the caller to spawn and stream. `tail` limits the

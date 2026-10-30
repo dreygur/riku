@@ -14,13 +14,17 @@ use std::path::Path;
 use anyhow::{anyhow, Result};
 use tempfile::{Builder, TempPath};
 
-fn check_entry(key: &str, value: &str) -> Result<()> {
-    let bad_key = key.is_empty()
-        || key.starts_with('#')
-        || key
+/// A name that holds no `=`, whitespace or control character. Shared with
+/// build argument names, which have the same `KEY=value` ambiguity.
+pub(crate) fn is_valid_name(key: &str) -> bool {
+    !key.is_empty()
+        && !key
             .chars()
-            .any(|c| c == '=' || c == '\0' || c.is_whitespace());
-    if bad_key {
+            .any(|c| c == '=' || c.is_whitespace() || c.is_control())
+}
+
+fn check_entry(key: &str, value: &str) -> Result<()> {
+    if !is_valid_name(key) || key.starts_with('#') {
         return Err(anyhow!(
             "environment variable name {key:?} is not allowed: it must be non-empty, not start with '#', and hold no '=', whitespace or NUL"
         ));
