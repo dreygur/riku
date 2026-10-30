@@ -30,6 +30,7 @@ mod rules;
 mod scalar;
 mod service;
 mod service_env;
+mod service_steps;
 #[cfg(test)]
 mod test_support;
 mod volume_decl;

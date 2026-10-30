@@ -1,8 +1,12 @@
-//! Shared fixture for the project level tests: a throwaway app directory with
-//! a chosen name, a compose file written into it, and `read_project` run on it.
+//! Shared fixtures for the compose tests: a throwaway app directory with a
+//! chosen name, a compose file written into it, and `read_project` run on it;
+//! and a single service parsed on its own.
 
-use super::{default_compose_file, find_compose_file, read_project, ComposeProject};
-use std::collections::BTreeMap;
+use super::{
+    default_compose_file, find_compose_file, parse_service, read_project, ComposeProject,
+    ServiceContext, ServiceDef, Value,
+};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -43,6 +47,43 @@ impl TestApp {
             .collect();
         read_project(&self.path, &compose, &env)
     }
+}
+
+/// One service parsed on its own, in a throwaway app directory that is also
+/// the compose directory. `pgdata` is the only declared volume.
+pub(super) struct ServiceFixture {
+    pub app: TempDir,
+    pub vars: BTreeMap<String, String>,
+    pub volumes: BTreeSet<String>,
+}
+
+impl ServiceFixture {
+    pub fn new() -> ServiceFixture {
+        ServiceFixture {
+            app: TempDir::new().unwrap(),
+            vars: BTreeMap::new(),
+            volumes: ["pgdata".to_string()].into(),
+        }
+    }
+
+    pub fn parse(&self, name: &str, value: Value) -> anyhow::Result<ServiceDef> {
+        let ctx = ServiceContext {
+            app_path: self.app.path(),
+            compose_dir: self.app.path(),
+            vars: &self.vars,
+            declared_volumes: &self.volumes,
+        };
+        parse_service(&ctx, name, &value)
+    }
+
+    pub fn write(&self, relative: &str, text: &str) {
+        fs::write(self.app.path().join(relative), text).unwrap();
+    }
+}
+
+/// The full error chain of a parse that must fail.
+pub(super) fn service_error(result: anyhow::Result<ServiceDef>) -> String {
+    format!("{:#}", result.expect_err("parse succeeded"))
 }
 
 /// An app called `shop` whose `compose.yaml` holds `text`, read with no env.

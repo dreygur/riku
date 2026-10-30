@@ -118,3 +118,7 @@ fn check_key(key: &str) -> Result<()> {
     }
     bail!("invalid environment variable name {key:?}")
 }
+
+#[cfg(test)]
+#[path = "service_env_tests.rs"]
+mod tests;

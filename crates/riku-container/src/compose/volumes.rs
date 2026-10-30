@@ -4,7 +4,9 @@
 //! absolute paths included, so a compose file cannot mount `/etc` or the
 //! engine socket. Named volumes must be declared at the top level and use the
 //! engine's name character set. Target paths are absolute and free of the
-//! characters the engine's mount syntax splits on.
+//! characters the engine's mount syntax splits on. Bind sources and targets
+//! hold no whitespace or control characters, the same rule the engine layer
+//! applies before `run`.
 
 use super::paths::resolve_inside;
 use super::scalar::reject_unknown;
@@ -49,19 +51,38 @@ fn named_volume(ctx: &ServiceContext, name: &str) -> Result<ServiceMountSource> 
     Ok(ServiceMountSource::Volume(VolumeKey::declared(name)))
 }
 
+/// The engine refuses whitespace and control characters in mount paths, so
+/// they are refused here rather than halfway through a deploy.
+fn has_blank_or_control(text: &str) -> bool {
+    text.chars().any(|c| c.is_whitespace() || c.is_control())
+}
+
+fn bind_source(ctx: &ServiceContext, raw: &str) -> Result<ServiceMountSource> {
+    let path = match resolve_inside(ctx.app_path, ctx.compose_dir, raw, "bind source") {
+        Ok(path) => path,
+        Err(e) => return Err(e),
+    };
+    if has_blank_or_control(&path.to_string_lossy()) {
+        bail!(
+            "bind source {} must not hold whitespace or control characters",
+            path.display()
+        );
+    }
+    Ok(ServiceMountSource::Bind(path))
+}
+
 fn bind_or_named(ctx: &ServiceContext, source: &str) -> Result<ServiceMountSource> {
     if source.starts_with(['/', '.']) {
-        return match resolve_inside(ctx.app_path, ctx.compose_dir, source, "bind source") {
-            Ok(path) => Ok(ServiceMountSource::Bind(path)),
-            Err(e) => Err(e),
-        };
+        return bind_source(ctx, source);
     }
     named_volume(ctx, source)
 }
 
 fn container_path(raw: &str) -> Result<PathBuf> {
-    if !raw.starts_with('/') || raw.contains([':', ',', '\n', '\r', '\0']) {
-        bail!("volume target {raw:?} must be an absolute path without ':' or ','");
+    if !raw.starts_with('/') || raw.contains([':', ',']) || has_blank_or_control(raw) {
+        bail!(
+            "volume target {raw:?} must be an absolute path without ':', ',', whitespace or control characters"
+        );
     }
     Ok(PathBuf::from(raw))
 }
@@ -106,10 +127,7 @@ fn parse_long(ctx: &ServiceContext, fields: &Mapping) -> Result<ServiceMount> {
         return Err(e);
     }
     let source = match (text_field(fields, "type"), text_field(fields, "source")) {
-        (Ok(Some("bind")), Ok(Some(source))) => {
-            resolve_inside(ctx.app_path, ctx.compose_dir, source, "bind source")
-                .map(ServiceMountSource::Bind)
-        }
+        (Ok(Some("bind")), Ok(Some(source))) => bind_source(ctx, source),
         (Ok(Some("bind")), Ok(None)) => bail!("a bind volume needs a source"),
         (Ok(Some("volume")), Ok(Some(source))) => named_volume(ctx, source),
         (Ok(Some("volume")), Ok(None)) => Ok(ServiceMountSource::Anonymous),

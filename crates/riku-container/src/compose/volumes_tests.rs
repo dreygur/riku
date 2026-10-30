@@ -142,6 +142,26 @@ fn bind_path_never_resolves_to_a_sibling_with_the_same_prefix() {
 }
 
 #[test]
+fn whitespace_and_control_characters_are_refused_in_sources_and_targets() {
+    // The engine refuses these at run time; a compose file holding them must
+    // fail at parse time instead of halfway through a deploy.
+    let fx = Fixture::new();
+    for value in [
+        json!(["./my data:/x"]),
+        json!(["pgdata:/my dir"]),
+        json!(["pgdata:/x\ty"]),
+        json!([{"type": "bind", "source": "./a\u{7}b", "target": "/x"}]),
+        json!([{"type": "volume", "target": "/x y"}]),
+    ] {
+        let err = match fx.parse(value.clone()) {
+            Ok(mounts) => panic!("{value} was accepted as {mounts:?}"),
+            Err(e) => e.to_string(),
+        };
+        assert!(err.contains("whitespace"), "{value}: {err}");
+    }
+}
+
+#[test]
 fn refuses_undeclared_volumes_other_types_and_unsafe_text() {
     let fx = Fixture::new();
     for value in [
