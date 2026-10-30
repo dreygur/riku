@@ -11,6 +11,8 @@ license = "MIT"
 anyhow = { workspace = true }
 chrono = { workspace = true }
 croner = "4"
+hex = { workspace = true }
+rand = { workspace = true }
 libc = { workspace = true }
 nix = { workspace = true, features = ["resource", "user"] }
 once_cell = { workspace = true }

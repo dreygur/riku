@@ -35,8 +35,8 @@ work they describe.
   `feat/caddy-router`).
 - Runs mostly in sequence: Task 1 then 2 then 3 then 4 (each moves code the
   next one builds on).
-- Task 1 riku-args: done
-- Task 2 riku-remote: not started
+- Task 1 riku-args: done (79cf37b)
+- Task 2 riku-remote: done
 - Task 3 rk binary: not started
 - Task 4 packaging and docs: not started
 

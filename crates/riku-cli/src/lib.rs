@@ -9,12 +9,12 @@ pub(crate) use riku_supervisor as supervisor;
 pub(crate) use riku_util as util;
 
 pub use riku_args::{app_hint, cli, cmds, help, placement};
+pub use riku_remote::{client_plugins, quickstart, remote, routing};
 
 pub mod addon;
 pub mod agent;
 pub mod apps;
 pub mod backup;
-pub mod client_plugins;
 pub mod container;
 pub mod control_actions;
 pub mod dispatch;
@@ -22,9 +22,6 @@ pub mod doctor;
 pub mod git;
 pub mod hooks;
 pub mod plugins;
-pub mod quickstart;
-pub mod remote;
-pub mod routing;
 pub mod scp;
 pub mod setup;
 pub mod ssh_command;

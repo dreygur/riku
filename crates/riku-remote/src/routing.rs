@@ -3,8 +3,9 @@
 //! Determines which CLI commands can be intercepted by client plugins
 //! and builds the argument list passed to those plugins.
 
-use super::{Commands, ConfigCmd};
+use crate::cmds::ConfigCmd;
 use crate::remote::SshAddress;
+use riku_args::cli::Commands;
 
 /// Extract the plugin command name from a CLI command.
 /// Returns None for commands that shouldn't be overridden by plugins.

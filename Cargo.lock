@@ -1625,6 +1625,7 @@ dependencies = [
  "riku-deploy",
  "riku-nginx",
  "riku-plugins",
+ "riku-remote",
  "riku-supervisor",
  "riku-util",
  "serde",
@@ -1756,6 +1757,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "riku-remote"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "dirs",
+ "nix",
+ "riku-args",
+ "riku-util",
+ "serde",
+ "shlex",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
 name = "riku-supervisor"
 version = "0.1.0"
 dependencies = [
@@ -1763,12 +1780,10 @@ dependencies = [
  "axum",
  "chrono",
  "futures",
- "hex",
  "libc",
  "nix",
  "notify",
  "once_cell",
- "rand",
  "reqwest",
  "riku-config",
  "riku-error",
@@ -1794,9 +1809,11 @@ dependencies = [
  "chrono",
  "colored",
  "croner",
+ "hex",
  "libc",
  "nix",
  "once_cell",
+ "rand",
  "regex",
  "subtle",
  "tempfile",

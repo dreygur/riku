@@ -33,7 +33,7 @@ use std::thread::JoinHandle;
 use anyhow::{anyhow, Result};
 
 use crate::remote::Server;
-use crate::supervisor::health::auth::generate_token;
+use crate::util::token::generate_token;
 use session::RemoteDashboard;
 use ssh_master::SshControl;
 

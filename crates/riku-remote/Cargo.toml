@@ -1,0 +1,22 @@
+[package]
+name = "riku-remote"
+version = "0.1.0"
+edition = "2021"
+description = "Riku laptop side code: server list, forwarding, dashboard client and client plugins"
+authors = ["Rakibul Yeasin"]
+repository = "https://github.com/dreygur/riku"
+license = "MIT"
+
+[dependencies]
+riku-args = { path = "../riku-args" }
+riku-util = { path = "../riku-util" }
+anyhow = { workspace = true }
+clap = { workspace = true }
+dirs = "7"
+nix = { workspace = true, features = ["signal", "process", "user", "fs", "term"] }
+serde = { workspace = true }
+shlex = { workspace = true }
+tempfile = { workspace = true }
+toml = { workspace = true }
+
+[dev-dependencies]

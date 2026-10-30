@@ -28,6 +28,7 @@ pub mod public_key;
 pub mod resource_limits;
 pub mod secure;
 pub mod ssh_keys;
+pub mod token;
 pub mod validation;
 
 // Re-export items used via `crate::util::*` call-sites.

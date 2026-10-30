@@ -2,16 +2,9 @@
 
 use anyhow::Result;
 
-use crate::cmds::{HookCmd, MarketplaceCmd, PluginCmd, PluginsCmd, TrustCmd};
+use crate::cmds::{HookCmd, MarketplaceCmd, PluginsCmd, TrustCmd};
 use crate::config::RikuPaths;
-use crate::{client_plugins, hooks, plugins};
-
-pub(super) fn run_plugin(cmd: PluginCmd) -> Result<()> {
-    match cmd {
-        PluginCmd::List => client_plugins::cmd_plugin_list(),
-        PluginCmd::Exists { name } => client_plugins::cmd_plugin_exists(&name),
-    }
-}
+use crate::{hooks, plugins};
 
 fn run_trust(paths: &RikuPaths, cmd: TrustCmd) -> Result<()> {
     match cmd {

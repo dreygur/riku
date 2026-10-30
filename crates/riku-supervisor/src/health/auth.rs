@@ -15,7 +15,7 @@ use std::io;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-const TOKEN_BYTES: usize = 32;
+use crate::util::token::generate_token;
 
 /// Load the control-plane token from disk, generating and persisting a new
 /// one on first use. The token file is created with `0600` permissions so
@@ -43,17 +43,6 @@ pub fn load_or_create_token(token_file: &Path) -> io::Result<String> {
     Ok(token)
 }
 
-/// Generate a 256-bit token from the OS CSPRNG, hex-encoded (lowercase).
-pub fn generate_token() -> String {
-    use rand::rand_core::UnwrapErr;
-    use rand::rngs::SysRng;
-    use rand::Rng;
-
-    let mut bytes = [0u8; TOKEN_BYTES];
-    UnwrapErr(SysRng).fill_bytes(&mut bytes);
-    hex::encode(bytes)
-}
-
 /// Constant-time string comparison, re-exported from the shared util crate so
 /// existing `health::auth::constant_time_eq` call-sites keep working.
 pub use crate::util::secure::constant_time_eq;
@@ -69,7 +58,7 @@ mod tests {
         let token_file = dir.path().join("control.token");
 
         let first = load_or_create_token(&token_file).unwrap();
-        assert_eq!(first.len(), TOKEN_BYTES * 2);
+        assert_eq!(first.len(), 64);
 
         let perms = fs::metadata(&token_file).unwrap().permissions();
         assert_eq!(perms.mode() & 0o777, 0o600);
