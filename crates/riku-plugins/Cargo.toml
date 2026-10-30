@@ -11,6 +11,7 @@ license = "MIT"
 riku-config = { path = "../riku-config" }
 riku-util = { path = "../riku-util" }
 riku-error = { path = "../riku-error" }
+riku-bundle = { path = "../riku-bundle" }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -20,9 +21,7 @@ libc = { workspace = true }
 tracing = { workspace = true }
 once_cell = { workspace = true }
 reqwest = { workspace = true }
-rand = { workspace = true }
 sha2 = "0.11"
-ed25519-dalek = { version = "3", features = ["rand_core"] }
 hex = { workspace = true }
 
 chrono = { workspace = true }

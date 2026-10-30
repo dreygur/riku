@@ -1598,6 +1598,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "riku-bundle"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ed25519-dalek",
+ "hex",
+ "rand",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "riku-caddy"
 version = "0.1.0"
 dependencies = [
@@ -1748,14 +1760,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "ed25519-dalek",
  "hex",
  "landlock",
  "libc",
  "nix",
  "once_cell",
- "rand",
  "reqwest",
+ "riku-bundle",
  "riku-config",
  "riku-error",
  "riku-util",

@@ -9,6 +9,7 @@ members = [
     "crates/riku-error",
     "crates/riku-nginx",
     "crates/riku-caddy",
+    "crates/riku-bundle",
     "crates/riku-plugins",
     "crates/riku-supervisor",
     "crates/riku-deploy",
