@@ -85,25 +85,31 @@ work they describe.
   It also ignored the port map and uWSGI. The wsgi template passed a bare
   socket to `uwsgi_pass`. All fixed; rendered configs pass `nginx -t`.
 - Plan `plans/2026-10-30-container-foundations.md`. Task status:
-- Task 0 Shared types: done
+- Task 0 Shared types: done (8a0abbd)
 
-- A1 Engine detection and the engine setting: done
-- A2 Engine identity and command probe: done
-- A3 Run and control containers: done
-- A4 Container state and stats: done
+- A1 Engine detection and the engine setting: done (8efebee)
+- A2 Engine identity and command probe: done (f0cf570..2d9fc18)
+- A3 Run and control containers: done (6172f4c..cd76b46)
+- A4 Container state and stats: done (438a55f..f5f8caa)
 
-- B1 Move compose file lookup into the library: done
-- B2 Read compose YAML with interpolation and key checks: done
-- B3 Parse service fields: done
+- B1 Move compose file lookup into the library: done (bfedb76)
+- B2 Read compose YAML with interpolation and key checks: done (897836a)
+- B3 Parse service fields: done (f2e6807..0a454d9)
 - B4 Project rules: order, routing, scale, replacement, volume names: done
+  (ad82fe5..456b37e)
 
-- C1 RoutePlan and Caddy rendering: done
-- C2 nginx upstream from backends: done
-- C3 Router plugin protocol 2: done
+- C1 RoutePlan and Caddy rendering: done (3a717f7)
+- C2 nginx upstream from backends: done (ba61258..16d86b6)
+- C3 Router plugin protocol 2: done (bd7753b)
 
-- D1 Crate, wire types and manifest scan: done
-- D2 Transfer plan, bundle and verified apply: done
-- D3 The sync conversation over a byte stream: done
+- D1 Crate, wire types and manifest scan: done (f28b200..c47b5db)
+- D2 Transfer plan, bundle and verified apply: done (a779210..6fe2177)
+- D3 The sync conversation over a byte stream: done (0948ac6..a685219)
+
+- Tracks merged at b22d010, 50cafa6, 44f0173, c747d31. Final review fixes
+  c747d31..ad2b81c, residual fixes ad2b81c..34ccc44. Gate on 34ccc44: 1110
+  passed, 0 failed, 2 ignored. Not merged into `feat/caddy-router`, not
+  pushed.
 
 ### Phase 3: container integration (after phase 2)
 
