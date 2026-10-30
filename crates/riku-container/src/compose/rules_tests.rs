@@ -57,6 +57,29 @@ fn no_published_port_means_no_route() {
 }
 
 #[test]
+fn udp_ports_are_never_routed() {
+    let lone_udp = project_of("services:\n  dns: {image: app, ports: [\"53:53/udp\"]}\n").unwrap();
+    assert!(
+        routed_http(&lone_udp).unwrap().is_none(),
+        "a UDP port became the HTTP route"
+    );
+
+    let labelled = routed_error(
+        "
+services:
+  dns:
+    image: app
+    labels: {riku.http: \"53\"}
+    ports: [\"53:53/udp\"]
+",
+    );
+    assert!(
+        labelled.contains("dns") && labelled.contains("TCP"),
+        "{labelled}"
+    );
+}
+
+#[test]
 fn ambiguous_routing_without_label_is_refused() {
     let message = routed_error(
         "

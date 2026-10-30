@@ -53,10 +53,10 @@ fn published(binding: &PortBinding) -> u16 {
 
 /// The service that serves the app's domains.
 ///
-/// A service labelled `riku.http` wins, and the label value must be one of its
-/// published host ports. With no label, routing works only when exactly one
-/// service publishes exactly one port; no published port gives `None` and
-/// anything else is refused.
+/// Only TCP bindings count; UDP ports are never routed. A service labelled
+/// `riku.http` wins, and the label value must be one of its published TCP host
+/// ports. With no label, routing works only when exactly one TCP port is
+/// published across the project; none gives `None` and several are refused.
 pub fn routed_http(project: &ComposeProject) -> Result<Option<RoutedPort>> {
     let labelled: Vec<&ServiceDef> = project
         .services
@@ -77,6 +77,14 @@ pub fn routed_http(project: &ComposeProject) -> Result<Option<RoutedPort>> {
     }
 }
 
+/// HTTP runs over TCP, so only TCP bindings can become the routed port.
+fn tcp_ports(service: &ServiceDef) -> impl Iterator<Item = &PortBinding> {
+    service
+        .ports
+        .iter()
+        .filter(|binding| binding.protocol == Protocol::Tcp)
+}
+
 fn route_from_label(service: &ServiceDef) -> Result<RoutedPort> {
     let value = &service.labels[labels::HTTP];
     let Ok(port) = value.parse::<u16>() else {
@@ -86,10 +94,10 @@ fn route_from_label(service: &ServiceDef) -> Result<RoutedPort> {
             labels::HTTP
         );
     };
-    match service.ports.iter().find(|b| b.host_port == Some(port)) {
+    match tcp_ports(service).find(|b| b.host_port == Some(port)) {
         Some(binding) => Ok(RoutedPort::new(service, binding)),
         None => bail!(
-            "service '{}': label {} is {port}, which is not one of its published ports",
+            "service '{}': label {} is {port}, which is not one of its published TCP ports",
             service.name,
             labels::HTTP
         ),
@@ -100,7 +108,7 @@ fn route_without_label(project: &ComposeProject) -> Result<Option<RoutedPort>> {
     let ports: Vec<(&ServiceDef, &PortBinding)> = project
         .services
         .iter()
-        .flat_map(|service| service.ports.iter().map(move |binding| (service, binding)))
+        .flat_map(|service| tcp_ports(service).map(move |binding| (service, binding)))
         .collect();
     match ports.as_slice() {
         [] => Ok(None),
