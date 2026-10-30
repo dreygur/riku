@@ -74,10 +74,10 @@ First match wins:
 1. `-s <name>` / `--server <name>` on the command line, for that run only.
 2. The current git repo. Riku reads `git remote -v` and compares each
    remote's `user@host` exactly against the registered `address` values.
-   A riku remote looks like `riku@solutech.local:myapp`. A match makes
+   A riku remote looks like `riku@edge.example:myapp`. A match makes
    that server the temporary default for commands run in the repo.
    Remotes matching two different servers is an error asking for `-s`.
-   No DNS lookup and no ssh config alias resolution: `solutech.local` and
+   No DNS lookup and no ssh config alias resolution: `edge.example` and
    `192.168.1.20` do not match each other.
 3. The default server.
 4. None of the above: forwarded commands run locally, exactly as today.
@@ -140,7 +140,7 @@ remote command is riku's exit code.
 Ctrl-C behave. Everything else runs without a tty so output pipes cleanly.
 
 Before every forwarded command riku prints one line to stderr naming the
-target, for example `[*] solutech (riku@solutech.local)`. No confirmation
+target, for example `[*] edge (riku@edge.example)`. No confirmation
 prompt is added. Commands that already confirm, like `destroy`, keep
 confirming, on the remote side.
 

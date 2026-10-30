@@ -3,7 +3,7 @@
 # riku server as the deploy user, tunneled to this machine, for as long as
 # this terminal stays open. Ctrl-C stops both.
 #
-#   scripts/dashboard-tunnel.sh dreygur@solutech.local
+#   scripts/dashboard-tunnel.sh admin@edge.example
 #
 # Log in as a user who can sudo: riku's own deploy keys allow no port
 # forwarding. The dashboard gets the token as an argument, so other users
