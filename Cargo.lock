@@ -1913,6 +1913,7 @@ dependencies = [
  "anyhow",
  "hex",
  "libc",
+ "riku-util",
  "serde",
  "serde_json",
  "sha2",

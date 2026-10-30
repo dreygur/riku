@@ -7,8 +7,8 @@ use std::fs;
 fn session_plans_against_the_tree_recovered_from_a_crash() {
     let f = fixture();
     let src = changed_source();
-    fs::rename(&f.live, f.parent.path().join("live.sync-old")).unwrap();
-    fs::create_dir(f.parent.path().join("live.sync-new")).unwrap();
+    fs::rename(&f.live, f.parent.path().join("live..sync-old")).unwrap();
+    fs::create_dir(f.parent.path().join("live..sync-new")).unwrap();
 
     let report = sync_over_sockets(src.path(), &f.live).unwrap();
     assert_eq!(
@@ -20,7 +20,7 @@ fn session_plans_against_the_tree_recovered_from_a_crash() {
     assert_eq!(scan(&f.live).unwrap(), scan(src.path()).unwrap());
     assert_eq!(
         names_in(f.parent.path()),
-        ["live", "live.sync-lock"],
+        ["live", "live..sync-lock"],
         "crash leftovers remain"
     );
 }

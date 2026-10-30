@@ -1,10 +1,14 @@
 //! Crash recovery and the final directory swap.
 //!
-//! Staging lives beside the live directory as `<live>.sync-new` and the old
-//! tree is parked as `<live>.sync-old` during the swap, so both renames stay on
+//! Staging lives beside the live directory as `<live>..sync-new` and the old
+//! tree is parked as `<live>..sync-old` during the swap, so both renames stay on
 //! one filesystem. If the process dies between the two renames, live is missing
-//! and `.sync-old` holds the previous tree; [`recover`] puts it back before the
+//! and `..sync-old` holds the previous tree; [`recover`] puts it back before the
 //! next apply starts.
+//!
+//! Every sibling name (these two and the lock) contains `..`, which no riku app
+//! name may hold, so recovery for one app can never delete another app that
+//! lives beside it in `apps/`.
 
 use crate::lock::SyncLock;
 use std::ffi::OsString;
@@ -12,8 +16,8 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-pub(crate) const STAGING_SUFFIX: &str = ".sync-new";
-const PARKED_SUFFIX: &str = ".sync-old";
+pub(crate) const STAGING_SUFFIX: &str = "..sync-new";
+const PARKED_SUFFIX: &str = "..sync-old";
 
 /// `<live><suffix>` in the same parent directory.
 pub(crate) fn sibling(live: &Path, suffix: &str) -> anyhow::Result<PathBuf> {
@@ -113,3 +117,7 @@ pub(crate) fn swap_in(live: &Path, staging: &Path) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "swap_tests.rs"]
+mod tests;

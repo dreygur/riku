@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
 /// What the parent of `live` holds after any apply: the tree and its lock file.
-pub const SETTLED: [&str; 2] = ["live", "live.sync-lock"];
+pub const SETTLED: [&str; 2] = ["live", "live..sync-lock"];
 
 pub fn rel(path: &str) -> RelPath {
     RelPath::try_from(path).unwrap()

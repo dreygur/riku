@@ -31,8 +31,8 @@ fn first_sync_creates_a_missing_live_directory() {
 #[test]
 fn leftovers_of_a_crashed_apply_are_removed() {
     let f = fixture();
-    put(&f.parent.path().join("live.sync-new"), "half.txt", "h");
-    put(&f.parent.path().join("live.sync-old"), "older.txt", "o");
+    put(&f.parent.path().join("live..sync-new"), "half.txt", "h");
+    put(&f.parent.path().join("live..sync-old"), "older.txt", "o");
     let src = tree_to_sync();
 
     sync_from(src.path(), &f.live);
@@ -45,8 +45,8 @@ fn leftovers_of_a_crashed_apply_are_removed() {
 fn live_lost_between_the_two_renames_is_restored_first() {
     let parent = tempfile::tempdir().unwrap();
     let live = parent.path().join("live");
-    put(&parent.path().join("live.sync-old"), "keep.txt", "k");
-    put(&parent.path().join("live.sync-new"), "half.txt", "h");
+    put(&parent.path().join("live..sync-old"), "keep.txt", "k");
+    put(&parent.path().join("live..sync-new"), "half.txt", "h");
     let manifest = manifest_of(vec![file_entry("keep.txt", "k")]);
 
     apply(
@@ -82,7 +82,7 @@ fn lock_file_that_is_a_symlink_is_refused() {
     let f = fixture();
     let target = f.parent.path().join("elsewhere");
     fs::write(&target, "").unwrap();
-    std::os::unix::fs::symlink(&target, f.parent.path().join("live.sync-lock")).unwrap();
+    std::os::unix::fs::symlink(&target, f.parent.path().join("live..sync-lock")).unwrap();
     let before = scan(&f.live).unwrap();
 
     let err = apply(

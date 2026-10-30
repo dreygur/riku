@@ -1,6 +1,6 @@
 //! Mutual exclusion between syncs of one live directory.
 //!
-//! The lock is an exclusive `flock` on `<live>.sync-lock`, held for the whole
+//! The lock is an exclusive `flock` on `<live>..sync-lock`, held for the whole
 //! apply (recovery included) and released when the returned file is dropped, or
 //! by the kernel if the process dies. The lock file itself is never deleted:
 //! unlinking it would let a second process lock a new file while the first
@@ -11,7 +11,7 @@ use std::fs::{File, OpenOptions, TryLockError};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
-const LOCK_SUFFIX: &str = ".sync-lock";
+pub(crate) const LOCK_SUFFIX: &str = "..sync-lock";
 
 /// Proof that the sync lock for one live directory is held. Only [`acquire`]
 /// makes one; dropping it releases the lock.

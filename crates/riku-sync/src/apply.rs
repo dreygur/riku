@@ -14,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::Path;
 
-/// Builds the manifest's tree in `<live>.sync-new` from `bundle` plus unchanged
+/// Builds the manifest's tree in `<live>..sync-new` from `bundle` plus unchanged
 /// files copied from `live`, verifies it, then swaps it in for `live`.
 ///
 /// `bundle` is the zstd compressed tar made by `write_bundle` for `plan.need`.
@@ -24,7 +24,7 @@ use std::path::Path;
 /// Everything in `live` that the manifest does not list is removed at the swap,
 /// so state the running app writes must live outside the synced directory.
 ///
-/// An exclusive lock on `<live>.sync-lock` is held throughout; a second apply to
+/// An exclusive lock on `<live>..sync-lock` is held throughout; a second apply to
 /// the same `live` fails at once instead of waiting.
 pub fn apply(
     live: &Path,
