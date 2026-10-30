@@ -31,8 +31,13 @@ pub fn cmd_agent_intro(_paths: &RikuPaths, session: &AgentSession) -> Result<()>
         "hint": "Use 'riku agent --schema' for full command reference",
     });
 
-    println!("{}", serde_json::to_string_pretty(&response)?);
-    Ok(())
+    match serde_json::to_string_pretty(&response) {
+        Ok(text) => {
+            println!("{text}");
+            Ok(())
+        }
+        Err(e) => Err(anyhow::anyhow!("failed to encode the agent intro: {e}")),
+    }
 }
 
 /// Show full command schema

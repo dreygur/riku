@@ -54,6 +54,11 @@ or from the environment. The name in the audit log comes from `--agent-id`
 in the same forced command. Never allow `RIKU_*` variables through sshd
 `AcceptEnv`.
 
+The forced command of an agent key must start with `riku agent`. A bare
+`riku` forced command gives the client full access and lets it choose
+everything. The agent keeps its rate limit counters and audit log in
+`~/.riku/state/agent/`, readable only by the riku user.
+
 ---
 
 ## SSH Key Setup

@@ -16,27 +16,50 @@ use crate::cli::{require_app, Commands};
 use crate::config::RikuPaths;
 use crate::{agent, apps, backup, container, doctor, git, quickstart, scp, setup};
 
-#[allow(clippy::too_many_arguments)]
-fn run_agent(
-    paths: &RikuPaths,
-    session: &AgentSession,
-    intro: bool,
-    schema: bool,
-    agent_help: bool,
+/// What `riku agent` was asked to do. The flags are checked in this order.
+enum AgentMode {
+    Intro,
+    Schema,
+    Help(Option<String>),
+    Run {
+        command: String,
+        args: Vec<String>,
+        confirm: Option<String>,
+    },
+}
+
+fn agent_mode(
+    (intro, schema, agent_help): (bool, bool, bool),
     command: Option<String>,
-    args: &[String],
-    confirm: Option<&str>,
-) -> Result<()> {
+    args: Vec<String>,
+    confirm: Option<String>,
+) -> AgentMode {
     if intro {
-        agent::cmd_agent_intro(paths, session)
-    } else if schema {
-        agent::cmd_agent_schema()
-    } else if agent_help {
-        agent::cmd_agent_help(command.as_deref())
-    } else if let Some(cmd) = command {
-        agent::cmd_agent_execute(paths, session, &cmd, args, confirm)
-    } else {
-        agent::cmd_agent_help(None)
+        return AgentMode::Intro;
+    }
+    if schema {
+        return AgentMode::Schema;
+    }
+    match command {
+        Some(command) if !agent_help => AgentMode::Run {
+            command,
+            args,
+            confirm,
+        },
+        other => AgentMode::Help(other),
+    }
+}
+
+fn run_agent(paths: &RikuPaths, session: &AgentSession, mode: AgentMode) -> Result<()> {
+    match mode {
+        AgentMode::Intro => agent::cmd_agent_intro(paths, session),
+        AgentMode::Schema => agent::cmd_agent_schema(),
+        AgentMode::Help(command) => agent::cmd_agent_help(command.as_deref()),
+        AgentMode::Run {
+            command,
+            args,
+            confirm,
+        } => agent::cmd_agent_execute(paths, session, &command, &args, confirm.as_deref()),
     }
 }
 
@@ -79,16 +102,8 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
             json: _,
         } => {
             let session = AgentSession::from_flags(scope.as_deref(), agent_id.as_deref());
-            run_agent(
-                paths,
-                &session,
-                intro,
-                schema,
-                agent_help,
-                command,
-                &args,
-                confirm.as_deref(),
-            )
+            let mode = agent_mode((intro, schema, agent_help), command, args, confirm);
+            run_agent(paths, &session, mode)
         }
         Commands::Apps { cmd } => app_cmds::run_apps(paths, cmd),
         Commands::Config(cmd) => app_cmds::run_config(paths, cmd),

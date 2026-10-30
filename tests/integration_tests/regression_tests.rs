@@ -558,3 +558,36 @@ mod agent_env_tests {
         assert!(text.contains("\"cursor-staging\""), "{text}");
     }
 }
+
+#[cfg(test)]
+mod agent_state_tests {
+    use std::os::unix::fs::PermissionsExt;
+    use tempfile::TempDir;
+
+    #[test]
+    fn agent_audit_log_is_private_and_under_the_riku_root() {
+        let home = TempDir::new().unwrap();
+        let bin =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku");
+        std::process::Command::new(bin)
+            .args([
+                "agent",
+                "--scope",
+                "readonly",
+                "--agent-id",
+                "state-test",
+                "apps",
+            ])
+            .env("HOME", home.path())
+            .env_remove("RIKU_ROOT")
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first");
+        let dir = home.path().join(".riku/state/agent");
+        let mode = |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&dir), 0o700);
+        let log = dir.join("audit.log");
+        assert_eq!(mode(&log), 0o600);
+        let text = std::fs::read_to_string(&log).unwrap();
+        assert!(text.contains("state-test apps"), "{text}");
+    }
+}
