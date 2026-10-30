@@ -19,8 +19,9 @@ impl Budget {
         self.0.set(self.0.get().saturating_add(bytes));
     }
 
-    pub(crate) fn set(&self, bytes: u64) {
-        self.0.set(bytes);
+    /// Lowers the allowance to `bytes` if more than that is left.
+    pub(crate) fn cap_at(&self, bytes: u64) {
+        self.0.set(self.0.get().min(bytes));
     }
 }
 

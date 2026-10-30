@@ -18,6 +18,9 @@ pub fn write_bundle(src: &Path, need: &[RelPath], out: impl Write) -> anyhow::Re
     };
     let mut builder = tar::Builder::new(encoder);
     builder.mode(tar::HeaderMode::Deterministic);
+    // Sparse entries are a GNU extension the receiver refuses; holes are sent
+    // as zeros.
+    builder.sparse(false);
     for path in need {
         let full = match real_file(src, path) {
             Ok(full) => full,

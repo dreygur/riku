@@ -109,8 +109,8 @@ pub(crate) fn receive_bundle(
             "bundle is missing requested file {missing:?}"
         ));
     }
-    decompressed.set(TRAILER_DECOMPRESSED);
-    compressed.set(TRAILER_COMPRESSED);
+    decompressed.cap_at(TRAILER_DECOMPRESSED);
+    compressed.cap_at(TRAILER_COMPRESSED);
     drain_trailer(archive.into_inner())
 }
 
@@ -168,6 +168,8 @@ fn store_entry(
 fn drain_trailer(mut rest: impl Read) -> anyhow::Result<()> {
     match io::copy(&mut rest, &mut io::sink()) {
         Ok(_) => Ok(()),
-        Err(e) => Err(anyhow::anyhow!("bundle stream is damaged: {e}")),
+        Err(e) => Err(anyhow::anyhow!(
+            "bundle trailer after the archive is damaged or too long: {e}"
+        )),
     }
 }

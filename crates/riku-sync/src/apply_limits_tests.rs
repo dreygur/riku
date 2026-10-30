@@ -29,6 +29,21 @@ fn a_huge_declared_size_does_not_raise_the_header_allowance() {
 }
 
 #[test]
+fn trailer_limit_stops_frames_after_a_large_valid_archive() {
+    let f = fixture();
+    let body = "\0".repeat(1 << 20);
+    let manifest = manifest_of(vec![file_entry("a.bin", &body)]);
+    let mut bundle = raw_bundle(&[("a.bin", body.as_bytes())]);
+    for _ in 0..40_000 {
+        bundle.extend_from_slice(&SKIPPABLE_EMPTY_FRAME);
+    }
+
+    let err = assert_refused_untouched(&f, &manifest, &plan_needing(&["a.bin"]), bundle);
+
+    assert!(err.contains("trailer"), "error was: {err}");
+}
+
+#[test]
 fn endless_empty_frames_after_the_archive_are_refused() {
     let f = fixture();
     let manifest = manifest_of(vec![file_entry("a.txt", "a")]);
