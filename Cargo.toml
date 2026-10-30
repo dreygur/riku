@@ -19,6 +19,7 @@ members = [
     "crates/riku-plugin-clojure",
     "crates/riku-plugin-container",
     "crates/riku-container",
+    "crates/riku-sync",
 ]
 resolver = "2"
 

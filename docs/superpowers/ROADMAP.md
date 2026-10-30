@@ -101,9 +101,9 @@ work they describe.
 - C2 nginx upstream from backends: done
 - C3 Router plugin protocol 2: done
 
-- D1 Crate, wire types and manifest scan: pending
-- D2 Transfer plan, bundle and verified apply: pending
-- D3 The sync conversation over a byte stream: pending
+- D1 Crate, wire types and manifest scan: done
+- D2 Transfer plan, bundle and verified apply: done
+- D3 The sync conversation over a byte stream: done
 
 ### Phase 3: container integration (after phase 2)
 
@@ -111,10 +111,13 @@ work they describe.
   migration, per copy ports for Procfile apps, state API and dashboard rows,
   CLI scale and logs, `rk deploy --build`. Mostly sequential; dashboard and
   CLI tasks in parallel once the state API exists.
-- Compose migration duty from B4: a `Declared` project name (compose `name` or
-  `COMPOSE_PROJECT_NAME`) must be refused when it equals another riku app's
-  name or its existing volumes lack the matching compose project label, and
-  only then may `ComposeProject::confirm_declared_name` be called.
+- Compose migration duty from B4: a `Declared` project name (compose `name`,
+  `COMPOSE_PROJECT_NAME`, or the directory of a `COMPOSE_FILE` below the app
+  root) must be refused when it equals another riku app's name or its
+  existing volumes lack the matching compose project label, and only then may
+  `ComposeProject::confirm_declared_name` be called.
+- Sync receive runs under a process level deadline; a stalled client is killed
+  so the app's sync lock is released.
 
 ### Phase 4: one rk managing many servers
 
