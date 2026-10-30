@@ -8,10 +8,7 @@ fn client_plugin_receives_selected_server() {
     let cmd = Commands::Stop {
         app: Some("myapp".to_string()),
     };
-    assert_eq!(
-        build_plugin_args(&cmd, Some(&addr))[0],
-        "riku@edge.example"
-    );
+    assert_eq!(build_plugin_args(&cmd, Some(&addr))[0], "riku@edge.example");
     assert_eq!(build_plugin_args(&cmd, None)[0], "");
 }
 

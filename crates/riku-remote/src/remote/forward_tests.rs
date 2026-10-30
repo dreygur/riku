@@ -41,12 +41,7 @@ fn finds_the_server_option_clap_consumed() {
 
 #[test]
 fn ssh_args_quote_each_argument_and_skip_riku_word() {
-    let a = ssh_args(
-        &edge(),
-        &sv(&["run", "myapp", "echo", "a b"]),
-        true,
-        None,
-    );
+    let a = ssh_args(&edge(), &sv(&["run", "myapp", "echo", "a b"]), true, None);
     assert_eq!(
         a,
         sv(&["-t", "--", "riku@edge.example", "run myapp echo 'a b'"])

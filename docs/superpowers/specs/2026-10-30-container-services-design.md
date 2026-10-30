@@ -9,7 +9,7 @@ process (crates/riku-supervisor/src/stats/resources.rs), not the containers'.
 A crashed service is invisible while `compose up` keeps running, restart and
 stop act on the whole stack, and scaling would start a second `compose up`
 fighting the first. The owner runs real compose apps (a private compose app on
-edge) and wants each service managed as well as a Procfile worker, plus
+a test server) and wants each service managed as well as a Procfile worker, plus
 real scaling with no downtime on deploy.
 
 ## Goals

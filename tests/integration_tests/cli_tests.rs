@@ -462,7 +462,7 @@ mod server_cmd {
         let config = tempfile::tempdir().unwrap();
         let dir = config.path();
 
-        let first = riku(dir, &["server", "add", "edge", "riku@edge.example"]);
+        let first = riku(dir, &["server", "add", "prod", "riku@prod.example"]);
         assert!(
             first.status.success(),
             "{}",
@@ -498,7 +498,7 @@ mod server_cmd {
             "default not marked:\n{listing}"
         );
         assert!(
-            !line_for(&listing, "edge").contains('*'),
+            !line_for(&listing, "prod").contains('*'),
             "wrong row marked:\n{listing}"
         );
         assert!(

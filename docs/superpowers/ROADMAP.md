@@ -26,7 +26,7 @@ work they describe.
   `plans/2026-10-29-remote-cli.md`. Merged into `feat/caddy-router` at
   e8addf6, pushed, PR #71 ("Caddy router, remote CLI and dashboard
   redesign"). Host checked in a Docker test host; not yet deployed on
-  edge (owner will do it later).
+  the owner's test server (owner will do it later).
 
 ### Phase 1: rk client (done)
 
@@ -39,8 +39,8 @@ work they describe.
 - Task 4 packaging and docs: done (73096cf)
 - Final review fixes: 14c2cce..1094a23. rk runs plugins scaffold, keygen
   and sign locally through the riku-bundle crate: 3b3e068..4b120b0.
-- Host check on edge.example, 2026-10-30, server riku built from
-  4b120b0: `rk -s edge apps`, `run myapp echo "a b"` prints
+- Host check on the owner's test server, 2026-10-30, server riku built
+  from 4b120b0: `rk -s <server> apps`, `run myapp echo "a b"` prints
   `a b` (after `riku doctor --fix` migrated the old forced command keys),
   `dashboard` through the admin login, refusals, plugin authoring. mkdocs
   strict build passes. The supervisor there still runs the old binary

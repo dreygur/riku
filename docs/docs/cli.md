@@ -39,7 +39,7 @@ The server list is local to your machine and always read here, never
 forwarded.
 
 ```bash
-riku server add edge riku@edge.example
+riku server add prod riku@prod.example
 riku server add edge riku@edge.example --admin root@edge.example
 riku server list
 riku server default edge
@@ -221,7 +221,7 @@ is empty, or the second, which names the registered servers:
 
 ```
 no server selected; add one with rk server add <name> <user@host>, or pass -s <name> (none are registered)
-no server selected; add one with rk server add <name> <user@host>, or pass -s <name> (registered: edge, edge)
+no server selected; add one with rk server add <name> <user@host>, or pass -s <name> (registered: edge, prod)
 ```
 
 Commands that only make sense on the server (`init`, `supervisor` and the
