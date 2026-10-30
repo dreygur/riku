@@ -28,17 +28,23 @@ work they describe.
   redesign"). Host checked in a Docker test host; not yet deployed on
   edge (owner will do it later).
 
-### Phase 1: rk client (next)
+### Phase 1: rk client (done)
 
 - Spec `specs/2026-10-30-rk-client-design.md`, plan
-  `plans/2026-10-30-rk-client.md`. Branch `feat/rk-client` (off
-  `feat/caddy-router`).
-- Runs mostly in sequence: Task 1 then 2 then 3 then 4 (each moves code the
-  next one builds on).
+  `plans/2026-10-30-rk-client.md`. Merged into `feat/caddy-router` at
+  4b120b0, not pushed.
 - Task 1 riku-args: done (79cf37b)
 - Task 2 riku-remote: done (52bd626)
 - Task 3 rk binary: done (f662519)
-- Task 4 packaging and docs: done (73096cf, host check and mkdocs build pending, Docker was not running)
+- Task 4 packaging and docs: done (73096cf)
+- Final review fixes: 14c2cce..1094a23. rk runs plugins scaffold, keygen
+  and sign locally through the riku-bundle crate: 3b3e068..4b120b0.
+- Host check on edge.example, 2026-10-30, server riku built from
+  4b120b0: `rk -s edge apps`, `run myapp echo "a b"` prints
+  `a b` (after `riku doctor --fix` migrated the old forced command keys),
+  `dashboard` through the admin login, refusals, plugin authoring. mkdocs
+  strict build passes. The supervisor there still runs the old binary
+  until `riku.service` restarts.
 
 ### Phase 2: container services foundations (after phase 1)
 
