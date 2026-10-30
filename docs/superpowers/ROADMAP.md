@@ -55,7 +55,7 @@ work they describe.
   strict build passes. The supervisor there still runs the old binary
   until `riku.service` restarts.
 
-### Phase 2: container services foundations (next)
+### Phase 2: container services foundations (done)
 
 - Spec `specs/2026-10-30-container-services-design.md`, plan
   `plans/2026-10-30-container-foundations.md` (owner answered its three
@@ -111,12 +111,30 @@ work they describe.
   passed, 0 failed, 2 ignored. Merged into `feat/caddy-router` at 10e956b
   (gate green there too), not pushed.
 
-### Phase 3: container integration (after phase 2)
+### Phase 3: container integration (next)
 
 - Same spec. Supervisor runs containers, rolling replacement, compose
   migration, per copy ports for Procfile apps, state API and dashboard rows,
   CLI scale and logs, `rk deploy --build`. Mostly sequential; dashboard and
   CLI tasks in parallel once the state API exists.
+- How to start (fresh session): work on `feat/caddy-router` (phase 2 merged
+  at 10e956b, local only, not pushed). No plan exists yet: write
+  `plans/<date>-container-integration.md` from the spec with
+  superpowers:writing-plans, folding in every duty below, then ask the owner
+  any open questions before running it the same way as phase 2 (implementer
+  per task, review after each, Opus for trust boundaries and the final
+  review). Ask the owner before pushing, merging elsewhere or touching the
+  test server; ask for the confidential names before the first commit.
+- Phase 2 run ledger with every ruling, owner decision and about 60 deferred
+  minor findings (several name phase 3 work):
+  `.superpowers/sdd/2026-10-30-container-foundations/progress.md` (git
+  ignored, this machine only). Read its "minor (deferred)", "Owner decided"
+  and "Phase 3 note" lines while writing the plan.
+- Small first item: `docs/docs/dashboard.md:30` and `docs/docs/plugins.md`
+  (the `ssh -N -L` rows) say to tunnel through the deploy key, which has
+  always had `no-port-forwarding`. Document the admin login form instead
+  (`ssh -t -L 8088:127.0.0.1:8088 admin@edge.example sudo -u riku -H riku
+  dashboard`, owner confirmed it works) or `rk dashboard`.
 - Compose migration duty from B4: a `Declared` project name (compose `name`,
   `COMPOSE_PROJECT_NAME`, the directory of a `COMPOSE_FILE` below the app
   root, or an app name that normalisation changes, such as `Shop` or `sh.op`)
