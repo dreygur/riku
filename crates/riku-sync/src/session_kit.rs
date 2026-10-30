@@ -1,7 +1,9 @@
 //! Helpers shared by the session, send and serve tests.
 
 use crate::testkit::{names_in, put, Fixture, SETTLED};
-use crate::{plan_transfer, receive, scan, send, write_bundle, Manifest, SendReport};
+use crate::{
+    plan_transfer, receive, scan, send, write_bundle, Manifest, ReceiveLimits, SendReport,
+};
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
@@ -12,7 +14,14 @@ pub fn sync_over_sockets(src: &Path, live: &Path) -> anyhow::Result<SendReport> 
     let (client_out, server_in) = UnixStream::pair().unwrap();
     let (server_out, client_in) = UnixStream::pair().unwrap();
     let live = live.to_path_buf();
-    let server = thread::spawn(move || receive(&live, BufReader::new(server_in), server_out));
+    let server = thread::spawn(move || {
+        receive(
+            &live,
+            &ReceiveLimits::default(),
+            BufReader::new(server_in),
+            server_out,
+        )
+    });
     let report = send(src, BufReader::new(client_in), client_out);
     let served = server.join().unwrap();
     assert!(served.is_ok(), "server side failed: {served:?}");
@@ -47,8 +56,24 @@ pub fn changed_source() -> tempfile::TempDir {
 /// Runs `receive` on `input` writing to `out`, checks it refused and left live
 /// and its parent as they were, and returns the error text.
 pub fn refused_to(f: &Fixture, input: impl BufRead, out: impl Write) -> String {
+    refused_under_to(f, &ReceiveLimits::default(), input, out)
+}
+
+/// Like [`refused`], with explicit limits.
+pub fn refused_under(f: &Fixture, limits: &ReceiveLimits, input: impl BufRead) -> (String, String) {
+    let mut reply = Vec::new();
+    let err = refused_under_to(f, limits, input, &mut reply);
+    (err, String::from_utf8(reply).unwrap())
+}
+
+fn refused_under_to(
+    f: &Fixture,
+    limits: &ReceiveLimits,
+    input: impl BufRead,
+    out: impl Write,
+) -> String {
     let before = scan(&f.live).unwrap();
-    let err = receive(&f.live, input, out)
+    let err = receive(&f.live, limits, input, out)
         .expect_err("receive must refuse")
         .to_string();
     assert_eq!(scan(&f.live).unwrap(), before, "live changed: {err}");

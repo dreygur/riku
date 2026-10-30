@@ -15,6 +15,7 @@
 
 pub mod apply;
 pub mod bundle;
+pub mod limits;
 pub mod plan;
 pub mod scan;
 pub mod session;
@@ -38,6 +39,7 @@ mod testkit;
 
 pub use apply::apply;
 pub use bundle::write_bundle;
+pub use limits::{ReceiveLimits, DEFAULT_FREE_MARGIN_BYTES, DEFAULT_MAX_NEEDED_BYTES};
 pub use plan::plan_transfer;
 pub use scan::scan;
 pub use send::send;
