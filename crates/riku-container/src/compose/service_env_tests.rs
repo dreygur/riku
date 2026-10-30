@@ -94,6 +94,19 @@ fn context_debug_output_omits_variable_values() {
 }
 
 #[test]
+fn multi_line_env_file_value_is_refused_naming_the_key() {
+    let fx = Fixture::new();
+    fx.write("app.env", "CERT=\"line one\nline two\"\n");
+
+    let err = error_of(fx.parse("web", json!({"image": "myapp", "env_file": "app.env"})));
+
+    assert!(
+        err.contains("service 'web'") && err.contains("CERT") && !err.contains("line one"),
+        "{err}"
+    );
+}
+
+#[test]
 fn env_file_outside_app_is_refused() {
     let err = error_of(Fixture::new().parse(
         "web",

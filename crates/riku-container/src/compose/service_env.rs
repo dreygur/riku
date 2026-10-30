@@ -65,7 +65,10 @@ fn read_env_files(ctx: &ServiceContext, value: &Value) -> Result<BTreeMap<String
             Ok(text) => text,
             Err(e) => return Err(e),
         };
-        match parse_dotenv(name, &text) {
+        // A bare KEY and `${VAR}` in an env_file read the project variables
+        // (the `.env` overlaid by the app ENV). The service parse has no
+        // warning channel, so unset variables expand to "" without one.
+        match parse_dotenv(name, &text, ctx.vars, &mut Vec::new()) {
             Ok(parsed) => vars.extend(parsed),
             Err(e) => return Err(e),
         }

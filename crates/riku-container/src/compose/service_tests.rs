@@ -143,6 +143,18 @@ fn restart_policies() {
 }
 
 #[test]
+fn extension_keys_on_a_service_are_ignored() {
+    let svc = Fixture::new()
+        .parse(
+            "web",
+            json!({"image": "myapp", "x-notes": {"owner": "web team"}, "x-tier": 1}),
+        )
+        .unwrap();
+
+    assert_eq!(svc.image.as_deref(), Some("myapp"));
+}
+
+#[test]
 fn refuses_custom_networks_and_unsafe_text() {
     let fx = Fixture::new();
     for value in [

@@ -12,6 +12,7 @@
 mod build;
 mod definition;
 mod depends;
+mod dotenv_value;
 mod duration;
 mod environment;
 mod fields;

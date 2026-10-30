@@ -79,13 +79,13 @@ pub fn read_raw(
     }
 
     let dotenv_dir = compose_path.parent().unwrap_or(app_path);
-    let mut vars = match read_dotenv(app_path, &dotenv_dir.join(".env")) {
+    let mut warnings = Vec::new();
+    let mut vars = match read_dotenv(app_path, &dotenv_dir.join(".env"), app_env, &mut warnings) {
         Ok(vars) => vars,
         Err(e) => return Err(e),
     };
     vars.extend(app_env.iter().map(|(k, v)| (k.clone(), v.clone())));
 
-    let mut warnings = Vec::new();
     if let Err(e) = interpolate_values(&mut document, &vars, &mut warnings) {
         return Err(e);
     }

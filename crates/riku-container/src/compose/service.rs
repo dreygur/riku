@@ -13,7 +13,7 @@ use super::definition::{ServiceContext, ServiceDef};
 use super::keys::SERVICE_KEYS;
 use super::scalar::reject_unknown;
 use super::service_steps::STEPS;
-use super::Value;
+use super::{Mapping, Value};
 use crate::types::{RestartPolicy, ServiceName, StopSignal, DEFAULT_STOP_GRACE};
 use anyhow::{anyhow, bail, Result};
 use std::collections::BTreeMap;
@@ -34,7 +34,14 @@ fn build_service(ctx: &ServiceContext, name: &str, value: &Value) -> Result<Serv
     let Value::Object(fields) = value else {
         bail!("must be a mapping");
     };
-    if let Err(e) = reject_unknown(fields, &SERVICE_KEYS, "service") {
+    // Compose extension keys (`x-...`) are accepted and ignored, as at the top
+    // level.
+    let known: Mapping = fields
+        .iter()
+        .filter(|(key, _)| !key.starts_with("x-"))
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
+    if let Err(e) = reject_unknown(&known, &SERVICE_KEYS, "service") {
         return Err(e);
     }
     let mut service = ServiceDef {
