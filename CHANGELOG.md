@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-07-08
 
+### Router Plugin Protocol 2
+
+The `configure` request sent to a router plugin now carries a `backends` list
+(each a TCP host and port, or a unix socket path) and a `protocol` field, in
+place of the single `upstream_port`. A router plugin must declare
+`[router] protocol = 2` in its manifest. A plugin without that table, or with
+another protocol number, is refused before any verb runs. `unconfigure` still
+runs for any protocol. A plugin may set `graceful_reload = true` under
+`[router]` to say its `reload` keeps connections alive. See
+`PLUGIN_PROTOCOL.md` section 6.2.
+
+`RIKU_DOMAINS` now goes through domain validation for plugin routers, as it
+already did for Caddy. An invalid value fails a plugin router deploy.
+
+A tcp backend's `host` is the app's `RIKU_BIND_ADDRESS` (default
+`127.0.0.1`); a value that is not an IP literal fails the deploy. Caddy keeps
+proxying to `127.0.0.1`.
+
+### Upgrade Notes: Routing and nginx
+
+- `RIKU_BIND_ADDRESS` must be an IP literal (`127.0.0.1`, `::1`, `10.0.0.5`)
+  for port mapped apps (`RIKU_NGINX_PORTMAP`). `localhost` used to work and
+  now fails the deploy.
+- A `RIKU_UPSTREAM_PORT` or `PORT` that is set but not a port number now
+  fails the deploy, naming the key. This holds for nginx port mapped apps,
+  Caddy and router plugins; Caddy and router plugins used to fall back to
+  port 8080.
+- `RIKU_NGINX_SOCKET` holding whitespace or nginx syntax characters (`;`,
+  `{`, `}` and the like) now fails the deploy, for every app type including
+  static and wsgi apps.
+- nginx sites now proxy through a named `upstream` block. The name is
+  `riku_` followed by the lowercase hex of the app name's bytes (`myapp`
+  becomes `riku_6d79617070`), so apps whose names differ only in case no
+  longer collide. A hand written include that used `proxy_pass
+  http://<app>_UPSTREAM` must switch to the new name.
+- HTTPS only sites (`RIKU_HTTPS_ONLY`) on nginx never rendered before: the
+  template failed and its parts did not pass `nginx -t`. They now render and
+  pass, including for port mapped and wsgi apps, and wsgi apps pass a
+  `unix:` socket to `uwsgi_pass`.
+
+### Container Apps
+
+- A compose file, or a folder on its path, may now be a symlink whose real
+  target stays inside the app directory (for example
+  `docker-compose.yml -> deploy/prod.yml`). A link that leaves the app is
+  refused, naming the path. Bind mount sources, the build context, the
+  dockerfile and `env_file` still refuse every symlink.
+- Container apps need Docker 23 or newer, or an engine with a compatible
+  CLI.
+
 ### Dashboard Authentication
 
 The Next.js browser dashboard (`dashboard/`) gets its own login, independent

@@ -44,7 +44,7 @@ Custom configs are included at the end of the generated config.
 | `RIKU_DOMAINS` | Domain name for the app | (none) |
 | `RIKU_HTTPS_ONLY` | Force HTTPS redirect. On for `true`, `1`, `yes` or `on`; any other value is off | `false` |
 | `RIKU_DISABLE_IPV6` | Disable IPv6 | `false` |
-| `RIKU_BIND_ADDRESS` | Backend bind address | `127.0.0.1` |
+| `RIKU_BIND_ADDRESS` | Backend bind address. Must be an IP literal such as `127.0.0.1` or `::1`; a host name like `localhost` fails the deploy of a port mapped app | `127.0.0.1` |
 
 ### Static Files
 

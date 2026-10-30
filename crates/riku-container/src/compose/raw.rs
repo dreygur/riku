@@ -1,0 +1,184 @@
+//! Reading a compose file into a checked, interpolated YAML tree.
+//!
+//! # Security model
+//!
+//! The compose file and the `.env` next to it come from a git push. Both must
+//! resolve inside the app directory and are size capped. The YAML parser
+//! rejects duplicate keys and bounds alias expansion, merge keys are applied
+//! by the parser, and the key check runs on that merged result. Interpolation
+//! touches string values only, never keys, and runs once, so a variable value
+//! is never re-expanded.
+
+use super::environment::{read_app_file, read_dotenv, MAX_APP_FILE_BYTES};
+use super::interpolate::{interpolate_capped, TooLarge};
+use super::keys::check_keys;
+use super::{ComposeFile, Mapping, Value};
+use anyhow::{anyhow, bail, Result};
+use std::collections::BTreeMap;
+use std::fmt;
+use std::path::Path;
+
+/// Cap on every string value of the compose file together, after
+/// interpolation. The file and the `.env` are each at most 1 MiB, so four
+/// times that leaves room for the whole file plus a large value used a few
+/// times, while a 1 MiB value referenced many times is refused before the
+/// expansion is built.
+const MAX_INTERPOLATED_BYTES: usize = 4 * MAX_APP_FILE_BYTES as usize;
+
+/// A compose file after merge keys, key checks and interpolation. Service
+/// fields are still raw YAML; later stages turn them into typed values.
+///
+/// The `Debug` output lists variable names, never values, which may be secrets.
+pub struct RawProject {
+    /// Service definitions by service name.
+    pub services: BTreeMap<String, Value>,
+    /// Top level named volume declarations by volume name. A volume declared
+    /// with no settings is `Value::Null`.
+    pub volumes: BTreeMap<String, Value>,
+    /// The top level `name` key. It sets the project name docker compose used
+    /// for existing volumes, so it is kept for volume naming.
+    pub name: Option<String>,
+    /// Non fatal findings, such as unset variables.
+    pub warnings: Vec<String>,
+    /// The variables interpolation used: the `.env` next to the compose file
+    /// overlaid by the app env. May hold secrets.
+    pub vars: BTreeMap<String, String>,
+}
+
+impl fmt::Debug for RawProject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RawProject")
+            .field("services", &self.services)
+            .field("volumes", &self.volumes)
+            .field("name", &self.name)
+            .field("warnings", &self.warnings)
+            .field("var_names", &self.vars.keys().collect::<Vec<_>>())
+            .finish()
+    }
+}
+
+/// Read, check and interpolate the compose file.
+///
+/// Variables come from the `.env` next to the compose file, overlaid by
+/// `app_env` (the app's own ENV).
+pub fn read_raw(
+    app_path: &Path,
+    compose: &ComposeFile,
+    app_env: &BTreeMap<String, String>,
+) -> Result<RawProject> {
+    let compose_path = app_path.join(compose.relative());
+    let text = match read_app_file(app_path, &compose_path) {
+        Ok(text) => text,
+        Err(e) => return Err(e),
+    };
+    let mut document: Value = match serde_saphyr::from_str(&text) {
+        Ok(document) => document,
+        Err(e) => return Err(anyhow!("{}: {e}", compose.relative().display())),
+    };
+    let Value::Object(project) = &document else {
+        bail!(
+            "{}: the top level must be a mapping",
+            compose.relative().display()
+        );
+    };
+    if let Err(e) = check_keys(project) {
+        return Err(e);
+    }
+
+    let dotenv_dir = compose_path.parent().unwrap_or(app_path);
+    let mut warnings = Vec::new();
+    let mut vars = match read_dotenv(app_path, &dotenv_dir.join(".env"), app_env, &mut warnings) {
+        Ok(vars) => vars,
+        Err(e) => return Err(e),
+    };
+    vars.extend(app_env.iter().map(|(k, v)| (k.clone(), v.clone())));
+
+    let mut budget = MAX_INTERPOLATED_BYTES;
+    match interpolate_values(&mut document, &vars, &mut budget, &mut warnings) {
+        Ok(()) => {}
+        Err(e) if e.downcast_ref::<TooLarge>().is_some() => bail!(
+            "{}: values expand past {MAX_INTERPOLATED_BYTES} bytes",
+            compose.relative().display()
+        ),
+        Err(e) => return Err(e),
+    }
+    let Value::Object(project) = document else {
+        bail!("the top level must be a mapping");
+    };
+    split_project(project, warnings, vars)
+}
+
+/// Interpolates every string in `value`, taking each expanded string's length
+/// from `budget` and failing with [`TooLarge`] once the total would pass it.
+fn interpolate_values(
+    value: &mut Value,
+    vars: &BTreeMap<String, String>,
+    budget: &mut usize,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    match value {
+        Value::String(text) => {
+            let lookup = |name: &str| vars.get(name).map(String::as_str);
+            *text = match interpolate_capped(text, &lookup, *budget, warnings) {
+                Ok(expanded) => expanded,
+                Err(e) => return Err(e),
+            };
+            *budget -= text.len();
+        }
+        Value::Array(items) => {
+            for item in items {
+                if let Err(e) = interpolate_values(item, vars, budget, warnings) {
+                    return Err(e);
+                }
+            }
+        }
+        Value::Object(fields) => {
+            for field in fields.values_mut() {
+                if let Err(e) = interpolate_values(field, vars, budget, warnings) {
+                    return Err(e);
+                }
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) => {}
+    }
+    Ok(())
+}
+
+fn split_project(
+    mut project: Mapping,
+    warnings: Vec<String>,
+    vars: BTreeMap<String, String>,
+) -> Result<RawProject> {
+    let name = match project.remove("name") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(name)) => Some(name),
+        Some(_) => bail!("top level 'name' must be a string"),
+    };
+    let services = match take_entries(&mut project, "services") {
+        Ok(services) => services,
+        Err(e) => return Err(e),
+    };
+    let volumes = match take_entries(&mut project, "volumes") {
+        Ok(volumes) => volumes,
+        Err(e) => return Err(e),
+    };
+    Ok(RawProject {
+        services,
+        volumes,
+        name,
+        warnings,
+        vars,
+    })
+}
+
+fn take_entries(project: &mut Mapping, key: &str) -> Result<BTreeMap<String, Value>> {
+    match project.remove(key) {
+        None | Some(Value::Null) => Ok(BTreeMap::new()),
+        Some(Value::Object(entries)) => Ok(entries.into_iter().collect()),
+        Some(_) => bail!("top level '{key}' must be a mapping"),
+    }
+}
+
+#[cfg(test)]
+#[path = "raw_tests.rs"]
+mod tests;

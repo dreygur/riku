@@ -4,8 +4,8 @@ use anyhow::{anyhow, bail, Result};
 use std::path::Path;
 use std::process::Command;
 
-use crate::compose_file::ComposeFile;
 use crate::{runtime, which};
+use riku_container::compose::ComposeFile;
 
 /// Program and leading args for invoking compose with the active container runtime.
 pub(crate) fn compose_cmd() -> (&'static str, Vec<&'static str>) {

@@ -8,6 +8,7 @@
 pub(crate) use riku_config as config;
 pub(crate) use riku_util as util;
 
+mod backends;
 mod cloudflare;
 mod context;
 mod sanitize;
@@ -23,17 +24,27 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+use crate::util::backend::Backend;
+pub use backends::{bind_address, default_backends, upstream_port_number};
 use template::{generate_nginx_config_from_template, use_custom_nginx_config};
 use validate::validate_nginx_config;
 
 /// Generate nginx configuration for an app.
 /// Checks for custom nginx config first, otherwise generates from template.
+///
+/// `backends` are the upstream servers the app's locations proxy to. An empty
+/// list is refused, since nginx rejects an upstream with no servers.
 pub fn generate_nginx_config(
     app: &str,
     app_path: &Path,
     env: &HashMap<String, String>,
+    backends: &[Backend],
     paths: &crate::config::RikuPaths,
 ) -> Result<()> {
+    if backends.is_empty() {
+        return Err(anyhow::anyhow!("no backends to route '{app}' to"));
+    }
+
     // Check for custom nginx config files in the app directory
     let custom_configs = [
         "nginx.conf",
@@ -54,7 +65,7 @@ pub fn generate_nginx_config(
     }
 
     // No custom config found, generate from template
-    generate_nginx_config_from_template(app, app_path, env, paths)
+    generate_nginx_config_from_template(app, app_path, env, backends, paths)
 }
 
 /// Ask the running nginx master process to reload its configuration

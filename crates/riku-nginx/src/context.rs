@@ -9,6 +9,7 @@ use std::path::Path;
 
 use crate::util::ensure_path_within;
 
+use super::backends::{socket_path, upstream_port};
 use super::cloudflare::generate_cloudflare_ips_config;
 use super::ssl::ensure_ssl_certificates;
 
@@ -48,13 +49,7 @@ pub(super) fn insert_address_context(
         .cloned()
         .unwrap_or(format!("{}.example.com", app));
 
-    let nginx_socket = env.get("RIKU_NGINX_SOCKET").cloned().unwrap_or(
-        paths
-            .nginx_root
-            .join(format!("{}.sock", app))
-            .to_string_lossy()
-            .to_string(),
-    );
+    let nginx_socket = socket_path(app, env, paths);
 
     let nginx_document_root = env
         .get("RIKU_NGINX_DOCUMENT_ROOT")
@@ -209,13 +204,8 @@ pub(super) fn insert_portmap_context(context: &mut tera::Context, env: &HashMap<
         .cloned()
         .unwrap_or("80".to_string());
 
-    let nginx_internal_port = env
-        .get("RIKU_UPSTREAM_PORT")
-        .cloned()
-        .unwrap_or_else(|| env.get("PORT").cloned().unwrap_or("8080".to_string()));
-
     context.insert("RIKU_NGINX_EXTERNAL_PORT", &nginx_external_port);
-    context.insert("RIKU_UPSTREAM_PORT", &nginx_internal_port);
+    context.insert("RIKU_UPSTREAM_PORT", &upstream_port(env));
 }
 
 /// Build the full Tera context from sanitized environment variables and paths.
@@ -228,12 +218,14 @@ pub(super) fn build_context(
 ) -> anyhow::Result<tera::Context> {
     let mut context = tera::Context::new();
 
-    context.insert("APP", app);
-    context.insert("INTERNAL_NGINX_APP_ROOT", &app_path.to_string_lossy());
-
     for (key, value) in env {
         context.insert(key.clone(), value);
     }
+    // Inserted after the ENV copy so an app ENV key of the same name cannot
+    // rename the upstream, the cache zone or the certificate files.
+    context.insert("APP", app);
+    context.insert("APP_UPSTREAM", &crate::backends::upstream_name(app));
+    context.insert("INTERNAL_NGINX_APP_ROOT", &app_path.to_string_lossy());
 
     insert_address_context(&mut context, env, paths, app, app_path);
     insert_cache_context(&mut context, env, paths, app);

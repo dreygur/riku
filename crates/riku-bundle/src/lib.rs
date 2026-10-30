@@ -12,11 +12,18 @@
 //! in the bundle other than the entry. Trust decisions live with the caller.
 
 pub mod manifest;
+pub mod router_section;
 pub mod signing;
 
 pub use manifest::PluginManifest;
+pub use router_section::RouterSection;
 
 /// The plugin protocol version this kernel implements. Set in every plugin
 /// invocation's environment as `RIKU_PLUGIN_API` and stamped into every event
 /// envelope. See `PLUGIN_PROTOCOL.md` §2.
 pub const RIKU_PLUGIN_API: u32 = 1;
+
+/// The router plugin protocol this riku drives. A router plugin declares the
+/// version it speaks in its manifest `[router]` table. See
+/// `PLUGIN_PROTOCOL.md` section 6.2.
+pub const ROUTER_PROTOCOL: u32 = 2;

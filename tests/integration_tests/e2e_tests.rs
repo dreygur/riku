@@ -607,7 +607,9 @@ esac
         let (bare, _work, sha) = make_git_repo_with_files(files);
         let app_dir = setup_app_clone(bare.path(), app, &paths);
         fs::create_dir_all(paths.env_root.join(app))?;
-        fs::write(paths.env_root.join(app).join("ENV"), "PORT=5000\n")?;
+        // No pinned PORT: a pinned port must be free on the host, and macOS
+        // AirPlay listens on 5000.
+        fs::write(paths.env_root.join(app).join("ENV"), "")?;
         fs::create_dir_all(paths.log_root.join(app))?;
 
         let deltas: HashMap<String, i64> = HashMap::new();
@@ -637,7 +639,9 @@ esac
         let (bare, _work, sha) = make_git_repo_with_files(files);
         let app_dir = setup_app_clone(bare.path(), app, &paths);
         fs::create_dir_all(paths.env_root.join(app))?;
-        fs::write(paths.env_root.join(app).join("ENV"), "PORT=5000\n")?;
+        // No pinned PORT: a pinned port must be free on the host, and macOS
+        // AirPlay listens on 5000.
+        fs::write(paths.env_root.join(app).join("ENV"), "")?;
         fs::create_dir_all(paths.log_root.join(app))?;
 
         let deltas: HashMap<String, i64> = HashMap::new();

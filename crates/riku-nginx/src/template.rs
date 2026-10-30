@@ -9,8 +9,9 @@ use std::fs;
 use std::path::Path;
 
 use super::context::build_context;
-use super::sanitize::sanitize_env_for_nginx;
+use super::sanitize::{sanitize_env_for_nginx, sanitize_nginx_value};
 use super::validate::validate_nginx_config;
+use crate::util::backend::Backend;
 
 /// Use a custom nginx configuration file from the app directory.
 pub(super) fn use_custom_nginx_config(
@@ -34,23 +35,79 @@ pub(super) fn generate_nginx_config_from_template(
     app: &str,
     app_path: &Path,
     env: &HashMap<String, String>,
+    backends: &[Backend],
     paths: &crate::config::RikuPaths,
 ) -> Result<()> {
-    let mut tera = tera::Tera::default();
-    register_templates(&mut tera)?;
+    let config_content = match render_nginx_config(app, app_path, env, backends, paths) {
+        Ok(content) => content,
+        Err(e) => {
+            return Err(anyhow::anyhow!(
+                "cannot render nginx config for '{app}': {e}"
+            ))
+        }
+    };
 
-    let env = &sanitize_env_for_nginx(env);
-    let context = build_context(app, app_path, env, paths)?;
-    let template_name = select_template(env);
-
-    let config_content = tera.render(template_name, &context)?;
     let config_file = paths.nginx_root.join(format!("{}.conf", app));
-    crate::util::write_atomic(&config_file, config_content.as_bytes())?;
-    validate_nginx_config(&config_file)?;
+    if let Err(e) = crate::util::write_atomic(&config_file, config_content.as_bytes()) {
+        return Err(anyhow::anyhow!("cannot write {config_file:?}: {e}"));
+    }
+    if let Err(e) = validate_nginx_config(&config_file) {
+        return Err(anyhow::anyhow!(
+            "nginx rejected the config for '{app}': {e}"
+        ));
+    }
 
     install_nginx_symlink(&config_file, app, paths);
 
     Ok(())
+}
+
+/// Render the app's config text without writing it.
+///
+/// Every backend address is checked before it reaches the template: nginx
+/// directive characters are refused as for ENV values, and so is whitespace in
+/// a socket path, which would let the rest of the path act as a `server`
+/// parameter such as `weight=0`.
+pub(super) fn render_nginx_config(
+    app: &str,
+    app_path: &Path,
+    env: &HashMap<String, String>,
+    backends: &[Backend],
+    paths: &crate::config::RikuPaths,
+) -> Result<String> {
+    let mut tera = tera::Tera::default();
+    if let Err(e) = register_templates(&mut tera) {
+        return Err(anyhow::anyhow!("cannot load nginx templates: {e}"));
+    }
+
+    let env = &sanitize_env_for_nginx(env);
+    let mut context = match build_context(app, app_path, env, paths) {
+        Ok(context) => context,
+        Err(e) => return Err(anyhow::anyhow!("cannot build nginx context: {e}")),
+    };
+    let addresses: Result<Vec<String>> = backends.iter().map(backend_address).collect();
+    match addresses {
+        Ok(addresses) => context.insert("RIKU_BACKENDS", &addresses),
+        Err(e) => return Err(anyhow::anyhow!("refusing backend: {e}")),
+    }
+
+    let template_name = select_template(env);
+    match tera.render(template_name, &context) {
+        Ok(content) => Ok(content),
+        Err(e) => Err(anyhow::anyhow!(
+            "failed to render {template_name} for '{app}': {e}"
+        )),
+    }
+}
+
+fn backend_address(backend: &Backend) -> Result<String> {
+    let address = backend.to_string();
+    if matches!(backend, Backend::Unix(_)) && address.contains(|c: char| c.is_ascii_whitespace()) {
+        return Err(anyhow::anyhow!(
+            "socket path '{address}' contains whitespace"
+        ));
+    }
+    sanitize_nginx_value("RIKU_BACKENDS", &address)
 }
 
 /// Register all nginx Tera templates.
@@ -87,6 +144,10 @@ fn register_templates(tera: &mut tera::Tera) -> Result<()> {
         (
             "nginx_proxy.conf.tera",
             include_str!("../../../templates/nginx_proxy.conf.tera"),
+        ),
+        (
+            "nginx_upstream.conf.tera",
+            include_str!("../../../templates/nginx_upstream.conf.tera"),
         ),
         (
             "nginx_uwsgi.conf.tera",
