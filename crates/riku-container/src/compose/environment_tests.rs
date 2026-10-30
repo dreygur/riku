@@ -23,6 +23,15 @@ EMPTY=
 }
 
 #[test]
+fn quoted_value_may_be_followed_by_a_comment() {
+    let vars = parse_dotenv(".env", "A=\"v\" # note\nB='v' # note\nC=\"v#1\"\n").unwrap();
+    assert_eq!(vars["A"], "v");
+    assert_eq!(vars["B"], "v");
+    assert_eq!(vars["C"], "v#1");
+    assert!(parse_dotenv(".env", "D=\"v\" trailing\n").is_err());
+}
+
+#[test]
 fn malformed_line_names_file_and_line() {
     let err = parse_dotenv("/app/.env", "OK=1\n\nnot a variable\n")
         .unwrap_err()

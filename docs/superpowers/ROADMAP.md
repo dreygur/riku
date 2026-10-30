@@ -94,7 +94,7 @@ work they describe.
 
 - B1 Move compose file lookup into the library: done
 - B2 Read compose YAML with interpolation and key checks: done
-- B3 Parse service fields: pending
+- B3 Parse service fields: done
 - B4 Project rules: order, routing, scale, replacement, volume names: pending
 
 - C1 RoutePlan and Caddy rendering: pending

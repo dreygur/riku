@@ -81,7 +81,7 @@ fn parse_line(line: &str) -> std::result::Result<(String, String), String> {
     }
 }
 
-fn is_valid_key(key: &str) -> bool {
+pub(crate) fn is_valid_key(key: &str) -> bool {
     let mut chars = key.chars();
     matches!(chars.next(), Some(c) if c.is_ascii_alphabetic() || c == '_')
         && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
@@ -89,19 +89,40 @@ fn is_valid_key(key: &str) -> bool {
 
 fn parse_value(raw: &str) -> std::result::Result<String, String> {
     if let Some(quoted) = raw.strip_prefix('\'') {
-        return match quoted.strip_suffix('\'') {
-            Some(inner) if !inner.contains('\'') => Ok(inner.to_string()),
+        return match quoted.split_once('\'') {
+            Some((inner, after)) if is_blank_or_comment(after) => Ok(inner.to_string()),
             _ => Err("unterminated single quote".to_string()),
         };
     }
     if let Some(quoted) = raw.strip_prefix('"') {
-        return match quoted.strip_suffix('"') {
-            Some(inner) => unescape_double_quoted(inner),
-            None => Err("unterminated double quote".to_string()),
+        return match closing_double_quote(quoted) {
+            Some(end) if is_blank_or_comment(&quoted[end + 1..]) => {
+                unescape_double_quoted(&quoted[..end])
+            }
+            _ => Err("unterminated double quote".to_string()),
         };
     }
     let end = raw.find(" #").unwrap_or(raw.len());
     Ok(raw[..end].trim_end().to_string())
+}
+
+fn is_blank_or_comment(after_quote: &str) -> bool {
+    let rest = after_quote.trim_start();
+    rest.is_empty() || (rest.starts_with('#') && after_quote.starts_with(char::is_whitespace))
+}
+
+/// Byte index of the first `"` not preceded by a backslash escape.
+fn closing_double_quote(quoted: &str) -> Option<usize> {
+    let mut escaped = false;
+    for (index, c) in quoted.char_indices() {
+        match c {
+            _ if escaped => escaped = false,
+            '\\' => escaped = true,
+            '"' => return Some(index),
+            _ => {}
+        }
+    }
+    None
 }
 
 fn unescape_double_quoted(inner: &str) -> std::result::Result<String, String> {
