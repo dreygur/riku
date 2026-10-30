@@ -72,7 +72,11 @@ pub fn run_without_server(command: Commands, name: &str, sub: Option<&str>) -> R
         return run(command);
     }
     if is_plugin_authoring(name, sub) {
-        return Err(not_part_of_rk(name, Elsewhere::FullBinary));
+        let refused = match sub {
+            Some(sub) => format!("{name} {sub}"),
+            None => name.to_string(),
+        };
+        return Err(not_part_of_rk(&refused, Elsewhere::FullBinary));
     }
     Err(no_server_selected())
 }

@@ -74,6 +74,19 @@ fn server_only_commands_and_container_are_refused() {
 }
 
 #[test]
+fn plugin_authoring_is_refused_naming_the_subcommand() {
+    let home = TempDir::new().unwrap();
+    let out = rk(&home, &["plugins", "keygen"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        stderr(&out)
+            .contains("'plugins keygen' is not part of rk; run it with the full riku binary"),
+        "{}",
+        stderr(&out)
+    );
+}
+
+#[test]
 fn local_flag_is_refused() {
     let home = TempDir::new().unwrap();
     let output = rk(&home, &["--local", "apps"]);
