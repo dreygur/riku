@@ -71,42 +71,79 @@ fn compose_file_env_rejects_symlink_escaping_the_app() {
     std::os::unix::fs::symlink(tmp.path().join("outside.yml"), app.join("compose.yml")).unwrap();
 
     let message = rejection(&app, "compose.yml");
-    assert!(message.contains("symlink"), "unexpected error: {message}");
+    assert!(
+        message.contains("symlink") && message.contains("compose.yml"),
+        "unexpected error: {message}"
+    );
 }
 
 #[test]
-fn compose_file_env_rejects_symlinked_file_pointing_inside_the_app() {
+fn compose_file_env_rejects_symlinked_subdirectory_escaping_the_app() {
     let tmp = TempDir::new().unwrap();
-    File::create(tmp.path().join("real.yml")).unwrap();
-    std::os::unix::fs::symlink(tmp.path().join("real.yml"), tmp.path().join("compose.yml"))
-        .unwrap();
+    let app = tmp.path().join("app");
+    fs::create_dir_all(tmp.path().join("elsewhere")).unwrap();
+    fs::create_dir(&app).unwrap();
+    File::create(tmp.path().join("elsewhere/compose.yml")).unwrap();
+    std::os::unix::fs::symlink(tmp.path().join("elsewhere"), app.join("deploy")).unwrap();
 
-    let message = rejection(tmp.path(), "compose.yml");
-    assert!(message.contains("symlink"), "unexpected error: {message}");
+    let message = rejection(&app, "deploy/compose.yml");
+    assert!(
+        message.contains("symlink") && message.contains("deploy/compose.yml"),
+        "unexpected error: {message}"
+    );
 }
 
 #[test]
-fn compose_file_env_rejects_symlinked_subdirectory_pointing_inside_the_app() {
+fn default_compose_file_linked_inside_the_app_is_used() {
+    // A common layout: docker-compose.yml -> deploy/prod.yml.
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir(tmp.path().join("deploy")).unwrap();
+    File::create(tmp.path().join("deploy/prod.yml")).unwrap();
+    std::os::unix::fs::symlink("deploy/prod.yml", tmp.path().join("docker-compose.yml")).unwrap();
+
+    assert_eq!(
+        compose_arg(tmp.path(), None).as_deref(),
+        Some("docker-compose.yml")
+    );
+}
+
+#[test]
+fn compose_file_env_accepts_a_linked_folder_inside_the_app() {
     let tmp = TempDir::new().unwrap();
     fs::create_dir(tmp.path().join("real")).unwrap();
     File::create(tmp.path().join("real/compose.yml")).unwrap();
-    std::os::unix::fs::symlink(tmp.path().join("real"), tmp.path().join("deploy")).unwrap();
+    std::os::unix::fs::symlink("real", tmp.path().join("deploy")).unwrap();
 
-    let message = rejection(tmp.path(), "deploy/compose.yml");
-    assert!(message.contains("symlink"), "unexpected error: {message}");
+    assert_eq!(
+        compose_arg(tmp.path(), Some("deploy/compose.yml")).as_deref(),
+        Some("deploy/compose.yml")
+    );
 }
 
 #[test]
-fn default_compose_file_that_is_a_symlink_is_refused() {
+fn default_compose_file_linked_outside_the_app_is_refused() {
     let tmp = TempDir::new().unwrap();
-    File::create(tmp.path().join("real.yml")).unwrap();
-    std::os::unix::fs::symlink(tmp.path().join("real.yml"), tmp.path().join("compose.yaml"))
-        .unwrap();
+    let app = tmp.path().join("app");
+    fs::create_dir(&app).unwrap();
+    File::create(tmp.path().join("outside.yml")).unwrap();
+    std::os::unix::fs::symlink(tmp.path().join("outside.yml"), app.join("compose.yaml")).unwrap();
 
-    let err = find_compose_file(tmp.path(), None).expect_err("a symlinked default was accepted");
+    let err = find_compose_file(&app, None).expect_err("a link leaving the app was accepted");
     assert!(
-        err.to_string().contains("symlink"),
+        err.to_string().contains("symlink") && err.to_string().contains("compose.yaml"),
         "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn compose_file_env_accepts_a_comma_in_the_file_name() {
+    // COMPOSE_FILE separates files with ':'; a ',' is part of the name.
+    let tmp = TempDir::new().unwrap();
+    File::create(tmp.path().join("compose,prod.yml")).unwrap();
+
+    assert_eq!(
+        compose_arg(tmp.path(), Some("compose,prod.yml")).as_deref(),
+        Some("compose,prod.yml")
     );
 }
 

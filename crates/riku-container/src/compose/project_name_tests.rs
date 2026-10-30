@@ -26,6 +26,19 @@ fn app_name_that_is_already_a_project_name_is_derived() {
 }
 
 #[test]
+fn compose_file_linked_from_the_app_root_keeps_the_app_as_project() {
+    let app = TestApp::new("shop");
+    app.write("deploy/prod.yml", "services:\n  web:\n    image: nginx\n");
+    std::os::unix::fs::symlink("deploy/prod.yml", app.path.join("docker-compose.yml")).unwrap();
+
+    let project = app.read(Some("docker-compose.yml"), &[]).unwrap();
+
+    assert_eq!(project.services[0].name.as_str(), "web");
+    assert_eq!(project.project_name(), "shop");
+    assert_eq!(project.name_source(), ProjectNameSource::Derived);
+}
+
+#[test]
 fn app_names_that_normalise_to_another_name_are_declared() {
     // `Shop`, `sh.op` and `shop` all become project `shop`; only the app
     // literally called `shop` may use it unchecked.

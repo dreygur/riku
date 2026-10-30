@@ -4,7 +4,6 @@
 //! It is user input that becomes a `-f` argument, so it must be one relative
 //! path that resolves to a file inside the app directory.
 
-use super::paths::resolve_inside;
 use anyhow::{bail, Result};
 use std::path::{Component, Path, PathBuf};
 
@@ -36,8 +35,9 @@ impl ComposeFile {
 }
 
 /// First of the default compose file names present, following docker
-/// compose's own precedence. A symlink counts as present so that
-/// [`find_compose_file`] can refuse it instead of skipping to the next name.
+/// compose's own precedence. A symlink counts as present, even a dangling one,
+/// so that [`find_compose_file`] reports it instead of skipping to the next
+/// name.
 pub fn default_compose_file(app_path: &Path) -> Option<ComposeFile> {
     COMPOSE_FILE_NAMES
         .iter()
@@ -49,12 +49,19 @@ pub fn default_compose_file(app_path: &Path) -> Option<ComposeFile> {
 ///
 /// The value comes from the app's ENV, which is user input, so it is rejected
 /// when it is absolute, climbs out with `..`, lists several files the way
-/// docker compose allows (`a.yml:b.yml`), or is a symlink or sits below one,
-/// even when the link points inside the app: the checkout can change between
-/// this check and the engine reading the file.
+/// docker compose allows (`a.yml:b.yml`), or holds a line break or NUL (it is
+/// printed as a `KEY=value` line). The compose file, or a folder on its path,
+/// may be a symlink as long as its real target stays inside the app; a link
+/// that leaves the app is refused naming the path.
+///
+/// Only the file itself may be reached through a link. Bind sources, the build
+/// context, the dockerfile and `env_file` still refuse every symlink.
 fn validate_compose_file(app_path: &Path, requested: &str) -> Result<ComposeFile> {
     if requested.contains(':') {
         bail!("COMPOSE_FILE='{requested}' lists several files; riku supports exactly one");
+    }
+    if requested.is_empty() || requested.contains(['\n', '\r', '\0']) {
+        bail!("COMPOSE_FILE={requested:?} is empty or contains a line break or NUL");
     }
 
     let relative = Path::new(requested);
@@ -65,10 +72,6 @@ fn validate_compose_file(app_path: &Path, requested: &str) -> Result<ComposeFile
         bail!("COMPOSE_FILE='{requested}' must be a relative path inside the app directory");
     }
 
-    if let Err(e) = resolve_inside(app_path, app_path, requested, "compose file") {
-        return Err(e);
-    }
-
     let app_root = match app_path.canonicalize() {
         Ok(path) => path,
         Err(e) => bail!("cannot resolve app directory {}: {e}", app_path.display()),
@@ -77,7 +80,14 @@ fn validate_compose_file(app_path: &Path, requested: &str) -> Result<ComposeFile
         Ok(path) => path,
         Err(e) => bail!("COMPOSE_FILE='{requested}' not found in the app: {e}"),
     };
-    if !resolved.starts_with(&app_root) || !resolved.is_file() {
+    // A plain relative path can only leave the app through a symlink.
+    if !resolved.starts_with(&app_root) {
+        bail!(
+            "compose file '{requested}' is reached through a symlink that leaves the app directory (it resolves to {})",
+            resolved.display()
+        );
+    }
+    if !resolved.is_file() {
         bail!("COMPOSE_FILE='{requested}' must point to a file inside the app directory");
     }
 
