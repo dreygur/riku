@@ -4,10 +4,12 @@
 //! It is user input that becomes a `-f` argument, so it must be one relative
 //! path that resolves to a file inside the app directory.
 
+use super::paths::resolve_inside;
 use anyhow::{bail, Result};
 use std::path::{Component, Path, PathBuf};
 
-const COMPOSE_FILE_NAMES: [&str; 4] = [
+/// Default compose file names, in docker compose's own precedence order.
+pub const COMPOSE_FILE_NAMES: [&str; 4] = [
     "compose.yaml",
     "compose.yml",
     "docker-compose.yaml",
@@ -19,25 +21,27 @@ const COMPOSE_FILE_NAMES: [&str; 4] = [
 /// Every compose command runs with the app directory as its working directory,
 /// so this relative form is what gets passed to `-f`.
 #[derive(Debug, PartialEq)]
-pub(crate) struct ComposeFile(PathBuf);
+pub struct ComposeFile(PathBuf);
 
 impl ComposeFile {
-    pub(crate) fn arg(&self) -> String {
+    /// The path as a `-f` argument.
+    pub fn arg(&self) -> String {
         self.0.to_string_lossy().into_owned()
+    }
+
+    /// The path relative to the app directory.
+    pub fn relative(&self) -> &Path {
+        &self.0
     }
 }
 
-/// The `COMPOSE_FILE` value from the app's ENV, if set and non-empty.
-pub(crate) fn requested_compose_file() -> Option<String> {
-    std::env::var("COMPOSE_FILE").ok().filter(|v| !v.is_empty())
-}
-
 /// First of the default compose file names present, following docker
-/// compose's own precedence.
-pub(crate) fn default_compose_file(app_path: &Path) -> Option<ComposeFile> {
+/// compose's own precedence. A symlink counts as present so that
+/// [`find_compose_file`] can refuse it instead of skipping to the next name.
+pub fn default_compose_file(app_path: &Path) -> Option<ComposeFile> {
     COMPOSE_FILE_NAMES
         .iter()
-        .find(|name| app_path.join(name).exists())
+        .find(|name| std::fs::symlink_metadata(app_path.join(name)).is_ok())
         .map(|name| ComposeFile(PathBuf::from(name)))
 }
 
@@ -45,8 +49,9 @@ pub(crate) fn default_compose_file(app_path: &Path) -> Option<ComposeFile> {
 ///
 /// The value comes from the app's ENV, which is user input, so it is rejected
 /// when it is absolute, climbs out with `..`, lists several files the way
-/// docker compose allows (`a.yml:b.yml`), or resolves through a symlink to a
-/// file outside the app directory.
+/// docker compose allows (`a.yml:b.yml`), or is a symlink or sits below one,
+/// even when the link points inside the app: the checkout can change between
+/// this check and the engine reading the file.
 fn validate_compose_file(app_path: &Path, requested: &str) -> Result<ComposeFile> {
     if requested.contains(':') {
         bail!("COMPOSE_FILE='{requested}' lists several files; riku supports exactly one");
@@ -58,6 +63,10 @@ fn validate_compose_file(app_path: &Path, requested: &str) -> Result<ComposeFile
         .all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
     if !is_plain_relative {
         bail!("COMPOSE_FILE='{requested}' must be a relative path inside the app directory");
+    }
+
+    if let Err(e) = resolve_inside(app_path, app_path, requested, "compose file") {
+        return Err(e);
     }
 
     let app_root = match app_path.canonicalize() {
@@ -75,19 +84,18 @@ fn validate_compose_file(app_path: &Path, requested: &str) -> Result<ComposeFile
     Ok(ComposeFile(relative.to_path_buf()))
 }
 
-fn find_compose_file(app_path: &Path, requested: Option<&str>) -> Result<Option<ComposeFile>> {
+/// Find the app's compose file: `requested` (the app's `COMPOSE_FILE` value,
+/// read by the caller) when given, otherwise the first default name present.
+pub fn find_compose_file(app_path: &Path, requested: Option<&str>) -> Result<Option<ComposeFile>> {
     match requested {
         Some(name) => validate_compose_file(app_path, name).map(Some),
-        None => Ok(default_compose_file(app_path)),
+        None => match default_compose_file(app_path) {
+            Some(default) => validate_compose_file(app_path, &default.arg()).map(Some),
+            None => Ok(None),
+        },
     }
 }
 
-/// Find the app's compose file: `COMPOSE_FILE` when set, otherwise the first
-/// default name present.
-pub(crate) fn compose_file(app_path: &Path) -> Result<Option<ComposeFile>> {
-    find_compose_file(app_path, requested_compose_file().as_deref())
-}
-
 #[cfg(test)]
-#[path = "compose_file_tests.rs"]
+#[path = "locate_tests.rs"]
 mod tests;

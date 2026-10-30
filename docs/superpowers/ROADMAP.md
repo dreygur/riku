@@ -92,10 +92,10 @@ work they describe.
 - A3 Run and control containers: done
 - A4 Container state and stats: done
 
-- B1 Move compose file lookup into the library: pending
-- B2 Read compose YAML with interpolation and key checks: pending
-- B3 Parse service fields: pending
-- B4 Project rules: order, routing, scale, replacement, volume names: pending
+- B1 Move compose file lookup into the library: done
+- B2 Read compose YAML with interpolation and key checks: done
+- B3 Parse service fields: done
+- B4 Project rules: order, routing, scale, replacement, volume names: done
 
 - C1 RoutePlan and Caddy rendering: pending
 - C2 nginx upstream from backends: pending
@@ -111,6 +111,10 @@ work they describe.
   migration, per copy ports for Procfile apps, state API and dashboard rows,
   CLI scale and logs, `rk deploy --build`. Mostly sequential; dashboard and
   CLI tasks in parallel once the state API exists.
+- Compose migration duty from B4: a `Declared` project name (compose `name` or
+  `COMPOSE_PROJECT_NAME`) must be refused when it equals another riku app's
+  name or its existing volumes lack the matching compose project label, and
+  only then may `ComposeProject::confirm_declared_name` be called.
 
 ### Phase 4: one rk managing many servers
 
