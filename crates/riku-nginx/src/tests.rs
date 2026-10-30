@@ -170,14 +170,15 @@ fn test_nginx_config_https_only() {
     let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
+    // Errors only at `nginx -t`, which is absent on most test hosts; the
+    // config file is written before that runs.
     let _ = generate_nginx_config("myapp", &app_path, &env, &paths);
     let config_file = paths.nginx_root.join("myapp.conf");
 
-    if !config_file.exists() {
-        return;
-    }
-
-    let config_content = fs::read_to_string(&config_file).unwrap();
+    let config_content = match fs::read_to_string(&config_file) {
+        Ok(content) => content,
+        Err(e) => panic!("HTTPS only config not written to {config_file:?}: {e}"),
+    };
     assert!(config_content.contains("return 301"));
     assert!(config_content.contains("https://"));
     assert!(config_content.contains("ssl"));

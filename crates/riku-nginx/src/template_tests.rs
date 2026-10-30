@@ -1,5 +1,7 @@
 use super::*;
 
+const SOCKET: &str = "/srv/riku/myapp.sock";
+
 // select_template
 
 #[test]
@@ -64,6 +66,106 @@ fn test_all_expected_templates_registered() {
     assert!(names.contains(&"nginx_portmap.conf.tera".to_string()));
     assert!(names.contains(&"nginx_static.conf.tera".to_string()));
     assert!(names.contains(&"nginx_wsgi.conf.tera".to_string()));
+}
+
+/// Renders the config `generate_nginx_config` would write for `pairs`.
+/// No `RIKU_DOMAINS`, so an HTTPS only render skips certificate issuance.
+fn render(pairs: &[(&str, &str)]) -> String {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
+    let env: HashMap<String, String> = pairs
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+
+    let mut tera = tera::Tera::default();
+    register_templates(&mut tera).unwrap();
+    let context = build_context("myapp", temp_dir.path(), &env, &paths).unwrap();
+    tera.render(select_template(&env), &context).unwrap()
+}
+
+/// nginx rejects a bare socket path as an upstream ("invalid host in
+/// upstream"), so every use of the socket must carry the `unix:` prefix.
+fn assert_socket_always_prefixed(config: &str) {
+    let uses = config.matches(SOCKET).count();
+    let prefixed = config.matches(&format!("unix:{SOCKET}")).count();
+    assert_eq!(uses, prefixed, "bare socket path in config:\n{config}");
+}
+
+#[test]
+fn https_only_web_app_proxies_to_its_port() {
+    let config = render(&[
+        ("RIKU_HTTPS_ONLY", "true"),
+        ("RIKU_NGINX_PORTMAP", "true"),
+        ("RIKU_UPSTREAM_PORT", "5001"),
+        ("RIKU_NGINX_SOCKET", SOCKET),
+    ]);
+
+    assert!(config.contains("443 ssl"), "not an HTTPS config:\n{config}");
+    assert!(
+        config.contains("proxy_pass http://127.0.0.1:5001;"),
+        "web app not proxied to its port:\n{config}"
+    );
+    assert!(
+        !config.contains(SOCKET),
+        "web app proxied to a socket:\n{config}"
+    );
+}
+
+#[test]
+fn https_only_socket_app_never_uses_a_bare_socket_path() {
+    let config = render(&[("RIKU_HTTPS_ONLY", "true"), ("RIKU_NGINX_SOCKET", SOCKET)]);
+
+    assert!(
+        config.contains(&format!("proxy_pass http://unix:{SOCKET};")),
+        "socket app not proxied to its socket:\n{config}"
+    );
+    assert_socket_always_prefixed(&config);
+}
+
+#[test]
+fn https_only_server_declares_the_acme_location_once() {
+    let config = render(&[("RIKU_HTTPS_ONLY", "true"), ("RIKU_NGINX_SOCKET", SOCKET)]);
+    let tls_server = match config.split_once("443 ssl") {
+        Some((_, rest)) => rest,
+        None => panic!("not an HTTPS config:\n{config}"),
+    };
+
+    // nginx refuses to start on a duplicate location in one server block.
+    assert_eq!(
+        tls_server
+            .matches("location ^~ /.well-known/acme-challenge")
+            .count(),
+        1,
+        "TLS server block:\n{tls_server}"
+    );
+}
+
+#[test]
+fn https_only_wsgi_app_passes_to_its_uwsgi_socket() {
+    let config = render(&[
+        ("RIKU_HTTPS_ONLY", "true"),
+        ("RIKU_NGINX_WSGI", "true"),
+        ("UWSGI_SOCKET", SOCKET),
+    ]);
+
+    assert!(config.contains("443 ssl"), "not an HTTPS config:\n{config}");
+    assert!(
+        config.contains(&format!("uwsgi_pass unix:{SOCKET};")),
+        "wsgi app not passed to uwsgi:\n{config}"
+    );
+    assert!(
+        !config.contains("proxy_pass"),
+        "wsgi app proxied over http:\n{config}"
+    );
+}
+
+#[test]
+fn wsgi_app_never_uses_a_bare_socket_path() {
+    let config = render(&[("RIKU_NGINX_WSGI", "true"), ("UWSGI_SOCKET", SOCKET)]);
+
+    assert!(config.contains("uwsgi_pass"), "no uwsgi_pass:\n{config}");
+    assert_socket_always_prefixed(&config);
 }
 
 #[test]

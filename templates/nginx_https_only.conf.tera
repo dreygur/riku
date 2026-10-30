@@ -1,7 +1,3 @@
-upstream {{ APP }}_UPSTREAM {
-  server {{ RIKU_NGINX_SOCKET }};
-}
-
 server {
   listen              {{ RIKU_NGINX_IPV4_ADDRESS }}:80;
 {% if RIKU_NGINX_IPV6_ADDRESS %}
@@ -32,11 +28,6 @@ server {
 
   # HSTS: tell browsers to always use HTTPS (1 year)
   add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-
-  location ^~ /.well-known/acme-challenge {
-    allow all;
-    root {{ ACME_WWW }};
-  }
 
 {% include "nginx_common.conf.tera" %}
 }

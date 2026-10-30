@@ -79,7 +79,12 @@ work they describe.
   5. Ask the owner before merging into `feat/caddy-router`, pushing, or
      touching the test server (engine detection and a sync round trip into
      a temporary directory there).
-- Task status: not started.
+- Step 1 nginx fix: done (commit pending). nginx 1.27 confirmed the HTTPS
+  only template never rendered (`RIKU_NGINX_ROOT` unset), and its parts
+  failed `nginx -t`: a bare socket upstream and a duplicate ACME location.
+  It also ignored the port map and uWSGI. The wsgi template passed a bare
+  socket to `uwsgi_pass`. All fixed; rendered configs pass `nginx -t`.
+- Task status: Task 0 not started.
 
 ### Phase 3: container integration (after phase 2)
 
@@ -93,6 +98,14 @@ work they describe.
 - No design yet. The owner wants to be asked questions interactively first.
 
 ## Known open problems, outside the plans
+
+- nginx: `RIKU_NGINX_CACHE_PREFIXES` puts `proxy_cache_path` inside the
+  `server` block; nginx allows it only at `http` level, so `nginx -t` fails
+  for any app that sets it.
+- Certificates (`crates/riku-nginx/src/ssl.rs`): ACME issues per domain and
+  stops at the first success, so other domains are uncovered; nginx serves
+  the leaf `<app>.crt`, not `<app>.fullchain.crt`; `nginx_acme_firstrun`
+  is registered but never selected. Needs a design.
 
 - `riku install-plugins` failed to download inside a Docker test container
   (reqwest); cause not confirmed.

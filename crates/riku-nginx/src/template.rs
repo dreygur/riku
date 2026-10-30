@@ -89,6 +89,10 @@ fn register_templates(tera: &mut tera::Tera) -> Result<()> {
             include_str!("../../../templates/nginx_proxy.conf.tera"),
         ),
         (
+            "nginx_uwsgi.conf.tera",
+            include_str!("../../../templates/nginx_uwsgi.conf.tera"),
+        ),
+        (
             "nginx_wsgi.conf.tera",
             include_str!("../../../templates/nginx_wsgi.conf.tera"),
         ),

@@ -242,6 +242,7 @@ pub(super) fn build_context(
     insert_portmap_context(&mut context, env);
 
     context.insert("RIKU_ROOT", &paths.riku_root.to_string_lossy());
+    context.insert("RIKU_NGINX_ROOT", &paths.nginx_root.to_string_lossy());
     context.insert("ACME_WWW", &paths.acme_www.to_string_lossy());
     context.insert(
         "RIKU_ACME_ROOT_CA",

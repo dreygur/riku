@@ -33,14 +33,22 @@ location {{ parts | first | trim }} {
 {% endfor %}
 {% endif %}
 
-{% if RIKU_NGINX_CACHE_PREFIXES %}
+{% if RIKU_NGINX_PORTMAP %}
+{% set upstream = "http://" ~ RIKU_BIND_ADDRESS ~ ":" ~ RIKU_UPSTREAM_PORT %}
+{% else %}
+{% set upstream = "http://unix:" ~ RIKU_NGINX_SOCKET %}
+{% endif %}
+
+{% if RIKU_NGINX_WSGI %}
+{% include "nginx_uwsgi.conf.tera" %}
+{% elif RIKU_NGINX_CACHE_PREFIXES %}
 # Proxy cache configuration
 proxy_cache_path {{ RIKU_NGINX_CACHE_PATH }} levels=1:2 keys_zone={{ APP }}:{{ RIKU_NGINX_CACHE_SIZE }}g inactive={{ RIKU_NGINX_CACHE_EXPIRY }}s;
 proxy_cache_key "$scheme$request_method$host$request_uri";
 
 {% for prefix in RIKU_NGINX_CACHE_PREFIXES | split(pat=",") %}
 location {{ prefix | trim }} {
-  proxy_pass http://unix:{{ RIKU_NGINX_SOCKET }};
+  proxy_pass {{ upstream }};
   proxy_set_header Host $host;
   proxy_set_header X-Real-IP $remote_addr;
   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -60,7 +68,7 @@ location {{ prefix | trim }} {
 {% endfor %}
 {% else %}
 location / {
-  proxy_pass http://unix:{{ RIKU_NGINX_SOCKET }};
+  proxy_pass {{ upstream }};
   proxy_set_header Host $host;
   proxy_set_header X-Real-IP $remote_addr;
   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
