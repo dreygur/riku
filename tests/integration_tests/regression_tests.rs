@@ -588,6 +588,8 @@ mod agent_state_tests {
         let log = dir.join("audit.log");
         assert_eq!(mode(&log), 0o600);
         let text = std::fs::read_to_string(&log).unwrap();
-        assert!(text.contains("state-test apps"), "{text}");
+        let entry: serde_json::Value = serde_json::from_str(text.trim_end()).unwrap();
+        assert_eq!(entry["agent"], "state-test", "{text}");
+        assert_eq!(entry["action"], "apps", "{text}");
     }
 }

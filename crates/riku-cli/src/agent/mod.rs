@@ -4,6 +4,7 @@
 //! to perform deployment and management tasks with proper authentication,
 //! authorization, and audit logging.
 
+pub mod audit;
 pub mod auth;
 pub mod commands;
 pub mod execute;

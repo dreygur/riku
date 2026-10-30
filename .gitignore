@@ -132,7 +132,6 @@ authorized_keys.*
 !crates/riku-util/src/authorized_keys.rs
 
 # Rate limiting and audit logs
-/tmp/riku-agent-*.log
 /tmp/riku-confirm-*
 riku-agent-*.log
 riku-confirm-*

@@ -3,7 +3,8 @@ use anyhow::Result;
 
 use crate::config::RikuPaths;
 
-use super::auth::{check_rate_limit_now, log_agent_action, AgentSession};
+use super::audit::{log_agent_action, open_before_mutation, AuditEntry};
+use super::auth::{check_rate_limit_now, AgentSession};
 use super::commands::{
     cmd_agent_apps, cmd_agent_config_get, cmd_agent_config_set, cmd_agent_config_show,
     cmd_agent_deploy, cmd_agent_destroy_confirm, cmd_agent_destroy_request, cmd_agent_logs,
@@ -59,12 +60,26 @@ pub fn cmd_agent_execute(
     }
 
     if !scope.allows(command) {
-        log_agent_action(&state, agent_id, command, "", false);
+        let entry = AuditEntry {
+            agent: agent_id,
+            action: command,
+            app: "",
+            success: false,
+        };
+        log_agent_action(&state, None, &entry);
         return print_response(&AgentResponse::error(
             "PERMISSION_DENIED",
             "Agent lacks required permission",
         ));
     }
+
+    let audit_log = match open_before_mutation(&state, command) {
+        Ok(file) => file,
+        Err(e) => {
+            let message = format!("Agent audit log is unavailable: {e}");
+            return print_response(&AgentResponse::error("STATE_UNAVAILABLE", &message));
+        }
+    };
 
     let response = match command {
         "apps" => cmd_agent_apps(paths),
@@ -157,13 +172,13 @@ pub fn cmd_agent_execute(
         _ => AgentResponse::error("INVALID_COMMAND", &format!("Unknown command: {}", command)),
     };
 
-    log_agent_action(
-        &state,
-        agent_id,
-        command,
-        args.first().map(|s| s.as_str()).unwrap_or(""),
-        response.success,
-    );
+    let entry = AuditEntry {
+        agent: agent_id,
+        action: command,
+        app: args.first().map(|s| s.as_str()).unwrap_or(""),
+        success: response.success,
+    };
+    log_agent_action(&state, audit_log, &entry);
 
     print_response(&response)
 }

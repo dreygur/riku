@@ -369,14 +369,20 @@ if not result["success"]:
 
 ## Audit Logging
 
-All AI agent actions are logged:
+All AI agent actions are logged to `~/.riku/state/agent/audit.log`, one JSON
+object per line with the fields `time`, `agent`, `action`, `app` and `status`.
+Control characters in a client supplied value are escaped, so an entry cannot
+be split or forged.
 
 ```
-2026-02-23 14:30:00 [AI] cursor-agent@rakib deployed myapp (v42)
-2026-02-23 14:31:00 [AI] cursor-agent@rakib set DATABASE_URL on myapp
-2026-02-23 14:32:00 [AI] cursor-agent@rakib restarted myapp
-2026-02-23 14:33:00 [AI] claude-agent@workstation viewed logs myapp
+{"time":"2026-02-23T14:30:00+00:00","agent":"cursor-agent@rakib","action":"deploy","app":"myapp","status":"success"}
+{"time":"2026-02-23T14:33:00+00:00","agent":"claude-agent@workstation","action":"logs","app":"myapp","status":"success"}
 ```
+
+Commands that change something (deploy, restart, run, config changes, stop,
+destroy) open the audit log before they run and are refused with
+`STATE_UNAVAILABLE` if it cannot be opened. Read only commands still run if
+the log cannot be written.
 
 **View audit logs:**
 ```bash

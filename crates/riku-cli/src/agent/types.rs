@@ -41,6 +41,15 @@ impl AgentScope {
     }
 }
 
+/// Whether `command` changes something on the server, as opposed to only
+/// reading it. Unknown commands count as mutating.
+pub fn is_mutating(command: &str) -> bool {
+    !matches!(
+        command,
+        "apps" | "logs" | "ps" | "config:get" | "config:show" | "stats"
+    )
+}
+
 /// Agent response structure
 #[derive(Debug)]
 pub struct AgentResponse {
