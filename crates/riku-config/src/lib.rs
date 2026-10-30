@@ -10,6 +10,7 @@ use anyhow::{anyhow, Result};
 use std::env;
 use std::path::{Component, Path, PathBuf};
 
+pub mod container_engine;
 pub mod router;
 
 /// Raw source URL for fetching the latest riku script (for reference implementation).
@@ -97,6 +98,8 @@ pub struct RikuPaths {
     pub caddy_root: PathBuf,
     /// Holds the host router name. See [`router::Router::load`].
     pub router_file: PathBuf,
+    /// Holds the container engine choice. See [`container_engine::load`].
+    pub container_engine_file: PathBuf,
     pub cache_root: PathBuf,
     pub workers_root: PathBuf,
     pub workers_available: PathBuf,
@@ -141,6 +144,7 @@ impl RikuPaths {
             nginx_root: riku_root.join("nginx"),
             caddy_root: riku_root.join("caddy"),
             router_file: riku_root.join(router::ROUTER_FILE),
+            container_engine_file: riku_root.join(container_engine::ENGINE_FILE),
             cache_root: riku_root.join("cache"),
             workers_root: riku_root.join("workers"),
             workers_available: riku_root.join("workers-available"),

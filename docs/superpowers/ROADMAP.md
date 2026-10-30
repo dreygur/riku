@@ -87,7 +87,7 @@ work they describe.
 - Plan `plans/2026-10-30-container-foundations.md`. Task status:
 - Task 0 Shared types: done
 
-- A1 Engine detection and the engine setting: pending
+- A1 Engine detection and the engine setting: done
 - A2 Engine identity and command probe: pending
 - A3 Run and control containers: pending
 - A4 Container state and stats: pending
