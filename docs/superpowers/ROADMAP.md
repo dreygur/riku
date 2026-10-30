@@ -88,7 +88,7 @@ work they describe.
 - Task 0 Shared types: done
 
 - A1 Engine detection and the engine setting: done
-- A2 Engine identity and command probe: pending
+- A2 Engine identity and command probe: done
 - A3 Run and control containers: pending
 - A4 Container state and stats: pending
 

@@ -9,5 +9,9 @@
 mod detect;
 #[cfg(test)]
 mod fake;
+mod identity;
+mod probe;
 
 pub use detect::{detect, EngineBinary, KNOWN_ENGINES};
+pub use identity::{parse_identity, Engine, EngineIdentity};
+pub use probe::REQUIRED_COMMANDS;
