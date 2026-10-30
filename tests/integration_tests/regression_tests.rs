@@ -427,3 +427,35 @@ max_restarts = 5
         std::env::remove_var(KEY);
     }
 }
+
+#[cfg(test)]
+mod init_privilege_tests {
+    use tempfile::TempDir;
+
+    fn riku_bin() -> std::path::PathBuf {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku")
+    }
+
+    /// A stale `USER=root` must not send an unprivileged `riku init` down the
+    /// root path, which creates the deploy account.
+    #[test]
+    fn init_ignores_user_env_when_not_root() {
+        let uid = std::process::Command::new("id").arg("-u").output().unwrap();
+        if String::from_utf8_lossy(&uid.stdout).trim() == "0" {
+            return;
+        }
+        let home = TempDir::new().unwrap();
+        let out = std::process::Command::new(riku_bin())
+            .args(["init", "--no-systemd"])
+            .env("HOME", home.path())
+            .env("USER", "root")
+            .env_remove("RIKU_ROOT")
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            !stderr.contains("useradd"),
+            "init took the root path for a non-root uid:\n{stderr}"
+        );
+    }
+}

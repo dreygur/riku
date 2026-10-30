@@ -40,6 +40,12 @@ pub struct DeployUser {
     gid: Gid,
 }
 
+/// Whether this process runs with root's effective uid. `$USER` is not used:
+/// `sudo -E` keeps the caller's value and a stale one can name any account.
+pub(crate) fn running_as_root() -> bool {
+    Uid::effective().is_root()
+}
+
 /// The `RIKU_USER` login name, `riku` when unset.
 pub fn deploy_user_name() -> String {
     std::env::var("RIKU_USER").unwrap_or_else(|_| DEFAULT_USER.to_string())

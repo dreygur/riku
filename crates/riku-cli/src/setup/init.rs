@@ -11,6 +11,7 @@ use crate::util::echo;
 use super::binary::{install_riku_binary, PathNote};
 use super::default_branch::{set_default_branch, BRANCH_ENV};
 use super::deploy_keys::{add_deploy_keys, parse_key_args, read_key_file};
+use super::deploy_user::running_as_root;
 use super::git_hook::create_git_hook;
 use super::guidance::{print_finish, InstallScope};
 use super::init_router::persist_router;
@@ -199,8 +200,7 @@ fn own_scope() -> InstallScope {
 // Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
 #[allow(clippy::question_mark)]
 pub fn cmd_init(options: InitOptions) -> Result<()> {
-    let is_root = env::var("USER").unwrap_or_default() == "root";
-    if is_root {
+    if running_as_root() {
         let user = match root_init(&options) {
             Ok(user) => user,
             Err(e) => return Err(e),

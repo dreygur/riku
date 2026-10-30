@@ -21,7 +21,7 @@ use anyhow::Result;
 use colored::Colorize;
 
 use crate::config::RikuPaths;
-use crate::setup::deploy_user::DeployUser;
+use crate::setup::deploy_user::{running_as_root, DeployUser};
 use crate::util::display;
 
 /// Outcome of a single diagnostic check.
@@ -75,7 +75,7 @@ pub fn current_home() -> Result<PathBuf> {
 /// deploys and the supervisor use. Only `--fix` writes, and it writes just
 /// the `authorized_keys` of that same user.
 fn diagnosed_target(paths: &RikuPaths) -> Result<(RikuPaths, PathBuf)> {
-    if std::env::var("USER").unwrap_or_default() != "root" {
+    if !running_as_root() {
         return match current_home() {
             Ok(home) => Ok((paths.clone(), home)),
             Err(e) => Err(e),

@@ -11,6 +11,7 @@ mod plugins;
 
 use anyhow::{anyhow, Result};
 
+use crate::agent::auth::AGENT_SCOPE_ENV;
 use crate::cli::{require_app, Commands};
 use crate::config::RikuPaths;
 use crate::{agent, apps, backup, container, doctor, git, quickstart, scp, setup};
@@ -68,19 +69,25 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
             intro,
             schema,
             agent_help,
+            scope,
             command,
             args,
             confirm,
             json: _,
-        } => run_agent(
-            paths,
-            intro,
-            schema,
-            agent_help,
-            command,
-            &args,
-            confirm.as_deref(),
-        ),
+        } => {
+            if let Some(scope) = scope {
+                std::env::set_var(AGENT_SCOPE_ENV, scope);
+            }
+            run_agent(
+                paths,
+                intro,
+                schema,
+                agent_help,
+                command,
+                &args,
+                confirm.as_deref(),
+            )
+        }
         Commands::Apps { cmd } => app_cmds::run_apps(paths, cmd),
         Commands::Config(cmd) => app_cmds::run_config(paths, cmd),
         Commands::Container { cmd } => {

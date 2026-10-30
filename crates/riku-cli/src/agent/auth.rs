@@ -5,6 +5,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::types::AgentScope;
 
+/// Environment variable that carries the agent's scope. `--scope` sets it.
+pub const AGENT_SCOPE_ENV: &str = "RIKU_AGENT_SCOPE";
+
 /// Get agent identity from SSH key comment or environment
 pub fn get_agent_identity() -> Option<String> {
     // Try environment variable first (set by SSH forced command)
@@ -32,7 +35,7 @@ pub fn get_agent_identity() -> Option<String> {
 /// Get agent scope from SSH key restrictions or environment
 pub fn get_agent_scope() -> AgentScope {
     // Try environment variable first (set by SSH forced command)
-    if let Ok(scope) = std::env::var("RIKU_AGENT_SCOPE") {
+    if let Ok(scope) = std::env::var(AGENT_SCOPE_ENV) {
         return AgentScope::parse(&scope);
     }
 

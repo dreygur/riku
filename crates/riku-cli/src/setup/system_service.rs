@@ -1,6 +1,5 @@
 /// System-wide (root) systemd service installation for riku.
 use anyhow::{anyhow, Result};
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -10,7 +9,7 @@ use crate::config::RikuPaths;
 use crate::util::echo;
 
 use super::binary::INSTALL_DIR;
-use super::deploy_user::{deploy_user_name, passwd_home};
+use super::deploy_user::{deploy_user_name, passwd_home, running_as_root};
 use super::router_units::{other_path_units, unit_ordering, write_router_units};
 
 const SYSTEMD_DIR: &str = "/etc/systemd/system";
@@ -131,7 +130,7 @@ fn enable_router_watch(router: &Router, path_unit: Option<&str>) {
 /// Install systemd service files for riku daemon (system-wide, requires root).
 #[allow(clippy::question_mark)]
 pub fn install_systemd_service(router: &Router) -> Result<()> {
-    if env::var("USER").unwrap_or_default() != "root" {
+    if !running_as_root() {
         return Ok(());
     }
 
