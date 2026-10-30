@@ -63,3 +63,21 @@ fn accepts_plain_hosts_and_users() {
         assert!(SshAddress::try_from(good).is_ok(), "rejected {good:?}");
     }
 }
+
+#[test]
+fn rejects_ipv6_with_a_port_suffix() {
+    assert!(SshAddress::try_from("riku@[::1]:2222").is_err());
+}
+
+#[test]
+fn destination_drops_the_brackets_ssh_cannot_resolve() {
+    let cases = [
+        ("riku@[::1]", "riku@::1"),
+        ("riku@[fe80::1]", "riku@fe80::1"),
+        ("riku@edge.example", "riku@edge.example"),
+    ];
+    for (typed, expected) in cases {
+        let address = SshAddress::try_from(typed).unwrap();
+        assert_eq!(address.destination(), expected, "for {typed}");
+    }
+}

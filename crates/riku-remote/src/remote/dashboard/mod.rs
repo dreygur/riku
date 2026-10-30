@@ -18,6 +18,7 @@
 //! is the one way in.
 
 mod browser;
+mod ended;
 mod events;
 mod flags;
 mod handshake;

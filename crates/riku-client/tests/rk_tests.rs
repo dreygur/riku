@@ -256,3 +256,21 @@ fn client_plugin_runs_with_an_empty_server_when_none_is_selected() {
     let args = fs::read_to_string(&marker).expect("mock client plugin should run");
     assert_eq!(args, "[][][apps]", "server, app and command the plugin got");
 }
+
+#[test]
+fn bracketed_ipv6_server_reaches_ssh_without_brackets() {
+    let home = TempDir::new().unwrap();
+    let record = mock_ssh(&home);
+    let added = rk(&home, &["server", "add", "v6", "riku@[::1]"]);
+    assert!(added.status.success(), "{}", stderr(&added));
+
+    let output = rk(&home, &["-s", "v6", "apps"]);
+    assert_eq!(output.status.code(), Some(7), "{}", stderr(&output));
+    assert!(
+        stderr(&output).contains("[*] v6 (riku@[::1])"),
+        "{}",
+        stderr(&output)
+    );
+    let recorded = fs::read_to_string(&record).expect("mock ssh should record its argv");
+    assert_eq!(recorded, "[--][riku@::1][apps]");
+}

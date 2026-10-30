@@ -106,7 +106,7 @@ pub fn ssh_args(
         ssh.push("-t".to_string());
     }
     ssh.push("--".to_string());
-    ssh.push(server.address.as_str().to_string());
+    ssh.push(server.address.destination());
     ssh.push(remote);
     ssh
 }

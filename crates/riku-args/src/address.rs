@@ -86,12 +86,29 @@ impl TryFrom<&str> for SshAddress {
 }
 
 impl SshAddress {
+    /// The login name before the `@`.
     pub fn user(&self) -> &str {
         self.0.split_once('@').map_or("", |(user, _)| user)
     }
 
+    /// The address as typed, brackets and all. Use it for display and storage.
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    /// The argument to give `ssh`. ssh does not read brackets in a plain
+    /// destination, so a bracketed IPv6 literal is passed without them.
+    pub fn destination(&self) -> String {
+        match self.0.split_once('@') {
+            Some((user, host)) => {
+                let bare = host
+                    .strip_prefix('[')
+                    .and_then(|rest| rest.strip_suffix(']'))
+                    .unwrap_or(host);
+                format!("{user}@{bare}")
+            }
+            None => self.0.clone(),
+        }
     }
 }
 

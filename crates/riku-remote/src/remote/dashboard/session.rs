@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 
+use super::ended::ended_message;
 use super::events::{read_stderr, read_stdout, Event};
 use super::handshake::{Action, Handshake};
 use super::remote_script::script_command;
@@ -39,6 +40,7 @@ pub(super) struct RemoteDashboard {
     events: Receiver<Event>,
     readers: Vec<JoinHandle<()>>,
     handshake: Handshake,
+    target: String,
 }
 
 impl RemoteDashboard {
@@ -67,6 +69,7 @@ impl RemoteDashboard {
             events,
             readers,
             handshake: Handshake::new(),
+            target: ssh.target().to_string(),
         })
     }
 
@@ -183,7 +186,7 @@ impl RemoteDashboard {
                 return Ok(());
             }
             match self.child.try_wait() {
-                Ok(Some(status)) => return Err(anyhow!("the remote dashboard ended ({status})")),
+                Ok(Some(status)) => return Err(anyhow!(ended_message(&self.target, &status))),
                 Ok(None) => {}
                 Err(e) => return Err(anyhow!("could not wait for ssh: {e}")),
             }

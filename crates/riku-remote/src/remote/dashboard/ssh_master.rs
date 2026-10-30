@@ -50,11 +50,16 @@ impl<'a> SshControl<'a> {
         SshControl { path, admin }
     }
 
+    /// The admin address as typed, for messages.
+    pub(super) fn target(&self) -> &str {
+        self.admin.as_str()
+    }
+
     fn with_socket(&self, options: &[&str]) -> Vec<String> {
         let mut args = vec!["-S".to_string(), self.path.to_string_lossy().into_owned()];
         args.extend(options.iter().map(|option| option.to_string()));
         args.push("--".to_string());
-        args.push(self.admin.as_str().to_string());
+        args.push(self.admin.destination());
         args
     }
 
