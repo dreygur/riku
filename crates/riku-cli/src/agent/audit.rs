@@ -1,8 +1,10 @@
 //! The audit log of agent actions: one JSON object per line.
 //!
-//! Security model: `action` and `app` come from the client's command line,
-//! so they are written as JSON strings. Control characters are escaped, which
-//! keeps every entry on one line and stops a client from forging another.
+//! Security model: `action` and `app` come from the agent argv, which the
+//! server owner wrote today. They may come from the client once agent
+//! requests over ssh are read, so entries are encoded as JSON strings.
+//! Control characters are escaped, which keeps every entry on one line and
+//! stops a value from forging another entry.
 
 use std::fs::File;
 use std::io::{Result, Write};

@@ -375,7 +375,7 @@ Control characters in a client supplied value are escaped, so an entry cannot
 be split or forged.
 
 ```
-{"time":"2026-02-23T14:30:00+00:00","agent":"cursor-agent@rakib","action":"deploy","app":"myapp","status":"success"}
+{"time":"2026-02-23T14:30:00+00:00","agent":"cursor-agent@laptop","action":"deploy","app":"myapp","status":"success"}
 {"time":"2026-02-23T14:33:00+00:00","agent":"claude-agent@workstation","action":"logs","app":"myapp","status":"success"}
 ```
 
@@ -384,9 +384,11 @@ destroy) open the audit log before they run and are refused with
 `STATE_UNAVAILABLE` if it cannot be opened. Read only commands still run if
 the log cannot be written.
 
-**View audit logs:**
+**View audit logs:** read the file on the server with an admin login. The
+forced command of the riku user cannot run `tail`. Each line is one JSON
+object, so `jq` works on it.
 ```bash
-ssh riku@server "riku agent --audit-log"
+ssh admin@server 'tail -n 50 ~riku/.riku/state/agent/audit.log'
 ```
 
 ---
