@@ -1,5 +1,9 @@
 //! Driver for the Docker compatible container engine CLI.
 //!
+//! Riku needs Docker 23 or newer, or an engine whose CLI accepts the same
+//! commands: `version` and `stats` are read with `--format json`, which older
+//! Docker releases do not support.
+//!
 //! # Security model
 //!
 //! Every value reaches the engine as a separate argv element, never through a
