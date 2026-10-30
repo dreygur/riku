@@ -19,17 +19,29 @@ mod health;
 mod interpolate;
 mod keys;
 mod locate;
+mod order;
 mod paths;
 mod ports;
+mod project;
+mod project_name;
 mod raw;
+mod rules;
 mod scalar;
 mod service;
 mod service_env;
+#[cfg(test)]
+mod test_support;
+mod volume_decl;
 mod volumes;
 
 pub use definition::{BuildDef, Dependency, DependsCondition, ServiceContext, ServiceDef};
 pub use locate::{default_compose_file, find_compose_file, ComposeFile, COMPOSE_FILE_NAMES};
+pub use project::{
+    existing_volume_name, read_project, single_image_project, ComposeProject, ProjectNameSource,
+    VolumeDecl,
+};
 pub use raw::{read_raw, RawProject};
+pub use rules::{check_scale, replace_order, routed_http, ReplaceOrder, RoutedPort};
 pub use serde_json::Value;
 pub use service::parse_service;
 

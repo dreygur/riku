@@ -24,7 +24,9 @@ pub mod labels {
 
 const SERVICE_NAME_MAX: usize = 63;
 
-fn is_engine_safe(name: &str) -> bool {
+/// True for `[a-zA-Z0-9][a-zA-Z0-9_.-]*`, the names an engine takes without
+/// reading them as an option, a path or a second argument.
+pub(crate) fn is_engine_safe(name: &str) -> bool {
     let mut chars = name.chars();
     let first_ok = chars.next().is_some_and(|c| c.is_ascii_alphanumeric());
     first_ok && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))

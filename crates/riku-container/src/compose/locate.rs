@@ -4,6 +4,7 @@
 //! It is user input that becomes a `-f` argument, so it must be one relative
 //! path that resolves to a file inside the app directory.
 
+use super::paths::resolve_inside;
 use anyhow::{bail, Result};
 use std::path::{Component, Path, PathBuf};
 
@@ -35,11 +36,12 @@ impl ComposeFile {
 }
 
 /// First of the default compose file names present, following docker
-/// compose's own precedence.
+/// compose's own precedence. A symlink counts as present so that
+/// [`find_compose_file`] can refuse it instead of skipping to the next name.
 pub fn default_compose_file(app_path: &Path) -> Option<ComposeFile> {
     COMPOSE_FILE_NAMES
         .iter()
-        .find(|name| app_path.join(name).exists())
+        .find(|name| std::fs::symlink_metadata(app_path.join(name)).is_ok())
         .map(|name| ComposeFile(PathBuf::from(name)))
 }
 
@@ -47,8 +49,9 @@ pub fn default_compose_file(app_path: &Path) -> Option<ComposeFile> {
 ///
 /// The value comes from the app's ENV, which is user input, so it is rejected
 /// when it is absolute, climbs out with `..`, lists several files the way
-/// docker compose allows (`a.yml:b.yml`), or resolves through a symlink to a
-/// file outside the app directory.
+/// docker compose allows (`a.yml:b.yml`), or is a symlink or sits below one,
+/// even when the link points inside the app: the checkout can change between
+/// this check and the engine reading the file.
 fn validate_compose_file(app_path: &Path, requested: &str) -> Result<ComposeFile> {
     if requested.contains(':') {
         bail!("COMPOSE_FILE='{requested}' lists several files; riku supports exactly one");
@@ -60,6 +63,10 @@ fn validate_compose_file(app_path: &Path, requested: &str) -> Result<ComposeFile
         .all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
     if !is_plain_relative {
         bail!("COMPOSE_FILE='{requested}' must be a relative path inside the app directory");
+    }
+
+    if let Err(e) = resolve_inside(app_path, app_path, requested, "compose file") {
+        return Err(e);
     }
 
     let app_root = match app_path.canonicalize() {
@@ -82,7 +89,10 @@ fn validate_compose_file(app_path: &Path, requested: &str) -> Result<ComposeFile
 pub fn find_compose_file(app_path: &Path, requested: Option<&str>) -> Result<Option<ComposeFile>> {
     match requested {
         Some(name) => validate_compose_file(app_path, name).map(Some),
-        None => Ok(default_compose_file(app_path)),
+        None => match default_compose_file(app_path) {
+            Some(default) => validate_compose_file(app_path, &default.arg()).map(Some),
+            None => Ok(None),
+        },
     }
 }
 

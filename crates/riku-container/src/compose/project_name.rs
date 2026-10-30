@@ -1,0 +1,63 @@
+//! Which project name docker compose used for an app's volumes.
+//!
+//! The compose specification says "Project names must contain only lowercase
+//! letters, decimal digits, dashes, and underscores, and must begin with a
+//! lowercase letter or decimal digit." The top level `name` key is held to
+//! that text as written. `COMPOSE_PROJECT_NAME` and the directory name are
+//! normalised the way docker compose does it (lowercase, other characters
+//! dropped); that normalisation is docker compose behaviour and is not spelled
+//! out in the specification text.
+//!
+//! # Security model
+//!
+//! The project name prefixes every engine volume name, so it decides which
+//! volumes an app can reach. Every name is checked with the engine safe
+//! character set before it is stored, and a name taken from the compose file
+//! or the app env is reported as `Declared`, never as `Derived`.
+
+use super::project::ProjectNameSource;
+use crate::types::is_engine_safe;
+use anyhow::{bail, Result};
+use std::collections::BTreeMap;
+use std::path::Path;
+
+const ENV_KEY: &str = "COMPOSE_PROJECT_NAME";
+
+/// Pick the project name: `COMPOSE_PROJECT_NAME` in `app_env`, else the
+/// compose file's top level `name`, else the name of `compose_dir`.
+pub(super) fn resolve_project_name(
+    app_env: &BTreeMap<String, String>,
+    declared: Option<&str>,
+    compose_dir: &Path,
+) -> Result<(String, ProjectNameSource)> {
+    if let Some(raw) = app_env.get(ENV_KEY).filter(|raw| !raw.is_empty()) {
+        return checked(normalise(raw), raw, ENV_KEY).map(|n| (n, ProjectNameSource::Declared));
+    }
+    if let Some(raw) = declared {
+        let name = raw.to_string();
+        if normalise(raw) != name {
+            bail!("top level name {raw:?} is not a valid project name: use lowercase letters, digits, '-' and '_'");
+        }
+        return checked(name, raw, "top level name").map(|n| (n, ProjectNameSource::Declared));
+    }
+    let dir = compose_dir
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    checked(normalise(&dir), &dir, "compose directory name")
+        .map(|n| (n, ProjectNameSource::Derived))
+}
+
+fn normalise(raw: &str) -> String {
+    raw.to_lowercase()
+        .chars()
+        .filter(|c| matches!(c, 'a'..='z' | '0'..='9' | '_' | '-'))
+        .collect()
+}
+
+fn checked(name: String, raw: &str, origin: &str) -> Result<String> {
+    if !is_engine_safe(&name) {
+        bail!("{origin} {raw:?} does not give a valid project name");
+    }
+    Ok(name)
+}
