@@ -71,6 +71,11 @@ pub enum Commands {
         #[arg(long, name = "agent-help")]
         agent_help: bool,
 
+        /// Permission scope: readonly, staging or production. Set by the
+        /// forced command of the agent's authorized_keys entry.
+        #[arg(long, value_name = "SCOPE")]
+        scope: Option<String>,
+
         /// Command to execute
         #[arg()]
         command: Option<String>,
@@ -424,3 +429,7 @@ pub enum Commands {
     #[command(hide = true, name = "__dump-state")]
     DumpState,
 }
+
+#[cfg(test)]
+#[path = "cli_tests.rs"]
+mod tests;

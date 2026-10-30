@@ -71,9 +71,6 @@ command="riku agent --scope staging",no-port-forwarding,no-pty ssh-ed25519 BBBB.
 
 # Production AI agent (full access, use with caution)
 command="riku agent --scope production",no-port-forwarding ssh-ed25519 CCCC... claude-production
-
-# Agent with specific app restriction (advanced)
-command="riku agent --scope staging --app myapp",no-port-forwarding,no-pty ssh-ed25519 DDDD... limited-agent
 ```
 
 ### SSH Key Options Explained
