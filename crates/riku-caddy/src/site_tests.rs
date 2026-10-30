@@ -12,7 +12,7 @@ fn plan(https: HttpsPolicy, backends: Vec<Backend>) -> RoutePlan {
 }
 
 fn request(https: HttpsPolicy) -> RoutePlan {
-    plan(https, vec![Backend::Tcp(5000)])
+    plan(https, vec![Backend::loopback(5000)])
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn plain_site_adds_http() {
 fn every_backend_is_an_upstream() {
     let plan = plan(
         HttpsPolicy::Only,
-        vec![Backend::Tcp(5001), Backend::Tcp(5002)],
+        vec![Backend::loopback(5001), Backend::loopback(5002)],
     );
 
     assert!(render_site("shop", &plan)

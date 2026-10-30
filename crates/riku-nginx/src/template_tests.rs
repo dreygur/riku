@@ -84,7 +84,7 @@ fn render_with(pairs: &[(&str, &str)], backends: Option<&[Backend]>) -> String {
         .iter()
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
-    let default = default_backends("myapp", &env, &paths);
+    let default = default_backends("myapp", &env, &paths).unwrap();
 
     render_nginx_config(
         "myapp",
@@ -108,7 +108,7 @@ fn assert_socket_always_prefixed(config: &str) {
 fn portmap_proxies_to_every_backend() {
     let config = render_with(
         &[("RIKU_NGINX_PORTMAP", "true")],
-        Some(&[Backend::Tcp(5001), Backend::Tcp(5002)]),
+        Some(&[Backend::loopback(5001), Backend::loopback(5002)]),
     );
 
     assert!(
@@ -127,7 +127,7 @@ fn portmap_proxies_to_every_backend() {
 fn https_only_web_app_proxies_to_its_ports() {
     let config = render_with(
         &[("RIKU_HTTPS_ONLY", "true"), ("RIKU_NGINX_PORTMAP", "true")],
-        Some(&[Backend::Tcp(5001), Backend::Tcp(5002)]),
+        Some(&[Backend::loopback(5001), Backend::loopback(5002)]),
     );
 
     assert!(config.contains("443 ssl"), "not an HTTPS config:\n{config}");
@@ -169,6 +169,32 @@ fn backend_with_nginx_directive_characters_is_refused() {
     let rendered = render_nginx_config("myapp", temp_dir.path(), &HashMap::new(), &hostile, &paths);
 
     assert!(rendered.is_err(), "hostile backend was rendered");
+}
+
+#[test]
+fn socket_backend_with_whitespace_is_refused() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
+    // A space would let "weight=0" be read as a server parameter.
+    let padded = [Backend::Unix("/x.sock weight=0".into())];
+
+    let rendered = render_nginx_config("myapp", temp_dir.path(), &HashMap::new(), &padded, &paths);
+
+    assert!(rendered.is_err(), "backend with a space was rendered");
+}
+
+#[test]
+fn portmap_upstream_uses_the_bind_address() {
+    let config = render(&[
+        ("RIKU_NGINX_PORTMAP", "true"),
+        ("RIKU_BIND_ADDRESS", "10.0.0.5"),
+        ("RIKU_UPSTREAM_PORT", "5001"),
+    ]);
+
+    assert!(
+        config.contains("server 10.0.0.5:5001;"),
+        "upstream ignores RIKU_BIND_ADDRESS:\n{config}"
+    );
 }
 
 #[test]

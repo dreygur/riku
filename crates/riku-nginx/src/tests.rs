@@ -51,7 +51,7 @@ fn test_generate_nginx_config() {
         "myapp",
         &app_path,
         &env,
-        &default_backends("myapp", &env, &paths),
+        &default_backends("myapp", &env, &paths).unwrap(),
         &paths,
     );
 
@@ -91,7 +91,7 @@ fn test_nginx_config_with_bind_address() {
         "myapp",
         &app_path,
         &env,
-        &default_backends("myapp", &env, &paths),
+        &default_backends("myapp", &env, &paths).unwrap(),
         &paths,
     );
     let config_file = paths.nginx_root.join("myapp.conf");
@@ -118,7 +118,7 @@ fn test_nginx_config_with_ipv4_address() {
         "myapp",
         &app_path,
         &env,
-        &default_backends("myapp", &env, &paths),
+        &default_backends("myapp", &env, &paths).unwrap(),
         &paths,
     );
     let config_content = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();
@@ -143,7 +143,7 @@ fn test_nginx_config_disable_ipv6() {
         "myapp",
         &app_path,
         &env,
-        &default_backends("myapp", &env, &paths),
+        &default_backends("myapp", &env, &paths).unwrap(),
         &paths,
     );
     let config_content = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();
@@ -173,7 +173,7 @@ fn test_nginx_config_with_cache() {
         "myapp",
         &app_path,
         &env,
-        &default_backends("myapp", &env, &paths),
+        &default_backends("myapp", &env, &paths).unwrap(),
         &paths,
     );
     let config_content = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();
@@ -200,7 +200,7 @@ fn test_nginx_config_with_cloudflare_acl() {
         "myapp",
         &app_path,
         &env,
-        &default_backends("myapp", &env, &paths),
+        &default_backends("myapp", &env, &paths).unwrap(),
         &paths,
     );
     let config_content = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();
@@ -227,7 +227,7 @@ fn test_nginx_config_https_only() {
         "myapp",
         &app_path,
         &env,
-        &default_backends("myapp", &env, &paths),
+        &default_backends("myapp", &env, &paths).unwrap(),
         &paths,
     );
     let config_file = paths.nginx_root.join("myapp.conf");
@@ -261,7 +261,7 @@ fn test_default_template_includes_filter_augmented_content() {
         "myapp",
         &app_path,
         &env,
-        &default_backends("myapp", &env, &paths),
+        &default_backends("myapp", &env, &paths).unwrap(),
         &paths,
     );
     let config_content = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();
@@ -289,7 +289,7 @@ fn test_static_template_includes_filter_augmented_content() {
         "myapp",
         &app_path,
         &env,
-        &default_backends("myapp", &env, &paths),
+        &default_backends("myapp", &env, &paths).unwrap(),
         &paths,
     );
     let config_content = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();

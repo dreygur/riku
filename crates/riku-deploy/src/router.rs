@@ -99,7 +99,10 @@ pub fn configure(
 
     match active {
         Router::Nginx => {
-            let backends = crate::nginx::default_backends(app, env, paths);
+            let backends = match crate::nginx::default_backends(app, env, paths) {
+                Ok(backends) => backends,
+                Err(e) => return Err(anyhow!("cannot route '{app}' through nginx: {e}")),
+            };
             crate::nginx::generate_nginx_config(app, app_path, env, &backends, paths)
         }
         Router::Caddy => configure_caddy(app, env, paths),
@@ -167,7 +170,7 @@ fn upstream_port_from_env(env: &HashMap<String, String>) -> u16 {
 /// The backends of an app's routed service. Until the supervisor reports its
 /// copies this is the single port named by the app's ENV.
 fn env_backends(env: &HashMap<String, String>) -> Vec<Backend> {
-    vec![Backend::Tcp(upstream_port_from_env(env))]
+    vec![Backend::loopback(upstream_port_from_env(env))]
 }
 
 /// The routing plan for an app, built from its ENV. A malformed

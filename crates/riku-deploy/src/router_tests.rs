@@ -26,7 +26,7 @@ fn route_plan_carries_domains_policy_and_the_env_backend() {
 
     assert_eq!(plan.domains.len(), 1);
     assert_eq!(plan.https, HttpsPolicy::AlsoPlainHttp);
-    assert_eq!(plan.backends, vec![Backend::Tcp(3000)]);
+    assert_eq!(plan.backends, vec![Backend::loopback(3000)]);
 }
 
 #[test]

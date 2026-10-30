@@ -31,7 +31,6 @@ pub(super) fn use_custom_nginx_config(
 }
 
 /// Generate nginx configuration from template.
-#[allow(clippy::question_mark)]
 pub(super) fn generate_nginx_config_from_template(
     app: &str,
     app_path: &Path,
@@ -41,15 +40,21 @@ pub(super) fn generate_nginx_config_from_template(
 ) -> Result<()> {
     let config_content = match render_nginx_config(app, app_path, env, backends, paths) {
         Ok(content) => content,
-        Err(e) => return Err(e),
+        Err(e) => {
+            return Err(anyhow::anyhow!(
+                "cannot render nginx config for '{app}': {e}"
+            ))
+        }
     };
 
     let config_file = paths.nginx_root.join(format!("{}.conf", app));
     if let Err(e) = crate::util::write_atomic(&config_file, config_content.as_bytes()) {
-        return Err(e);
+        return Err(anyhow::anyhow!("cannot write {config_file:?}: {e}"));
     }
     if let Err(e) = validate_nginx_config(&config_file) {
-        return Err(e);
+        return Err(anyhow::anyhow!(
+            "nginx rejected the config for '{app}': {e}"
+        ));
     }
 
     install_nginx_symlink(&config_file, app, paths);
@@ -59,9 +64,10 @@ pub(super) fn generate_nginx_config_from_template(
 
 /// Render the app's config text without writing it.
 ///
-/// Every backend address is checked for nginx directive characters before it
-/// reaches the template, the same as the ENV values are.
-#[allow(clippy::question_mark)]
+/// Every backend address is checked before it reaches the template: nginx
+/// directive characters are refused as for ENV values, and so is whitespace in
+/// a socket path, which would let the rest of the path act as a `server`
+/// parameter such as `weight=0`.
 pub(super) fn render_nginx_config(
     app: &str,
     app_path: &Path,
@@ -71,21 +77,18 @@ pub(super) fn render_nginx_config(
 ) -> Result<String> {
     let mut tera = tera::Tera::default();
     if let Err(e) = register_templates(&mut tera) {
-        return Err(e);
+        return Err(anyhow::anyhow!("cannot load nginx templates: {e}"));
     }
 
     let env = &sanitize_env_for_nginx(env);
     let mut context = match build_context(app, app_path, env, paths) {
         Ok(context) => context,
-        Err(e) => return Err(e),
+        Err(e) => return Err(anyhow::anyhow!("cannot build nginx context: {e}")),
     };
-    let addresses: Result<Vec<String>> = backends
-        .iter()
-        .map(|backend| sanitize_nginx_value("RIKU_BACKENDS", &backend.to_string()))
-        .collect();
+    let addresses: Result<Vec<String>> = backends.iter().map(backend_address).collect();
     match addresses {
         Ok(addresses) => context.insert("RIKU_BACKENDS", &addresses),
-        Err(e) => return Err(e),
+        Err(e) => return Err(anyhow::anyhow!("refusing backend: {e}")),
     }
 
     let template_name = select_template(env);
@@ -95,6 +98,16 @@ pub(super) fn render_nginx_config(
             "failed to render {template_name} for '{app}': {e}"
         )),
     }
+}
+
+fn backend_address(backend: &Backend) -> Result<String> {
+    let address = backend.to_string();
+    if matches!(backend, Backend::Unix(_)) && address.contains(|c: char| c.is_ascii_whitespace()) {
+        return Err(anyhow::anyhow!(
+            "socket path '{address}' contains whitespace"
+        ));
+    }
+    sanitize_nginx_value("RIKU_BACKENDS", &address)
 }
 
 /// Register all nginx Tera templates.
