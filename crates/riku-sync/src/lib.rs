@@ -26,10 +26,13 @@ mod guard;
 mod line;
 mod lock;
 mod receive;
+mod send;
 mod serve;
 mod staging;
 mod swap;
 
+#[cfg(test)]
+mod session_kit;
 #[cfg(test)]
 mod testkit;
 
@@ -37,6 +40,7 @@ pub use apply::apply;
 pub use bundle::write_bundle;
 pub use plan::plan_transfer;
 pub use scan::scan;
+pub use send::send;
 pub use serve::receive;
-pub use session::{send, SendReport, MAX_LINE_BYTES, SYNC_PROTOCOL};
+pub use session::{SendReport, MAX_LINE_BYTES, SYNC_PROTOCOL};
 pub use wire::{Entry, EntryKind, Manifest, RelPath, TransferPlan};

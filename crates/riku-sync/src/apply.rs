@@ -11,6 +11,7 @@ use crate::staging::Staging;
 use crate::swap::{recover, remove_tree, sibling, swap_in, STAGING_SUFFIX};
 use crate::wire::{EntryKind, Manifest, TransferPlan};
 use std::collections::{HashMap, HashSet};
+use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
@@ -32,10 +33,25 @@ pub fn apply(
     plan: &TransferPlan,
     bundle: impl Read,
 ) -> anyhow::Result<()> {
-    let _lock = match acquire(live) {
+    let lock = match acquire(live) {
         Ok(lock) => lock,
         Err(e) => return Err(e),
     };
+    apply_locked(live, &lock, manifest, plan, bundle)
+}
+
+/// [`apply`] for a caller that already holds the lock from `acquire(live)`.
+///
+/// A second `flock` taken in the same process conflicts with the first, so a
+/// caller that locked early (to plan under the lock) cannot call `apply`.
+/// `_held` is the proof that the lock is held; it is not used otherwise.
+pub(crate) fn apply_locked(
+    live: &Path,
+    _held: &File,
+    manifest: &Manifest,
+    plan: &TransferPlan,
+    bundle: impl Read,
+) -> anyhow::Result<()> {
     let wanted = match wanted_sizes(manifest, plan) {
         Ok(wanted) => wanted,
         Err(e) => return Err(e),

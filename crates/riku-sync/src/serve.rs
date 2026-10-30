@@ -5,11 +5,16 @@
 //! bundle goes through [`crate::apply`]. The peer is sent only the plan and
 //! fixed error texts (plus the version number it sent, parsed as an integer);
 //! nothing it supplied and nothing from this server's filesystem, such as a
-//! path or an OS error, is put into an error line. The full cause goes to the
-//! server log and to the caller.
+//! path or an OS error, is put into an error line. The full cause is returned
+//! to the caller of [`receive`], which owns logging it.
+//!
+//! The lock on `live` is taken right after the manifest is read and before
+//! anything on the server is read or hashed, so a second concurrent session
+//! costs the server nothing.
 
-use crate::apply::apply;
+use crate::apply::apply_locked;
 use crate::line::read_line;
+use crate::lock::{acquire, SyncBusy};
 use crate::plan::plan_transfer;
 use crate::session::{write_line, MAX_LINE_BYTES, SYNC_PROTOCOL};
 use crate::wire::Manifest;
@@ -55,6 +60,7 @@ impl Refusal {
 /// Reads the manifest, answers with the plan, applies the bundle that follows
 /// until the client closes its side, and confirms. On any failure the peer gets
 /// a fixed error line, `live` is as it was before, and the cause is returned.
+/// The cause is not logged here; the caller does that.
 pub fn receive(
     live: &Path,
     mut from_client: impl BufRead,
@@ -63,7 +69,6 @@ pub fn receive(
     match converse(live, &mut from_client, &mut to_client) {
         Ok(()) => write_line(&mut to_client, &serde_json::json!({ "ok": true })),
         Err(refusal) => {
-            tracing::warn!("sync refused: {:#}", refusal.cause);
             let told = write_line(
                 &mut to_client,
                 &serde_json::json!({ "error": refusal.public }),
@@ -85,6 +90,13 @@ fn converse(
         Ok(manifest) => manifest,
         Err(refusal) => return Err(refusal),
     };
+    let lock = match acquire(live) {
+        Ok(lock) => lock,
+        Err(e) if e.downcast_ref::<SyncBusy>().is_some() => {
+            return Err(Refusal::new("another sync of this app is in progress", e))
+        }
+        Err(e) => return Err(Refusal::new("cannot lock the app for syncing", e)),
+    };
     let plan = match plan_transfer(live, &manifest) {
         Ok(plan) => plan,
         Err(e) => return Err(Refusal::new("cannot work out a transfer plan", e)),
@@ -92,7 +104,7 @@ fn converse(
     if let Err(e) = write_line(to_client, &plan) {
         return Err(Refusal::new("cannot send the transfer plan", e));
     }
-    match apply(live, &manifest, &plan, from_client) {
+    match apply_locked(live, &lock, &manifest, &plan, from_client) {
         Ok(()) => Ok(()),
         Err(e) => Err(Refusal::new("the bundle was refused", e)),
     }
@@ -101,7 +113,7 @@ fn converse(
 fn read_request(from_client: &mut impl BufRead) -> Result<Manifest, Refusal> {
     let line = match read_line(from_client, MAX_LINE_BYTES, "manifest line") {
         Ok(line) => line,
-        Err(e) => return Err(Refusal::plain(e.to_string())),
+        Err(e) => return Err(Refusal::new(&e.fixed_text(), anyhow::Error::new(e))),
     };
     let version: RequestVersion = match serde_json::from_slice(&line) {
         Ok(version) => version,
@@ -126,3 +138,7 @@ fn read_request(from_client: &mut impl BufRead) -> Result<Manifest, Refusal> {
         )),
     }
 }
+
+#[cfg(test)]
+#[path = "serve_tests.rs"]
+mod tests;

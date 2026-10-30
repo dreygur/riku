@@ -13,6 +13,21 @@ use std::path::Path;
 
 const LOCK_SUFFIX: &str = ".sync-lock";
 
+/// The lock is held by another sync. Callers that need to tell this apart from
+/// a real failure use `downcast_ref::<SyncBusy>()` on the error.
+#[derive(Debug)]
+pub(crate) struct SyncBusy {
+    live: String,
+}
+
+impl std::fmt::Display for SyncBusy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "another sync of {} is running", self.live)
+    }
+}
+
+impl std::error::Error for SyncBusy {}
+
 /// Takes the lock without waiting. A second concurrent sync fails at once. The
 /// lock file is opened with `O_NOFOLLOW`, so a symlink planted at its path is
 /// refused instead of followed.
@@ -37,10 +52,9 @@ pub(crate) fn acquire(live: &Path) -> anyhow::Result<File> {
     };
     match file.try_lock() {
         Ok(()) => Ok(file),
-        Err(TryLockError::WouldBlock) => Err(anyhow::anyhow!(
-            "another sync of {} is running",
-            live.display()
-        )),
+        Err(TryLockError::WouldBlock) => Err(anyhow::Error::new(SyncBusy {
+            live: live.display().to_string(),
+        })),
         Err(TryLockError::Error(e)) => Err(anyhow::anyhow!("cannot lock {}: {e}", path.display())),
     }
 }

@@ -111,6 +111,8 @@ work they describe.
   migration, per copy ports for Procfile apps, state API and dashboard rows,
   CLI scale and logs, `rk deploy --build`. Mostly sequential; dashboard and
   CLI tasks in parallel once the state API exists.
+- Sync receive runs under a process level deadline; a stalled client is killed
+  so the app's sync lock is released.
 
 ### Phase 4: one rk managing many servers
 
