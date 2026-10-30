@@ -32,41 +32,14 @@ pub fn get_agent_identity() -> Option<String> {
     Some("unknown-agent".to_string())
 }
 
-/// Get agent scope from SSH key restrictions or environment
+/// The scope of this run: `--scope` (which sets [`AGENT_SCOPE_ENV`]) or the
+/// variable itself. Nothing else is consulted, so a key whose forced command
+/// carries no scope is read only. Unknown values are read only too.
 pub fn get_agent_scope() -> AgentScope {
-    // Try environment variable first (set by SSH forced command)
-    if let Ok(scope) = std::env::var(AGENT_SCOPE_ENV) {
-        return AgentScope::parse(&scope);
+    match std::env::var(AGENT_SCOPE_ENV) {
+        Ok(scope) => AgentScope::parse(&scope),
+        Err(_) => AgentScope::Readonly,
     }
-
-    // Parse authorized_keys to find scope from command restriction
-    // Format: command="riku agent --scope staging",no-port-forwarding ssh-rsa AAAA... comment
-    if let Some(scope) = parse_scope_from_authorized_keys() {
-        return scope;
-    }
-
-    AgentScope::Readonly
-}
-
-/// Parse agent scope from authorized_keys file
-fn parse_scope_from_authorized_keys() -> Option<AgentScope> {
-    let auth_keys_path = dirs::home_dir().map(|h| h.join(".ssh/authorized_keys"));
-
-    if let Some(path) = auth_keys_path {
-        if let Ok(content) = fs::read_to_string(&path) {
-            for line in content.lines() {
-                // Look for command restriction with scope
-                if line.contains("riku agent") && line.contains("--scope") {
-                    if let Some(scope_start) = line.find("--scope ") {
-                        let scope_str = &line[scope_start + 8..];
-                        let scope = scope_str.split_whitespace().next()?;
-                        return Some(AgentScope::parse(scope));
-                    }
-                }
-            }
-        }
-    }
-    None
 }
 
 /// Check rate limit for agent

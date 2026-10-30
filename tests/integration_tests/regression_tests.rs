@@ -459,3 +459,59 @@ mod init_privilege_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod agent_scope_tests {
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn intro(home: &TempDir, scope_flag: Option<&str>) -> String {
+        let bin =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku");
+        let mut cmd = std::process::Command::new(bin);
+        cmd.arg("agent");
+        if let Some(scope) = scope_flag {
+            cmd.args(["--scope", scope]);
+        }
+        let out = cmd
+            .arg("--intro")
+            .env("HOME", home.path())
+            .env_remove("RIKU_AGENT_SCOPE")
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first");
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    fn home_with_other_keys_scope() -> TempDir {
+        let home = TempDir::new().unwrap();
+        fs::create_dir_all(home.path().join(".ssh")).unwrap();
+        fs::write(
+            home.path().join(".ssh/authorized_keys"),
+            "command=\"riku agent --scope production --json\",no-pty ssh-ed25519 AAAA other-key\n",
+        )
+        .unwrap();
+        home
+    }
+
+    #[test]
+    fn agent_without_scope_is_readonly_whatever_other_keys_allow() {
+        let text = intro(&home_with_other_keys_scope(), None);
+        assert!(
+            text.contains("\"apps\""),
+            "intro printed no permissions:\n{text}"
+        );
+        assert!(
+            !text.contains("\"deploy\""),
+            "inherited another key's scope:\n{text}"
+        );
+    }
+
+    #[test]
+    fn scope_flag_sets_the_permissions_the_agent_gets() {
+        let text = intro(&home_with_other_keys_scope(), Some("staging"));
+        assert!(
+            text.contains("\"deploy\""),
+            "staging scope not applied:\n{text}"
+        );
+    }
+}

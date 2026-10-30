@@ -43,10 +43,13 @@ command="riku agent --scope staging",no-port-forwarding,no-pty ssh-ed25519 AAAA.
 
 ### 4. Test Connection
 
-```bash
-# Test AI agent connection
-ssh -i ~/.ssh/riku-cursor riku@your-server "riku agent --intro"
-```
+This step does not work yet. With a forced command, sshd ignores the
+command the client sends and puts it in `SSH_ORIGINAL_COMMAND`, which
+`riku agent` does not read, so the agent only gets the help output. This is
+tracked in the roadmap.
+
+A key whose forced command has no `--scope` is read only. The scope comes
+from that key's own `--scope`, never from another line in `authorized_keys`.
 
 ---
 

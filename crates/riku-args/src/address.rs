@@ -99,17 +99,9 @@ impl SshAddress {
 
     /// The argument to give `ssh`. ssh does not read brackets in a plain
     /// destination, so a bracketed IPv6 literal is passed without them.
+    /// Construction allows brackets only around the host.
     pub fn destination(&self) -> String {
-        match self.0.split_once('@') {
-            Some((user, host)) => {
-                let bare = host
-                    .strip_prefix('[')
-                    .and_then(|rest| rest.strip_suffix(']'))
-                    .unwrap_or(host);
-                format!("{user}@{bare}")
-            }
-            None => self.0.clone(),
-        }
+        self.0.replace(['[', ']'], "")
     }
 }
 

@@ -73,6 +73,5 @@ work they describe.
 - The agent forced command `command="riku agent --scope ..."` now parses,
   but sshd runs it with the client's request only in `SSH_ORIGINAL_COMMAND`,
   which `riku agent` never reads, so an agent behind that key sees only the
-  help output. Without `--scope` or `RIKU_AGENT_SCOPE`, the scope falls back
-  to the first `--scope` line anywhere in `authorized_keys`, whichever key
-  logged in (crates/riku-cli/src/agent/auth.rs).
+  help output. Reading it needs a design, and tokens from the client must
+  never override the forced command's `--scope`.

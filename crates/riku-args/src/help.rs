@@ -10,6 +10,8 @@ use crate::cli::Cli;
 use crate::client_text::for_client;
 use crate::placement::{client_rule, placement_of, ClientRule, Placement};
 
+/// The client binary's name. It repeats `Program::Rk` of riku-remote because
+/// riku-remote depends on this crate, so the enum cannot be imported here.
 const CLIENT_PROGRAM: &str = "rk";
 const LOCAL_HEADING: &str = "Local commands:";
 const SERVER_HEADING: &str = "Server commands:";
