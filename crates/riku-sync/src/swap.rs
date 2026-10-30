@@ -11,10 +11,10 @@
 //! lives beside it in `apps/`.
 
 use crate::lock::SyncLock;
+use crate::modes::chmod_dir;
 use std::ffi::OsString;
 use std::fs;
 use std::io;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 pub(crate) const STAGING_SUFFIX: &str = "..sync-new";
@@ -46,7 +46,7 @@ pub(crate) fn remove_tree(path: &Path) -> io::Result<()> {
     if !meta.file_type().is_dir() {
         return fs::remove_file(path);
     }
-    if let Err(e) = open_up(path, meta.permissions().mode()) {
+    if let Err(e) = open_up(path) {
         return Err(e);
     }
     fs::remove_dir_all(path)
@@ -54,13 +54,11 @@ pub(crate) fn remove_tree(path: &Path) -> io::Result<()> {
 
 /// Gives the owner read, write and search permission on `dir` and every
 /// directory below it, so `remove_dir_all` can empty directories a synced tree
-/// made read only (a `0555` directory in the manifest). Symlinks are never
-/// followed.
-fn open_up(dir: &Path, mode: u32) -> io::Result<()> {
-    if mode & 0o700 != 0o700 {
-        if let Err(e) = fs::set_permissions(dir, fs::Permissions::from_mode(mode | 0o700)) {
-            return Err(e);
-        }
+/// made read only (a `0555` directory in the manifest). Each change goes
+/// through [`chmod_dir`], so a symlink is refused, never followed.
+fn open_up(dir: &Path) -> io::Result<()> {
+    if let Err(e) = chmod_dir(dir, |mode| mode | 0o700) {
+        return Err(e);
     }
     let items = match fs::read_dir(dir) {
         Ok(items) => items,
@@ -76,7 +74,7 @@ fn open_up(dir: &Path, mode: u32) -> io::Result<()> {
             Err(e) => return Err(e),
         };
         if meta.file_type().is_dir() {
-            if let Err(e) = open_up(&item.path(), meta.permissions().mode()) {
+            if let Err(e) = open_up(&item.path()) {
                 return Err(e);
             }
         }
