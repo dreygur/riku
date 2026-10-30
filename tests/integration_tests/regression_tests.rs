@@ -515,3 +515,46 @@ mod agent_scope_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod agent_env_tests {
+    use tempfile::TempDir;
+
+    fn intro_with_env(vars: &[(&str, &str)], args: &[&str]) -> String {
+        let home = TempDir::new().unwrap();
+        let bin =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku");
+        let out = std::process::Command::new(bin)
+            .arg("agent")
+            .args(args)
+            .arg("--intro")
+            .env("HOME", home.path())
+            .envs(vars.iter().copied())
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first");
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    /// With sshd AcceptEnv a client can send any variable; only the forced
+    /// command's own arguments may choose the scope.
+    #[test]
+    fn agent_scope_is_not_taken_from_the_environment() {
+        let text = intro_with_env(&[("RIKU_AGENT_SCOPE", "production")], &[]);
+        assert!(
+            text.contains("\"readonly\""),
+            "env chose the scope:\n{text}"
+        );
+    }
+
+    #[test]
+    fn agent_id_is_not_taken_from_the_environment() {
+        let text = intro_with_env(&[("RIKU_AGENT_ID", "forged")], &[]);
+        assert!(!text.contains("forged"), "env chose the identity:\n{text}");
+    }
+
+    #[test]
+    fn agent_id_comes_from_the_forced_command() {
+        let text = intro_with_env(&[], &["--agent-id", "cursor-staging"]);
+        assert!(text.contains("\"cursor-staging\""), "{text}");
+    }
+}

@@ -11,13 +11,15 @@ mod plugins;
 
 use anyhow::{anyhow, Result};
 
-use crate::agent::auth::AGENT_SCOPE_ENV;
+use crate::agent::auth::AgentSession;
 use crate::cli::{require_app, Commands};
 use crate::config::RikuPaths;
 use crate::{agent, apps, backup, container, doctor, git, quickstart, scp, setup};
 
+#[allow(clippy::too_many_arguments)]
 fn run_agent(
     paths: &RikuPaths,
+    session: &AgentSession,
     intro: bool,
     schema: bool,
     agent_help: bool,
@@ -26,13 +28,13 @@ fn run_agent(
     confirm: Option<&str>,
 ) -> Result<()> {
     if intro {
-        agent::cmd_agent_intro(paths)
+        agent::cmd_agent_intro(paths, session)
     } else if schema {
         agent::cmd_agent_schema()
     } else if agent_help {
         agent::cmd_agent_help(command.as_deref())
     } else if let Some(cmd) = command {
-        agent::cmd_agent_execute(paths, &cmd, args, confirm)
+        agent::cmd_agent_execute(paths, session, &cmd, args, confirm)
     } else {
         agent::cmd_agent_help(None)
     }
@@ -70,16 +72,16 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
             schema,
             agent_help,
             scope,
+            agent_id,
             command,
             args,
             confirm,
             json: _,
         } => {
-            if let Some(scope) = scope {
-                std::env::set_var(AGENT_SCOPE_ENV, scope);
-            }
+            let session = AgentSession::from_flags(scope.as_deref(), agent_id.as_deref());
             run_agent(
                 paths,
+                &session,
                 intro,
                 schema,
                 agent_help,

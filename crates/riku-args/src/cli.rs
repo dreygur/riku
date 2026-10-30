@@ -76,6 +76,10 @@ pub enum Commands {
         #[arg(long, value_name = "SCOPE")]
         scope: Option<String>,
 
+        /// Name recorded in the audit log. Set by the forced command.
+        #[arg(long = "agent-id", value_name = "ID")]
+        agent_id: Option<String>,
+
         /// Command to execute
         #[arg()]
         command: Option<String>,

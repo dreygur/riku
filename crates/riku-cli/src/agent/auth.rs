@@ -5,40 +5,38 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::types::AgentScope;
 
-/// Environment variable that carries the agent's scope. `--scope` sets it.
-pub const AGENT_SCOPE_ENV: &str = "RIKU_AGENT_SCOPE";
+const UNKNOWN_AGENT: &str = "unknown-agent";
 
-/// Get agent identity from SSH key comment or environment
-pub fn get_agent_identity() -> Option<String> {
-    // Try environment variable first (set by SSH forced command)
-    if let Ok(id) = std::env::var("RIKU_AGENT_ID") {
-        return Some(id);
-    }
-
-    // Try to extract from SSH key comment via SSH_CONNECTION
-    // This would typically be set in the forced command in authorized_keys
-    if let Ok(cmd) = std::env::var("SSH_ORIGINAL_COMMAND") {
-        // Extract agent ID from command if present
-        if cmd.contains("--agent-id=") {
-            return cmd
-                .split("--agent-id=")
-                .nth(1)
-                .and_then(|s| s.split_whitespace().next())
-                .map(|s| s.to_string());
-        }
-        return Some("ssh-agent".to_string());
-    }
-
-    Some("unknown-agent".to_string())
+/// Who is calling and what they may do. Both come from the arguments of the
+/// key's forced command, which the server owner wrote. Nothing is read from
+/// the environment or from the client's own request: with sshd `AcceptEnv` a
+/// client can send any variable and it writes its own `SSH_ORIGINAL_COMMAND`.
+#[derive(Debug, Clone)]
+pub struct AgentSession {
+    pub id: String,
+    pub scope: AgentScope,
 }
 
-/// The scope of this run: `--scope` (which sets [`AGENT_SCOPE_ENV`]) or the
-/// variable itself. Nothing else is consulted, so a key whose forced command
-/// carries no scope is read only. Unknown values are read only too.
-pub fn get_agent_scope() -> AgentScope {
-    match std::env::var(AGENT_SCOPE_ENV) {
-        Ok(scope) => AgentScope::parse(&scope),
-        Err(_) => AgentScope::Readonly,
+fn is_plain_id(id: &str) -> bool {
+    !id.is_empty()
+        && !id.starts_with('.')
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '@'))
+}
+
+impl AgentSession {
+    /// A missing or unknown scope is read only. An id that is missing or not
+    /// plain (it names a file under the rate limit directory) is
+    /// `unknown-agent`.
+    pub fn from_flags(scope: Option<&str>, id: Option<&str>) -> Self {
+        AgentSession {
+            id: match id {
+                Some(id) if is_plain_id(id) => id.to_string(),
+                _ => UNKNOWN_AGENT.to_string(),
+            },
+            scope: scope.map_or(AgentScope::Readonly, AgentScope::parse),
+        }
     }
 }
 
@@ -106,3 +104,7 @@ pub fn log_agent_action(agent_id: &str, action: &str, app: &str, success: bool) 
             f.write_all(log_line.as_bytes())
         });
 }
+
+#[cfg(test)]
+#[path = "auth_tests.rs"]
+mod tests;

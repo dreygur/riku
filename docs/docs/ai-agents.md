@@ -49,7 +49,10 @@ command the client sends and puts it in `SSH_ORIGINAL_COMMAND`, which
 tracked in the roadmap.
 
 A key whose forced command has no `--scope` is read only. The scope comes
-from that key's own `--scope`, never from another line in `authorized_keys`.
+from that key's own `--scope`, never from another line in `authorized_keys`
+or from the environment. The name in the audit log comes from `--agent-id`
+in the same forced command. Never allow `RIKU_*` variables through sshd
+`AcceptEnv`.
 
 ---
 

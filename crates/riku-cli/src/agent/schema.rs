@@ -2,14 +2,16 @@
 use anyhow::Result;
 use serde_json::json;
 
-use super::auth::{get_agent_identity, get_agent_scope};
+use super::auth::AgentSession;
 use super::types::AgentScope;
 use crate::config::RikuPaths;
 
 /// Show agent introduction and permissions
-pub fn cmd_agent_intro(_paths: &RikuPaths) -> Result<()> {
-    let agent_id = get_agent_identity().unwrap_or_else(|| "unknown-agent".to_string());
-    let scope = get_agent_scope();
+pub fn cmd_agent_intro(_paths: &RikuPaths, session: &AgentSession) -> Result<()> {
+    let AgentSession {
+        id: agent_id,
+        scope,
+    } = session;
 
     let response = json!({
         "welcome": "Riku AI Agent Interface",
