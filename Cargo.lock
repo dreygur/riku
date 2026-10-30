@@ -1840,6 +1840,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "riku-sync"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
 name = "riku-util"
 version = "0.1.0"
 dependencies = [

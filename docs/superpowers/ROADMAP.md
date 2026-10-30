@@ -101,7 +101,7 @@ work they describe.
 - C2 nginx upstream from backends: pending
 - C3 Router plugin protocol 2: pending
 
-- D1 Crate, wire types and manifest scan: pending
+- D1 Crate, wire types and manifest scan: done
 - D2 Transfer plan, bundle and verified apply: pending
 - D3 The sync conversation over a byte stream: pending
 
