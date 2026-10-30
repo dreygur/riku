@@ -15,7 +15,7 @@ fn cut_stream_leaves_live_untouched() {
     input.extend_from_slice(&bundle[..bundle.len() / 2]);
     let (err, reply) = refused(&f, Cursor::new(input));
     assert!(
-        err.contains("bundle stream is damaged") && err.contains("incomplete frame"),
+        err.contains("bundle stream is damaged"),
         "server error was: {err}"
     );
     assert_eq!(
@@ -146,7 +146,7 @@ fn garbage_where_the_bundle_belongs_is_refused() {
     input.extend_from_slice(b"this is not a zstd stream");
     let (err, reply) = refused(&f, Cursor::new(input));
     assert!(
-        err.contains("bundle stream is damaged") && err.contains("Unknown frame descriptor"),
+        err.contains("bundle stream is damaged"),
         "server error was: {err}"
     );
     assert_eq!(

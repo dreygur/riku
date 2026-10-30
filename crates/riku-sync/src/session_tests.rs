@@ -1,20 +1,28 @@
-use crate::testkit::{put, rel};
-use crate::{receive, scan, send, SendReport};
+use crate::scan;
+use crate::session_kit::{changed_source, sync_over_sockets};
+use crate::testkit::{fixture, names_in, put, rel};
 use std::fs;
-use std::io::BufReader;
-use std::os::unix::net::UnixStream;
-use std::path::Path;
-use std::thread;
 
-fn sync_over_sockets(src: &Path, live: &Path) -> anyhow::Result<SendReport> {
-    let (client_out, server_in) = UnixStream::pair().unwrap();
-    let (server_out, client_in) = UnixStream::pair().unwrap();
-    let live = live.to_path_buf();
-    let server = thread::spawn(move || receive(&live, BufReader::new(server_in), server_out));
-    let report = send(src, BufReader::new(client_in), client_out);
-    let served = server.join().unwrap();
-    assert!(served.is_ok(), "server side failed: {served:?}");
-    report
+#[test]
+fn session_plans_against_the_tree_recovered_from_a_crash() {
+    let f = fixture();
+    let src = changed_source();
+    fs::rename(&f.live, f.parent.path().join("live.sync-old")).unwrap();
+    fs::create_dir(f.parent.path().join("live.sync-new")).unwrap();
+
+    let report = sync_over_sockets(src.path(), &f.live).unwrap();
+    assert_eq!(
+        report.sent,
+        vec![rel("dir/inner.txt"), rel("new.txt")],
+        "only changed files should be resent after recovery"
+    );
+    assert_eq!(report.deleted, vec![rel("old.txt")]);
+    assert_eq!(scan(&f.live).unwrap(), scan(src.path()).unwrap());
+    assert_eq!(
+        names_in(f.parent.path()),
+        ["live", "live.sync-lock"],
+        "crash leftovers remain"
+    );
 }
 
 #[test]

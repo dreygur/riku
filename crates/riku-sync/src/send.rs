@@ -49,7 +49,7 @@ pub fn send(
     };
     let bytes = match send_bundle(src, &plan.need, to_server) {
         Ok(bytes) => bytes,
-        Err(write_failure) => return Err(prefer_server_refusal(&mut from_server, write_failure)),
+        Err(failure) => return Err(explain_bundle_failure(&mut from_server, failure)),
     };
     if let Err(e) = read_confirmation(&mut from_server) {
         return Err(e);
@@ -94,28 +94,47 @@ fn read_plan(from: &mut impl BufRead, manifest: &Manifest) -> anyhow::Result<Tra
     Ok(TransferPlan { need, delete })
 }
 
-fn send_bundle(src: &Path, need: &[RelPath], to_server: impl Write) -> anyhow::Result<u64> {
+/// Where a bundle failure came from.
+enum BundleFailure {
+    /// Writing to the server failed, typically because it hung up.
+    Peer(anyhow::Error),
+    /// Reading or packing the local files failed.
+    Local(anyhow::Error),
+}
+
+fn send_bundle(src: &Path, need: &[RelPath], to_server: impl Write) -> Result<u64, BundleFailure> {
     let mut counted = CountingWriter {
         inner: to_server,
         bytes: 0,
+        peer_failed: false,
     };
     if let Err(e) = write_bundle(src, need, &mut counted) {
-        return Err(e);
+        return Err(counted.failure(e));
     }
     if let Err(e) = counted.flush() {
-        return Err(anyhow::anyhow!("cannot flush the bundle: {e}"));
+        return Err(BundleFailure::Peer(anyhow::anyhow!(
+            "cannot flush the bundle: {e}"
+        )));
     }
     Ok(counted.bytes)
 }
 
-/// A server that refuses mid-bundle stops reading, so the sender sees a broken
-/// pipe. The server's error line is already waiting and says why.
-fn prefer_server_refusal(from: &mut impl BufRead, write_failure: anyhow::Error) -> anyhow::Error {
-    match read_reply_raw(from, "refusal") {
+/// Builds the error for a failed bundle. A server that refuses mid-bundle stops
+/// reading, so the sender sees a broken pipe while the server's error line is
+/// already waiting: for a write failure that text replaces the pipe error. A
+/// local failure keeps its own cause and gets the server's text appended, since
+/// the server will have refused the cut stream.
+fn explain_bundle_failure(from: &mut impl BufRead, failure: BundleFailure) -> anyhow::Error {
+    let refusal = match read_reply_raw(from, "refusal") {
         Ok(Reply {
             error: Some(text), ..
-        }) => server_refusal(&text),
-        _ => write_failure,
+        }) => Some(server_refusal(&text)),
+        _ => None,
+    };
+    match (failure, refusal) {
+        (BundleFailure::Peer(_), Some(refusal)) => refusal,
+        (BundleFailure::Local(local), Some(refusal)) => anyhow::anyhow!("{local}; {refusal}"),
+        (BundleFailure::Peer(e) | BundleFailure::Local(e), None) => e,
     }
 }
 
@@ -127,23 +146,41 @@ fn read_confirmation(from: &mut impl BufRead) -> anyhow::Result<()> {
     }
 }
 
+/// Counts bytes written and remembers whether the inner writer ever failed, so
+/// a failure of the peer can be told from a failure to read local files.
 struct CountingWriter<W> {
     inner: W,
     bytes: u64,
+    peer_failed: bool,
+}
+
+impl<W> CountingWriter<W> {
+    fn failure(&self, error: anyhow::Error) -> BundleFailure {
+        if self.peer_failed {
+            BundleFailure::Peer(error)
+        } else {
+            BundleFailure::Local(error)
+        }
+    }
 }
 
 impl<W: Write> Write for CountingWriter<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let written = match self.inner.write(buf) {
             Ok(written) => written,
-            Err(e) => return Err(e),
+            Err(e) => {
+                self.peer_failed = true;
+                return Err(e);
+            }
         };
         self.bytes += written as u64;
         Ok(written)
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush()
+        let flushed = self.inner.flush();
+        self.peer_failed |= flushed.is_err();
+        flushed
     }
 }
 

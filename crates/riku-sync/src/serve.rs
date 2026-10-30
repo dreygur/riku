@@ -17,6 +17,7 @@ use crate::line::read_line;
 use crate::lock::{acquire, SyncBusy};
 use crate::plan::plan_transfer;
 use crate::session::{write_line, MAX_LINE_BYTES, SYNC_PROTOCOL};
+use crate::swap::recover;
 use crate::wire::Manifest;
 use serde::Deserialize;
 use std::io::{BufRead, Write};
@@ -97,6 +98,9 @@ fn converse(
         }
         Err(e) => return Err(Refusal::new("cannot lock the app for syncing", e)),
     };
+    if let Err(e) = recover(live, &lock) {
+        return Err(Refusal::new("cannot recover an interrupted sync", e));
+    }
     let plan = match plan_transfer(live, &manifest) {
         Ok(plan) => plan,
         Err(e) => return Err(Refusal::new("cannot work out a transfer plan", e)),

@@ -1,9 +1,23 @@
 //! Helpers shared by the session, send and serve tests.
 
 use crate::testkit::{names_in, put, Fixture, SETTLED};
-use crate::{plan_transfer, receive, scan, write_bundle, Manifest};
-use std::io::{BufRead, Write};
+use crate::{plan_transfer, receive, scan, send, write_bundle, Manifest, SendReport};
+use std::io::{BufRead, BufReader, Write};
+use std::os::unix::net::UnixStream;
 use std::path::Path;
+use std::thread;
+
+/// Runs a real `send` against a real `receive` on two threads joined by sockets.
+pub fn sync_over_sockets(src: &Path, live: &Path) -> anyhow::Result<SendReport> {
+    let (client_out, server_in) = UnixStream::pair().unwrap();
+    let (server_out, client_in) = UnixStream::pair().unwrap();
+    let live = live.to_path_buf();
+    let server = thread::spawn(move || receive(&live, BufReader::new(server_in), server_out));
+    let report = send(src, BufReader::new(client_in), client_out);
+    let served = server.join().unwrap();
+    assert!(served.is_ok(), "server side failed: {served:?}");
+    report
+}
 
 pub fn request_line(manifest: &Manifest) -> Vec<u8> {
     let mut line =

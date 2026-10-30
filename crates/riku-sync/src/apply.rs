@@ -5,13 +5,12 @@
 //! error before the swap removes staging and leaves `live` as it was.
 
 use crate::check::wanted_sizes;
-use crate::lock::acquire;
+use crate::lock::{acquire, SyncLock};
 use crate::receive::receive_bundle;
 use crate::staging::Staging;
 use crate::swap::{recover, remove_tree, sibling, swap_in, STAGING_SUFFIX};
 use crate::wire::{EntryKind, Manifest, TransferPlan};
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
@@ -37,17 +36,20 @@ pub fn apply(
         Ok(lock) => lock,
         Err(e) => return Err(e),
     };
+    if let Err(e) = recover(live, &lock) {
+        return Err(e);
+    }
     apply_locked(live, &lock, manifest, plan, bundle)
 }
 
-/// [`apply`] for a caller that already holds the lock from `acquire(live)`.
+/// [`apply`] for a caller that already holds the lock and has already run
+/// [`recover`] under it, so it could plan against the recovered tree.
 ///
 /// A second `flock` taken in the same process conflicts with the first, so a
-/// caller that locked early (to plan under the lock) cannot call `apply`.
-/// `_held` is the proof that the lock is held; it is not used otherwise.
+/// caller that locked early cannot call `apply`. `_held` is only the proof.
 pub(crate) fn apply_locked(
     live: &Path,
-    _held: &File,
+    _held: &SyncLock,
     manifest: &Manifest,
     plan: &TransferPlan,
     bundle: impl Read,
@@ -56,9 +58,6 @@ pub(crate) fn apply_locked(
         Ok(wanted) => wanted,
         Err(e) => return Err(e),
     };
-    if let Err(e) = recover(live) {
-        return Err(e);
-    }
     let staging_path = match sibling(live, STAGING_SUFFIX) {
         Ok(path) => path,
         Err(e) => return Err(e),

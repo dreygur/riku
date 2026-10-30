@@ -6,6 +6,7 @@
 //! and `.sync-old` holds the previous tree; [`recover`] puts it back before the
 //! next apply starts.
 
+use crate::lock::SyncLock;
 use std::ffi::OsString;
 use std::fs;
 use std::io;
@@ -45,8 +46,9 @@ pub(crate) fn remove_tree(path: &Path) -> io::Result<()> {
 }
 
 /// Restores a parked tree when live is missing, then removes any leftover
-/// staging and parked directories from an interrupted apply.
-pub(crate) fn recover(live: &Path) -> anyhow::Result<()> {
+/// staging and parked directories from an interrupted apply. Needs the sync
+/// lock, since it renames and deletes beside `live`.
+pub(crate) fn recover(live: &Path, _held: &SyncLock) -> anyhow::Result<()> {
     let parked = match sibling(live, PARKED_SUFFIX) {
         Ok(parked) => parked,
         Err(e) => return Err(e),

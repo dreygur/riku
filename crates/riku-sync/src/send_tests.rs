@@ -43,6 +43,51 @@ fn prefers_the_servers_refusal_over_a_broken_pipe_mid_bundle() {
     );
 }
 
+/// The sender's `app.py` is removed after the scan and before the pack, as if
+/// something else on the machine deleted it. The server then sends `refusal`,
+/// if any, and hangs up. Returns the error `send` gave.
+fn file_vanishes_before_packing(refusal: Option<&'static [u8]>) -> String {
+    let src = tempfile::tempdir().unwrap();
+    put(src.path(), "app.py", "v1");
+    let doomed = src.path().join("app.py");
+    let (client_out, server_in) = UnixStream::pair().unwrap();
+    let (mut server_out, client_in) = UnixStream::pair().unwrap();
+    let server = thread::spawn(move || {
+        let mut request = String::new();
+        BufReader::new(server_in).read_line(&mut request).unwrap();
+        std::fs::remove_file(doomed).unwrap();
+        server_out
+            .write_all(b"{\"need\":[\"app.py\"],\"delete\":[]}\n")
+            .unwrap();
+        if let Some(line) = refusal {
+            server_out.write_all(line).unwrap();
+        }
+    });
+    let outcome = send(src.path(), BufReader::new(client_in), client_out);
+    server.join().unwrap();
+    outcome.unwrap_err().to_string()
+}
+
+#[test]
+fn local_failure_keeps_its_cause_and_adds_the_servers_text() {
+    let err = file_vanishes_before_packing(Some(b"{\"error\":\"the bundle was refused\"}\n"));
+    assert!(err.contains("app.py"), "local cause lost: {err}");
+    assert!(
+        err.contains("server refused the sync: the bundle was refused"),
+        "server text missing: {err}"
+    );
+}
+
+#[test]
+fn local_failure_is_not_blamed_on_the_server() {
+    let err = file_vanishes_before_packing(None);
+    assert!(err.contains("app.py"), "local cause lost: {err}");
+    assert!(
+        !err.contains("server refused"),
+        "a local failure was reported as a server refusal: {err}"
+    );
+}
+
 fn send_against(server_says: impl BufRead) -> (anyhow::Result<SendReport>, Vec<u8>) {
     let src = tempfile::tempdir().unwrap();
     put(src.path(), "app.py", "v1");
