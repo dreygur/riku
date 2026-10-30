@@ -121,3 +121,7 @@ mod tests;
 #[cfg(test)]
 #[path = "apply_hostile_tests.rs"]
 mod hostile_tests;
+
+#[cfg(test)]
+#[path = "apply_limits_tests.rs"]
+mod limits_tests;

@@ -62,6 +62,42 @@ fn live_lost_between_the_two_renames_is_restored_first() {
 }
 
 #[test]
+fn a_hundred_files_with_long_paths_sync_within_the_allowance() {
+    let src = tempfile::tempdir().unwrap();
+    let dir = "d".repeat(70);
+    for i in 0..100 {
+        let name = format!("{}{i:03}", "f".repeat(77));
+        put(src.path(), &format!("{dir}/{name}"), "x");
+    }
+    let parent = tempfile::tempdir().unwrap();
+    let live = parent.path().join("live");
+
+    sync_from(src.path(), &live);
+
+    assert_eq!(scan(&live).unwrap(), scan(src.path()).unwrap());
+}
+
+#[test]
+fn lock_file_that_is_a_symlink_is_refused() {
+    let f = fixture();
+    let target = f.parent.path().join("elsewhere");
+    fs::write(&target, "").unwrap();
+    std::os::unix::fs::symlink(&target, f.parent.path().join("live.sync-lock")).unwrap();
+    let before = scan(&f.live).unwrap();
+
+    let err = apply(
+        &f.live,
+        &manifest_of(vec![file_entry("keep.txt", "k")]),
+        &TransferPlan::default(),
+        Cursor::new(raw_bundle(&[])),
+    )
+    .unwrap_err();
+
+    assert!(err.to_string().contains("lock file"), "error was: {err}");
+    assert_eq!(scan(&f.live).unwrap(), before);
+}
+
+#[test]
 fn second_apply_is_refused_while_the_first_holds_the_lock() {
     let f = fixture();
     let before = scan(&f.live).unwrap();

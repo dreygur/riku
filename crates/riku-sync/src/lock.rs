@@ -8,17 +8,25 @@
 
 use crate::swap::sibling;
 use std::fs::{File, OpenOptions, TryLockError};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 const LOCK_SUFFIX: &str = ".sync-lock";
 
-/// Takes the lock without waiting. A second concurrent sync fails at once.
+/// Takes the lock without waiting. A second concurrent sync fails at once. The
+/// lock file is opened with `O_NOFOLLOW`, so a symlink planted at its path is
+/// refused instead of followed.
 pub(crate) fn acquire(live: &Path) -> anyhow::Result<File> {
     let path = match sibling(live, LOCK_SUFFIX) {
         Ok(path) => path,
         Err(e) => return Err(e),
     };
-    let file = match OpenOptions::new().create(true).append(true).open(&path) {
+    let opened = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(&path);
+    let file = match opened {
         Ok(file) => file,
         Err(e) => {
             return Err(anyhow::anyhow!(

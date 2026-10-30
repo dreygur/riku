@@ -6,26 +6,69 @@
 //! written with at most its manifest size plus one byte read. Anything else
 //! aborts the whole transfer.
 //!
-//! Memory and decompression bounds: the tar library reads GNU long name, long
-//! link, pax and sparse headers whole into memory before any check here runs, so
-//! the decompressed stream is capped at the wanted sizes plus per entry slack
-//! ([`ENTRY_SLACK`]) plus end blocks and record padding ([`END_SLACK`]); crossing
-//! the cap is an error. The zstd window is limited to [`WINDOW_LOG_MAX`]. The
-//! compressed frame must end cleanly, so a cut stream is an error.
+//! Bounds, because the tar library reads GNU long name, long link, pax and
+//! sparse headers whole into memory before any check here runs, and the
+//! manifest sizes are as hostile as the stream:
+//!
+//! - Decompressed header bytes (header blocks, padding, long names, end blocks)
+//!   draw from a budget computed from the requested path lengths alone, see
+//!   [`header_budget`]. It does not depend on any declared size.
+//! - Body bytes are allowed only while a body copy runs, and then only up to
+//!   that entry's declared size plus one.
+//! - Compressed input is capped at the decompressed total plus
+//!   [`COMPRESSED_MARGIN`] and a 1/64 proportional allowance. zstd stores
+//!   incompressible data at a cost of 3 bytes per 128 KiB block, so 1/64 is far
+//!   above any real expansion; the margin covers frame headers. This stops
+//!   streams of empty or skippable frames, which produce no output.
+//! - After the archive ends, the rest of the stream gets a small separate
+//!   allowance ([`TRAILER_COMPRESSED`], [`TRAILER_DECOMPRESSED`]) and the zstd
+//!   frame must end cleanly, so a cut stream is an error.
+//! - The zstd window is limited to [`WINDOW_LOG_MAX`].
 
-use crate::capped::CappedReader;
+use crate::capped::{Budget, CappedReader};
 use crate::staging::Staging;
 use crate::wire::RelPath;
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Read};
 
-/// Header block, data padding and long name slack allowed per wanted file.
-const ENTRY_SLACK: u64 = 1536;
-/// Two end blocks plus padding to a 10 KiB tar record, rounded up.
-const END_SLACK: u64 = 16 * 1024;
+const BLOCK: u64 = 512;
+/// Names this long or longer are written by the sender as an extra GNU long
+/// name entry. The real limit is 100 bytes including the NUL, so this is
+/// slightly generous.
+const LONG_NAME_AT: u64 = 100;
+const END_BLOCKS: u64 = 2 * BLOCK;
+const COMPRESSED_MARGIN: u64 = 64 * 1024;
+const TRAILER_COMPRESSED: u64 = 64 * 1024;
+/// Padding to a 10 KiB tar record, rounded up.
+const TRAILER_DECOMPRESSED: u64 = 16 * 1024;
 /// `write_bundle` compresses at level 3, which uses a 2 MiB window (log 21).
 /// 23 leaves headroom for other zstd encoders and caps decoder memory at 8 MiB.
 const WINDOW_LOG_MAX: u32 = 23;
+
+/// Header block, up to 511 bytes of data padding, and for a long name an extra
+/// header block plus the name rounded up to whole blocks.
+fn entry_allowance(path_len: u64) -> u64 {
+    let base = BLOCK + (BLOCK - 1);
+    if path_len < LONG_NAME_AT {
+        return base;
+    }
+    base + BLOCK + (path_len + 1).div_ceil(BLOCK) * BLOCK
+}
+
+fn header_budget(wanted: &HashMap<&str, u64>) -> u64 {
+    wanted.keys().fold(END_BLOCKS, |sum, path| {
+        sum.saturating_add(entry_allowance(path.len() as u64))
+    })
+}
+
+fn compressed_budget(header: u64, wanted: &HashMap<&str, u64>) -> u64 {
+    let total = wanted.values().fold(header, |sum, size| {
+        sum.saturating_add(size.saturating_add(1))
+    });
+    total
+        .saturating_add(total / 64)
+        .saturating_add(COMPRESSED_MARGIN)
+}
 
 /// Writes every file in `bundle` into `staging`. `wanted` maps each requested
 /// path to its manifest size; every one must arrive.
@@ -34,21 +77,17 @@ pub(crate) fn receive_bundle(
     wanted: &HashMap<&str, u64>,
     bundle: impl Read,
 ) -> anyhow::Result<()> {
-    let mut decoder = match zstd::Decoder::new(bundle) {
+    let header = header_budget(wanted);
+    let compressed = Budget::new(compressed_budget(header, wanted));
+    let decompressed = Budget::new(header);
+    let mut decoder = match zstd::Decoder::new(CappedReader::new(bundle, compressed.clone())) {
         Ok(decoder) => decoder,
         Err(e) => return Err(anyhow::anyhow!("bundle is not a zstd stream: {e}")),
     };
     if let Err(e) = decoder.window_log_max(WINDOW_LOG_MAX) {
         return Err(anyhow::anyhow!("cannot limit the zstd window: {e}"));
     }
-    let payload: u64 = wanted
-        .values()
-        .fold(0, |sum, size| sum.saturating_add(*size));
-    let slack = ENTRY_SLACK
-        .saturating_mul(wanted.len() as u64)
-        .saturating_add(END_SLACK);
-    let capped = CappedReader::new(decoder, payload.saturating_add(slack));
-    let mut archive = tar::Archive::new(capped);
+    let mut archive = tar::Archive::new(CappedReader::new(decoder, decompressed.clone()));
     let mut arrived: HashSet<String> = HashSet::new();
     {
         let entries = match archive.entries() {
@@ -60,7 +99,7 @@ pub(crate) fn receive_bundle(
                 Ok(entry) => entry,
                 Err(e) => return Err(anyhow::anyhow!("bundle stream is damaged: {e}")),
             };
-            if let Err(e) = store_entry(staging, wanted, &mut arrived, entry) {
+            if let Err(e) = store_entry(staging, wanted, &mut arrived, &decompressed, entry) {
                 return Err(e);
             }
         }
@@ -70,6 +109,8 @@ pub(crate) fn receive_bundle(
             "bundle is missing requested file {missing:?}"
         ));
     }
+    decompressed.set(TRAILER_DECOMPRESSED);
+    compressed.set(TRAILER_COMPRESSED);
     drain_trailer(archive.into_inner())
 }
 
@@ -77,6 +118,7 @@ fn store_entry(
     staging: &Staging,
     wanted: &HashMap<&str, u64>,
     arrived: &mut HashSet<String>,
+    decompressed: &Budget,
     mut entry: tar::Entry<impl Read>,
 ) -> anyhow::Result<()> {
     if entry.header().entry_type() != tar::EntryType::Regular {
@@ -110,6 +152,7 @@ fn store_entry(
         Ok(file) => file,
         Err(e) => return Err(e),
     };
+    decompressed.allow(size.saturating_add(1));
     let written = match io::copy(&mut (&mut entry).take(size.saturating_add(1)), &mut file) {
         Ok(written) => written,
         Err(e) => return Err(anyhow::anyhow!("cannot store {name:?}: {e}")),
