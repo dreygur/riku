@@ -1,3 +1,4 @@
+use super::super::dotenv_value::SCANNED_BYTES;
 use super::*;
 use tempfile::TempDir;
 
@@ -53,6 +54,24 @@ fn unterminated_quote_names_file_and_starting_line() {
         .to_string();
 
     assert!(err.starts_with("/app/.env:2: KEY:"), "{err}");
+}
+
+#[test]
+fn open_quote_over_many_lines_is_scanned_once() {
+    // Rescanning the whole value on each continuation line read about
+    // 5 * 10^11 bytes for this 1 MiB file.
+    let text = format!("A=\"{}", "\n".repeat(MAX_APP_FILE_BYTES as usize - 3));
+    SCANNED_BYTES.with(|n| n.set(0));
+
+    let err = parse_dotenv("/app/.env", &text).unwrap_err().to_string();
+
+    let scanned = SCANNED_BYTES.with(|n| n.get());
+    assert!(err.contains("unterminated double quote"), "{err}");
+    assert!(
+        scanned <= text.len(),
+        "quote scan read {scanned} bytes of a {} byte file",
+        text.len()
+    );
 }
 
 #[test]

@@ -8,16 +8,52 @@
 
 use super::interpolate::{interpolate_capped, TooLarge};
 
-/// True while `raw` opens a quote it has not closed yet, so the value goes on
-/// to the next line.
-pub(super) fn quote_is_open(raw: &str) -> bool {
-    if let Some(quoted) = raw.strip_prefix('\'') {
-        return !quoted.contains('\'');
+#[cfg(test)]
+thread_local! {
+    /// Bytes the open quote scan has read on this thread.
+    pub(super) static SCANNED_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Whether a value's opening quote is still open, carried from line to line
+/// so a value over many lines is scanned once in total.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum OpenQuote {
+    /// No quote open: the value ends on this line.
+    None,
+    Single,
+    Double,
+}
+
+impl OpenQuote {
+    /// The state after the first line of a value, `first`.
+    pub(super) fn after_first_line(first: &str) -> Self {
+        if let Some(quoted) = first.strip_prefix('\'') {
+            return OpenQuote::Single.after_line(quoted);
+        }
+        if let Some(quoted) = first.strip_prefix('"') {
+            return OpenQuote::Double.after_line(quoted);
+        }
+        OpenQuote::None
     }
-    if let Some(quoted) = raw.strip_prefix('"') {
-        return closing_double_quote(quoted).is_none();
+
+    /// The state after `line` is appended to a value with this quote open.
+    ///
+    /// A backslash escape never carries over a line: a `\` at the end of a
+    /// line escapes the line break, so the next line starts unescaped.
+    pub(super) fn after_line(self, line: &str) -> Self {
+        #[cfg(test)]
+        SCANNED_BYTES.with(|n| n.set(n.get() + line.len()));
+        let closed = match self {
+            OpenQuote::None => true,
+            OpenQuote::Single => line.contains('\''),
+            OpenQuote::Double => closing_double_quote(line).is_some(),
+        };
+        if closed {
+            OpenQuote::None
+        } else {
+            self
+        }
     }
-    false
 }
 
 /// The value written as `raw`, expanded through `lookup` where its quoting

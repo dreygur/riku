@@ -23,7 +23,7 @@
 //! one is refused when the service is parsed, naming the key, and so is a
 //! label.
 
-use super::dotenv_value::{parse_value, quote_is_open, ValueError};
+use super::dotenv_value::{parse_value, OpenQuote, ValueError};
 use anyhow::{anyhow, bail, Result};
 use riku_util::ensure_path_within;
 use std::collections::BTreeMap;
@@ -110,9 +110,11 @@ pub(crate) fn parse_dotenv(
             bail!("{source}:{}: invalid variable name '{key}'", start + 1);
         }
         let mut raw = first.trim().to_string();
-        while quote_is_open(&raw) && next < lines.len() {
+        let mut quote = OpenQuote::after_first_line(&raw);
+        while quote != OpenQuote::None && next < lines.len() {
             raw.push('\n');
             raw.push_str(lines[next]);
+            quote = quote.after_line(lines[next]);
             next += 1;
         }
         let budget = MAX_EXPANDED_BYTES.saturating_sub(total);
