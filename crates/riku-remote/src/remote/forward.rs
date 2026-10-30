@@ -47,21 +47,17 @@ fn server_arg_candidates(argv: &[String]) -> Vec<Vec<usize>> {
 /// slots, so they are not argv positions. Instead each candidate is removed
 /// in turn and the line parsed again: the one whose removal leaves no server
 /// is the one clap read. A `-s` inside a `run` command line is never picked,
-/// because removing it leaves the real one in place.
-pub fn server_arg_positions(cli: &Command, argv: &[String]) -> Result<Vec<usize>> {
+/// because removing it leaves the real one in place. `None` when no
+/// candidate fits.
+pub fn server_arg_positions(cli: &Command, argv: &[String]) -> Option<Vec<usize>> {
     if server_flag_given(cli, argv) != Some(true) {
-        return Ok(Vec::new());
+        return Some(Vec::new());
     }
-    for consumed in server_arg_candidates(argv) {
+    server_arg_candidates(argv).into_iter().find(|consumed| {
         let mut rest = argv[..1].to_vec();
-        rest.extend(strip_target_args(argv, &consumed));
-        if server_flag_given(cli, &rest) == Some(false) {
-            return Ok(consumed);
-        }
-    }
-    Err(anyhow!(
-        "could not tell which argument is the server; put it before the command, as in: riku -s <name> ps"
-    ))
+        rest.extend(strip_target_args(argv, consumed));
+        server_flag_given(cli, &rest) == Some(false)
+    })
 }
 
 /// Drops the program name and the `consumed` positions from `argv`.

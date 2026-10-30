@@ -3,7 +3,10 @@
 //! the same question for the laptop only `rk` binary.
 
 const CONTAINER: &str = "container";
-const DASHBOARD: &str = "dashboard";
+
+/// The one server only command that can target a server: its remote form
+/// opens the server's dashboard on this machine.
+pub const DASHBOARD: &str = "dashboard";
 
 /// Execution site of a top-level command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -10,11 +10,8 @@
 use super::git_remote::read_remotes;
 use super::target::{resolve, Selection, Source, Target};
 use super::{forward, store, Server};
-use crate::placement::{placement_of, Placement};
+use crate::placement::{placement_of, Placement, DASHBOARD};
 use anyhow::{anyhow, Result};
-
-/// The one server only command that can target a server.
-const DASHBOARD: &str = "dashboard";
 
 #[allow(clippy::question_mark)]
 fn resolve_from_disk(sel: Selection) -> Result<Target> {
@@ -104,17 +101,23 @@ fn target_line(server: &Server, source: Source, app_hint: Option<&str>) -> Strin
 /// Prints the target line, runs the command on `server`, and returns its
 /// exit code. `argv` is the full process argv, program name included.
 /// `source` is why `server` was chosen; `app_hint` is the app sent along.
-#[allow(clippy::question_mark)]
+/// `program` is the binary name the user typed, for the error that shows
+/// how to place `-s`.
 pub fn forward(
     argv: &[String],
     server: &Server,
     source: Source,
     app_hint: Option<&str>,
+    program: &str,
 ) -> Result<i32> {
     let cli = crate::help::command(crate::help::FORWARD_HEADING);
     let consumed = match forward::server_arg_positions(&cli, argv) {
-        Ok(consumed) => consumed,
-        Err(e) => return Err(e),
+        Some(consumed) => consumed,
+        None => {
+            return Err(anyhow!(
+                "could not tell which argument is the server; put it before the command, as in: {program} -s <name> ps"
+            ))
+        }
     };
     let args = forward::strip_target_args(argv, &consumed);
     eprintln!("{}", target_line(server, source, app_hint));

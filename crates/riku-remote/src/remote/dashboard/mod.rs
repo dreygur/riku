@@ -100,15 +100,16 @@ fn settle(outcome: Result<()>) -> Result<()> {
 }
 
 /// Runs `server`'s dashboard for this session and opens it locally, until
-/// Ctrl-C or the remote side ends.
+/// Ctrl-C or the remote side ends. `program` is the binary name the user
+/// typed, for the fix it suggests when the server has no admin login.
 #[allow(clippy::question_mark)]
-pub fn run_remote(server: &Server) -> Result<()> {
+pub fn run_remote(server: &Server, program: &str) -> Result<()> {
     let name = server.name.as_str();
     let admin = match &server.admin {
         Some(admin) => admin,
         None => {
             return Err(anyhow!(
-                "no admin login for {name}: riku server remove {name}, then riku server add {name} {} --admin user@host",
+                "no admin login for {name}: {program} server remove {name}, then {program} server add {name} {} --admin user@host",
                 server.address.as_str()
             ))
         }

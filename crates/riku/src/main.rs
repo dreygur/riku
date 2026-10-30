@@ -6,15 +6,15 @@ use anyhow::Result;
 use clap::{ArgMatches, FromArgMatches};
 
 use riku::cli::address::ServerName;
-use riku::cli::app_hint::apply_app_hint;
-use riku::cli::client_plugins;
-use riku::cli::parse::parse_with_help;
+use riku::cli::parse::{command_names, parse_with_help};
+use riku::cli::remote::flow::{run_or_forward, Outcome};
 use riku::cli::remote::route;
-use riku::cli::remote::target::{Selection, Target};
-use riku::cli::routing::{build_plugin_args, get_plugin_command};
+use riku::cli::remote::target::Selection;
 use riku::cli::{Cli, Commands};
 use riku::config::RikuPaths;
 use riku::{cli, dashboard};
+
+const PROGRAM: &str = "riku";
 
 /// Initialize tracing subscriber for structured logging
 fn init_tracing() {
@@ -64,10 +64,7 @@ fn main() -> Result<()> {
         local: args.local,
         via_ssh,
     };
-    let command_name = matches.subcommand_name().unwrap_or("");
-    let subcommand_name = matches
-        .subcommand_matches(command_name)
-        .and_then(|sub| sub.subcommand_name());
+    let (command_name, subcommand_name) = command_names(&matches);
     let target = match route::target_for(command_name, subcommand_name, selection) {
         Ok(target) => target,
         Err(e) => return Err(e),
@@ -77,41 +74,11 @@ fn main() -> Result<()> {
         Err(e) => return Err(e),
     };
 
-    let (server, source, hint) = match &target {
-        Target::Remote {
-            server,
-            source,
-            app_hint,
-        } => (Some(server), Some(*source), app_hint.as_deref()),
-        Target::Local => (None, None, args.app_hint.as_deref()),
+    let command = match run_or_forward(&argv, &matches, args, &target, PROGRAM) {
+        Ok(Outcome::Done) => return Ok(()),
+        Ok(Outcome::Local(command)) => command,
+        Err(e) => return Err(e),
     };
-    let mut command = args.command;
-    let hint_used = apply_app_hint(&mut command, hint);
-
-    // Check for client plugins first: they can override built-in commands.
-    if let Some(plugin_name) = get_plugin_command(&command) {
-        let plugin_args = build_plugin_args(&command, server.map(|s| &s.address));
-        match client_plugins::try_execute_client_plugin(&plugin_name, &plugin_args) {
-            Ok(true) => return Ok(()),
-            Ok(false) => {}
-            Err(e) => return Err(e),
-        }
-    }
-
-    if let (Some(server), Some(source)) = (server, source) {
-        if let Commands::Dashboard { .. } = command {
-            if let Err(e) = cli::remote::dashboard::check_remote_flags(&matches) {
-                return Err(e);
-            }
-            return cli::remote::dashboard::run_remote(server);
-        }
-        let sent_hint = if hint_used { hint } else { None };
-        match route::forward(&argv, server, source, sent_hint) {
-            Ok(code) => std::process::exit(code),
-            Err(e) => return Err(e),
-        }
-    }
-
     match command {
         Commands::Dashboard { bind, token } => dashboard::run(&paths, &bind, token),
         command => cli::dispatch::run_local(&paths, command),

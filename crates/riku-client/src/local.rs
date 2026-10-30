@@ -6,7 +6,7 @@
 
 use anyhow::{anyhow, Error, Result};
 use riku_args::cli::Commands;
-use riku_args::placement::{client_rule, placement_of, ClientRule, Elsewhere, Placement};
+use riku_args::placement::{client_rule, ClientRule, Elsewhere};
 use riku_remote::plugin_cmd::run_plugin;
 use riku_remote::quickstart::cmd_quickstart;
 use riku_remote::remote::route::is_plugin_authoring;
@@ -18,8 +18,7 @@ const NO_LOCAL_MODE: &str = "rk has no local mode; run the command with riku";
 const NO_SERVER: &str =
     "no server selected; add one with rk server add <name> <user@host>, or pass -s <name>";
 
-/// The error for a command that is not part of `rk`.
-pub fn not_part_of_rk(command: &str, elsewhere: Elsewhere) -> Error {
+fn not_part_of_rk(command: &str, elsewhere: Elsewhere) -> Error {
     let runner = match elsewhere {
         Elsewhere::OnServer => "riku on the server",
         Elsewhere::FullBinary => "the full riku binary",
@@ -28,22 +27,21 @@ pub fn not_part_of_rk(command: &str, elsewhere: Elsewhere) -> Error {
 }
 
 /// The error for `--local`, which `rk` has no meaning for.
-pub fn no_local_mode() -> Error {
+pub(crate) fn no_local_mode() -> Error {
     anyhow!(NO_LOCAL_MODE)
 }
 
 /// Refuses `container` and the server only commands. `dashboard` passes: its
 /// remote form runs here.
-pub fn check_supported(command: &str) -> Result<()> {
+pub(crate) fn check_supported(command: &str) -> Result<()> {
     match client_rule(command) {
         ClientRule::Refused(elsewhere) => Err(not_part_of_rk(command, elsewhere)),
         ClientRule::RunsHere | ClientRule::Forwards => Ok(()),
     }
 }
 
-/// The error for a command that needs a server when none was selected,
-/// naming the registered ones.
-pub fn no_server_selected() -> Error {
+/// The no server error, naming the registered servers.
+fn no_server_selected() -> Error {
     let path = match store::servers_path() {
         Ok(path) => path,
         Err(e) => return anyhow!("{NO_SERVER} ({e})"),
@@ -54,31 +52,26 @@ pub fn no_server_selected() -> Error {
     }
 }
 
-/// Handles a command that resolved to no server: local commands run, plugin
-/// authoring is refused, anything else is the no server error.
-pub fn run_without_server(command: Commands, name: &str, sub: Option<&str>) -> Result<()> {
-    if placement_of(name) == Some(Placement::Local) {
-        return run(command);
-    }
-    if is_plugin_authoring(name, sub) {
-        let refused = match sub {
-            Some(sub) => format!("{name} {sub}"),
-            None => name.to_string(),
-        };
-        return Err(not_part_of_rk(&refused, Elsewhere::FullBinary));
-    }
-    Err(no_server_selected())
-}
-
-fn run(command: Commands) -> Result<()> {
+/// Handles a command that resolved to no server. `name` and `sub` are the
+/// clap names of the command and its subcommand. `server`, `plugin` and
+/// `quickstart` run here, plugin authoring is refused, and anything else is
+/// the no server error.
+pub(crate) fn run_without_server(command: Commands, name: &str, sub: Option<&str>) -> Result<()> {
     match command {
         Commands::Server(cmd) => server_cmd::run(cmd),
         Commands::Plugin(cmd) => run_plugin(cmd),
         Commands::Quickstart {
-            name,
+            name: app,
             runtime,
             remote,
-        } => cmd_quickstart(&name, &runtime, remote.as_deref()),
-        _ => Err(anyhow!("this command needs a server")),
+        } => cmd_quickstart(&app, &runtime, remote.as_deref()),
+        _ if is_plugin_authoring(name, sub) => {
+            let refused = match sub {
+                Some(sub) => format!("{name} {sub}"),
+                None => name.to_string(),
+            };
+            Err(not_part_of_rk(&refused, Elsewhere::FullBinary))
+        }
+        _ => Err(no_server_selected()),
     }
 }

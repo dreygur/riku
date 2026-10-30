@@ -5,8 +5,10 @@
 //! `target` pick the server for a command, `forward` runs it over ssh, and
 //! `route` ties those together for the binary. `dashboard` opens a server's
 //! embedded dashboard in the local browser over an admin ssh session.
+//! `flow` is the dispatch both binaries run once the target is known.
 
 pub mod dashboard;
+pub mod flow;
 pub mod forward;
 pub mod git_remote;
 pub mod route;
