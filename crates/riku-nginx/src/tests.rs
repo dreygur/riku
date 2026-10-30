@@ -5,7 +5,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 
-use super::generate_nginx_config;
+use super::{default_backends, generate_nginx_config};
 
 /// Installs a real `nginx.include_content` filter plugin, dispatched
 /// through the actual `FilterBus`, not mocked, that appends a marker line
@@ -47,10 +47,31 @@ fn test_generate_nginx_config() {
 
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
-    let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
+    let _result = generate_nginx_config(
+        "myapp",
+        &app_path,
+        &env,
+        &default_backends("myapp", &env, &paths),
+        &paths,
+    );
 
     let config_file = paths.nginx_root.join("myapp.conf");
     assert!(config_file.exists());
+}
+
+#[test]
+fn empty_backends_are_refused() {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
+    fs::create_dir_all(&paths.nginx_root).unwrap();
+
+    let result = generate_nginx_config("myapp", temp_dir.path(), &HashMap::new(), &[], &paths);
+
+    assert!(result.is_err(), "no backends should be an error");
+    assert!(
+        !paths.nginx_root.join("myapp.conf").exists(),
+        "a config was written without any backend"
+    );
 }
 
 #[test]
@@ -66,7 +87,13 @@ fn test_nginx_config_with_bind_address() {
     let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
-    let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
+    let _result = generate_nginx_config(
+        "myapp",
+        &app_path,
+        &env,
+        &default_backends("myapp", &env, &paths),
+        &paths,
+    );
     let config_file = paths.nginx_root.join("myapp.conf");
     assert!(config_file.exists());
 }
@@ -87,7 +114,13 @@ fn test_nginx_config_with_ipv4_address() {
     let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
-    let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
+    let _result = generate_nginx_config(
+        "myapp",
+        &app_path,
+        &env,
+        &default_backends("myapp", &env, &paths),
+        &paths,
+    );
     let config_content = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();
 
     assert!(config_content.contains("192.168.1.1"));
@@ -106,7 +139,13 @@ fn test_nginx_config_disable_ipv6() {
     let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
-    let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
+    let _result = generate_nginx_config(
+        "myapp",
+        &app_path,
+        &env,
+        &default_backends("myapp", &env, &paths),
+        &paths,
+    );
     let config_content = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();
 
     assert!(!config_content.contains("[::]"));
@@ -130,7 +169,13 @@ fn test_nginx_config_with_cache() {
     let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
-    let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
+    let _result = generate_nginx_config(
+        "myapp",
+        &app_path,
+        &env,
+        &default_backends("myapp", &env, &paths),
+        &paths,
+    );
     let config_content = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();
 
     assert!(config_content.contains("proxy_cache"));
@@ -151,7 +196,13 @@ fn test_nginx_config_with_cloudflare_acl() {
     let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     fs::create_dir_all(&paths.nginx_root).unwrap();
 
-    let _result = generate_nginx_config("myapp", &app_path, &env, &paths);
+    let _result = generate_nginx_config(
+        "myapp",
+        &app_path,
+        &env,
+        &default_backends("myapp", &env, &paths),
+        &paths,
+    );
     let config_content = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();
 
     assert!(config_content.contains("cloudflare"));
@@ -172,7 +223,13 @@ fn test_nginx_config_https_only() {
 
     // Errors only at `nginx -t`, which is absent on most test hosts; the
     // config file is written before that runs.
-    let _ = generate_nginx_config("myapp", &app_path, &env, &paths);
+    let _ = generate_nginx_config(
+        "myapp",
+        &app_path,
+        &env,
+        &default_backends("myapp", &env, &paths),
+        &paths,
+    );
     let config_file = paths.nginx_root.join("myapp.conf");
 
     let config_content = match fs::read_to_string(&config_file) {
@@ -200,7 +257,13 @@ fn test_default_template_includes_filter_augmented_content() {
     // Default template (no HTTPS_ONLY/WSGI/PORTMAP/STATIC flag) -> selects
     // nginx.conf.tera, which pulls in nginx_common.conf.tera via {% include %}
     // -- this is the shared partial fix, exercised for real.
-    let _ = generate_nginx_config("myapp", &app_path, &env, &paths);
+    let _ = generate_nginx_config(
+        "myapp",
+        &app_path,
+        &env,
+        &default_backends("myapp", &env, &paths),
+        &paths,
+    );
     let config_content = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();
     assert!(
         config_content.contains("augmented-by-plugin"),
@@ -222,7 +285,13 @@ fn test_static_template_includes_filter_augmented_content() {
     env.insert("RIKU_DOMAINS".to_string(), "example.com".to_string());
     env.insert("RIKU_NGINX_STATIC".to_string(), "true".to_string());
 
-    let _ = generate_nginx_config("myapp", &app_path, &env, &paths);
+    let _ = generate_nginx_config(
+        "myapp",
+        &app_path,
+        &env,
+        &default_backends("myapp", &env, &paths),
+        &paths,
+    );
     let config_content = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();
     assert!(
         config_content.contains("augmented-by-plugin"),

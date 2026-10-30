@@ -9,8 +9,9 @@ use std::fs;
 use std::path::Path;
 
 use super::context::build_context;
-use super::sanitize::sanitize_env_for_nginx;
+use super::sanitize::{sanitize_env_for_nginx, sanitize_nginx_value};
 use super::validate::validate_nginx_config;
+use crate::util::backend::Backend;
 
 /// Use a custom nginx configuration file from the app directory.
 pub(super) fn use_custom_nginx_config(
@@ -30,27 +31,70 @@ pub(super) fn use_custom_nginx_config(
 }
 
 /// Generate nginx configuration from template.
+#[allow(clippy::question_mark)]
 pub(super) fn generate_nginx_config_from_template(
     app: &str,
     app_path: &Path,
     env: &HashMap<String, String>,
+    backends: &[Backend],
     paths: &crate::config::RikuPaths,
 ) -> Result<()> {
-    let mut tera = tera::Tera::default();
-    register_templates(&mut tera)?;
+    let config_content = match render_nginx_config(app, app_path, env, backends, paths) {
+        Ok(content) => content,
+        Err(e) => return Err(e),
+    };
 
-    let env = &sanitize_env_for_nginx(env);
-    let context = build_context(app, app_path, env, paths)?;
-    let template_name = select_template(env);
-
-    let config_content = tera.render(template_name, &context)?;
     let config_file = paths.nginx_root.join(format!("{}.conf", app));
-    crate::util::write_atomic(&config_file, config_content.as_bytes())?;
-    validate_nginx_config(&config_file)?;
+    if let Err(e) = crate::util::write_atomic(&config_file, config_content.as_bytes()) {
+        return Err(e);
+    }
+    if let Err(e) = validate_nginx_config(&config_file) {
+        return Err(e);
+    }
 
     install_nginx_symlink(&config_file, app, paths);
 
     Ok(())
+}
+
+/// Render the app's config text without writing it.
+///
+/// Every backend address is checked for nginx directive characters before it
+/// reaches the template, the same as the ENV values are.
+#[allow(clippy::question_mark)]
+pub(super) fn render_nginx_config(
+    app: &str,
+    app_path: &Path,
+    env: &HashMap<String, String>,
+    backends: &[Backend],
+    paths: &crate::config::RikuPaths,
+) -> Result<String> {
+    let mut tera = tera::Tera::default();
+    if let Err(e) = register_templates(&mut tera) {
+        return Err(e);
+    }
+
+    let env = &sanitize_env_for_nginx(env);
+    let mut context = match build_context(app, app_path, env, paths) {
+        Ok(context) => context,
+        Err(e) => return Err(e),
+    };
+    let addresses: Result<Vec<String>> = backends
+        .iter()
+        .map(|backend| sanitize_nginx_value("RIKU_BACKENDS", &backend.to_string()))
+        .collect();
+    match addresses {
+        Ok(addresses) => context.insert("RIKU_BACKENDS", &addresses),
+        Err(e) => return Err(e),
+    }
+
+    let template_name = select_template(env);
+    match tera.render(template_name, &context) {
+        Ok(content) => Ok(content),
+        Err(e) => Err(anyhow::anyhow!(
+            "failed to render {template_name} for '{app}': {e}"
+        )),
+    }
 }
 
 /// Register all nginx Tera templates.
@@ -87,6 +131,10 @@ fn register_templates(tera: &mut tera::Tera) -> Result<()> {
         (
             "nginx_proxy.conf.tera",
             include_str!("../../../templates/nginx_proxy.conf.tera"),
+        ),
+        (
+            "nginx_upstream.conf.tera",
+            include_str!("../../../templates/nginx_upstream.conf.tera"),
         ),
         (
             "nginx_uwsgi.conf.tera",

@@ -98,7 +98,10 @@ pub fn configure(
     };
 
     match active {
-        Router::Nginx => crate::nginx::generate_nginx_config(app, app_path, env, paths),
+        Router::Nginx => {
+            let backends = crate::nginx::default_backends(app, env, paths);
+            crate::nginx::generate_nginx_config(app, app_path, env, &backends, paths)
+        }
         Router::Caddy => configure_caddy(app, env, paths),
         Router::Plugin(name) => configure_plugin(&name, app, env, paths),
     }

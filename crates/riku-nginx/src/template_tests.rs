@@ -1,4 +1,5 @@
 use super::*;
+use crate::backends::default_backends;
 
 const SOCKET: &str = "/srv/riku/myapp.sock";
 
@@ -68,20 +69,31 @@ fn test_all_expected_templates_registered() {
     assert!(names.contains(&"nginx_wsgi.conf.tera".to_string()));
 }
 
-/// Renders the config `generate_nginx_config` would write for `pairs`.
+/// Renders the config `generate_nginx_config` would write for `pairs`, with
+/// the backends `default_backends` picks for that ENV.
 /// No `RIKU_DOMAINS`, so an HTTPS only render skips certificate issuance.
 fn render(pairs: &[(&str, &str)]) -> String {
+    render_with(pairs, None)
+}
+
+/// Like [`render`], with an explicit backend list when `backends` is `Some`.
+fn render_with(pairs: &[(&str, &str)], backends: Option<&[Backend]>) -> String {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
     let env: HashMap<String, String> = pairs
         .iter()
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
+    let default = default_backends("myapp", &env, &paths);
 
-    let mut tera = tera::Tera::default();
-    register_templates(&mut tera).unwrap();
-    let context = build_context("myapp", temp_dir.path(), &env, &paths).unwrap();
-    tera.render(select_template(&env), &context).unwrap()
+    render_nginx_config(
+        "myapp",
+        temp_dir.path(),
+        &env,
+        backends.unwrap_or(&default),
+        &paths,
+    )
+    .unwrap()
 }
 
 /// nginx rejects a bare socket path as an upstream ("invalid host in
@@ -93,22 +105,43 @@ fn assert_socket_always_prefixed(config: &str) {
 }
 
 #[test]
-fn https_only_web_app_proxies_to_its_port() {
-    let config = render(&[
-        ("RIKU_HTTPS_ONLY", "true"),
-        ("RIKU_NGINX_PORTMAP", "true"),
-        ("RIKU_UPSTREAM_PORT", "5001"),
-        ("RIKU_NGINX_SOCKET", SOCKET),
-    ]);
+fn portmap_proxies_to_every_backend() {
+    let config = render_with(
+        &[("RIKU_NGINX_PORTMAP", "true")],
+        Some(&[Backend::Tcp(5001), Backend::Tcp(5002)]),
+    );
+
+    assert!(
+        config.contains(
+            "upstream myapp_UPSTREAM {\n  server 127.0.0.1:5001;\n  server 127.0.0.1:5002;\n}"
+        ),
+        "upstream block missing or malformed:\n{config}"
+    );
+    assert!(
+        config.contains("proxy_pass http://myapp_UPSTREAM;"),
+        "location not proxied to the upstream:\n{config}"
+    );
+}
+
+#[test]
+fn https_only_web_app_proxies_to_its_ports() {
+    let config = render_with(
+        &[("RIKU_HTTPS_ONLY", "true"), ("RIKU_NGINX_PORTMAP", "true")],
+        Some(&[Backend::Tcp(5001), Backend::Tcp(5002)]),
+    );
 
     assert!(config.contains("443 ssl"), "not an HTTPS config:\n{config}");
     assert!(
-        config.contains("proxy_pass http://127.0.0.1:5001;"),
-        "web app not proxied to its port:\n{config}"
+        config.contains("server 127.0.0.1:5001;") && config.contains("server 127.0.0.1:5002;"),
+        "upstream does not list both backends:\n{config}"
     );
     assert!(
-        !config.contains(SOCKET),
-        "web app proxied to a socket:\n{config}"
+        config.contains("proxy_pass http://myapp_UPSTREAM;"),
+        "web app not proxied to its upstream:\n{config}"
+    );
+    assert!(
+        config.find("upstream myapp_UPSTREAM") < config.find("server {"),
+        "upstream must sit outside the server blocks:\n{config}"
     );
 }
 
@@ -117,10 +150,25 @@ fn https_only_socket_app_never_uses_a_bare_socket_path() {
     let config = render(&[("RIKU_HTTPS_ONLY", "true"), ("RIKU_NGINX_SOCKET", SOCKET)]);
 
     assert!(
-        config.contains(&format!("proxy_pass http://unix:{SOCKET};")),
-        "socket app not proxied to its socket:\n{config}"
+        config.contains(&format!("server unix:{SOCKET};")),
+        "upstream does not name the socket:\n{config}"
+    );
+    assert!(
+        config.contains("proxy_pass http://myapp_UPSTREAM;"),
+        "socket app not proxied to its upstream:\n{config}"
     );
     assert_socket_always_prefixed(&config);
+}
+
+#[test]
+fn backend_with_nginx_directive_characters_is_refused() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
+    let hostile = [Backend::Unix("/s.sock; include /etc/passwd".into())];
+
+    let rendered = render_nginx_config("myapp", temp_dir.path(), &HashMap::new(), &hostile, &paths);
+
+    assert!(rendered.is_err(), "hostile backend was rendered");
 }
 
 #[test]
@@ -150,6 +198,7 @@ fn https_only_wsgi_app_passes_to_its_uwsgi_socket() {
     ]);
 
     assert!(config.contains("443 ssl"), "not an HTTPS config:\n{config}");
+    assert_socket_always_prefixed(&config);
     assert!(
         config.contains(&format!("uwsgi_pass unix:{SOCKET};")),
         "wsgi app not passed to uwsgi:\n{config}"
