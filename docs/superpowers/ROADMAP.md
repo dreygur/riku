@@ -38,7 +38,7 @@ work they describe.
 - Task 1 riku-args: done (79cf37b)
 - Task 2 riku-remote: done (52bd626)
 - Task 3 rk binary: done (f662519)
-- Task 4 packaging and docs: done (host check and mkdocs build pending, Docker was not running)
+- Task 4 packaging and docs: done (73096cf, host check and mkdocs build pending, Docker was not running)
 
 ### Phase 2: container services foundations (after phase 1)
 

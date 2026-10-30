@@ -1,4 +1,4 @@
-//! Top-level `riku -h` output, grouped by where each command runs.
+//! Top level `riku -h` output, grouped by where each command runs.
 //!
 //! clap's template language has no escape for `{`, so command descriptions are
 //! sanitized before they are spliced into the template.
@@ -12,30 +12,43 @@ use crate::placement::{client_rule, placement_of, ClientRule, Placement};
 const LOCAL_HEADING: &str = "Local commands:";
 const SERVER_HEADING: &str = "Server commands:";
 const HELP_ABOUT: &str = "Print this message or the help of the given subcommand(s)";
-const CLIENT_FORWARD_HEADING: &str = "Forwarded commands (run on the selected server):";
-
-type Row = (String, String);
 
 /// Forwarded group title when no server is implied by the repo or a default.
 pub const FORWARD_HEADING: &str =
     "Forwarded commands (run on the selected server, or here with --local):";
 
+type Row = (String, String);
+
+/// Whether the binary has a `--local` mode for the forwarded heading to mention.
+#[derive(Debug, Clone, Copy)]
+enum LocalMode {
+    Offered,
+    Absent,
+}
+
 fn escape_braces(text: &str) -> String {
     text.replace('{', "(").replace('}', ")")
 }
 
-/// Forwarded group title naming the server a command without `-s` reaches.
-pub fn forward_heading(server: Option<&ServerName>) -> String {
-    match server {
-        Some(name) => format!(
-            "Forwarded commands (run on {}, or here with --local):",
-            name.as_str()
-        ),
-        None => FORWARD_HEADING.to_string(),
+fn heading(server: Option<&ServerName>, mode: LocalMode) -> String {
+    let target = match server {
+        Some(name) => name.as_str(),
+        None => "the selected server",
+    };
+    match mode {
+        LocalMode::Offered => {
+            format!("Forwarded commands (run on {target}, or here with --local):")
+        }
+        LocalMode::Absent => format!("Forwarded commands (run on {target}):"),
     }
 }
 
-fn visible_in(root: &Command, placement: Placement) -> Vec<(String, String)> {
+/// Forwarded group title naming the server a command without `-s` reaches.
+pub fn forward_heading(server: Option<&ServerName>) -> String {
+    heading(server, LocalMode::Offered)
+}
+
+fn visible_in(root: &Command, placement: Placement) -> Vec<Row> {
     root.get_subcommands()
         .filter(|c| !c.is_hide_set() && placement_of(c.get_name()) == Some(placement))
         .map(|c| {
@@ -46,7 +59,7 @@ fn visible_in(root: &Command, placement: Placement) -> Vec<(String, String)> {
         .collect()
 }
 
-fn group_text(heading: &str, rows: &[(String, String)], width: usize) -> String {
+fn group_text(heading: &str, rows: &[Row], width: usize) -> String {
     if rows.is_empty() {
         return String::new();
     }
@@ -55,40 +68,6 @@ fn group_text(heading: &str, rows: &[(String, String)], width: usize) -> String 
         .map(|(name, about)| format!("  {name:<width$}  {about}\n"))
         .collect();
     format!("{heading}\n{lines}\n")
-}
-
-/// Returns the root `Cli` command with a help template that lists commands in
-/// Local, Server, Forwarded order. `forward_heading` titles the last group.
-pub fn command(forward_heading: &str) -> Command {
-    let root = Cli::command();
-    let mut local = visible_in(&root, Placement::Local);
-    local.push(("help".to_string(), HELP_ABOUT.to_string()));
-    let server = visible_in(&root, Placement::Server);
-    let forwarded = visible_in(&root, Placement::Forwarded);
-    with_groups(root, forward_heading, [local, server, forwarded])
-}
-
-/// The root command as `rk` shows it: only what a laptop can run. The remote
-/// dashboard counts as local there, `container` and the server only commands
-/// are left out, and `--local` is hidden since `rk` has no local mode.
-pub fn client_command(server: Option<&ServerName>) -> Command {
-    let root = Cli::command().name("rk").mut_arg("local", |a| a.hide(true));
-    let mut local: Vec<_> = visible_in(&root, Placement::Local)
-        .into_iter()
-        .filter(|(name, _)| client_rule(name) == ClientRule::RunsHere)
-        .collect();
-    local.extend(
-        visible_in(&root, Placement::Server)
-            .into_iter()
-            .filter(|(name, _)| client_rule(name) == ClientRule::RunsHere),
-    );
-    local.push(("help".to_string(), HELP_ABOUT.to_string()));
-    let forwarded = visible_in(&root, Placement::Forwarded);
-    let heading = match server {
-        Some(name) => format!("Forwarded commands (run on {}):", name.as_str()),
-        None => CLIENT_FORWARD_HEADING.to_string(),
-    };
-    with_groups(root, &heading, [local, Vec::new(), forwarded])
 }
 
 fn with_groups(root: Command, forward_heading: &str, rows: [Vec<Row>; 3]) -> Command {
@@ -110,6 +89,33 @@ fn with_groups(root: Command, forward_heading: &str, rows: [Vec<Row>; 3]) -> Com
         "{{about-with-newline}}\n{{usage-heading}} {{usage}}\n\n{groups}Options:\n{{options}}"
     );
     root.help_template(template)
+}
+
+/// Returns the root `Cli` command with a help template that lists commands in
+/// Local, Server, Forwarded order. `forward_heading` titles the last group.
+pub fn command(forward_heading: &str) -> Command {
+    let root = Cli::command();
+    let mut local = visible_in(&root, Placement::Local);
+    local.push(("help".to_string(), HELP_ABOUT.to_string()));
+    let server = visible_in(&root, Placement::Server);
+    let forwarded = visible_in(&root, Placement::Forwarded);
+    with_groups(root, forward_heading, [local, server, forwarded])
+}
+
+/// The root command as `rk` shows it: only what a laptop can run. The remote
+/// dashboard counts as local there, `container` and the server only commands
+/// are left out, and `--local` is hidden since `rk` has no local mode.
+pub fn client_command(server: Option<&ServerName>) -> Command {
+    let root = Cli::command().name("rk").mut_arg("local", |a| a.hide(true));
+    let mut local: Vec<Row> = [Placement::Local, Placement::Server]
+        .into_iter()
+        .flat_map(|placement| visible_in(&root, placement))
+        .filter(|(name, _)| client_rule(name) == ClientRule::RunsHere)
+        .collect();
+    local.push(("help".to_string(), HELP_ABOUT.to_string()));
+    let forwarded = visible_in(&root, Placement::Forwarded);
+    let title = heading(server, LocalMode::Absent);
+    with_groups(root, &title, [local, Vec::new(), forwarded])
 }
 
 #[cfg(test)]

@@ -235,7 +235,7 @@ riku/
 │   ├── riku-args/          # clap command tree, help, command placement (client_rule), shared parse_with_help
 │   ├── riku-remote/        # Laptop side: server list, forwarding, dashboard client, client plugins, quickstart, plugin_cmd
 │   ├── riku-client/        # Package riku-client, builds the rk binary (forwards server commands over ssh)
-│   ├── riku-cli/           # CLI command handlers (apps/, agent/, doctor/, dispatch/ local command execution, cli.rs, cmds.rs, ...)
+│   ├── riku-cli/           # CLI command handlers (apps/, agent/, doctor/, dispatch/ local command execution, ssh_command, setup, ...)
 │   ├── riku-config/        # Path & environment configuration (repository layer)
 │   ├── riku-deploy/        # Deployment orchestration: git_ops, env_setup, releases, router, scaling
 │   ├── riku-nginx/         # Nginx configuration generation (context, template, sanitize, ssl)

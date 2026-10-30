@@ -2,7 +2,7 @@
 name = "riku-util"
 version = "0.1.0"
 edition = "2021"
-description = "Riku shared utilities: fs, env, procfile, cron parsing, resource limits"
+description = "Riku shared utilities: fs, env, procfile, cron parsing, resource limits, token generation"
 authors = ["Rakibul Yeasin"]
 repository = "https://github.com/dreygur/riku"
 license = "MIT"

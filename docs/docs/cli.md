@@ -202,8 +202,10 @@ rk -s edge apps
 `rk` is a separate, smaller binary. It parses the same commands as `riku`, but
 it never runs server code: every server command is sent over ssh to the
 `riku` installed on the server. It runs only these commands itself: `server`,
-`plugin` (client plugins), `quickstart`, `help`, and `dashboard -s <name>`,
-which tunnels to the server's dashboard.
+`plugin` (client plugins), `quickstart`, `help`, and the remote form of
+`dashboard`, which tunnels to the dashboard of the chosen server. `dashboard`
+picks its server like every other command: `-s`, then the git remote of the
+current repo, then the default server.
 
 Install it with the install script, which fetches `rk-<os>-<arch>.tar.gz` from
 the release and checks its `.sha256`:
@@ -214,10 +216,12 @@ curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.s
 
 The server is chosen as in [Choosing the server](#choosing-the-server), minus
 the last rule: `rk` has no `--local` and never falls back to this machine. When
-no server is selected it stops with:
+no server is selected it stops with the first line below when the server list
+is empty, or the second, which names the registered servers:
 
 ```
-no server selected; add one with rk server add <name> <user@host>, or pass -s <name>
+no server selected; add one with rk server add <name> <user@host>, or pass -s <name> (none are registered)
+no server selected; add one with rk server add <name> <user@host>, or pass -s <name> (registered: edge, edge)
 ```
 
 Commands that only make sense on the server (`init`, `supervisor` and the

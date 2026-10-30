@@ -23,6 +23,27 @@ cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
 
 After running `riku init`, the binary will be installed to `~/.local/bin/riku` and you can use `riku` from anywhere.
 
+## The rk laptop client
+
+`rk` is a separate binary for your laptop (Linux or macOS). It runs riku commands on your servers over ssh and never runs server code. The server still needs the full `riku` from the steps above.
+
+Install it with the install script and the `--rk` flag:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh -s -- --rk
+```
+
+The script downloads the release asset `rk-<os>-<arch>.tar.gz`, checks it against the release `.sha256` when one is published, and installs to `~/.local/bin` (or `/usr/local/bin` as root). `RIKU_INSTALL_DIR` and `RIKU_VERSION` override the directory and release tag. Without `--rk` the same script installs `riku`.
+
+First use:
+
+```bash
+rk server add myserver riku@your-server-ip
+rk -s myserver apps
+```
+
+See [The rk client](cli.md#the-rk-client) for the full description.
+
 ## Installation Methods
 
 There are several ways to install Riku:
