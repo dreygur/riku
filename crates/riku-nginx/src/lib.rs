@@ -25,7 +25,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::util::backend::Backend;
-pub use backends::default_backends;
+pub use backends::{bind_address, default_backends, upstream_port_number};
 use template::{generate_nginx_config_from_template, use_custom_nginx_config};
 use validate::validate_nginx_config;
 

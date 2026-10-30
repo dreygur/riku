@@ -182,7 +182,10 @@ Caddy are built in; this seam is for third party routers.
 A `configure` request looks like this. `https` is true when the app is
 HTTPS only. `backends` lists every copy of the routed service, and the router
 balances across all of them. A backend is either `{"kind":"tcp","host":...,
-"port":...}` or `{"kind":"unix","path":...}`.
+"port":...}` or `{"kind":"unix","path":...}`. A tcp `host` is the app's
+`RIKU_BIND_ADDRESS` (default `127.0.0.1`), always an IP literal; a bind
+address that is not one, or a `RIKU_UPSTREAM_PORT` or `PORT` that is set but
+not a port number, fails the deploy before the plugin runs.
 
 ```json
 {"protocol":2,"app":"shop","domains":["shop.example.com"],"https":true,"backends":[{"kind":"tcp","host":"127.0.0.1","port":5001},{"kind":"unix","path":"/srv/riku/nginx/shop.sock"}]}

@@ -49,6 +49,30 @@ fn configure_request_lists_every_backend() {
 }
 
 #[test]
+fn plugin_backend_host_is_the_bind_address() {
+    let routed = |pairs: &[(&str, &str)]| plugin_route_plan(&env(pairs)).map(|plan| plan.backends);
+
+    assert_eq!(
+        routed(&[("PORT", "5001"), ("RIKU_BIND_ADDRESS", "10.0.0.5")]).unwrap(),
+        vec![Backend::Tcp {
+            host: "10.0.0.5".parse().unwrap(),
+            port: 5001
+        }]
+    );
+    assert_eq!(
+        routed(&[("PORT", "5001")]).unwrap(),
+        vec![Backend::loopback(5001)]
+    );
+    let err = routed(&[("RIKU_BIND_ADDRESS", "localhost")])
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("RIKU_BIND_ADDRESS") && err.contains("localhost"),
+        "{err}"
+    );
+}
+
+#[test]
 fn old_router_plugin_is_refused_before_running() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());

@@ -16,6 +16,7 @@
 //! caller-controlled argv. The plugin runs under the shared plugin timeout.
 
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
@@ -88,23 +89,14 @@ pub fn remove(app: &str, paths: &RikuPaths) -> Result<()> {
     }
 }
 
-/// The app's upstream port: `RIKU_UPSTREAM_PORT`, then `PORT`, default 8080.
-fn upstream_port_from_env(env: &HashMap<String, String>) -> u16 {
-    env.get("RIKU_UPSTREAM_PORT")
-        .or_else(|| env.get("PORT"))
-        .and_then(|p| p.trim().parse().ok())
-        .unwrap_or(8080)
-}
-
-/// The backends of an app's routed service. Until the supervisor reports its
-/// copies this is the single port named by the app's ENV.
-fn env_backends(env: &HashMap<String, String>) -> Vec<Backend> {
-    vec![Backend::loopback(upstream_port_from_env(env))]
-}
-
-/// The routing plan for an app, built from its ENV. A malformed
-/// `RIKU_DOMAINS` is an error, so nothing unvalidated reaches a router.
-fn route_plan(env: &HashMap<String, String>) -> Result<RoutePlan> {
+/// The routing plan for an app, built from its ENV, with one backend at `host`
+/// on the app's upstream port. Until the supervisor reports its copies that
+/// single port is all there is.
+///
+/// A malformed `RIKU_DOMAINS`, or a port key that is set but not a port
+/// number, is an error, so nothing unvalidated reaches a router.
+#[allow(clippy::question_mark)]
+fn route_plan(env: &HashMap<String, String>, host: IpAddr) -> Result<RoutePlan> {
     let raw = env
         .get("RIKU_DOMAINS")
         .map(String::as_str)
@@ -112,6 +104,10 @@ fn route_plan(env: &HashMap<String, String>) -> Result<RoutePlan> {
     let domains = match parse_domains(raw) {
         Ok(domains) => domains,
         Err(e) => return Err(anyhow!("invalid RIKU_DOMAINS: {e}")),
+    };
+    let port = match crate::nginx::upstream_port_number(env) {
+        Ok(port) => port,
+        Err(e) => return Err(e),
     };
     let https = if https_only(env) {
         HttpsPolicy::Only
@@ -121,7 +117,7 @@ fn route_plan(env: &HashMap<String, String>) -> Result<RoutePlan> {
     Ok(RoutePlan {
         domains,
         https,
-        backends: env_backends(env),
+        backends: vec![Backend::Tcp { host, port }],
     })
 }
 

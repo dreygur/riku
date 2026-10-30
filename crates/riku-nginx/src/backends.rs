@@ -59,21 +59,38 @@ pub(crate) fn socket_path(
     }
 }
 
-fn tcp_backend(env: &HashMap<String, String>) -> Result<Backend> {
+/// The address the app listens on: `RIKU_BIND_ADDRESS`, default `127.0.0.1`.
+/// A value that is not an IP literal (`localhost` included) is an error.
+pub fn bind_address(env: &HashMap<String, String>) -> Result<IpAddr> {
     let bind = env
         .get("RIKU_BIND_ADDRESS")
         .map_or(DEFAULT_BIND_ADDRESS, String::as_str);
-    let host: IpAddr = match bind.trim().parse() {
-        Ok(host) => host,
-        Err(_) => return Err(anyhow!("RIKU_BIND_ADDRESS is not an IP address: '{bind}'")),
-    };
+    match bind.trim().parse() {
+        Ok(host) => Ok(host),
+        Err(_) => Err(anyhow!("RIKU_BIND_ADDRESS is not an IP address: '{bind}'")),
+    }
+}
 
+/// The app's upstream port: `RIKU_UPSTREAM_PORT`, then `PORT`, default 8080.
+/// A value that is present but not a port number is an error naming its key.
+pub fn upstream_port_number(env: &HashMap<String, String>) -> Result<u16> {
     let (key, value) = upstream_port_entry(env);
-    let port: u16 = match value.trim().parse() {
-        Ok(port) => port,
-        Err(_) => return Err(anyhow!("{key} is not a port number: '{value}'")),
-    };
+    match value.trim().parse() {
+        Ok(port) => Ok(port),
+        Err(_) => Err(anyhow!("{key} is not a port number: '{value}'")),
+    }
+}
 
+#[allow(clippy::question_mark)]
+fn tcp_backend(env: &HashMap<String, String>) -> Result<Backend> {
+    let host = match bind_address(env) {
+        Ok(host) => host,
+        Err(e) => return Err(e),
+    };
+    let port = match upstream_port_number(env) {
+        Ok(port) => port,
+        Err(e) => return Err(e),
+    };
     Ok(Backend::Tcp { host, port })
 }
 

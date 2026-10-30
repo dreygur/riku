@@ -6,6 +6,7 @@
 //! injecting Caddyfile syntax.
 
 use std::collections::HashMap;
+use std::net::{IpAddr, Ipv4Addr};
 
 use anyhow::{anyhow, Result};
 
@@ -33,7 +34,8 @@ fn caddy_request(env: &HashMap<String, String>) -> Result<Option<RoutePlan>> {
         ));
     }
 
-    let plan = match route_plan(env) {
+    // Caddy reaches the app over loopback whatever RIKU_BIND_ADDRESS says.
+    let plan = match route_plan(env, IpAddr::V4(Ipv4Addr::LOCALHOST)) {
         Ok(plan) => plan,
         Err(e) => return Err(e),
     };
