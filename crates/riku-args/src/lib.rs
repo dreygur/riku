@@ -10,6 +10,7 @@
 pub mod address;
 pub mod app_hint;
 pub mod cli;
+mod client_text;
 pub mod cmds;
 pub mod container_args;
 pub mod help;

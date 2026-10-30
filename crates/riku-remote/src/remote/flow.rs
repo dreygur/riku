@@ -2,10 +2,10 @@
 //! target is known: the app hint, client plugins, the remote dashboard and
 //! forwarding. What runs locally is left to each binary.
 
+use crate::cli::{Cli, Commands};
 use anyhow::Result;
 use clap::ArgMatches;
 use riku_args::app_hint::apply_app_hint;
-use riku_args::cli::{Cli, Commands};
 
 use crate::client_plugins::try_execute_client_plugin;
 use crate::routing::{build_plugin_args, get_plugin_command};

@@ -68,12 +68,11 @@ work they describe.
 
 ## Known open problems, outside the plans
 
-- `riku init` decides root from `$USER`, not the effective uid
-  (crates/riku-cli/src/setup/init.rs around line 202).
 - `riku install-plugins` failed to download inside a Docker test container
   (reqwest); cause not confirmed.
-- The agent key form `command="riku agent --scope ..."` in
-  `docs/docs/ai-agents.md` does not parse.
-- Bracketed IPv6 server addresses are untested end to end.
-- A dropped link during `riku dashboard -s` reports "the remote dashboard
-  ended (exit status: 255)" rather than saying the link dropped.
+- The agent forced command `command="riku agent --scope ..."` now parses,
+  but sshd runs it with the client's request only in `SSH_ORIGINAL_COMMAND`,
+  which `riku agent` never reads, so an agent behind that key sees only the
+  help output. Without `--scope` or `RIKU_AGENT_SCOPE`, the scope falls back
+  to the first `--scope` line anywhere in `authorized_keys`, whichever key
+  logged in (crates/riku-cli/src/agent/auth.rs).

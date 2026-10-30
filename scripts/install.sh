@@ -108,7 +108,7 @@ mkdir -p "$install_dir"
 mv "${tmp}/${bin}" "${install_dir}/${bin}"
 chmod +x "${install_dir}/${bin}"
 
-say "✓ ${bin} installed: ${install_dir}/${bin}"
+say "-----> ${bin} installed: ${install_dir}/${bin}"
 
 # --- next steps --------------------------------------------------------------
 case ":${PATH}:" in

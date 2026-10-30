@@ -7,8 +7,10 @@ use clap::{Command, CommandFactory};
 
 use crate::address::ServerName;
 use crate::cli::Cli;
+use crate::client_text::for_client;
 use crate::placement::{client_rule, placement_of, ClientRule, Placement};
 
+const CLIENT_PROGRAM: &str = "rk";
 const LOCAL_HEADING: &str = "Local commands:";
 const SERVER_HEADING: &str = "Server commands:";
 const HELP_ABOUT: &str = "Print this message or the help of the given subcommand(s)";
@@ -106,7 +108,9 @@ pub fn command(forward_heading: &str) -> Command {
 /// dashboard counts as local there, `container` and the server only commands
 /// are left out, and `--local` is hidden since `rk` has no local mode.
 pub fn client_command(server: Option<&ServerName>) -> Command {
-    let root = Cli::command().name("rk").mut_arg("local", |a| a.hide(true));
+    let root = for_client(Cli::command(), CLIENT_PROGRAM)
+        .name(CLIENT_PROGRAM)
+        .mut_arg("local", |a| a.hide(true));
     let mut local: Vec<Row> = [Placement::Local, Placement::Server]
         .into_iter()
         .flat_map(|placement| visible_in(&root, placement))
