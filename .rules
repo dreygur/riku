@@ -186,6 +186,10 @@
     - The fix is to make the test hermetic: give it its own temp dir, its own env scope, no dependency on run order or on what another test left behind. Serialize tests against shared state only as a last resort, and only for the specific tests that must share it
     - Banned as a "fix": `#[ignore]`-ing the test, adding a retry wrapper, loosening the assertion to stop noticing the divergence, or re-running until it's green and calling that resolved. A single green run does not prove a flake is fixed; if you suspect one is gone, run the suspect test repeatedly, including with a different `--test-threads` count, before saying so
 
+## Ongoing Work
+
+Read `docs/superpowers/ROADMAP.md` at the start of a session. It lists what is done, the next phase, its spec and plan, and per task status. Update its status lines in the same commit as the work.
+
 ## Project Overview
 
 Riku is a complete Rust port of the Piku micro-PaaS, providing Heroku-like git push deployments. It's a single binary written in Rust with no runtime dependencies.
