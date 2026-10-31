@@ -4,7 +4,7 @@ use riku_container::compose::ComposeProject;
 use riku_container::types::{labels, HostIp, PortBinding, Protocol, RestartPolicy};
 
 use super::*;
-use crate::containers::mock_engine::project_in;
+use crate::mock_engine::project_in;
 
 const WEB: &str = "
 services:

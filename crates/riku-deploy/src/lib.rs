@@ -39,7 +39,10 @@ pub mod env_setup;
 pub mod git_ops;
 pub mod hooks;
 pub mod lock;
+#[cfg(test)]
+mod mock_engine;
 pub mod releases;
+pub mod rolling;
 pub mod router;
 pub mod scaling;
 pub mod service_update;

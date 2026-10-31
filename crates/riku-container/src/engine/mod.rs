@@ -10,6 +10,7 @@
 //! shell. Names, paths and image references that came from a compose file are
 //! validated by the types in [`crate::types`] before they are used here.
 
+mod bounded;
 mod build;
 mod control;
 mod detect;

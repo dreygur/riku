@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 use std::fs;
 
 use super::*;
-use crate::containers::mock_engine::{logged, mock_engine, project_in};
 use crate::containers::AppName;
+use crate::mock_engine::{logged, mock_engine, project_in};
 
 const TWO_SERVICES: &str = "
 services:
