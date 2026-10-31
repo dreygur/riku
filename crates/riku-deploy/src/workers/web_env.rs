@@ -15,6 +15,7 @@ use crate::config::RikuPaths;
 const UWSGI_PROCESSES: &str = "4";
 const UWSGI_THREADS: &str = "4";
 const RIKU_NGINX_EXTERNAL_PORT: &str = "80";
+const PORT_PICK_ATTEMPTS: usize = 20;
 
 /// Keys older riku versions persisted for the one address of the last copy.
 const LEGACY_ADDRESS_KEYS: [&str; 2] = ["RIKU_UPSTREAM_PORT", "UWSGI_SOCKET"];
@@ -71,14 +72,46 @@ pub(super) fn pinned_port(env: &HashMap<String, String>) -> Result<Option<u16>> 
     }
 }
 
+fn free_loopback_port() -> Result<u16> {
+    match crate::util::get_free_port("127.0.0.1") {
+        Ok(port) => Ok(port),
+        Err(e) => Err(anyhow!("failed to allocate a port: {e}")),
+    }
+}
+
+/// A port from `pick` that is not in `taken`. The OS hands out a port it
+/// has just released again now and then, and two copies on one port leave
+/// one of them crash looping behind the router.
+#[allow(clippy::question_mark)]
+fn unused_port(taken: &[u16], mut pick: impl FnMut() -> Result<u16>) -> Result<u16> {
+    for _ in 0..PORT_PICK_ATTEMPTS {
+        let port = match pick() {
+            Ok(port) => port,
+            Err(e) => return Err(e),
+        };
+        if !taken.contains(&port) {
+            return Ok(port);
+        }
+    }
+    Err(anyhow!(
+        "could not find a port distinct from the app's other copies"
+    ))
+}
+
 /// Use the pinned port or allocate a free one, and inject nginx port-map
 /// variables into the environment.
-fn configure_web_env(socket_path: &Path, env: &mut HashMap<String, String>) -> Result<()> {
+#[allow(clippy::question_mark)]
+fn configure_web_env(
+    socket_path: &Path,
+    env: &mut HashMap<String, String>,
+    taken: &[u16],
+    pick: impl FnMut() -> Result<u16>,
+) -> Result<()> {
     let port = match pinned_port(env) {
         Ok(Some(port)) => port,
-        Ok(None) => match crate::util::get_free_port("127.0.0.1") {
+        Ok(None) => match unused_port(taken, pick) {
             Ok(port) => port,
-            Err(e) => return Err(anyhow!("failed to allocate a port: {e}")),
+            Err(e) => return Err(e),
         },
         Err(e) => return Err(e),
     };
@@ -167,6 +200,7 @@ pub(super) fn build_worker_env(
     kind: &str,
     copy: CopyIndex,
     base_env: &HashMap<String, String>,
+    taken: &[u16],
     paths: &RikuPaths,
 ) -> Result<HashMap<String, String>> {
     let mut env = base_env.clone();
@@ -179,7 +213,7 @@ pub(super) fn build_worker_env(
 
     if is_wsgi_kind(kind) {
         configure_wsgi_env(&socket_path, &mut env);
-    } else if let Err(e) = configure_web_env(&socket_path, &mut env) {
+    } else if let Err(e) = configure_web_env(&socket_path, &mut env, taken, free_loopback_port) {
         return Err(e);
     }
 

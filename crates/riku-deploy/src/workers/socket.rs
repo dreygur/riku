@@ -1,7 +1,7 @@
 //! Check for an app that names its uWSGI socket with `RIKU_NGINX_SOCKET`.
 //!
-//! One path cannot be shared by several copies, so such an app runs one web
-//! facing process. The check runs before any worker config changes.
+//! One path cannot be shared by several copies, so such an app runs one uWSGI
+//! process. The check runs before any worker config changes.
 
 use std::collections::HashMap;
 
@@ -11,10 +11,10 @@ use crate::config::RikuPaths;
 
 use super::read_scaling_count;
 
-const WEB_FACING_KINDS: [&str; 5] = ["web", "wsgi", "jwsgi", "rwsgi", "php"];
+const WSGI_KINDS: [&str; 4] = ["wsgi", "jwsgi", "rwsgi", "php"];
 
-/// Refuse a custom `RIKU_NGINX_SOCKET` when any web facing kind is scaled
-/// past one process.
+/// Refuse a custom `RIKU_NGINX_SOCKET` when any uWSGI kind is scaled
+/// past one process. A TCP web app ignores the key.
 #[allow(clippy::question_mark)]
 pub(super) fn check_custom_socket(
     app: &str,
@@ -24,7 +24,7 @@ pub(super) fn check_custom_socket(
     if !env.contains_key("RIKU_NGINX_SOCKET") {
         return Ok(());
     }
-    for kind in WEB_FACING_KINDS {
+    for kind in WSGI_KINDS {
         let count = match read_scaling_count(paths, app, kind) {
             Ok(count) => count,
             Err(e) => return Err(e),

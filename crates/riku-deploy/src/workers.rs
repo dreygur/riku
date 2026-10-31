@@ -77,6 +77,7 @@ pub fn create_workers_generic(
     if let Err(e) = check_custom_socket(app, env, paths) {
         return Err(e);
     }
+    let mut taken = enabled_ports(app, paths);
     if should_restart(env) {
         remove_stale_configs(app, paths);
     }
@@ -110,10 +111,13 @@ pub fn create_workers_generic(
         for i in 1..=count {
             let copy =
                 riku_container::types::CopyIndex::new(i).expect("copies are numbered from 1");
-            let worker_env = match build_worker_env(app, kind, copy, env, paths) {
+            let worker_env = match build_worker_env(app, kind, copy, env, &taken, paths) {
                 Ok(worker_env) => worker_env,
                 Err(e) => return Err(e),
             };
+            if let Some(port) = worker_env.get("PORT").and_then(|p| p.parse().ok()) {
+                taken.push(port);
+            }
             if let Err(e) =
                 write_worker_config(app, app_path, kind, effective_cmd, i, worker_env, paths)
             {
@@ -128,6 +132,18 @@ pub fn create_workers_generic(
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
+
+/// Ports the app's enabled web copies run on. Old copies keep theirs until
+/// the supervisor restarts them, so new copies must not be given the same.
+fn enabled_ports(app: &str, paths: &RikuPaths) -> Vec<u16> {
+    match crate::router::web_copies(app, paths) {
+        Ok(copies) => copies
+            .iter()
+            .filter_map(|copy| copy.env.get("PORT").and_then(|port| port.parse().ok()))
+            .collect(),
+        Err(_) => Vec::new(),
+    }
+}
 
 /// Returns true when `RIKU_AUTO_RESTART` is not explicitly disabled.
 fn should_restart(env: &HashMap<String, String>) -> bool {

@@ -270,13 +270,26 @@ fn pinned_app(tmp: &TempDir) -> (RikuPaths, std::path::PathBuf) {
 fn custom_socket_refuses_scale() {
     let tmp = TempDir::new().unwrap();
     let (paths, app_path) = pinned_app(&tmp);
-    fs::write(paths.env_root.join("myapp/SCALING"), "web=2\n").unwrap();
+    fs::write(paths.env_root.join("myapp/SCALING"), "wsgi=2\n").unwrap();
+    fs::write(app_path.join("Procfile"), "wsgi: uwsgi app.ini\n").unwrap();
     let env = HashMap::from([("RIKU_NGINX_SOCKET".to_string(), "/srv/s.sock".to_string())]);
 
     let err = create_workers_generic("myapp", &app_path, &env, &paths, None).unwrap_err();
 
     assert!(err.to_string().contains("RIKU_NGINX_SOCKET"), "{err}");
-    assert!(!paths.workers_available.join("myapp-web-1.toml").exists());
+    assert!(!paths.workers_available.join("myapp-wsgi-1.toml").exists());
+}
+
+#[test]
+fn stale_custom_socket_does_not_stop_a_tcp_web_app_scaling() {
+    let tmp = TempDir::new().unwrap();
+    let (paths, app_path) = pinned_app(&tmp);
+    fs::write(paths.env_root.join("myapp/SCALING"), "web=2\n").unwrap();
+    let env = HashMap::from([("RIKU_NGINX_SOCKET".to_string(), "/srv/s.sock".to_string())]);
+
+    create_workers_generic("myapp", &app_path, &env, &paths, None).unwrap();
+
+    assert!(paths.workers_available.join("myapp-web-2.toml").exists());
 }
 
 #[test]
