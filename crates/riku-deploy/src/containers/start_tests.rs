@@ -5,8 +5,8 @@ use std::os::unix::fs::symlink;
 use riku_container::types::CopyIndex;
 
 use super::*;
-use crate::containers::mock_engine::{logged, mock_engine, project_in};
 use crate::containers::{copy_spec, AppName};
+use crate::mock_engine::{logged, mock_engine, project_in};
 
 const ID: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 

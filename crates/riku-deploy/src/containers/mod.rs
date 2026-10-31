@@ -14,8 +14,6 @@
 #![allow(clippy::question_mark)]
 
 mod images;
-#[cfg(test)]
-mod mock_engine;
 mod ports;
 mod spec;
 mod start;

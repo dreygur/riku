@@ -1776,6 +1776,7 @@ dependencies = [
  "glob",
  "libc",
  "nix",
+ "reqwest",
  "riku-bundle",
  "riku-caddy",
  "riku-config",
