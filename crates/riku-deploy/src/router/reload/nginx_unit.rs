@@ -37,12 +37,13 @@ const RETRIGGER_AFTER: Duration = Duration::from_secs(5);
 #[cfg(test)]
 const RETRIGGER_AFTER: Duration = Duration::from_millis(200);
 const NGINX_UNIT: &str = "riku-nginx-reload.service";
-const UNIT_PROPERTIES: &str = "ExecMainStartTimestampMonotonic,ExecMainExitTimestampMonotonic,ExecMainStatus,LoadState,ActiveState";
+const UNIT_PROPERTIES: &str =
+    "ExecMainStartTimestampMonotonic,ExecMainExitTimestampMonotonic,ExecMainStatus,LoadState";
 
 /// How nginx will be reloaded, decided before the config is written.
 pub enum Baseline {
-    /// The reload unit exists. `busy` is whether it was running at the time.
-    Unit { busy: bool },
+    /// The reload unit exists.
+    Unit,
     /// No usable reload unit: run `nginx -s reload` directly.
     Direct,
 }
@@ -50,19 +51,9 @@ pub enum Baseline {
 struct UnitState {
     exit_ok: bool,
     load_state: String,
-    active_state: String,
     started_at: u64,
     exited_at: u64,
     status: String,
-}
-
-impl UnitState {
-    fn running(&self) -> bool {
-        matches!(
-            self.active_state.as_str(),
-            "active" | "activating" | "reloading"
-        )
-    }
 }
 
 fn parse_timestamp(key: &str, raw: &str) -> u64 {
@@ -101,7 +92,6 @@ fn read_unit(programs: &ReloadPrograms) -> Result<UnitState> {
     Ok(UnitState {
         exit_ok: output.status.success(),
         load_state: value("LoadState"),
-        active_state: value("ActiveState"),
         started_at: parse_timestamp(
             "ExecMainStartTimestampMonotonic",
             &value("ExecMainStartTimestampMonotonic"),
@@ -135,9 +125,7 @@ impl Baseline {
             );
             return Baseline::Direct;
         }
-        Baseline::Unit {
-            busy: state.running(),
-        }
+        Baseline::Unit
     }
 }
 
@@ -173,11 +161,12 @@ fn confirmed(state: &UnitState, written_at: u64) -> Option<Result<()>> {
 }
 
 /// Wait for a run of the reload unit that started after the config was
-/// written. When the unit was busy at write time and its run ends without a
-/// new one starting, the watched directory is touched once to make the path
-/// unit fire again.
+/// written. If no such run has started by `RETRIGGER_AFTER` (a run already
+/// in flight, or a concurrent deploy's run, took the path unit's trigger),
+/// the watched directory is touched once to make the path unit fire again.
+/// An older run is never accepted.
 #[allow(clippy::question_mark)]
-pub fn await_unit(paths: &RikuPaths, busy: bool) -> Result<()> {
+pub fn await_unit(paths: &RikuPaths) -> Result<()> {
     let written_at = match monotonic_micros() {
         Ok(now) => now,
         Err(e) => return Err(e),
@@ -193,7 +182,7 @@ pub fn await_unit(paths: &RikuPaths, busy: bool) -> Result<()> {
             return outcome;
         }
         let elapsed = started.elapsed();
-        if busy && !retriggered && elapsed >= RETRIGGER_AFTER && !state.running() {
+        if !retriggered && elapsed >= RETRIGGER_AFTER && state.started_at < written_at {
             touch_watched_dir(&paths.nginx_root);
             retriggered = true;
         }

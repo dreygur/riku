@@ -57,7 +57,7 @@ fn reload_caddy(programs: &ReloadPrograms) -> Result<()> {
 
 fn confirm(router: &Router, paths: &RikuPaths, before: &Baseline) -> Result<()> {
     match (router, before) {
-        (Router::Nginx, Baseline::Unit { busy }) => nginx_unit::await_unit(paths, *busy),
+        (Router::Nginx, Baseline::Unit) => nginx_unit::await_unit(paths),
         (Router::Nginx, Baseline::Direct) => {
             crate::nginx::reload_nginx_with(&paths.reload_programs.nginx)
         }

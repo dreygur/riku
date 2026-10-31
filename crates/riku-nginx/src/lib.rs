@@ -75,14 +75,6 @@ pub fn generate_nginx_config(
 /// nginx when a symlink was cleared, and returns the reload error after the
 /// files are gone.
 pub fn remove_nginx_config(app: &str, paths: &crate::config::RikuPaths) -> Result<()> {
-    remove_nginx_config_with(app, paths, "nginx")
-}
-
-fn remove_nginx_config_with(
-    app: &str,
-    paths: &crate::config::RikuPaths,
-    nginx: &str,
-) -> Result<()> {
     let config_file = paths.nginx_root.join(format!("{}.conf", app));
     if config_file.exists() {
         if let Err(e) = fs::remove_file(&config_file) {
@@ -109,7 +101,7 @@ fn remove_nginx_config_with(
     }
 
     let reloaded = if unlinked {
-        reload_nginx_with(nginx)
+        reload_nginx_with(&paths.reload_programs.nginx)
     } else {
         Ok(())
     };

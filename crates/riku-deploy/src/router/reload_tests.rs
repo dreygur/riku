@@ -144,6 +144,16 @@ fn nginx_reload_retriggers_the_path_unit_once_the_old_run_ends() {
 }
 
 #[test]
+fn nginx_reload_retriggers_after_a_run_that_started_unseen_and_finished() {
+    let (outcome, _paths, _tmp) = nginx_reload(
+        &[(50, OLD, 0, "inactive"), (150, 160, 0, "inactive")],
+        &[(NEW, NEW + 1, 0, "inactive")],
+    );
+
+    outcome.unwrap();
+}
+
+#[test]
 fn nginx_reload_fails_on_unit_error() {
     let (outcome, paths, _tmp) = nginx_reload(
         &[(50, OLD, 0, "inactive"), (NEW, NEW + 1, 1, "inactive")],

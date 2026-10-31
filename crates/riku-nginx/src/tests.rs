@@ -315,7 +315,10 @@ fn remove_nginx_config_clears_a_symlink_left_dangling_by_the_config_removal() {
     fs::write(&mock_nginx, "#!/bin/sh\nexit 0\n").unwrap();
     fs::set_permissions(&mock_nginx, fs::Permissions::from_mode(0o755)).unwrap();
 
-    super::remove_nginx_config_with("myapp", &paths, mock_nginx.to_str().unwrap()).unwrap();
+    let mut paths = paths;
+    paths.reload_programs.nginx = mock_nginx;
+
+    super::remove_nginx_config("myapp", &paths).unwrap();
 
     assert!(
         symlink.symlink_metadata().is_err(),
