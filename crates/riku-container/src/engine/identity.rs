@@ -6,10 +6,9 @@
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use anyhow::{anyhow, Result};
-use riku_util::spawn::output_retrying_etxtbsy;
+use riku_config::settings::EngineSettings;
 use serde_json::Value;
 
 use super::detect::EngineBinary;
@@ -52,6 +51,7 @@ pub fn parse_identity(binary_name: &str, version_json: &str) -> Result<EngineIde
 pub struct Engine {
     program: PathBuf,
     identity: EngineIdentity,
+    settings: EngineSettings,
 }
 
 impl Engine {
@@ -70,6 +70,7 @@ impl Engine {
                 name: binary.binary_name.clone(),
                 version: String::new(),
             },
+            settings: EngineSettings::default(),
         };
         let json = match engine.output(&["version".into(), "--format".into(), "json".into()]) {
             Ok(json) => json,
@@ -87,6 +88,13 @@ impl Engine {
         Ok(engine)
     }
 
+    /// Use `settings` for the time limits of every engine call. The version
+    /// read in [`Engine::open`] runs before this and uses the defaults.
+    pub fn with_settings(mut self, settings: EngineSettings) -> Engine {
+        self.settings = settings;
+        self
+    }
+
     /// What the engine reported about itself.
     pub fn identity(&self) -> &EngineIdentity {
         &self.identity
@@ -96,29 +104,13 @@ impl Engine {
         &self.program
     }
 
-    /// Run the engine with `args` and return stdout.
-    ///
-    /// A non zero exit is an error carrying the command name and trimmed stderr.
+    pub(super) fn settings(&self) -> &EngineSettings {
+        &self.settings
+    }
+
+    /// Run the engine with `args` and return stdout, within `call_timeout`.
     pub(crate) fn output(&self, args: &[OsString]) -> Result<String> {
-        let command = args
-            .first()
-            .map(|a| a.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let out = match output_retrying_etxtbsy(Command::new(&self.program).args(args)) {
-            Ok(out) => out,
-            Err(e) => {
-                return Err(anyhow!(
-                    "cannot run '{command}' on the container engine: {e}"
-                ))
-            }
-        };
-        if !out.status.success() {
-            return Err(anyhow!(
-                "container engine '{command}' failed: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            ));
-        }
-        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+        self.output_within(args, self.settings.call_timeout)
     }
 }
 

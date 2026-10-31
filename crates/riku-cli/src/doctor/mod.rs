@@ -14,6 +14,7 @@ pub mod app_env;
 pub mod checks;
 pub mod forced_commands;
 pub mod router_check;
+pub mod settings_check;
 
 use std::path::{Path, PathBuf};
 
@@ -127,6 +128,7 @@ pub fn collect(paths: &RikuPaths, home: &Path) -> Vec<Check> {
     checks.extend(checks::binary());
     checks.push(checks::systemd_service());
     checks.extend(router_check::router(paths));
+    checks.push(settings_check::settings_file(paths));
     checks.push(checks::plugins(paths));
     checks.push(checks::disk(paths));
     checks.push(checks::ssh_access());

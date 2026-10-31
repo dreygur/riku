@@ -13,6 +13,7 @@ use std::path::{Component, Path, PathBuf};
 pub mod container_engine;
 pub mod reload_programs;
 pub mod router;
+pub mod settings;
 
 pub use reload_programs::ReloadPrograms;
 
@@ -103,6 +104,8 @@ pub struct RikuPaths {
     pub router_file: PathBuf,
     /// Holds the container engine choice. See [`container_engine::load`].
     pub container_engine_file: PathBuf,
+    /// Holds the server wide settings. See [`settings::load`].
+    pub settings_file: PathBuf,
     pub cache_root: PathBuf,
     pub workers_root: PathBuf,
     pub workers_available: PathBuf,
@@ -150,6 +153,7 @@ impl RikuPaths {
             caddy_root: riku_root.join("caddy"),
             router_file: riku_root.join(router::ROUTER_FILE),
             container_engine_file: riku_root.join(container_engine::ENGINE_FILE),
+            settings_file: riku_root.join(settings::SETTINGS_FILE),
             cache_root: riku_root.join("cache"),
             workers_root: riku_root.join("workers"),
             workers_available: riku_root.join("workers-available"),

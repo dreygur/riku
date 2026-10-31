@@ -49,11 +49,16 @@ impl Engine {
     }
 
     /// Send the stop signal, then kill after `grace`, rounded up to a whole
-    /// second.
+    /// second. The engine call itself is given `stop_extra` more than the
+    /// grace before riku gives up on it.
     pub fn stop(&self, id: &ContainerId, grace: Duration) -> Result<()> {
-        let secs = whole_seconds_up(grace).to_string();
-        self.output(&args_of(["stop", "-t", &secs, id.as_str()]))
-            .map(|_| ())
+        let secs = whole_seconds_up(grace);
+        let limit = Duration::from_secs(secs) + self.settings().stop_extra;
+        self.output_within(
+            &args_of(["stop", "-t", &secs.to_string(), id.as_str()]),
+            limit,
+        )
+        .map(|_| ())
     }
 
     /// Send `signal` to the container's main process.
@@ -67,13 +72,14 @@ impl Engine {
         self.output(&args_of(["rm", id.as_str()])).map(|_| ())
     }
 
-    /// Pull `image` from its registry.
+    /// Pull `image` from its registry, streaming the engine's output and
+    /// stopping it at the pull limit.
     pub fn pull(&self, image: &str) -> Result<()> {
         match check_positional("image", image) {
             Ok(()) => {}
             Err(e) => return Err(e),
         }
-        self.output(&args_of(["pull", image])).map(|_| ())
+        self.run_streamed(&args_of(["pull", image]), self.settings().pull_timeout)
     }
 
     /// A `logs` command for the caller to spawn and stream. `tail` limits the

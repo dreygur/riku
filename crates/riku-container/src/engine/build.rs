@@ -82,13 +82,14 @@ fn build_args(spec: &BuildSpec) -> Result<Vec<OsString>> {
 }
 
 impl Engine {
-    /// Build an image from `spec.context`.
+    /// Build an image from `spec.context`, streaming the engine's output and
+    /// stopping it at the build limit.
     pub fn build(&self, spec: &BuildSpec) -> Result<()> {
         let args = match build_args(spec) {
             Ok(args) => args,
             Err(e) => return Err(anyhow!("cannot build {}: {e}", spec.tag)),
         };
-        self.output(&args).map(|_| ())
+        self.run_streamed(&args, self.settings().build_timeout)
     }
 }
 

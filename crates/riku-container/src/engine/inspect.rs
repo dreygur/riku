@@ -77,7 +77,7 @@ impl Engine {
         if let Some(filter) = filter {
             args.extend(["--filter", filter].map(OsString::from));
         }
-        match self.output_bounded(&args) {
+        match self.output(&args) {
             Ok(stdout) => parse_ids(&stdout),
             Err(e) => Err(anyhow!("cannot list containers: {e}")),
         }
@@ -113,7 +113,7 @@ impl Engine {
                 .map(OsString::from)
                 .collect();
             args.extend(ids.iter().map(|id| OsString::from(id.as_str())));
-            self.output_bounded(&args)
+            self.output(&args)
         };
         match fetch_present(self, ids, run, parse_inspect) {
             Ok(infos) => Ok(infos),
