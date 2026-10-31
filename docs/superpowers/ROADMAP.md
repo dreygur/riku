@@ -120,7 +120,21 @@ work they describe.
   yet, written after 3a. Owner decisions for 3a are in its Global
   Constraints. Ask the owner before pushing, merging elsewhere or touching
   the test server; ask for the confidential names before the first commit.
-- 3a task status: none started.
+- 3a task status (branch `feat/container-integration`, local only):
+  - Task 1 confirmed router reload: done (7673cc9..598bc97)
+  - Task 2 every web copy a backend: done (42c59b4..01583ef)
+  - Task 3 engine driver additions: done (a02dac2..b9f38ad)
+  - Task 4 start one container copy: done (be6cf54..6e4fcf9)
+  - Task 5 wait for health: done (2bf098e..068157e)
+  - Task 6 rolling replacement: done (b32713d..06ff205)
+  - Task 10 supervisor fixes: done (334b7aa)
+  - Task 17 settings.toml and engine time limits: added 2026-11-01
+  - Tasks 7 to 9, 11 to 16: open
+- Owner decisions 2026-11-01: engine time limits in a new
+  `~/.riku/settings.toml` (short calls 30 s, stop grace plus 30 s, pull and
+  build 30 min); supervisor follows engine events and polls stats every
+  30 s; restart counts reset on each deploy; nginx reload confirmation
+  checked in a systemd container on the development machine.
 - Docs tunnel fix (first small item): done.
 - Phase 2 run ledger with every ruling, owner decision and about 60 deferred
   minor findings (several name phase 3 work):
@@ -149,9 +163,22 @@ work they describe.
   server setting.
 - (3b) The ssh sync entry point logs the refusal cause `receive` returns.
 
+### After 3a: small boards and binary size
+
+- One task: build targets for Pi Zero / Zero W (armv6), Pi Zero 2 W and Pi
+  3/4/5 (arm64, armv7), shipped as both glibc and static musl builds; a size
+  profile trial (`opt-level = "z"`, `panic = "abort"`); sizes of riku and rk
+  measured per target before and after. The owner sets a size budget from
+  the measurements. Move ROUTER and CONTAINER_ENGINE into settings.toml with
+  a `riku doctor --fix` migration.
+
 ### Phase 4: one rk managing many servers
 
 - No design yet. The owner wants to be asked questions interactively first.
+- Owner direction 2026-11-01: a fleet such as one controller board and ten
+  host boards, driven from a PC. The controller is a hub (always on,
+  aggregate dashboard, scheduling) that rk can bypass to reach a host
+  directly when the controller is down.
 
 ## Known open problems, outside the plans
 

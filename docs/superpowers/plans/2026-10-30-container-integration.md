@@ -258,9 +258,9 @@ Opus review: names, mounts and env cross a trust boundary.
 - Consumes: `restart_copy` and `RestartOutcome` (Task 7) through `ControlActions::restart_copy(&self, paths: &RikuPaths, app: &str, service: &str, copy: u32) -> Result<RestartOutcome>`; `RestartOutcome` moves to `riku-supervisor` (`health/actions.rs`) so the supervisor does not depend on riku-deploy, and riku-deploy re-exports it.
 - Produces: `pub enum RestartPolicyLabel { No, Always, UnlessStopped, OnFailure(Option<u32>) }` with `TryFrom<&str>`; `fn should_restart(policy, exit_code: i32, restarts: u32) -> bool`.
 - Produces: `ProcessStats.container: Option<ContainerFacts>` with `pub struct ContainerFacts { pub id: String, pub image: String, pub state: String, pub exit_code: Option<i32>, pub cpu_percent: f64 }`; rows keyed `<app>-<service>-<n>`, `kind` = service, `ordinal` = copy, `pid` = None, `memory_bytes` from engine stats.
-- Behaviour: on start no copy is stopped (adoption); each tick lists riku containers per app, starts a log follower per running copy (`logs_command(follow, tail Some(0))` appending to `{log_root}/{app}/{service}.{n}.log`; tail 0 on adoption so lines are not repeated), restarts exited copies per policy with the existing backoff `min(60, 2^min(n,6))` s, counts restarts in memory per container name.
+- Behaviour: on start no copy is stopped (adoption) and one listing finds every riku container; after that the supervisor follows `<engine> events` (container start, die, health status) through one long running process, so it reacts to a crash without polling, and polls engine stats every 30 s (`CONTAINER_STATS_INTERVAL`) for memory and CPU. Engines without `events` (capability probe) fall back to a listing every 30 s. It starts a log follower per running copy (`logs_command(follow, tail Some(0))` appending to `{log_root}/{app}/{service}.{n}.log`; tail 0 on adoption so lines are not repeated), restarts exited copies per policy with the existing backoff `min(60, 2^min(n,6))` s, counts restarts in memory per container name. Owner decision 2026-11-01: restart counts mean restarts since the last deploy, so a new container id (containers) or a rewritten worker TOML (Procfile copies) starts at 0.
 
-- [ ] **Step 1: Failing tests:** `adoption_never_stops_copies` (fake engine with two running copies, a fresh supervisor tick records no stop/kill/remove), `busy_deploy_skips_restart` (Review Focus 3: `restart_copy` returns `Busy`, restart count unchanged, retried next tick), `on_failure_respects_limit`, `exit_zero_not_restarted_on_failure`, `stats_rows_carry_engine_state`.
+- [ ] **Step 1: Failing tests:** `adoption_never_stops_copies` (fake engine with two running copies, a fresh supervisor tick records no stop/kill/remove), `busy_deploy_skips_restart` (Review Focus 3: `restart_copy` returns `Busy`, restart count unchanged, retried next tick), `on_failure_respects_limit`, `exit_zero_not_restarted_on_failure`, `stats_rows_carry_engine_state`, `die_event_triggers_restart` (mock engine streams one die event; restart happens without a listing tick), `no_events_falls_back_to_polling`, `deploy_resets_restart_count` (new container id or rewritten TOML starts at 0).
 - [ ] **Step 2: Run** `cargo test -q -p riku-supervisor containers`. Expected: FAIL.
 - [ ] **Step 3: Implement.** Engine errors in a tick are logged and the tick continues with other apps.
 - [ ] **Step 4: Run** `cargo test -q --workspace`, 20 runs of the new tests in both thread modes.
@@ -378,6 +378,26 @@ Tasks 14 and 15 run in parallel after Task 13.
 - [ ] **Step 3:** ROADMAP: phase 3a status lines with commits, phase 3b entry naming its duties (moved from the phase 3 list).
 - [ ] **Step 4: Commit** `Document container integration`.
 
+### Task 17: Server settings file and engine time limits
+
+Owner decisions 2026-11-01.
+
+**Files:**
+- Create: `crates/riku-config/src/settings.rs`, `settings_tests.rs`
+- Modify: `crates/riku-config/src/lib.rs` (`settings_file` path on `RikuPaths`), `crates/riku-container/src/engine/bounded.rs` and the engine call sites, `crates/riku-cli/src/doctor/` (report an unreadable settings file), docs.
+
+**Interfaces:**
+- Produces: `pub struct ServerSettings { pub engine: EngineSettings }`, `pub struct EngineSettings { pub call_timeout: Duration, pub stop_extra: Duration, pub pull_timeout: Duration, pub build_timeout: Duration }` with defaults 30 s, 30 s, 30 min, 30 min; `pub fn load(paths: &RikuPaths) -> Result<ServerSettings>` reading `~/.riku/settings.toml` (`[engine]` table, keys `call_timeout`, `stop_extra`, `pull_timeout`, `build_timeout` as humantime strings such as `"30s"`, `"30m"`). Missing file or key gives the default; an unknown key or a bad value is an error naming the key and the file.
+- `Engine` takes its limits from `EngineSettings` (set when opened): `run`, `remove`, `stats`, `list`, `inspect`, `owner_of`, `volume_labels`, `remove_network`, `image_id`, `login` use `call_timeout`; `stop` uses the grace period plus `stop_extra`; `pull` and `build` use their own limits and stream output to the caller's log as they run.
+- ROUTER and CONTAINER_ENGINE stay in their own files (moved later with a `riku doctor --fix` migration).
+
+- [ ] **Step 1: Failing tests:** `missing_settings_file_gives_defaults`, `unknown_engine_key_is_refused` (error names key and file), `stop_waits_grace_plus_extra` (mock engine sleeping past grace plus a short cfg(test) extra is killed), `pull_limit_applies` (mock pull sleeping past a short limit fails naming pull).
+- [ ] **Step 2: Run** `cargo test -q -p riku-config settings` and `cargo test -q -p riku-container bounded`. Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** `cargo test -q --workspace`. Expected: PASS.
+- [ ] **Step 5: Docs:** `docs/docs/` page for server settings (create `settings.md`, link from mkdocs nav).
+- [ ] **Step 6: Commit** `Add server settings file with engine time limits`.
+
 ## Run order
 
-Tasks 1, 3 and 10 have no dependencies on each other and run at the same time, each in its own worktree. Then 2 (needs 1 and 3), 4 (needs 3), 5, 6, 7, 8 and 9 in order, 11 and 12 (need 7), 13 (needs 9), then 14 and 15 in parallel, then 16. Reviews: Opus for 3, 4, 11 and the final branch review; Sonnet for the rest. At most 4 agents at a time.
+Tasks 1, 3 and 10 have no dependencies on each other and run at the same time, each in its own worktree. Then 2 (needs 1 and 3), 4 (needs 3), 5, 6, 7, 8 and 9 in order, 11 and 12 (need 7), 13 (needs 9), then 14 and 15 in parallel, then 16. Task 17 (added 2026-11-01) runs beside Task 7 in its own worktree; it touches riku-config, riku-container and doctor only. Reviews: Opus for 3, 4, 11 and the final branch review; Sonnet for the rest. At most 4 agents at a time.
