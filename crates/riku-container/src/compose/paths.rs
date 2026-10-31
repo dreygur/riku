@@ -55,6 +55,16 @@ pub(super) fn resolve_inside(
     Ok(resolved)
 }
 
+/// Check again, at start time, that the absolute bind `source` is inside
+/// `app_path` and that no component of it has become a symlink since the
+/// project was parsed.
+pub fn check_bind_source(app_path: &Path, source: &Path) -> Result<()> {
+    match resolve_inside(app_path, app_path, &source.to_string_lossy(), "bind source") {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
 fn refuse_symlinks(root: &Path, below_root: &Path, what: &str, raw: &str) -> Result<()> {
     let mut walked = root.to_path_buf();
     for component in below_root.components() {

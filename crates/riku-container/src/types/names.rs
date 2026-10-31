@@ -52,7 +52,7 @@ pub(crate) fn check_engine_name(what: &str, name: &str) -> anyhow::Result<()> {
 
 /// Accepts an app name that `riku_util::validate_app_name` returns unchanged
 /// and that the engine accepts inside a container name or a label filter.
-pub(crate) fn check_app_name(app: &str) -> anyhow::Result<()> {
+pub fn check_app_name(app: &str) -> anyhow::Result<()> {
     let validated = match riku_util::validate_app_name(app) {
         Ok(v) => v,
         Err(e) => return Err(anyhow::anyhow!("invalid app name {app:?}: {e}")),
