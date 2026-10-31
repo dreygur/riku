@@ -1,9 +1,10 @@
 //! systemd units that reload the host router when riku changes its config.
 //!
-//! nginx and Caddy each get a path unit watching their config directory
-//! under the deploy user's riku root, plus a oneshot service that runs
-//! `systemctl reload` on the router. Router plugins reload themselves, so
-//! they get no units.
+//! nginx gets a path unit watching its config directory under the deploy
+//! user's riku root, plus a oneshot service that runs `systemctl reload`
+//! on it. Caddy and router plugins get no units: riku reloads them itself
+//! and waits for the result. Units written for Caddy by older versions are
+//! removed.
 
 use std::fs;
 use std::path::Path;
@@ -20,8 +21,7 @@ const CADDY_SERVICE: &str = "caddy";
 fn router_service(router: &Router) -> Option<&'static str> {
     match router {
         Router::Nginx => Some(NGINX_SERVICE),
-        Router::Caddy => Some(CADDY_SERVICE),
-        Router::Plugin(_) => None,
+        Router::Caddy | Router::Plugin(_) => None,
     }
 }
 
@@ -121,6 +121,21 @@ pub fn write_router_units(
         return Err(e);
     }
     Ok(Some(path_unit))
+}
+
+/// Delete the Caddy path and reload units that older versions installed.
+pub fn remove_caddy_units(systemd_dir: &Path) {
+    for name in [
+        path_unit_name(CADDY_SERVICE),
+        reload_unit_name(CADDY_SERVICE),
+    ] {
+        let unit = systemd_dir.join(&name);
+        if let Err(e) = fs::remove_file(&unit) {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!("could not remove {}: {e}", unit.display());
+            }
+        }
+    }
 }
 
 /// Path units of the built-in routers other than `router`, to disable when

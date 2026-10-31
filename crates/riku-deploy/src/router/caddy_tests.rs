@@ -3,7 +3,7 @@ use crate::router::tests::env;
 use crate::util::backend::Backend;
 
 fn caddy_err(pairs: &[(&str, &str)]) -> String {
-    match caddy_request(&env(pairs)) {
+    match caddy_request(&env(pairs), &[Backend::loopback(5001)]) {
         Ok(_) => panic!("{pairs:?} was accepted"),
         Err(e) => e.to_string(),
     }
@@ -21,23 +21,11 @@ fn rejects_bad_domain() {
 
 #[test]
 fn none_without_domains() {
-    assert!(caddy_request(&env(&[])).unwrap().is_none());
-    assert!(caddy_request(&env(&[("RIKU_DOMAINS", " ")]))
+    let backends = [Backend::loopback(5001)];
+    assert!(caddy_request(&env(&[]), &backends).unwrap().is_none());
+    assert!(caddy_request(&env(&[("RIKU_DOMAINS", " ")]), &backends)
         .unwrap()
         .is_none());
-}
-
-#[test]
-fn proxies_to_loopback_whatever_the_bind_address() {
-    let plan = caddy_request(&env(&[
-        ("RIKU_DOMAINS", "a.com"),
-        ("PORT", "5001"),
-        ("RIKU_BIND_ADDRESS", "10.0.0.5"),
-    ]))
-    .unwrap()
-    .unwrap();
-
-    assert_eq!(plan.backends, vec![Backend::loopback(5001)]);
 }
 
 #[test]

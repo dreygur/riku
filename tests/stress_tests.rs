@@ -46,7 +46,7 @@ static FORK_GATE: RwLock<()> = RwLock::new(());
 /// The host router is Caddy: with no `RIKU_DOMAINS` set, routing is a file
 /// removal, so deploys here need no `nginx` binary for `nginx -t`.
 fn make_paths(tmp: &TempDir) -> RikuPaths {
-    let paths = RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
+    let mut paths = RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
     for dir in &[
         &paths.app_root,
         &paths.env_root,
@@ -62,6 +62,13 @@ fn make_paths(tmp: &TempDir) -> RikuPaths {
         fs::create_dir_all(dir).expect("create riku dir");
     }
     router::save(&paths, &Router::Caddy).expect("write router file");
+    paths.reload_programs.caddy = tmp.path().join("mock_caddy");
+    fs::write(&paths.reload_programs.caddy, "#!/bin/sh\nexit 0\n").expect("write mock caddy");
+    fs::set_permissions(
+        &paths.reload_programs.caddy,
+        fs::Permissions::from_mode(0o755),
+    )
+    .expect("chmod mock caddy");
     paths
 }
 

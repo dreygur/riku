@@ -16,6 +16,7 @@ mod tests {
     use anyhow::Result;
     use std::collections::HashMap;
     use std::fs;
+    use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
     use std::process::Command;
     use tempfile::TempDir;
@@ -29,7 +30,7 @@ mod tests {
     /// The host router is Caddy: with no `RIKU_DOMAINS` set, routing is a
     /// file removal, so deploys here need no `nginx` binary for `nginx -t`.
     fn make_paths(tmp: &TempDir) -> riku::config::RikuPaths {
-        let paths = riku::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
+        let mut paths = riku::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
         for dir in &[
             &paths.app_root,
             &paths.env_root,
@@ -46,6 +47,14 @@ mod tests {
         }
         riku::config::router::save(&paths, &riku::config::router::Router::Caddy)
             .expect("Failed to write router file");
+        paths.reload_programs.caddy = tmp.path().join("mock_caddy");
+        fs::write(&paths.reload_programs.caddy, "#!/bin/sh\nexit 0\n")
+            .expect("Failed to write mock caddy");
+        fs::set_permissions(
+            &paths.reload_programs.caddy,
+            fs::Permissions::from_mode(0o755),
+        )
+        .expect("Failed to chmod mock caddy");
         paths
     }
 

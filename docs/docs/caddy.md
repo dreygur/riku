@@ -31,8 +31,16 @@ Under Caddy, a root `riku init`:
 - adds the `caddy` user to the deploy user's primary group
 - gives that group traverse access (`g+x`, not listing) to the deploy home and `~/.riku`
 - creates `~/.riku/caddy` with mode `0750`, owned by the deploy user
-- installs `riku-caddy.path` and `riku-caddy-reload.service`: the path unit watches `~/.riku/caddy` and runs `systemctl reload caddy` when a site file changes
+- removes `riku-caddy.path` and `riku-caddy-reload.service` if an earlier init installed them
 - disables `riku-nginx.path` if an earlier init enabled it
+
+### Reloads
+
+Riku reloads Caddy itself after it writes or removes a site, with `caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`, and waits for the command to succeed. A failed reload fails the deploy and shows Caddy's message, and `riku doctor` reports the last failure.
+
+This goes through Caddy's admin endpoint, so the endpoint must stay on. It is on by default, at `localhost:2019`. Any local user can reach that endpoint. That is Caddy's default and riku does not change it.
+
+For nginx, "confirmed" is weaker than for Caddy. Riku waits for a run of `riku-nginx-reload.service` that started after it wrote the config and exited 0, which means the reload signal was delivered and accepted. Caddy confirms that the config was loaded. On a host without systemd or without that unit, riku runs `nginx -s reload` and requires exit 0.
 
 Everything inside the deploy user's home is created and changed as the deploy user, never as root.
 

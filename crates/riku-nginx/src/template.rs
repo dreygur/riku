@@ -182,7 +182,7 @@ fn select_template(env: &HashMap<String, String>) -> &'static str {
     }
 }
 
-/// Create or update the app's sites-enabled symlink and reload nginx.
+/// Create or update the app's sites-enabled symlink. The caller reloads nginx.
 ///
 /// Does nothing when the sites-enabled directory is absent, which is the
 /// normal case on a host with no nginx installed.
@@ -206,8 +206,6 @@ fn install_nginx_symlink(config_file: &Path, app: &str, paths: &crate::config::R
 
     if let Err(e) = std::os::unix::fs::symlink(config_file, &symlink_path) {
         tracing::warn!("could not create nginx symlink {:?}: {}", symlink_path, e);
-    } else {
-        super::reload_nginx();
     }
 }
 
