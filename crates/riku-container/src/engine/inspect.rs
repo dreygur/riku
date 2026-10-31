@@ -19,6 +19,8 @@ use crate::types::{check_app_name, labels, CopyIndex, ServiceName};
 pub enum ContainerState {
     /// Running, and either has no health check or it has not failed.
     Running,
+    /// Running, but the engine's health check has not passed yet (`starting`).
+    Starting,
     /// Running, but the engine's health check reports `unhealthy`.
     Unhealthy,
     /// The engine is in the middle of restarting it.
@@ -38,12 +40,22 @@ pub struct ContainerInfo {
     pub id: ContainerId,
     /// Container name without the leading slash docker adds.
     pub name: String,
+    /// From the `riku.app` label; `None` when the container has none.
+    pub app: Option<String>,
     /// From the `riku.service` label; `None` when the container has none.
     pub service: Option<ServiceName>,
     /// From the `riku.copy` label; `None` when the container has none.
     pub copy: Option<CopyIndex>,
     /// Image reference the container was created from, as written at creation.
     pub image: String,
+    /// Engine id of the image the container runs, as `inspect` reports it
+    /// (docker prefixes it with `sha256:`).
+    pub image_id: String,
+    /// Host port from the `riku.port` label; `None` when the label is absent
+    /// or is not a port number.
+    pub host_port: Option<u16>,
+    /// The `riku.restart` label as written; `None` when absent.
+    pub restart: Option<String>,
     pub state: ContainerState,
 }
 
@@ -57,7 +69,7 @@ fn parse_ids(output: &str) -> Result<Vec<ContainerId>> {
 }
 
 impl Engine {
-    fn list_with_filter(&self, filter: Option<&str>) -> Result<Vec<ContainerId>> {
+    pub(super) fn list_with_filter(&self, filter: Option<&str>) -> Result<Vec<ContainerId>> {
         let mut args: Vec<OsString> = ["ps", "-a", "-q", "--no-trunc"]
             .into_iter()
             .map(OsString::from)

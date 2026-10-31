@@ -9,9 +9,9 @@ use std::process::Command;
 use riku_util::spawn::output_retrying_etxtbsy;
 
 /// Engine subcommands riku depends on. An engine missing any of them is refused.
-pub const REQUIRED_COMMANDS: [&str; 13] = [
+pub const REQUIRED_COMMANDS: [&str; 15] = [
     "pull", "build", "run", "stop", "kill", "rm", "ps", "inspect", "stats", "logs", "version",
-    "network", "volume",
+    "network", "volume", "image", "login",
 ];
 
 /// Run `<program> <command> --help` for every required command.

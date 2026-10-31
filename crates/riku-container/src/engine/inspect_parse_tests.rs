@@ -1,5 +1,5 @@
 use super::parse_inspect;
-use crate::engine::fixture::{inspect_json, ID, ID_B};
+use crate::engine::fixture::{inspect_json, ID, ID_B, IMAGE_ID};
 use crate::engine::ContainerState;
 
 /// Captured from `docker inspect` (docker 29.8.2) of a running alpine container
@@ -42,12 +42,34 @@ const DOCKER_RUNNING: &str = r#"[
     }
 ]"#;
 
+/// Captured from `docker inspect` (docker 29.8.2) of a container started with
+/// a health check still in its start period and the riku.port and riku.restart
+/// labels. Trimmed; id, pid and timestamps replaced with stock values.
+const DOCKER_STARTING: &str = r#"[
+    {
+        "Id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "Name": "/myapp-web-1",
+        "Image": "sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a",
+        "State": {
+            "Status": "running", "Running": true, "Pid": 1234, "ExitCode": 0, "Error": "",
+            "StartedAt": "2026-10-30T13:27:17.273819223Z",
+            "FinishedAt": "0001-01-01T00:00:00Z",
+            "Health": {"Status": "starting", "FailingStreak": 0, "Log": []}
+        },
+        "Config": {
+            "Image": "alpine",
+            "Labels": {"riku.app": "myapp", "riku.port": "8080", "riku.restart": "on-failure"}
+        }
+    }
+]"#;
+
 /// Written from the podman documentation, not captured: podman reports the name
 /// without a leading slash and `null` labels for a container started by hand.
 const PODMAN_CREATED: &str = r#"[
     {
         "Id": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
         "Name": "scratch",
+        "Image": "be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a",
         "State": {"Status": "created", "ExitCode": 0},
         "Config": {"Image": "docker.io/library/alpine:latest", "Labels": null}
     }
@@ -69,6 +91,58 @@ fn reads_state_labels_and_image_from_an_unhealthy_container() {
     assert_eq!(info.copy.unwrap().get(), 2);
     assert_eq!(info.image, "shop/web:1.4");
     assert_eq!(info.state, ContainerState::Unhealthy);
+}
+
+#[test]
+fn reads_app_port_restart_and_image_id_from_labels() {
+    let json = inspect_json(
+        ID,
+        r#"{"Status":"running"}"#,
+        r#"{"riku.app":"myapp","riku.port":"8080","riku.restart":"on-failure"}"#,
+    );
+
+    let info = &parse_inspect(&json).unwrap()[0];
+
+    assert_eq!(info.app.as_deref(), Some("myapp"));
+    assert_eq!(info.host_port, Some(8080));
+    assert_eq!(info.restart.as_deref(), Some("on-failure"));
+    assert_eq!(info.image_id, IMAGE_ID);
+}
+
+#[test]
+fn docker_capture_in_health_start_period_is_starting_with_labels() {
+    let info = &parse_inspect(DOCKER_STARTING).unwrap()[0];
+
+    assert_eq!(info.state, ContainerState::Starting);
+    assert_eq!(info.host_port, Some(8080));
+    assert_eq!(info.restart.as_deref(), Some("on-failure"));
+    assert_eq!(info.app.as_deref(), Some("myapp"));
+}
+
+#[test]
+fn junk_port_label_is_none() {
+    for junk in ["web", "70000", "0", ""] {
+        let labels = format!(r#"{{"riku.port":"{junk}"}}"#);
+        let json = inspect_json(ID, r#"{"Status":"running"}"#, &labels);
+
+        let infos = parse_inspect(&json).unwrap();
+
+        assert_eq!(infos[0].host_port, None, "port label {junk:?} was kept");
+    }
+}
+
+#[test]
+fn starting_health_is_starting() {
+    let json = inspect_json(
+        ID,
+        r#"{"Status":"running","Health":{"Status":"starting"}}"#,
+        "{}",
+    );
+
+    assert_eq!(
+        parse_inspect(&json).unwrap()[0].state,
+        ContainerState::Starting
+    );
 }
 
 #[test]

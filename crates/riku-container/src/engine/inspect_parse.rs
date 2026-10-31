@@ -23,6 +23,8 @@ struct RawContainer {
     config: RawConfig,
     #[serde(rename = "State")]
     state: RawState,
+    #[serde(rename = "Image")]
+    image_id: String,
 }
 
 #[derive(Deserialize)]
@@ -51,14 +53,11 @@ struct RawHealth {
 
 fn container_state(state: &RawState) -> Result<ContainerState> {
     match state.status.as_str() {
-        "running" => {
-            let health = state.health.as_ref().and_then(|h| h.status.as_deref());
-            if health == Some("unhealthy") {
-                Ok(ContainerState::Unhealthy)
-            } else {
-                Ok(ContainerState::Running)
-            }
-        }
+        "running" => match state.health.as_ref().and_then(|h| h.status.as_deref()) {
+            Some("unhealthy") => Ok(ContainerState::Unhealthy),
+            Some("starting") => Ok(ContainerState::Starting),
+            _ => Ok(ContainerState::Running),
+        },
         "restarting" => Ok(ContainerState::Restarting),
         "created" => Ok(ContainerState::Created),
         "exited" => match state.exit_code.map(i32::try_from) {
@@ -92,6 +91,25 @@ fn copy_label(label_map: &HashMap<String, String>) -> Result<Option<CopyIndex>> 
     }
 }
 
+#[allow(clippy::question_mark)]
+fn port_label(label_map: &HashMap<String, String>, container: &str) -> Option<u16> {
+    let raw = match label_map.get(labels::PORT) {
+        Some(raw) => raw,
+        None => return None,
+    };
+    match raw.parse::<u16>() {
+        Ok(port) if port != 0 => Some(port),
+        _ => {
+            tracing::warn!(
+                container,
+                label = labels::PORT,
+                "label is not a port number"
+            );
+            None
+        }
+    }
+}
+
 fn into_info(raw: RawContainer) -> Result<ContainerInfo> {
     let name = raw.name.trim_start_matches('/').to_string();
     let id = match ContainerId::try_from(raw.id.as_str()) {
@@ -111,12 +129,17 @@ fn into_info(raw: RawContainer) -> Result<ContainerInfo> {
         Ok(copy) => copy,
         Err(e) => return Err(anyhow!("container {name}: {e}")),
     };
+    let host_port = port_label(&label_map, &name);
     Ok(ContainerInfo {
         id,
+        app: label_map.get(labels::APP).cloned(),
+        restart: label_map.get(labels::RESTART).cloned(),
+        host_port,
         name,
         service,
         copy,
         image: raw.config.image,
+        image_id: raw.image_id,
         state,
     })
 }

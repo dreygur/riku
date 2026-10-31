@@ -22,6 +22,8 @@ mod identity;
 mod ids;
 mod inspect;
 mod inspect_parse;
+mod login;
+mod lookup;
 mod probe;
 mod resources;
 mod run_args;

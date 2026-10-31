@@ -155,6 +155,15 @@ fn extension_keys_on_a_service_are_ignored() {
 }
 
 #[test]
+fn compose_refuses_riku_port_label() {
+    let fx = Fixture::new();
+    for label in ["riku.port", "riku.restart"] {
+        let err = error_of(fx.parse("web", json!({"image": "myapp", "labels": {label: "1"}})));
+        assert!(err.contains(label), "{label}: {err}");
+    }
+}
+
+#[test]
 fn refuses_custom_networks_and_unsafe_text() {
     let fx = Fixture::new();
     for value in [
