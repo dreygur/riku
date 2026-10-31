@@ -16,6 +16,7 @@ riku-nginx = { path = "../riku-nginx" }
 riku-caddy = { path = "../riku-caddy" }
 riku-plugins = { path = "../riku-plugins" }
 riku-supervisor = { path = "../riku-supervisor" }
+riku-container = { path = "../riku-container" }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 libc = { workspace = true }

@@ -40,6 +40,7 @@ mod volumes;
 pub use definition::{BuildDef, Dependency, DependsCondition, ServiceContext, ServiceDef};
 pub use locate::{default_compose_file, find_compose_file, ComposeFile, COMPOSE_FILE_NAMES};
 pub use mounts::{ServiceMount, ServiceMountSource, VolumeKey};
+pub use paths::check_bind_source;
 pub use project::{
     existing_volume_name, read_project, single_image_project, ComposeProject, ProjectNameSource,
     VolumeDecl,
