@@ -1,7 +1,5 @@
 use super::*;
 
-const LOOPBACK: IpAddr = IpAddr::V4(std::net::Ipv4Addr::LOCALHOST);
-
 pub(super) fn env(pairs: &[(&str, &str)]) -> HashMap<String, String> {
     pairs
         .iter()
@@ -31,55 +29,18 @@ fn route_plan_rejects_bad_domain() {
 }
 
 #[test]
-fn upstream_port_prefers_internal_then_port_then_default() {
-    let port_of = |pairs: &[(&str, &str)]| tcp_backend(&env(pairs), LOOPBACK).unwrap();
-
-    assert_eq!(
-        port_of(&[("RIKU_UPSTREAM_PORT", "9000"), ("PORT", "3000")]),
-        vec![Backend::loopback(9000)]
-    );
-    assert_eq!(port_of(&[("PORT", "3000")]), vec![Backend::loopback(3000)]);
-    assert_eq!(port_of(&[]), vec![Backend::loopback(8080)]);
-}
-
-#[test]
-fn unparsable_port_is_refused_naming_the_key() {
-    for (key, value) in [("PORT", "nope"), ("RIKU_UPSTREAM_PORT", "80x")] {
-        let err = match tcp_backend(&env(&[(key, value)]), LOOPBACK) {
-            Ok(backends) => panic!("{key}={value} was routed to {backends:?}"),
-            Err(e) => e.to_string(),
-        };
-        assert!(err.contains(key) && err.contains(value), "{err}");
-    }
-}
-
-#[test]
-fn caddy_proxies_to_loopback_and_plugins_to_the_bind_address() {
-    let paths = RikuPaths::for_tests(std::path::Path::new("/nonexistent"));
-    let e = env(&[("PORT", "5001"), ("RIKU_BIND_ADDRESS", "10.0.0.5")]);
+fn caddy_proxies_to_loopback_and_others_keep_the_copy_address() {
+    let host = "10.0.0.5".parse().unwrap();
+    let copies = vec![
+        Backend::Tcp { host, port: 5001 },
+        Backend::Unix("/srv/a.sock".into()),
+    ];
     let plugin = Router::Plugin("edge-router".to_string());
 
     assert_eq!(
-        initial_backends(&Router::Caddy, "shop", &e, &paths).unwrap(),
-        vec![Backend::loopback(5001)]
+        backends_for(&Router::Caddy, copies.clone()),
+        vec![Backend::loopback(5001), Backend::Unix("/srv/a.sock".into())]
     );
-    assert_eq!(
-        initial_backends(&plugin, "shop", &e, &paths).unwrap(),
-        vec![Backend::Tcp {
-            host: "10.0.0.5".parse().unwrap(),
-            port: 5001
-        }]
-    );
-    let err = initial_backends(
-        &plugin,
-        "shop",
-        &env(&[("RIKU_BIND_ADDRESS", "localhost")]),
-        &paths,
-    )
-    .unwrap_err()
-    .to_string();
-    assert!(
-        err.contains("RIKU_BIND_ADDRESS") && err.contains("localhost"),
-        "{err}"
-    );
+    assert_eq!(backends_for(&plugin, copies.clone()), copies);
+    assert_eq!(backends_for(&Router::Nginx, copies.clone()), copies);
 }

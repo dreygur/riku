@@ -19,6 +19,17 @@ use super::{read_scaling_count, WEB_KIND};
 /// Env keys that say which port an app is served on.
 const PORT_KEYS: [&str; 2] = ["PORT", "RIKU_UPSTREAM_PORT"];
 
+/// Whether one of `app`'s enabled web copies runs on `port`.
+fn copy_on_port(port: u16, app: &str, paths: &RikuPaths) -> bool {
+    let wanted = port.to_string();
+    match crate::router::web_copies(app, paths) {
+        Ok(copies) => copies
+            .iter()
+            .any(|copy| copy.env.get("PORT") == Some(&wanted)),
+        Err(_) => false,
+    }
+}
+
 /// Another riku app that pins `port` or is routed to it.
 fn app_on_port(port: u16, app: &str, paths: &RikuPaths) -> Option<String> {
     let entries = fs::read_dir(&paths.env_root).ok()?;
@@ -32,10 +43,8 @@ fn app_on_port(port: u16, app: &str, paths: &RikuPaths) -> Option<String> {
         if crate::util::parse_settings(&entry.path().join("ENV"), &mut env).is_err() {
             return None;
         }
-        PORT_KEYS
-            .iter()
-            .any(|key| env.get(*key) == Some(&wanted))
-            .then_some(name)
+        let pinned = PORT_KEYS.iter().any(|key| env.get(*key) == Some(&wanted));
+        (pinned || copy_on_port(port, &name, paths)).then_some(name)
     })
 }
 
@@ -76,8 +85,7 @@ pub(super) fn check_pinned_port(
         return Err(anyhow!("PORT {port} is already used by app '{other}'"));
     }
 
-    let ours = env.get("RIKU_UPSTREAM_PORT") == Some(&port.to_string());
-    if !ours && port_in_use(port) {
+    if !copy_on_port(port, app, paths) && port_in_use(port) {
         return Err(anyhow!(
             "PORT {port} is in use by another process on this host"
         ));

@@ -1,5 +1,5 @@
 location / {
-  uwsgi_pass unix:{{ UWSGI_SOCKET }};
+  uwsgi_pass {{ APP_UPSTREAM }};
   include uwsgi_params;
   uwsgi_param Host $host;
   uwsgi_param X-Real-IP $remote_addr;

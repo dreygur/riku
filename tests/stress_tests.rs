@@ -108,7 +108,7 @@ esac
 /// #2 (the per-app `flock` in `deploy::lock`) doesn't touch.
 ///
 /// Without the lock, all five threads would race on `git_reset` (skipped
-/// here), worker TOML writes, and the ENV file's `RIKU_UPSTREAM_PORT`
+/// here), worker TOML writes, and the ENV file's routing keys
 /// read-modify-write: exactly the corruption fix #2 closes off.
 #[test]
 fn test_concurrent_deploy_lockout() {

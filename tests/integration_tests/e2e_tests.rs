@@ -364,9 +364,9 @@ esac
 
         configure_route(&paths, app, Some("shop.example.com")).unwrap();
         let site = fs::read_to_string(&site_file).expect("site file written");
-        let mut env = HashMap::new();
-        riku::util::parse_settings(&paths.env_root.join(app).join("ENV"), &mut env).unwrap();
-        let upstream = format!("reverse_proxy 127.0.0.1:{}", env["RIKU_UPSTREAM_PORT"]);
+        let backends =
+            riku::deploy::router::current_backends(app, &HashMap::new(), &paths, None).unwrap();
+        let upstream = format!("reverse_proxy {}", backends[0]);
         assert!(site.contains("shop.example.com"), "{site}");
         assert!(
             site.contains(&upstream),

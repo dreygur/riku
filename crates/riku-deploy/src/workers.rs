@@ -20,9 +20,11 @@ const WEB_KIND: &str = "web";
 const ONE_SHOT_KINDS: [&str; 2] = ["release", "preflight"];
 
 mod pinned;
-mod web_env;
+mod socket;
+pub(crate) mod web_env;
 
 use pinned::check_pinned_port;
+use socket::check_custom_socket;
 use web_env::build_worker_env;
 
 // ---------------------------------------------------------------------------
@@ -72,6 +74,9 @@ pub fn create_workers_generic(
     if let Err(e) = check_pinned_port(app, env, paths) {
         return Err(e);
     }
+    if let Err(e) = check_custom_socket(app, env, paths) {
+        return Err(e);
+    }
     if should_restart(env) {
         remove_stale_configs(app, paths);
     }
@@ -103,7 +108,9 @@ pub fn create_workers_generic(
             Err(e) => return Err(e),
         };
         for i in 1..=count {
-            let worker_env = match build_worker_env(app, kind, env, paths) {
+            let copy =
+                riku_container::types::CopyIndex::new(i).expect("copies are numbered from 1");
+            let worker_env = match build_worker_env(app, kind, copy, env, paths) {
                 Ok(worker_env) => worker_env,
                 Err(e) => return Err(e),
             };

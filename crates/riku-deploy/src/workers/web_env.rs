@@ -1,11 +1,14 @@
 //! Environment for web-facing workers: the port or uWSGI socket each one
-//! listens on, and the routing keys persisted to the app's ENV file so
-//! `spawn_app` can point the router at it.
+//! listens on, and the routing keys persisted to the app's ENV file that
+//! pick the router's template. The addresses themselves live in each copy's
+//! worker config, which `router::current_backends` reads.
 
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+use riku_container::types::CopyIndex;
 
 use crate::config::RikuPaths;
 
@@ -13,23 +16,32 @@ const UWSGI_PROCESSES: &str = "4";
 const UWSGI_THREADS: &str = "4";
 const RIKU_NGINX_EXTERNAL_PORT: &str = "80";
 
-/// Keys persisted for a uWSGI socket app.
-const WSGI_KEYS: [&str; 2] = ["RIKU_NGINX_WSGI", "UWSGI_SOCKET"];
-/// Keys persisted for a TCP port app.
-const PORTMAP_KEYS: [&str; 3] = [
-    "RIKU_NGINX_PORTMAP",
-    "RIKU_UPSTREAM_PORT",
-    "RIKU_NGINX_EXTERNAL_PORT",
-];
+/// Keys older riku versions persisted for the one address of the last copy.
+const LEGACY_ADDRESS_KEYS: [&str; 2] = ["RIKU_UPSTREAM_PORT", "UWSGI_SOCKET"];
 
 /// Returns true when `kind` uses a WSGI unix socket (wsgi, jwsgi, rwsgi, php).
-fn is_wsgi_kind(kind: &str) -> bool {
+pub(crate) fn is_wsgi_kind(kind: &str) -> bool {
     matches!(kind, "wsgi" | "jwsgi" | "rwsgi" | "php")
 }
 
 /// Returns true when `kind` needs router wiring (web + all wsgi variants).
-fn is_web_facing(kind: &str) -> bool {
+pub(crate) fn is_web_facing(kind: &str) -> bool {
     kind == "web" || is_wsgi_kind(kind)
+}
+
+/// The unix socket a copy listens on: `RIKU_NGINX_SOCKET` when the app sets
+/// one (such an app runs a single copy, see `check_custom_socket`), else a
+/// socket of its own per copy.
+fn listen_socket(
+    app: &str,
+    copy: CopyIndex,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+) -> PathBuf {
+    match env.get("RIKU_NGINX_SOCKET") {
+        Some(socket) => PathBuf::from(socket),
+        None => crate::router::copy_socket(paths, app, copy),
+    }
 }
 
 /// Inject uwsgi unix-socket variables into the environment.
@@ -89,30 +101,23 @@ fn configure_web_env(socket_path: &Path, env: &mut HashMap<String, String>) -> R
 /// An app that moves from `wsgi:` to `web:` (or back) would otherwise keep
 /// the old mode's keys: nginx picks its wsgi template whenever
 /// `RIKU_NGINX_WSGI` is present, and Caddy rejects the app outright.
-fn apply_route_keys(
-    kind: &str,
-    socket_path: &Path,
-    env: &HashMap<String, String>,
-    persisted: &mut HashMap<String, String>,
-) {
+///
+/// Neither mode persists a port or socket: with several copies there is no
+/// single value to keep, and the router reads each copy's address from its
+/// worker config. The old single address keys are dropped when found.
+fn apply_route_keys(kind: &str, persisted: &mut HashMap<String, String>) {
+    for key in LEGACY_ADDRESS_KEYS {
+        persisted.remove(key);
+    }
     if is_wsgi_kind(kind) {
-        for key in PORTMAP_KEYS {
-            persisted.remove(key);
-        }
+        persisted.remove("RIKU_NGINX_PORTMAP");
+        persisted.remove("RIKU_NGINX_EXTERNAL_PORT");
         persisted.insert("RIKU_NGINX_WSGI".to_string(), "true".to_string());
-        persisted.insert(
-            "UWSGI_SOCKET".to_string(),
-            socket_path.to_string_lossy().to_string(),
-        );
         return;
     }
 
-    for key in WSGI_KEYS {
-        persisted.remove(key);
-    }
-    let port = env.get("PORT").map(|s| s.as_str()).unwrap_or("8080");
+    persisted.remove("RIKU_NGINX_WSGI");
     persisted.insert("RIKU_NGINX_PORTMAP".to_string(), "true".to_string());
-    persisted.insert("RIKU_UPSTREAM_PORT".to_string(), port.to_string());
     persisted.insert(
         "RIKU_NGINX_EXTERNAL_PORT".to_string(),
         RIKU_NGINX_EXTERNAL_PORT.to_string(),
@@ -132,13 +137,7 @@ fn apply_route_keys(
 /// port forever: every redeploy after the first would spawn the worker on
 /// a new port while nginx kept proxying to the old, now-dead one, a
 /// guaranteed 502 on the very next deploy of any web app.
-fn persist_route_env(
-    app: &str,
-    kind: &str,
-    socket_path: &Path,
-    env: &HashMap<String, String>,
-    paths: &RikuPaths,
-) -> Result<()> {
+fn persist_route_env(app: &str, kind: &str, paths: &RikuPaths) -> Result<()> {
     let env_dir = paths.env_root.join(app);
     if let Err(e) = fs::create_dir_all(&env_dir) {
         return Err(anyhow!("failed to create {}: {e}", env_dir.display()));
@@ -150,7 +149,7 @@ fn persist_route_env(
         return Err(anyhow!("failed to read {}: {e}", env_file.display()));
     }
 
-    apply_route_keys(kind, socket_path, env, &mut persisted);
+    apply_route_keys(kind, &mut persisted);
 
     match crate::util::write_config(&env_file, &persisted, "=") {
         Ok(()) => Ok(()),
@@ -166,6 +165,7 @@ fn persist_route_env(
 pub(super) fn build_worker_env(
     app: &str,
     kind: &str,
+    copy: CopyIndex,
     base_env: &HashMap<String, String>,
     paths: &RikuPaths,
 ) -> Result<HashMap<String, String>> {
@@ -175,7 +175,7 @@ pub(super) fn build_worker_env(
         return Ok(env);
     }
 
-    let socket_path = paths.nginx_root.join(format!("{}.sock", app));
+    let socket_path = listen_socket(app, copy, base_env, paths);
 
     if is_wsgi_kind(kind) {
         configure_wsgi_env(&socket_path, &mut env);
@@ -183,7 +183,7 @@ pub(super) fn build_worker_env(
         return Err(e);
     }
 
-    if let Err(e) = persist_route_env(app, kind, &socket_path, &env, paths) {
+    if let Err(e) = persist_route_env(app, kind, paths) {
         return Err(e);
     }
 
