@@ -308,21 +308,16 @@ fn refuses_a_pinned_port_another_app_uses() {
 #[test]
 fn a_stale_upstream_port_in_another_apps_env_is_not_a_claim() {
     let tmp = TempDir::new().unwrap();
-    let (paths, app_path) = pinned_app(&tmp);
+    let (paths, _) = pinned_app(&tmp);
     fs::create_dir_all(paths.env_root.join("other")).unwrap();
-    let free = std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port();
     fs::write(
         paths.env_root.join("other/ENV"),
-        format!("RIKU_UPSTREAM_PORT={free}\n"),
+        "RIKU_UPSTREAM_PORT=3000\n",
     )
     .unwrap();
-    let env = HashMap::from([("PORT".to_string(), free.to_string())]);
+    let env = HashMap::from([("PORT".to_string(), "3000".to_string())]);
 
-    create_workers_generic("myapp", &app_path, &env, &paths, None).unwrap();
+    pinned::check_pinned_port_with("myapp", &env, &paths, |_| false).unwrap();
 }
 
 #[test]
