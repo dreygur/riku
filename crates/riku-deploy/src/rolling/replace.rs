@@ -6,7 +6,7 @@
 //! Neither is touched here beyond those calls, so the ordering guarantees can
 //! be tested with doubles.
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use riku_container::compose::ReplaceOrder;
 use riku_container::engine::ContainerId;
 use riku_container::types::CopyIndex;
@@ -39,6 +39,10 @@ pub trait CopyRuntime {
     fn live(&self) -> Result<Vec<LiveCopy>>;
 
     /// Starts a copy under this index and returns it once it exists.
+    ///
+    /// For a routed service the copy must come back with `backend: Some`.
+    /// Returning `None` for a routed copy is an error the runtime raises
+    /// itself; replacement cannot tell it from an unrouted copy.
     fn start(&mut self, copy: CopyIndex) -> Result<LiveCopy>;
 
     /// Returns `Ok` once the copy is ready for traffic, an error on timeout.
@@ -68,6 +72,20 @@ impl RouteSink for NoRoutes {
     }
 }
 
+fn stop_first_failure(old: &LiveCopy, still_serving: usize) -> String {
+    if still_serving == 0 {
+        format!(
+            "the service is down: copy {} stopped and its replacement failed",
+            old.copy
+        )
+    } else {
+        format!(
+            "copy {} stopped and its replacement failed; other copies still serving: {still_serving}",
+            old.copy
+        )
+    }
+}
+
 fn replace_one(
     runtime: &mut impl CopyRuntime,
     routes: &mut impl RouteSink,
@@ -88,12 +106,7 @@ fn replace_one(
             }
             let fresh = match start_healthy(runtime, copies) {
                 Ok(fresh) => fresh,
-                Err(e) => {
-                    return Err(e.context(format!(
-                        "the service is down: copy {} stopped and its replacement failed",
-                        old.copy
-                    )))
-                }
+                Err(e) => return Err(e.context(stop_first_failure(old, copies.len()))),
             };
             let index = fresh.copy;
             copies.push(fresh);
@@ -117,13 +130,17 @@ fn replace_one(
 /// [`NoRoutes`] and the publishes do nothing.
 ///
 /// Old copies beyond `want` are drained and stopped, highest index first,
-/// after the kept ones are replaced.
+/// after the kept ones are replaced. `want` must be at least 1; stopping a
+/// whole service is the caller's job, because it also removes the route.
 pub fn replace_all(
     runtime: &mut impl CopyRuntime,
     routes: &mut impl RouteSink,
     order: ReplaceOrder,
     want: u32,
 ) -> Result<()> {
+    if want == 0 {
+        return Err(anyhow!("cannot replace a service with 0 copies"));
+    }
     let mut old = match runtime.live() {
         Ok(old) => old,
         Err(e) => return Err(e.context("could not list running copies")),

@@ -4,6 +4,8 @@
 #![allow(clippy::question_mark)]
 
 pub mod health;
+#[cfg(test)]
+mod mock_copies;
 pub mod replace;
 pub mod scale;
 
