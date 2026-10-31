@@ -4,6 +4,7 @@
 
 pub mod generation;
 pub mod health_check;
+mod health_interval;
 pub mod isolation;
 pub mod orchestration;
 pub mod spawn;

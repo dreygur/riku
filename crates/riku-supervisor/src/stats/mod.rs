@@ -77,6 +77,27 @@ mod tests {
     }
 
     #[test]
+    fn restart_count_survives_respawn() {
+        let mut manager = StatsManager::new();
+        let register = |m: &mut StatsManager| {
+            m.register_process(
+                "app-web-1".to_string(),
+                "app".to_string(),
+                "web".to_string(),
+                1,
+            )
+        };
+        register(&mut manager);
+        manager.mark_restarting("app-web-1");
+        register(&mut manager);
+
+        let stats = process_stats(&manager, "app-web-1");
+        assert_eq!(stats.restart_count, 1, "respawn must not reset the count");
+        assert!(stats.last_restart_at.is_some());
+        assert_eq!(stats.status, ProcessStatus::Starting);
+    }
+
+    #[test]
     fn test_health_check_update() {
         let mut manager = StatsManager::new();
         manager.register_process(

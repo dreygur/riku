@@ -110,12 +110,16 @@ impl ProcessManager {
     /// Second pass: perform health checks (kept separate from the scan above
     /// to avoid borrow checker issues: this needs `&mut self` per process
     /// while the scan still holds an iterator over `self.processes`).
-    fn run_health_checks(
+    pub(super) fn run_health_checks(
         &mut self,
         health_checks: Vec<(String, HealthCheck)>,
         to_restart: &mut Vec<String>,
     ) {
         for (process_id, health_config) in health_checks {
+            if !self.claim_health_probe(&process_id, health_config.interval) {
+                continue;
+            }
+
             let health_status = self.perform_health_check(&process_id, &health_config);
 
             // Update stats with health check result

@@ -27,7 +27,8 @@ impl StatsManager {
         }
     }
 
-    /// Register a new process.
+    /// Register a process. Re-registering an id keeps its restart count and
+    /// last restart time, since a restart respawns under the same id.
     pub fn register_process(
         &mut self,
         process_id: String,
@@ -35,6 +36,7 @@ impl StatsManager {
         kind: String,
         ordinal: u32,
     ) {
+        let previous = self.stats.get(&process_id);
         let stats = ProcessStats {
             process_id: process_id.clone(),
             app,
@@ -42,6 +44,8 @@ impl StatsManager {
             ordinal,
             started_at: Some(Utc::now()),
             status: ProcessStatus::Starting,
+            restart_count: previous.map_or(0, |p| p.restart_count),
+            last_restart_at: previous.and_then(|p| p.last_restart_at),
             ..Default::default()
         };
 

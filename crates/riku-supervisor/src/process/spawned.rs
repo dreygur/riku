@@ -19,6 +19,8 @@ pub struct SpawnedProcess {
     pub last_restart: std::time::Instant,
     pub health_check_config: Option<HealthCheck>,
     pub consecutive_health_failures: u32,
+    /// When the last health probe ran; `None` until the first one.
+    pub last_health_probe: Option<std::time::Instant>,
     /// Present only when the worker opted into cgroup v2 isolation. Used to
     /// poll for OOM kills and removed once the process has exited.
     pub cgroup: Option<WorkerCgroup>,
@@ -47,6 +49,7 @@ impl SpawnedProcess {
             last_restart: std::time::Instant::now(),
             health_check_config,
             consecutive_health_failures: 0,
+            last_health_probe: None,
             cgroup,
             last_exit_code: None,
         })
