@@ -1,4 +1,12 @@
 //! Starting one container copy.
+//!
+//! # Security model
+//!
+//! The bind source symlink walk right before the engine runs is check then
+//! use: a path could still be swapped between the walk and the engine's
+//! mount. That is acceptable because only riku's own deploy writes the
+//! checkout. The container name check stops one app from starting over
+//! another app's container.
 
 use std::path::Path;
 

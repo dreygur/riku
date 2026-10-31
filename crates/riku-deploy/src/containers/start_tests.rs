@@ -69,7 +69,11 @@ services:
 
     let err = start_copy(&engine, &spec, &app_path, dir.path()).unwrap_err();
 
-    assert!(format!("{err:#}").contains("data"), "{err:#}");
+    let message = format!("{err:#}");
+    assert!(
+        message.contains("data") && message.contains("symlink"),
+        "{message}"
+    );
     assert!(
         logged(&log).iter().all(|l| !l.starts_with("run")),
         "engine run was called: {:?}",

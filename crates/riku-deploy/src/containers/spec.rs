@@ -64,6 +64,7 @@ fn copy_labels(
 ) -> BTreeMap<String, String> {
     let mut labels_out = service.labels.clone();
     labels_out.remove(labels::COMPOSE_PROJECT);
+    labels_out.remove(labels::PORT);
     labels_out.insert(labels::APP.to_string(), app.to_string());
     labels_out.insert(labels::SERVICE.to_string(), service.name.to_string());
     labels_out.insert(labels::COPY.to_string(), copy.to_string());
@@ -90,7 +91,7 @@ fn copy_env(app_env: &BTreeMap<String, String>, service: &ServiceDef) -> BTreeMa
 /// the routed service listens on its own port; it is ignored for other
 /// services. The container env is the app env without `RIKU_*` entries,
 /// overlaid by the service's own `environment`. A service with a `build` runs
-/// the image tagged `riku-<app>-<service>`, otherwise its `image`.
+/// the image tagged by `build_tag`, otherwise its `image`.
 pub fn copy_spec(
     app: &AppName,
     project: &ComposeProject,

@@ -4,6 +4,12 @@
 //! `Engine::login`, which writes it to the engine's stdin. It is not logged
 //! and not passed to builds. Build args come from the compose file only and
 //! are visible in the process list while a build runs.
+//!
+//! `Engine::login` makes the engine store the credentials in its user's shared
+//! auth file. They outlive the removal of the ENV keys, apply to every app on
+//! the server, and the last login wins. An app owner who interpolates
+//! `RIKU_GHCR_TOKEN` into compose build args or environment puts the token
+//! there themselves.
 
 use std::collections::BTreeMap;
 
@@ -11,6 +17,7 @@ use anyhow::{anyhow, Result};
 use riku_container::compose::{ComposeProject, ServiceDef};
 use riku_container::engine::{BuildSpec, Engine};
 use riku_container::types::ServiceName;
+use sha2::{Digest, Sha256};
 
 use super::AppName;
 
@@ -18,10 +25,21 @@ const GHCR_REGISTRY: &str = "ghcr.io";
 const GHCR_USERNAME: &str = "RIKU_GHCR_USERNAME";
 const GHCR_TOKEN: &str = "RIKU_GHCR_TOKEN";
 
-/// The local tag a built service gets: `riku-<app>-<service>`, lowercased
-/// because engines reject uppercase repository names.
+/// The local tag a built service gets: `riku/<h>`, where `<h>` is the first 16
+/// hex characters of the SHA-256 of the app name, a NUL byte and the service
+/// name.
+///
+/// A readable `riku-<app>-<service>` is ambiguous: `a-b`/`c` and `a`/`b-c`
+/// join to the same text, and lowercasing for the engine merges `Shop` with
+/// `shop`. Two apps sharing a tag would let one build replace the other's
+/// image. NUL cannot occur in either name, so the hash input is unambiguous.
 pub(super) fn build_tag(app: &AppName, service: &ServiceName) -> String {
-    format!("riku-{app}-{service}").to_ascii_lowercase()
+    let mut hasher = Sha256::new();
+    hasher.update(app.as_str().as_bytes());
+    hasher.update([0u8]);
+    hasher.update(service.as_str().as_bytes());
+    let digest = hex::encode(hasher.finalize());
+    format!("riku/{}", &digest[..16])
 }
 
 fn login_if_configured(engine: &Engine, env: &BTreeMap<String, String>) -> Result<()> {
