@@ -214,10 +214,28 @@ fn stop_first_failure_says_the_service_is_down() {
 
     let message = format!("{:#}", outcome.unwrap_err());
     assert!(message.contains("service is down"), "got: {message}");
-    assert_eq!(
-        calls(&log),
-        ["publish 0", "stop 1", "start 1", "healthy 1", "discard 1"]
-    );
+    assert_eq!(calls(&log), ["stop 1", "start 1", "healthy 1", "discard 1"]);
+}
+
+#[test]
+fn single_routed_copy_stops_without_an_empty_publish() {
+    let log = CallLog::default();
+    let mut runtime = mock_runtime(&log, &[1]);
+    let mut routes = mock_routes(&log, None);
+
+    replace_all(&mut runtime, &mut routes, ReplaceOrder::StopFirst, 1).unwrap();
+
+    assert_eq!(calls(&log), ["stop 1", "start 1", "healthy 1", "publish 1"]);
+}
+
+#[test]
+fn scale_to_zero_is_refused_untouched() {
+    let log = CallLog::default();
+    let mut runtime = mock_runtime(&log, &[1, 2]);
+    let mut routes = mock_routes(&log, None);
+
+    assert!(scale_to(&mut runtime, &mut routes, 0).is_err());
+    assert!(calls(&log).is_empty(), "touched: {:?}", calls(&log));
 }
 
 #[test]

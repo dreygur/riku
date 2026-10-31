@@ -1,6 +1,6 @@
 //! Adding and removing copies of a service without touching the others.
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use riku_container::types::CopyIndex;
 use riku_util::backend::Backend;
 
@@ -36,6 +36,17 @@ pub(super) fn start_healthy(
     Ok(fresh)
 }
 
+/// Publishes the backends of `copies`. Nothing is published when none has a
+/// backend: routers refuse an empty list, so the old routes stay until the
+/// next copy is added.
+fn publish_live(routes: &mut impl RouteSink, copies: &[LiveCopy]) -> Result<()> {
+    let backends = backends_of(copies);
+    if backends.is_empty() {
+        return Ok(());
+    }
+    routes.publish(&backends)
+}
+
 /// Routes to `fresh`, already pushed onto `copies`. When the router cannot
 /// confirm, the copy stays running: it may already be serving, and the next
 /// deploy replaces it.
@@ -44,7 +55,7 @@ pub(super) fn publish_added(
     copies: &[LiveCopy],
     fresh: CopyIndex,
 ) -> Result<()> {
-    match routes.publish(&backends_of(copies)) {
+    match publish_live(routes, copies) {
         Ok(()) => Ok(()),
         Err(e) => Err(e.context(format!(
             "router not confirmed for copy {fresh}; copy {fresh} left running, the next deploy replaces it"
@@ -67,7 +78,9 @@ pub(super) fn add_copy(
     publish_added(routes, copies, index)
 }
 
-/// Removes `old` from the routes, then stops it.
+/// Removes `old` from the routes, then stops it. When `old` is the last
+/// routed copy the routes are left alone (they cannot be empty) and the stop
+/// is accepted downtime.
 pub(super) fn drain_copy(
     runtime: &mut impl CopyRuntime,
     routes: &mut impl RouteSink,
@@ -75,7 +88,7 @@ pub(super) fn drain_copy(
     old: &LiveCopy,
 ) -> Result<()> {
     copies.retain(|c| c.copy != old.copy);
-    if let Err(e) = routes.publish(&backends_of(copies)) {
+    if let Err(e) = publish_live(routes, copies) {
         return Err(e.context(format!("could not drain copy {}, left running", old.copy)));
     }
     match runtime.stop(old) {
@@ -86,12 +99,16 @@ pub(super) fn drain_copy(
 
 /// Brings a service to `want` copies without restarting the ones it keeps.
 /// Growing starts copies at the lowest free indexes; shrinking drains and
-/// stops the highest indexes first.
+/// stops the highest indexes first. Scaling to 0 is an error: nothing is
+/// started or stopped.
 pub fn scale_to(
     runtime: &mut impl CopyRuntime,
     routes: &mut impl RouteSink,
     want: u32,
 ) -> Result<()> {
+    if want == 0 {
+        return Err(anyhow!("cannot scale a service to 0 copies"));
+    }
     let mut copies = match runtime.live() {
         Ok(copies) => copies,
         Err(e) => return Err(e.context("could not list running copies")),

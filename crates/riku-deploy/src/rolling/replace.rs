@@ -54,8 +54,8 @@ pub trait CopyRuntime {
 
 /// Where the router learns which backends are live.
 pub trait RouteSink {
-    /// Replaces the full backend list. Returns `Ok` only after the router
-    /// confirmed the change took effect.
+    /// Replaces the full backend list, which always has at least one entry.
+    /// Returns `Ok` only after the router confirmed the change took effect.
     fn publish(&mut self, backends: &[Backend]) -> Result<()>;
 }
 
@@ -111,7 +111,9 @@ fn replace_one(
 /// router cannot confirm that the new copy was added, that copy stays running
 /// and the next deploy replaces it. [`ReplaceOrder::StopFirst`] drains and
 /// stops the old copy before its replacement starts, so the two never run
-/// together; the service is down in between. Unrouted services pass
+/// together; the service is down in between, and when the old copy is the
+/// only routed one the drain publish is skipped because routers refuse an
+/// empty list. Unrouted services pass
 /// [`NoRoutes`] and the publishes do nothing.
 ///
 /// Old copies beyond `want` are drained and stopped, highest index first,
