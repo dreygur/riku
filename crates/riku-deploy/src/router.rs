@@ -16,7 +16,7 @@
 //! caller-controlled argv. The plugin runs under the shared plugin timeout.
 
 use std::collections::HashMap;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
@@ -30,16 +30,49 @@ use crate::util::route_plan::{HttpsPolicy, RoutePlan};
 
 mod caddy;
 mod plugin;
+mod reload;
 
 use caddy::configure_caddy;
 use plugin::{configure_plugin, remove_plugin};
+pub use reload::{reload, reload_with, Baseline, ReloadTools, ERROR_FILE as RELOAD_ERROR_FILE};
 
-/// Configure the active router so `app` is reachable.
+/// The one backend an app has until the supervisor reports its copies.
 ///
-/// With the default `nginx` router this generates the config and returns; the
-/// supervisor daemon performs the graceful `nginx -s reload` when it observes
-/// the changed config (unchanged legacy behavior). With a plugin router there
-/// is no daemon watcher, so this dispatches `configure` then `reload`.
+/// nginx gets its own pick from the app's ENV. Caddy reaches the app over
+/// loopback whatever `RIKU_BIND_ADDRESS` says. A router plugin gets the
+/// address the app listens on, since it may run elsewhere and must not be
+/// told a made up address.
+fn initial_backends(
+    router: &Router,
+    app: &str,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+) -> Result<Vec<Backend>> {
+    match router {
+        Router::Nginx => match crate::nginx::default_backends(app, env, paths) {
+            Ok(backends) => Ok(backends),
+            Err(e) => Err(anyhow!("cannot route '{app}' through nginx: {e}")),
+        },
+        Router::Caddy => tcp_backend(env, IpAddr::V4(Ipv4Addr::LOCALHOST)),
+        Router::Plugin(name) => {
+            let host = match crate::nginx::bind_address(env) {
+                Ok(host) => host,
+                Err(e) => return Err(anyhow!("cannot route '{app}' through '{name}': {e}")),
+            };
+            tcp_backend(env, host)
+        }
+    }
+}
+
+fn tcp_backend(env: &HashMap<String, String>, host: IpAddr) -> Result<Vec<Backend>> {
+    match crate::nginx::upstream_port_number(env) {
+        Ok(port) => Ok(vec![Backend::Tcp { host, port }]),
+        Err(e) => Err(e),
+    }
+}
+
+/// Configure the active router so `app` is reachable, with the backends it
+/// has today, and return once the router confirmed the new config.
 #[allow(clippy::question_mark)]
 pub fn configure(
     app: &str,
@@ -51,18 +84,49 @@ pub fn configure(
         Ok(router) => router,
         Err(e) => return Err(e),
     };
+    let backends = match initial_backends(&active, app, env, paths) {
+        Ok(backends) => backends,
+        Err(e) => return Err(e),
+    };
+    apply_to(&active, app, app_path, env, paths, &backends)
+}
 
-    match active {
-        Router::Nginx => {
-            let backends = match crate::nginx::default_backends(app, env, paths) {
-                Ok(backends) => backends,
-                Err(e) => return Err(anyhow!("cannot route '{app}' through nginx: {e}")),
-            };
-            crate::nginx::generate_nginx_config(app, app_path, env, &backends, paths)
-        }
-        Router::Caddy => configure_caddy(app, env, paths),
-        Router::Plugin(name) => configure_plugin(&name, app, env, paths),
+/// Render and write `app`'s router config for `backends`, then reload the
+/// active router and wait for it to confirm.
+#[allow(clippy::question_mark)]
+pub fn apply(
+    app: &str,
+    app_path: &Path,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+    backends: &[Backend],
+) -> Result<()> {
+    let active = match Router::load(paths) {
+        Ok(router) => router,
+        Err(e) => return Err(e),
+    };
+    apply_to(&active, app, app_path, env, paths, backends)
+}
+
+#[allow(clippy::question_mark)]
+fn apply_to(
+    active: &Router,
+    app: &str,
+    app_path: &Path,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+    backends: &[Backend],
+) -> Result<()> {
+    let baseline = Baseline::capture(active, &ReloadTools::system());
+    let written = match active {
+        Router::Nginx => crate::nginx::generate_nginx_config(app, app_path, env, backends, paths),
+        Router::Caddy => configure_caddy(app, env, backends, paths),
+        Router::Plugin(name) => configure_plugin(name, app, env, backends, paths),
+    };
+    if let Err(e) = written {
+        return Err(e);
     }
+    reload(active, paths, &baseline)
 }
 
 /// Remove `app` from the active router.
@@ -82,21 +146,24 @@ pub fn remove(app: &str, paths: &RikuPaths) -> Result<()> {
         Err(e) => return Err(e),
     };
 
-    match active {
+    match &active {
         Router::Nginx => crate::nginx::remove_nginx_config(app, paths),
-        Router::Caddy => crate::caddy::remove_site(app, paths),
-        Router::Plugin(name) => remove_plugin(&name, app, paths),
+        Router::Caddy => {
+            if let Err(e) = crate::caddy::remove_site(app, paths) {
+                return Err(e);
+            }
+            reload(&active, paths, &Baseline::Direct)
+        }
+        Router::Plugin(name) => remove_plugin(name, app, paths),
     }
 }
 
-/// The routing plan for an app, built from its ENV, with one backend at `host`
-/// on the app's upstream port. Until the supervisor reports its copies that
-/// single port is all there is.
+/// The routing plan for an app: its domains and HTTPS policy from ENV, and
+/// the given `backends`.
 ///
-/// A malformed `RIKU_DOMAINS`, or a port key that is set but not a port
-/// number, is an error, so nothing unvalidated reaches a router.
-#[allow(clippy::question_mark)]
-fn route_plan(env: &HashMap<String, String>, host: IpAddr) -> Result<RoutePlan> {
+/// A malformed `RIKU_DOMAINS` is an error, so nothing unvalidated reaches a
+/// router.
+fn route_plan(env: &HashMap<String, String>, backends: &[Backend]) -> Result<RoutePlan> {
     let raw = env
         .get("RIKU_DOMAINS")
         .map(String::as_str)
@@ -104,10 +171,6 @@ fn route_plan(env: &HashMap<String, String>, host: IpAddr) -> Result<RoutePlan> 
     let domains = match parse_domains(raw) {
         Ok(domains) => domains,
         Err(e) => return Err(anyhow!("invalid RIKU_DOMAINS: {e}")),
-    };
-    let port = match crate::nginx::upstream_port_number(env) {
-        Ok(port) => port,
-        Err(e) => return Err(e),
     };
     let https = if https_only(env) {
         HttpsPolicy::Only
@@ -117,7 +180,7 @@ fn route_plan(env: &HashMap<String, String>, host: IpAddr) -> Result<RoutePlan> 
     Ok(RoutePlan {
         domains,
         https,
-        backends: vec![Backend::Tcp { host, port }],
+        backends: backends.to_vec(),
     })
 }
 

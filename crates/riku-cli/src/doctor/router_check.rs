@@ -11,8 +11,11 @@ use std::process::{Command, Output};
 use crate::caddy::{has_import, import_line, SYSTEM_CADDYFILE};
 use crate::config::router::Router;
 use crate::config::RikuPaths;
+use crate::deploy::router::RELOAD_ERROR_FILE;
 
 use super::Check;
+
+const SYSTEMD_DIR: &str = "/etc/systemd/system";
 
 /// The last non-empty stderr line of a failed validator run.
 fn last_error_line(output: &Output) -> String {
@@ -100,16 +103,41 @@ fn caddy(paths: &RikuPaths, caddyfile: &Path) -> Vec<Check> {
     ]
 }
 
+/// Fails with the error of the last reload that did not confirm. The file
+/// is removed by the next reload that does.
+fn last_reload(paths: &RikuPaths) -> Option<Check> {
+    match fs::read_to_string(paths.riku_root.join(RELOAD_ERROR_FILE)) {
+        Ok(text) => Some(Check::fail("router reload", text.trim().to_string())),
+        Err(_) => None,
+    }
+}
+
+/// Warns about the Caddy watcher units older versions installed, which now
+/// reload Caddy a second time on every change.
+fn old_caddy_units(systemd_dir: &Path) -> Option<Check> {
+    if !systemd_dir.join("riku-caddy.path").exists() {
+        return None;
+    }
+    Some(Check::warn(
+        "caddy units",
+        "riku-caddy.path is obsolete, re-run: sudo riku setup",
+    ))
+}
+
 /// Checks for the active router: nginx keeps its `nginx -t` check, Caddy
 /// gets a binary, import line and `caddy validate` check, and a plugin
-/// router is reported by name. An unreadable `ROUTER` file fails.
+/// router is reported by name. An unreadable `ROUTER` file fails. A failed
+/// last reload and leftover Caddy units are reported for any router.
 pub fn router(paths: &RikuPaths) -> Vec<Check> {
-    match Router::load(paths) {
+    let mut checks = match Router::load(paths) {
         Ok(Router::Nginx) => nginx(),
         Ok(Router::Caddy) => caddy(paths, Path::new(SYSTEM_CADDYFILE)),
         Ok(Router::Plugin(name)) => vec![Check::ok("router", format!("plugin {name}"))],
-        Err(e) => vec![Check::fail("router", e.to_string())],
-    }
+        Err(e) => return vec![Check::fail("router", e.to_string())],
+    };
+    checks.extend(last_reload(paths));
+    checks.extend(old_caddy_units(Path::new(SYSTEMD_DIR)));
+    checks
 }
 
 #[cfg(test)]

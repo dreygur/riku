@@ -260,9 +260,11 @@ impl Supervisor {
     fn reload_router(&self) {
         match Router::load_file(&self.router_file) {
             Ok(Router::Nginx) => {
-                crate::nginx::reload_nginx();
+                if let Err(e) = crate::nginx::reload_nginx() {
+                    tracing::warn!("nginx reload failed: {e}");
+                }
             }
-            // The riku-caddy.path unit reloads Caddy; a router plugin reloads itself.
+            // Caddy is reloaded by each deploy; a router plugin reloads itself.
             Ok(Router::Caddy | Router::Plugin(_)) => {}
             Err(e) => tracing::error!("not reloading the router: {e}"),
         }

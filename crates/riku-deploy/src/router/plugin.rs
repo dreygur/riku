@@ -40,16 +40,6 @@ fn configure_request(app: &str, plan: &RoutePlan) -> serde_json::Value {
     })
 }
 
-/// The plan sent to a router plugin. Its backend host is the address the app
-/// listens on (`RIKU_BIND_ADDRESS`, default `127.0.0.1`), since the plugin may
-/// run elsewhere and must not be told a made up address.
-fn plugin_route_plan(env: &HashMap<String, String>) -> Result<RoutePlan> {
-    match crate::nginx::bind_address(env) {
-        Ok(host) => route_plan(env, host),
-        Err(e) => Err(e),
-    }
-}
-
 /// The refusal for a plugin that does not speak [`ROUTER_PROTOCOL`], if any.
 /// A manifest without a `[router]` table counts as protocol 1.
 fn protocol_refusal(manifest: &PluginManifest) -> Option<anyhow::Error> {
@@ -66,7 +56,8 @@ fn protocol_refusal(manifest: &PluginManifest) -> Option<anyhow::Error> {
     ))
 }
 
-/// Send `configure` then `reload` to the router plugin `name`.
+/// Send `configure` for `app` to the router plugin `name`, routing to
+/// `backends`.
 ///
 /// Fails before running any verb when the plugin does not speak the current
 /// router protocol, or when the app's `RIKU_DOMAINS` is invalid.
@@ -75,6 +66,7 @@ pub(super) fn configure_plugin(
     name: &str,
     app: &str,
     env: &HashMap<String, String>,
+    backends: &[Backend],
     paths: &RikuPaths,
 ) -> Result<()> {
     let (bundle, manifest) = match bundles::find_router(&paths.plugin_root, name) {
@@ -85,23 +77,28 @@ pub(super) fn configure_plugin(
         return Err(refusal);
     }
 
-    let plan = match plugin_route_plan(env) {
+    let plan = match route_plan(env, backends) {
         Ok(plan) => plan,
         Err(e) => return Err(anyhow!("cannot route '{app}' through '{name}': {e}")),
     };
     let request = configure_request(app, &plan);
 
-    let configured = router::run_verb(
+    router::run_verb(
         paths,
         &bundle,
         &manifest,
         "configure",
         Some(app),
         Some(&request),
-    );
-    if configured.is_err() {
-        return configured;
-    }
+    )
+}
+
+/// Send `reload` to the router plugin `name`.
+pub(super) fn reload_plugin(name: &str, paths: &RikuPaths) -> Result<()> {
+    let (bundle, manifest) = match bundles::find_router(&paths.plugin_root, name) {
+        Some(found) => found,
+        None => return Err(anyhow!("router plugin '{name}' not installed")),
+    };
     router::run_verb(paths, &bundle, &manifest, "reload", None, None)
 }
 

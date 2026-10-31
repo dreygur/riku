@@ -49,30 +49,6 @@ fn configure_request_lists_every_backend() {
 }
 
 #[test]
-fn plugin_backend_host_is_the_bind_address() {
-    let routed = |pairs: &[(&str, &str)]| plugin_route_plan(&env(pairs)).map(|plan| plan.backends);
-
-    assert_eq!(
-        routed(&[("PORT", "5001"), ("RIKU_BIND_ADDRESS", "10.0.0.5")]).unwrap(),
-        vec![Backend::Tcp {
-            host: "10.0.0.5".parse().unwrap(),
-            port: 5001
-        }]
-    );
-    assert_eq!(
-        routed(&[("PORT", "5001")]).unwrap(),
-        vec![Backend::loopback(5001)]
-    );
-    let err = routed(&[("RIKU_BIND_ADDRESS", "localhost")])
-        .unwrap_err()
-        .to_string();
-    assert!(
-        err.contains("RIKU_BIND_ADDRESS") && err.contains("localhost"),
-        "{err}"
-    );
-}
-
-#[test]
 fn old_router_plugin_is_refused_before_running() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());
@@ -80,9 +56,15 @@ fn old_router_plugin_is_refused_before_running() {
     let script = format!("#!/bin/sh\ntouch {}\n", ran.display());
     write_router_bundle(&paths, "edge-router", "", &script);
 
-    let err = configure_plugin("edge-router", "shop", &env(&[]), &paths)
-        .unwrap_err()
-        .to_string();
+    let err = configure_plugin(
+        "edge-router",
+        "shop",
+        &env(&[]),
+        &[Backend::loopback(5001)],
+        &paths,
+    )
+    .unwrap_err()
+    .to_string();
 
     assert!(err.contains("router protocol 1"), "{err}");
     assert!(err.contains("needs protocol 2"), "{err}");
@@ -100,15 +82,21 @@ fn router_plugin_on_another_protocol_is_refused_with_its_number() {
         "#!/bin/sh\n",
     );
 
-    let err = configure_plugin("edge-router", "shop", &env(&[]), &paths)
-        .unwrap_err()
-        .to_string();
+    let err = configure_plugin(
+        "edge-router",
+        "shop",
+        &env(&[]),
+        &[Backend::loopback(5001)],
+        &paths,
+    )
+    .unwrap_err()
+    .to_string();
 
     assert!(err.contains("router protocol 3"), "{err}");
 }
 
 #[test]
-fn protocol_2_plugin_gets_the_request_then_a_reload() {
+fn protocol_2_plugin_gets_the_request_and_reload_is_a_separate_call() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());
     let request = tmp.path().join("request.json");
@@ -121,7 +109,14 @@ fn protocol_2_plugin_gets_the_request_then_a_reload() {
     write_router_bundle(&paths, "edge-router", "[router]\nprotocol = 2", &script);
     let app_env = env(&[("RIKU_DOMAINS", "shop.example.com"), ("PORT", "5001")]);
 
-    configure_plugin("edge-router", "shop", &app_env, &paths).unwrap();
+    configure_plugin(
+        "edge-router",
+        "shop",
+        &app_env,
+        &[Backend::loopback(5001)],
+        &paths,
+    )
+    .unwrap();
 
     let sent: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&request).unwrap()).unwrap();
@@ -131,6 +126,8 @@ fn protocol_2_plugin_gets_the_request_then_a_reload() {
         sent["backends"],
         serde_json::json!([{"kind": "tcp", "host": "127.0.0.1", "port": 5001}])
     );
+    assert_eq!(std::fs::read_to_string(&verbs).unwrap(), "configure\n");
+    reload_plugin("edge-router", &paths).unwrap();
     assert_eq!(
         std::fs::read_to_string(&verbs).unwrap(),
         "configure\nreload\n"

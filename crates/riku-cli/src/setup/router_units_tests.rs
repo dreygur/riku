@@ -3,41 +3,61 @@ use std::path::PathBuf;
 use super::*;
 
 #[test]
-fn path_unit_watches_caddy() {
+fn nginx_path_unit_watches_its_config_dir() {
     let tmp = tempfile::tempdir().unwrap();
-    let caddy_dir = PathBuf::from("/home/deploy/.riku/caddy");
+    let nginx_dir = PathBuf::from("/home/deploy/.riku/nginx");
 
-    let enabled = write_router_units(tmp.path(), &Router::Caddy, &caddy_dir).unwrap();
-    assert_eq!(enabled.as_deref(), Some("riku-caddy.path"));
+    let enabled = write_router_units(tmp.path(), &Router::Nginx, &nginx_dir).unwrap();
+    assert_eq!(enabled.as_deref(), Some("riku-nginx.path"));
 
-    let path_unit = fs::read_to_string(tmp.path().join("riku-caddy.path")).unwrap();
+    let path_unit = fs::read_to_string(tmp.path().join("riku-nginx.path")).unwrap();
     assert!(
-        path_unit.contains("PathModified=/home/deploy/.riku/caddy"),
+        path_unit.contains("PathModified=/home/deploy/.riku/nginx"),
         "{path_unit}"
     );
     assert!(
-        path_unit.contains("Unit=riku-caddy-reload.service"),
+        path_unit.contains("Unit=riku-nginx-reload.service"),
         "{path_unit}"
     );
 
-    let reload = fs::read_to_string(tmp.path().join("riku-caddy-reload.service")).unwrap();
+    let reload = fs::read_to_string(tmp.path().join("riku-nginx-reload.service")).unwrap();
     assert!(
-        reload.contains("ExecStart=/usr/bin/systemctl reload caddy"),
+        reload.contains("ExecStart=/usr/bin/systemctl reload nginx"),
         "{reload}"
     );
 }
 
 #[test]
-fn plugin_router_gets_no_units() {
+fn caddy_and_plugin_routers_get_no_units() {
     let tmp = tempfile::tempdir().unwrap();
-    let router = Router::Plugin("traefik".to_string());
-
-    let enabled = write_router_units(tmp.path(), &router, tmp.path()).unwrap();
-    assert_eq!(enabled, None);
+    for router in [Router::Caddy, Router::Plugin("traefik".to_string())] {
+        let enabled = write_router_units(tmp.path(), &router, tmp.path()).unwrap();
+        assert_eq!(enabled, None);
+    }
     assert_eq!(
         fs::read_dir(tmp.path()).unwrap().count(),
         0,
         "no unit files expected"
     );
-    assert_eq!(unit_ordering(&router), "After=network.target");
+    assert_eq!(
+        unit_ordering(&Router::Plugin("traefik".to_string())),
+        "After=network.target"
+    );
+}
+
+#[test]
+fn old_caddy_units_are_removed() {
+    let tmp = tempfile::tempdir().unwrap();
+    for name in ["riku-caddy.path", "riku-caddy-reload.service"] {
+        fs::write(tmp.path().join(name), "").unwrap();
+    }
+    fs::write(tmp.path().join("riku.service"), "").unwrap();
+
+    remove_caddy_units(tmp.path());
+
+    let left: Vec<_> = fs::read_dir(tmp.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(left, vec![std::ffi::OsString::from("riku.service")]);
 }

@@ -120,7 +120,7 @@ work they describe.
   yet, written after 3a. Owner decisions for 3a are in its Global
   Constraints. Ask the owner before pushing, merging elsewhere or touching
   the test server; ask for the confidential names before the first commit.
-- 3a task status: none started.
+- 3a task status: Task 1 confirmed router reload done, e2e fixtures using Caddy need a caddy binary (see report).
 - Docs tunnel fix (first small item): done.
 - Phase 2 run ledger with every ruling, owner decision and about 60 deferred
   minor findings (several name phase 3 work):
