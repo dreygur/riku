@@ -13,6 +13,8 @@
 mod build;
 mod control;
 mod detect;
+#[cfg(test)]
+mod docker_tests;
 mod env_file;
 #[cfg(test)]
 mod fake;
@@ -22,6 +24,8 @@ mod identity;
 mod ids;
 mod inspect;
 mod inspect_parse;
+mod login;
+mod lookup;
 mod probe;
 mod resources;
 mod run_args;

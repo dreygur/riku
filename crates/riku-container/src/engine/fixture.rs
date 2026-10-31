@@ -63,11 +63,15 @@ pub fn sample_spec() -> RunSpec {
 pub const ID: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 pub const ID_B: &str = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
 
+/// Image id every [`inspect_json`] container reports.
+pub const IMAGE_ID: &str =
+    "sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a";
+
 /// `inspect` output for one container named `myapp-web-2` running image
 /// `shop/web:1.4`, with the given `State` and `Labels` JSON.
 pub fn inspect_json(id: &str, state: &str, labels: &str) -> String {
     format!(
-        r#"[{{"Id":"{id}","Name":"/myapp-web-2","Config":{{"Image":"shop/web:1.4","Labels":{labels}}},"State":{state}}}]"#
+        r#"[{{"Id":"{id}","Name":"/myapp-web-2","Image":"{IMAGE_ID}","Config":{{"Image":"shop/web:1.4","Labels":{labels}}},"State":{state}}}]"#
     )
 }
 

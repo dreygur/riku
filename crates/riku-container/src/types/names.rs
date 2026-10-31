@@ -20,6 +20,13 @@ pub mod labels {
     pub const HTTP: &str = "riku.http";
     /// Compose label that overrides how riku checks a service's health.
     pub const HEALTH: &str = "riku.health";
+    /// Host port riku published for the service, set by riku.
+    pub const PORT: &str = "riku.port";
+    /// Restart policy riku applies itself, set by riku. The engine's own
+    /// restart policy stays off.
+    pub const RESTART: &str = "riku.restart";
+    /// Label compose tools put on every container of a project.
+    pub const COMPOSE_PROJECT: &str = "com.docker.compose.project";
 }
 
 const SERVICE_NAME_MAX: usize = 63;
@@ -30,6 +37,17 @@ pub(crate) fn is_engine_safe(name: &str) -> bool {
     let mut chars = name.chars();
     let first_ok = chars.next().is_some_and(|c| c.is_ascii_alphanumeric());
     first_ok && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
+}
+
+/// Accepts a project, volume or network name the engine takes as one argument
+/// or inside a label filter.
+pub(crate) fn check_engine_name(what: &str, name: &str) -> anyhow::Result<()> {
+    if is_engine_safe(name) {
+        return Ok(());
+    }
+    Err(anyhow::anyhow!(
+        "{what} {name:?} cannot be used with the container engine: it must start with an ASCII letter or digit and use only ASCII letters, digits, '_', '.' and '-'"
+    ))
 }
 
 /// Accepts an app name that `riku_util::validate_app_name` returns unchanged

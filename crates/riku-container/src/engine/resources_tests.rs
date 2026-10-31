@@ -58,6 +58,45 @@ fn volume_exists_matches_the_exact_name_only() {
 }
 
 #[test]
+fn volume_labels_reads_the_map_and_treats_null_as_empty() {
+    let dir = tempfile::tempdir().unwrap();
+    // Shapes captured from `docker volume inspect --format '{{json .Labels}}'`
+    // (docker 29.8.2): keys sorted, `null` for a volume without labels.
+    let (engine, log) = logging_engine(dir.path(), r#"echo '{"a":"b","riku.app":"shop"}'"#);
+    let labels = engine.volume_labels("shop_data").unwrap();
+    assert_eq!(labels["riku.app"], "shop");
+    assert_eq!(labels.len(), 2);
+    assert_eq!(
+        logged(&log),
+        ["volume inspect --format {{json .Labels}} shop_data"]
+    );
+
+    let bare = tempfile::tempdir().unwrap();
+    let (engine, _log) = logging_engine(bare.path(), "echo null");
+    assert!(engine.volume_labels("shop_data").unwrap().is_empty());
+
+    assert!(engine.volume_labels("-shop").is_err());
+}
+
+#[test]
+fn remove_network_skips_an_absent_network_and_removes_a_present_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, log) = logging_engine(dir.path(), "");
+    engine.remove_network("riku-myapp").unwrap();
+    assert_eq!(logged(&log).len(), 1, "removed an absent network");
+
+    let present = tempfile::tempdir().unwrap();
+    let (engine, log) = logging_engine(present.path(), &listing("network ls", "riku-myapp"));
+    engine.remove_network("riku-myapp").unwrap();
+    assert_eq!(logged(&log)[1], "network rm riku-myapp");
+
+    let failing_dir = tempfile::tempdir().unwrap();
+    let (engine, _log) = logging_engine(failing_dir.path(), &failing("network ls"));
+    let err = engine.remove_network("riku-myapp").unwrap_err().to_string();
+    assert!(err.contains("cannot reach engine"), "{err}");
+}
+
+#[test]
 fn volume_exists_reports_engine_failure_as_an_error() {
     let dir = tempfile::tempdir().unwrap();
     let (engine, _log) = logging_engine(dir.path(), &failing("volume ls"));

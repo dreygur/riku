@@ -38,9 +38,15 @@ fn apply_labels(_: &ServiceContext, fields: &Mapping, service: &mut ServiceDef) 
             Err(e) => return Err(e),
         };
     }
-    match [labels::APP, labels::SERVICE, labels::COPY]
-        .into_iter()
-        .find(|reserved| service.labels.contains_key(*reserved))
+    match [
+        labels::APP,
+        labels::SERVICE,
+        labels::COPY,
+        labels::PORT,
+        labels::RESTART,
+    ]
+    .into_iter()
+    .find(|reserved| service.labels.contains_key(*reserved))
     {
         Some(reserved) => bail!("label {reserved} is set by riku and cannot be overridden"),
         None => Ok(()),

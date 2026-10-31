@@ -29,6 +29,22 @@ fn open_refuses_engine_missing_a_command() {
 }
 
 #[test]
+fn open_refuses_engine_without_login_or_image() {
+    for command in ["login", "image"] {
+        let dir = tempfile::tempdir().unwrap();
+        let script = format!("case \"$1\" in {command}) echo 'unknown' >&2; exit 1;; esac");
+        let bin = binary(dir.path(), &script);
+
+        let err = Engine::open(bin).unwrap_err().to_string();
+
+        assert!(
+            err.contains(&format!("does not answer '{command}'")),
+            "{err}"
+        );
+    }
+}
+
+#[test]
 fn open_reports_spawn_failure_instead_of_blaming_a_command() {
     let dir = tempfile::tempdir().unwrap();
     let bin = binary(dir.path(), "exit 0");
