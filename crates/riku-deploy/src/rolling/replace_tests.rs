@@ -3,14 +3,21 @@ use std::rc::Rc;
 
 use anyhow::anyhow;
 
+use super::super::scale::scale_to;
 use super::*;
 
 type CallLog = Rc<RefCell<Vec<String>>>;
 
+#[derive(Clone, Copy, PartialEq)]
+enum NewCopy {
+    Healthy,
+    Unhealthy,
+}
+
 struct MockRuntime {
     log: CallLog,
     running: Vec<LiveCopy>,
-    unhealthy: bool,
+    new_copy: NewCopy,
 }
 
 struct MockRoutes {
@@ -31,7 +38,7 @@ fn mock_runtime(log: &CallLog, running: &[u32]) -> MockRuntime {
     MockRuntime {
         log: log.clone(),
         running: running.iter().map(|n| copy_at(*n)).collect(),
-        unhealthy: false,
+        new_copy: NewCopy::Healthy,
     }
 }
 
@@ -57,10 +64,10 @@ impl CopyRuntime for MockRuntime {
 
     fn wait_healthy(&self, copy: &LiveCopy) -> Result<()> {
         self.log.borrow_mut().push(format!("healthy {}", copy.copy));
-        if self.unhealthy {
-            return Err(anyhow!("timed out"));
+        match self.new_copy {
+            NewCopy::Healthy => Ok(()),
+            NewCopy::Unhealthy => Err(anyhow!("timed out")),
         }
-        Ok(())
     }
 
     fn stop(&mut self, copy: &LiveCopy) -> Result<()> {
@@ -92,18 +99,11 @@ fn calls(log: &CallLog) -> Vec<String> {
     log.borrow().clone()
 }
 
-fn verbs(log: &CallLog) -> Vec<String> {
-    calls(log)
-        .iter()
-        .map(|c| c.split(' ').next().unwrap().to_string())
-        .collect()
-}
-
 #[test]
 fn failed_copy_leaves_old_serving() {
     let log = CallLog::default();
     let mut runtime = mock_runtime(&log, &[1, 2]);
-    runtime.unhealthy = true;
+    runtime.new_copy = NewCopy::Unhealthy;
     let mut routes = mock_routes(&log, None);
 
     let outcome = replace_all(&mut runtime, &mut routes, ReplaceOrder::Overlap, 2);
@@ -130,6 +130,22 @@ fn unconfirmed_reload_keeps_old_copy() {
         "old copy stopped without a confirmed drain: {:?}",
         calls(&log)
     );
+}
+
+#[test]
+fn unconfirmed_add_keeps_new_copy_running() {
+    let log = CallLog::default();
+    let mut runtime = mock_runtime(&log, &[1]);
+    let mut routes = mock_routes(&log, Some(1));
+
+    let outcome = replace_all(&mut runtime, &mut routes, ReplaceOrder::Overlap, 1);
+
+    let message = format!("{:#}", outcome.unwrap_err());
+    assert!(
+        message.contains("copy 2 left running") && message.contains("next deploy"),
+        "error must name the copy left running: {message}"
+    );
+    assert_eq!(calls(&log), ["start 2", "healthy 2", "publish 2"]);
 }
 
 #[test]
@@ -163,7 +179,7 @@ fn overlap_replaces_one_at_a_time() {
 }
 
 #[test]
-fn stop_first_never_overlaps() {
+fn stop_first_never_overlaps_and_routes_to_the_new_copy() {
     let log = CallLog::default();
     let mut runtime = mock_runtime(&log, &[1, 2]);
     let mut routes = mock_routes(&log, None);
@@ -173,13 +189,34 @@ fn stop_first_never_overlaps() {
     assert_eq!(
         calls(&log),
         [
+            "publish 1",
             "stop 1",
             "start 1",
             "healthy 1",
+            "publish 2",
+            "publish 1",
             "stop 2",
             "start 2",
-            "healthy 2"
+            "healthy 2",
+            "publish 2",
         ]
+    );
+}
+
+#[test]
+fn stop_first_failure_says_the_service_is_down() {
+    let log = CallLog::default();
+    let mut runtime = mock_runtime(&log, &[1]);
+    runtime.new_copy = NewCopy::Unhealthy;
+    let mut routes = mock_routes(&log, None);
+
+    let outcome = replace_all(&mut runtime, &mut routes, ReplaceOrder::StopFirst, 1);
+
+    let message = format!("{:#}", outcome.unwrap_err());
+    assert!(message.contains("service is down"), "got: {message}");
+    assert_eq!(
+        calls(&log),
+        ["publish 0", "stop 1", "start 1", "healthy 1", "discard 1"]
     );
 }
 
@@ -191,9 +228,20 @@ fn scale_down_drains_before_stop() {
 
     replace_all(&mut runtime, &mut routes, ReplaceOrder::Overlap, 1).unwrap();
 
-    let tail: Vec<String> = calls(&log).split_off(5);
-    assert_eq!(tail, ["publish 2", "stop 3", "publish 1", "stop 2"]);
-    assert_eq!(verbs(&log).iter().filter(|v| *v == "stop").count(), 3);
+    assert_eq!(
+        calls(&log),
+        [
+            "start 4",
+            "healthy 4",
+            "publish 4",
+            "publish 3",
+            "stop 1",
+            "publish 2",
+            "stop 3",
+            "publish 1",
+            "stop 2",
+        ]
+    );
 }
 
 #[test]
@@ -204,16 +252,42 @@ fn scale_up_publishes_each_added_copy() {
 
     replace_all(&mut runtime, &mut routes, ReplaceOrder::Overlap, 3).unwrap();
 
-    let tail: Vec<String> = calls(&log).split_off(5);
     assert_eq!(
-        tail,
+        calls(&log),
         [
+            "start 2",
+            "healthy 2",
+            "publish 2",
+            "publish 1",
+            "stop 1",
             "start 1",
             "healthy 1",
             "publish 2",
             "start 3",
             "healthy 3",
-            "publish 3"
+            "publish 3",
         ]
     );
+}
+
+#[test]
+fn scale_to_adds_a_copy_without_restarting_others() {
+    let log = CallLog::default();
+    let mut runtime = mock_runtime(&log, &[1, 2, 3]);
+    let mut routes = mock_routes(&log, None);
+
+    scale_to(&mut runtime, &mut routes, 4).unwrap();
+
+    assert_eq!(calls(&log), ["start 4", "healthy 4", "publish 4"]);
+}
+
+#[test]
+fn scale_to_removes_the_highest_index_first() {
+    let log = CallLog::default();
+    let mut runtime = mock_runtime(&log, &[1, 2, 3]);
+    let mut routes = mock_routes(&log, None);
+
+    scale_to(&mut runtime, &mut routes, 1).unwrap();
+
+    assert_eq!(calls(&log), ["publish 2", "stop 3", "publish 1", "stop 2"]);
 }

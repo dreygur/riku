@@ -5,5 +5,7 @@
 
 pub mod health;
 pub mod replace;
+pub mod scale;
 
 pub use replace::{replace_all, CopyHandle, CopyRuntime, LiveCopy, NoRoutes, RouteSink};
+pub use scale::scale_to;
