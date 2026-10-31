@@ -5,7 +5,8 @@
 //! Probes only ever connect to `127.0.0.1` on a port riku chose. The health
 //! path comes from a compose label or an app ENV value, so it is forced to
 //! start with `/` (it cannot change the host) and redirects are not followed
-//! (a copy cannot point the probe at another service).
+//! (a copy cannot point the probe at another service). A 3xx answer therefore
+//! counts as unhealthy. System proxy settings are ignored for the same reason.
 
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
@@ -81,15 +82,19 @@ pub fn procfile_target(env: &HashMap<String, String>, port: u16) -> HealthTarget
     }
 }
 
-fn probe_url(port: u16, path: &str) -> Result<()> {
-    let client = match Client::builder()
+fn probe_client() -> Result<Client> {
+    match Client::builder()
         .timeout(PROBE_TIMEOUT)
         .redirect(Policy::none())
+        .no_proxy()
         .build()
     {
-        Ok(client) => client,
-        Err(e) => return Err(anyhow!("cannot build the health probe client: {e}")),
-    };
+        Ok(client) => Ok(client),
+        Err(e) => Err(anyhow!("cannot build the health probe client: {e}")),
+    }
+}
+
+fn probe_url(client: &Client, port: u16, path: &str) -> Result<()> {
     let slash = if path.starts_with('/') { "" } else { "/" };
     let url = format!("http://127.0.0.1:{port}{slash}{path}");
     match client.get(url).send() {
@@ -143,7 +148,7 @@ where
             Err(e) => return Err(e),
         }
         if Instant::now() >= deadline {
-            return Err(anyhow!("not healthy after {}s", limit.as_secs()));
+            return Err(anyhow!("not healthy after {limit:?}"));
         }
         sleep(PROBE_INTERVAL);
     }
@@ -169,6 +174,9 @@ fn poll_probe(limit: Duration, probe: impl Fn() -> Result<()>) -> Result<()> {
 /// `engine` is required for [`HealthTarget::Engine`] and ignored otherwise.
 /// An engine check fails at once when the container is unhealthy or has
 /// exited; a probe keeps retrying until the limit.
+///
+/// Blocks the calling thread for up to the limit and uses the blocking HTTP
+/// client, so it must not run on a tokio runtime thread.
 pub fn wait_healthy(target: &HealthTarget, engine: Option<&Engine>) -> Result<()> {
     match target {
         HealthTarget::Engine(id) => {
@@ -178,7 +186,13 @@ pub fn wait_healthy(target: &HealthTarget, engine: Option<&Engine>) -> Result<()
             };
             poll_until(HEALTHCHECK_WAIT, || engine_state_ready(engine, id))
         }
-        HealthTarget::Url { port, path } => poll_probe(PROBE_WAIT, || probe_url(*port, path)),
+        HealthTarget::Url { port, path } => {
+            let client = match probe_client() {
+                Ok(client) => client,
+                Err(e) => return Err(e),
+            };
+            poll_probe(PROBE_WAIT, || probe_url(&client, *port, path))
+        }
         HealthTarget::Port(port) => poll_probe(PROBE_WAIT, || probe_port(*port)),
     }
 }

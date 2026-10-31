@@ -1,3 +1,4 @@
+use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -5,7 +6,7 @@ use std::sync::Arc;
 use std::thread;
 
 use super::*;
-use crate::mock_engine::{mock_engine, project_in};
+use crate::mock_engine::{logged, mock_engine, project_in};
 
 const ID: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
@@ -117,4 +118,45 @@ fn disabled_healthcheck_falls_back_to_port() {
     let target = health_target(&service, &container_id(), Some(8080));
 
     assert_eq!(target, Some(HealthTarget::Port(8080)));
+}
+
+fn inspect_with_state(state: &str) -> String {
+    format!(
+        r#"[{{"Id":"{ID}","Name":"/myapp-web-1","Image":"sha256:x","Config":{{"Image":"nginx:1","Labels":{{}}}},"State":{state}}}]"#
+    )
+}
+
+#[test]
+fn engine_check_keeps_polling_while_starting() {
+    let dir = tempfile::tempdir().unwrap();
+    let counter = dir.path().join("calls");
+    let starting = inspect_with_state(r#"{"Status":"running","Health":{"Status":"starting"}}"#);
+    let running = inspect_with_state(r#"{"Status":"running"}"#);
+    let behaviour = format!(
+        "echo x >> '{}'\nif [ \"$(wc -l < '{}')\" -ge 2 ]; then echo '{running}'; else echo '{starting}'; fi",
+        counter.display(),
+        counter.display()
+    );
+    let (engine, _log) = mock_engine(dir.path(), &behaviour);
+
+    let outcome = wait_healthy(&HealthTarget::Engine(container_id()), Some(&engine));
+
+    assert!(outcome.is_ok(), "should pass once running: {outcome:?}");
+    let calls = fs::read_to_string(&counter).unwrap().lines().count();
+    assert_eq!(calls, 2, "the starting state must not count as healthy");
+}
+
+#[test]
+fn unhealthy_container_fails_at_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let unhealthy = inspect_with_state(r#"{"Status":"running","Health":{"Status":"unhealthy"}}"#);
+    let (engine, log) = mock_engine(dir.path(), &format!("echo '{unhealthy}'"));
+
+    let err = wait_healthy(&HealthTarget::Engine(container_id()), Some(&engine)).unwrap_err();
+
+    assert!(
+        err.to_string().contains("unhealthy"),
+        "unexpected error: {err}"
+    );
+    assert_eq!(logged(&log).len(), 1, "polled again after unhealthy");
 }
