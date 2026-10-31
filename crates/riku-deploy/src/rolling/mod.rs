@@ -4,3 +4,6 @@
 #![allow(clippy::question_mark)]
 
 pub mod health;
+pub mod replace;
+
+pub use replace::{replace_all, CopyHandle, CopyRuntime, LiveCopy, NoRoutes, RouteSink};
