@@ -60,7 +60,9 @@ fn volume_exists_matches_the_exact_name_only() {
 #[test]
 fn volume_labels_reads_the_map_and_treats_null_as_empty() {
     let dir = tempfile::tempdir().unwrap();
-    let (engine, log) = logging_engine(dir.path(), r#"echo '{"riku.app":"shop","a":"b"}'"#);
+    // Shapes captured from `docker volume inspect --format '{{json .Labels}}'`
+    // (docker 29.8.2): keys sorted, `null` for a volume without labels.
+    let (engine, log) = logging_engine(dir.path(), r#"echo '{"a":"b","riku.app":"shop"}'"#);
     let labels = engine.volume_labels("shop_data").unwrap();
     assert_eq!(labels["riku.app"], "shop");
     assert_eq!(labels.len(), 2);

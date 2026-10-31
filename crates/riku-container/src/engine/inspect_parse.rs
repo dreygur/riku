@@ -91,23 +91,20 @@ fn copy_label(label_map: &HashMap<String, String>) -> Result<Option<CopyIndex>> 
     }
 }
 
-#[allow(clippy::question_mark)]
 fn port_label(label_map: &HashMap<String, String>, container: &str) -> Option<u16> {
-    let raw = match label_map.get(labels::PORT) {
-        Some(raw) => raw,
-        None => return None,
-    };
-    match raw.parse::<u16>() {
-        Ok(port) if port != 0 => Some(port),
-        _ => {
-            tracing::warn!(
-                container,
-                label = labels::PORT,
-                "label is not a port number"
-            );
-            None
-        }
-    }
+    label_map
+        .get(labels::PORT)
+        .and_then(|raw| match raw.parse::<u16>() {
+            Ok(port) if port != 0 => Some(port),
+            _ => {
+                tracing::warn!(
+                    container,
+                    label = labels::PORT,
+                    "label is not a port number"
+                );
+                None
+            }
+        })
 }
 
 fn into_info(raw: RawContainer) -> Result<ContainerInfo> {

@@ -109,8 +109,7 @@ fn image_id_is_none_when_absent_and_refuses_an_ambiguous_reference() {
     let err = engine.image_id("shop/web").unwrap_err().to_string();
     assert!(err.contains("several images"), "{err}");
 
-    assert!(
-        engine.image_id("-q").is_err(),
-        "accepted a flag as an image"
-    );
+    for image in ["-q", "shop/*", "shop/we?"] {
+        assert!(engine.image_id(image).is_err(), "accepted {image:?}");
+    }
 }

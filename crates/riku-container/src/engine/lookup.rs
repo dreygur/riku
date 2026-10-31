@@ -23,6 +23,8 @@ impl Engine {
     ///
     /// `None` when no such container exists, `Some("")` when it exists without
     /// the label, so the caller can tell a free name from one someone else holds.
+    /// A malformed riku label on a container with that name is an error, so a
+    /// foreign container never reads as free.
     #[allow(clippy::question_mark)]
     pub fn owner_of(&self, name: &ContainerName) -> Result<Option<String>> {
         let ids = match self.list_with_filter(Some(&exact_name_filter(name))) {
@@ -60,6 +62,9 @@ impl Engine {
         match check_positional("image", image) {
             Ok(()) => {}
             Err(e) => return Err(e),
+        }
+        if image.contains(['*', '?']) {
+            return Err(anyhow!("image {image:?} must not contain wildcards"));
         }
         let args: Vec<OsString> = ["image", "ls", "-q", "--no-trunc", image]
             .into_iter()

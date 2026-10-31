@@ -13,6 +13,8 @@
 mod build;
 mod control;
 mod detect;
+#[cfg(test)]
+mod docker_tests;
 mod env_file;
 #[cfg(test)]
 mod fake;

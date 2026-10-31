@@ -120,7 +120,7 @@ work they describe.
   yet, written after 3a. Owner decisions for 3a are in its Global
   Constraints. Ask the owner before pushing, merging elsewhere or touching
   the test server; ask for the confidential names before the first commit.
-- 3a task status: Task 3 engine driver additions done (commit below); others not started.
+- 3a task status: none started.
 - Docs tunnel fix (first small item): done.
 - Phase 2 run ledger with every ruling, owner decision and about 60 deferred
   minor findings (several name phase 3 work):

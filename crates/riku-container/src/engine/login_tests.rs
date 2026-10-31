@@ -46,6 +46,7 @@ fn login_refuses_values_that_could_be_read_as_flags() {
     let (engine, log) = logging_engine(dir.path(), "cat >/dev/null");
 
     assert!(engine.login("-x", "deploy", TOKEN).is_err());
+    assert!(engine.login("registry.example", "-x", TOKEN).is_err());
     assert!(engine.login("registry.example", "", TOKEN).is_err());
     assert!(engine.login("registry.example", "deploy", "").is_err());
     assert!(
