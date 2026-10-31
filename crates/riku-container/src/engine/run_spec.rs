@@ -8,6 +8,17 @@ use crate::types::{
     ContainerName, HealthCheck, Mount, NetworkName, PortBinding, ServiceName, StopSignal,
 };
 
+/// Whether the engine may fetch the image from a registry when it is missing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PullPolicy {
+    /// The engine's default: pull when the image is not present locally.
+    #[default]
+    Missing,
+    /// Never pull (`--pull=never`). For images riku built itself, so a missing
+    /// image fails the start instead of running a same named registry image.
+    Never,
+}
+
 /// Everything needed to start one container.
 ///
 /// An `Exec` health check is joined into a shell line because the engine CLI
@@ -19,6 +30,7 @@ pub struct RunSpec {
     pub name: ContainerName,
     /// Image reference, checked by `Engine::run` before use.
     pub image: String,
+    pub pull: PullPolicy,
     pub network: NetworkName,
     /// Name other containers on the network resolve this one by.
     pub alias: ServiceName,
@@ -45,6 +57,7 @@ impl fmt::Debug for RunSpec {
         f.debug_struct("RunSpec")
             .field("name", &self.name)
             .field("image", &self.image)
+            .field("pull", &self.pull)
             .field("network", &self.network)
             .field("alias", &self.alias)
             .field("labels", &self.labels)

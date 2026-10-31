@@ -40,5 +40,5 @@ pub use identity::{parse_identity, Engine, EngineIdentity};
 pub use ids::ContainerId;
 pub use inspect::{ContainerInfo, ContainerState};
 pub use probe::REQUIRED_COMMANDS;
-pub use run_spec::RunSpec;
+pub use run_spec::{PullPolicy, RunSpec};
 pub use stats::ContainerStats;

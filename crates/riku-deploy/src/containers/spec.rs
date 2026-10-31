@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
 use riku_container::compose::{routed_http, ComposeProject, RoutedPort, ServiceDef};
-use riku_container::engine::RunSpec;
+use riku_container::engine::{PullPolicy, RunSpec};
 use riku_container::types::{
     labels, ContainerName, CopyIndex, NetworkName, PortBinding, RestartPolicy,
 };
@@ -104,9 +104,9 @@ pub fn copy_spec(
         Ok(name) => name,
         Err(e) => return Err(e),
     };
-    let image = match (&service.build, &service.image) {
-        (Some(_), _) => build_tag(app, &service.name),
-        (None, Some(image)) => image.clone(),
+    let (image, pull) = match (&service.build, &service.image) {
+        (Some(_), _) => (build_tag(app, &service.name), PullPolicy::Never),
+        (None, Some(image)) => (image.clone(), PullPolicy::Missing),
         (None, None) => {
             return Err(anyhow!(
                 "service '{}' has neither image nor build",
@@ -130,6 +130,7 @@ pub fn copy_spec(
     Ok(RunSpec {
         name,
         image,
+        pull,
         network: NetworkName::for_app(app.as_str()),
         alias: service.name.clone(),
         labels: copy_labels(app, service, copy, published),
