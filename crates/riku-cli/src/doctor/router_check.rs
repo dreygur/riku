@@ -12,10 +12,9 @@ use crate::caddy::{has_import, import_line, SYSTEM_CADDYFILE};
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::deploy::router::RELOAD_ERROR_FILE;
+use crate::setup::system_service::SYSTEMD_DIR;
 
 use super::Check;
-
-const SYSTEMD_DIR: &str = "/etc/systemd/system";
 
 /// The last non-empty stderr line of a failed validator run.
 fn last_error_line(output: &Output) -> String {

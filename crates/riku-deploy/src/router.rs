@@ -34,6 +34,7 @@ mod reload;
 
 use caddy::configure_caddy;
 use plugin::{configure_plugin, remove_plugin};
+use reload::record_outcome;
 pub use reload::{reload, Baseline, ERROR_FILE as RELOAD_ERROR_FILE};
 
 /// The one backend an app has until the supervisor reports its copies.
@@ -117,7 +118,10 @@ fn apply_to(
     paths: &RikuPaths,
     backends: &[Backend],
 ) -> Result<()> {
-    let baseline = Baseline::capture(active, &paths.reload_programs);
+    let baseline = match active {
+        Router::Nginx => Baseline::capture(&paths.reload_programs),
+        Router::Caddy | Router::Plugin(_) => Baseline::Direct,
+    };
     let written = match active {
         Router::Nginx => crate::nginx::generate_nginx_config(app, app_path, env, backends, paths),
         Router::Caddy => configure_caddy(app, env, backends, paths),
@@ -146,16 +150,16 @@ pub fn remove(app: &str, paths: &RikuPaths) -> Result<()> {
         Err(e) => return Err(e),
     };
 
-    match &active {
+    let outcome = match &active {
         Router::Nginx => crate::nginx::remove_nginx_config(app, paths),
-        Router::Caddy => {
-            if let Err(e) = crate::caddy::remove_site(app, paths) {
-                return Err(e);
-            }
-            reload(&active, paths, &Baseline::Direct)
-        }
+        Router::Caddy => match crate::caddy::remove_site(app, paths) {
+            Ok(()) => reload(&active, paths, &Baseline::Direct),
+            Err(e) => Err(e),
+        },
         Router::Plugin(name) => remove_plugin(name, app, paths),
-    }
+    };
+    record_outcome(paths, &outcome);
+    outcome
 }
 
 /// The routing plan for an app: its domains and HTTPS policy from ENV, and

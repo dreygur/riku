@@ -14,7 +14,7 @@ use super::router_units::{
     other_path_units, remove_caddy_units, unit_ordering, write_router_units,
 };
 
-const SYSTEMD_DIR: &str = "/etc/systemd/system";
+pub const SYSTEMD_DIR: &str = "/etc/systemd/system";
 
 fn render_system_unit(
     router: &Router,

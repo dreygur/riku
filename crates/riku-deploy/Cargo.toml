@@ -19,7 +19,7 @@ riku-supervisor = { path = "../riku-supervisor" }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 libc = { workspace = true }
-nix = { workspace = true, features = ["signal", "process", "user", "fs"] }
+nix = { workspace = true, features = ["signal", "process", "user", "fs", "time"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
