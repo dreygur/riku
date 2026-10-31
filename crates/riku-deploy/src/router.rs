@@ -29,12 +29,14 @@ use crate::util::route_plan::{HttpsPolicy, RoutePlan};
 
 mod backends;
 mod caddy;
+mod fallback;
 mod plugin;
 mod reload;
 
 pub(crate) use backends::web_copies;
 pub use backends::{copy_socket, current_backends};
 use caddy::configure_caddy;
+use fallback::fallback_backends;
 use plugin::{configure_plugin, remove_plugin};
 use reload::record_outcome;
 pub use reload::{reload, Baseline, ERROR_FILE as RELOAD_ERROR_FILE};
@@ -55,6 +57,27 @@ fn backends_for(router: &Router, backends: Vec<Backend>) -> Vec<Backend> {
         .collect()
 }
 
+#[allow(clippy::question_mark)]
+fn routed_backends(
+    active: &Router,
+    app: &str,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+) -> Result<Vec<Backend>> {
+    let copies = match web_copies(app, paths) {
+        Ok(copies) => copies,
+        Err(e) => return Err(anyhow!("cannot route '{app}': {e}")),
+    };
+    if copies.is_empty() {
+        tracing::debug!("'{app}' has no web copy, routing it to its default backend");
+        return fallback_backends(active, app, env, paths);
+    }
+    match current_backends(app, env, paths, None) {
+        Ok(backends) => Ok(backends_for(active, backends)),
+        Err(e) => Err(anyhow!("cannot route '{app}': {e}")),
+    }
+}
+
 /// Configure the active router so `app` is reachable, with a backend for
 /// every web copy it has today, and return once the router confirmed the new
 /// config.
@@ -69,9 +92,9 @@ pub fn configure(
         Ok(router) => router,
         Err(e) => return Err(e),
     };
-    let backends = match current_backends(app, env, paths, None) {
-        Ok(backends) => backends_for(&active, backends),
-        Err(e) => return Err(anyhow!("cannot route '{app}': {e}")),
+    let backends = match routed_backends(&active, app, env, paths) {
+        Ok(backends) => backends,
+        Err(e) => return Err(e),
     };
     apply_to(&active, app, app_path, env, paths, &backends)
 }

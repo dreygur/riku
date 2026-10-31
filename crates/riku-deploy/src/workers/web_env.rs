@@ -10,12 +10,12 @@ use std::path::{Path, PathBuf};
 
 use riku_container::types::CopyIndex;
 
+use super::ports::{free_loopback_port, pinned_port, unused_port};
 use crate::config::RikuPaths;
 
 const UWSGI_PROCESSES: &str = "4";
 const UWSGI_THREADS: &str = "4";
 const RIKU_NGINX_EXTERNAL_PORT: &str = "80";
-const PORT_PICK_ATTEMPTS: usize = 20;
 
 /// Keys older riku versions persisted for the one address of the last copy.
 const LEGACY_ADDRESS_KEYS: [&str; 2] = ["RIKU_UPSTREAM_PORT", "UWSGI_SOCKET"];
@@ -58,44 +58,6 @@ fn configure_wsgi_env(socket_path: &Path, env: &mut HashMap<String, String>) {
     env.insert("RIKU_NGINX_WSGI".to_string(), "true".to_string());
     env.insert("UWSGI_PROCESSES".to_string(), UWSGI_PROCESSES.to_string());
     env.insert("UWSGI_THREADS".to_string(), UWSGI_THREADS.to_string());
-}
-
-/// The `PORT` the app's ENV pins, if any. Some apps need a fixed port, such
-/// as a compose file that publishes one.
-pub(super) fn pinned_port(env: &HashMap<String, String>) -> Result<Option<u16>> {
-    let Some(value) = env.get("PORT") else {
-        return Ok(None);
-    };
-    match value.parse::<u16>() {
-        Ok(port) if port != 0 => Ok(Some(port)),
-        _ => Err(anyhow!("PORT in the app env is not a port: {value:?}")),
-    }
-}
-
-fn free_loopback_port() -> Result<u16> {
-    match crate::util::get_free_port("127.0.0.1") {
-        Ok(port) => Ok(port),
-        Err(e) => Err(anyhow!("failed to allocate a port: {e}")),
-    }
-}
-
-/// A port from `pick` that is not in `taken`. The OS hands out a port it
-/// has just released again now and then, and two copies on one port leave
-/// one of them crash looping behind the router.
-#[allow(clippy::question_mark)]
-fn unused_port(taken: &[u16], mut pick: impl FnMut() -> Result<u16>) -> Result<u16> {
-    for _ in 0..PORT_PICK_ATTEMPTS {
-        let port = match pick() {
-            Ok(port) => port,
-            Err(e) => return Err(e),
-        };
-        if !taken.contains(&port) {
-            return Ok(port);
-        }
-    }
-    Err(anyhow!(
-        "could not find a port distinct from the app's other copies"
-    ))
 }
 
 /// Use the pinned port or allocate a free one, and inject nginx port-map
@@ -157,19 +119,9 @@ fn apply_route_keys(kind: &str, persisted: &mut HashMap<String, String>) {
     );
 }
 
-/// Write routing variables to the app's ENV file, refreshing them on
-/// every deploy.
-///
-/// `configure_web_env`/`configure_wsgi_env` allocate a fresh ephemeral port
-/// (or socket) on every single deploy, not just the first, so the values
-/// persisted here (read back by `spawn_app`'s router configure call)
-/// must always be overwritten to match, never just "written once". A
-/// previous version of this function skipped the whole write whenever the
-/// ENV file already contained `RIKU_NGINX_PORTMAP`/`RIKU_NGINX_WSGI` from an earlier
-/// deploy, which left `RIKU_UPSTREAM_PORT` pinned to that first deploy's
-/// port forever: every redeploy after the first would spawn the worker on
-/// a new port while nginx kept proxying to the old, now-dead one, a
-/// guaranteed 502 on the very next deploy of any web app.
+/// Set the app ENV file's routing keys for `kind`, on every deploy, so the
+/// template the router picks follows the kind the Procfile has now. The
+/// addresses are not persisted, see `apply_route_keys`.
 fn persist_route_env(app: &str, kind: &str, paths: &RikuPaths) -> Result<()> {
     let env_dir = paths.env_root.join(app);
     if let Err(e) = fs::create_dir_all(&env_dir) {

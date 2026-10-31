@@ -6,8 +6,9 @@
 //! Two deploys for the same app racing (a second `git push` landing while
 //! the first `post-receive` hook is still running, or a dashboard-triggered
 //! redeploy firing mid-push) corrupt that shared state, e.g. a lost update
-//! on the routing keys in ENV leaves nginx on the wrong template. An advisory `flock` keyed by app name serializes deploys of the
-//! same app without affecting deploys of different apps.
+//! on the routing keys in ENV leaves nginx on the wrong template. An
+//! advisory `flock` keyed by app name serializes deploys of the same app
+//! without affecting deploys of different apps.
 
 use anyhow::{Context, Result};
 use std::fs::{self, File, OpenOptions};
