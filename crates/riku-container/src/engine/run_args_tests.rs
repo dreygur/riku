@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use super::run_args;
 use crate::engine::fixture::sample_spec;
-use crate::engine::RunSpec;
+use crate::engine::{PullPolicy, RunSpec};
 use crate::types::{HostIp, Mount, MountSource, PortBinding, Protocol, StopSignal};
 
 pub(super) fn argv(spec: &RunSpec) -> Vec<String> {
@@ -11,6 +11,16 @@ pub(super) fn argv(spec: &RunSpec) -> Vec<String> {
         .into_iter()
         .map(|a| a.to_string_lossy().into_owned())
         .collect()
+}
+
+#[test]
+fn pull_never_adds_the_flag_and_the_default_does_not() {
+    let mut spec = sample_spec();
+    assert!(!argv(&spec).iter().any(|a| a.starts_with("--pull")));
+
+    spec.pull = PullPolicy::Never;
+
+    assert!(argv(&spec).contains(&"--pull=never".to_string()));
 }
 
 fn port(host_ip: HostIp, host_port: Option<u16>) -> PortBinding {

@@ -32,7 +32,9 @@ fn build_tag_separates_apps_that_would_join_to_the_same_text() {
     assert_ne!(tag("a-b", "c"), tag("a", "b-c"));
     assert_ne!(tag("Shop", "web"), tag("shop", "web"));
     let repo = tag("myapp", "web");
-    let hash = repo.strip_prefix("riku/").expect("tag lacks riku/ prefix");
+    let hash = repo
+        .strip_prefix("localhost/riku-")
+        .expect("tag lacks localhost/riku- prefix");
     assert!(
         hash.len() == 16 && hash.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f')),
         "not a lowercase hex repository: {repo}"
@@ -54,7 +56,7 @@ fn pulls_image_services_and_builds_the_rest() {
     assert!(
         lines
             .iter()
-            .any(|l| l.starts_with("build") && l.contains(" -t riku/")),
+            .any(|l| l.starts_with("build") && l.contains(" -t localhost/riku-")),
         "{lines:?}"
     );
 }

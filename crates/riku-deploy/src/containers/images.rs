@@ -25,9 +25,15 @@ const GHCR_REGISTRY: &str = "ghcr.io";
 const GHCR_USERNAME: &str = "RIKU_GHCR_USERNAME";
 const GHCR_TOKEN: &str = "RIKU_GHCR_TOKEN";
 
-/// The local tag a built service gets: `riku/<h>`, where `<h>` is the first 16
-/// hex characters of the SHA-256 of the app name, a NUL byte and the service
-/// name.
+/// The local tag a built service gets: `localhost/riku-<h>`, where `<h>` is the
+/// first 16 hex characters of the SHA-256 of the app name, a NUL byte and the
+/// service name.
+///
+/// The `localhost/` host makes the reference resolve only to a local registry
+/// (and is podman's own prefix for local images). A bare `riku/<h>` would be a
+/// Docker Hub repository, so a missing local image could be pulled from
+/// whoever published that name. Runs of built images also use
+/// `PullPolicy::Never`.
 ///
 /// A readable `riku-<app>-<service>` is ambiguous: `a-b`/`c` and `a`/`b-c`
 /// join to the same text, and lowercasing for the engine merges `Shop` with
@@ -39,7 +45,7 @@ pub(super) fn build_tag(app: &AppName, service: &ServiceName) -> String {
     hasher.update([0u8]);
     hasher.update(service.as_str().as_bytes());
     let digest = hex::encode(hasher.finalize());
-    format!("riku/{}", &digest[..16])
+    format!("localhost/riku-{}", &digest[..16])
 }
 
 fn login_if_configured(engine: &Engine, env: &BTreeMap<String, String>) -> Result<()> {

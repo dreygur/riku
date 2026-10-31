@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 
-use super::run_spec::RunSpec;
+use super::run_spec::{PullPolicy, RunSpec};
 use super::spec_check::exec_command_line;
 use crate::types::{HealthCheck, HealthTest, HostIp, Mount, MountSource, PortBinding, Protocol};
 
@@ -105,6 +105,9 @@ pub(crate) fn run_args(spec: &RunSpec, env_file: &Path) -> Result<Vec<OsString>>
     let mut args: Vec<OsString> = vec!["run".into(), "-d".into()];
     pair(&mut args, "--name", spec.name.as_str());
     pair(&mut args, "--restart", "no");
+    if spec.pull == PullPolicy::Never {
+        args.push("--pull=never".into());
+    }
     pair(&mut args, "--network", spec.network.as_str());
     pair(&mut args, "--network-alias", spec.alias.as_str());
     for (key, value) in &spec.labels {

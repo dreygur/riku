@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use super::detect::EngineBinary;
 use super::fake::fake_engine;
-use super::{Engine, RunSpec};
+use super::{Engine, PullPolicy, RunSpec};
 use crate::types::{
     labels, ContainerName, CopyIndex, NetworkName, ServiceName, StopSignal, DEFAULT_STOP_GRACE,
 };
@@ -40,6 +40,7 @@ pub fn sample_spec() -> RunSpec {
     RunSpec {
         name: ContainerName::new("myapp", &service, CopyIndex::new(1).unwrap()).unwrap(),
         image: "registry.example/myapp:1".to_string(),
+        pull: PullPolicy::default(),
         network: NetworkName::for_app("myapp"),
         alias: service,
         labels: labels

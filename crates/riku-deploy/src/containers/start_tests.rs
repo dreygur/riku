@@ -96,5 +96,25 @@ fn free_name_starts_the_container() {
     let id = start_copy(&engine, &spec, &app_path, dir.path()).unwrap();
 
     assert_eq!(id.as_str(), ID);
-    assert!(logged(&log).iter().any(|l| l.starts_with("run")));
+    let lines = logged(&log);
+    let run = lines.iter().find(|l| l.starts_with("run")).expect("no run");
+    assert!(!run.contains("--pull"), "{run}");
+}
+
+#[test]
+fn built_image_is_never_pulled_at_start() {
+    let dir = tempfile::tempdir().unwrap();
+    let (app_path, project) = project_in(dir.path(), "myapp", "services:\n  web:\n    build: .\n");
+    let behaviour = format!("case \"$1\" in run) echo {ID};; esac");
+    let (engine, log) = mock_engine(dir.path(), &behaviour);
+    let spec = spec_of("myapp", &project);
+
+    start_copy(&engine, &spec, &app_path, dir.path()).unwrap();
+
+    let lines = logged(&log);
+    let run = lines.iter().find(|l| l.starts_with("run")).expect("no run");
+    assert!(
+        run.contains("--pull=never") && run.contains("localhost/riku-"),
+        "{run}"
+    );
 }
