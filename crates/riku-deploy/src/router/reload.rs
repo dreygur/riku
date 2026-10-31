@@ -12,7 +12,6 @@
 //! riku root, which only the deploy user can write.
 
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 use std::time::{Duration, Instant};
 
@@ -21,7 +20,7 @@ use anyhow::{anyhow, Result};
 use super::plugin::reload_plugin;
 use crate::caddy::SYSTEM_CADDYFILE;
 use crate::config::router::Router;
-use crate::config::RikuPaths;
+use crate::config::{ReloadPrograms, RikuPaths};
 use crate::util::spawn::output_retrying_etxtbsy;
 
 #[cfg(not(test))]
@@ -33,25 +32,6 @@ const NGINX_UNIT: &str = "riku-nginx-reload.service";
 const UNIT_PROPERTIES: &str = "ExecMainExitTimestampMonotonic,ExecMainStatus,LoadState";
 /// File under the riku root holding the last failed reload's error text.
 pub const ERROR_FILE: &str = "router-reload.err";
-
-/// The programs a reload runs. Production uses [`ReloadTools::system`]; a
-/// test points the fields at scripts in its own directory.
-pub struct ReloadTools {
-    pub systemctl: PathBuf,
-    pub caddy: PathBuf,
-    pub nginx: PathBuf,
-}
-
-impl ReloadTools {
-    /// The programs found on `PATH`.
-    pub fn system() -> Self {
-        ReloadTools {
-            systemctl: PathBuf::from("systemctl"),
-            caddy: PathBuf::from("caddy"),
-            nginx: PathBuf::from("nginx"),
-        }
-    }
-}
 
 /// What the router looked like before its config was written.
 pub enum Baseline {
@@ -66,7 +46,7 @@ struct UnitState {
     status: String,
 }
 
-fn run_systemctl(tools: &ReloadTools) -> Result<(String, UnitState)> {
+fn run_systemctl(tools: &ReloadPrograms) -> Result<(String, UnitState)> {
     let output = match output_retrying_etxtbsy(
         Command::new(&tools.systemctl)
             .args(["show", "-p", UNIT_PROPERTIES])
@@ -99,7 +79,7 @@ fn run_systemctl(tools: &ReloadTools) -> Result<(String, UnitState)> {
 impl Baseline {
     /// Record the router's state. Call it before the config is written, so a
     /// reload that finishes quickly is still seen as newer.
-    pub fn capture(router: &Router, tools: &ReloadTools) -> Baseline {
+    pub fn capture(router: &Router, tools: &ReloadPrograms) -> Baseline {
         if !matches!(router, Router::Nginx) {
             return Baseline::Direct;
         }
@@ -115,7 +95,7 @@ impl Baseline {
 }
 
 #[allow(clippy::question_mark)]
-fn await_nginx_unit(tools: &ReloadTools, before: u64) -> Result<()> {
+fn await_nginx_unit(tools: &ReloadPrograms, before: u64) -> Result<()> {
     let deadline = Instant::now() + RELOAD_WAIT;
     loop {
         let (_, state) = match run_systemctl(tools) {
@@ -141,7 +121,7 @@ fn await_nginx_unit(tools: &ReloadTools, before: u64) -> Result<()> {
     }
 }
 
-fn reload_caddy(tools: &ReloadTools) -> Result<()> {
+fn reload_caddy(tools: &ReloadPrograms) -> Result<()> {
     let output = match output_retrying_etxtbsy(Command::new(&tools.caddy).args([
         "reload",
         "--config",
@@ -162,7 +142,7 @@ fn reload_caddy(tools: &ReloadTools) -> Result<()> {
 }
 
 fn confirm(
-    tools: &ReloadTools,
+    tools: &ReloadPrograms,
     router: &Router,
     paths: &RikuPaths,
     before: &Baseline,
@@ -191,25 +171,16 @@ fn record_outcome(paths: &RikuPaths, outcome: &Result<()>) {
     }
 }
 
-/// [`reload`] with explicit programs.
-pub fn reload_with(
-    tools: &ReloadTools,
-    router: &Router,
-    paths: &RikuPaths,
-    before: &Baseline,
-) -> Result<()> {
-    let outcome = confirm(tools, router, paths, before);
-    record_outcome(paths, &outcome);
-    outcome
-}
-
 /// Reload `router` and return once it has confirmed the new config.
 ///
 /// `before` is the [`Baseline`] taken before the config was written. The
-/// last failure is also written to `<riku root>/router-reload.err` for
-/// `riku doctor`, and the file is removed on success.
+/// programs run come from `paths.reload_programs`. The last failure is also
+/// written to `<riku root>/router-reload.err` for `riku doctor`, and the
+/// file is removed on success.
 pub fn reload(router: &Router, paths: &RikuPaths, before: &Baseline) -> Result<()> {
-    reload_with(&ReloadTools::system(), router, paths, before)
+    let outcome = confirm(&paths.reload_programs, router, paths, before);
+    record_outcome(paths, &outcome);
+    outcome
 }
 
 #[cfg(test)]

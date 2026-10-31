@@ -11,7 +11,10 @@ use std::env;
 use std::path::{Component, Path, PathBuf};
 
 pub mod container_engine;
+pub mod reload_programs;
 pub mod router;
+
+pub use reload_programs::ReloadPrograms;
 
 /// Raw source URL for fetching the latest riku script (for reference implementation).
 pub const RIKU_RAW_SOURCE_URL: &str =
@@ -112,6 +115,8 @@ pub struct RikuPaths {
     /// `riku_root`. `RIKU_NGINX_SITES_ENABLED` overrides it so a test run can
     /// point it somewhere disposable instead of writing to the real nginx.
     pub nginx_sites_enabled: PathBuf,
+    /// Programs a router reload runs. Tests replace them with mock scripts.
+    pub reload_programs: ReloadPrograms,
 }
 
 impl RikuPaths {
@@ -154,6 +159,7 @@ impl RikuPaths {
             riku_script,
             acme_root,
             nginx_sites_enabled,
+            reload_programs: ReloadPrograms::default(),
         }
     }
 

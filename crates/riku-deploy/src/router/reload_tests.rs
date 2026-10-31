@@ -34,20 +34,21 @@ fn mock_systemctl(dir: &Path, runs: &[(u64, u32)]) -> PathBuf {
     write_script(dir, "mock_systemctl", &body)
 }
 
-fn tools_with(dir: &Path, systemctl: PathBuf, caddy: &str) -> ReloadTools {
-    ReloadTools {
+fn paths_with(dir: &Path, systemctl: PathBuf, caddy: &str) -> RikuPaths {
+    let mut paths = RikuPaths::for_tests(dir);
+    paths.reload_programs = ReloadPrograms {
         systemctl,
         caddy: write_script(dir, "mock_caddy", caddy),
         nginx: dir.join("mock_nginx_unused"),
-    }
+    };
+    paths
 }
 
 fn nginx_reload(runs: &[(u64, u32)]) -> (anyhow::Result<()>, RikuPaths, tempfile::TempDir) {
     let tmp = tempfile::tempdir().unwrap();
-    let paths = RikuPaths::for_tests(tmp.path());
-    let tools = tools_with(tmp.path(), mock_systemctl(tmp.path(), runs), "exit 0\n");
-    let baseline = Baseline::capture(&Router::Nginx, &tools);
-    let outcome = reload_with(&tools, &Router::Nginx, &paths, &baseline);
+    let paths = paths_with(tmp.path(), mock_systemctl(tmp.path(), runs), "exit 0\n");
+    let baseline = Baseline::capture(&Router::Nginx, &paths.reload_programs);
+    let outcome = reload(&Router::Nginx, &paths, &baseline);
     (outcome, paths, tmp)
 }
 
@@ -80,14 +81,13 @@ fn nginx_reload_times_out() {
 #[test]
 fn caddy_reload_reports_stderr() {
     let tmp = tempfile::tempdir().unwrap();
-    let paths = RikuPaths::for_tests(tmp.path());
-    let tools = tools_with(
+    let paths = paths_with(
         tmp.path(),
         tmp.path().join("mock_systemctl_unused"),
         "echo 'admin endpoint disabled' >&2\nexit 1\n",
     );
 
-    let err = reload_with(&tools, &Router::Caddy, &paths, &Baseline::Direct)
+    let err = reload(&Router::Caddy, &paths, &Baseline::Direct)
         .unwrap_err()
         .to_string();
 

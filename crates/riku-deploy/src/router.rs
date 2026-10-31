@@ -34,7 +34,7 @@ mod reload;
 
 use caddy::configure_caddy;
 use plugin::{configure_plugin, remove_plugin};
-pub use reload::{reload, reload_with, Baseline, ReloadTools, ERROR_FILE as RELOAD_ERROR_FILE};
+pub use reload::{reload, Baseline, ERROR_FILE as RELOAD_ERROR_FILE};
 
 /// The one backend an app has until the supervisor reports its copies.
 ///
@@ -117,7 +117,7 @@ fn apply_to(
     paths: &RikuPaths,
     backends: &[Backend],
 ) -> Result<()> {
-    let baseline = Baseline::capture(active, &ReloadTools::system());
+    let baseline = Baseline::capture(active, &paths.reload_programs);
     let written = match active {
         Router::Nginx => crate::nginx::generate_nginx_config(app, app_path, env, backends, paths),
         Router::Caddy => configure_caddy(app, env, backends, paths),
