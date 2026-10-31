@@ -16,7 +16,6 @@
 //! caller-controlled argv. The plugin runs under the shared plugin timeout.
 
 use std::collections::HashMap;
-use std::net::{IpAddr, Ipv4Addr};
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
@@ -28,52 +27,60 @@ use crate::util::domain::parse_domains;
 use crate::util::flag::https_only;
 use crate::util::route_plan::{HttpsPolicy, RoutePlan};
 
+mod backends;
 mod caddy;
+mod fallback;
 mod plugin;
 mod reload;
 
+pub(crate) use backends::web_copies;
+pub use backends::{copy_socket, current_backends};
 use caddy::configure_caddy;
+use fallback::fallback_backends;
 use plugin::{configure_plugin, remove_plugin};
 use reload::record_outcome;
 pub use reload::{reload, Baseline, ERROR_FILE as RELOAD_ERROR_FILE};
 
-/// The one backend an app has until the supervisor reports its copies.
-///
-/// nginx gets its own pick from the app's ENV. Caddy reaches the app over
-/// loopback whatever `RIKU_BIND_ADDRESS` says. A router plugin gets the
-/// address the app listens on, since it may run elsewhere and must not be
-/// told a made up address.
-fn initial_backends(
-    router: &Router,
+/// Caddy reaches an app over loopback whatever `RIKU_BIND_ADDRESS` says.
+/// nginx and router plugins keep the address each copy listens on, since a
+/// plugin may run elsewhere and must not be told a made up address.
+fn backends_for(router: &Router, backends: Vec<Backend>) -> Vec<Backend> {
+    if !matches!(router, Router::Caddy) {
+        return backends;
+    }
+    backends
+        .into_iter()
+        .map(|backend| match backend {
+            Backend::Tcp { port, .. } => Backend::loopback(port),
+            unix => unix,
+        })
+        .collect()
+}
+
+#[allow(clippy::question_mark)]
+fn routed_backends(
+    active: &Router,
     app: &str,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
 ) -> Result<Vec<Backend>> {
-    match router {
-        Router::Nginx => match crate::nginx::default_backends(app, env, paths) {
-            Ok(backends) => Ok(backends),
-            Err(e) => Err(anyhow!("cannot route '{app}' through nginx: {e}")),
-        },
-        Router::Caddy => tcp_backend(env, IpAddr::V4(Ipv4Addr::LOCALHOST)),
-        Router::Plugin(name) => {
-            let host = match crate::nginx::bind_address(env) {
-                Ok(host) => host,
-                Err(e) => return Err(anyhow!("cannot route '{app}' through '{name}': {e}")),
-            };
-            tcp_backend(env, host)
-        }
+    let copies = match web_copies(app, paths) {
+        Ok(copies) => copies,
+        Err(e) => return Err(anyhow!("cannot route '{app}': {e}")),
+    };
+    if copies.is_empty() {
+        tracing::debug!("'{app}' has no web copy, routing it to its default backend");
+        return fallback_backends(active, app, env, paths);
+    }
+    match current_backends(app, env, paths, None) {
+        Ok(backends) => Ok(backends_for(active, backends)),
+        Err(e) => Err(anyhow!("cannot route '{app}': {e}")),
     }
 }
 
-fn tcp_backend(env: &HashMap<String, String>, host: IpAddr) -> Result<Vec<Backend>> {
-    match crate::nginx::upstream_port_number(env) {
-        Ok(port) => Ok(vec![Backend::Tcp { host, port }]),
-        Err(e) => Err(e),
-    }
-}
-
-/// Configure the active router so `app` is reachable, with the backends it
-/// has today, and return once the router confirmed the new config.
+/// Configure the active router so `app` is reachable, with a backend for
+/// every web copy it has today, and return once the router confirmed the new
+/// config.
 #[allow(clippy::question_mark)]
 pub fn configure(
     app: &str,
@@ -85,7 +92,7 @@ pub fn configure(
         Ok(router) => router,
         Err(e) => return Err(e),
     };
-    let backends = match initial_backends(&active, app, env, paths) {
+    let backends = match routed_backends(&active, app, env, paths) {
         Ok(backends) => backends,
         Err(e) => return Err(e),
     };

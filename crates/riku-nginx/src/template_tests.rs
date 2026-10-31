@@ -267,18 +267,17 @@ fn https_only_server_declares_the_acme_location_once() {
 }
 
 #[test]
-fn https_only_wsgi_app_passes_to_its_uwsgi_socket() {
-    let config = render(&[
-        ("RIKU_HTTPS_ONLY", "true"),
-        ("RIKU_NGINX_WSGI", "true"),
-        ("UWSGI_SOCKET", SOCKET),
-    ]);
+fn https_only_wsgi_app_passes_to_its_uwsgi_upstream() {
+    let config = render_with(
+        &[("RIKU_HTTPS_ONLY", "true"), ("RIKU_NGINX_WSGI", "true")],
+        Some(&[Backend::Unix(SOCKET.into())]),
+    );
 
     assert!(config.contains("443 ssl"), "not an HTTPS config:\n{config}");
     assert_socket_always_prefixed(&config);
     assert!(
-        config.contains(&format!("uwsgi_pass unix:{SOCKET};")),
-        "wsgi app not passed to uwsgi:\n{config}"
+        config.contains("uwsgi_pass riku_6d79617070;"),
+        "wsgi app not passed to its upstream:\n{config}"
     );
     assert!(
         !config.contains("proxy_pass"),
@@ -287,11 +286,23 @@ fn https_only_wsgi_app_passes_to_its_uwsgi_socket() {
 }
 
 #[test]
-fn wsgi_app_never_uses_a_bare_socket_path() {
-    let config = render(&[("RIKU_NGINX_WSGI", "true"), ("UWSGI_SOCKET", SOCKET)]);
+fn wsgi_app_balances_over_every_socket_backend() {
+    let second = "/srv/riku/myapp.2.sock";
+    let config = render_with(
+        &[("RIKU_NGINX_WSGI", "true")],
+        Some(&[Backend::Unix(SOCKET.into()), Backend::Unix(second.into())]),
+    );
 
-    assert!(config.contains("uwsgi_pass"), "no uwsgi_pass:\n{config}");
-    assert_socket_always_prefixed(&config);
+    assert!(
+        config.contains(&format!(
+            "upstream riku_6d79617070 {{\n  server unix:{SOCKET};\n  server unix:{second};\n}}"
+        )),
+        "upstream block missing or malformed:\n{config}"
+    );
+    assert!(
+        config.contains("uwsgi_pass riku_6d79617070;"),
+        "no uwsgi_pass to the upstream:\n{config}"
+    );
 }
 
 #[test]

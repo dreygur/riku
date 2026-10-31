@@ -8,6 +8,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+use riku_container::types::CopyIndex;
+
 use crate::config::RikuPaths;
 use crate::util::{echo, parse_procfile};
 
@@ -19,10 +21,15 @@ const WEB_KIND: &str = "web";
 /// restart them every time they exit.
 const ONE_SHOT_KINDS: [&str; 2] = ["release", "preflight"];
 
+mod files;
 mod pinned;
-mod web_env;
+mod ports;
+mod socket;
+pub(crate) mod web_env;
 
+use files::{remove_stale_configs, write_worker_config};
 use pinned::check_pinned_port;
+use socket::check_custom_socket;
 use web_env::build_worker_env;
 
 // ---------------------------------------------------------------------------
@@ -72,6 +79,13 @@ pub fn create_workers_generic(
     if let Err(e) = check_pinned_port(app, env, paths) {
         return Err(e);
     }
+    if let Err(e) = check_custom_socket(app, env, paths) {
+        return Err(e);
+    }
+    let mut taken = match enabled_ports(app, paths) {
+        Ok(ports) => ports,
+        Err(e) => return Err(e),
+    };
     if should_restart(env) {
         remove_stale_configs(app, paths);
     }
@@ -102,11 +116,15 @@ pub fn create_workers_generic(
             Ok(count) => count,
             Err(e) => return Err(e),
         };
-        for i in 1..=count {
-            let worker_env = match build_worker_env(app, kind, env, paths) {
+        for copy in (1..=count).filter_map(CopyIndex::new) {
+            let i = copy.get();
+            let worker_env = match build_worker_env(app, kind, copy, env, &taken, paths) {
                 Ok(worker_env) => worker_env,
                 Err(e) => return Err(e),
             };
+            if let Some(port) = worker_env.get("PORT").and_then(|p| p.parse().ok()) {
+                taken.push(port);
+            }
             if let Err(e) =
                 write_worker_config(app, app_path, kind, effective_cmd, i, worker_env, paths)
             {
@@ -122,80 +140,25 @@ pub fn create_workers_generic(
 // Private helpers
 // ---------------------------------------------------------------------------
 
+/// Ports the app's enabled web copies run on. Old copies keep theirs until
+/// the supervisor restarts them, so new copies must not be given the same.
+fn enabled_ports(app: &str, paths: &RikuPaths) -> Result<Vec<u16>> {
+    match crate::router::web_copies(app, paths) {
+        Ok(copies) => Ok(copies
+            .iter()
+            .filter_map(|copy| copy.env.get("PORT").and_then(|port| port.parse().ok()))
+            .collect()),
+        Err(e) => Err(anyhow::anyhow!(
+            "cannot read the web copies of '{app}': {e}"
+        )),
+    }
+}
+
 /// Returns true when `RIKU_AUTO_RESTART` is not explicitly disabled.
 fn should_restart(env: &HashMap<String, String>) -> bool {
     env.get("RIKU_AUTO_RESTART")
         .map(|v| v.to_lowercase() != "false" && v != "0" && v != "no")
         .unwrap_or(true)
-}
-
-/// Remove existing worker symlinks from `workers_enabled` to trigger a restart.
-///
-/// Uses `"{app}-*"` not `"{app}*"` to avoid touching configs for apps
-/// whose names share a prefix (e.g. "foo" would otherwise match "foobar").
-fn remove_stale_configs(app: &str, paths: &RikuPaths) {
-    for ext in &["toml", "ini"] {
-        let pattern = paths.workers_enabled.join(format!("{}-*.{}", app, ext));
-        if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
-            for entry in entries.flatten() {
-                if let Err(e) = fs::remove_file(&entry) {
-                    tracing::warn!("Could not remove stale worker config {:?}: {}", entry, e);
-                }
-            }
-        }
-    }
-}
-
-/// Write a single worker TOML config to `workers_available` and symlink it into `workers_enabled`.
-fn write_worker_config(
-    app: &str,
-    app_path: &Path,
-    kind: &str,
-    command: &str,
-    index: u32,
-    env: HashMap<String, String>,
-    paths: &RikuPaths,
-) -> Result<()> {
-    use crate::supervisor::config::create_worker_config;
-
-    let log_path = paths
-        .log_root
-        .join(app)
-        .join(format!("{}.{}.log", kind, index));
-
-    let config = create_worker_config(
-        app,
-        kind,
-        command,
-        index,
-        env,
-        &app_path.to_string_lossy(),
-        &log_path.to_string_lossy(),
-    );
-
-    let filename = format!("{}-{}-{}.toml", app, kind, index);
-    let available = paths.workers_available.join(&filename);
-    let enabled = paths.workers_enabled.join(&filename);
-
-    crate::util::write_atomic(&available, toml::to_string(&config)?.as_bytes())?;
-
-    // Atomic symlink swap: create the new symlink under a temp name, then
-    // `rename` it over `enabled`. A crash or concurrent reader between a
-    // `remove_file` and a fresh `symlink` would otherwise see `enabled`
-    // briefly missing entirely; `rename` guarantees the path always
-    // resolves to either the old or the new symlink, never nothing.
-    let tmp_link = paths
-        .workers_enabled
-        .join(format!(".{}.tmp-{}", filename, std::process::id()));
-    let _ = fs::remove_file(&tmp_link);
-    std::os::unix::fs::symlink(&available, &tmp_link)?;
-    fs::rename(&tmp_link, &enabled)?;
-
-    echo(
-        &format!("-----> Created worker config: {}", filename),
-        "green",
-    );
-    Ok(())
 }
 
 #[cfg(test)]

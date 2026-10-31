@@ -2,13 +2,13 @@
 //!
 //! `do_deploy` mutates state shared across concurrent triggers for the same
 //! app: it `git reset --hard`s the working tree, rewrites worker TOML
-//! configs, and read-modify-writes the ENV file's nginx port allocation.
+//! configs, and read-modify-writes the ENV file's routing keys.
 //! Two deploys for the same app racing (a second `git push` landing while
 //! the first `post-receive` hook is still running, or a dashboard-triggered
 //! redeploy firing mid-push) corrupt that shared state, e.g. a lost update
-//! on `RIKU_UPSTREAM_PORT` leaves nginx proxying to a port no worker is
-//! bound to. An advisory `flock` keyed by app name serializes deploys of the
-//! same app without affecting deploys of different apps.
+//! on the routing keys in ENV leaves nginx on the wrong template. An
+//! advisory `flock` keyed by app name serializes deploys of the same app
+//! without affecting deploys of different apps.
 
 use anyhow::{Context, Result};
 use std::fs::{self, File, OpenOptions};

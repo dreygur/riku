@@ -13,30 +13,52 @@ use anyhow::{anyhow, Result};
 
 use crate::config::RikuPaths;
 
-use super::web_env::pinned_port;
+use super::ports::pinned_port;
 use super::{read_scaling_count, WEB_KIND};
 
-/// Env keys that say which port an app is served on.
-const PORT_KEYS: [&str; 2] = ["PORT", "RIKU_UPSTREAM_PORT"];
+/// Whether one of `app`'s enabled web copies runs on `port`.
+fn copy_on_port(port: u16, app: &str, paths: &RikuPaths) -> Result<bool> {
+    let wanted = port.to_string();
+    match crate::router::web_copies(app, paths) {
+        Ok(copies) => Ok(copies
+            .iter()
+            .any(|copy| copy.env.get("PORT") == Some(&wanted))),
+        Err(e) => Err(anyhow!("cannot read the web copies of '{app}': {e}")),
+    }
+}
+
+/// Whether the app named `name` pins `port` in its ENV or runs a copy on it.
+/// A `RIKU_UPSTREAM_PORT` left in an old ENV file says nothing about a live
+/// app, so only `PORT` and the enabled copies count.
+fn app_uses_port(port: u16, name: &str, paths: &RikuPaths) -> Result<bool> {
+    let mut env = HashMap::new();
+    let env_file = paths.env_root.join(name).join("ENV");
+    if crate::util::parse_settings(&env_file, &mut env).is_ok()
+        && env.get("PORT") == Some(&port.to_string())
+    {
+        return Ok(true);
+    }
+    copy_on_port(port, name, paths)
+}
 
 /// Another riku app that pins `port` or is routed to it.
-fn app_on_port(port: u16, app: &str, paths: &RikuPaths) -> Option<String> {
-    let entries = fs::read_dir(&paths.env_root).ok()?;
-    let wanted = port.to_string();
-    entries.flatten().find_map(|entry| {
+fn app_on_port(port: u16, app: &str, paths: &RikuPaths) -> Result<Option<String>> {
+    let entries = match fs::read_dir(&paths.env_root) {
+        Ok(entries) => entries,
+        Err(_) => return Ok(None),
+    };
+    for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
         if name == app {
-            return None;
+            continue;
         }
-        let mut env = HashMap::new();
-        if crate::util::parse_settings(&entry.path().join("ENV"), &mut env).is_err() {
-            return None;
+        match app_uses_port(port, &name, paths) {
+            Ok(true) => return Ok(Some(name)),
+            Ok(false) => {}
+            Err(e) => return Err(e),
         }
-        PORT_KEYS
-            .iter()
-            .any(|key| env.get(*key) == Some(&wanted))
-            .then_some(name)
-    })
+    }
+    Ok(None)
 }
 
 /// Whether some process listens on `port`. Only `AddrInUse` counts: binding
@@ -50,11 +72,22 @@ fn port_in_use(port: u16) -> bool {
 
 /// Refuse a pinned port that is scaled past one process, used by another
 /// app, or held by a process that is not this app's previous deploy.
-#[allow(clippy::question_mark)]
 pub(super) fn check_pinned_port(
     app: &str,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
+) -> Result<()> {
+    check_pinned_port_with(app, env, paths, port_in_use)
+}
+
+/// [`check_pinned_port`] with the probe for a busy port injected, so a test
+/// of the claim logic does not depend on which ports the host has free.
+#[allow(clippy::question_mark)]
+pub(super) fn check_pinned_port_with(
+    app: &str,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+    in_use: impl Fn(u16) -> bool,
 ) -> Result<()> {
     let port = match pinned_port(env) {
         Ok(Some(port)) => port,
@@ -72,12 +105,17 @@ pub(super) fn check_pinned_port(
         ));
     }
 
-    if let Some(other) = app_on_port(port, app, paths) {
-        return Err(anyhow!("PORT {port} is already used by app '{other}'"));
+    match app_on_port(port, app, paths) {
+        Ok(Some(other)) => return Err(anyhow!("PORT {port} is already used by app '{other}'")),
+        Ok(None) => {}
+        Err(e) => return Err(e),
     }
 
-    let ours = env.get("RIKU_UPSTREAM_PORT") == Some(&port.to_string());
-    if !ours && port_in_use(port) {
+    let ours = match copy_on_port(port, app, paths) {
+        Ok(ours) => ours,
+        Err(e) => return Err(e),
+    };
+    if !ours && in_use(port) {
         return Err(anyhow!(
             "PORT {port} is in use by another process on this host"
         ));
