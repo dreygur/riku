@@ -2,11 +2,13 @@
 //!
 //! Security model: only fixed command names from [`REQUIRED_COMMANDS`] are
 //! passed, each as its own argv element, to the already resolved engine path.
+//! Each probe is time bounded like every other engine call.
 
+use std::ffi::OsString;
 use std::path::Path;
-use std::process::Command;
+use std::time::Duration;
 
-use riku_util::spawn::output_retrying_etxtbsy;
+use super::bounded::capture;
 
 /// Engine subcommands riku depends on. An engine missing any of them is refused.
 pub const REQUIRED_COMMANDS: [&str; 15] = [
@@ -14,14 +16,17 @@ pub const REQUIRED_COMMANDS: [&str; 15] = [
     "network", "volume", "image", "login",
 ];
 
-/// Run `<program> <command> --help` for every required command.
+/// Run `<program> <command> --help` for every required command, each within
+/// `limit`.
 ///
 /// Capability is judged by the command answering, never by the engine's name.
-/// Returns the first command that failed or could not be spawned, with the
-/// reason: the spawn error, or the exit status plus trimmed stderr.
-pub fn first_unanswered(program: &Path) -> Option<(&'static str, String)> {
+/// Returns the first command that failed, timed out or could not be spawned,
+/// with the reason: the spawn or timeout error, or the exit status plus
+/// trimmed stderr.
+pub fn first_unanswered(program: &Path, limit: Duration) -> Option<(&'static str, String)> {
     for command in REQUIRED_COMMANDS {
-        match output_retrying_etxtbsy(Command::new(program).args([command, "--help"])) {
+        let args = [OsString::from(command), OsString::from("--help")];
+        match capture(program, &args, limit) {
             Ok(out) if out.status.success() => {}
             Ok(out) => {
                 let stderr = String::from_utf8_lossy(&out.stderr);

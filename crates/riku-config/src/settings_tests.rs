@@ -52,6 +52,32 @@ fn unknown_engine_key_is_refused() {
 }
 
 #[test]
+fn unknown_section_is_refused() {
+    let (_tmp, paths) = paths();
+    std::fs::write(&paths.settings_file, "[egnine]\ncall_timeout = \"30s\"\n").unwrap();
+
+    let message = load(&paths).unwrap_err().to_string();
+
+    assert!(
+        message.contains("egnine") && message.contains("settings.toml"),
+        "error should name the section and the file: {message}"
+    );
+}
+
+#[test]
+fn non_string_duration_is_refused_naming_the_key() {
+    let (_tmp, paths) = paths();
+    std::fs::write(&paths.settings_file, "[engine]\nbuild_timeout = 30\n").unwrap();
+
+    let message = load(&paths).unwrap_err().to_string();
+
+    assert!(
+        message.contains("build_timeout") && message.contains("settings.toml"),
+        "error should name the key and the file: {message}"
+    );
+}
+
+#[test]
 fn bad_duration_is_refused_naming_the_key() {
     let (_tmp, paths) = paths();
     for bad in ["30", "0s", "1d", "-5s", "s", "1.5m"] {

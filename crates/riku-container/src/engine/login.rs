@@ -9,9 +9,8 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, Result};
-use riku_util::spawn::spawn_retrying_etxtbsy;
 
-use super::bounded::{drain, wait_bounded};
+use super::bounded::{drain, spawn_in_group, wait_bounded};
 use super::spec_check::check_positional;
 use super::Engine;
 
@@ -34,7 +33,7 @@ impl Engine {
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::piped());
-        let mut child = match spawn_retrying_etxtbsy(&mut command) {
+        let mut child = match spawn_in_group(&mut command) {
             Ok(child) => child,
             Err(e) => return Err(anyhow!("cannot run 'login' on the container engine: {e}")),
         };

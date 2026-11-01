@@ -89,7 +89,7 @@ impl Engine {
             Ok(args) => args,
             Err(e) => return Err(anyhow!("cannot build {}: {e}", spec.tag)),
         };
-        self.run_streamed(&args, self.settings().build_timeout)
+        self.run_streamed(&args, &spec.tag, self.settings().build_timeout)
     }
 }
 

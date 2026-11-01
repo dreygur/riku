@@ -13,10 +13,11 @@ use std::process::Command;
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
+use riku_config::settings::EngineSettings;
 
 use super::env_file::write_env_file;
 use super::run_args::{run_args, whole_seconds_up};
-use super::run_spec::RunSpec;
+use super::run_spec::{PullPolicy, RunSpec};
 use super::spec_check::{check_positional, check_spec};
 use super::{ContainerId, Engine};
 use crate::types::StopSignal;
@@ -25,10 +26,20 @@ fn args_of<const N: usize>(parts: [&str; N]) -> Vec<OsString> {
     parts.into_iter().map(OsString::from).collect()
 }
 
+fn run_limit(settings: &EngineSettings, pull: PullPolicy) -> Duration {
+    match pull {
+        PullPolicy::Missing => settings.pull_timeout,
+        PullPolicy::Never => settings.call_timeout,
+    }
+}
+
 impl Engine {
     /// Start `spec` detached and return its id.
     ///
     /// The env file is written under `scratch` and removed when this returns.
+    /// A spec that may pull a missing image gets the pull limit, since the
+    /// pull happens inside this call; one that never pulls gets the quick
+    /// call limit.
     pub fn run(&self, spec: &RunSpec, scratch: &Path) -> Result<ContainerId> {
         if let Err(e) = check_spec(spec) {
             return Err(anyhow!("cannot run {}: {e}", spec.name.as_str()));
@@ -41,7 +52,8 @@ impl Engine {
             Ok(args) => args,
             Err(e) => return Err(anyhow!("cannot run {}: {e}", spec.name.as_str())),
         };
-        let stdout = match self.output(&args) {
+        let limit = run_limit(self.settings(), spec.pull);
+        let stdout = match self.output_within(&args, limit) {
             Ok(stdout) => stdout,
             Err(e) => return Err(anyhow!("cannot start {}: {e}", spec.name.as_str())),
         };
@@ -79,7 +91,11 @@ impl Engine {
             Ok(()) => {}
             Err(e) => return Err(e),
         }
-        self.run_streamed(&args_of(["pull", image]), self.settings().pull_timeout)
+        self.run_streamed(
+            &args_of(["pull", image]),
+            image,
+            self.settings().pull_timeout,
+        )
     }
 
     /// A `logs` command for the caller to spawn and stream. `tail` limits the

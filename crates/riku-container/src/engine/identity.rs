@@ -56,8 +56,12 @@ pub struct Engine {
 
 impl Engine {
     /// Probe the engine's commands, then read its identity.
+    ///
+    /// Settings cannot apply before the engine is open, so the probe and the
+    /// version read use the default call limit.
     pub fn open(binary: EngineBinary) -> Result<Engine> {
-        if let Some((command, reason)) = first_unanswered(&binary.program) {
+        let limit = EngineSettings::default().call_timeout;
+        if let Some((command, reason)) = first_unanswered(&binary.program, limit) {
             return Err(anyhow!(
                 "container engine {} does not answer '{command}'; riku needs: {} ({reason})",
                 binary.program.display(),

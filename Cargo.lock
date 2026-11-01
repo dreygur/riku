@@ -1739,6 +1739,7 @@ name = "riku-container"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "nix",
  "riku-config",
  "riku-util",
  "serde",

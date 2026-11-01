@@ -2,11 +2,33 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
+use riku_config::settings::EngineSettings;
+
+use super::run_limit;
 use crate::engine::fixture::{logged, logging_engine, sample_spec};
 use crate::engine::ContainerId;
+use crate::engine::PullPolicy;
 use crate::types::{StopSignal, DEFAULT_STOP_GRACE};
 
 const ID: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+#[test]
+fn run_limit_is_the_pull_limit_only_when_the_run_may_pull() {
+    let settings = EngineSettings {
+        call_timeout: Duration::from_secs(7),
+        pull_timeout: Duration::from_secs(900),
+        ..EngineSettings::default()
+    };
+
+    assert_eq!(
+        run_limit(&settings, PullPolicy::Missing),
+        Duration::from_secs(900)
+    );
+    assert_eq!(
+        run_limit(&settings, PullPolicy::Never),
+        Duration::from_secs(7)
+    );
+}
 
 fn id() -> ContainerId {
     ContainerId::try_from(ID).unwrap()
