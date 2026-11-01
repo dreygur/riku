@@ -131,11 +131,13 @@ fn parse_count(line: &str) -> Result<Option<(String, u32)>> {
     if line.is_empty() || line.starts_with('#') {
         return Ok(None);
     }
-    let Some((name, count)) = line.split_once('=') else {
-        return Err(anyhow!("SCALING line {line:?} is not <service>=<copies>"));
+    let (name, count) = match line.split_once('=') {
+        Some((name, count)) if !name.trim().is_empty() => (name.trim(), count),
+        Some(_) => return Err(anyhow!("SCALING line {line:?} has an empty service name")),
+        None => return Err(anyhow!("SCALING line {line:?} is not <service>=<copies>")),
     };
     match count.trim().parse::<u32>() {
-        Ok(count) => Ok(Some((name.trim().to_string(), count))),
+        Ok(count) => Ok(Some((name.to_string(), count))),
         Err(_) => Err(anyhow!("SCALING line {line:?} does not give a copy count")),
     }
 }
@@ -192,3 +194,7 @@ pub(crate) fn write_scaling(
 pub(crate) fn wanted(counts: &BTreeMap<String, u32>, service: &ServiceName) -> u32 {
     counts.get(service.as_str()).copied().unwrap_or(1)
 }
+
+#[cfg(test)]
+#[path = "app_tests.rs"]
+mod tests;

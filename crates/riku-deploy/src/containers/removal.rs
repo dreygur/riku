@@ -86,11 +86,16 @@ pub(crate) fn remove_dropped(engine: &Engine, app: &str, project: &ComposeProjec
 }
 
 /// Stop and remove every container of `app` and its network, for
-/// `riku destroy`. Volumes are kept, and the output says so.
+/// `riku destroy`. Holds the deploy lock for the whole removal. Volumes are
+/// kept, and the output says so.
 ///
 /// Runs while the checkout still exists, so the services' grace periods are
 /// used when the compose file can still be read.
 pub fn destroy_containers(app: &AppName, paths: &RikuPaths) -> Result<()> {
+    let _lock = match crate::lock::acquire(app.as_str(), paths) {
+        Ok(lock) => lock,
+        Err(e) => return Err(e),
+    };
     let engine = match open_engine(paths) {
         Ok(engine) => engine,
         Err(e) => return Err(e),

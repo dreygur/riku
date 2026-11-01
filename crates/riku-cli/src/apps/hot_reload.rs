@@ -68,3 +68,7 @@ pub fn cmd_hot_reload(paths: &RikuPaths, app: &str) -> Result<()> {
         Err(e) => Err(e),
     }
 }
+
+#[cfg(test)]
+#[path = "hot_reload_tests.rs"]
+mod tests;

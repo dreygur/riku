@@ -73,13 +73,13 @@ pub fn restart_service(
 }
 
 /// Position of a container's service in start order; containers of services
-/// no longer in the compose file sort first.
+/// no longer in the compose file stop first.
 fn start_rank(ctx: &ContainerApp, info: &ContainerInfo) -> usize {
     ctx.project
         .services
         .iter()
         .position(|s| Some(&s.name) == info.service.as_ref())
-        .map_or(0, |n| n + 1)
+        .map_or(usize::MAX, |n| n + 1)
 }
 
 /// Stop and remove the copies of `service`, or every container of the app.

@@ -138,13 +138,22 @@ pub fn build_plugin_args(command: &Commands, server: Option<&SshAddress>) -> Vec
             args.push("run".to_string());
             args.extend(cmd.clone());
         }
-        Commands::Restart { app, .. } => {
+        Commands::Restart { app, service, hot } => {
             args.push(app.clone().unwrap_or_default());
             args.push("restart".to_string());
+            if let Some(service) = service {
+                args.push(service.clone());
+            }
+            if *hot {
+                args.push("--hot".to_string());
+            }
         }
-        Commands::Stop { app, .. } => {
+        Commands::Stop { app, service } => {
             args.push(app.clone().unwrap_or_default());
             args.push("stop".to_string());
+            if let Some(service) = service {
+                args.push(service.clone());
+            }
         }
         Commands::Container { .. } => {
             args.push(String::new());

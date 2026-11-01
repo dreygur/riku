@@ -201,7 +201,7 @@ pub enum Commands {
         /// Only this service of a container app
         service: Option<String>,
         /// Use hot reload (zero downtime)
-        #[arg(long)]
+        #[arg(long, conflicts_with = "service")]
         hot: bool,
     },
 

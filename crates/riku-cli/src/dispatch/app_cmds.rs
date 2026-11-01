@@ -73,7 +73,7 @@ pub(super) fn run_restart(
     hot: bool,
 ) -> Result<()> {
     match require_app(app) {
-        Ok(app) if hot && service.is_none() => apps::cmd_hot_reload(paths, &app),
+        Ok(app) if hot => apps::cmd_hot_reload(paths, &app),
         Ok(app) => apps::cmd_restart(paths, &app, service.as_deref()),
         Err(e) => Err(e),
     }

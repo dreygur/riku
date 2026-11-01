@@ -15,7 +15,7 @@ fn service_count(setting: &str) -> Result<(ServiceName, u32)> {
     };
     let service = match ServiceName::try_from(name.trim()) {
         Ok(service) => service,
-        Err(e) => return Err(e),
+        Err(e) => return Err(e.context(format!("in scale setting '{setting}'"))),
     };
     match count.trim().parse::<u32>() {
         Ok(count) => Ok((service, count)),
@@ -110,3 +110,7 @@ pub fn cmd_ps_scale(paths: &RikuPaths, app: &str, settings: &[String]) -> Result
         Err(e) => Err(e),
     }
 }
+
+#[cfg(test)]
+#[path = "ps_scale_tests.rs"]
+mod tests;

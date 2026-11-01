@@ -26,7 +26,10 @@ pub(crate) enum ControlTarget {
 
 fn service_name(raw: Option<&str>) -> Result<Option<ServiceName>> {
     match raw {
-        Some(raw) => ServiceName::try_from(raw).map(Some),
+        Some(raw) => match ServiceName::try_from(raw) {
+            Ok(service) => Ok(Some(service)),
+            Err(e) => Err(e.context(format!("invalid service argument '{raw}'"))),
+        },
         None => Ok(None),
     }
 }
@@ -60,3 +63,7 @@ pub(crate) fn control_target(
         Err(e) => Err(e),
     }
 }
+
+#[cfg(test)]
+#[path = "control_target_tests.rs"]
+mod tests;

@@ -50,6 +50,14 @@ fn wait_for_dependencies(ctx: &ContainerApp, service: &ServiceDef) -> Result<()>
             Ok(ids) => ids,
             Err(e) => return Err(e),
         };
+        if ids.is_empty() {
+            return Err(anyhow!(
+                "service '{}' waits for '{}' to be healthy, but '{}' has no running copies",
+                service.name,
+                dep.service,
+                dep.service
+            ));
+        }
         for id in ids {
             if let Err(e) = wait_healthy(&HealthTarget::Engine(id), Some(&ctx.engine)) {
                 return Err(anyhow!(
