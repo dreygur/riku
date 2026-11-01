@@ -49,6 +49,14 @@ proxying to `127.0.0.1`.
 
 ### Container Apps
 
+- An app with a Dockerfile, Containerfile or compose file now deploys as
+  containers on its next push. To keep the runtime it used before, set
+  `RIKU_RUNTIME` to that runtime (for example `riku config:set myapp
+  RIKU_RUNTIME=node`) before pushing.
+- A container app's Procfile `release` command now runs in a one-off
+  container from the newly built image, with the app's env and on the app's
+  network, instead of on the host. A nonzero exit stops the deploy before
+  any copy is replaced.
 - A compose file, or a folder on its path, may now be a symlink whose real
   target stays inside the app directory (for example
   `docker-compose.yml -> deploy/prod.yml`). A link that leaves the app is

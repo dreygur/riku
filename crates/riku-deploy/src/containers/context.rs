@@ -104,6 +104,11 @@ impl<'a> ContainerApp<'a> {
         }
     }
 
+    /// The 0700 directory engine env files are written to.
+    pub fn scratch(&self) -> &std::path::Path {
+        &self.scratch
+    }
+
     pub fn is_routed(&self, service: &ServiceName) -> bool {
         self.routed.as_ref().is_some_and(|r| &r.service == service)
     }

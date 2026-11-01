@@ -8,6 +8,15 @@ fn container_name_joins_app_service_and_copy() {
 }
 
 #[test]
+fn release_container_name_is_app_dash_release_and_validates_the_app() {
+    assert_eq!(
+        ContainerName::for_release("myapp").unwrap().as_str(),
+        "myapp-release"
+    );
+    assert!(ContainerName::for_release("-myapp").is_err());
+}
+
+#[test]
 fn container_name_rejects_unvalidated_app() {
     let web = ServiceName::try_from("web").unwrap();
     assert!(ContainerName::new("../myapp", &web, CopyIndex::new(1).unwrap()).is_err());

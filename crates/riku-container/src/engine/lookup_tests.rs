@@ -45,6 +45,16 @@ fn owner_of_reports_the_label_the_empty_string_or_nothing() {
 }
 
 #[test]
+fn id_of_reports_the_full_id_of_the_named_container() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _log) = engine_listing_one(dir.path(), "{}");
+
+    let found = engine.id_of(&name("myapp", 2)).unwrap();
+
+    assert_eq!(found.as_ref().map(ContainerId::as_str), Some(ID));
+}
+
+#[test]
 fn owner_of_escapes_dots_and_ignores_a_container_with_another_name() {
     let dir = tempfile::tempdir().unwrap();
     let (engine, log) = engine_listing_one(dir.path(), r#"{"riku.app":"other"}"#);

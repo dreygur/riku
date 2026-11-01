@@ -3,16 +3,16 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use riku_container::compose::{check_scale, ComposeProject, ServiceDef};
 
 use super::app::{read_scaling, wanted};
 use super::context::ContainerApp;
+use super::release::run_release;
 use super::removal::remove_dropped;
 use super::rollout::roll_out;
 use super::{prepare_images, AppName};
 use crate::config::RikuPaths;
-use crate::util::parse_procfile;
 
 /// The runtime name hooks receive for container apps.
 pub const CONTAINER_RUNTIME: &str = "container";
@@ -26,19 +26,8 @@ fn check_counts(project: &ComposeProject, counts: &BTreeMap<String, u32>) -> Res
     Ok(())
 }
 
-fn run_release(ctx: &ContainerApp) -> Result<()> {
-    let procfile = match parse_procfile(&ctx.app_path.join("Procfile")) {
-        Ok(procfile) => procfile.unwrap_or_default(),
-        Err(e) => return Err(anyhow!("invalid Procfile: {e}")),
-    };
-    match procfile.get("release") {
-        Some(release) => crate::env_setup::run_release(release, &ctx.app_path),
-        None => Ok(()),
-    }
-}
-
 /// Pre build hooks, image pulls and builds, post build hooks, then the
-/// Procfile `release` command when there is one.
+/// Procfile `release` command, in the new image, when there is one.
 fn build_images(ctx: &ContainerApp) -> Result<()> {
     let app = ctx.app.as_str();
     let runtime = Some(CONTAINER_RUNTIME);

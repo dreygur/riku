@@ -22,6 +22,7 @@ mod images;
 #[cfg(test)]
 mod mock_state;
 mod ports;
+mod release;
 mod removal;
 mod rollout;
 mod routes;
