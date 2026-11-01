@@ -19,19 +19,19 @@ theme:
   palette:
     # Dark is the hard default (listed first); toggle reveals light mode.
     - scheme: slate
-      primary: black
+      primary: custom
       accent: deep purple
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
     - scheme: default
-      primary: black
+      primary: custom
       accent: deep purple
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
-  # Match the dashboard: system sans for UI, JetBrains Mono for code
-  # (JetBrains Mono is loaded via stylesheets/extra.css).
+  # Match the dashboard: Geist for UI, Geist Mono for code
+  # (both are loaded via stylesheets/extra.css).
   font: false
   icon:
     repo: fontawesome/brands/github
@@ -95,6 +95,7 @@ markdown_extensions:
   - meta
   - toc:
       permalink: true
+      title: On this page
   - pymdownx.arithmatex:
       generic: true
   - pymdownx.betterem:
