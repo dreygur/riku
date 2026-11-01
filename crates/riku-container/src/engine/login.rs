@@ -9,13 +9,14 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, Result};
-use riku_util::spawn::spawn_retrying_etxtbsy;
 
+use super::bounded::{drain, spawn_in_group, wait_bounded};
 use super::spec_check::check_positional;
 use super::Engine;
 
 impl Engine {
     /// Log the engine in to `registry` with `user` and `token`.
+    #[allow(clippy::question_mark)]
     pub fn login(&self, registry: &str, user: &str, token: &str) -> Result<()> {
         for (what, value) in [("registry", registry), ("registry user", user)] {
             match check_positional(what, value) {
@@ -32,7 +33,7 @@ impl Engine {
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::piped());
-        let mut child = match spawn_retrying_etxtbsy(&mut command) {
+        let mut child = match spawn_in_group(&mut command) {
             Ok(child) => child,
             Err(e) => return Err(anyhow!("cannot run 'login' on the container engine: {e}")),
         };
@@ -40,18 +41,18 @@ impl Engine {
             Some(mut stdin) => stdin.write_all(token.as_bytes()),
             None => Ok(()),
         };
-        let out = match child.wait_with_output() {
-            Ok(out) => out,
-            Err(e) => {
-                return Err(anyhow!(
-                    "cannot wait for 'login' on the container engine: {e}"
-                ))
-            }
+        let stderr = child.stderr.take().map(drain);
+        let status = match wait_bounded(&mut child, "login", self.settings().call_timeout) {
+            Ok(status) => status,
+            Err(e) => return Err(e),
         };
-        if !out.status.success() {
+        if !status.success() {
+            let stderr = stderr
+                .map(|h| h.join().unwrap_or_default())
+                .unwrap_or_default();
             return Err(anyhow!(
                 "container engine 'login' failed for {registry}: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
+                String::from_utf8_lossy(&stderr).trim()
             ));
         }
         match written {

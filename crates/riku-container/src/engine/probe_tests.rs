@@ -2,6 +2,7 @@ use std::os::unix::fs::PermissionsExt;
 
 use crate::engine::detect::EngineBinary;
 use crate::engine::fake::fake_engine;
+use crate::engine::probe::first_unanswered;
 use crate::engine::Engine;
 
 const PODMAN_VERSION: &str = r#"{"Client":{"Version":"5.2.2"},"Server":{"Version":"5.2.2"}}"#;
@@ -26,6 +27,21 @@ fn open_refuses_engine_missing_a_command() {
     assert!(err.contains("does not answer 'stats'"), "{err}");
     assert!(err.contains("riku needs: pull, build, run"), "{err}");
     assert!(err.contains("unknown command"), "stderr missing: {err}");
+}
+
+#[test]
+fn probe_stops_a_command_that_never_answers() {
+    let dir = tempfile::tempdir().unwrap();
+    let bin = binary(dir.path(), "case \"$1\" in ps) exec sleep 30;; esac");
+
+    let (command, reason) =
+        first_unanswered(&bin.program, std::time::Duration::from_millis(1500)).unwrap();
+
+    assert_eq!(command, "ps", "{reason}");
+    assert!(
+        reason.contains("1.5s"),
+        "reason should name the limit: {reason}"
+    );
 }
 
 #[test]

@@ -34,6 +34,7 @@ mod run_spec;
 mod snapshot;
 mod spec_check;
 mod stats;
+mod streamed;
 
 pub use build::BuildSpec;
 pub use detect::{detect, EngineBinary, KNOWN_ENGINES};

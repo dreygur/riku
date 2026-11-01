@@ -13,10 +13,11 @@ use std::process::Command;
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
+use riku_config::settings::EngineSettings;
 
 use super::env_file::write_env_file;
 use super::run_args::{run_args, whole_seconds_up};
-use super::run_spec::RunSpec;
+use super::run_spec::{PullPolicy, RunSpec};
 use super::spec_check::{check_positional, check_spec};
 use super::{ContainerId, Engine};
 use crate::types::StopSignal;
@@ -25,10 +26,20 @@ fn args_of<const N: usize>(parts: [&str; N]) -> Vec<OsString> {
     parts.into_iter().map(OsString::from).collect()
 }
 
+fn run_limit(settings: &EngineSettings, pull: PullPolicy) -> Duration {
+    match pull {
+        PullPolicy::Missing => settings.pull_timeout,
+        PullPolicy::Never => settings.call_timeout,
+    }
+}
+
 impl Engine {
     /// Start `spec` detached and return its id.
     ///
     /// The env file is written under `scratch` and removed when this returns.
+    /// A spec that may pull a missing image gets the pull limit, since the
+    /// pull happens inside this call; one that never pulls gets the quick
+    /// call limit.
     pub fn run(&self, spec: &RunSpec, scratch: &Path) -> Result<ContainerId> {
         if let Err(e) = check_spec(spec) {
             return Err(anyhow!("cannot run {}: {e}", spec.name.as_str()));
@@ -41,7 +52,8 @@ impl Engine {
             Ok(args) => args,
             Err(e) => return Err(anyhow!("cannot run {}: {e}", spec.name.as_str())),
         };
-        let stdout = match self.output(&args) {
+        let limit = run_limit(self.settings(), spec.pull);
+        let stdout = match self.output_within(&args, limit) {
             Ok(stdout) => stdout,
             Err(e) => return Err(anyhow!("cannot start {}: {e}", spec.name.as_str())),
         };
@@ -49,11 +61,16 @@ impl Engine {
     }
 
     /// Send the stop signal, then kill after `grace`, rounded up to a whole
-    /// second.
+    /// second. The engine call itself is given `stop_extra` more than the
+    /// grace before riku gives up on it.
     pub fn stop(&self, id: &ContainerId, grace: Duration) -> Result<()> {
-        let secs = whole_seconds_up(grace).to_string();
-        self.output(&args_of(["stop", "-t", &secs, id.as_str()]))
-            .map(|_| ())
+        let secs = whole_seconds_up(grace);
+        let limit = Duration::from_secs(secs) + self.settings().stop_extra;
+        self.output_within(
+            &args_of(["stop", "-t", &secs.to_string(), id.as_str()]),
+            limit,
+        )
+        .map(|_| ())
     }
 
     /// Send `signal` to the container's main process.
@@ -67,9 +84,12 @@ impl Engine {
         self.output(&args_of(["rm", id.as_str()])).map(|_| ())
     }
 
-    /// Block until the container exits and return its exit code.
+    /// Block until the container exits and return its exit code. Bounded by
+    /// the build limit, since it waits on one-off jobs such as a release
+    /// command that can run as long as a build.
     pub fn wait(&self, id: &ContainerId) -> Result<i64> {
-        let stdout = match self.output(&args_of(["wait", id.as_str()])) {
+        let limit = self.settings().build_timeout;
+        let stdout = match self.output_within(&args_of(["wait", id.as_str()]), limit) {
             Ok(stdout) => stdout,
             Err(e) => return Err(anyhow!("cannot wait for {}: {e}", id.as_str())),
         };
@@ -83,13 +103,18 @@ impl Engine {
         }
     }
 
-    /// Pull `image` from its registry.
+    /// Pull `image` from its registry, streaming the engine's output and
+    /// stopping it at the pull limit.
     pub fn pull(&self, image: &str) -> Result<()> {
         match check_positional("image", image) {
             Ok(()) => {}
             Err(e) => return Err(e),
         }
-        self.output(&args_of(["pull", image])).map(|_| ())
+        self.run_streamed(
+            &args_of(["pull", image]),
+            image,
+            self.settings().pull_timeout,
+        )
     }
 
     /// A `logs` command for the caller to spawn and stream. `tail` limits the
