@@ -91,6 +91,34 @@ fn timeout_stops_helpers_that_ignore_sigterm() {
     }
 }
 
+#[test]
+fn capture_returns_when_a_helper_keeps_stdout_open() {
+    let dir = tempfile::tempdir().unwrap();
+    let pid_file = dir.path().join("helper.pid");
+    let behaviour = format!(
+        "sleep 30 &\necho $! > '{}'\necho ok\nexit 0",
+        pid_file.display()
+    );
+    let (engine, _log) = logging_engine(dir.path(), &behaviour);
+    let started = Instant::now();
+
+    let out = engine
+        .output_within(&[OsString::from("ps")], Duration::from_millis(500))
+        .unwrap();
+
+    assert!(out.contains("ok"), "output should contain 'ok': {out}");
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "capture waited for the helper"
+    );
+    let pid = fs::read_to_string(&pid_file).unwrap();
+    assert!(
+        wait_until_gone(pid.trim()),
+        "helper {} still running",
+        pid.trim()
+    );
+}
+
 fn short_limits() -> EngineSettings {
     EngineSettings {
         call_timeout: Duration::from_millis(300),

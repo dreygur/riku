@@ -31,31 +31,27 @@ pub(super) fn spawn_in_group(command: &mut Command) -> io::Result<Child> {
     spawn_retrying_etxtbsy(command)
 }
 
-fn signal_group(child: &Child, signal: Signal) {
-    let _ = killpg(Pid::from_raw(child.id() as i32), signal);
-}
-
 fn stop_group(child: &mut Child) {
-    signal_group(child, Signal::SIGTERM);
+    let pgid = Pid::from_raw(child.id() as i32);
+    let _ = killpg(pgid, Signal::SIGTERM);
     let deadline = Instant::now() + TERM_GRACE;
     while Instant::now() < deadline {
-        if let Ok(Some(_)) = child.try_wait() {
+        let _ = child.try_wait();
+        if killpg(pgid, None).is_err() {
             break;
         }
         sleep(POLL_INTERVAL);
     }
-    signal_group(child, Signal::SIGKILL);
+    let _ = killpg(pgid, Signal::SIGKILL);
     let _ = child.wait();
 }
 
-/// Wait for `child`, stopping its whole process group when `limit` passes
-/// first. `child` must have been started with [`spawn_in_group`].
-pub(super) fn wait_bounded(
+fn wait_until(
     child: &mut Child,
     command: &str,
+    deadline: Instant,
     limit: Duration,
 ) -> Result<ExitStatus> {
-    let deadline = Instant::now() + limit;
     loop {
         match child.try_wait() {
             Ok(Some(status)) => return Ok(status),
@@ -72,6 +68,16 @@ pub(super) fn wait_bounded(
     }
 }
 
+/// Wait for `child`, stopping its whole process group when `limit` passes
+/// first. `child` must have been started with [`spawn_in_group`].
+pub(super) fn wait_bounded(
+    child: &mut Child,
+    command: &str,
+    limit: Duration,
+) -> Result<ExitStatus> {
+    wait_until(child, command, Instant::now() + limit, limit)
+}
+
 pub(super) fn drain(mut pipe: impl Read + Send + 'static) -> JoinHandle<Vec<u8>> {
     spawn(move || {
         let mut bytes = Vec::new();
@@ -84,6 +90,13 @@ fn joined(handle: Option<JoinHandle<Vec<u8>>>) -> Vec<u8> {
     handle
         .map(|h| h.join().unwrap_or_default())
         .unwrap_or_default()
+}
+
+fn is_finished(handle: &Option<JoinHandle<Vec<u8>>>) -> bool {
+    match handle {
+        Some(h) => h.is_finished(),
+        None => true,
+    }
 }
 
 /// Exit status and captured output of a finished engine call.
@@ -117,12 +130,23 @@ pub(super) fn capture(program: &Path, args: &[OsString], limit: Duration) -> Res
             ))
         }
     };
+    let pgid = Pid::from_raw(child.id() as i32);
     let stdout = child.stdout.take().map(drain);
     let stderr = child.stderr.take().map(drain);
-    let status = match wait_bounded(&mut child, &command, limit) {
+    let deadline = Instant::now() + limit;
+    let status = match wait_until(&mut child, &command, deadline, limit) {
         Ok(status) => status,
         Err(e) => return Err(e),
     };
+    while Instant::now() < deadline {
+        if is_finished(&stdout) && is_finished(&stderr) {
+            break;
+        }
+        sleep(POLL_INTERVAL);
+    }
+    if !is_finished(&stdout) || !is_finished(&stderr) {
+        let _ = killpg(pgid, Signal::SIGKILL);
+    }
     Ok(Captured {
         status,
         stdout: joined(stdout),
