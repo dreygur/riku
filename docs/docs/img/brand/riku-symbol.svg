@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 152 160" role="img" aria-labelledby="title">
+  <title id="title">Riku geometric kernel symbol</title>
+  <g fill="#F0F1F3">
+    <path d="M76 12 132 44 76 76 20 44 76 12Zm0 17L49 44l27 15 27-15-27-15Z"/>
+    <path d="M20 57 68 84v58L20 114V57Z"/>
+    <path d="M132 57 84 84v58l48-28V57Z"/>
+  </g>
+</svg>

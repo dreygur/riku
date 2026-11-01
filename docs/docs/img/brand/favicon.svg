@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">riku</title>
+  <rect width="512" height="512" rx="112" fill="#141416"/>
+  <rect x="1.5" y="1.5" width="509" height="509" rx="110.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="3"/>
+  <g transform="translate(98 96) scale(2.08)" fill="#F0F1F3">
+    <path d="M76 12 132 44 76 76 20 44 76 12Zm0 17L49 44l27 15 27-15-27-15Z"/>
+    <path d="M20 57 68 84v58L20 114V57Z"/>
+    <path d="M132 57 84 84v58l48-28V57Z"/>
+  </g>
+</svg>

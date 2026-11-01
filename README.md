@@ -1,4 +1,9 @@
-# Riku
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/docs/img/brand/riku-logo.svg">
+    <img src="docs/docs/img/brand/riku-logo-dark.svg" alt="riku" width="360">
+  </picture>
+</p>
 
 **Git-push deployments on a single small box: one Rust binary, no Docker required.**
 
