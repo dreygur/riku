@@ -129,6 +129,27 @@ fn pull_refuses_an_image_that_looks_like_a_flag() {
 }
 
 #[test]
+fn wait_returns_parsed_exit_code() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, log) = logging_engine(dir.path(), "echo 42");
+
+    let code = engine.wait(&id()).unwrap();
+
+    assert_eq!(code, 42);
+    assert_eq!(logged(&log), [format!("wait {ID}")]);
+}
+
+#[test]
+fn wait_fails_on_unparseable_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _log) = logging_engine(dir.path(), "echo 'not-a-number'");
+
+    let err = engine.wait(&id()).unwrap_err().to_string();
+
+    assert!(err.contains("cannot parse exit code"), "{err}");
+}
+
+#[test]
 fn logs_command_follows_and_tails() {
     let dir = tempfile::tempdir().unwrap();
     let (engine, _log) = logging_engine(dir.path(), "");

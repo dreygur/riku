@@ -71,7 +71,7 @@ pub fn cmd_agent_ps(paths: &RikuPaths, app: &str) -> AgentResponse {
     }))
 }
 
-pub fn cmd_agent_restart(paths: &RikuPaths, app: &str, _process: Option<&str>) -> AgentResponse {
+pub fn cmd_agent_restart(paths: &RikuPaths, app: &str, service: Option<&str>) -> AgentResponse {
     let app = match exit_if_invalid(app, &paths.app_root) {
         Ok(a) => a,
         Err(_) => {
@@ -82,7 +82,7 @@ pub fn cmd_agent_restart(paths: &RikuPaths, app: &str, _process: Option<&str>) -
         }
     };
 
-    match crate::apps::cmd_restart(paths, &app) {
+    match crate::apps::cmd_restart(paths, &app, service) {
         Ok(_) => AgentResponse::success(json!({
             "message": format!("Restart completed for {}", app)
         })),
@@ -114,7 +114,7 @@ pub fn cmd_agent_stop(paths: &RikuPaths, app: &str) -> AgentResponse {
 }
 
 pub fn cmd_agent_stop_confirm(paths: &RikuPaths, app: &str, _token: &str) -> AgentResponse {
-    match crate::apps::cmd_stop(paths, app) {
+    match crate::apps::cmd_stop(paths, app, None) {
         Ok(_) => AgentResponse::success(json!({
             "message": format!("Application '{}' stopped successfully", app)
         })),
@@ -174,3 +174,7 @@ pub fn cmd_agent_stats(paths: &RikuPaths, app: Option<&str>) -> AgentResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "cmd_runtime_tests.rs"]
+mod tests;

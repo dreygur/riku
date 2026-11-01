@@ -74,9 +74,9 @@ fn worker_only_and_static_apps_keep_their_default_backend() {
     enable_worker(&paths, "worker", 1, &[]);
     let socket = Backend::Unix(paths.nginx_root.join("shop.sock"));
 
-    let worker_only = routed_backends(&Router::Nginx, "shop", &env(&[]), &paths).unwrap();
+    let worker_only = routed_backends(&Router::Nginx, "shop", &env(&[]), &paths, None).unwrap();
     let static_env = env(&[("RIKU_NGINX_STATIC", "true")]);
-    let static_site = routed_backends(&Router::Nginx, "shop", &static_env, &paths).unwrap();
+    let static_site = routed_backends(&Router::Nginx, "shop", &static_env, &paths, None).unwrap();
 
     assert_eq!(worker_only, vec![socket.clone()]);
     assert_eq!(static_site, vec![socket]);
@@ -90,7 +90,7 @@ fn web_copies_replace_the_default_backend() {
     enable_worker(&paths, "web", 2, &[("PORT", "5002")]);
     let e = env(&[("RIKU_NGINX_PORTMAP", "true"), ("PORT", "5002")]);
 
-    let backends = routed_backends(&Router::Nginx, "shop", &e, &paths).unwrap();
+    let backends = routed_backends(&Router::Nginx, "shop", &e, &paths, None).unwrap();
 
     assert_eq!(
         backends,
@@ -111,7 +111,7 @@ fn caddy_deploys_a_worker_only_app_to_the_port_from_its_env() {
     enable_worker(&paths, "worker", 1, &[]);
     let e = env(&[("RIKU_DOMAINS", "shop.example.com"), ("PORT", "5001")]);
 
-    configure("shop", tmp.path(), &e, &paths).unwrap();
+    configure("shop", tmp.path(), &e, &paths, None).unwrap();
 
     let site = std::fs::read_to_string(paths.caddy_root.join("shop.caddy")).unwrap();
     assert!(site.contains("reverse_proxy 127.0.0.1:5001"), "{site}");

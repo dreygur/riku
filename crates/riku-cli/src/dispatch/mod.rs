@@ -128,8 +128,10 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
         Commands::Stats(cmd) => app_cmds::run_stats(paths, cmd),
         Commands::Server(cmd) => crate::remote::server_cmd::run(cmd),
         Commands::Run { app, cmd } => apps::cmd_run(paths, &app, &cmd),
-        Commands::Restart { app, hot } => app_cmds::run_restart(paths, app, hot),
-        Commands::Stop { app } => require_app(app).and_then(|app| apps::cmd_stop(paths, &app)),
+        Commands::Restart { app, service, hot } => app_cmds::run_restart(paths, app, service, hot),
+        Commands::Stop { app, service } => {
+            require_app(app).and_then(|app| apps::cmd_stop(paths, &app, service.as_deref()))
+        }
         Commands::Rollback { app, to, list } => {
             require_app(app).and_then(|app| apps::cmd_rollback(paths, &app, to.as_deref(), list))
         }

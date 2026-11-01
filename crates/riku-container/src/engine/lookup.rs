@@ -11,7 +11,7 @@ use std::ffi::OsString;
 use anyhow::{anyhow, Result};
 
 use super::spec_check::check_positional;
-use super::{ContainerId, Engine};
+use super::{ContainerId, ContainerInfo, Engine};
 use crate::types::{check_engine_name, labels, ContainerName};
 
 fn exact_name_filter(name: &ContainerName) -> String {
@@ -25,8 +25,23 @@ impl Engine {
     /// the label, so the caller can tell a free name from one someone else holds.
     /// A malformed riku label on a container with that name is an error, so a
     /// foreign container never reads as free.
-    #[allow(clippy::question_mark)]
     pub fn owner_of(&self, name: &ContainerName) -> Result<Option<String>> {
+        match self.named(name) {
+            Ok(info) => Ok(info.map(|info| info.app.unwrap_or_default())),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Full id of the container named exactly `name`, if one exists.
+    pub fn id_of(&self, name: &ContainerName) -> Result<Option<ContainerId>> {
+        match self.named(name) {
+            Ok(info) => Ok(info.map(|info| info.id)),
+            Err(e) => Err(e),
+        }
+    }
+
+    #[allow(clippy::question_mark)]
+    fn named(&self, name: &ContainerName) -> Result<Option<ContainerInfo>> {
         let ids = match self.list_with_filter(Some(&exact_name_filter(name))) {
             Ok(ids) => ids,
             Err(e) => return Err(e),
@@ -35,11 +50,7 @@ impl Engine {
             Ok(infos) => infos,
             Err(e) => return Err(e),
         };
-        let owner = infos
-            .into_iter()
-            .find(|info| info.name == name.as_str())
-            .map(|info| info.app.unwrap_or_default());
-        Ok(owner)
+        Ok(infos.into_iter().find(|info| info.name == name.as_str()))
     }
 
     /// Full ids of every container of a compose project, running or not.

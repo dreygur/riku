@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use std::fs;
 use std::path::Path;
 
+use super::control_target::{control_target, ControlTarget};
 use crate::config::RikuPaths;
 use crate::util::{echo, ensure_path_within, exit_if_invalid};
 
@@ -33,6 +34,20 @@ fn plugin_cleanup(paths: &RikuPaths, app: &str) {
             &format!("--> Runtime cleanup failed, containers may remain: {e}"),
             "yellow",
         );
+    }
+}
+
+/// Stop and remove a container app's copies and network while its compose
+/// file can still be read. Unlike plugin cleanup, a failure stops destroy:
+/// running copies would keep their ports after riku forgot the app.
+#[allow(clippy::question_mark)]
+fn container_cleanup(paths: &RikuPaths, app: &str) -> Result<()> {
+    match control_target(paths, app, None) {
+        Ok(ControlTarget::Containers { app, .. }) => {
+            crate::deploy::containers::destroy_containers(&app, paths)
+        }
+        Ok(ControlTarget::Procfile) => Ok(()),
+        Err(e) => Err(e),
     }
 }
 
@@ -106,6 +121,11 @@ pub fn cmd_destroy(paths: &RikuPaths, app: &str) -> Result<()> {
         Err(e) => return Err(e),
     };
 
+    if let Err(e) = container_cleanup(paths, &app) {
+        return Err(e.context(format!(
+            "cannot remove the containers of '{app}', nothing was deleted"
+        )));
+    }
     plugin_cleanup(paths, &app);
 
     for dir in [

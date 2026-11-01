@@ -66,10 +66,15 @@ pub(super) fn run_stats(paths: &RikuPaths, cmd: StatsCmd) -> Result<()> {
     }
 }
 
-pub(super) fn run_restart(paths: &RikuPaths, app: Option<String>, hot: bool) -> Result<()> {
+pub(super) fn run_restart(
+    paths: &RikuPaths,
+    app: Option<String>,
+    service: Option<String>,
+    hot: bool,
+) -> Result<()> {
     match require_app(app) {
         Ok(app) if hot => apps::cmd_hot_reload(paths, &app),
-        Ok(app) => apps::cmd_restart(paths, &app),
+        Ok(app) => apps::cmd_restart(paths, &app, service.as_deref()),
         Err(e) => Err(e),
     }
 }

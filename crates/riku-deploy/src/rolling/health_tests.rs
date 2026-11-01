@@ -1,6 +1,7 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpListener;
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -21,9 +22,28 @@ fn service_with(extra: &str) -> ServiceDef {
     project.services[0].clone()
 }
 
-fn closed_port() -> u16 {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    listener.local_addr().unwrap().port()
+/// A loopback port held by a socket that is bound but never listens. Connects
+/// to it are refused, and no other test or process can take the port while
+/// the returned descriptor lives, unlike a dropped listener's port.
+fn closed_port() -> (OwnedFd, u16) {
+    let len = std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t;
+    let mut addr: libc::sockaddr_in = unsafe { std::mem::zeroed() };
+    addr.sin_family = libc::AF_INET as libc::sa_family_t;
+    addr.sin_addr.s_addr = u32::from(Ipv4Addr::LOCALHOST).to_be();
+    #[cfg(target_os = "macos")]
+    {
+        addr.sin_len = len as u8;
+    }
+    let raw = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
+    assert!(raw >= 0, "socket: {}", std::io::Error::last_os_error());
+    let socket = unsafe { OwnedFd::from_raw_fd(raw) };
+    let addr_ptr = &mut addr as *mut libc::sockaddr_in as *mut libc::sockaddr;
+    let bound = unsafe { libc::bind(socket.as_raw_fd(), addr_ptr, len) };
+    assert_eq!(bound, 0, "bind: {}", std::io::Error::last_os_error());
+    let mut out_len = len;
+    let named = unsafe { libc::getsockname(socket.as_raw_fd(), addr_ptr, &mut out_len) };
+    assert_eq!(named, 0, "getsockname: {}", std::io::Error::last_os_error());
+    (socket, u16::from_be(addr.sin_port))
 }
 
 fn answer_with(listener: TcpListener, statuses: &'static [&'static str], served: Arc<AtomicUsize>) {
@@ -88,7 +108,9 @@ fn exited_container_fails_fast() {
 
 #[test]
 fn closed_port_times_out() {
-    let err = wait_healthy(&HealthTarget::Port(closed_port()), None).unwrap_err();
+    let (_held, port) = closed_port();
+
+    let err = wait_healthy(&HealthTarget::Port(port), None).unwrap_err();
 
     assert!(
         err.to_string().contains("not healthy after 1s"),

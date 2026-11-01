@@ -18,16 +18,6 @@ pub(crate) fn compose_cmd() -> (&'static str, Vec<&'static str>) {
     ("docker", vec!["compose"])
 }
 
-pub(crate) fn compose_cmd_display(
-    (program, base_args): &(&'static str, Vec<&'static str>),
-) -> String {
-    if base_args.is_empty() {
-        program.to_string()
-    } else {
-        format!("{} {}", program, base_args.join(" "))
-    }
-}
-
 /// `compose pull` arguments that leave services with a `build:` section to
 /// `compose build`.
 ///

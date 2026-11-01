@@ -67,6 +67,22 @@ impl Engine {
         self.output(&args_of(["rm", id.as_str()])).map(|_| ())
     }
 
+    /// Block until the container exits and return its exit code.
+    pub fn wait(&self, id: &ContainerId) -> Result<i64> {
+        let stdout = match self.output(&args_of(["wait", id.as_str()])) {
+            Ok(stdout) => stdout,
+            Err(e) => return Err(anyhow!("cannot wait for {}: {e}", id.as_str())),
+        };
+        let trimmed = stdout.trim();
+        match trimmed.parse::<i64>() {
+            Ok(code) => Ok(code),
+            Err(e) => Err(anyhow!(
+                "cannot parse exit code '{trimmed}' for {}: {e}",
+                id.as_str()
+            )),
+        }
+    }
+
     /// Pull `image` from its registry.
     pub fn pull(&self, image: &str) -> Result<()> {
         match check_positional("image", image) {

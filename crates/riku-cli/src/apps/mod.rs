@@ -9,14 +9,18 @@
 //! - `process`: process scaling and status (ps commands)
 //! - `logs`: log tailing
 //! - `stats`: resource usage statistics
-//! - `control`: run, restart, stop, update, supervisor, hot-reload
+//! - `control`: run, restart, stop, update, supervisor
+//! - `hot_reload`: restart --hot
+//! - `control_target`: container app or Procfile app, for per service commands
 
 pub mod config;
 pub mod control;
+mod control_target;
 pub mod create;
 pub mod deploy;
 pub mod destroy;
 pub mod dump_state;
+pub mod hot_reload;
 pub mod info;
 pub mod install_plugins;
 pub mod list;
@@ -30,11 +34,12 @@ pub mod stats;
 pub use config::{
     cmd_config_get, cmd_config_live, cmd_config_set, cmd_config_show, cmd_config_unset,
 };
-pub use control::{cmd_hot_reload, cmd_restart, cmd_run, cmd_stop, cmd_supervisor, cmd_update};
+pub use control::{cmd_restart, cmd_run, cmd_stop, cmd_supervisor, cmd_update};
 pub use create::cmd_apps_create;
 pub use deploy::cmd_deploy;
 pub use destroy::cmd_destroy;
 pub use dump_state::{cmd_dump_state, state_json};
+pub use hot_reload::cmd_hot_reload;
 pub use info::cmd_apps_info;
 pub use install_plugins::cmd_install_plugins;
 pub use list::cmd_apps;

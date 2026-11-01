@@ -18,7 +18,7 @@ use std::io::Write as IoWrite;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use compose_cli::{compose_cmd, compose_cmd_display, pull_and_build, run_compose};
+use compose_cli::{pull_and_build, run_compose};
 use riku_container::compose::{default_compose_file, find_compose_file, ComposeFile};
 
 /// The `COMPOSE_FILE` value from the app's ENV, if set and non-empty.
@@ -44,7 +44,7 @@ fn main() -> Result<()> {
         "detect" => detect(app_path),
         "build" => build(app_path, &app, env_path.as_deref()),
         "env" => print_env(app_path, &app),
-        "start" => print_start(app_path, &app),
+        "start" => print_start(),
         "destroy" => destroy(app_path),
         "pull-service" => {
             let service = arg2.ok_or_else(|| anyhow!("pull-service requires a service name"))?;
@@ -188,22 +188,12 @@ fn print_env(app_path: &Path, app: &str) -> Result<()> {
     Ok(())
 }
 
-#[allow(clippy::question_mark)]
-fn print_start(app_path: &Path, app: &str) -> Result<()> {
-    let compose = match compose_file(app_path) {
-        Ok(compose) => compose,
-        Err(e) => return Err(e),
-    };
-    if let Some(compose) = compose {
-        let cmd = compose_cmd();
-        println!("{} -f {} up", compose_cmd_display(&cmd), compose.arg());
-        return Ok(());
-    }
-
-    let rt = runtime();
-    let image = format!("riku-{}", app);
-    println!("{} run --rm -p $PORT:$PORT {}", rt, image);
-    Ok(())
+/// Riku starts compose and single image apps as its own containers, so a
+/// riku that still asks this plugin for a start command is older than the
+/// plugin, or the app was deployed before riku took over. Either way the
+/// answer is a redeploy, never a supervised `compose up`.
+fn print_start() -> Result<()> {
+    Err(anyhow!("riku runs container apps itself; redeploy"))
 }
 
 /// Remove a compose stack's containers and network. Volumes stay, since

@@ -143,6 +143,17 @@ impl ContainerName {
         Ok(ContainerName(format!("{app}-{service}-{copy}")))
     }
 
+    /// The one-off container that runs an app's Procfile `release` command:
+    /// `<app>-release`. It cannot collide with a copy, whose name ends in a
+    /// number. Fails on the same `app` values as [`ContainerName::new`].
+    pub fn for_release(app: &str) -> anyhow::Result<ContainerName> {
+        match check_app_name(app) {
+            Ok(()) => {}
+            Err(e) => return Err(e),
+        }
+        Ok(ContainerName(format!("{app}-release")))
+    }
+
     /// The name to pass to the engine.
     pub fn as_str(&self) -> &str {
         &self.0
