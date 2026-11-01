@@ -13,13 +13,30 @@
 // Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
 #![allow(clippy::question_mark)]
 
+mod app;
+mod context;
+mod control;
+mod copy_restart;
+mod deploy;
 mod images;
+#[cfg(test)]
+mod mock_state;
 mod ports;
+mod removal;
+mod rollout;
+mod routes;
+mod runtime;
 mod spec;
 mod start;
 
+pub use app::{is_container_app, load_project, open_engine, read_scaling, SINGLE_IMAGE_PORT};
+pub use control::{restart_service, runs_containers, scale_service, stop_service};
+pub use copy_restart::{restart_copy, RestartOutcome};
+pub use deploy::{deploy_containers, CONTAINER_RUNTIME};
 pub use images::prepare_images;
 pub use ports::pick_free_port;
+pub use removal::destroy_containers;
+pub use riku_container::types::ServiceName;
 pub use spec::copy_spec;
 pub use start::start_copy;
 

@@ -142,7 +142,7 @@ pub fn build_plugin_args(command: &Commands, server: Option<&SshAddress>) -> Vec
             args.push(app.clone().unwrap_or_default());
             args.push("restart".to_string());
         }
-        Commands::Stop { app } => {
+        Commands::Stop { app, .. } => {
             args.push(app.clone().unwrap_or_default());
             args.push("stop".to_string());
         }

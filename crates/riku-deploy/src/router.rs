@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
+use riku_container::engine::Engine;
 
 use crate::config::router::Router;
 use crate::config::RikuPaths;
@@ -57,22 +58,28 @@ fn backends_for(router: &Router, backends: Vec<Backend>) -> Vec<Backend> {
         .collect()
 }
 
+/// A container app (`engine` given) routes to its running routed copies; a
+/// Procfile app to its web copies, or to its old default backend when it has
+/// none.
 #[allow(clippy::question_mark)]
 fn routed_backends(
     active: &Router,
     app: &str,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
+    engine: Option<&Engine>,
 ) -> Result<Vec<Backend>> {
-    let copies = match web_copies(app, paths) {
-        Ok(copies) => copies,
-        Err(e) => return Err(anyhow!("cannot route '{app}': {e}")),
-    };
-    if copies.is_empty() {
-        tracing::debug!("'{app}' has no web copy, routing it to its default backend");
-        return fallback_backends(active, app, env, paths);
+    if engine.is_none() {
+        let copies = match web_copies(app, paths) {
+            Ok(copies) => copies,
+            Err(e) => return Err(anyhow!("cannot route '{app}': {e}")),
+        };
+        if copies.is_empty() {
+            tracing::debug!("'{app}' has no web copy, routing it to its default backend");
+            return fallback_backends(active, app, env, paths);
+        }
     }
-    match current_backends(app, env, paths, None) {
+    match current_backends(app, env, paths, engine) {
         Ok(backends) => Ok(backends_for(active, backends)),
         Err(e) => Err(anyhow!("cannot route '{app}': {e}")),
     }
@@ -80,19 +87,20 @@ fn routed_backends(
 
 /// Configure the active router so `app` is reachable, with a backend for
 /// every web copy it has today, and return once the router confirmed the new
-/// config.
+/// config. `engine` is `Some` for a container app.
 #[allow(clippy::question_mark)]
 pub fn configure(
     app: &str,
     app_path: &Path,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
+    engine: Option<&Engine>,
 ) -> Result<()> {
     let active = match Router::load(paths) {
         Ok(router) => router,
         Err(e) => return Err(e),
     };
-    let backends = match routed_backends(&active, app, env, paths) {
+    let backends = match routed_backends(&active, app, env, paths, engine) {
         Ok(backends) => backends,
         Err(e) => return Err(e),
     };

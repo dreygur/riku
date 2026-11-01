@@ -36,14 +36,14 @@ pub(crate) fn router() -> Router<DashboardState> {
 
 async fn restart(state: State<DashboardState>, headers: HeaderMap, app: Path<String>) -> Response {
     run_action(state, headers, app, "restart", |paths, app| {
-        crate::cli::apps::cmd_restart(paths, app)
+        crate::cli::apps::cmd_restart(paths, app, None)
     })
     .await
 }
 
 async fn stop(state: State<DashboardState>, headers: HeaderMap, app: Path<String>) -> Response {
     run_action(state, headers, app, "stop", |paths, app| {
-        crate::cli::apps::cmd_stop(paths, app)
+        crate::cli::apps::cmd_stop(paths, app, None)
     })
     .await
 }

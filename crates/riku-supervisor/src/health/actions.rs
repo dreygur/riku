@@ -15,6 +15,16 @@ use anyhow::Result;
 
 use riku_config::RikuPaths;
 
+/// What a request to restart one dead container copy did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RestartOutcome {
+    /// The dead container was removed and its slot started again.
+    Restarted,
+    /// A deploy of the app holds its lock, so nothing was touched. The caller
+    /// tries again later.
+    Busy,
+}
+
 /// Operations the control plane needs but that live above the supervisor.
 pub trait ControlActions: Send + Sync {
     fn create_app(&self, paths: &RikuPaths, app: &str) -> Result<()>;

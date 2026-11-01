@@ -15,7 +15,7 @@ fn app_slot(command: &mut Commands) -> Option<&mut Option<String>> {
         Commands::Deploy { app, .. }
         | Commands::Logs { app, .. }
         | Commands::Restart { app, .. }
-        | Commands::Stop { app }
+        | Commands::Stop { app, .. }
         | Commands::Rollback { app, .. }
         | Commands::Backup { app, .. }
         | Commands::Config(ConfigCmd::Show { app } | ConfigCmd::Live { app })

@@ -203,6 +203,7 @@ mod routing_tests {
     fn restart_command_maps_to_restart() {
         let cmd = Commands::Restart {
             app: Some("myapp".to_string()),
+            service: None,
             hot: false,
         };
         assert_eq!(get_plugin_command(&cmd), Some("restart".to_string()));
@@ -212,6 +213,7 @@ mod routing_tests {
     fn stop_command_maps_to_stop() {
         let cmd = Commands::Stop {
             app: Some("myapp".to_string()),
+            service: None,
         };
         assert_eq!(get_plugin_command(&cmd), Some("stop".to_string()));
     }

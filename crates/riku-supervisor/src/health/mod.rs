@@ -15,7 +15,7 @@ mod control;
 mod plugins;
 mod responses;
 
-pub use actions::{ControlActions, NoopControlActions, SharedActions};
+pub use actions::{ControlActions, NoopControlActions, RestartOutcome, SharedActions};
 
 #[cfg(test)]
 mod tests;

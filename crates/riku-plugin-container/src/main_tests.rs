@@ -12,6 +12,13 @@ fn compose_file_env_claims_the_app_even_when_invalid() {
 }
 
 #[test]
+fn plugin_start_refuses_compose() {
+    let err = print_start().unwrap_err();
+
+    assert_eq!(err.to_string(), "riku runs container apps itself; redeploy");
+}
+
+#[test]
 fn read_env_file_parses_ghcr_credentials() {
     let tmp = TempDir::new().unwrap();
     let dir = tmp.path();

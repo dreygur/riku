@@ -346,7 +346,7 @@ esac
         if let Some(domains) = domains {
             env.insert("RIKU_DOMAINS".to_string(), domains.to_string());
         }
-        riku::deploy::router::configure(app, &paths.app_root.join(app), &env, paths)
+        riku::deploy::router::configure(app, &paths.app_root.join(app), &env, paths, None)
     }
 
     #[test]

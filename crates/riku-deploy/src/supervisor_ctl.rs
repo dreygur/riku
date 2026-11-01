@@ -128,7 +128,7 @@ pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
     }
 
     // Configure the active router (built-in nginx, or a router plugin)
-    if let Err(e) = crate::router::configure(app, &app_path, &env, paths) {
+    if let Err(e) = crate::router::configure(app, &app_path, &env, paths, None) {
         return Err(anyhow::anyhow!("failed to configure router: {e}"));
     }
 

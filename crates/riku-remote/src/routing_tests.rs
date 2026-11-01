@@ -7,6 +7,7 @@ fn client_plugin_receives_selected_server() {
     let addr = SshAddress::try_from("riku@edge.example").unwrap();
     let cmd = Commands::Stop {
         app: Some("myapp".to_string()),
+        service: None,
     };
     assert_eq!(build_plugin_args(&cmd, Some(&addr))[0], "riku@edge.example");
     assert_eq!(build_plugin_args(&cmd, None)[0], "");
@@ -17,6 +18,7 @@ fn client_plugin_sees_the_hinted_app() {
     let addr = SshAddress::try_from("riku@edge.example").unwrap();
     let mut cmd = Commands::Restart {
         app: None,
+        service: None,
         hot: false,
     };
     apply_app_hint(&mut cmd, Some("shop"));

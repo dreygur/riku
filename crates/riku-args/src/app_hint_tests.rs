@@ -2,19 +2,23 @@ use super::*;
 
 #[test]
 fn hint_fills_only_an_omitted_optional_app() {
-    let mut omitted = Commands::Stop { app: None };
+    let mut omitted = Commands::Stop {
+        app: None,
+        service: None,
+    };
     assert!(apply_app_hint(&mut omitted, Some("shop")));
     assert!(
-        matches!(&omitted, Commands::Stop { app: Some(app) } if app == "shop"),
+        matches!(&omitted, Commands::Stop { app: Some(app), .. } if app == "shop"),
         "{omitted:?}"
     );
 
     let mut typed = Commands::Stop {
         app: Some("blog".to_string()),
+        service: None,
     };
     assert!(!apply_app_hint(&mut typed, Some("shop")));
     assert!(
-        matches!(&typed, Commands::Stop { app: Some(app) } if app == "blog"),
+        matches!(&typed, Commands::Stop { app: Some(app), .. } if app == "blog"),
         "{typed:?}"
     );
 

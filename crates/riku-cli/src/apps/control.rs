@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::process::{Command, Stdio};
 
+use super::control_target::{control_target, ControlTarget};
 use crate::config::{RikuPaths, RIKU_RAW_SOURCE_URL};
 use crate::supervisor::Supervisor;
 use crate::util::{display, exit_if_invalid, parse_settings};
@@ -36,22 +37,50 @@ pub fn cmd_run(paths: &RikuPaths, app: &str, cmd: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// Restart an app: stop then spawn.
-pub fn cmd_restart(paths: &RikuPaths, app: &str) -> Result<()> {
-    let app = exit_if_invalid(app, &paths.app_root)?;
-
+/// Restart an app. A container app replaces the copies of `service`, or of
+/// every service, one at a time from the images it runs now; a Procfile app
+/// is stopped and deployed again. Naming a service of a Procfile app fails.
+#[allow(clippy::question_mark)]
+pub fn cmd_restart(paths: &RikuPaths, app: &str, service: Option<&str>) -> Result<()> {
+    let app = match exit_if_invalid(app, &paths.app_root) {
+        Ok(app) => app,
+        Err(e) => return Err(e),
+    };
+    let target = match control_target(paths, &app, service) {
+        Ok(target) => target,
+        Err(e) => return Err(e),
+    };
     display::info(&format!("restarting app '{}'...", app));
-    do_stop(paths, &app);
-    // Trigger a deploy to restart the app
-    let deltas: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
-    crate::deploy::do_deploy(&app, paths, &deltas, None)
+    match target {
+        ControlTarget::Containers { app, service } => {
+            crate::deploy::containers::restart_service(&app, paths, service.as_ref())
+        }
+        ControlTarget::Procfile => {
+            do_stop(paths, &app);
+            crate::deploy::do_deploy(&app, paths, &HashMap::new(), None)
+        }
+    }
 }
 
-/// Stop an app by removing enabled worker configs.
-pub fn cmd_stop(paths: &RikuPaths, app: &str) -> Result<()> {
-    let app = exit_if_invalid(app, &paths.app_root)?;
-    do_stop(paths, &app);
-    Ok(())
+/// Stop an app. A container app stops and removes the copies of `service`,
+/// or of every service, keeping its volumes; a Procfile app loses its
+/// enabled worker configs. Naming a service of a Procfile app fails.
+#[allow(clippy::question_mark)]
+pub fn cmd_stop(paths: &RikuPaths, app: &str, service: Option<&str>) -> Result<()> {
+    let app = match exit_if_invalid(app, &paths.app_root) {
+        Ok(app) => app,
+        Err(e) => return Err(e),
+    };
+    match control_target(paths, &app, service) {
+        Ok(ControlTarget::Containers { app, service }) => {
+            crate::deploy::containers::stop_service(&app, paths, service.as_ref())
+        }
+        Ok(ControlTarget::Procfile) => {
+            do_stop(paths, &app);
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
 }
 
 /// Self-update the binary by downloading latest from RIKU_RAW_SOURCE_URL.
@@ -90,54 +119,6 @@ pub fn cmd_supervisor(paths: &RikuPaths) -> Result<()> {
         std::sync::Arc::new(crate::control_actions::CliControlActions),
     );
     supervisor.run()
-}
-
-/// Hot reload an app (zero downtime restart).
-pub fn cmd_hot_reload(paths: &RikuPaths, app: &str) -> Result<()> {
-    let app = exit_if_invalid(app, &paths.app_root)?;
-
-    display::info(&format!("Hot reloading app '{}'...", app));
-
-    // Signal the supervisor by updating the mtime of each enabled worker TOML.
-    // The supervisor's file watcher (notify) detects the Modify event and reloads the config.
-    // We achieve a real mtime bump by reading the content and writing it back.
-    let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", app));
-
-    if let Ok(entries) = glob::glob(toml_pattern.to_str().unwrap_or("")) {
-        let mut count = 0;
-        for entry in entries.flatten() {
-            // Read and rewrite the file to bump its mtime, triggering a supervisor reload.
-            match fs::read_to_string(&entry) {
-                Ok(content) => {
-                    if let Err(e) = fs::write(&entry, content) {
-                        display::warn(&format!(
-                            "Warning: failed to touch {}: {}",
-                            entry.display(),
-                            e
-                        ));
-                    } else {
-                        count += 1;
-                    }
-                }
-                Err(e) => {
-                    display::warn(&format!(
-                        "Warning: failed to read {}: {}",
-                        entry.display(),
-                        e
-                    ));
-                }
-            }
-        }
-
-        if count > 0 {
-            display::success(&format!("Triggered hot reload for {} worker(s)", count));
-            display::warn("Note: Supervisor must be running for hot reload to take effect.");
-        } else {
-            display::warn("No worker configs found. Is the app deployed?");
-        }
-    }
-
-    Ok(())
 }
 
 /// Stop an app by removing its enabled worker config files.

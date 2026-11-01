@@ -24,10 +24,10 @@ impl ControlActions for CliControlActions {
         crate::apps::cmd_deploy(paths, app, None)
     }
     fn restart(&self, paths: &RikuPaths, app: &str) -> Result<()> {
-        crate::apps::cmd_restart(paths, app)
+        crate::apps::cmd_restart(paths, app, None)
     }
     fn stop(&self, paths: &RikuPaths, app: &str) -> Result<()> {
-        crate::apps::cmd_stop(paths, app)
+        crate::apps::cmd_stop(paths, app, None)
     }
     fn destroy(&self, paths: &RikuPaths, app: &str) -> Result<()> {
         crate::apps::cmd_destroy(paths, app)

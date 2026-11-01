@@ -192,20 +192,26 @@ pub enum Commands {
     },
 
     /// Restart an app (hot reload for zero downtime)
-    #[command(after_help = "Examples:\n  riku restart myapp\n  riku restart myapp --hot")]
+    #[command(
+        after_help = "Examples:\n  riku restart myapp\n  riku restart myapp --hot\n  riku restart myapp web"
+    )]
     Restart {
         /// App name (default: the app of this repo's riku git remote)
         app: Option<String>,
+        /// Only this service of a container app
+        service: Option<String>,
         /// Use hot reload (zero downtime)
         #[arg(long)]
         hot: bool,
     },
 
     /// Stop an app
-    #[command(after_help = "Examples:\n  riku stop myapp")]
+    #[command(after_help = "Examples:\n  riku stop myapp\n  riku stop myapp worker")]
     Stop {
         /// App name (default: the app of this repo's riku git remote)
         app: Option<String>,
+        /// Only this service of a container app
+        service: Option<String>,
     },
 
     /// Roll an app back to a previous release
