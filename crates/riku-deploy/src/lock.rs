@@ -14,9 +14,14 @@ use anyhow::{Context, Result};
 use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::os::unix::io::{AsRawFd, RawFd};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use crate::config::RikuPaths;
 use crate::error::DeployError;
+
+const CONTENTION_GRACE: Duration = Duration::from_secs(1);
+const RETRY_INTERVAL: Duration = Duration::from_millis(10);
 
 /// Apply a non-blocking `flock` operation, retrying on `EINTR`.
 ///
@@ -44,6 +49,28 @@ fn try_flock(fd: RawFd, operation: libc::c_int) -> io::Result<bool> {
     }
 }
 
+/// Retry acquiring the lock when initially contended.
+///
+/// A child process spawned by a concurrent thread can transiently inherit
+/// the lock file descriptor across fork until exec closes it. A real deploy
+/// holds the lock far longer than 1 s, so we wait out any transient child
+/// inheritance before declaring contention.
+fn retry_acquire(file: &File) -> io::Result<bool> {
+    let start = Instant::now();
+    loop {
+        thread::sleep(RETRY_INTERVAL);
+        match try_flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) {
+            Ok(true) => return Ok(true),
+            Ok(false) => {
+                if start.elapsed() >= CONTENTION_GRACE {
+                    return Ok(false);
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 /// Acquire the deploy lock for `app`, non-blocking. Returns the locked file
 /// handle: the lock is held until it is dropped, so callers must keep the
 /// returned `File` alive for the duration of the deploy.
@@ -52,14 +79,21 @@ fn try_flock(fd: RawFd, operation: libc::c_int) -> io::Result<bool> {
 /// app already holds the lock.
 pub fn acquire(app: &str, paths: &RikuPaths) -> Result<File> {
     let lock_dir = paths.riku_root.join("locks");
-    fs::create_dir_all(&lock_dir)?;
+    match fs::create_dir_all(&lock_dir) {
+        Ok(()) => {}
+        Err(e) => return Err(e).context("failed to create lock directory"),
+    }
     let lock_path = lock_dir.join(format!("{}.deploy.lock", app));
 
-    let file = OpenOptions::new()
+    let file = match OpenOptions::new()
         .create(true)
         .truncate(false)
         .write(true)
-        .open(&lock_path)?;
+        .open(&lock_path)
+    {
+        Ok(file) => file,
+        Err(e) => return Err(e).context("failed to open lock file"),
+    };
 
     // Use libc::flock directly, same as the supervisor's PID-file lock
     // (create_pid_file_with_lock): portable across Unix systems, no extra
@@ -67,7 +101,11 @@ pub fn acquire(app: &str, paths: &RikuPaths) -> Result<File> {
     // make a legitimate deploy look like a concurrent one.
     match try_flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) {
         Ok(true) => Ok(file),
-        Ok(false) => Err(DeployError::DeployInProgress(app.to_string()).into()),
+        Ok(false) => match retry_acquire(&file) {
+            Ok(true) => Ok(file),
+            Ok(false) => Err(DeployError::DeployInProgress(app.to_string()).into()),
+            Err(e) => Err(e).context("failed to acquire deploy lock"),
+        },
         Err(e) => Err(e).context("failed to acquire deploy lock"),
     }
 }
@@ -185,6 +223,24 @@ mod tests {
 
         let _a = acquire("app-a", &paths).expect("app-a lock should succeed");
         let _b = acquire("app-b", &paths).expect("app-b lock should succeed independently");
+    }
+
+    #[test]
+    fn acquire_waits_out_a_briefly_held_lock() {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+
+        let lock = acquire("myapp", &paths).expect("first lock should succeed");
+        let handle = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(150));
+            drop(lock);
+        });
+
+        assert!(
+            acquire("myapp", &paths).is_ok(),
+            "acquire should wait out the briefly held lock and succeed"
+        );
+        handle.join().unwrap();
     }
 
     // --- is_locked ---
