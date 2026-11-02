@@ -109,13 +109,8 @@ pub(crate) fn notify_supervisor_reload(paths: &RikuPaths) {
     }
 }
 
-/// Notify the supervisor to reload configurations and spawn processes.
-/// This function is called after deployment to start/restart application processes.
-/// The worker configs should already exist from the deploy step.
-pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
-    let app_path = paths.app_root.join(app);
-
-    // Get environment variables for nginx config generation
+/// The settings in an app's ENV file, empty when the app has none.
+pub(crate) fn read_app_env(app: &str, paths: &RikuPaths) -> Result<HashMap<String, String>> {
     let env_file = paths.env_root.join(app).join("ENV");
     let mut env: HashMap<String, String> = HashMap::new();
     if env_file.exists() {
@@ -126,19 +121,38 @@ pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
             ));
         }
     }
+    Ok(env)
+}
 
-    // Configure the active router (built-in nginx, or a router plugin)
-    if let Err(e) = crate::router::configure(app, &app_path, &env, paths, None) {
-        return Err(anyhow::anyhow!("failed to configure router: {e}"));
-    }
-
-    // Ensure supervisor is running, start if not
+/// Starts the supervisor unless it runs, and tells the user when it could
+/// not be started.
+pub(crate) fn start_supervisor(paths: &RikuPaths) {
     if !ensure_supervisor_running(paths) {
         echo(
             "Warning: Could not start supervisor. Run 'riku supervisor' manually.",
             "yellow",
         );
     }
+}
+
+/// Notify the supervisor to reload configurations and spawn processes.
+/// This function is called after deployment to start/restart application processes.
+/// The worker configs should already exist from the deploy step.
+#[allow(clippy::question_mark)]
+pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
+    let app_path = paths.app_root.join(app);
+
+    let env = match read_app_env(app, paths) {
+        Ok(env) => env,
+        Err(e) => return Err(e),
+    };
+
+    // Configure the active router (built-in nginx, or a router plugin)
+    if let Err(e) = crate::router::configure(app, &app_path, &env, paths, None) {
+        return Err(anyhow::anyhow!("failed to configure router: {e}"));
+    }
+
+    start_supervisor(paths);
 
     // Notify the supervisor to reload configurations
     // The supervisor will detect new/changed configs and spawn processes

@@ -29,6 +29,7 @@ use crate::config::{ReloadPrograms, RikuPaths};
 use crate::util::spawn::output_retrying_etxtbsy;
 
 mod nginx_unit;
+mod unit_state;
 
 pub use nginx_unit::Baseline;
 
@@ -95,6 +96,10 @@ pub fn reload(router: &Router, paths: &RikuPaths, before: &Baseline) -> Result<(
     record_outcome(paths, &outcome);
     outcome
 }
+
+#[cfg(test)]
+#[path = "reload/mock_systemctl.rs"]
+mod mock_systemctl;
 
 #[cfg(test)]
 #[path = "reload_tests.rs"]

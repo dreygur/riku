@@ -1,10 +1,11 @@
 use std::fs;
 use std::io::{Read, Write};
-use std::net::TcpListener;
+use std::net::{Ipv4Addr, TcpListener};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
+use std::time::Instant;
 
 use super::*;
 use crate::mock_engine::{logged, mock_engine, project_in};
@@ -181,4 +182,20 @@ fn unhealthy_container_fails_at_once() {
         "unexpected error: {err}"
     );
     assert_eq!(logged(&log).len(), 1, "polled again after unhealthy");
+}
+
+#[test]
+fn socket_target_needs_a_listener() {
+    let dir = tempfile::tempdir().unwrap();
+    let socket = dir.path().join("myapp.1.sock");
+
+    let err = wait_healthy(&HealthTarget::Socket(socket.clone()), None).unwrap_err();
+    assert!(
+        err.to_string().contains("not healthy after"),
+        "unexpected error: {err}"
+    );
+
+    let _listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+    let outcome = wait_healthy(&HealthTarget::Socket(socket), None);
+    assert!(outcome.is_ok(), "a bound socket is healthy: {outcome:?}");
 }

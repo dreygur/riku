@@ -23,6 +23,10 @@ use std::sync::{Arc, Barrier, RwLock};
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
+#[path = "integration_tests/mock_supervisor.rs"]
+mod mock_supervisor;
+
+use mock_supervisor::MockSupervisor;
 use riku::config::router::{self, Router};
 use riku::config::RikuPaths;
 use riku::error::DeployError;
@@ -128,6 +132,7 @@ fn test_concurrent_deploy_lockout() {
     fs::write(paths.env_root.join(app).join("ENV"), "PORT=5000\n").unwrap();
     fs::create_dir_all(paths.log_root.join(app)).unwrap();
 
+    let _supervisor = MockSupervisor::start(&paths);
     const N: usize = 5;
     let barrier = Arc::new(Barrier::new(N));
 
@@ -212,6 +217,7 @@ fn test_deploy_lock_released_after_completion() {
     fs::create_dir_all(paths.env_root.join(app)).unwrap();
     fs::create_dir_all(paths.log_root.join(app)).unwrap();
 
+    let _supervisor = MockSupervisor::start(&paths);
     let deltas: HashMap<String, i64> = HashMap::new();
     riku::deploy::do_deploy(app, &paths, &deltas, None).expect("first deploy should succeed");
     riku::deploy::do_deploy(app, &paths, &deltas, None)
@@ -237,6 +243,7 @@ fn test_concurrent_deploys_of_different_apps_do_not_contend() {
         fs::create_dir_all(paths.log_root.join(app)).unwrap();
     }
 
+    let _supervisor = MockSupervisor::start(&paths);
     let barrier = Arc::new(Barrier::new(apps.len()));
     let handles: Vec<_> = apps
         .iter()

@@ -15,14 +15,13 @@
 
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::{anyhow, Result};
 use nix::time::{clock_gettime, ClockId};
 
+use super::unit_state::{read_unit, UnitState};
 use crate::config::{ReloadPrograms, RikuPaths};
-use crate::util::spawn::output_retrying_etxtbsy;
 
 #[cfg(not(test))]
 const RELOAD_WAIT: Duration = Duration::from_secs(30);
@@ -36,9 +35,7 @@ const PROBE_INTERVAL: Duration = Duration::from_millis(50);
 const RETRIGGER_AFTER: Duration = Duration::from_secs(5);
 #[cfg(test)]
 const RETRIGGER_AFTER: Duration = Duration::from_millis(200);
-const NGINX_UNIT: &str = "riku-nginx-reload.service";
-const UNIT_PROPERTIES: &str =
-    "ExecMainStartTimestampMonotonic,ExecMainExitTimestampMonotonic,ExecMainStatus,LoadState";
+pub(super) const NGINX_UNIT: &str = "riku-nginx-reload.service";
 
 /// How nginx will be reloaded, decided before the config is written.
 pub enum Baseline {
@@ -46,62 +43,6 @@ pub enum Baseline {
     Unit,
     /// No usable reload unit: run `nginx -s reload` directly.
     Direct,
-}
-
-struct UnitState {
-    exit_ok: bool,
-    load_state: String,
-    started_at: u64,
-    exited_at: u64,
-    status: String,
-}
-
-fn parse_timestamp(key: &str, raw: &str) -> u64 {
-    if raw.is_empty() {
-        return 0;
-    }
-    match raw.parse() {
-        Ok(timestamp) => timestamp,
-        Err(_) => {
-            tracing::debug!("{NGINX_UNIT}: {key} is not a number, treating it as 0");
-            0
-        }
-    }
-}
-
-fn read_unit(programs: &ReloadPrograms) -> Result<UnitState> {
-    let output = match output_retrying_etxtbsy(
-        Command::new(&programs.systemctl)
-            .args(["show", "-p", UNIT_PROPERTIES])
-            .arg(NGINX_UNIT),
-    ) {
-        Ok(output) => output,
-        Err(e) => return Err(anyhow!("could not run systemctl: {e}")),
-    };
-    let text = String::from_utf8_lossy(&output.stdout);
-    let value = |key: &str| {
-        text.lines()
-            .find_map(|line| {
-                line.strip_prefix(key)
-                    .and_then(|rest| rest.strip_prefix('='))
-            })
-            .unwrap_or_default()
-            .trim()
-            .to_string()
-    };
-    Ok(UnitState {
-        exit_ok: output.status.success(),
-        load_state: value("LoadState"),
-        started_at: parse_timestamp(
-            "ExecMainStartTimestampMonotonic",
-            &value("ExecMainStartTimestampMonotonic"),
-        ),
-        exited_at: parse_timestamp(
-            "ExecMainExitTimestampMonotonic",
-            &value("ExecMainExitTimestampMonotonic"),
-        ),
-        status: value("ExecMainStatus"),
-    })
 }
 
 impl Baseline {
@@ -160,11 +101,17 @@ fn confirmed(state: &UnitState, written_at: u64) -> Option<Result<()>> {
     )))
 }
 
+fn unit_idle(state: &UnitState) -> bool {
+    state.active_state == "inactive" || state.active_state == "failed"
+}
+
 /// Wait for a run of the reload unit that started after the config was
-/// written. If no such run has started by `RETRIGGER_AFTER` (a run already
-/// in flight, or a concurrent deploy's run, took the path unit's trigger),
-/// the watched directory is touched once to make the path unit fire again.
-/// An older run is never accepted.
+/// written. While no such run has started (a run already in flight, or a
+/// concurrent deploy's run, took the path unit's trigger), the watched
+/// directory is touched each time the unit is seen idle and `RETRIGGER_AFTER`
+/// has passed since the last trigger. A trigger that lands while the unit is
+/// active is lost, so one touch is not enough, and touching an active unit
+/// is pointless. An older run is never accepted.
 #[allow(clippy::question_mark)]
 pub fn await_unit(paths: &RikuPaths) -> Result<()> {
     let written_at = match monotonic_micros() {
@@ -172,7 +119,7 @@ pub fn await_unit(paths: &RikuPaths) -> Result<()> {
         Err(e) => return Err(e),
     };
     let started = Instant::now();
-    let mut retriggered = false;
+    let mut last_trigger = started;
     loop {
         let state = match read_unit(&paths.reload_programs) {
             Ok(state) => state,
@@ -181,12 +128,14 @@ pub fn await_unit(paths: &RikuPaths) -> Result<()> {
         if let Some(outcome) = confirmed(&state, written_at) {
             return outcome;
         }
-        let elapsed = started.elapsed();
-        if !retriggered && elapsed >= RETRIGGER_AFTER && state.started_at < written_at {
+        if state.started_at < written_at
+            && unit_idle(&state)
+            && last_trigger.elapsed() >= RETRIGGER_AFTER
+        {
             touch_watched_dir(&paths.nginx_root);
-            retriggered = true;
+            last_trigger = Instant::now();
         }
-        if elapsed >= RELOAD_WAIT {
+        if started.elapsed() >= RELOAD_WAIT {
             return Err(anyhow!(
                 "nginx did not confirm the reload within {}s: {NGINX_UNIT} did not run after the config was written",
                 RELOAD_WAIT.as_secs()

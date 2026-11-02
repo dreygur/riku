@@ -6,6 +6,7 @@
 pub mod health;
 #[cfg(test)]
 mod mock_copies;
+mod probe;
 pub mod replace;
 pub mod scale;
 

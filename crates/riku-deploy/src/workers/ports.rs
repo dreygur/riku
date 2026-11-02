@@ -5,6 +5,8 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 
+use crate::config::RikuPaths;
+
 const PORT_PICK_ATTEMPTS: usize = 20;
 
 /// The `PORT` the app's ENV pins, if any. Some apps need a fixed port, such
@@ -43,4 +45,16 @@ pub(super) fn unused_port(taken: &[u16], mut pick: impl FnMut() -> Result<u16>) 
     Err(anyhow!(
         "could not find a port distinct from the app's other copies"
     ))
+}
+
+/// Ports the app's enabled web copies run on. Old copies keep theirs while
+/// their replacements start, so a new copy must not be given one of them.
+pub(super) fn enabled_ports(app: &str, paths: &RikuPaths) -> Result<Vec<u16>> {
+    match crate::router::web_copies(app, paths) {
+        Ok(copies) => Ok(copies
+            .iter()
+            .filter_map(|copy| copy.env.get("PORT").and_then(|port| port.parse().ok()))
+            .collect()),
+        Err(e) => Err(anyhow!("cannot read the web copies of '{app}': {e}")),
+    }
 }

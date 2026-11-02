@@ -1,6 +1,9 @@
+use std::fs;
+use tempfile::TempDir;
+
+use super::mock_supervisor::{MockRoutes, MockSupervisor};
 use super::*;
 use crate::util::backend::Backend;
-use tempfile::TempDir;
 
 fn make_paths(tmp: &TempDir) -> RikuPaths {
     let paths = crate::config::RikuPaths::for_tests(tmp.path());
@@ -8,6 +11,18 @@ fn make_paths(tmp: &TempDir) -> RikuPaths {
     fs::create_dir_all(&paths.workers_enabled).unwrap();
     fs::create_dir_all(&paths.nginx_root).unwrap();
     paths
+}
+
+/// A deploy whose web copies a mock supervisor runs and a mock router routes.
+fn deploy(
+    app_path: &Path,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+    start_cmd: Option<&str>,
+) -> Result<()> {
+    let _supervisor = MockSupervisor::start(paths);
+    let mut routes = MockRoutes::new(paths);
+    create_workers_with("myapp", app_path, env, paths, start_cmd, &mut routes)
 }
 
 // --- read_scaling_count ---
@@ -85,7 +100,7 @@ fn release_and_preflight_run_once_and_never_become_workers() {
     )
     .unwrap();
 
-    create_workers_generic("myapp", &app_path, &HashMap::new(), &paths, None).unwrap();
+    deploy(&app_path, &HashMap::new(), &paths, None).unwrap();
 
     for kind in ["release", "preflight"] {
         let config = paths.workers_available.join(format!("myapp-{kind}-1.toml"));
@@ -104,7 +119,7 @@ fn runs_the_plugin_start_command_as_web_without_a_procfile() {
     fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
 
     let start = "docker compose -f compose.yml up";
-    create_workers_generic("myapp", &app_path, &HashMap::new(), &paths, Some(start)).unwrap();
+    deploy(&app_path, &HashMap::new(), &paths, Some(start)).unwrap();
 
     let config = fs::read_to_string(paths.workers_available.join("myapp-web-1.toml"))
         .expect("web worker config should be created");
@@ -216,21 +231,14 @@ fn redeploy_routes_every_copy_of_the_latest_deploy() -> anyhow::Result<()> {
     fs::write(app_path.join("Procfile"), "web: python app.py\n")?;
 
     let env = HashMap::new();
-    create_workers_generic("myapp", &app_path, &env, &paths, None)?;
-    create_workers_generic("myapp", &app_path, &env, &paths, None)?;
+    deploy(&app_path, &env, &paths, None)?;
+    deploy(&app_path, &env, &paths, None)?;
 
-    let worker_ports: Vec<u16> = (1..=3)
-        .map(|copy| {
-            let file = format!("myapp-web-{copy}.toml");
-            let worker_toml = fs::read_to_string(paths.workers_available.join(file)).unwrap();
-            let port = worker_toml
-                .lines()
-                .find_map(|l| l.strip_prefix("PORT = \""))
-                .and_then(|rest| rest.strip_suffix('"'))
-                .expect("worker config should contain a PORT value");
-            port.parse().unwrap()
-        })
+    let worker_ports: Vec<u16> = crate::router::web_copies("myapp", &paths)?
+        .iter()
+        .map(|copy| copy.env["PORT"].parse().unwrap())
         .collect();
+    assert_eq!(worker_ports.len(), 3, "enabled copies: {worker_ports:?}");
     let routed = crate::router::current_backends("myapp", &env, &paths, None)?;
     let expected: Vec<_> = worker_ports.into_iter().map(Backend::loopback).collect();
     assert_eq!(routed, expected);
@@ -287,7 +295,7 @@ fn stale_custom_socket_does_not_stop_a_tcp_web_app_scaling() {
     fs::write(paths.env_root.join("myapp/SCALING"), "web=2\n").unwrap();
     let env = HashMap::from([("RIKU_NGINX_SOCKET".to_string(), "/srv/s.sock".to_string())]);
 
-    create_workers_generic("myapp", &app_path, &env, &paths, None).unwrap();
+    deploy(&app_path, &env, &paths, None).unwrap();
 
     assert!(paths.workers_available.join("myapp-web-2.toml").exists());
 }
@@ -343,5 +351,6 @@ fn refuses_a_pinned_port_something_else_listens_on_unless_it_was_ours() {
         &paths,
     )
     .unwrap();
-    create_workers_generic("myapp", &app_path, &env, &paths, None).unwrap();
+    let mut routes = MockRoutes::new(&paths);
+    create_workers_with("myapp", &app_path, &env, &paths, None, &mut routes).unwrap();
 }

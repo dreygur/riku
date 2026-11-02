@@ -110,6 +110,7 @@ fn release_and_start(
     if let Err(e) = env_setup::write_live_env(app, paths, env) {
         return Err(e);
     }
+    crate::supervisor_ctl::start_supervisor(paths);
     if let Err(e) = workers::create_workers_generic(app, &app_path, env, paths, start_cmd) {
         return Err(e);
     }

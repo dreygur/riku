@@ -34,8 +34,8 @@ mod fallback;
 mod plugin;
 mod reload;
 
-pub(crate) use backends::web_copies;
 pub use backends::{copy_socket, current_backends};
+pub(crate) use backends::{web_copies, worker_backend};
 use caddy::configure_caddy;
 use fallback::fallback_backends;
 use plugin::{configure_plugin, remove_plugin};

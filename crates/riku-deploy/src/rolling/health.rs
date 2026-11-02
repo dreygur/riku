@@ -9,17 +9,16 @@
 //! counts as unhealthy. System proxy settings are ignored for the same reason.
 
 use std::collections::HashMap;
-use std::net::{Ipv4Addr, SocketAddr, TcpStream};
-use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::path::PathBuf;
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
-use reqwest::blocking::Client;
-use reqwest::redirect::Policy;
 use riku_container::compose::ServiceDef;
 use riku_container::engine::{ContainerId, ContainerState, Engine};
 use riku_container::types::labels;
 use riku_container::types::HealthTest;
+
+use super::probe::{poll_probe, poll_until, probe_client, probe_port, probe_socket, probe_url};
 
 #[cfg(not(test))]
 const HEALTHCHECK_WAIT: Duration = Duration::from_secs(120);
@@ -29,8 +28,6 @@ const HEALTHCHECK_WAIT: Duration = Duration::from_secs(2);
 const PROBE_WAIT: Duration = Duration::from_secs(60);
 #[cfg(test)]
 const PROBE_WAIT: Duration = Duration::from_secs(1);
-const PROBE_INTERVAL: Duration = Duration::from_millis(500);
-const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// What to watch to decide a new copy is ready for traffic.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +38,8 @@ pub enum HealthTarget {
     Url { port: u16, path: String },
     /// A TCP connect to `127.0.0.1:port` that must succeed.
     Port(u16),
+    /// A connect to the unix socket a uWSGI copy listens on that must succeed.
+    Socket(PathBuf),
 }
 
 /// Pick how to check a compose service copy, or `None` when started is
@@ -82,36 +81,6 @@ pub fn procfile_target(env: &HashMap<String, String>, port: u16) -> HealthTarget
     }
 }
 
-fn probe_client() -> Result<Client> {
-    match Client::builder()
-        .timeout(PROBE_TIMEOUT)
-        .redirect(Policy::none())
-        .no_proxy()
-        .build()
-    {
-        Ok(client) => Ok(client),
-        Err(e) => Err(anyhow!("cannot build the health probe client: {e}")),
-    }
-}
-
-fn probe_url(client: &Client, port: u16, path: &str) -> Result<()> {
-    let slash = if path.starts_with('/') { "" } else { "/" };
-    let url = format!("http://127.0.0.1:{port}{slash}{path}");
-    match client.get(url).send() {
-        Ok(response) if response.status().is_success() => Ok(()),
-        Ok(response) => Err(anyhow!("answered {}", response.status())),
-        Err(e) => Err(anyhow!("request failed: {e}")),
-    }
-}
-
-fn probe_port(port: u16) -> Result<()> {
-    let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
-    match TcpStream::connect_timeout(&addr, PROBE_TIMEOUT) {
-        Ok(_) => Ok(()),
-        Err(e) => Err(anyhow!("connect failed: {e}")),
-    }
-}
-
 /// One engine poll. `Ok(true)` is healthy, `Ok(false)` keep waiting, `Err`
 /// means the copy will not get healthy.
 fn engine_state_ready(engine: &Engine, id: &ContainerId) -> Result<bool> {
@@ -133,39 +102,6 @@ fn engine_state_ready(engine: &Engine, id: &ContainerId) -> Result<bool> {
         | ContainerState::Restarting
         | ContainerState::Created
         | ContainerState::Other(_) => Ok(false),
-    }
-}
-
-fn poll_until<F>(limit: Duration, mut attempt: F) -> Result<()>
-where
-    F: FnMut() -> Result<bool>,
-{
-    let deadline = Instant::now() + limit;
-    loop {
-        match attempt() {
-            Ok(true) => return Ok(()),
-            Ok(false) => {}
-            Err(e) => return Err(e),
-        }
-        if Instant::now() >= deadline {
-            return Err(anyhow!("not healthy after {limit:?}"));
-        }
-        sleep(PROBE_INTERVAL);
-    }
-}
-
-fn poll_probe(limit: Duration, probe: impl Fn() -> Result<()>) -> Result<()> {
-    let mut last = String::from("no answer");
-    let outcome = poll_until(limit, || match probe() {
-        Ok(()) => Ok(true),
-        Err(e) => {
-            last = e.to_string();
-            Ok(false)
-        }
-    });
-    match outcome {
-        Ok(()) => Ok(()),
-        Err(e) => Err(anyhow!("{e} (last probe: {last})")),
     }
 }
 
@@ -194,6 +130,7 @@ pub fn wait_healthy(target: &HealthTarget, engine: Option<&Engine>) -> Result<()
             poll_probe(PROBE_WAIT, || probe_url(&client, *port, path))
         }
         HealthTarget::Port(port) => poll_probe(PROBE_WAIT, || probe_port(*port)),
+        HealthTarget::Socket(path) => poll_probe(PROBE_WAIT, || probe_socket(path)),
     }
 }
 

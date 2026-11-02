@@ -77,7 +77,9 @@ fn worker_label(config: &WorkerConfig) -> String {
     format!("{}-{}-{}", info.app, info.kind, info.ordinal)
 }
 
-fn worker_backend(config: &WorkerConfig) -> Result<Backend> {
+/// Where the router reaches the copy `config` describes: its uWSGI socket for
+/// a wsgi kind, else its `PORT` on its bind address.
+pub(crate) fn worker_backend(config: &WorkerConfig) -> Result<Backend> {
     if is_wsgi_kind(&config.worker.kind) {
         return match config.env.get("UWSGI_SOCKET") {
             Some(socket) => Ok(Backend::Unix(PathBuf::from(socket))),

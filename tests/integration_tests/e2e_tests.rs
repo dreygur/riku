@@ -21,6 +21,8 @@ mod tests {
     use std::process::Command;
     use tempfile::TempDir;
 
+    use crate::mock_supervisor::MockSupervisor;
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
@@ -268,6 +270,7 @@ esac
 
         let env = HashMap::new();
 
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         // Both worker configs must exist in workers-available
@@ -311,6 +314,7 @@ esac
         fs::write(app_dir.join("requirements.txt"), "gunicorn==20.0.0\n")?;
 
         let env = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         let web_cfg = paths.workers_available.join("pyapp-web-1.toml");
@@ -358,6 +362,7 @@ esac
         fs::create_dir_all(&app_dir).unwrap();
         fs::create_dir_all(paths.log_root.join(app)).unwrap();
         fs::write(app_dir.join("Procfile"), "web: node server.js\n").unwrap();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::workers::create_workers_generic(app, &app_dir, &HashMap::new(), &paths, None)
             .unwrap();
         let site_file = paths.caddy_root.join("shop.caddy");
@@ -550,6 +555,7 @@ esac
         fs::write(app_dir.join("package.json"), r#"{"name":"scaledapp"}"#)?;
 
         let env = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         let cfg1 = paths.workers_available.join("scaledapp-web-1.toml");
@@ -622,6 +628,7 @@ esac
         fs::create_dir_all(paths.log_root.join(app))?;
 
         let deltas: HashMap<String, i64> = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
         let web_cfg = paths.workers_available.join("testapp-web-1.toml");
@@ -654,6 +661,7 @@ esac
         fs::create_dir_all(paths.log_root.join(app))?;
 
         let deltas: HashMap<String, i64> = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
         let web_cfg = paths.workers_available.join("testapp-web-1.toml");
@@ -840,6 +848,7 @@ esac
         )?;
 
         let env = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         assert!(
@@ -917,6 +926,7 @@ esac
         )?;
 
         let env = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         // Only web config should exist
@@ -1081,6 +1091,7 @@ esac
         fs::create_dir_all(paths.log_root.join(app))?;
 
         let deltas: HashMap<String, i64> = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
         let deploy_log = paths.deploy_log_file(app);
@@ -1116,6 +1127,7 @@ esac
         fs::create_dir_all(paths.log_root.join(app))?;
 
         let deltas: HashMap<String, i64> = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
         // LIVE_ENV must be written
@@ -1156,6 +1168,7 @@ esac
         fs::create_dir_all(paths.log_root.join(app))?;
 
         let deltas: HashMap<String, i64> = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
         assert!(
@@ -1197,6 +1210,7 @@ esac
         fs::create_dir_all(paths.log_root.join(app))?;
 
         let deltas: HashMap<String, i64> = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         let result = riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha));
         assert!(result.is_ok(), "deploy without ENV file must succeed");
 
@@ -1226,6 +1240,7 @@ esac
         fs::create_dir_all(paths.log_root.join(app))?;
 
         let deltas: HashMap<String, i64> = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
         assert!(
