@@ -5,9 +5,11 @@
 //! - `ps_show`: show processes for a single app
 //! - `ps_scale`: scale workers for an app
 
+pub(super) mod helpers;
 pub(super) mod ps_all;
 pub(super) mod ps_scale;
 pub(super) mod ps_show;
+pub(super) mod scaling_display;
 
 pub use ps_all::cmd_ps_all;
 pub use ps_scale::cmd_ps_scale;
