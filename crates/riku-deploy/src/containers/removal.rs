@@ -11,8 +11,9 @@ use riku_container::compose::ComposeProject;
 use riku_container::engine::{ContainerInfo, Engine};
 use riku_container::types::{NetworkName, DEFAULT_STOP_GRACE};
 
-use super::app::{load_project, open_engine};
+use super::app::load_project;
 use super::context::saved_env;
+use super::engine_open::open_engine;
 use super::AppName;
 use crate::config::RikuPaths;
 use crate::util::echo;

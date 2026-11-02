@@ -16,7 +16,8 @@ use riku_container::compose::{routed_http, ComposeProject, RoutedPort, ServiceDe
 use riku_container::engine::Engine;
 use riku_container::types::ServiceName;
 
-use super::app::{load_project, open_engine, sorted_env};
+use super::app::{load_project, sorted_env};
+use super::engine_open::open_engine;
 use super::routes::ServiceRoutes;
 use super::runtime::ContainerRuntime;
 use super::AppName;

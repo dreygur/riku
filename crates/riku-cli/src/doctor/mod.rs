@@ -2,16 +2,18 @@
 //!
 //! Solo devs have no ops team, so the tool *is* the ops team: `doctor` runs a
 //! battery of **read-only** health checks across dependencies, the `~/.riku`
-//! directory layout, the systemd supervisor service, the host router, runtime plugins,
-//! disk headroom, SSH deploy access, and renamed app ENV keys, then prints a
-//! summary. It is read only unless run with `--fix`, which only rewrites old style
-//! deploy key forced commands in `authorized_keys`.
+//! directory layout, the systemd supervisor service, the host router, the
+//! container engine, legacy container apps, runtime plugins, disk headroom, SSH
+//! deploy access, and renamed app ENV keys, then prints a summary. It is read
+//! only unless run with `--fix`, which only rewrites old style deploy key forced
+//! commands in `authorized_keys`.
 //!
 //! Exit code: `0` when nothing failed (warnings allowed), `1` when any check
 //! has [`Status::Fail`], so it composes in CI and provisioning scripts.
 
 pub mod app_env;
 pub mod checks;
+pub mod container_check;
 pub mod forced_commands;
 pub mod router_check;
 pub mod settings_check;
@@ -129,6 +131,8 @@ pub fn collect(paths: &RikuPaths, home: &Path) -> Vec<Check> {
     checks.push(checks::systemd_service());
     checks.extend(router_check::router(paths));
     checks.push(settings_check::settings_file(paths));
+    checks.push(container_check::container_engine(paths));
+    checks.push(container_check::legacy_containers(paths));
     checks.push(checks::plugins(paths));
     checks.push(checks::disk(paths));
     checks.push(checks::ssh_access());

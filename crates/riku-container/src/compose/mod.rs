@@ -45,6 +45,7 @@ pub use project::{
     existing_volume_name, read_project, single_image_project, ComposeProject, ProjectNameSource,
     VolumeDecl,
 };
+pub use project_name::normalise_project_name;
 pub use raw::{read_raw, RawProject};
 pub use rules::{check_scale, replace_order, routed_http, ReplaceOrder, RoutedPort};
 pub use serde_json::Value;

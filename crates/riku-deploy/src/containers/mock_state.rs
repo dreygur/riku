@@ -2,7 +2,8 @@
 //! container deploys, plus a temp riku root routed through a mock Caddy.
 //!
 //! State lives in `<root>/state`: per container its name, labels and state
-//! JSON. Files a test creates there change how new containers behave:
+//! JSON; per volume its `vol-<name>` labels file; per network its `net-<name>`
+//! marker file. Files a test creates there change how new containers behave:
 //! `exits-<service>` makes them exit at once with code 1, `slow-<service>`
 //! makes their health report `starting` for the first two inspects, and
 //! `release-exits` makes `wait` report exit code 1 instead of 0. The
@@ -41,61 +42,7 @@ volumes:
   data:
 ";
 
-const BEHAVIOUR: &str = r#"
-last=''; for a in "$@"; do last=$a; done
-case "$1" in
-ps)
-  case "$*" in *name=*) exit 0;; esac
-  for f in "$S"/*.state; do [ -e "$f" ] || continue; basename "$f" .state; done;;
-inspect)
-  shift 3
-  printf '['; sep=''
-  for id in "$@"; do
-    [ -e "$S/$id.state" ] || { echo "No such container: $id" >&2; exit 1; }
-    state=$(cat "$S/$id.state")
-    polls=$(cat "$S/$id.polls" 2>/dev/null || echo 0)
-    if [ "$polls" -gt 0 ]; then
-      echo $((polls - 1)) > "$S/$id.polls"
-      state='{"Status":"running","Health":{"Status":"starting"}}'
-    elif [ "$state" = '{"Status":"running"}' ] && [ ! -e "$S/$id.ready" ]; then
-      touch "$S/$id.ready"; echo "ready $(cat "$S/$id.name")" >> "$LOG"
-    fi
-    printf '%s{"Id":"%s","Name":"/%s","Image":"sha256:x","Config":{"Image":"img","Labels":{%s}},"State":%s}' \
-      "$sep" "$id" "$(cat "$S/$id.name")" "$(cat "$S/$id.labels")" "$state"
-    sep=','
-  done
-  echo ']';;
-run)
-  n=$(cat "$S/counter" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$S/counter"
-  id=$(printf '%064d' "$n")
-  prev=''; labels=''; svc=''; name=''
-  for a in "$@"; do
-    case "$prev" in
-      --name) name=$a;;
-      --label) k=${a%%=*}; v=${a#*=}; labels="$labels${labels:+,}\"$k\":\"$v\""
-        [ "$k" = riku.service ] && svc=$v;;
-    esac
-    prev=$a
-  done
-  echo "$name" > "$S/$id.name"; printf '%s' "$labels" > "$S/$id.labels"
-  if [ -e "$S/exits-$svc" ]; then
-    echo '{"Status":"exited","ExitCode":1}' > "$S/$id.state"
-  else
-    echo '{"Status":"running"}' > "$S/$id.state"
-  fi
-  [ -e "$S/slow-$svc" ] && echo 2 > "$S/$id.polls"
-  echo "$id";;
-stop) echo '{"Status":"exited","ExitCode":0}' > "$S/$last.state";;
-wait) if [ -e "$S/release-exits" ]; then echo 1; else echo 0; fi;;
-rm) rm -f "$S/$last".*;;
-network)
-  case "$2" in
-  ls) for f in "$S"/net-*; do [ -e "$f" ] || continue; basename "$f" | cut -c5-; done;;
-  create) touch "$S/net-$3";;
-  rm) rm -f "$S/net-$3";;
-  esac;;
-esac
-"#;
+const BEHAVIOUR: &str = include_str!("mock_state.sh");
 
 /// A temp riku server: mock engine, Caddy as the router (reload always
 /// confirms), and the argv log and state directory of the engine.

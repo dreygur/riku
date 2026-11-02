@@ -108,7 +108,8 @@ impl Engine {
         &self.program
     }
 
-    pub(super) fn settings(&self) -> &EngineSettings {
+    /// The time limits this engine applies to its calls.
+    pub fn settings(&self) -> &EngineSettings {
         &self.settings
     }
 

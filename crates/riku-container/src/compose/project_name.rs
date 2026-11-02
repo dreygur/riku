@@ -39,11 +39,12 @@ pub(super) fn resolve_project_name(
     compose_dir: &Path,
 ) -> Result<(String, ProjectNameSource)> {
     if let Some(raw) = vars.get(ENV_KEY).filter(|raw| !raw.is_empty()) {
-        return checked(normalise(raw), raw, ENV_KEY).map(|n| (n, ProjectNameSource::Declared));
+        return checked(normalise_project_name(raw), raw, ENV_KEY)
+            .map(|n| (n, ProjectNameSource::Declared));
     }
     if let Some(raw) = declared {
         let name = raw.to_string();
-        if normalise(raw) != name {
+        if normalise_project_name(raw) != name {
             bail!("top level name {raw:?} is not a valid project name: use lowercase letters, digits, '-' and '_'");
         }
         return checked(name, raw, "top level name").map(|n| (n, ProjectNameSource::Declared));
@@ -52,7 +53,7 @@ pub(super) fn resolve_project_name(
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let name = match checked(normalise(&dir), &dir, "compose directory name") {
+    let name = match checked(normalise_project_name(&dir), &dir, "compose directory name") {
         Ok(name) => name,
         Err(e) => return Err(e),
     };
@@ -67,7 +68,7 @@ pub(super) fn resolve_project_name(
 /// The project name for an app with no compose file: its riku app name,
 /// normalised and checked like every other project name.
 pub(super) fn project_name_for_app(app: &str) -> Result<(String, ProjectNameSource)> {
-    match checked(normalise(app), app, "app name") {
+    match checked(normalise_project_name(app), app, "app name") {
         Ok(name) => {
             let source = own_name_source(&name, app);
             Ok((name, source))
@@ -87,7 +88,8 @@ fn own_name_source(name: &str, app_name: &str) -> ProjectNameSource {
     }
 }
 
-fn normalise(raw: &str) -> String {
+/// Lowercase and strip characters other than a-z, 0-9, '_' and '-'.
+pub fn normalise_project_name(raw: &str) -> String {
     raw.to_lowercase()
         .chars()
         .filter(|c| matches!(c, 'a'..='z' | '0'..='9' | '_' | '-'))
