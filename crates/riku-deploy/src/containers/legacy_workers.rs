@@ -10,34 +10,33 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::Path;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::{anyhow, Result};
 
 use super::legacy::{enabled_entries, is_legacy_worker, read_worker};
 use crate::config::RikuPaths;
-use crate::supervisor_ctl::{notify_supervisor_reload, pid_is_alive};
+use crate::supervisor::stats::{read_stats_file, ProcessStats, ProcessStatus};
+use crate::supervisor_ctl::{notify_supervisor_reload, pid_is_alive, supervisor_is_running};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
 const STOP_EXTRA: Duration = Duration::from_secs(30);
 const ENABLED: &str = ".toml";
 const PARKED: &str = ".toml.migrating";
 
-/// Poll until none of `pids` is alive, or fail once `limit` has passed.
-pub(crate) fn wait_pids_stopped(app: &str, pids: &[i32], limit: Duration) -> Result<()> {
-    let start = Instant::now();
-    loop {
-        if !pids.iter().any(|&pid| pid_is_alive(pid)) {
-            return Ok(());
-        }
-        if start.elapsed() >= limit {
-            return Err(anyhow!(
-                "the old workers of '{app}' did not stop within {} s",
-                limit.as_secs()
-            ));
-        }
-        std::thread::sleep(POLL_INTERVAL);
+fn snapshot_is_fresh(stats_file: &Path, parked_at: SystemTime) -> bool {
+    match fs::metadata(stats_file).and_then(|meta| meta.modified()) {
+        Ok(modified) => modified >= parked_at,
+        Err(_) => false,
     }
+}
+
+fn is_running(process: &ProcessStats) -> bool {
+    let alive = process
+        .pid
+        .and_then(|pid| i32::try_from(pid).ok())
+        .is_some_and(pid_is_alive);
+    process.status == ProcessStatus::Running || alive
 }
 
 fn rename(paths: &RikuPaths, name: &str, from: &str, to: &str) -> Result<()> {
@@ -144,23 +143,56 @@ impl LegacyWorkers {
         Ok(())
     }
 
-    /// Wait for the processes the supervisor last reported for these
-    /// workers to exit, up to the longest grace period plus 30 s. Without a
-    /// stats file there is nothing to wait on.
-    pub(crate) fn wait_stopped(&self, paths: &RikuPaths) -> Result<()> {
-        let stats_file = paths.riku_root.join("stats.json");
-        let Some(apps) = crate::supervisor::stats::read_stats_file(&stats_file) else {
-            return Ok(());
+    fn any_running(&self, stats_file: &Path) -> bool {
+        let Some(apps) = read_stats_file(stats_file) else {
+            return true;
         };
         let names: BTreeSet<&str> = self.names.iter().map(String::as_str).collect();
-        let pids: Vec<i32> = apps
-            .into_iter()
+        apps.iter()
             .filter(|stats| stats.app == self.app)
-            .flat_map(|stats| stats.processes)
+            .flat_map(|stats| stats.processes.iter())
             .filter(|process| names.contains(process.process_id.as_str()))
-            .filter_map(|process| process.pid)
-            .filter_map(|pid| i32::try_from(pid).ok())
-            .collect();
-        wait_pids_stopped(&self.app, &pids, self.longest_grace + STOP_EXTRA)
+            .any(is_running)
+    }
+
+    /// Wait until a supervisor snapshot taken after `parked_at` shows none of
+    /// these workers running, or fail once `limit` has passed. The supervisor
+    /// reloads before it writes the next snapshot, so a fresh snapshot proves
+    /// the workers it was told to stop are stopped. Without a running
+    /// supervisor there is nothing to wait for.
+    pub(crate) fn wait_stopped_since(
+        &self,
+        paths: &RikuPaths,
+        parked_at: SystemTime,
+        limit: Duration,
+    ) -> Result<()> {
+        if !supervisor_is_running(paths) {
+            return Ok(());
+        }
+        let stats_file = paths.riku_root.join("stats.json");
+        let start = Instant::now();
+        loop {
+            if snapshot_is_fresh(&stats_file, parked_at) && !self.any_running(&stats_file) {
+                return Ok(());
+            }
+            if start.elapsed() >= limit {
+                return Err(anyhow!(
+                    "the old workers of '{}' did not stop within {} s",
+                    self.app,
+                    limit.as_secs()
+                ));
+            }
+            std::thread::sleep(POLL_INTERVAL);
+        }
+    }
+
+    /// Wait for the old workers to stop, up to the longest grace period plus
+    /// 30 s.
+    pub(crate) fn wait_stopped(&self, paths: &RikuPaths, parked_at: SystemTime) -> Result<()> {
+        self.wait_stopped_since(paths, parked_at, self.longest_grace + STOP_EXTRA)
     }
 }
+
+#[cfg(test)]
+#[path = "legacy_wait_tests.rs"]
+mod wait_tests;

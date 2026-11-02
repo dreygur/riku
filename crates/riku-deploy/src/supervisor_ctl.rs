@@ -23,6 +23,14 @@ pub(crate) fn pid_is_alive(pid: i32) -> bool {
     nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None).is_ok()
 }
 
+/// Return true when the supervisor PID file holds a live process id.
+pub(crate) fn supervisor_is_running(paths: &RikuPaths) -> bool {
+    match read_supervisor_pid(paths) {
+        Some(pid) => pid_is_alive(pid),
+        None => false,
+    }
+}
+
 /// Resolve which `riku` binary to exec when (re-)launching the supervisor.
 ///
 /// Order: `$RIKU_BIN` (explicit override) → `~/.local/bin/riku` (the

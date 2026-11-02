@@ -39,7 +39,7 @@ pub fn legacy_stack(server: &MockServer) {
         "web",
         LEGACY_COMPOSE_COMMAND,
         1,
-        HashMap::new(),
+        HashMap::from([("PORT".to_string(), "8080".to_string())]),
         &app_path.to_string_lossy(),
         &log_file.to_string_lossy(),
     );
