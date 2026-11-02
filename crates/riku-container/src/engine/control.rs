@@ -9,7 +9,6 @@
 
 use std::ffi::OsString;
 use std::path::Path;
-use std::process::Command;
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
@@ -115,21 +114,6 @@ impl Engine {
             image,
             self.settings().pull_timeout,
         )
-    }
-
-    /// A `logs` command for the caller to spawn and stream. `tail` limits the
-    /// history to that many lines.
-    pub fn logs_command(&self, id: &ContainerId, follow: bool, tail: Option<u32>) -> Command {
-        let mut command = Command::new(self.program());
-        command.arg("logs");
-        if follow {
-            command.arg("-f");
-        }
-        if let Some(lines) = tail {
-            command.args(["--tail", &lines.to_string()]);
-        }
-        command.arg(id.as_str());
-        command
     }
 }
 

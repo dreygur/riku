@@ -83,7 +83,7 @@ impl LogFollowers {
             Err(e) => return Err(anyhow!("cannot clone log file handle: {e}")),
         };
 
-        let mut cmd = engine.logs_command(&info.id, true, tail.as_tail_lines());
+        let mut cmd = engine.logs_command(&info.id, tail.as_tail_lines());
         cmd.stdin(Stdio::null());
         cmd.stdout(Stdio::from(file));
         cmd.stderr(Stdio::from(stderr_file));

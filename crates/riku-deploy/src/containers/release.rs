@@ -11,7 +11,6 @@
 //! it for a copy.
 
 use std::collections::BTreeMap;
-use std::process::Stdio;
 
 use anyhow::{anyhow, Result};
 use riku_container::compose::ServiceDef;
@@ -97,9 +96,7 @@ fn remove_stale(ctx: &ContainerApp, name: &ContainerName) -> Result<()> {
 }
 
 fn print_logs(ctx: &ContainerApp, id: &ContainerId) {
-    let mut logs = ctx.engine.logs_command(id, false, None);
-    logs.stdout(Stdio::inherit()).stderr(Stdio::inherit());
-    if let Err(e) = logs.status() {
+    if let Err(e) = ctx.engine.print_logs(id) {
         tracing::warn!("cannot show the release output: {e}");
     }
 }
