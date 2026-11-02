@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::containers::mock_state::{deploy, mock_server, DB_AND_WEB};
 use crate::service_update::pull_service;
 
@@ -108,5 +110,31 @@ fn built_service_is_skipped_without_pull() {
     assert!(
         !calls.iter().any(|c| c.starts_with("pull")),
         "expected no call starting with pull, got calls: {calls:#?}"
+    );
+}
+
+#[test]
+fn built_service_is_skipped_before_lock_and_engine() {
+    let tmp = tempfile::tempdir().unwrap();
+    let server = mock_server(tmp.path(), "myapp", COMPOSE, "");
+    deploy(&server).unwrap();
+
+    let _lock = crate::lock::acquire("myapp", &server.paths).unwrap();
+    std::fs::write(
+        &server.paths.container_engine_file,
+        tmp.path().join("no-such-engine").display().to_string(),
+    )
+    .unwrap();
+
+    let start = std::time::Instant::now();
+    let res = pull_service("myapp", &server.paths, "web");
+    assert!(
+        res.is_ok(),
+        "expected pull_service to return Ok for built service, got: {res:?}"
+    );
+    assert!(
+        start.elapsed() < Duration::from_millis(500),
+        "pull_service took too long ({:?}), expected to return quickly without contending lock",
+        start.elapsed()
     );
 }

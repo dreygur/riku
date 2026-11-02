@@ -1,8 +1,9 @@
 use std::os::unix::fs::PermissionsExt;
+use std::time::{Duration, Instant};
 
 use crate::engine::detect::EngineBinary;
 use crate::engine::fake::fake_engine;
-use crate::engine::probe::first_unanswered;
+use crate::engine::probe::{answers_version, first_unanswered};
 use crate::engine::Engine;
 
 const PODMAN_VERSION: &str = r#"{"Client":{"Version":"5.2.2"},"Server":{"Version":"5.2.2"}}"#;
@@ -99,5 +100,42 @@ fn output_reports_command_and_stderr_on_failure() {
     assert!(
         err.contains("'rm'") && err.contains("no such thing"),
         "{err}"
+    );
+}
+
+#[test]
+fn answers_version_stops_hung_program_and_returns_false() {
+    let dir = tempfile::tempdir().unwrap();
+    let program = fake_engine(dir.path(), "docker", "exec sleep 30");
+    let started = Instant::now();
+
+    let answered = answers_version(&program, Duration::from_millis(300));
+
+    assert!(!answered, "sleeping program should return false");
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "answers_version was not stopped within 10 s"
+    );
+}
+
+#[test]
+fn answers_version_accepts_zero_exit() {
+    let dir = tempfile::tempdir().unwrap();
+    let program = fake_engine(dir.path(), "docker", "exit 0");
+
+    assert!(
+        answers_version(&program, Duration::from_millis(300)),
+        "program exiting 0 should return true"
+    );
+}
+
+#[test]
+fn answers_version_rejects_nonzero_exit() {
+    let dir = tempfile::tempdir().unwrap();
+    let program = fake_engine(dir.path(), "docker", "exit 1");
+
+    assert!(
+        !answers_version(&program, Duration::from_millis(300)),
+        "program exiting 1 should return false"
     );
 }

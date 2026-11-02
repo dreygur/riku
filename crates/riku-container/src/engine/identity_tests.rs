@@ -1,4 +1,7 @@
+use std::fs;
+
 use super::*;
+use crate::engine::fake::fake_engine;
 
 #[test]
 fn docker_identity_uses_platform_name() {
@@ -28,4 +31,39 @@ fn client_version_is_the_fallback_when_no_server_answers() {
 fn rejects_version_output_without_any_version() {
     let err = parse_identity("docker", r#"{"Server":{}}"#).unwrap_err();
     assert!(err.to_string().contains("version"), "{err}");
+}
+
+#[test]
+fn ping_succeeds_for_healthy_engine_and_fails_when_version_fails() {
+    let dir = tempfile::tempdir().unwrap();
+    let flag = dir.path().join("fail");
+    let script = format!(
+        "case \"$2\" in --help) exit 0;; esac\n\
+         if [ -f '{}' ]; then\n\
+             echo 'daemon stopped' >&2\n\
+             exit 1\n\
+         fi\n\
+         case \"$1\" in version) echo '{{\"Client\":{{\"Version\":\"1\"}}}}'; exit 0;; esac\n\
+         exit 0",
+        flag.display()
+    );
+    let binary = EngineBinary {
+        program: fake_engine(dir.path(), "engine", &script),
+        binary_name: "engine".to_string(),
+    };
+    let engine = Engine::open(binary).unwrap();
+
+    let ping_healthy = engine.ping();
+    assert!(
+        ping_healthy.is_ok(),
+        "healthy engine ping must succeed, got: {ping_healthy:?}"
+    );
+
+    fs::write(&flag, "").unwrap();
+
+    let ping_failed = engine.ping();
+    assert!(
+        ping_failed.is_err(),
+        "ping must fail when daemon version stops answering"
+    );
 }

@@ -16,6 +16,15 @@ pub const REQUIRED_COMMANDS: [&str; 16] = [
     "network", "volume", "image", "login", "wait",
 ];
 
+/// Run `<program> --version` within `limit` and return whether it exited 0.
+pub fn answers_version(program: &Path, limit: Duration) -> bool {
+    let args = [OsString::from("--version")];
+    match capture(program, &args, limit) {
+        Ok(out) => out.status.success(),
+        Err(_) => false,
+    }
+}
+
 /// Run `<program> <command> --help` for every required command, each within
 /// `limit`.
 ///

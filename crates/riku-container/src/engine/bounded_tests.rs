@@ -3,15 +3,7 @@ use std::fs;
 use std::time::{Duration, Instant};
 
 use crate::engine::fake::fake_engine;
-use crate::engine::fixture::logging_engine;
-
-fn pid_alive(pid: &str) -> bool {
-    std::process::Command::new("kill")
-        .args(["-0", pid])
-        .output()
-        .map(|out| out.status.success())
-        .unwrap_or(false)
-}
+use crate::engine::fixture::{logging_engine, pid_alive, wait_until_gone};
 
 #[test]
 fn hung_engine_call_is_killed_at_the_limit() {
@@ -40,16 +32,6 @@ fn hung_engine_call_is_killed_at_the_limit() {
         "engine child {} still running",
         pid.trim()
     );
-}
-
-fn wait_until_gone(pid: &str) -> bool {
-    (0..40).any(|_| {
-        let gone = !pid_alive(pid);
-        if !gone {
-            std::thread::sleep(Duration::from_millis(50));
-        }
-        gone
-    })
 }
 
 #[test]
@@ -99,11 +81,8 @@ fn capture_returns_when_a_helper_keeps_stdout_open() {
     let (engine, _log) = logging_engine(dir.path(), &behaviour);
     let started = Instant::now();
 
-    let out = engine
-        .output_within(&[OsString::from("ps")], Duration::from_millis(500))
-        .unwrap();
-
-    assert!(out.contains("ok"), "output should contain 'ok': {out}");
+    let res = engine.run_within(&[OsString::from("ps")], Duration::from_millis(500));
+    assert!(res.is_ok(), "run_within should succeed: {res:?}");
     assert!(
         started.elapsed() < Duration::from_secs(5),
         "capture waited for the helper"

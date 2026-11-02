@@ -20,8 +20,6 @@ use nix::sys::signal::{killpg, Signal};
 use nix::unistd::Pid;
 use riku_util::spawn::spawn_retrying_etxtbsy;
 
-use super::identity::Engine;
-
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
 const TERM_GRACE: Duration = Duration::from_secs(2);
 
@@ -158,38 +156,6 @@ pub(super) fn capture(program: &Path, args: &[OsString], limit: Duration) -> Res
         stderr: joined(stderr),
         truncated,
     })
-}
-
-impl Engine {
-    /// Run the engine with `args`, returning stdout.
-    ///
-    /// A call still running after `limit` is stopped (see [`capture`]). A non
-    /// zero exit is an error carrying the subcommand and trimmed stderr. Emits
-    /// a warning when a helper held the pipe open past the limit.
-    #[allow(clippy::question_mark)]
-    pub(super) fn output_within(&self, args: &[OsString], limit: Duration) -> Result<String> {
-        let command = args
-            .first()
-            .map(|a| a.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let out = match capture(self.program(), args, limit) {
-            Ok(out) => out,
-            Err(e) => return Err(e),
-        };
-        if !out.status.success() {
-            return Err(anyhow!(
-                "container engine '{command}' failed: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            ));
-        }
-        if out.truncated {
-            tracing::warn!(
-                command = %command,
-                "container engine output may be incomplete: a helper held the pipe open past the limit"
-            );
-        }
-        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
-    }
 }
 
 #[cfg(test)]

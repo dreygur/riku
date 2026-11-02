@@ -19,6 +19,7 @@ use super::context::ContainerApp;
 use super::deploy::roll_out_app;
 use super::legacy_workers::LegacyWorkers;
 use super::removal::{app_containers, remove_containers};
+use super::rollback_wait::wait_restored_workers;
 use crate::util::echo;
 
 /// The old compose names containers `<project>-<service>-<n>`.
@@ -88,6 +89,11 @@ fn roll_back(ctx: &ContainerApp, legacy: &LegacyWorkers, failure: anyhow::Error)
     if let Err(e) = legacy.restore(ctx.paths) {
         return Err(failure.context(format!(
             "migration of '{app}' failed and the old workers could not be restored ({e:#})"
+        )));
+    }
+    if let Err(e) = wait_restored_workers(ctx.app.as_str(), ctx.paths) {
+        return Err(failure.context(format!(
+            "migration of '{app}' failed and the restored old workers did not answer ({e:#}); the old route was not republished"
         )));
     }
     if let Err(e) = republish_old_route(ctx) {

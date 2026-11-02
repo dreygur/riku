@@ -17,12 +17,12 @@ fn args_of<const N: usize>(parts: [&str; N]) -> Vec<OsString> {
 impl Engine {
     /// Stream the container's logs to stdout and stderr.
     ///
-    /// This is a short call bounded by the engine call limit.
+    /// Bounded by the engine build limit.
     pub fn print_logs(&self, id: &ContainerId) -> Result<()> {
         self.run_streamed(
             &args_of(["logs", id.as_str()]),
             id.as_str(),
-            self.settings().call_timeout,
+            self.settings().build_timeout,
         )
     }
 

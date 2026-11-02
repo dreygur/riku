@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use super::detect::EngineBinary;
 use super::fake::fake_engine;
@@ -10,6 +11,26 @@ use super::{Engine, PullPolicy, RunSpec};
 use crate::types::{
     labels, ContainerName, CopyIndex, NetworkName, ServiceName, StopSignal, DEFAULT_STOP_GRACE,
 };
+
+/// Whether a process with id `pid` is alive.
+pub fn pid_alive(pid: &str) -> bool {
+    std::process::Command::new("kill")
+        .args(["-0", pid])
+        .output()
+        .map(|out| out.status.success())
+        .unwrap_or(false)
+}
+
+/// Poll until process `pid` is no longer alive, up to 2 seconds.
+pub fn wait_until_gone(pid: &str) -> bool {
+    (0..40).any(|_| {
+        let gone = !pid_alive(pid);
+        if !gone {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        gone
+    })
+}
 
 /// Open an engine whose `/bin/sh` script answers the probe, appends each other
 /// command line to a log, then runs `behaviour`. Returns the engine and the log path.

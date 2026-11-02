@@ -2,30 +2,27 @@
 //!
 //! Handles building container images (Docker/Podman) locally and deploying them to remote servers.
 
-use anyhow::Result;
 use std::path::Path;
 use std::process::Command;
+
+use anyhow::Result;
+use riku_config::settings::EngineSettings;
+use riku_container::engine::answers_version;
 
 use crate::util::echo;
 
 /// Get the container runtime command (docker or podman).
+///
+/// Uses default engine settings because this caller has no RikuPaths.
 pub fn get_container_runtime() -> Result<String> {
-    // Check for Docker first
-    let docker_check = Command::new("docker").arg("--version").output();
+    let limit = EngineSettings::default().call_timeout;
 
-    if let Ok(output) = docker_check {
-        if output.status.success() {
-            return Ok("docker".to_string());
-        }
+    if answers_version(Path::new("docker"), limit) {
+        return Ok("docker".to_string());
     }
 
-    // Check for Podman
-    let podman_check = Command::new("podman").arg("--version").output();
-
-    if let Ok(output) = podman_check {
-        if output.status.success() {
-            return Ok("podman".to_string());
-        }
+    if answers_version(Path::new("podman"), limit) {
+        return Ok("podman".to_string());
     }
 
     Err(anyhow::anyhow!(
@@ -196,23 +193,5 @@ pub fn check_remote_runtime(remote_host: &str) -> Result<Option<String>> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_get_container_runtime() {
-        // This test will depend on what's available on the system
-        let result = get_container_runtime();
-        // The result depends on what's installed
-        assert!(result.is_ok() || result.is_err());
-    }
-
-    #[test]
-    fn test_check_remote_runtime_format() {
-        // Just verify the function exists and compiles
-        // Actual testing would require a real remote host
-        let result = check_remote_runtime("localhost");
-        // Result depends on what's installed on localhost
-        assert!(result.is_ok());
-    }
-}
+#[path = "container_runtime_tests.rs"]
+mod tests;

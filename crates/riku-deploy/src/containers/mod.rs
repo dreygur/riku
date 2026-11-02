@@ -32,6 +32,7 @@ mod ports;
 mod project_check;
 mod release;
 mod removal;
+mod rollback_wait;
 mod rollout;
 mod routes;
 mod runtime;
@@ -43,7 +44,7 @@ pub use control::{restart_service, runs_containers, scale_service, stop_service}
 pub use copy_restart::{restart_copy, RestartOutcome};
 pub use deploy::{deploy_containers, CONTAINER_RUNTIME};
 pub use engine_open::{open_engine, EngineUnreachable};
-pub use image_update::{update_service, ImageUpdate};
+pub use image_update::{is_built_service, update_service, ImageUpdate};
 pub use images::prepare_images;
 pub use legacy::{is_legacy_worker, legacy_apps};
 pub use ports::pick_free_port;

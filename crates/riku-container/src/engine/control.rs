@@ -65,22 +65,20 @@ impl Engine {
     pub fn stop(&self, id: &ContainerId, grace: Duration) -> Result<()> {
         let secs = whole_seconds_up(grace);
         let limit = Duration::from_secs(secs) + self.settings().stop_extra;
-        self.output_within(
+        self.run_within(
             &args_of(["stop", "-t", &secs.to_string(), id.as_str()]),
             limit,
         )
-        .map(|_| ())
     }
 
     /// Send `signal` to the container's main process.
     pub fn kill(&self, id: &ContainerId, signal: &StopSignal) -> Result<()> {
-        self.output(&args_of(["kill", "--signal", signal.as_str(), id.as_str()]))
-            .map(|_| ())
+        self.run_quiet(&args_of(["kill", "--signal", signal.as_str(), id.as_str()]))
     }
 
     /// Remove the container. Volumes are left alone.
     pub fn remove(&self, id: &ContainerId) -> Result<()> {
-        self.output(&args_of(["rm", id.as_str()])).map(|_| ())
+        self.run_quiet(&args_of(["rm", id.as_str()]))
     }
 
     /// Block until the container exits and return its exit code. Bounded by

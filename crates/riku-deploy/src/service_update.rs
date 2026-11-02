@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use anyhow::{anyhow, Result};
 
 use crate::config::RikuPaths;
-use crate::containers::{AppName, ServiceName};
+use crate::containers::{is_built_service, AppName, ImageUpdate, ServiceName};
 use crate::lock;
 
 fn container_pull(app: &str, paths: &RikuPaths, service: &str) -> Result<()> {
@@ -25,6 +25,14 @@ fn container_pull(app: &str, paths: &RikuPaths, service: &str) -> Result<()> {
         Ok(name) => name,
         Err(e) => return Err(e),
     };
+    let is_built = match is_built_service(&app_name, paths, &service_name) {
+        Ok(is_built) => is_built,
+        Err(e) => return Err(e),
+    };
+    if is_built {
+        tracing::info!(app, service, outcome = ?ImageUpdate::Built, "image watch check");
+        return Ok(());
+    }
     let update = match crate::containers::update_service(&app_name, paths, &service_name) {
         Ok(update) => update,
         Err(e) => return Err(e),

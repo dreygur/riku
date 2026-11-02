@@ -9,7 +9,7 @@ const ENV: &str = "RIKU_DOMAINS=myapp.example.com\n";
 fn migration_reuses_volume_names() {
     let tmp = tempfile::tempdir().unwrap();
     let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
-    legacy_stack(&server);
+    let _old = legacy_stack(&server);
 
     deploy(&server).unwrap();
 
@@ -126,7 +126,7 @@ fn declared_name_adopts_its_compose_volume() {
 fn failed_start_restores_old_stack() {
     let tmp = tempfile::tempdir().unwrap();
     let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
-    legacy_stack(&server);
+    let _old = legacy_stack(&server);
     server.mark("exits", "web");
 
     let err = deploy(&server).unwrap_err();
@@ -170,12 +170,12 @@ fn failed_start_restores_old_stack() {
 fn migration_never_removes_volumes() {
     let tmp_ok = tempfile::tempdir().unwrap();
     let server_ok = mock_server(tmp_ok.path(), "myapp", DB_AND_WEB, ENV);
-    legacy_stack(&server_ok);
+    let _old = legacy_stack(&server_ok);
     deploy(&server_ok).unwrap();
 
     let tmp_fail = tempfile::tempdir().unwrap();
     let server_fail = mock_server(tmp_fail.path(), "myapp", DB_AND_WEB, ENV);
-    legacy_stack(&server_fail);
+    let _old = legacy_stack(&server_fail);
     server_fail.mark("exits", "web");
     let _ = deploy(&server_fail).unwrap_err();
 

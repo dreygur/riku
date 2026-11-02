@@ -13,6 +13,7 @@ use riku_container::types::ServiceName;
 
 use super::app::{is_container_app, read_scaling, write_scaling};
 use super::context::{saved_env, ContainerApp};
+use super::engine_open::reclassify;
 use super::removal::{app_containers, remove_containers};
 use super::rollout::roll_out;
 use super::AppName;
@@ -53,6 +54,22 @@ fn chosen<'a>(ctx: &'a ContainerApp, service: Option<&ServiceName>) -> Result<Ve
     }
 }
 
+fn restart_locked(
+    ctx: &ContainerApp,
+    paths: &RikuPaths,
+    service: Option<&ServiceName>,
+) -> Result<()> {
+    let counts = match read_scaling(ctx.app.as_str(), paths) {
+        Ok(counts) => counts,
+        Err(e) => return Err(e),
+    };
+    let services = match chosen(ctx, service) {
+        Ok(services) => services,
+        Err(e) => return Err(e),
+    };
+    roll_out(ctx, &counts, &services)
+}
+
 /// Replace the copies of `service`, or of every service in start order, with
 /// fresh ones from the images they run now. Stopped services start again.
 pub fn restart_service(
@@ -64,15 +81,7 @@ pub fn restart_service(
         Ok(locked) => locked,
         Err(e) => return Err(e),
     };
-    let counts = match read_scaling(app.as_str(), paths) {
-        Ok(counts) => counts,
-        Err(e) => return Err(e),
-    };
-    let services = match chosen(&ctx, service) {
-        Ok(services) => services,
-        Err(e) => return Err(e),
-    };
-    roll_out(&ctx, &counts, &services)
+    reclassify(&ctx.engine, restart_locked(&ctx, paths, service))
 }
 
 /// Position of a container's service in start order; containers of services
@@ -85,16 +94,8 @@ fn start_rank(ctx: &ContainerApp, info: &ContainerInfo) -> usize {
         .map_or(usize::MAX, |n| n + 1)
 }
 
-/// Stop and remove the copies of `service`, or every container of the app.
-///
-/// When the routed service is among them the app is taken off the router
-/// first, so the router never points at a stopped copy. Dependents stop
-/// before the services they depend on. Volumes are kept.
-pub fn stop_service(app: &AppName, paths: &RikuPaths, service: Option<&ServiceName>) -> Result<()> {
-    let (_lock, ctx) = match locked(app, paths) {
-        Ok(locked) => locked,
-        Err(e) => return Err(e),
-    };
+fn stop_locked(ctx: &ContainerApp, paths: &RikuPaths, service: Option<&ServiceName>) -> Result<()> {
+    let app = ctx.app;
     if let Some(name) = service {
         if let Err(e) = ctx.service(name) {
             return Err(e);
@@ -116,7 +117,7 @@ pub fn stop_service(app: &AppName, paths: &RikuPaths, service: Option<&ServiceNa
             return Err(e.context("cannot take the app off the router, nothing was stopped"));
         }
     }
-    targets.sort_by_key(|info| std::cmp::Reverse(start_rank(&ctx, info)));
+    targets.sort_by_key(|info| std::cmp::Reverse(start_rank(ctx, info)));
     if let Err(e) = remove_containers(&ctx.engine, Some(&ctx.project), &targets) {
         return Err(e);
     }
@@ -125,6 +126,20 @@ pub fn stop_service(app: &AppName, paths: &RikuPaths, service: Option<&ServiceNa
         "green",
     );
     Ok(())
+}
+
+/// Stop and remove the copies of `service`, or every container of the app.
+///
+/// When the routed service is among them the app is taken off the router
+/// first, so the router never points at a stopped copy. Dependents stop
+/// before the services they depend on. Volumes are kept. A daemon that stops
+/// answering mid operation is reported as [`super::EngineUnreachable`].
+pub fn stop_service(app: &AppName, paths: &RikuPaths, service: Option<&ServiceName>) -> Result<()> {
+    let (_lock, ctx) = match locked(app, paths) {
+        Ok(locked) => locked,
+        Err(e) => return Err(e),
+    };
+    reclassify(&ctx.engine, stop_locked(&ctx, paths, service))
 }
 
 /// Grow or shrink `service` to `copies` without restarting the copies it

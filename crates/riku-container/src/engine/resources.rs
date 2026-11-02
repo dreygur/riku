@@ -38,8 +38,7 @@ impl Engine {
             Ok(false) => {}
             Err(e) => return Err(e),
         }
-        self.output(&["network".into(), "create".into(), name.as_str().into()])
-            .map(|_| ())
+        self.run_quiet(&["network".into(), "create".into(), name.as_str().into()])
     }
 
     /// Whether a volume with exactly this name exists.
@@ -84,8 +83,7 @@ impl Engine {
             Ok(false) => return Ok(()),
             Err(e) => return Err(e),
         }
-        self.output(&["network".into(), "rm".into(), name.into()])
-            .map(|_| ())
+        self.run_quiet(&["network".into(), "rm".into(), name.into()])
     }
 }
 

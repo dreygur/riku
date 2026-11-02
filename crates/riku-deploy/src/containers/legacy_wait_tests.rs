@@ -59,7 +59,7 @@ fn set_stats_mtime(paths: &RikuPaths, mtime: SystemTime) {
 fn legacy_server() -> (tempfile::TempDir, MockServer, LegacyWorkers) {
     let tmp = tempfile::tempdir().unwrap();
     let server = mock_server(tmp.path(), "myapp", "", "");
-    legacy_stack(&server);
+    let _old = legacy_stack(&server);
     let legacy = LegacyWorkers::load("myapp", &server.paths).unwrap();
     (tmp, server, legacy)
 }

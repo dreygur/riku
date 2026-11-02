@@ -117,6 +117,16 @@ impl Engine {
     pub(crate) fn output(&self, args: &[OsString]) -> Result<String> {
         self.output_within(args, self.settings.call_timeout)
     }
+
+    /// Ask the engine for its version JSON to verify the daemon is answering.
+    ///
+    /// A failing ping after a successful open means the daemon is gone or wedged.
+    pub fn ping(&self) -> Result<()> {
+        match self.output(&["version".into(), "--format".into(), "json".into()]) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
 }
 
 #[cfg(test)]

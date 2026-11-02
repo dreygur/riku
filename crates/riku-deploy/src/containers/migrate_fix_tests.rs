@@ -10,13 +10,14 @@ const ENV: &str = "RIKU_DOMAINS=myapp.example.com\n";
 fn failed_migration_republishes_old_route() {
     let tmp = tempfile::tempdir().unwrap();
     let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
-    legacy_stack(&server);
+    let _old = legacy_stack(&server);
+    let port = _old.local_addr().unwrap().port();
     server.mark("exits", "web");
 
     assert!(deploy(&server).is_err(), "deploy must fail when web exits");
     let site = server.site("myapp");
     assert!(
-        site.contains("127.0.0.1:8080"),
+        site.contains(&format!("127.0.0.1:{port}")),
         "old web copy must be routed again after rollback: {site:?}"
     );
 }
@@ -25,7 +26,7 @@ fn failed_migration_republishes_old_route() {
 fn delete_failure_after_migration_is_a_warning() {
     let tmp = tempfile::tempdir().unwrap();
     let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
-    legacy_stack(&server);
+    let _old = legacy_stack(&server);
 
     // Root ignores directory permissions, so the delete would not fail.
     if nix::unistd::geteuid().is_root() {
@@ -50,4 +51,30 @@ fn delete_failure_after_migration_is_a_warning() {
         "deploy must succeed with warning on discard failure: {outcome:?}"
     );
     assert_eq!(server.containers(), ["myapp-db-1", "myapp-web-1"]);
+}
+
+#[test]
+fn rollback_reports_a_restored_worker_that_never_answers() {
+    let tmp = tempfile::tempdir().unwrap();
+    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
+    let old = legacy_stack(&server);
+    let port = old.local_addr().unwrap().port();
+    drop(old);
+    server.mark("exits", "web");
+
+    let err = deploy(&server).unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains("exited"),
+        "error must contain migration failure: {msg}"
+    );
+    assert!(
+        msg.contains("did not answer"),
+        "error must contain health wait failure: {msg}"
+    );
+    let site = server.site("myapp");
+    assert!(
+        !site.contains(&format!("127.0.0.1:{port}")),
+        "old route must not be republished when worker never answers: {site:?}"
+    );
 }

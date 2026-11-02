@@ -17,11 +17,30 @@ fn short_limits() -> EngineSettings {
 }
 
 #[test]
-fn print_logs_is_bounded_by_the_call_limit() {
+fn print_logs_is_bounded_by_the_build_limit() {
     let dir = tempfile::tempdir().unwrap();
-    let (engine, _log) = logging_engine(dir.path(), "case \"$1\" in logs) exec sleep 30;; esac");
-    let engine = engine.with_settings(short_limits());
+    let (engine, _log) = logging_engine(
+        dir.path(),
+        "case \"$1\" in logs) echo line; sleep 1; exit 0;; esac",
+    );
+    let mut limits = short_limits();
+    limits.call_timeout = Duration::from_millis(200);
+    limits.build_timeout = Duration::from_secs(3);
+    let engine = engine.with_settings(limits);
     let id = ContainerId::try_from(ID).unwrap();
+
+    let result = engine.print_logs(&id);
+    assert!(
+        result.is_ok(),
+        "print_logs should succeed within build limit: {result:?}"
+    );
+
+    let dir_hang = tempfile::tempdir().unwrap();
+    let (engine, _log) =
+        logging_engine(dir_hang.path(), "case \"$1\" in logs) exec sleep 30;; esac");
+    let mut limits = short_limits();
+    limits.build_timeout = Duration::from_millis(600);
+    let engine = engine.with_settings(limits);
     let started = Instant::now();
 
     let err = match engine.print_logs(&id) {

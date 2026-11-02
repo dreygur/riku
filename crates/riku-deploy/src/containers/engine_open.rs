@@ -53,6 +53,20 @@ pub fn open_engine(paths: &RikuPaths) -> Result<Engine> {
     Ok(engine.with_settings(settings.engine))
 }
 
+/// Reclassify an operation error as [`EngineUnreachable`] if the engine daemon
+/// stopped answering after the engine was opened.
+pub(super) fn reclassify<T>(engine: &Engine, outcome: Result<T>) -> Result<T> {
+    match outcome {
+        Ok(value) => Ok(value),
+        Err(e) => match engine.ping() {
+            Ok(()) => Err(e),
+            Err(ping_error) => Err(anyhow::Error::new(EngineUnreachable::new(format!(
+                "{ping_error}; original failure: {e:#}"
+            )))),
+        },
+    }
+}
+
 #[cfg(test)]
 #[path = "engine_open_tests.rs"]
 mod tests;

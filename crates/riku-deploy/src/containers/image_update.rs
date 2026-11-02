@@ -74,6 +74,7 @@ pub fn update_service(
     };
     let image = match watched_image(def) {
         Ok(Some(image)) => image,
+        // Backstop for a compose file that changes between the pre-lock check and here.
         Ok(None) => return Ok(ImageUpdate::Built),
         Err(e) => return Err(e),
     };
@@ -107,4 +108,29 @@ pub fn update_service(
         return Err(e);
     }
     Ok(ImageUpdate::Replaced)
+}
+
+/// Whether a service is built from source instead of pulled from a registry.
+///
+/// Reads only the app's env and compose file, without taking the deploy lock
+/// or opening the container engine.
+pub fn is_built_service(app: &AppName, paths: &RikuPaths, service: &ServiceName) -> Result<bool> {
+    let env = match super::context::saved_env(app.as_str(), paths) {
+        Ok(env) => env,
+        Err(e) => return Err(e),
+    };
+    let app_path = paths.app_root.join(app.as_str());
+    let project = match super::app::load_project(app.as_str(), &app_path, &env) {
+        Ok(project) => project,
+        Err(e) => return Err(e),
+    };
+    let def = match project.services.iter().find(|s| &s.name == service) {
+        Some(def) => def,
+        None => {
+            return Err(anyhow!(
+                "app '{app}' has no service '{service}' in its compose file"
+            ));
+        }
+    };
+    Ok(def.build.is_some())
 }
