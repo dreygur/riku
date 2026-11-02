@@ -32,6 +32,18 @@ pub(crate) fn router() -> Router<DashboardState> {
             "/api/apps/{app}/workers/{kind}/{ordinal}",
             delete(delete_worker),
         )
+        .route(
+            "/api/apps/{app}/services/{service}/restart",
+            post(super::service_mutations::restart),
+        )
+        .route(
+            "/api/apps/{app}/services/{service}/stop",
+            post(super::service_mutations::stop),
+        )
+        .route(
+            "/api/apps/{app}/services/{service}/scale",
+            post(super::service_mutations::scale),
+        )
 }
 
 async fn restart(state: State<DashboardState>, headers: HeaderMap, app: Path<String>) -> Response {

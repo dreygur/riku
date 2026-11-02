@@ -763,7 +763,7 @@
         <div class="table" role="table" aria-label="${esc(app)} workers">
           <div class="tr th" role="row">
             <span role="columnheader">Worker</span><span role="columnheader">State</span><span role="columnheader">Memory</span>
-            <span role="columnheader">CPU time</span><span role="columnheader">PID</span><span role="columnheader" class="r">Restarts</span>
+            <span role="columnheader">CPU</span><span role="columnheader">PID / ID</span><span role="columnheader" class="r">Restarts</span>
           </div>
           <div role="rowgroup" data-rows></div>
         </div>
@@ -796,7 +796,7 @@
           <button type="button" class="link" data-do="logs">Follow deploy output ${I.arrow}</button>
         </div>
       </div>`;
-    const c = { app, id, el, data: null, releases: [], webNow: 0, scaleVal: null, wasBusy: false };
+    const c = { app, id, el, data: null, releases: [], webNow: 0, scaleVal: null, wasBusy: false, svcScale: {} };
     wire(c);
     loadReleases(c);
     return c;
@@ -809,6 +809,27 @@
       const step = e.target.closest("[data-step]");
       if (step) {
         if (!step.disabled) { setScale(c, (c.scaleVal == null ? c.webNow : c.scaleVal) + Number(step.dataset.step)); }
+        return;
+      }
+      const svcStep = e.target.closest("[data-svc-step]");
+      if (svcStep && !svcStep.disabled) {
+        const svc = svcStep.dataset.service;
+        const sInput = el.querySelector(`[data-svc-scale="${svc}"]`);
+        if (sInput) {
+          const cur = parseInt(sInput.value, 10) || 0;
+          const delta = Number(svcStep.dataset.svcStep);
+          const next = Math.max(0, Math.min(MAX_SCALE, cur + delta));
+          if (!c.svcScale) { c.svcScale = {}; }
+          c.svcScale[svc] = next;
+          sInput.value = next;
+          const apply = el.querySelector(`[data-do="svc-scale"][data-service="${svc}"]`);
+          if (apply) {
+            const count = (c.data && c.data.workers ? c.data.workers.filter((w) => w.kind === svc).length : 0);
+            const dirty = next !== count;
+            apply.disabled = !dirty;
+            apply.classList.toggle("primary", dirty);
+          }
+        }
         return;
       }
       const btn = e.target.closest("[data-do]");
@@ -825,6 +846,40 @@
           if (await act(app, "scale", { web: n })) {
             toast("ok", `Scaling ${app} web to ${n}`, "Workers appear as they start.", viewLogs);
             c.scaleVal = null; soon();
+          }
+        });
+        return;
+      }
+      if (what === "svc-scale") {
+        const svc = btn.dataset.service;
+        const sInput = el.querySelector(`[data-svc-scale="${svc}"]`);
+        const n = sInput ? parseInt(sInput.value, 10) : null;
+        if (n == null || isNaN(n)) { return; }
+        await withBusy(c, btn, "Applying...", async () => {
+          if (await act(app, `services/${encodeURIComponent(svc)}/scale`, { copies: n })) {
+            toast("ok", `Scaling ${app} ${svc} to ${n}`, "Service is adjusting copies.", viewLogs);
+            if (c.svcScale) { delete c.svcScale[svc]; }
+            soon();
+          }
+        });
+        return;
+      }
+      if (what === "svc-restart") {
+        const svc = btn.dataset.service;
+        await withBusy(c, btn, "Restarting...", async () => {
+          if (await act(app, `services/${encodeURIComponent(svc)}/restart`)) {
+            toast("ok", `Restarting ${app} ${svc}`, "Service copies restarting.", viewLogs);
+            soon();
+          }
+        });
+        return;
+      }
+      if (what === "svc-stop") {
+        const svc = btn.dataset.service;
+        await withBusy(c, btn, "Stopping...", async () => {
+          if (await act(app, `services/${encodeURIComponent(svc)}/stop`)) {
+            toast("ok", `Stopping ${app} ${svc}`, "Service copies stopped.");
+            soon();
           }
         });
         return;
@@ -861,14 +916,34 @@
         });
       }
     });
-    input.addEventListener("input", () => {
-      const n = parseInt(input.value, 10);
-      if (!isNaN(n)) { setScale(c, n, true); }
-    });
-    input.addEventListener("blur", () => syncScale(c));
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); el.querySelector('[data-do="scale"]').click(); }
-      if (e.key === "Escape") { c.scaleVal = null; syncScale(c); }
+    if (input) {
+      input.addEventListener("input", () => {
+        const n = parseInt(input.value, 10);
+        if (!isNaN(n)) { setScale(c, n, true); }
+      });
+      input.addEventListener("blur", () => syncScale(c));
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); const b = el.querySelector('[data-do="scale"]'); if (b) b.click(); }
+        if (e.key === "Escape") { c.scaleVal = null; syncScale(c); }
+      });
+    }
+    el.addEventListener("input", (e) => {
+      const sInput = e.target.closest("[data-svc-scale]");
+      if (sInput) {
+        const svc = sInput.dataset.svcScale;
+        const n = parseInt(sInput.value, 10);
+        if (!isNaN(n)) {
+          if (!c.svcScale) { c.svcScale = {}; }
+          c.svcScale[svc] = n;
+          const apply = el.querySelector(`[data-do="svc-scale"][data-service="${svc}"]`);
+          if (apply) {
+            const count = (c.data && c.data.workers ? c.data.workers.filter((w) => w.kind === svc).length : 0);
+            const dirty = n !== count;
+            apply.disabled = !dirty;
+            apply.classList.toggle("primary", dirty);
+          }
+        }
+      }
     });
   }
 
@@ -883,6 +958,7 @@
     const input = el.querySelector("[data-scale]");
     const apply = el.querySelector('[data-do="scale"]');
     const reset = el.querySelector('[data-do="reset"]');
+    if (!input || !apply || !reset) { return; }
     const val = c.scaleVal == null ? c.webNow : c.scaleVal;
     const dirty = c.scaleVal != null;
     if (!keepInput) { input.value = val; }
@@ -968,16 +1044,24 @@
   }
 
   function workerRow(w, peak) {
+    const isContainer = w.unit === "container";
     const st = stateOf(w.status);
     const rc = num(w.restart_count);
     const rlvl = rc >= 4 ? "crit" : "warn";
-    const live = !!w.pid;
+    const live = isContainer ? st.cls === "alive" || st.cls === "warn" : !!w.pid;
+    const pidOrContainer = isContainer ? (w.container_id ? esc(w.container_id) : NO_VALUE) : (w.pid ? esc(w.pid) : NO_VALUE);
+    const cpuDisplay = isContainer
+      ? (w.cpu_percent != null ? esc(w.cpu_percent.toFixed(1)) + "%" : NO_VALUE)
+      : (w.pid ? fmtCpu(w.cpu_time_ms) : NO_VALUE);
+    const stateLabel = isContainer && w.state_detail ? w.state_detail : st.label;
+    const nameExtra = isContainer && w.image ? `<span class="dim" title="${esc(w.image)}"> · ${esc(w.image)}</span>` : "";
+
     return `<div class="tr ${st.cls === "dead" ? "is-bad" : ""}" role="row">
-      <span role="cell" class="w-name">${esc(workerName(w))}</span>
-      <span role="cell"><span class="state ${st.cls}">${glyph(st.cls)}${esc(st.label)}</span></span>
+      <span role="cell" class="w-name">${esc(workerName(w))}${nameExtra}</span>
+      <span role="cell"><span class="state ${st.cls}">${glyph(st.cls)}${esc(stateLabel)}</span></span>
       ${memCell(w, peak)}
-      <span role="cell" class="${live ? "muted" : "dim"}">${live ? fmtCpu(w.cpu_time_ms) : NO_VALUE}</span>
-      <span role="cell" class="${live ? "muted" : "dim"}">${live ? esc(w.pid) : NO_VALUE}</span>
+      <span role="cell" class="${live ? "muted" : "dim"}">${cpuDisplay}</span>
+      <span role="cell" class="${live ? "muted" : "dim"}">${pidOrContainer}</span>
       <span role="cell" class="r">${rc ? `<span class="rc-badge ${rlvl}" title="${rc} restarts">${I.restartSm}${rc}</span>` : '<span class="dim">0</span>'}</span>
     </div>`;
   }
@@ -1040,17 +1124,52 @@
       ? ws.map((w) => workerRow(w, peak)).join("")
       : '<div class="tr empty-row" role="row"><span role="cell">No workers running.</span></div>';
 
-    c.webNow = ws.filter((w) => w.kind === "web").length;
-    if (c.scaleVal === c.webNow) { c.scaleVal = null; }
+    const isContainer = ws.some((w) => w.unit === "container");
+    const controls = el.querySelector("[data-controls]");
+    if (isContainer) {
+      const services = [...new Set(ws.map((w) => w.kind))];
+      const svcsHtml = services.map((svc) => {
+        const count = ws.filter((w) => w.kind === svc).length;
+        const curScale = c.svcScale && c.svcScale[svc] != null ? c.svcScale[svc] : count;
+        const dirty = curScale !== count;
+        return `<div class="ctl" data-service-group="${esc(svc)}">
+          <label class="ctl-label">Service <b>${esc(svc)}</b></label>
+          <div class="stepper" data-svc-stepper="${esc(svc)}">
+            <button type="button" class="st-btn" data-svc-step="-1" data-service="${esc(svc)}" aria-label="Fewer ${esc(svc)} copies">${I.minus}</button>
+            <input type="number" min="0" max="${MAX_SCALE}" inputmode="numeric" data-svc-scale="${esc(svc)}" value="${curScale}" />
+            <button type="button" class="st-btn" data-svc-step="1" data-service="${esc(svc)}" aria-label="More ${esc(svc)} copies">${I.plus}</button>
+          </div>
+          <button type="button" class="btn sm ${dirty ? "primary" : ""}" data-do="svc-scale" data-service="${esc(svc)}" ${dirty ? "" : "disabled"}>Apply</button>
+          <button type="button" class="btn sm" data-do="svc-restart" data-service="${esc(svc)}">${I.restart}Restart</button>
+          <button type="button" class="btn sm danger" data-do="svc-stop" data-service="${esc(svc)}">${I.stop}Stop</button>
+          <button type="button" class="btn sm" data-do="logs" data-worker="${esc(svc)}">${I.term}Logs</button>
+        </div>`;
+      }).join('<span class="vsep" aria-hidden="true"></span>');
 
-    el.querySelector("[data-controls]").hidden = busy;
+      const releaseHtml = `<span class="vsep" aria-hidden="true"></span>
+        <div class="ctl">
+          <label class="ctl-label" for="${c.id}-rel">Release</label>
+          <div class="select"><select id="${c.id}-rel" data-rel><option value="">loading...</option></select>${I.chev}</div>
+          <button type="button" class="btn" data-do="rollback">${I.rollback}Roll back</button>
+        </div>
+        <span class="grow"></span>
+        <button type="button" class="btn danger" data-do="stop">${I.stop}Stop app</button>`;
+
+      controls.innerHTML = svcsHtml + releaseHtml;
+      renderReleases(c);
+    } else {
+      c.webNow = ws.filter((w) => w.kind === "web").length;
+      if (c.scaleVal === c.webNow) { c.scaleVal = null; }
+      syncScale(c);
+    }
+
+    controls.hidden = busy;
     el.querySelector("[data-busynote]").hidden = !busy;
-    el.querySelectorAll('[data-do="restart"],[data-do="redeploy"],[data-do="stop"]').forEach((b) => {
+    el.querySelectorAll('[data-do="restart"],[data-do="redeploy"],[data-do="stop"],[data-do="svc-restart"],[data-do="svc-stop"]').forEach((b) => {
       if (!b.hasAttribute("aria-busy")) { b.disabled = busy; }
     });
     const rb = el.querySelector('[data-do="rollback"]');
-    if (!rb.hasAttribute("aria-busy")) { rb.disabled = busy || c.releases.length < 2; }
-    syncScale(c);
+    if (rb && !rb.hasAttribute("aria-busy")) { rb.disabled = busy || c.releases.length < 2; }
   }
 
   // The releases API lists oldest first; the select wants newest first.
@@ -1132,7 +1251,8 @@
     const t = $("#supText");
     if (state === "live" && data) {
       const up = data.supervisor_uptime_seconds == null ? "uptime unknown" : "up " + fmtDur(data.supervisor_uptime_seconds);
-      t.innerHTML = `<b>Live</b><span class="sep">/</span>v${esc(data.riku_version)}<span class="sep">/</span>${esc(up)}`;
+      const eng = data.engine ? `<span class="sep">/</span>${esc(data.engine.name)} ${esc(data.engine.version)}` : "";
+      t.innerHTML = `<b>Live</b><span class="sep">/</span>v${esc(data.riku_version)}<span class="sep">/</span>${esc(up)}${eng}`;
     } else if (state === "down") {
       t.innerHTML = "<b>Unreachable</b>";
     } else if (state === "error" && data) {

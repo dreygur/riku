@@ -31,6 +31,7 @@ mod logs;
 mod market;
 mod mutations;
 mod routes;
+mod service_mutations;
 mod system;
 
 use std::net::{IpAddr, SocketAddr};
