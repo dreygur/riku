@@ -11,7 +11,9 @@ pub(super) fn run_apps(paths: &RikuPaths, cmd: Option<AppsCmd>) -> Result<()> {
     match cmd {
         Some(AppsCmd::Create { name }) => apps::cmd_apps_create(paths, &name),
         Some(AppsCmd::Info { name }) => apps::cmd_apps_info(paths, &name),
-        Some(AppsCmd::Destroy { name }) => apps::cmd_destroy(paths, &name),
+        Some(AppsCmd::Destroy { name, force }) => {
+            apps::cmd_destroy(paths, &name, apps::DestroyMode::from(force))
+        }
         None => apps::cmd_apps(paths),
     }
 }

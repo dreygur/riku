@@ -195,6 +195,7 @@ mod routing_tests {
     fn destroy_command_maps_to_destroy() {
         let cmd = Commands::Destroy {
             app: "myapp".to_string(),
+            force: false,
         };
         assert_eq!(get_plugin_command(&cmd), Some("destroy".to_string()));
     }

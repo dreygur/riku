@@ -31,7 +31,7 @@ impl ControlActions for CliControlActions {
         crate::apps::cmd_stop(paths, app, None)
     }
     fn destroy(&self, paths: &RikuPaths, app: &str) -> Result<()> {
-        crate::apps::cmd_destroy(paths, app)
+        crate::apps::cmd_destroy(paths, app, crate::apps::DestroyMode::Safe)
     }
     fn install_plugins(&self, paths: &RikuPaths, only: Option<Vec<String>>) -> Result<()> {
         crate::apps::cmd_install_plugins(paths, only)

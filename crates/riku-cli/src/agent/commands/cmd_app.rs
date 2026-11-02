@@ -97,7 +97,7 @@ pub fn cmd_agent_destroy_confirm(paths: &RikuPaths, app: &str, token: &str) -> A
         if content.starts_with(&format!("destroy:{}:", app)) {
             let _ = fs::remove_file(&token_file);
 
-            match crate::apps::cmd_destroy(paths, app) {
+            match crate::apps::cmd_destroy(paths, app, crate::apps::DestroyMode::Safe) {
                 Ok(_) => AgentResponse::success(json!({
                     "message": format!("Application '{}' destroyed successfully", app)
                 })),

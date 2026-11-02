@@ -42,7 +42,7 @@ pub use app::{is_container_app, load_project, read_scaling, SINGLE_IMAGE_PORT};
 pub use control::{restart_service, runs_containers, scale_service, stop_service};
 pub use copy_restart::{restart_copy, RestartOutcome};
 pub use deploy::{deploy_containers, CONTAINER_RUNTIME};
-pub use engine_open::open_engine;
+pub use engine_open::{open_engine, EngineUnreachable};
 pub use image_update::{update_service, ImageUpdate};
 pub use images::prepare_images;
 pub use legacy::{is_legacy_worker, legacy_apps};
@@ -82,3 +82,7 @@ impl std::fmt::Display for AppName {
         f.write_str(&self.0)
     }
 }
+
+#[cfg(test)]
+#[path = "unreachable_tests.rs"]
+mod unreachable_tests;

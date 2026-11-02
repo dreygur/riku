@@ -124,10 +124,14 @@ pub enum Commands {
     },
 
     /// Remove an app (preserves data dir)
-    #[command(after_help = "Examples:\n  riku destroy myapp")]
+    #[command(after_help = "Examples:\n  riku destroy myapp\n  riku destroy myapp --force")]
     Destroy {
         /// App name. Always typed: destroy does not prompt.
         app: String,
+        /// Remove riku's files and route even when the container engine is
+        /// unreachable. Running containers are left behind.
+        #[arg(long)]
+        force: bool,
     },
 
     /// Tail app logs
