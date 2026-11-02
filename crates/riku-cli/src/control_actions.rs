@@ -10,7 +10,8 @@ use std::path::Path;
 use anyhow::Result;
 
 use crate::config::RikuPaths;
-use crate::supervisor::health::ControlActions;
+use crate::deploy::containers::{AppName, CopyIndex, ServiceName};
+use crate::supervisor::health::{ControlActions, RestartOutcome};
 
 /// Routes control-plane requests to the same command functions `riku <cmd>`
 /// uses, so HTTP-triggered actions behave identically to the CLI.
@@ -43,5 +44,26 @@ impl ControlActions for CliControlActions {
     }
     fn pull_service(&self, paths: &RikuPaths, app: &str, service: &str) -> Result<()> {
         crate::deploy::service_update::pull_service(app, paths, service)
+    }
+    fn restart_copy(
+        &self,
+        paths: &RikuPaths,
+        app: &str,
+        service: &str,
+        copy: u32,
+    ) -> Result<RestartOutcome> {
+        let app_name = match AppName::try_from(app) {
+            Ok(name) => name,
+            Err(e) => return Err(e.context("cannot restart a copy")),
+        };
+        let service_name = match ServiceName::try_from(service) {
+            Ok(name) => name,
+            Err(e) => return Err(e.context(format!("cannot restart a copy of {app_name}"))),
+        };
+        let copy_index = match CopyIndex::new(copy) {
+            Some(idx) => idx,
+            None => return Err(anyhow::anyhow!("invalid copy number: {copy}")),
+        };
+        crate::deploy::containers::restart_copy(&app_name, paths, &service_name, copy_index)
     }
 }

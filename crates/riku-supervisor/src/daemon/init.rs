@@ -33,9 +33,14 @@ impl Supervisor {
         let control_token_file = riku_root.join("control.token");
         let router_file = riku_root.join(riku_config::router::ROUTER_FILE);
 
+        let process_manager = match ProcessManager::new() {
+            Ok(pm) => pm,
+            Err(e) => return Err(e.context("cannot start the process manager")),
+        };
+
         Ok(Supervisor {
             config_dir,
-            process_manager: ProcessManager::new()?,
+            process_manager,
             watched_configs: HashMap::new(),
             log_rotator: LogRotator::new(LogRotationConfig::default()),
             log_root,
@@ -58,6 +63,9 @@ impl Supervisor {
             pid_file_lock: None,
             metrics_broadcast_tx: None,
             actions: std::sync::Arc::new(crate::health::NoopControlActions),
+            container_watch: None,
+            last_container_watch: std::time::SystemTime::now(),
+            last_engine_attempt: None,
         })
     }
 

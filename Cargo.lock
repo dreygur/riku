@@ -1897,6 +1897,7 @@ dependencies = [
  "once_cell",
  "reqwest",
  "riku-config",
+ "riku-container",
  "riku-error",
  "riku-nginx",
  "riku-plugins",
