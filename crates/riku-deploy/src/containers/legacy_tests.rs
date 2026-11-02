@@ -1,9 +1,6 @@
-use std::collections::HashMap;
-use std::time::Duration;
-
 use crate::containers::legacy::is_legacy_worker;
-use crate::containers::legacy_workers::wait_pids_stopped;
 use crate::supervisor::config::create_worker_config;
+use std::collections::HashMap;
 
 fn make_config(app: &str, command: &str) -> crate::supervisor::config::WorkerConfig {
     create_worker_config(
@@ -65,25 +62,5 @@ fn recognises_only_plugin_commands() {
     assert!(
         !is_legacy_worker(&other_app_run),
         "command for another app must not be recognized as legacy for myapp"
-    );
-}
-
-#[test]
-fn stop_wait_times_out_on_live_worker() {
-    let mut child = match std::process::Command::new("sleep").arg("5").spawn() {
-        Ok(child) => child,
-        Err(e) => panic!("cannot spawn sleep process: {e}"),
-    };
-    let pid = child.id() as i32;
-    let deadline = Duration::from_millis(300);
-
-    let result = wait_pids_stopped("myapp", &[pid], deadline);
-
-    let _ = child.kill();
-    let _ = child.wait();
-
-    assert!(
-        result.is_err(),
-        "expected timeout waiting for live pid {pid}"
     );
 }

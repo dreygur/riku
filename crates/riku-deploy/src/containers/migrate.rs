@@ -5,11 +5,11 @@
 //! new routed copy is healthy. Named volumes are kept and reused under the
 //! names compose gave them (`<project>_<key>`); no path here removes a
 //! volume. When the new containers fail, they are removed and the old worker
-//! comes back. The project name was confirmed before this runs (see
+//! and its route come back. The project name was confirmed before this runs (see
 //! [`super::project_check`]), so the volumes mounted are this app's own.
 
 use std::collections::BTreeMap;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use anyhow::{anyhow, Result};
 use riku_container::compose::ComposeProject;
@@ -71,6 +71,10 @@ fn remove_new_copies(ctx: &ContainerApp) -> Result<()> {
     }
 }
 
+fn republish_old_route(ctx: &ContainerApp) -> Result<()> {
+    crate::router::configure(ctx.app.as_str(), &ctx.app_path, &ctx.env, ctx.paths, None)
+}
+
 /// Undo a failed migration. The old stack only comes back once riku's new
 /// copies are gone, since both would mount the same volumes; otherwise the
 /// workers stay parked and the next deploy picks the migration up again.
@@ -84,6 +88,11 @@ fn roll_back(ctx: &ContainerApp, legacy: &LegacyWorkers, failure: anyhow::Error)
     if let Err(e) = legacy.restore(ctx.paths) {
         return Err(failure.context(format!(
             "migration of '{app}' failed and the old workers could not be restored ({e:#})"
+        )));
+    }
+    if let Err(e) = republish_old_route(ctx) {
+        return Err(failure.context(format!(
+            "migration of '{app}' failed and the old route could not be republished ({e:#})"
         )));
     }
     Err(failure.context(format!(
@@ -103,10 +112,11 @@ pub(crate) fn migrate(
         &format!("-----> Migrating '{}' to riku containers; the app is down until its new copies are healthy", ctx.app),
         "yellow",
     );
+    let parked_at = SystemTime::now();
     if let Err(e) = legacy.park(ctx.paths) {
         return roll_back(ctx, &legacy, e);
     }
-    if let Err(e) = legacy.wait_stopped(ctx.paths) {
+    if let Err(e) = legacy.wait_stopped(ctx.paths, parked_at) {
         return roll_back(ctx, &legacy, e);
     }
     if let Err(e) = stop_old_stack(ctx) {
@@ -116,10 +126,7 @@ pub(crate) fn migrate(
         return roll_back(ctx, &legacy, e);
     }
     if let Err(e) = legacy.discard(ctx.paths) {
-        return Err(e.context(format!(
-            "'{}' runs as riku containers, but its old worker files remain",
-            ctx.app
-        )));
+        tracing::warn!(app = %ctx.app, "migrated, but the old worker files remain: {e:#}");
     }
     echo(
         &format!("-----> Migrated '{}'. Volumes are kept.", ctx.app),
@@ -131,3 +138,7 @@ pub(crate) fn migrate(
 #[cfg(test)]
 #[path = "migrate_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "migrate_fix_tests.rs"]
+mod fix_tests;
