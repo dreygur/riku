@@ -24,6 +24,8 @@ pub enum ImageUpdate {
     Replaced,
     /// The service has no running copies, so there was nothing to compare. Nothing was started.
     NotRunning,
+    /// The service is built from source, there is nothing to pull, nothing was done.
+    Built,
 }
 
 fn is_running(state: &ContainerState) -> bool {
@@ -33,15 +35,12 @@ fn is_running(state: &ContainerState) -> bool {
     )
 }
 
-fn watched_image(def: &ServiceDef) -> Result<&str> {
+fn watched_image(def: &ServiceDef) -> Result<Option<&str>> {
     if def.build.is_some() {
-        return Err(anyhow!(
-            "service '{}' is built from source, image watch only follows pulled images",
-            def.name
-        ));
+        return Ok(None);
     }
     match &def.image {
-        Some(image) => Ok(image.as_str()),
+        Some(image) => Ok(Some(image.as_str())),
         None => Err(anyhow!("service '{}' has no image", def.name)),
     }
 }
@@ -74,7 +73,8 @@ pub fn update_service(
         Err(e) => return Err(e),
     };
     let image = match watched_image(def) {
-        Ok(image) => image,
+        Ok(Some(image)) => image,
+        Ok(None) => return Ok(ImageUpdate::Built),
         Err(e) => return Err(e),
     };
     if let Err(e) = super::images::pull_image(&ctx.engine, &ctx.container_env, image) {

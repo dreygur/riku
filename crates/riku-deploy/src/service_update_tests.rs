@@ -1,6 +1,14 @@
 use crate::containers::mock_state::{deploy, mock_server, DB_AND_WEB};
 use crate::service_update::pull_service;
 
+const COMPOSE: &str = "
+services:
+  db:
+    image: postgres:16
+  web:
+    build: .
+";
+
 #[test]
 fn same_digest_does_nothing() {
     let tmp = tempfile::tempdir().unwrap();
@@ -84,5 +92,21 @@ fn new_digest_replaces_service() {
     assert!(
         !current_containers.contains(&"myapp-web-1".to_string()),
         "old web container must be gone: {current_containers:#?}"
+    );
+}
+
+#[test]
+fn built_service_is_skipped_without_pull() {
+    let tmp = tempfile::tempdir().unwrap();
+    let server = mock_server(tmp.path(), "myapp", COMPOSE, "");
+    deploy(&server).unwrap();
+
+    let start = server.calls().len();
+    pull_service("myapp", &server.paths, "web").unwrap();
+
+    let calls = &server.calls()[start..];
+    assert!(
+        !calls.iter().any(|c| c.starts_with("pull")),
+        "expected no call starting with pull, got calls: {calls:#?}"
     );
 }
