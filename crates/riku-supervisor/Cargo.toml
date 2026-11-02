@@ -13,6 +13,7 @@ riku-util = { path = "../riku-util" }
 riku-error = { path = "../riku-error" }
 riku-nginx = { path = "../riku-nginx" }
 riku-plugins = { path = "../riku-plugins" }
+riku-container = { path = "../riku-container" }
 anyhow = { workspace = true }
 once_cell = { workspace = true }
 serde = { workspace = true }

@@ -37,6 +37,7 @@ pub use deploy::{deploy_containers, CONTAINER_RUNTIME};
 pub use images::prepare_images;
 pub use ports::pick_free_port;
 pub use removal::destroy_containers;
+pub use riku_container::types::CopyIndex;
 pub use riku_container::types::ServiceName;
 pub use spec::copy_spec;
 pub use start::start_copy;

@@ -1,6 +1,8 @@
 use super::*;
 use crate::config::create_worker_config;
+use crate::RELOAD_COUNTER;
 use std::collections::HashMap;
+use std::sync::atomic::Ordering;
 use tempfile::TempDir;
 
 fn write_sleep_worker_config(config_dir: &std::path::Path, log_dir: &std::path::Path) {
@@ -100,6 +102,74 @@ fn test_sighup_triggers_reload_without_disturbing_unchanged_worker() {
         pid_before, pid_after,
         "an unchanged worker config must not be restarted by a SIGHUP reload \
              (same PID before and after)"
+    );
+
+    supervisor.process_manager.stop_all_processes().unwrap();
+}
+
+#[test]
+fn rewritten_toml_resets_restart_count() {
+    let tmp = TempDir::new().unwrap();
+    let riku_root = tmp.path().join(".riku");
+    let config_dir = riku_root.join("workers-enabled");
+    let log_dir = riku_root.join("logs");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::create_dir_all(&log_dir).unwrap();
+
+    let toml_path = config_dir.join("testapp-web-1.toml");
+    let config = create_worker_config(
+        "testapp",
+        "web",
+        "sleep 30",
+        1,
+        HashMap::new(),
+        "/tmp",
+        log_dir.join("web.1.log").to_str().unwrap(),
+    );
+    let toml_str = toml::to_string(&config).unwrap();
+    std::fs::write(&toml_path, &toml_str).unwrap();
+
+    // The deploy writes the TOML again after a restart was counted. The
+    // Create path is used because a Modify unloads first, and unloading an
+    // app without an app directory drops its stats row, which would reset
+    // the count on its own.
+    let mut supervisor = Supervisor::new(config_dir.clone()).unwrap();
+
+    let process_id = "testapp-web-1";
+    supervisor.process_manager.stats_mut().register_process(
+        process_id.to_string(),
+        "testapp".to_string(),
+        "web".to_string(),
+        1,
+    );
+    supervisor
+        .process_manager
+        .stats_mut()
+        .mark_restarting(process_id);
+    supervisor
+        .process_manager
+        .stats_mut()
+        .mark_restarting(process_id);
+
+    let event = notify::Event {
+        kind: notify::EventKind::Create(notify::event::CreateKind::File),
+        paths: vec![toml_path],
+        attrs: notify::event::EventAttributes::default(),
+    };
+    supervisor.handle_file_event(event).unwrap();
+
+    let count = supervisor
+        .process_manager
+        .stats()
+        .get_all_stats()
+        .into_iter()
+        .flat_map(|app| app.processes)
+        .find(|p| p.process_id == process_id)
+        .map(|p| p.restart_count)
+        .unwrap_or(u32::MAX);
+    assert_eq!(
+        count, 0,
+        "a worker TOML written again by a deploy must start its restart count at 0"
     );
 
     supervisor.process_manager.stop_all_processes().unwrap();

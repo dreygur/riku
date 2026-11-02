@@ -119,4 +119,27 @@ impl StatsManager {
         let json = serde_json::to_string_pretty(&app_stats)?;
         crate::util::write_atomic(path, json.as_bytes())
     }
+
+    /// Replace container rows with freshly polled process statistics.
+    pub fn replace_container_rows(&mut self, rows: Vec<ProcessStats>) {
+        self.stats.retain(|_, s| s.container.is_none());
+        for row in rows {
+            self.stats.insert(row.process_id.clone(), row);
+        }
+    }
+
+    /// Reset restart count and timestamp for a process.
+    ///
+    /// Restart counts mean restarts since the last deploy, so a rewritten
+    /// worker TOML starts at 0.
+    pub fn reset_restarts(&mut self, process_id: &str) {
+        if let Some(stats) = self.stats.get_mut(process_id) {
+            stats.restart_count = 0;
+            stats.last_restart_at = None;
+        }
+    }
 }
+
+#[cfg(test)]
+#[path = "manager_tests.rs"]
+mod tests;

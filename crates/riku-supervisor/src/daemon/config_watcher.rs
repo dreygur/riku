@@ -108,7 +108,14 @@ impl Supervisor {
         Ok(())
     }
 
+    fn reset_process_restarts(&mut self, filename: &str) {
+        let process_id = filename.strip_suffix(".toml").unwrap_or(filename);
+        self.process_manager.stats_mut().reset_restarts(process_id);
+    }
+
     /// Handle file system events (create, modify, remove config files).
+    // Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
+    #[allow(clippy::question_mark)]
     pub(super) fn handle_file_event(&mut self, event: Event) -> Result<()> {
         // Acquire lock to prevent race with manual reload (SIGHUP). See
         // `reload_all_configs` for why a poisoned lock is recovered here.
@@ -122,7 +129,10 @@ impl Supervisor {
                     match event.kind {
                         notify::EventKind::Create(_) => {
                             tracing::info!("New config file detected: {}", filename);
-                            self.load_config_file(&path, filename)?;
+                            self.reset_process_restarts(filename);
+                            if let Err(e) = self.load_config_file(&path, filename) {
+                                return Err(e);
+                            }
                             if let Ok(metadata) = fs::metadata(&path) {
                                 if let Ok(modified) = metadata.modified() {
                                     self.watched_configs.insert(filename.to_string(), modified);
@@ -135,7 +145,12 @@ impl Supervisor {
                                     if let Some(old_modified) = self.watched_configs.get(filename) {
                                         if new_modified > *old_modified {
                                             tracing::info!("Config file modified: {}", filename);
-                                            self.handle_modified_config(&path, filename)?;
+                                            self.reset_process_restarts(filename);
+                                            if let Err(e) =
+                                                self.handle_modified_config(&path, filename)
+                                            {
+                                                return Err(e);
+                                            }
                                             self.watched_configs
                                                 .insert(filename.to_string(), new_modified);
                                         }
@@ -146,7 +161,10 @@ impl Supervisor {
                                             "New config file detected via Modify: {}",
                                             filename
                                         );
-                                        self.load_config_file(&path, filename)?;
+                                        self.reset_process_restarts(filename);
+                                        if let Err(e) = self.load_config_file(&path, filename) {
+                                            return Err(e);
+                                        }
                                         self.watched_configs
                                             .insert(filename.to_string(), new_modified);
                                     }
@@ -155,7 +173,9 @@ impl Supervisor {
                         }
                         notify::EventKind::Remove(_) => {
                             tracing::info!("Config file removed: {}", filename);
-                            self.unload_config(filename)?;
+                            if let Err(e) = self.unload_config(filename) {
+                                return Err(e);
+                            }
                             self.watched_configs.remove(filename);
                         }
                         _ => {}

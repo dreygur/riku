@@ -39,6 +39,17 @@ pub trait ControlActions: Send + Sync {
     /// full redeploy. Used by the daemon's periodic image-watch check
     /// (see `daemon::image_watch`).
     fn pull_service(&self, paths: &RikuPaths, app: &str, service: &str) -> Result<()>;
+    /// Restart one dead container copy for the supervisor's watch.
+    ///
+    /// Returns [`RestartOutcome::Busy`] when a deploy holds the app lock.
+    /// Blocks through the health wait, so callers run it off the main loop.
+    fn restart_copy(
+        &self,
+        paths: &RikuPaths,
+        app: &str,
+        service: &str,
+        copy: u32,
+    ) -> Result<RestartOutcome>;
 }
 
 /// Default used when no implementation is injected (tests, or a supervisor
@@ -78,6 +89,9 @@ impl ControlActions for NoopControlActions {
         Err(Self::unavailable())
     }
     fn pull_service(&self, _: &RikuPaths, _: &str, _: &str) -> Result<()> {
+        Err(Self::unavailable())
+    }
+    fn restart_copy(&self, _: &RikuPaths, _: &str, _: &str, _: u32) -> Result<RestartOutcome> {
         Err(Self::unavailable())
     }
 }

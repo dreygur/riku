@@ -18,6 +18,7 @@ pub(crate) use riku_util as util;
 pub mod cgroups;
 pub mod config;
 pub use crate::util::cron;
+pub mod containers;
 pub mod daemon;
 pub mod health;
 pub mod log_rotation;
