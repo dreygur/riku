@@ -1,5 +1,10 @@
-use super::*;
+use std::collections::HashMap;
+use std::fs;
 use tempfile::TempDir;
+
+use super::supervisor_files::{load_app_stats, supervisor_uptime_seconds};
+use super::*;
+use crate::config::RikuPaths;
 
 fn make_paths(tmp: &TempDir) -> RikuPaths {
     let paths = RikuPaths::for_tests(tmp.path());
@@ -199,4 +204,172 @@ fn dump_state_reports_caddy_site() {
         serde_json::json!({ "router": "caddy", "site": site.display().to_string() }),
         "caddy route should carry the site path and no nginx fields"
     );
+}
+
+#[test]
+fn container_row_has_engine_fields() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let app = "edge";
+    fs::create_dir_all(paths.app_root.join(app)).unwrap();
+    fs::create_dir_all(paths.env_root.join(app)).unwrap();
+
+    let stats_json = format!(
+        r#"[{{"app":"{app}","total_processes":1,"running_processes":1,"healthy_processes":1,
+            "total_restarts":0,"total_memory_bytes":1024,"total_cpu_time_ms":0,
+            "processes":[{{"process_id":"{app}-web-1","app":"{app}","kind":"web","ordinal":1,
+            "pid":null,"status":"running","started_at":null,"last_health_check":null,
+            "health_check_status":"unknown","restart_count":2,"last_restart_at":null,
+            "cpu_time_ms":0,"memory_bytes":1024,"requests_total":0,"requests_per_second":0.0,
+            "container":{{"id":"c0ffee1234567890abcdef","image":"ghcr.io/org/repo:tag",
+            "state":"running","exit_code":null,"cpu_percent":4.5}}}}],
+            "last_updated":"2026-11-02T00:00:00Z"}}]"#,
+        app = app
+    );
+    fs::write(paths.riku_root.join("stats.json"), stats_json).unwrap();
+
+    let app_stats = load_app_stats(&paths);
+    let entry = build_app_entry(app, &paths, &app_stats);
+
+    assert_eq!(entry.workers.len(), 1);
+    let worker = &entry.workers[0];
+    assert_eq!(worker.unit, UnitKind::Container);
+    assert_eq!(worker.container_id, Some("c0ffee123456".to_string()));
+    assert_eq!(worker.image, Some("ghcr.io/org/repo:tag".to_string()));
+    assert_eq!(worker.state_detail, Some("running".to_string()));
+    assert_eq!(worker.cpu_percent, Some(4.5));
+
+    let val = serde_json::to_value(worker).unwrap();
+    assert_eq!(val["unit"], "container");
+    assert_eq!(val["container_id"], "c0ffee123456");
+    assert_eq!(val["image"], "ghcr.io/org/repo:tag");
+    assert_eq!(val["state_detail"], "running");
+    assert_eq!(val["cpu_percent"], 4.5);
+}
+
+#[test]
+fn container_row_exited_shows_exit_code() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let app = "edge";
+    fs::create_dir_all(paths.app_root.join(app)).unwrap();
+    fs::create_dir_all(paths.env_root.join(app)).unwrap();
+
+    let stats_json = format!(
+        r#"[{{"app":"{app}","total_processes":1,"running_processes":0,"healthy_processes":0,
+            "total_restarts":1,"total_memory_bytes":0,"total_cpu_time_ms":0,
+            "processes":[{{"process_id":"{app}-web-1","app":"{app}","kind":"web","ordinal":1,
+            "pid":null,"status":"crashed","started_at":null,"last_health_check":null,
+            "health_check_status":"unknown","restart_count":1,"last_restart_at":null,
+            "cpu_time_ms":0,"memory_bytes":0,"requests_total":0,"requests_per_second":0.0,
+            "container":{{"id":"deadbeef123456","image":"edge:latest",
+            "state":"exited","exit_code":137,"cpu_percent":0.0}}}}],
+            "last_updated":"2026-11-02T00:00:00Z"}}]"#,
+        app = app
+    );
+    fs::write(paths.riku_root.join("stats.json"), stats_json).unwrap();
+
+    let app_stats = load_app_stats(&paths);
+    let entry = build_app_entry(app, &paths, &app_stats);
+
+    assert_eq!(entry.workers.len(), 1);
+    let worker = &entry.workers[0];
+    assert_eq!(worker.state_detail, Some("exited 137".to_string()));
+}
+
+#[test]
+fn process_row_unchanged() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let app = "myapp";
+    fs::create_dir_all(paths.app_root.join(app)).unwrap();
+    fs::create_dir_all(paths.env_root.join(app)).unwrap();
+
+    let stats_json = format!(
+        r#"[{{"app":"{app}","total_processes":1,"running_processes":1,"healthy_processes":1,
+            "total_restarts":0,"total_memory_bytes":1000,"total_cpu_time_ms":200,
+            "processes":[{{"process_id":"{app}-web-1","app":"{app}","kind":"web","ordinal":1,
+            "pid":4242,"status":"running","started_at":null,"last_health_check":null,
+            "health_check_status":"unknown","restart_count":0,"last_restart_at":null,
+            "cpu_time_ms":200,"memory_bytes":1000,"requests_total":0,"requests_per_second":0.0}}],
+            "last_updated":"2026-11-02T00:00:00Z"}}]"#,
+        app = app
+    );
+    fs::write(paths.riku_root.join("stats.json"), stats_json).unwrap();
+
+    let app_stats = load_app_stats(&paths);
+    let entry = build_app_entry(app, &paths, &app_stats);
+
+    assert_eq!(entry.workers.len(), 1);
+    let worker = &entry.workers[0];
+    assert_eq!(worker.unit, UnitKind::Process);
+    assert_eq!(worker.container_id, None);
+    assert_eq!(worker.image, None);
+    assert_eq!(worker.state_detail, None);
+    assert_eq!(worker.cpu_percent, None);
+
+    let val = serde_json::to_value(worker).unwrap();
+    let expected = serde_json::json!({
+        "process_id": format!("{app}-web-1"),
+        "kind": "web",
+        "ordinal": 1,
+        "pid": 4242,
+        "status": "running",
+        "restart_count": 0,
+        "memory_bytes": 1000,
+        "cpu_time_ms": 200,
+        "unit": "process",
+        "container_id": null,
+        "image": null,
+        "state_detail": null,
+        "cpu_percent": null
+    });
+    assert_eq!(val, expected);
+}
+
+#[test]
+fn engine_missing_is_null() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    fs::write(&paths.container_engine_file, "missing-engine\n").unwrap();
+    let dump = build_state_dump(&paths).unwrap();
+    assert_eq!(dump.engine, None);
+
+    let val = serde_json::to_value(&dump).unwrap();
+    assert!(val.get("engine").is_some());
+    assert!(val["engine"].is_null());
+}
+
+#[test]
+fn engine_present_reports_info() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let engine_bin = tmp.path().join("mock-engine");
+    let script = "#!/bin/sh\n\
+        case \"$2\" in --help) exit 0;; esac\n\
+        case \"$1\" in version) echo '{\"Server\":{\"Platform\":{\"Name\":\"Podman\"},\"Version\":\"5.0.0\"}}'; exit 0;; esac\n\
+        exit 0\n";
+    fs::write(&engine_bin, script).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&engine_bin, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    fs::write(
+        &paths.container_engine_file,
+        engine_bin.display().to_string(),
+    )
+    .unwrap();
+
+    let dump = build_state_dump(&paths).unwrap();
+    assert_eq!(
+        dump.engine,
+        Some(EngineInfo {
+            name: "Podman".to_string(),
+            version: "5.0.0".to_string(),
+        })
+    );
+    let val = serde_json::to_value(&dump).unwrap();
+    assert_eq!(val["engine"]["name"], "Podman");
+    assert_eq!(val["engine"]["version"], "5.0.0");
 }

@@ -18,6 +18,7 @@ riku-caddy = { path = "../riku-caddy" }
 riku-plugins = { path = "../riku-plugins" }
 riku-supervisor = { path = "../riku-supervisor" }
 riku-deploy = { path = "../riku-deploy" }
+riku-container = { path = "../riku-container" }
 clap = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }

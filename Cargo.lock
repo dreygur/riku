@@ -1698,6 +1698,7 @@ dependencies = [
  "riku-args",
  "riku-caddy",
  "riku-config",
+ "riku-container",
  "riku-deploy",
  "riku-nginx",
  "riku-plugins",

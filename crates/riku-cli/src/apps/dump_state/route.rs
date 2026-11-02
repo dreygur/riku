@@ -8,9 +8,9 @@ use crate::config::RikuPaths;
 
 /// How an app is routed, tagged by router so each carries only its own
 /// fields.
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(tag = "router", rename_all = "snake_case")]
-pub(super) enum RouteState {
+pub enum RouteState {
     Nginx {
         config_exists: bool,
         enabled: bool,

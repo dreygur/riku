@@ -11,7 +11,7 @@ pub mod types;
 pub use manager::StatsManager;
 pub use repository::read_stats_file;
 pub use resources::get_process_resources;
-pub use types::{AppStats, HealthStatus, ProcessStatus};
+pub use types::{AppStats, ContainerFacts, HealthStatus, ProcessStats, ProcessStatus};
 
 #[cfg(test)]
 mod tests {
