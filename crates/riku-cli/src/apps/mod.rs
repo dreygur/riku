@@ -19,6 +19,7 @@ mod control_target;
 pub mod create;
 pub mod deploy;
 pub mod destroy;
+mod destroy_engine;
 pub mod dump_state;
 pub mod hot_reload;
 pub mod info;
@@ -37,7 +38,7 @@ pub use config::{
 pub use control::{cmd_restart, cmd_run, cmd_stop, cmd_supervisor, cmd_update};
 pub use create::cmd_apps_create;
 pub use deploy::cmd_deploy;
-pub use destroy::cmd_destroy;
+pub use destroy::{cmd_destroy, DestroyMode};
 pub use dump_state::{cmd_dump_state, state_json};
 pub use hot_reload::cmd_hot_reload;
 pub use info::cmd_apps_info;

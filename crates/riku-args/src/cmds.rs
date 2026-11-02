@@ -20,10 +20,16 @@ pub enum AppsCmd {
     },
 
     /// Destroy an application (preserves data/cache)
-    #[command(after_help = "Examples:\n  riku apps destroy myapp")]
+    #[command(
+        after_help = "Examples:\n  riku apps destroy myapp\n  riku apps destroy myapp --force"
+    )]
     Destroy {
         /// Application name
         name: String,
+        /// Remove riku's files and route even when the container engine is
+        /// unreachable. Running containers are left behind.
+        #[arg(long)]
+        force: bool,
     },
 }
 

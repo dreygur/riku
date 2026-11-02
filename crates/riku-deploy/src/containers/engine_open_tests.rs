@@ -24,3 +24,25 @@ fn open_engine_applies_server_settings() {
         "open_engine did not apply call_timeout from settings.toml"
     );
 }
+
+#[test]
+fn open_engine_fails_when_engine_binary_missing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    fs::create_dir_all(&paths.riku_root).unwrap();
+    let no_engine = tmp.path().join("no-such-engine");
+    fs::write(
+        &paths.container_engine_file,
+        no_engine.display().to_string(),
+    )
+    .unwrap();
+
+    let err = match open_engine(&paths) {
+        Ok(_) => panic!("open_engine succeeded with a missing binary"),
+        Err(err) => err,
+    };
+    assert!(
+        err.downcast_ref::<EngineUnreachable>().is_some(),
+        "expected EngineUnreachable, got: {err:#}"
+    );
+}

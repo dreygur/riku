@@ -113,7 +113,9 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
         Commands::Deploy { app, from } => {
             require_app(app).and_then(|app| apps::cmd_deploy(paths, &app, from.as_deref()))
         }
-        Commands::Destroy { app } => apps::cmd_destroy(paths, &app),
+        Commands::Destroy { app, force } => {
+            apps::cmd_destroy(paths, &app, apps::DestroyMode::from(force))
+        }
         Commands::Logs {
             app,
             process,

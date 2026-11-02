@@ -13,6 +13,22 @@ fn agent_accepts_the_scope_of_a_forced_command() {
     }
 }
 
+fn destroy_force(argv: &[&str]) -> bool {
+    match Cli::try_parse_from(argv) {
+        Ok(Cli {
+            command: Commands::Destroy { force, .. },
+            ..
+        }) => force,
+        other => panic!("expected the destroy command from {argv:?}, got {other:?}"),
+    }
+}
+
+#[test]
+fn destroy_force_is_off_unless_asked() {
+    assert!(destroy_force(&["riku", "destroy", "myapp", "--force"]));
+    assert!(!destroy_force(&["riku", "destroy", "myapp"]));
+}
+
 #[test]
 fn restart_refuses_hot_with_named_service() {
     let err = match Cli::try_parse_from(["riku", "restart", "myapp", "web", "--hot"]) {

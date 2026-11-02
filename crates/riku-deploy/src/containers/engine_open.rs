@@ -11,6 +11,26 @@ use riku_container::engine::{detect, Engine};
 
 use crate::config::RikuPaths;
 
+/// A container engine cannot be detected, executed, or does not answer probes.
+#[derive(Debug)]
+pub struct EngineUnreachable {
+    reason: String,
+}
+
+impl EngineUnreachable {
+    pub(crate) fn new(reason: String) -> Self {
+        Self { reason }
+    }
+}
+
+impl std::fmt::Display for EngineUnreachable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "container engine unreachable: {}", self.reason)
+    }
+}
+
+impl std::error::Error for EngineUnreachable {}
+
 /// Open the engine the server is set up to use.
 pub fn open_engine(paths: &RikuPaths) -> Result<Engine> {
     let settings = match riku_config::settings::load(paths) {
@@ -24,11 +44,11 @@ pub fn open_engine(paths: &RikuPaths) -> Result<Engine> {
     let search_path = std::env::var_os("PATH").unwrap_or_default();
     let binary = match detect(setting.as_deref(), &search_path) {
         Ok(binary) => binary,
-        Err(e) => return Err(e),
+        Err(e) => return Err(anyhow::Error::new(EngineUnreachable::new(e.to_string()))),
     };
     let engine = match Engine::open(binary) {
         Ok(engine) => engine,
-        Err(e) => return Err(e),
+        Err(e) => return Err(anyhow::Error::new(EngineUnreachable::new(e.to_string()))),
     };
     Ok(engine.with_settings(settings.engine))
 }
