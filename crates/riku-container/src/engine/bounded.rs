@@ -104,12 +104,16 @@ pub(super) struct Captured {
     pub status: ExitStatus,
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
+    /// True when stdout or stderr was still open when the capture deadline
+    /// passed, so the output may be incomplete.
+    pub truncated: bool,
 }
 
 /// Run `program` with `args` and capture its output, within `limit`.
 ///
 /// When it is still running after `limit` the process group is stopped and
-/// the error names the subcommand and the limit.
+/// the error names the subcommand and the limit. Output is marked truncated
+/// when a helper held a pipe open past the limit.
 #[allow(clippy::question_mark)]
 pub(super) fn capture(program: &Path, args: &[OsString], limit: Duration) -> Result<Captured> {
     let command = args
@@ -144,13 +148,15 @@ pub(super) fn capture(program: &Path, args: &[OsString], limit: Duration) -> Res
         }
         sleep(POLL_INTERVAL);
     }
-    if !is_finished(&stdout) || !is_finished(&stderr) {
+    let truncated = !is_finished(&stdout) || !is_finished(&stderr);
+    if truncated {
         let _ = killpg(pgid, Signal::SIGKILL);
     }
     Ok(Captured {
         status,
         stdout: joined(stdout),
         stderr: joined(stderr),
+        truncated,
     })
 }
 
@@ -158,7 +164,8 @@ impl Engine {
     /// Run the engine with `args`, returning stdout.
     ///
     /// A call still running after `limit` is stopped (see [`capture`]). A non
-    /// zero exit is an error carrying the subcommand and trimmed stderr.
+    /// zero exit is an error carrying the subcommand and trimmed stderr. Emits
+    /// a warning when a helper held the pipe open past the limit.
     #[allow(clippy::question_mark)]
     pub(super) fn output_within(&self, args: &[OsString], limit: Duration) -> Result<String> {
         let command = args
@@ -175,6 +182,12 @@ impl Engine {
                 String::from_utf8_lossy(&out.stderr).trim()
             ));
         }
+        if out.truncated {
+            tracing::warn!(
+                command = %command,
+                "container engine output may be incomplete: a helper held the pipe open past the limit"
+            );
+        }
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     }
 }
@@ -182,3 +195,7 @@ impl Engine {
 #[cfg(test)]
 #[path = "bounded_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "bounded_limits_tests.rs"]
+mod limits_tests;
