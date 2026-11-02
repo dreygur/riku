@@ -56,6 +56,7 @@ run)
 stop) echo '{"Status":"exited","ExitCode":0}' > "$S/$last.state";;
 wait) if [ -e "$S/release-exits" ]; then echo 1; else echo 0; fi;;
 rm) rm -f "$S/$last".*;;
+image) if [ -e "$S/image-id" ]; then cat "$S/image-id"; else echo sha256:x; fi;;
 network)
   case "$2" in
   ls) for f in "$S"/net-*; do [ -e "$f" ] || continue; basename "$f" | cut -c5-; done;;

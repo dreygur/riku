@@ -19,6 +19,7 @@ mod control;
 mod copy_restart;
 mod deploy;
 mod engine_open;
+mod image_update;
 mod images;
 mod legacy;
 mod legacy_workers;
@@ -26,7 +27,7 @@ mod migrate;
 #[cfg(test)]
 mod mock_legacy;
 #[cfg(test)]
-mod mock_state;
+pub(crate) mod mock_state;
 mod ports;
 mod project_check;
 mod release;
@@ -42,6 +43,7 @@ pub use control::{restart_service, runs_containers, scale_service, stop_service}
 pub use copy_restart::{restart_copy, RestartOutcome};
 pub use deploy::{deploy_containers, CONTAINER_RUNTIME};
 pub use engine_open::open_engine;
+pub use image_update::{update_service, ImageUpdate};
 pub use images::prepare_images;
 pub use legacy::{is_legacy_worker, legacy_apps};
 pub use ports::pick_free_port;
