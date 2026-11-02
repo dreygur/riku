@@ -4,7 +4,8 @@
 //! State lives in `<root>/state`: per container its name, labels and state
 //! JSON. Files a test creates there change how new containers behave:
 //! `exits-<service>` makes them exit at once with code 1, `slow-<service>`
-//! makes their health report `starting` for the first two inspects, and
+//! makes their health report `starting` for the first two inspects,
+//! `image-id` overrides the image id reported by image ls, and
 //! `release-exits` makes `wait` report exit code 1 instead of 0. The
 //! first inspect that reports a container running and healthy appends
 //! `ready <name>` to the argv log, so tests can order it against runs.
@@ -88,6 +89,7 @@ run)
 stop) echo '{"Status":"exited","ExitCode":0}' > "$S/$last.state";;
 wait) if [ -e "$S/release-exits" ]; then echo 1; else echo 0; fi;;
 rm) rm -f "$S/$last".*;;
+image) if [ -e "$S/image-id" ]; then cat "$S/image-id"; else echo sha256:x; fi;;
 network)
   case "$2" in
   ls) for f in "$S"/net-*; do [ -e "$f" ] || continue; basename "$f" | cut -c5-; done;;

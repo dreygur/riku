@@ -58,6 +58,18 @@ fn login_if_configured(engine: &Engine, env: &BTreeMap<String, String>) -> Resul
     }
 }
 
+/// Log in to the registry if configured and pull the image.
+pub(super) fn pull_image(
+    engine: &Engine,
+    env: &BTreeMap<String, String>,
+    image: &str,
+) -> Result<()> {
+    if let Err(e) = login_if_configured(engine, env) {
+        return Err(e);
+    }
+    engine.pull(image)
+}
+
 fn prepare_service(engine: &Engine, app: &AppName, service: &ServiceDef) -> Result<()> {
     if let Some(build) = &service.build {
         let spec = BuildSpec {

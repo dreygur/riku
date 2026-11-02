@@ -28,7 +28,10 @@ pub fn runs_containers(app: &str, paths: &RikuPaths) -> Result<bool> {
     }
 }
 
-fn locked<'a>(app: &'a AppName, paths: &'a RikuPaths) -> Result<(File, ContainerApp<'a>)> {
+pub(super) fn locked<'a>(
+    app: &'a AppName,
+    paths: &'a RikuPaths,
+) -> Result<(File, ContainerApp<'a>)> {
     let lock = match crate::lock::acquire(app.as_str(), paths) {
         Ok(lock) => lock,
         Err(e) => return Err(e),

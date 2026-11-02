@@ -18,9 +18,10 @@ mod context;
 mod control;
 mod copy_restart;
 mod deploy;
+mod image_update;
 mod images;
 #[cfg(test)]
-mod mock_state;
+pub(crate) mod mock_state;
 mod ports;
 mod release;
 mod removal;
@@ -34,6 +35,7 @@ pub use app::{is_container_app, load_project, open_engine, read_scaling, SINGLE_
 pub use control::{restart_service, runs_containers, scale_service, stop_service};
 pub use copy_restart::{restart_copy, RestartOutcome};
 pub use deploy::{deploy_containers, CONTAINER_RUNTIME};
+pub use image_update::{update_service, ImageUpdate};
 pub use images::prepare_images;
 pub use ports::pick_free_port;
 pub use removal::destroy_containers;
