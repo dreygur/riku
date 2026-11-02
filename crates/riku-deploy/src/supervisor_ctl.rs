@@ -19,7 +19,7 @@ fn read_supervisor_pid(paths: &RikuPaths) -> Option<i32> {
 }
 
 /// Return true if a process with the given PID exists (sending signal 0).
-fn pid_is_alive(pid: i32) -> bool {
+pub(crate) fn pid_is_alive(pid: i32) -> bool {
     nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None).is_ok()
 }
 

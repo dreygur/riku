@@ -1,4 +1,5 @@
-//! Deploying a container app: build or pull its images, then replace every
+//! Deploying a container app: build or pull its images, migrate it off the
+//! old container plugin's workers when it still has them, then replace every
 //! service's copies in start order.
 
 use std::collections::{BTreeMap, HashMap};
@@ -8,6 +9,9 @@ use riku_container::compose::{check_scale, ComposeProject, ServiceDef};
 
 use super::app::{read_scaling, wanted};
 use super::context::ContainerApp;
+use super::legacy_workers::LegacyWorkers;
+use super::migrate::migrate;
+use super::project_check::confirm_project_name;
 use super::release::run_release;
 use super::removal::remove_dropped;
 use super::rollout::roll_out;
@@ -43,15 +47,49 @@ fn build_images(ctx: &ContainerApp) -> Result<()> {
     run_release(ctx)
 }
 
+/// Copy counts checked, images ready and the release command run. The old
+/// stack of a migrating app still serves during all of this.
+fn prepare(ctx: &ContainerApp) -> Result<BTreeMap<String, u32>> {
+    let counts = match read_scaling(ctx.app.as_str(), ctx.paths) {
+        Ok(counts) => counts,
+        Err(e) => return Err(e),
+    };
+    if let Err(e) = check_counts(&ctx.project, &counts) {
+        return Err(e);
+    }
+    match build_images(ctx) {
+        Ok(()) => Ok(counts),
+        Err(e) => Err(e),
+    }
+}
+
+/// Replace every service's copies, remove containers of dropped services,
+/// and take an app with no routed port off the router.
+pub(crate) fn roll_out_app(ctx: &ContainerApp, counts: &BTreeMap<String, u32>) -> Result<()> {
+    let services: Vec<&ServiceDef> = ctx.project.services.iter().collect();
+    if let Err(e) = roll_out(ctx, counts, &services) {
+        return Err(e);
+    }
+    if let Err(e) = remove_dropped(&ctx.engine, ctx.app.as_str(), &ctx.project) {
+        return Err(e);
+    }
+    match ctx.routed {
+        Some(_) => Ok(()),
+        None => crate::router::remove(ctx.app.as_str(), ctx.paths),
+    }
+}
+
 /// Deploy `app` as riku managed containers.
 ///
-/// Every service's copy count comes from `SCALING` (1 when absent) and is
-/// checked before anything is built. Services are then replaced in start
-/// order, one copy at a time; a service with `service_healthy` dependencies
-/// starts only once their copies are healthy. A failure stops the deploy and
-/// leaves the copies not yet replaced serving. Containers of services the
-/// compose file no longer has are removed, and an app with no routed port
-/// is taken off the router.
+/// A project name the compose file or app env declares is checked against
+/// the other apps and existing volumes first. Every service's copy count
+/// comes from `SCALING` (1 when absent) and is checked before anything is
+/// built. An app still run by the old container plugin is then migrated (see
+/// [`migrate`]). Services are replaced in start order, one copy at a time; a
+/// service with `service_healthy` dependencies starts only once their copies
+/// are healthy. A failure stops the deploy and leaves the copies not yet
+/// replaced serving. Containers of services the compose file no longer has
+/// are removed, and an app with no routed port is taken off the router.
 ///
 /// Blocks for as long as builds and health waits take, so it must not run on
 /// a tokio runtime thread.
@@ -60,30 +98,25 @@ pub fn deploy_containers(
     paths: &RikuPaths,
     env: &HashMap<String, String>,
 ) -> Result<()> {
-    let ctx = match ContainerApp::load(app, paths, env.clone()) {
+    let mut ctx = match ContainerApp::load(app, paths, env.clone()) {
         Ok(ctx) => ctx,
         Err(e) => return Err(e),
     };
-    let counts = match read_scaling(app.as_str(), paths) {
+    if let Err(e) = confirm_project_name(&mut ctx.project, app, paths, &ctx.engine) {
+        return Err(e);
+    }
+    let counts = match prepare(&ctx) {
         Ok(counts) => counts,
         Err(e) => return Err(e),
     };
-    if let Err(e) = check_counts(&ctx.project, &counts) {
-        return Err(e);
-    }
-    if let Err(e) = build_images(&ctx) {
-        return Err(e);
-    }
-    let services: Vec<&ServiceDef> = ctx.project.services.iter().collect();
-    if let Err(e) = roll_out(&ctx, &counts, &services) {
-        return Err(e);
-    }
-    if let Err(e) = remove_dropped(&ctx.engine, app.as_str(), &ctx.project) {
-        return Err(e);
-    }
-    match ctx.routed {
-        Some(_) => Ok(()),
-        None => crate::router::remove(app.as_str(), paths),
+    let legacy = match LegacyWorkers::load(app.as_str(), paths) {
+        Ok(legacy) => legacy,
+        Err(e) => return Err(e),
+    };
+    if legacy.is_empty() {
+        roll_out_app(&ctx, &counts)
+    } else {
+        migrate(&ctx, legacy, &counts)
     }
 }
 

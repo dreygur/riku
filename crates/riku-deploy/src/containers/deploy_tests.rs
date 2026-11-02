@@ -112,3 +112,31 @@ fn failing_release_aborts_before_rollout() {
     );
     assert_eq!(server.containers(), ["myapp-db-1", "myapp-web-1"]);
 }
+
+#[test]
+fn broken_settings_fail_the_deploy() {
+    let tmp = tempfile::tempdir().unwrap();
+    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
+    std::fs::write(
+        &server.paths.settings_file,
+        "[engine]\ncall_timeout = \"soon\"\n",
+    )
+    .unwrap();
+
+    let err = deploy(&server).unwrap_err();
+
+    let message = format!("{err:#}");
+    assert!(
+        message.contains("settings.toml"),
+        "error does not name settings.toml: {message}"
+    );
+    assert!(
+        message.contains("call_timeout"),
+        "error does not name call_timeout: {message}"
+    );
+    assert!(
+        !server.calls().iter().any(|l| l.starts_with("run")),
+        "an engine call line started with run: {:?}",
+        server.calls()
+    );
+}

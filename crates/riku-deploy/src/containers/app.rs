@@ -1,13 +1,11 @@
 //! Telling a container app apart and loading what its deploy needs: the
-//! engine, the compose project and the wanted copy counts.
+//! compose project and the wanted copy counts.
 //!
 //! # Security model
 //!
 //! The compose file, `COMPOSE_FILE` and `SCALING` are app owner input. The
 //! compose parser refuses paths outside the checkout and unknown keys; copy
-//! counts that are not numbers are refused here. The engine program comes
-//! from the operator's `CONTAINER_ENGINE` setting or a fixed list searched on
-//! `PATH`, never from app input.
+//! counts that are not numbers are refused here.
 
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
@@ -17,7 +15,6 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Result};
 use riku_container::compose::ComposeProject;
 use riku_container::compose::{find_compose_file, read_project, single_image_project};
-use riku_container::engine::{detect, Engine};
 use riku_container::types::{HostIp, PortBinding, Protocol, ServiceName};
 
 use crate::config::RikuPaths;
@@ -59,20 +56,6 @@ pub fn is_container_app(app_path: &Path, env: &HashMap<String, String>) -> Resul
         Ok(None) => Ok(image_file(app_path).is_some()),
         Err(e) => Err(e),
     }
-}
-
-/// Open the engine the server is set up to use.
-pub fn open_engine(paths: &RikuPaths) -> Result<Engine> {
-    let setting = match riku_config::container_engine::load(paths) {
-        Ok(setting) => setting,
-        Err(e) => return Err(e),
-    };
-    let search_path = std::env::var_os("PATH").unwrap_or_default();
-    let binary = match detect(setting.as_deref(), &search_path) {
-        Ok(binary) => binary,
-        Err(e) => return Err(e),
-    };
-    Engine::open(binary)
 }
 
 /// The app env as the compose reader and the run spec want it.
