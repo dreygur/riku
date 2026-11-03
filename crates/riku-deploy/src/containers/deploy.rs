@@ -14,6 +14,7 @@ use super::migrate::migrate;
 use super::project_check::confirm_project_name;
 use super::release::run_release;
 use super::removal::remove_dropped;
+use super::retire::retire_procfile_workers;
 use super::rollout::roll_out;
 use super::{prepare_images, AppName};
 use crate::config::RikuPaths;
@@ -89,7 +90,9 @@ pub(crate) fn roll_out_app(ctx: &ContainerApp, counts: &BTreeMap<String, u32>) -
 /// service with `service_healthy` dependencies starts only once their copies
 /// are healthy. A failure stops the deploy and leaves the copies not yet
 /// replaced serving. Containers of services the compose file no longer has
-/// are removed, and an app with no routed port is taken off the router.
+/// are removed, and an app with no routed port is taken off the router. An app
+/// that ran as a Procfile app has its old workers stopped and deleted once the
+/// containers are healthy and routed (see [`super::retire`]).
 ///
 /// Blocks for as long as builds and health waits take, so it must not run on
 /// a tokio runtime thread.
@@ -109,12 +112,19 @@ pub fn deploy_containers(
         Ok(counts) => counts,
         Err(e) => return Err(e),
     };
+    let stale = match LegacyWorkers::load_procfile(app.as_str(), paths) {
+        Ok(stale) => stale,
+        Err(e) => return Err(e),
+    };
     let legacy = match LegacyWorkers::load(app.as_str(), paths) {
         Ok(legacy) => legacy,
         Err(e) => return Err(e),
     };
     if legacy.is_empty() {
-        roll_out_app(&ctx, &counts)
+        match roll_out_app(&ctx, &counts) {
+            Ok(()) => retire_procfile_workers(&ctx, stale),
+            Err(e) => Err(e),
+        }
     } else {
         migrate(&ctx, legacy, &counts)
     }

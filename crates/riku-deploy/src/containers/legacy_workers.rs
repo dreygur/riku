@@ -16,6 +16,7 @@ use anyhow::{anyhow, Result};
 
 use super::legacy::{enabled_entries, is_legacy_worker, read_worker};
 use crate::config::RikuPaths;
+use crate::supervisor::config::WorkerConfig;
 use crate::supervisor::stats::{read_stats_file, ProcessStats, ProcessStatus};
 use crate::supervisor_ctl::{notify_supervisor_reload, pid_is_alive, supervisor_is_running};
 
@@ -68,6 +69,19 @@ pub(crate) struct LegacyWorkers {
 impl LegacyWorkers {
     /// Find the app's enabled or already parked legacy workers.
     pub(crate) fn load(app: &str, paths: &RikuPaths) -> Result<LegacyWorkers> {
+        Self::load_matching(app, paths, is_legacy_worker)
+    }
+
+    /// Find every enabled or parked worker of the app, whatever its command.
+    pub(crate) fn load_procfile(app: &str, paths: &RikuPaths) -> Result<LegacyWorkers> {
+        Self::load_matching(app, paths, |_| true)
+    }
+
+    fn load_matching(
+        app: &str,
+        paths: &RikuPaths,
+        keep: fn(&WorkerConfig) -> bool,
+    ) -> Result<LegacyWorkers> {
         let entries = match enabled_entries(paths) {
             Ok(entries) => entries,
             Err(e) => return Err(e),
@@ -93,7 +107,7 @@ impl LegacyWorkers {
                 Ok(config) => config,
                 Err(e) => return Err(e),
             };
-            if config.worker.app == app && is_legacy_worker(&config) {
+            if config.worker.app == app && keep(&config) {
                 let grace = Duration::from_secs(config.options.grace_period);
                 workers.longest_grace = workers.longest_grace.max(grace);
                 workers.names.push(name.to_string());

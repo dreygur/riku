@@ -31,9 +31,7 @@ fn write_container_state(server: &MockServer, id: &str, name: &str, labels: &str
     .unwrap();
 }
 
-/// Set up a legacy container stack for myapp on the mock server.
-#[must_use]
-pub fn legacy_stack(server: &MockServer) -> TcpListener {
+fn write_worker_toml(server: &MockServer, command: &str) -> TcpListener {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     let app_path = server.paths.app_root.join("myapp");
@@ -41,7 +39,7 @@ pub fn legacy_stack(server: &MockServer) -> TcpListener {
     let config = create_worker_config(
         "myapp",
         "web",
-        LEGACY_COMPOSE_COMMAND,
+        command,
         1,
         HashMap::from([("PORT".to_string(), port.to_string())]),
         &app_path.to_string_lossy(),
@@ -56,6 +54,19 @@ pub fn legacy_stack(server: &MockServer) -> TcpListener {
     fs::write(&available, toml_str).unwrap();
     let _ = fs::remove_file(&enabled);
     symlink(&available, &enabled).unwrap();
+    listener
+}
+
+/// Set up an enabled Procfile web worker for myapp on the mock server.
+#[must_use]
+pub fn procfile_workers(server: &MockServer) -> TcpListener {
+    write_worker_toml(server, "python app.py")
+}
+
+/// Set up a legacy container stack for myapp on the mock server.
+#[must_use]
+pub fn legacy_stack(server: &MockServer) -> TcpListener {
+    let listener = write_worker_toml(server, LEGACY_COMPOSE_COMMAND);
 
     let db_id = legacy_id(1);
     let web_id = legacy_id(2);

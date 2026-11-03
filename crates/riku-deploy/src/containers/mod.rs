@@ -32,6 +32,10 @@ mod ports;
 mod project_check;
 mod release;
 mod removal;
+mod retire;
+#[cfg(test)]
+#[path = "retire_tests.rs"]
+mod retire_tests;
 mod rollback_wait;
 mod rollout;
 mod routes;

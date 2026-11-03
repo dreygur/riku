@@ -27,6 +27,21 @@ fn test_write_live_env_creates_file() -> Result<()> {
 }
 
 #[test]
+fn live_env_is_written_for_an_app_that_never_had_config_set() -> Result<()> {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    assert!(
+        !paths.env_root.join("myapp").exists(),
+        "fixture must start without an env dir"
+    );
+
+    write_live_env("myapp", &paths, &HashMap::new())?;
+
+    assert!(paths.env_root.join("myapp").join("LIVE_ENV").exists());
+    Ok(())
+}
+
+#[test]
 fn test_write_live_env_contains_app_name() -> Result<()> {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
