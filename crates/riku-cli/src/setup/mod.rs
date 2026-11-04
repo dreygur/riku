@@ -20,5 +20,6 @@ pub mod ssh;
 pub mod system_service;
 pub mod systemd;
 pub mod user_service;
+mod var_root;
 
 pub use init::{cmd_init, InitOptions};

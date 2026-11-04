@@ -49,7 +49,9 @@ To add directives to the generated `server` block, set `RIKU_NGINX_INCLUDE_FILE`
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `RIKU_NGINX_STATIC_PATHS` | URL path to directory mappings | (none) |
+| `RIKU_NGINX_STATIC` | Serve the app as a static site, no backend | (none) |
+| `RIKU_NGINX_DOCUMENT_ROOT` | Static site directory, relative to the app checkout | `public` |
+| `RIKU_NGINX_STATIC_PATHS` | URL path to directory mappings, directories relative to the app checkout | (none) |
 | `RIKU_NGINX_ALLOW_GIT_FOLDERS` | Allow access to `.git` | `false` |
 | `RIKU_NGINX_CATCH_ALL` | SPA catch-all file | (none) |
 
@@ -61,6 +63,27 @@ RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static
 # SPA routing
 RIKU_NGINX_CATCH_ALL=index.html
 ```
+
+The nginx worker cannot read the deploy user's home, so nginx never serves
+from the checkout. Each deploy copies the document root (with
+`RIKU_NGINX_STATIC`) and every `RIKU_NGINX_STATIC_PATHS` directory into
+`/var/lib/riku/static/<app>/`:
+
+```
+/var/lib/riku/static/<app>/root       the document root
+/var/lib/riku/static/<app>/paths/0    the first RIKU_NGINX_STATIC_PATHS entry
+/var/lib/riku/static/<app>/paths/1    the second, and so on
+```
+
+The new copy is staged next to the old one and swapped in with one rename,
+so a request never sees a half copied tree. `riku destroy` removes it.
+Directories are `2750` and files `0640`, group `riku-sockets` (the nginx
+worker's group), so no other account can read them.
+
+Every source, and every symlink inside it, must resolve inside the app
+checkout. A path or link that leads anywhere else fails the deploy. A
+missing source is published as an empty directory. `sudo riku init` creates
+`/var/lib/riku/static`; without it a static deploy fails and says so.
 
 ### Caching
 
@@ -142,12 +165,15 @@ server {
 When `RIKU_NGINX_STATIC_PATHS=/static:public`:
 
 ```nginx
-location /static/ {
-    alias /home/riku/.riku/apps/myapp/public/;
+location /static {
+    alias /var/lib/riku/static/myapp/paths/0;
     expires 30d;
     add_header Cache-Control "public, immutable";
 }
 ```
+
+With `RIKU_NGINX_STATIC` the server's `root` is
+`/var/lib/riku/static/myapp/root`.
 
 ### SPA Catch-All
 
@@ -239,6 +265,16 @@ riku config set myapp RIKU_NGINX_INCLUDE_FILE=nginx.include
 
 Riku supports ACME (Let's Encrypt) for automatic SSL certificates.
 
+Every generated server answers `/.well-known/acme-challenge` from the
+webroot `/var/lib/riku/acme`, outside the deploy home. `sudo riku init`
+creates it owned by the deploy user, group `riku-sockets`, mode `2750`.
+When `~/.acme.sh/acme.sh` (or `$RIKU_ACME_ROOT/acme.sh`) exists, a deploy
+with `RIKU_HTTPS_ONLY` and `RIKU_DOMAINS` runs it with that webroot and
+umask `027`, so the challenge files are readable by nginx's group and no
+one else.
+
+To issue a certificate by hand:
+
 1. **Set domain:**
    ```bash
    riku config set myapp RIKU_DOMAINS=example.com
@@ -252,7 +288,8 @@ Riku supports ACME (Let's Encrypt) for automatic SSL certificates.
 3. **Obtain certificate:**
    ```bash
    # Using acme.sh
-   acme.sh --issue -d example.com --webroot /home/riku/.riku/acme/www
+   umask 027
+   acme.sh --issue -d example.com --webroot /var/lib/riku/acme
    ```
 
 4. **Install certificate:**
@@ -320,8 +357,8 @@ riku restart myapp
 Static files not found or wrong path.
 
 ```bash
-# Check static paths
-ls -la ~/.riku/apps/myapp/public/
+# Check the published copy nginx serves
+ls -la /var/lib/riku/static/myapp/
 
 # Verify RIKU_NGINX_STATIC_PATHS
 riku config get myapp RIKU_NGINX_STATIC_PATHS

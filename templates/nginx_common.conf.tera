@@ -21,17 +21,14 @@ location ~ /\.git {
 }
 {% endif %}
 
-{% if RIKU_NGINX_STATIC_PATHS %}
-# Static path mappings
-{% for mapping in RIKU_NGINX_STATIC_PATHS | split(pat=",") %}
-{% set parts = mapping | split(pat=":") %}
-{% if parts | length == 2 %}
-location {{ parts | first | trim }} {
-  alias {{ parts | last | trim }};
+{% if RIKU_STATIC_ALIASES | length > 0 %}
+# Static path mappings, published outside the deploy home
+{% for static in RIKU_STATIC_ALIASES %}
+location {{ static.location }} {
+  alias {{ static.alias }};
   expires 30d;
   add_header Cache-Control "public, immutable";
 }
-{% endif %}
 {% endfor %}
 {% endif %}
 

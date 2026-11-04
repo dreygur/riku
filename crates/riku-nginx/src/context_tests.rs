@@ -23,10 +23,9 @@ fn test_address_defaults_applied_when_env_empty() {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
     let env = HashMap::new();
-    let app_path = tmp.path().join("app");
 
     let mut ctx = tera::Context::new();
-    insert_address_context(&mut ctx, &env, &paths, "myapp", &app_path);
+    insert_address_context(&mut ctx, &env, &paths, "myapp");
 
     assert_eq!(ctx_str(&ctx, "RIKU_BIND_ADDRESS"), "127.0.0.1");
     assert_eq!(ctx_str(&ctx, "RIKU_NGINX_IPV4_ADDRESS"), "0.0.0.0");
@@ -46,7 +45,7 @@ fn test_address_custom_bind_address_used() {
     env.insert("RIKU_BIND_ADDRESS".to_string(), "10.0.0.5".to_string());
 
     let mut ctx = tera::Context::new();
-    insert_address_context(&mut ctx, &env, &paths, "app", &tmp.path().join("app"));
+    insert_address_context(&mut ctx, &env, &paths, "app");
 
     assert_eq!(ctx_str(&ctx, "RIKU_BIND_ADDRESS"), "10.0.0.5");
 }
@@ -59,7 +58,7 @@ fn test_address_disable_ipv6_clears_ipv6_address() {
     env.insert("RIKU_DISABLE_IPV6".to_string(), "true".to_string());
 
     let mut ctx = tera::Context::new();
-    insert_address_context(&mut ctx, &env, &paths, "app", &tmp.path().join("app"));
+    insert_address_context(&mut ctx, &env, &paths, "app");
 
     assert_eq!(ctx_str(&ctx, "RIKU_NGINX_IPV6_ADDRESS"), "");
 }
@@ -72,7 +71,7 @@ fn test_address_disable_ipv6_with_one_value() {
     env.insert("RIKU_DISABLE_IPV6".to_string(), "1".to_string());
 
     let mut ctx = tera::Context::new();
-    insert_address_context(&mut ctx, &env, &paths, "app", &tmp.path().join("app"));
+    insert_address_context(&mut ctx, &env, &paths, "app");
 
     assert_eq!(ctx_str(&ctx, "RIKU_NGINX_IPV6_ADDRESS"), "");
 }

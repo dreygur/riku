@@ -37,6 +37,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `caddy` out of the deploy group (`sudo gpasswd -d caddy riku`), run
   `chmod g-x ~ ~/.riku` as the deploy user, restart Caddy and redeploy each
   app.
+- nginx no longer serves files from the deploy home. The ACME http-01
+  webroot moved from `~/.riku/acme` to `/var/lib/riku/acme`, and acme.sh
+  now runs with umask `027` so its challenge files are group readable. A
+  deploy copies the `RIKU_NGINX_STATIC` document root and each
+  `RIKU_NGINX_STATIC_PATHS` source into `/var/lib/riku/static/<app>`
+  (swapped in through one rename, removed on destroy), and nginx's `root`
+  and `alias` point there. Both directories are owned by the deploy user,
+  group `riku-sockets`, mode `2750`, under a root-owned `0755`
+  `/var/lib/riku`, and are in the unit's `ReadWritePaths`. Sources must
+  resolve inside the app checkout, symlinks included, or the deploy fails;
+  an absolute `RIKU_NGINX_DOCUMENT_ROOT` outside it is refused. Run
+  `sudo riku init` and redeploy static apps. `~/.riku/acme` now only holds
+  the per app links to acme.sh certificate directories. In `RikuPaths`,
+  `acme_root` is now the webroot, the acme.sh install is `acme_sh_root`, and
+  `acme_www` became `acme_cert_links`.
 - Worker configs, `ENV` and `LIVE_ENV` files are written `0600`, app env
   directories `0700`, and an app's TLS key `0600`. A deploy rewrites the
   worker configs and `LIVE_ENV` and tightens the env directory; an existing

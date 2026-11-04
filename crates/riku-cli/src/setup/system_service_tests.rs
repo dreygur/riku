@@ -20,10 +20,13 @@ fn units_follow_router() {
 }
 
 #[test]
-fn sockets_and_caddy_sites_stay_writable() {
+fn directories_outside_the_home_stay_writable() {
     let unit = render_system_unit(&Router::Nginx, "deploy", "/home/deploy", "/usr/bin/riku");
     assert!(
-        unit.contains("ReadWritePaths=/home/deploy/.riku -/run/riku-sockets -/etc/riku/caddy\n"),
-        "ProtectSystem=strict would leave the socket or Caddy site directory read only: {unit}"
+        unit.contains(
+            "ReadWritePaths=/home/deploy/.riku -/run/riku-sockets -/etc/riku/caddy \
+             -/var/lib/riku/acme -/var/lib/riku/static\n"
+        ),
+        "ProtectSystem=strict would leave a directory riku writes outside the home read only: {unit}"
     );
 }

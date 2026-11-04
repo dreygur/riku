@@ -26,6 +26,25 @@ fn removes_the_repo_link_but_not_the_repo_it_points_to() {
 }
 
 #[test]
+fn destroy_removes_the_published_static_files() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    crate::nginx::write_include_file(&paths).unwrap();
+    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+    let copy = paths.static_root.join("shop~1");
+    fs::create_dir_all(copy.join("root")).unwrap();
+    std::os::unix::fs::symlink("shop~1", paths.static_root.join("shop")).unwrap();
+
+    cmd_destroy(&paths, "shop", DestroyMode::Safe).unwrap();
+
+    let left: Vec<_> = fs::read_dir(&paths.static_root).unwrap().collect();
+    assert!(
+        left.is_empty(),
+        "published files survived destroy: {left:?}"
+    );
+}
+
+#[test]
 fn destroy_deletes_the_app_dir_last_so_a_failure_can_be_retried() {
     let tmp = tempfile::tempdir().unwrap();
     let mut paths = RikuPaths::for_tests(tmp.path());

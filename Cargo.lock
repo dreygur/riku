@@ -1927,6 +1927,7 @@ name = "riku-nginx"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "libc",
  "reqwest",
  "riku-config",
  "riku-http",

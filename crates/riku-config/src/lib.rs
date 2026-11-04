@@ -64,6 +64,18 @@ pub const SOCKET_GROUP: &str = "riku-sockets";
 /// creates it owned by the deploy user, group `caddy`, mode `2750`.
 pub const CADDY_SITE_ROOT: &str = "/etc/riku/caddy";
 
+/// Root-owned `0755` parent of the directories nginx serves files from.
+pub const VAR_ROOT: &str = "/var/lib/riku";
+
+/// The ACME http-01 webroot on a real host. Root init creates it owned by
+/// the deploy user, group [`SOCKET_GROUP`], mode `2750`, so the nginx worker
+/// reads challenge files without any access to the deploy home.
+pub const ACME_WEBROOT: &str = "/var/lib/riku/acme";
+
+/// Where deploys publish each app's static files for nginx, one directory
+/// per app. Same owner, group and mode as [`ACME_WEBROOT`].
+pub const STATIC_ROOT: &str = "/var/lib/riku/static";
+
 /// All resolved directory paths used by riku.
 #[derive(Debug, Clone)]
 pub struct RikuPaths {
@@ -93,8 +105,18 @@ pub struct RikuPaths {
     pub workers_root: PathBuf,
     pub workers_available: PathBuf,
     pub workers_enabled: PathBuf,
+    /// The acme.sh install, `$RIKU_ACME_ROOT` or `~/.acme.sh`.
+    pub acme_sh_root: PathBuf,
+    /// Per app links to the acme.sh domain directory holding the app's
+    /// certificate, so destroy can find it. Inside the deploy home.
+    pub acme_cert_links: PathBuf,
+    /// The ACME http-01 webroot nginx serves challenges from,
+    /// [`ACME_WEBROOT`] outside tests, not taken from the environment for the
+    /// same reason as `socket_root`.
     pub acme_root: PathBuf,
-    pub acme_www: PathBuf,
+    /// Published static files, `<static_root>/<app>`. [`STATIC_ROOT`]
+    /// outside tests, not taken from the environment either.
+    pub static_root: PathBuf,
     /// Where older riku versions symlinked each app config
     /// (`/etc/nginx/sites-enabled`). riku no longer writes here: a root
     /// `riku init` removes the links that point into `nginx_root` and
@@ -130,7 +152,7 @@ impl RikuPaths {
     /// [`Self::from_dirs`] with the system nginx paths given.
     pub fn with_nginx_host(riku_root: PathBuf, home: &Path, nginx_host: NginxHostPaths) -> Self {
         let riku_script = env::current_exe().unwrap_or_else(|_| PathBuf::from("riku"));
-        let acme_root = env::var("RIKU_ACME_ROOT")
+        let acme_sh_root = env::var("RIKU_ACME_ROOT")
             .map(PathBuf::from)
             .unwrap_or_else(|_| home.join(".acme.sh"));
 
@@ -151,10 +173,12 @@ impl RikuPaths {
             workers_root: riku_root.join("workers"),
             workers_available: riku_root.join("workers-available"),
             workers_enabled: riku_root.join("workers-enabled"),
-            acme_www: riku_root.join("acme"),
+            acme_cert_links: riku_root.join("acme"),
+            acme_root: PathBuf::from(ACME_WEBROOT),
+            static_root: PathBuf::from(STATIC_ROOT),
             riku_root,
             riku_script,
-            acme_root,
+            acme_sh_root,
             nginx_sites_enabled: nginx_host.sites_enabled,
             nginx_include_file: nginx_host.include_file,
             reload_programs: ReloadPrograms::default(),
@@ -183,8 +207,9 @@ impl RikuPaths {
     ///
     /// The system nginx paths are placed inside `root` whatever the
     /// environment says, so a test never touches the machine's real nginx,
-    /// and so are the socket directory, `root/sockets`, and the Caddy site
-    /// directory, `root/caddy-sites`. Tests create the socket directory.
+    /// and so are the socket directory, `root/sockets`, the Caddy site
+    /// directory, `root/caddy-sites`, the ACME webroot, `root/acme-webroot`,
+    /// and the static root, `root/static`. Tests create the ones they use.
     pub fn for_tests(root: &Path) -> Self {
         let nginx_host = NginxHostPaths {
             sites_enabled: root.join("nginx-sites-enabled"),
@@ -193,6 +218,8 @@ impl RikuPaths {
         let mut paths = Self::with_nginx_host(root.join(".riku"), root, nginx_host);
         paths.socket_root = root.join("sockets");
         paths.caddy_root = root.join("caddy-sites");
+        paths.acme_root = root.join("acme-webroot");
+        paths.static_root = root.join("static");
         paths
     }
 }

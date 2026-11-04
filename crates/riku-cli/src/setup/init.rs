@@ -32,7 +32,7 @@ fn create_directory_structure(paths: &RikuPaths, router: &Router) -> Result<()> 
         ("workers-available", &paths.workers_available),
         ("workers-enabled", &paths.workers_enabled),
         ("logs", &paths.log_root),
-        ("acme", &paths.acme_www),
+        ("acme", &paths.acme_cert_links),
         ("plugins", &paths.plugin_root),
     ];
     // Caddy's site directory sits outside the home; root init creates it.

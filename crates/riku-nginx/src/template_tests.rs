@@ -359,6 +359,43 @@ fn a_snippet_directive_replaces_the_templates_own_line() {
 }
 
 #[test]
+fn static_files_and_acme_challenges_are_served_from_outside_the_home() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
+    let published = paths.static_root.join("myapp");
+    let render_env = |pairs: &[(&str, &str)]| {
+        let env: HashMap<String, String> = pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        let backends = default_backends("myapp", &env, &paths).unwrap();
+        render_nginx_config("myapp", temp_dir.path(), &env, &backends, &paths).unwrap()
+    };
+
+    let site = render_env(&[("RIKU_NGINX_STATIC", "true")]);
+    assert!(
+        site.contains(&format!(
+            "root                {}/root;",
+            published.display()
+        )),
+        "{site}"
+    );
+
+    let proxied = render_env(&[("RIKU_NGINX_STATIC_PATHS", "/assets:dist,broken,/img:images")]);
+    for (location, index) in [("/assets", 0), ("/img", 1)] {
+        let block = format!(
+            "location {location} {{\n  alias {}/paths/{index};",
+            published.display()
+        );
+        assert!(proxied.contains(&block), "missing {block:?} in:\n{proxied}");
+    }
+    assert!(
+        proxied.contains(&format!("root {};", paths.acme_root.display())),
+        "{proxied}"
+    );
+}
+
+#[test]
 fn https_only_false_keeps_plain_template() {
     let env = HashMap::from([("RIKU_HTTPS_ONLY".to_string(), "false".to_string())]);
     assert_eq!(select_template(&env), "nginx.conf.tera");

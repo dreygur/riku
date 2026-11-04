@@ -13,6 +13,7 @@ riku-plugins = { path = "../riku-plugins" }
 riku-util = { path = "../riku-util" }
 riku-http = { path = "../riku-http" }
 anyhow = { workspace = true }
+libc = { workspace = true }
 serde_json = { workspace = true }
 tera = "2"
 tracing = { workspace = true }

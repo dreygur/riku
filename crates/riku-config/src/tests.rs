@@ -32,7 +32,9 @@ fn all_subdirectory_paths_are_relative_to_riku_root() {
         Path::new("/srv/riku/workers-available")
     );
     assert_eq!(p.workers_enabled, Path::new("/srv/riku/workers-enabled"));
-    assert_eq!(p.acme_www, Path::new("/srv/riku/acme"));
+    assert_eq!(p.acme_cert_links, Path::new("/srv/riku/acme"));
+    assert_eq!(p.acme_root, Path::new("/var/lib/riku/acme"));
+    assert_eq!(p.static_root, Path::new("/var/lib/riku/static"));
     assert_eq!(p.plugin_root, Path::new("/srv/riku/plugins"));
 }
 
@@ -45,7 +47,7 @@ fn custom_root_parameter_works() {
 }
 
 #[test]
-fn acme_root_defaults_to_home_acme_sh() {
+fn acme_sh_root_defaults_to_home_acme_sh() {
     // Test that RIKU_ACME_ROOT defaults to ~/.acme.sh when not set
     // We test the logic directly rather than through from_dirs to avoid parallel test issues
     let home = PathBuf::from("/home/bob");
@@ -59,13 +61,13 @@ fn acme_root_defaults_to_home_acme_sh() {
 }
 
 #[test]
-fn acme_root_respects_env_var() {
+fn acme_sh_root_respects_env_var() {
     // Save the original value
     let orig_value = env::var("RIKU_ACME_ROOT").ok();
 
     env::set_var("RIKU_ACME_ROOT", "/custom/acme");
     let p = paths_with_root("/x", "/home/bob");
-    assert_eq!(p.acme_root, Path::new("/custom/acme"));
+    assert_eq!(p.acme_sh_root, Path::new("/custom/acme"));
 
     // Restore original value or remove if it wasn't set
     match orig_value {

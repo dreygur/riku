@@ -22,6 +22,8 @@ mod sanitize;
 mod snippet_grammar;
 mod snippet_limits;
 mod ssl;
+mod static_copy;
+mod static_site;
 mod template;
 mod validate;
 
@@ -44,6 +46,7 @@ pub use host::{include_file_contents, include_line, includes_riku_sites, write_i
 pub use host_check::{check_host_ready, stray_site_configs, HostReadiness};
 pub use reload::reload_nginx_with;
 pub use remove::{remove_nginx_files, NginxRemoval};
+pub use static_site::remove_static;
 pub use template::check_nginx_config;
 use template::generate_nginx_config_from_template;
 
@@ -77,6 +80,10 @@ fn warn_about_app_nginx_configs(app: &str, app_path: &Path) {
 ///
 /// `backends` are the upstream servers the app's locations proxy to. An empty
 /// list is refused, since nginx rejects an upstream with no servers.
+///
+/// The app's static files are copied to `<static_root>/<app>` first, so the
+/// config never points nginx at a copy that is not there yet.
+#[allow(clippy::question_mark)]
 pub fn generate_nginx_config(
     app: &str,
     app_path: &Path,
@@ -88,5 +95,10 @@ pub fn generate_nginx_config(
         return Err(anyhow::anyhow!("no backends to route '{app}' to"));
     }
     warn_about_app_nginx_configs(app, app_path);
+    if let Err(e) = static_site::publish_static(app, app_path, env, paths) {
+        return Err(anyhow::anyhow!(
+            "cannot publish static files for '{app}': {e}"
+        ));
+    }
     generate_nginx_config_from_template(app, app_path, env, backends, paths)
 }

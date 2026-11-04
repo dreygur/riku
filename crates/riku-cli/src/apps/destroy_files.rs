@@ -8,6 +8,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::config::RikuPaths;
+use crate::nginx::remove_static;
 use crate::util::{echo, ensure_path_within};
 
 fn remove_dir(path: &Path) -> Result<()> {
@@ -62,14 +63,14 @@ fn remove_worker_configs(paths: &RikuPaths, app: &str) -> Result<()> {
 
 #[allow(clippy::question_mark)]
 fn remove_acme_certs(paths: &RikuPaths, app: &str) -> Result<()> {
-    let acme_link = paths.acme_www.join(app);
+    let acme_link = paths.acme_cert_links.join(app);
     if !acme_link.exists() {
         return Ok(());
     }
     let acme_certs = fs::canonicalize(&acme_link).unwrap_or_else(|_| acme_link.clone());
     if acme_certs.exists() {
         if ensure_path_within(&acme_certs, &paths.riku_root).is_ok()
-            || ensure_path_within(&acme_certs, &paths.acme_root).is_ok()
+            || ensure_path_within(&acme_certs, &paths.acme_sh_root).is_ok()
         {
             if let Err(e) = remove_dir(&acme_certs) {
                 return Err(e);
@@ -94,8 +95,8 @@ fn remove_acme_certs(paths: &RikuPaths, app: &str) -> Result<()> {
     Ok(())
 }
 
-/// Delete worker configs, the repo link, the env, git and log directories
-/// and the ACME certs, then `apps/<app>` last.
+/// Delete worker configs, the repo link, the env, git and log directories,
+/// the ACME certs and the published static files, then `apps/<app>` last.
 #[allow(clippy::question_mark)]
 pub(super) fn remove_app_files(paths: &RikuPaths, app: &str) -> Result<()> {
     if let Err(e) = remove_worker_configs(paths, app) {
@@ -110,6 +111,9 @@ pub(super) fn remove_app_files(paths: &RikuPaths, app: &str) -> Result<()> {
         }
     }
     if let Err(e) = remove_acme_certs(paths, app) {
+        return Err(e);
+    }
+    if let Err(e) = remove_static(app, paths) {
         return Err(e);
     }
     remove_dir_if_present(&paths.app_root.join(app))

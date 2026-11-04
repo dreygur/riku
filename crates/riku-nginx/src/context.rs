@@ -11,6 +11,7 @@ use super::backends::{socket_path, upstream_port};
 use super::cloudflare::generate_cloudflare_ips_config;
 use super::context_cache::insert_cache_context;
 use super::ssl::ensure_ssl_certificates;
+use super::static_site::{document_root, static_path_dir, static_paths};
 
 /// Insert address-related context values.
 pub(super) fn insert_address_context(
@@ -18,7 +19,6 @@ pub(super) fn insert_address_context(
     env: &HashMap<String, String>,
     paths: &crate::config::RikuPaths,
     app: &str,
-    app_path: &Path,
 ) {
     let bind_address = env
         .get("RIKU_BIND_ADDRESS")
@@ -50,17 +50,38 @@ pub(super) fn insert_address_context(
 
     let nginx_socket = socket_path(app, env, paths);
 
-    let nginx_document_root = env
-        .get("RIKU_NGINX_DOCUMENT_ROOT")
-        .cloned()
-        .unwrap_or(format!("{}/public", app_path.to_string_lossy()));
-
     context.insert("RIKU_BIND_ADDRESS", &bind_address);
     context.insert("RIKU_NGINX_IPV4_ADDRESS", &nginx_ipv4_address);
     context.insert("RIKU_NGINX_IPV6_ADDRESS", &nginx_ipv6_address);
     context.insert("RIKU_DOMAINS", &nginx_server_name);
     context.insert("RIKU_NGINX_SOCKET", &nginx_socket);
-    context.insert("RIKU_NGINX_DOCUMENT_ROOT", &nginx_document_root);
+}
+
+/// Insert where nginx finds the app's published static files: the document
+/// root and one `location`/`alias` pair per `RIKU_NGINX_STATIC_PATHS` entry.
+pub(super) fn insert_static_context(
+    context: &mut tera::Context,
+    env: &HashMap<String, String>,
+    paths: &crate::config::RikuPaths,
+    app: &str,
+) {
+    let aliases: Vec<HashMap<&str, String>> = static_paths(env)
+        .into_iter()
+        .enumerate()
+        .map(|(index, mapping)| {
+            let alias = static_path_dir(app, paths, index);
+            HashMap::from([
+                ("location", mapping.location),
+                ("alias", alias.to_string_lossy().into_owned()),
+            ])
+        })
+        .collect();
+
+    context.insert(
+        "RIKU_NGINX_DOCUMENT_ROOT",
+        &document_root(app, paths).to_string_lossy(),
+    );
+    context.insert("RIKU_STATIC_ALIASES", &aliases);
 }
 
 /// Insert feature-flag context values (Cloudflare ACL, git folder exposure).
@@ -130,7 +151,8 @@ pub(super) fn build_context(
     context.insert("APP_UPSTREAM", &crate::backends::upstream_name(app));
     context.insert("INTERNAL_NGINX_APP_ROOT", &app_path.to_string_lossy());
 
-    insert_address_context(&mut context, env, paths, app, app_path);
+    insert_address_context(&mut context, env, paths, app);
+    insert_static_context(&mut context, env, paths, app);
     insert_cache_context(&mut context, env, paths, app);
     insert_feature_flags(&mut context, env, paths);
     if let Err(e) = insert_include_file(&mut context, env, app_path, paths) {
@@ -140,7 +162,7 @@ pub(super) fn build_context(
 
     context.insert("RIKU_ROOT", &paths.riku_root.to_string_lossy());
     context.insert("RIKU_NGINX_ROOT", &paths.nginx_root.to_string_lossy());
-    context.insert("ACME_WWW", &paths.acme_www.to_string_lossy());
+    context.insert("ACME_WWW", &paths.acme_root.to_string_lossy());
     context.insert(
         "RIKU_ACME_ROOT_CA",
         &env.get("RIKU_ACME_ROOT_CA")

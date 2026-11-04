@@ -23,10 +23,12 @@ pub(crate) fn paths_with_nginx(dir: &Path, body: &str) -> RikuPaths {
 }
 
 /// Generate `myapp`'s config for `env` under `dir`, with `nginx -t`
-/// accepting, and return the live config text.
+/// accepting, and return the live config text. The static root is created
+/// as root init would, for a static app to publish into.
 pub(crate) fn generate_live(dir: &Path, paths: &RikuPaths, env: &[(&str, &str)]) -> String {
     let app_path = dir.join("myapp");
     fs::create_dir_all(&app_path).unwrap();
+    fs::create_dir_all(&paths.static_root).unwrap();
     let env: HashMap<String, String> = env
         .iter()
         .map(|(key, value)| (key.to_string(), value.to_string()))

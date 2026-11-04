@@ -1,7 +1,9 @@
 //! SSL certificate management for nginx.
 //!
 //! Obtains certificates via acme.sh (Let's Encrypt) or generates
-//! a self-signed fallback certificate using openssl.
+//! a self-signed fallback certificate using openssl. acme.sh writes http-01
+//! challenge files into `RikuPaths::acme_root` (`/var/lib/riku/acme`), which
+//! the nginx worker reads through its group, never the deploy home.
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -9,6 +11,7 @@ use std::os::unix::fs::PermissionsExt;
 use anyhow::{anyhow, Result};
 
 const KEY_FILE_MODE: u32 = 0o600;
+const ACME_UMASK: libc::mode_t = 0o027;
 
 /// Make a private key readable by its owner only. nginx's master process
 /// runs as root and reads it before dropping to the worker user, so nothing
@@ -41,7 +44,7 @@ pub fn ensure_ssl_certificates(
     }
 
     // Try acme.sh first
-    let acme_sh = paths.acme_root.join("acme.sh");
+    let acme_sh = paths.acme_sh_root.join("acme.sh");
     if acme_sh.exists() {
         let issued =
             match try_acme_certificates(app, domains, paths, &acme_sh, &key_path, &crt_path) {
@@ -67,6 +70,24 @@ pub fn ensure_ssl_certificates(
     Ok(generated)
 }
 
+/// acme.sh run with umask `027`, so the challenge files it writes in the
+/// webroot are readable by the webroot's group (the nginx worker's) and by
+/// nobody else, whatever umask riku itself runs under.
+fn acme_sh_command(acme_sh: &std::path::Path) -> std::process::Command {
+    use std::os::unix::process::CommandExt;
+
+    let mut command = std::process::Command::new(acme_sh);
+    // SAFETY: umask is async-signal-safe and touches no memory, so it may
+    // run between fork and exec.
+    unsafe {
+        command.pre_exec(|| {
+            libc::umask(ACME_UMASK);
+            Ok(())
+        });
+    }
+    command
+}
+
 /// Attempt to issue certificates via acme.sh. Returns `Some(true)` on success,
 /// `None` if issuance failed for all domains (caller should fall back).
 fn try_acme_certificates(
@@ -78,13 +99,13 @@ fn try_acme_certificates(
     crt_path: &std::path::Path,
 ) -> Result<Option<bool>> {
     for domain in domains {
-        let result = std::process::Command::new(acme_sh)
+        let result = acme_sh_command(acme_sh)
             .args([
                 "--issue",
                 "-d",
                 domain,
                 "-w",
-                &paths.acme_www.to_string_lossy(),
+                &paths.acme_root.to_string_lossy(),
                 "--server",
                 "letsencrypt.org",
                 "--key-file",
@@ -105,10 +126,12 @@ fn try_acme_certificates(
                     &format!("-----> Obtained Let's Encrypt certificate for '{}'", domain),
                     "green",
                 );
-                // Create symlink for ACME_WWW
-                let acme_domain_dir = paths.acme_root.join(domain);
-                if acme_domain_dir.exists() && !paths.acme_www.join(app).exists() {
-                    let _ = std::os::unix::fs::symlink(&acme_domain_dir, paths.acme_www.join(app));
+                // Lets destroy find the certificate. Kept out of the webroot,
+                // which nginx serves.
+                let acme_domain_dir = paths.acme_sh_root.join(domain);
+                let link = paths.acme_cert_links.join(app);
+                if acme_domain_dir.exists() && !link.exists() {
+                    let _ = std::os::unix::fs::symlink(&acme_domain_dir, link);
                 }
                 return Ok(Some(true));
             }
@@ -186,7 +209,7 @@ mod tests {
     fn make_paths(tmp: &TempDir) -> crate::config::RikuPaths {
         let paths = crate::config::RikuPaths::for_tests(tmp.path());
         std::fs::create_dir_all(&paths.nginx_root).unwrap();
-        std::fs::create_dir_all(&paths.acme_www).unwrap();
+        std::fs::create_dir_all(&paths.acme_root).unwrap();
         paths
     }
 
@@ -212,7 +235,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let paths = make_paths(&tmp);
         // acme.sh does NOT exist → falls straight to openssl (ignored below)
-        let acme_sh = paths.acme_root.join("acme.sh");
+        let acme_sh = paths.acme_sh_root.join("acme.sh");
         assert!(!acme_sh.exists());
         // We just verify the early-exit path (certs already present) works here
     }
