@@ -31,9 +31,10 @@ fn exit_code(info: &ContainerInfo) -> Option<i32> {
     }
 }
 
-/// Apply finished restarts to the tally. A copy that was restarted, or whose
-/// restart failed, is gone from the engine, so its old id is forgotten; a
-/// busy copy is untouched and tried again on the next tick.
+/// Apply finished restarts to the tally. A copy that was restarted, whose
+/// restart failed, or that was already gone, is gone from the engine, so its
+/// old id is forgotten; only real attempts count. A busy copy is untouched
+/// and tried again on the next tick.
 pub(crate) fn collect_reports(
     restarts: &mut Restarts,
     tally: &mut RestartTally,
@@ -43,6 +44,9 @@ pub(crate) fn collect_reports(
     for report in restarts.collect() {
         match report.outcome {
             Ok(RestartOutcome::Busy) => {}
+            Ok(RestartOutcome::Gone) => {
+                known.remove(&report.id);
+            }
             Ok(RestartOutcome::Restarted) => {
                 tally.record_restart(&report.name, now);
                 known.remove(&report.id);

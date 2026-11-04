@@ -45,6 +45,58 @@ fn restart_copy_reports_busy() {
 }
 
 #[test]
+fn restart_copy_replaces_a_crashed_copy() {
+    let tmp = tempfile::tempdir().unwrap();
+    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    deploy(&server).unwrap();
+    server.crash("myapp-web-1");
+    let before = server.calls().len();
+
+    let outcome = restart_copy(
+        &myapp(),
+        &server.paths,
+        &service("web"),
+        CopyIndex::new(1).unwrap(),
+    )
+    .unwrap();
+
+    assert_eq!(outcome, RestartOutcome::Restarted);
+    let calls = server.calls()[before..].to_vec();
+    assert!(
+        calls
+            .iter()
+            .any(|l| l.starts_with("run") && l.contains("myapp-web-1")),
+        "no fresh web copy was started: {calls:#?}"
+    );
+    assert_eq!(server.containers(), ["myapp-db-1", "myapp-web-1"]);
+}
+
+#[test]
+fn restart_copy_leaves_a_user_stopped_service_stopped() {
+    let tmp = tempfile::tempdir().unwrap();
+    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    deploy(&server).unwrap();
+    stop_service(&myapp(), &server.paths, Some(&service("web"))).unwrap();
+    let after_stop = server.calls().len();
+
+    let outcome = restart_copy(
+        &myapp(),
+        &server.paths,
+        &service("web"),
+        CopyIndex::new(1).unwrap(),
+    )
+    .unwrap();
+
+    assert_eq!(outcome, RestartOutcome::Gone);
+    let calls = server.calls()[after_stop..].to_vec();
+    assert!(
+        calls.iter().all(|l| !l.starts_with("run")),
+        "the supervisor undid the stop: {calls:#?}"
+    );
+    assert_eq!(server.containers(), ["myapp-db-1"]);
+}
+
+#[test]
 fn destroy_keeps_volumes() {
     let tmp = tempfile::tempdir().unwrap();
     let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
@@ -110,6 +162,7 @@ fn restart_copy_clears_route_when_restart_fails() {
         .and_then(|rest| rest.split_whitespace().next())
         .expect("could not find host port in site");
 
+    server.crash("myapp-web-1");
     server.mark("exits", "web");
 
     let err = restart_copy(

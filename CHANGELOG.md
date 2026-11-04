@@ -124,7 +124,13 @@ proxying to `127.0.0.1`.
 - `riku logs <app>` follows every `*.log` of the app except `deploy.log`.
   `riku logs <app> <service>` follows that service's `<service>.<n>.log`
   files, and a name with no log files is an error listing the names that
-  have them.
+  have them. A service name that is not a plain name, such as `../other` or
+  `a*`, is refused.
+- The service riku makes for a Dockerfile app now restarts with
+  `unless-stopped`: the supervisor starts a crashed copy again, and a copy
+  stopped with `riku stop` stays stopped. Before, it was never restarted.
+  The supervisor also no longer starts a copy that `riku stop` removed while
+  its restart waited for the app's lock.
 - A compose file, or a folder on its path, may now be a symlink whose real
   target stays inside the app directory (for example
   `docker-compose.yml -> deploy/prod.yml`). A link that leaves the app is

@@ -147,7 +147,8 @@ pub fn read_project(
 }
 
 /// The project for the riku app `app` when it has a Dockerfile and no compose
-/// file: one service `app` built from the app directory, publishing no ports.
+/// file: one service `app` built from the app directory, publishing no ports
+/// and restarted by the supervisor unless the user stopped it.
 /// The project name is the app's name normalised; it is `Derived` only when
 /// normalising left the name unchanged, since `Shop` and `shop` share `shop`.
 pub fn single_image_project(
@@ -175,7 +176,7 @@ pub fn single_image_project(
         mounts: Vec::new(),
         depends_on: Vec::new(),
         healthcheck: None,
-        restart: RestartPolicy::No,
+        restart: RestartPolicy::UnlessStopped,
         stop_grace: DEFAULT_STOP_GRACE,
         stop_signal: StopSignal::default(),
         labels: BTreeMap::new(),

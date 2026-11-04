@@ -470,9 +470,10 @@ CMD ["node", "server.js"]
 Riku builds the image and runs it as one service named `app`. The app must
 listen on port 8000 inside the container; riku also sets `PORT=8000` there,
 so an app that reads `$PORT` works unchanged. Riku publishes that port on a
-free 127.0.0.1 port and routes the app's domains to it. The service has no
-restart policy, so the supervisor does not start it again when it exits;
-`riku restart <app>` or a new deploy does.
+free 127.0.0.1 port and routes the app's domains to it. The service's restart
+policy is `unless-stopped`: the supervisor starts it again whenever it exits,
+until `riku stop <app>` stops it. It stays stopped until `riku restart <app>`
+or a new deploy.
 
 ### Compose apps
 
@@ -659,9 +660,11 @@ services they depend on, and keeps volumes. Naming a service of a Procfile
 app is refused.
 
 The supervisor watches the containers. A copy that exits is started again
-according to its compose `restart` policy (`no` when unset), with a delay of
-1, 2, 4 and so on up to 60 seconds between attempts, and not while a deploy
-of that app holds its lock. A copy's restart count starts at 0 again when a
+according to its compose `restart` policy (`no` when unset; `unless-stopped`
+for the service riku makes from a Dockerfile), with a delay of 1, 2, 4 and so
+on up to 60 seconds between attempts, and not while a deploy of that app
+holds its lock. A copy that `riku stop` or a scale down removed is never
+started again by the supervisor, whatever its policy. A copy's restart count starts at 0 again when a
 deploy or `riku restart` replaces it. Each copy's output goes to
 `~/.riku/logs/<app>/<service>.<n>.log`, which `riku logs <app> <service>`
 follows.

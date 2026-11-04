@@ -5,6 +5,7 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
+use riku_container::types::ServiceName;
 
 use crate::config::RikuPaths;
 use crate::util::{display, exit_if_invalid, validate_app_name};
@@ -45,6 +46,20 @@ pub fn cmd_deploy_logs(paths: &RikuPaths, app: &str, follow: bool) -> Result<()>
     }
 }
 
+/// The service `riku logs` was asked for: `None` for every service (empty or
+/// `*`), otherwise a validated name. The name goes into a glob pattern, so
+/// anything that is not a plain service name, such as `../other` or `a*`, is
+/// refused here rather than matched against other apps' files.
+fn requested_service(service: &str) -> Result<Option<ServiceName>> {
+    if service.is_empty() || service == "*" {
+        return Ok(None);
+    }
+    match ServiceName::try_from(service) {
+        Ok(name) => Ok(Some(name)),
+        Err(e) => Err(e),
+    }
+}
+
 /// Tail all process log files for an app or a single service.
 #[allow(clippy::question_mark)]
 pub fn cmd_logs(paths: &RikuPaths, app: &str, service: &str) -> Result<()> {
@@ -52,9 +67,13 @@ pub fn cmd_logs(paths: &RikuPaths, app: &str, service: &str) -> Result<()> {
         Ok(a) => a,
         Err(e) => return Err(e),
     };
+    let service = match requested_service(service) {
+        Ok(service) => service,
+        Err(e) => return Err(e),
+    };
     let app_log_dir = paths.log_root.join(&app);
 
-    if !service.is_empty() && service != "*" {
+    if let Some(service) = service {
         let pattern = app_log_dir.join(format!("{service}.*.log"));
         let logfiles = match glob::glob(pattern.to_str().unwrap_or("")) {
             Ok(g) => g.filter_map(Result::ok).collect::<Vec<_>>(),

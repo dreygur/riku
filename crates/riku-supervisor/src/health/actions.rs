@@ -23,6 +23,10 @@ pub enum RestartOutcome {
     /// A deploy of the app holds its lock, so nothing was touched. The caller
     /// tries again later.
     Busy,
+    /// The slot no longer holds an exited container: `riku stop`, a scale
+    /// down or a deploy removed or replaced it since it died. Nothing was
+    /// started, so a stop by the user stays a stop.
+    Gone,
 }
 
 /// Operations the control plane needs but that live above the supervisor.

@@ -67,6 +67,40 @@ fn busy_deploy_skips_restart() {
 }
 
 #[test]
+fn crashed_unless_stopped_copy_is_restarted() {
+    let dir = tempfile::tempdir().unwrap();
+    let state_file = dir.path().join("state.json");
+    let content = format!(
+        "[{}]",
+        entry(ID_1, "myapp-web-1", "exited", Some(137), "unless-stopped")
+    );
+    fs::write(&state_file, content).unwrap();
+
+    let script = format!(
+        r#"case "$1" in
+           ps) echo "{ID_1}";;
+           inspect) cat '{state}';;
+           logs) exit 0;;
+           events) sleep 30;;
+           esac"#,
+        state = state_file.display()
+    );
+
+    let (engine, _log) = mock_engine(dir.path(), &script);
+    let paths = RikuPaths::for_tests(dir.path());
+    let actions = mock_actions(RestartOutcome::Restarted);
+    let log_root = dir.path().join("logs");
+    let mut watch = ContainerWatch::with_engine(engine, paths, actions.clone(), &log_root);
+
+    tick_until(
+        &mut watch,
+        Instant::now(),
+        |_| actions.call_count() >= 1,
+        "a restart of the crashed unless-stopped copy",
+    );
+}
+
+#[test]
 fn die_event_triggers_restart() {
     let dir = tempfile::tempdir().unwrap();
     let state_file = dir.path().join("state.json");

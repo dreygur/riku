@@ -62,6 +62,24 @@ fn restart_label_maps_policy() {
 }
 
 #[test]
+fn dockerfile_app_copy_is_labelled_unless_stopped() {
+    let project = riku_container::compose::single_image_project(
+        "myapp",
+        std::path::Path::new("/srv/myapp"),
+        std::path::Path::new("Dockerfile"),
+    )
+    .unwrap();
+
+    let spec = spec_for(&project, None);
+
+    assert_eq!(
+        spec.labels[labels::RESTART],
+        "unless-stopped",
+        "the supervisor reads this label to decide whether a crashed copy restarts"
+    );
+}
+
+#[test]
 fn compose_label_cannot_join_another_compose_project() {
     let dir = tempfile::tempdir().unwrap();
     let compose = "

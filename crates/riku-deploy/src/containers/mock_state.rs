@@ -77,6 +77,23 @@ impl MockServer {
         fs::write(self.state.join(format!("{flag}-{service}")), "").unwrap();
     }
 
+    /// Make the running container named `name` exit with code 137, as a
+    /// crash would.
+    pub fn crash(&self, name: &str) {
+        let name_file = fs::read_dir(&self.state)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "name"))
+            .find(|path| fs::read_to_string(path).unwrap().trim() == name)
+            .unwrap_or_else(|| panic!("no container named {name}"));
+        fs::write(
+            name_file.with_extension("state"),
+            "{\"Status\":\"exited\",\"ExitCode\":137}\n",
+        )
+        .unwrap();
+    }
+
     /// The Caddy site file of `app`, empty when there is none.
     pub fn site(&self, app: &str) -> String {
         fs::read_to_string(self.paths.caddy_root.join(format!("{app}.caddy"))).unwrap_or_default()
