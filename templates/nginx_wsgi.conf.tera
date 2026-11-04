@@ -35,8 +35,5 @@ server {
 {% if RIKU_NGINX_INCLUDE_CONTENT %}
   # Custom nginx configuration from file
   {{ RIKU_NGINX_INCLUDE_CONTENT }}
-{% elif RIKU_NGINX_INCLUDE_FILE %}
-  # Custom nginx configuration
-  include {{ RIKU_NGINX_INCLUDE_FILE }};
 {% endif %}
 }

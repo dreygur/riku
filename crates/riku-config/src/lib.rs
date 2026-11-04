@@ -6,15 +6,21 @@
 //! no `..`, so the resolved tree never depends on the working directory or
 //! climbs out of the directory the operator named.
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use std::env;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 pub mod container_engine;
+pub mod nginx_host;
+pub mod program;
 pub mod reload_programs;
+mod root_dirs;
 pub mod router;
 pub mod settings;
 
+use root_dirs::root_dirs;
+
+pub use nginx_host::{NginxHostPaths, DEFAULT_NGINX_INCLUDE_FILE, DEFAULT_NGINX_SITES_ENABLED};
 pub use reload_programs::ReloadPrograms;
 
 /// Raw source URL for fetching the latest riku script (for reference implementation).
@@ -48,44 +54,6 @@ pub const NGINX_CACHE_ANY_DEFAULT: u32 = 3600;
 /// Default nginx cache control time in seconds (1 hour).
 pub const NGINX_CACHE_CONTROL_DEFAULT: u32 = 3600;
 
-/// Where nginx looks for enabled site configs on a stock Debian/Ubuntu install.
-pub const DEFAULT_NGINX_SITES_ENABLED: &str = "/etc/nginx/sites-enabled";
-
-fn checked_dir(var: &str, value: String) -> Result<PathBuf> {
-    let path = PathBuf::from(value);
-    let climbs = path.components().any(|c| c == Component::ParentDir);
-    if !path.is_absolute() || climbs {
-        return Err(anyhow!(
-            "{var} must be an absolute path without `..`, got {}",
-            path.display()
-        ));
-    }
-    Ok(path)
-}
-
-/// Resolve `(riku_root, home)` from the raw `HOME` and `RIKU_ROOT` values.
-///
-/// Kept apart from `from_env` so the validation can be tested without
-/// mutating the process environment.
-#[allow(clippy::question_mark)]
-fn root_dirs(home: Option<String>, riku_root: Option<String>) -> Result<(PathBuf, PathBuf)> {
-    let home = match home {
-        Some(value) => match checked_dir("HOME", value) {
-            Ok(path) => path,
-            Err(e) => return Err(e),
-        },
-        None => return Err(anyhow!("HOME environment variable must be set")),
-    };
-    let riku_root = match riku_root {
-        Some(value) => match checked_dir("RIKU_ROOT", value) {
-            Ok(path) => path,
-            Err(e) => return Err(e),
-        },
-        None => home.join(".riku"),
-    };
-    Ok((riku_root, home))
-}
-
 /// All resolved directory paths used by riku.
 #[derive(Debug, Clone)]
 pub struct RikuPaths {
@@ -112,12 +80,15 @@ pub struct RikuPaths {
     pub workers_enabled: PathBuf,
     pub acme_root: PathBuf,
     pub acme_www: PathBuf,
-    /// Directory nginx reads enabled site configs from. Every generated app
-    /// config is symlinked in here, so unlike the fields above it is a
-    /// system-wide path (`/etc/nginx/sites-enabled`), not one under
-    /// `riku_root`. `RIKU_NGINX_SITES_ENABLED` overrides it so a test run can
-    /// point it somewhere disposable instead of writing to the real nginx.
+    /// Where older riku versions symlinked each app config
+    /// (`/etc/nginx/sites-enabled`). riku no longer writes here: a root
+    /// `riku init` removes the links that point into `nginx_root` and
+    /// `riku doctor` reports any left. See [`NginxHostPaths`] for overrides.
     pub nginx_sites_enabled: PathBuf,
+    /// The root-owned file that makes nginx load `nginx_root/*.conf`
+    /// (`/etc/nginx/conf.d/riku.conf`). Only a root `riku init` writes it.
+    /// See [`NginxHostPaths`] for overrides.
+    pub nginx_include_file: PathBuf,
     /// Programs a router reload runs. Tests replace them with mock scripts.
     pub reload_programs: ReloadPrograms,
 }
@@ -128,19 +99,18 @@ impl RikuPaths {
         self.log_root.join(app).join("deploy.log")
     }
 
-    /// Build paths using the given root directory and home directory.
-    ///
-    /// This is the core constructor used by both production code and tests.
+    /// Build paths using the given root directory and home directory, with
+    /// the system nginx paths from the environment ([`NginxHostPaths::from_env`]).
     pub fn from_dirs(riku_root: PathBuf, home: &Path) -> Self {
-        let riku_script = env::current_exe().unwrap_or_else(|_| PathBuf::from("riku"));
+        Self::with_nginx_host(riku_root, home, NginxHostPaths::from_env())
+    }
 
+    /// [`Self::from_dirs`] with the system nginx paths given.
+    pub fn with_nginx_host(riku_root: PathBuf, home: &Path, nginx_host: NginxHostPaths) -> Self {
+        let riku_script = env::current_exe().unwrap_or_else(|_| PathBuf::from("riku"));
         let acme_root = env::var("RIKU_ACME_ROOT")
             .map(PathBuf::from)
             .unwrap_or_else(|_| home.join(".acme.sh"));
-
-        let nginx_sites_enabled = env::var("RIKU_NGINX_SITES_ENABLED")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from(DEFAULT_NGINX_SITES_ENABLED));
 
         Self {
             plugin_root: riku_root.join("plugins"),
@@ -162,7 +132,8 @@ impl RikuPaths {
             riku_root,
             riku_script,
             acme_root,
-            nginx_sites_enabled,
+            nginx_sites_enabled: nginx_host.sites_enabled,
+            nginx_include_file: nginx_host.include_file,
             reload_programs: ReloadPrograms::default(),
         }
     }
@@ -186,12 +157,15 @@ impl RikuPaths {
     /// otherwise gets hand-copied into nearly every crate's test module.
     /// Not `#[cfg(test)]`: other crates' tests need to call it too, and that
     /// attribute doesn't cross crate boundaries.
+    ///
+    /// The system nginx paths are placed inside `root` whatever the
+    /// environment says, so a test never touches the machine's real nginx.
     pub fn for_tests(root: &Path) -> Self {
-        let mut paths = Self::from_dirs(root.join(".riku"), root);
-        // Ignore any RIKU_NGINX_SITES_ENABLED the surrounding process set: a
-        // test must never symlink into the machine's real nginx.
-        paths.nginx_sites_enabled = root.join("nginx-sites-enabled");
-        paths
+        let nginx_host = NginxHostPaths {
+            sites_enabled: root.join("nginx-sites-enabled"),
+            include_file: root.join("nginx-conf.d").join("riku.conf"),
+        };
+        Self::with_nginx_host(root.join(".riku"), root, nginx_host)
     }
 }
 

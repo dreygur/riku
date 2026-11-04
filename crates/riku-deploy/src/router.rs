@@ -31,16 +31,20 @@ use crate::util::route_plan::{HttpsPolicy, RoutePlan};
 mod backends;
 mod caddy;
 mod fallback;
+mod host_guard;
 mod plugin;
 mod reload;
+mod remove;
 
 pub use backends::{copy_socket, current_backends};
 pub(crate) use backends::{web_copies, worker_backend};
 use caddy::configure_caddy;
 use fallback::fallback_backends;
-use plugin::{configure_plugin, remove_plugin};
-use reload::record_outcome;
+pub use host_guard::ensure_host_ready;
+use host_guard::ready_for;
+use plugin::configure_plugin;
 pub use reload::{reload, Baseline, ERROR_FILE as RELOAD_ERROR_FILE};
+pub use remove::remove;
 
 /// Caddy reaches an app over loopback whatever `RIKU_BIND_ADDRESS` says.
 /// nginx and router plugins keep the address each copy listens on, since a
@@ -133,6 +137,9 @@ fn apply_to(
     paths: &RikuPaths,
     backends: &[Backend],
 ) -> Result<()> {
+    if let Err(e) = ready_for(active, paths, crate::nginx::RouteChange::Install) {
+        return Err(e);
+    }
     let baseline = match active {
         Router::Nginx => Baseline::capture(&paths.reload_programs),
         Router::Caddy | Router::Plugin(_) => Baseline::Direct,
@@ -146,35 +153,6 @@ fn apply_to(
         return Err(e);
     }
     reload(active, paths, &baseline)
-}
-
-/// Remove `app` from the active router.
-///
-/// nginx removal is built-in. For a plugin router this dispatches `unconfigure`
-/// (the app's config is keyed by `RIKU_APP`, which is still available even
-/// though the app's `ENV` is already gone by destroy time) then `reload`.
-///
-/// `unconfigure` is **best-effort**: it was added within API v1, so a plugin
-/// predating it may not implement the verb and will exit non-zero, in that
-/// case the following `reload` lets the plugin reconcile the orphaned upstream
-/// on its own. See `PLUGIN_PROTOCOL.md` §6.2.
-#[allow(clippy::question_mark)]
-pub fn remove(app: &str, paths: &RikuPaths) -> Result<()> {
-    let active = match Router::load(paths) {
-        Ok(router) => router,
-        Err(e) => return Err(e),
-    };
-
-    let outcome = match &active {
-        Router::Nginx => crate::nginx::remove_nginx_config(app, paths),
-        Router::Caddy => match crate::caddy::remove_site(app, paths) {
-            Ok(()) => reload(&active, paths, &Baseline::Direct),
-            Err(e) => Err(e),
-        },
-        Router::Plugin(name) => remove_plugin(name, app, paths),
-    };
-    record_outcome(paths, &outcome);
-    outcome
 }
 
 /// The routing plan for an app: its domains and HTTPS policy from ENV, and

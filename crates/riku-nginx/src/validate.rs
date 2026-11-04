@@ -23,13 +23,17 @@ impl Drop for TempFile {
     }
 }
 
-/// Validate nginx configuration file.
-pub(super) fn validate_nginx_config(config_file: &Path) -> Result<()> {
+/// Check one site config with `nginx -t`, wrapped in a minimal main config.
+///
+/// The wrapper sits beside `config_file` as `<name>.check`, a name nginx's
+/// `*.conf` include never matches, so a reload racing the check cannot load
+/// it.
+pub(super) fn validate_nginx_config(config_file: &Path, nginx: &Path) -> Result<()> {
     use std::process::Command;
 
-    // Create a temporary nginx.conf that includes our site config
-    // This allows proper validation of server block configs
-    let temp_nginx_conf = config_file.with_file_name("test_nginx.conf");
+    let mut wrapper_name = config_file.file_name().unwrap_or_default().to_os_string();
+    wrapper_name.push(".check");
+    let temp_nginx_conf = config_file.with_file_name(wrapper_name);
     let _temp_file = TempFile::new(temp_nginx_conf.clone());
 
     let include_directive = format!("include {};\n", config_file.display());
@@ -38,13 +42,22 @@ pub(super) fn validate_nginx_config(config_file: &Path) -> Result<()> {
         include_directive
     );
 
-    fs::write(&temp_nginx_conf, &full_config)?;
+    if let Err(e) = fs::write(&temp_nginx_conf, &full_config) {
+        return Err(anyhow::anyhow!(
+            "failed to write {}: {e}",
+            temp_nginx_conf.display()
+        ));
+    }
 
-    let output = Command::new("nginx")
+    let output = match Command::new(nginx)
         .arg("-t")
         .arg("-c")
         .arg(&temp_nginx_conf)
-        .output()?;
+        .output()
+    {
+        Ok(output) => output,
+        Err(e) => return Err(anyhow::anyhow!("could not run {}: {e}", nginx.display())),
+    };
 
     // Temp file is automatically cleaned up by Drop
 
@@ -105,7 +118,8 @@ mod tests {
             "server { listen 8080; server_name localhost; location / { return 200; } }",
         )
         .unwrap();
-        let result = validate_nginx_config(&config_file);
+        let nginx = crate::config::program::find_program("nginx");
+        let result = validate_nginx_config(&config_file, &nginx);
         assert!(result.is_ok());
     }
 }

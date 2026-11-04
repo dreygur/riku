@@ -16,17 +16,22 @@ run_test() {
     test_home=$(mktemp -d /tmp/riku-test-XXXXXX)
     export RIKU_ROOT="$test_home"
 
-    # Riku symlinks each generated config into the nginx sites-enabled
-    # directory, which is system-wide and so outside $test_home. Point it
-    # inside instead: otherwise the rm -rf below leaves a dangling symlink in
-    # /etc/nginx/sites-enabled and every later test's nginx reload fails on it.
+    # Keep the legacy sites-enabled path inside $test_home so nothing a test
+    # does can reach the real /etc/nginx/sites-enabled.
     local sites_enabled="$test_home/nginx-sites-enabled"
     mkdir -p "$sites_enabled"
     export RIKU_NGINX_SITES_ENABLED="$sites_enabled"
 
+    # Deploy and destroy refuse unless nginx loads this root's sites, which
+    # `sudo riku init` arranges on a real host. Write the same include line
+    # init would, at a per-case path the system nginx never reads.
+    local host_include="$test_home/nginx-host-include.conf"
+    printf 'include %s/nginx/*.conf;\n' "$test_home" > "$host_include"
+    export RIKU_NGINX_HOST_INCLUDE="$host_include"
+
     echo ""
     echo "━━━ $name ━━━"
-    if RIKU_ROOT="$test_home" RIKU_NGINX_SITES_ENABLED="$sites_enabled" bash "$script" 2>&1; then
+    if bash "$script" 2>&1; then
         echo "✓ PASS: $name"
         PASS=$((PASS + 1))
     else

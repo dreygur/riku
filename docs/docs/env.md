@@ -206,14 +206,29 @@ RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static,/images:img
 ### Include Custom Config
 
 ```bash
-RIKU_NGINX_INCLUDE_FILE=custom.conf
+RIKU_NGINX_INCLUDE_FILE=nginx.include
 ```
 
 - **Default:** (none)
-- **Description:** Include custom nginx configuration file
-- **Values:** Path to nginx config snippet
+- **Description:** Snippet copied into the app's generated `server` block
+- **Values:** Path relative to the app directory
 
-The file should be placed in `~/.riku/nginx/` or your app directory.
+The file must resolve inside the app directory (symlinks are followed first). Every statement in it must use one of these directives, spelled exactly:
+
+`add_header`, `expires`, `client_max_body_size`, `client_body_timeout`, `keepalive_timeout`, `proxy_connect_timeout`, `proxy_read_timeout`, `proxy_send_timeout`, `proxy_buffering`, `proxy_buffer_size`, `proxy_buffers`, `proxy_busy_buffers_size`, `gzip`, `gzip_types`, `gzip_min_length`, `gzip_comp_level`, `gzip_vary`
+
+`#` comments are allowed. The deploy is refused, naming the file and the reason, when the file is missing or resolves outside the app directory, or when it has:
+
+- any other directive (for example `proxy_pass`, `root`, `return`, `include`, `access_log`, `ssl_certificate`, `limit_req`, `proxy_set_header`)
+- `{` or `}` anywhere, including in a comment or a quoted string
+- a backslash anywhere
+- a character other than printable ASCII, space, tab or newline (so no CR line endings and no non-ASCII text)
+- a quote or `#` straight after a non-space character (write `a #` or `"a#b"`, not `a#`)
+- anything but a space or `;` right after a closing quote
+- a quoted string that spans lines, or one that is never closed
+- a statement not ended by `;`, or an empty one (`;;` or a leading `;`)
+
+Do not put extra `.conf` files in `~/.riku/nginx/`: nginx loads every `*.conf` there.
 
 ### Allow Git Folders
 

@@ -20,6 +20,7 @@ pub mod create;
 pub mod deploy;
 pub mod destroy;
 mod destroy_engine;
+mod destroy_files;
 pub mod dump_state;
 pub mod hot_reload;
 pub mod info;

@@ -11,8 +11,10 @@ When you deploy an app, Riku:
 1. Detects the app type (web, static, etc.)
 2. Reads environment variables from `~/.riku/envs/<app>/ENV`
 3. Generates an nginx config using templates
-4. Symlinks the config to nginx's `sites-enabled/`
+4. Writes it as `<app>.conf.new`, checks it with `nginx -t`, and only then renames it to `<app>.conf`
 5. Reloads nginx
+
+nginx loads every `~/.riku/nginx/*.conf` through one file, `/etc/nginx/conf.d/riku.conf`, which `sudo riku init` installs. It holds a single line, `include /home/<user>/.riku/nginx/*.conf;`. Riku never writes anything else under `/etc/nginx`. Re-running `sudo riku init` also removes the per-app symlinks older versions left in `/etc/nginx/sites-enabled/`, which would otherwise load each site twice. Until that is in order, deploy and destroy refuse to run and say what to fix: a missing include file, leftover links, or a `*.conf` in `~/.riku/nginx/` that is no app's config. `riku doctor` reports the same. On a host without nginx this check is skipped.
 
 ---
 
@@ -26,12 +28,9 @@ Generated automatically based on your app type and environment variables.
 
 ### Custom Config
 
-You can provide custom nginx configuration:
+Replacing the generated config is not supported. An `nginx.conf`, `nginx.custom.conf`, `nginx.custom` or `.nginx.conf` in the app directory is ignored with a warning at deploy, and the generated config is used. Every riku site is loaded into the one server-wide nginx, so a file from an app repo could otherwise take over other apps' domains.
 
-1. **App directory:** `nginx.conf`, `nginx.custom.conf`, or `.nginx.conf`
-2. **Include file:** Set `RIKU_NGINX_INCLUDE_FILE=custom.conf`
-
-Custom configs are included at the end of the generated config.
+To add directives to the generated `server` block, set `RIKU_NGINX_INCLUDE_FILE` to a snippet in the app directory (see below).
 
 ---
 
@@ -84,7 +83,7 @@ RIKU_NGINX_CACHE_TIME=7200
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `RIKU_NGINX_CLOUDFLARE_ACL` | Restrict to Cloudflare IPs | `false` |
-| `RIKU_NGINX_INCLUDE_FILE` | Custom nginx config snippet | (none) |
+| `RIKU_NGINX_INCLUDE_FILE` | Snippet in the app directory copied into the server block (plain directives only, see below) | (none) |
 
 ---
 
@@ -211,18 +210,21 @@ Manual edits may be overwritten on redeploy.
 
 ### Add Custom Config
 
-Create `~/.riku/nginx/myapp.custom.conf`:
+Create `nginx.include` in the app directory. Its content is copied into the app's `server` block, and every statement must use one of these directives:
+
+`add_header`, `expires`, `client_max_body_size`, `client_body_timeout`, `keepalive_timeout`, `proxy_connect_timeout`, `proxy_read_timeout`, `proxy_send_timeout`, `proxy_buffering`, `proxy_buffer_size`, `proxy_buffers`, `proxy_busy_buffers_size`, `gzip`, `gzip_types`, `gzip_min_length`, `gzip_comp_level`, `gzip_vary`
 
 ```nginx
-# Custom rate limiting
-location /api/ {
-    limit_req zone=api burst=20 nodelay;
-}
+# Larger uploads and a stricter frame policy
+client_max_body_size 50m;
+add_header X-Frame-Options DENY always;
 ```
+
+The deploy is refused, naming the file and the reason, if the file is missing or resolves outside the app directory, or if it uses any other directive, contains `{` or `}`, or has quoting nginx could read differently (see `RIKU_NGINX_INCLUDE_FILE` in the environment reference). Blocks such as `location`, and directives like `proxy_pass`, `root` or `proxy_set_header`, are therefore not possible here. Do not put extra `.conf` files in `~/.riku/nginx/`: nginx loads every `*.conf` there.
 
 Set in ENV:
 ```bash
-riku config set myapp RIKU_NGINX_INCLUDE_FILE=myapp.custom.conf
+riku config set myapp RIKU_NGINX_INCLUDE_FILE=nginx.include
 ```
 
 ---
@@ -349,9 +351,11 @@ sudo systemctl restart nginx
 
 ## Advanced Configuration
 
+These examples are for an nginx config you manage yourself. An app's `RIKU_NGINX_INCLUDE_FILE` snippet accepts only the directives listed under Add Custom Config: the custom headers below work there, the gzip example works without `gzip_proxied`, and rate limiting (`limit_req_zone` lives at http level) and the WebSocket `location` block cannot be set per app.
+
 ### Rate Limiting
 
-Add to custom config:
+Not possible through the app snippet (see above):
 
 ```nginx
 # Define zone (in http block)

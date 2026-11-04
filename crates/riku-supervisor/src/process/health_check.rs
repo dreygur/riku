@@ -219,7 +219,7 @@ impl ProcessManager {
             None => return HealthStatus::Error("No port configured".to_string()),
         };
 
-        let client = Client::builder()
+        let client = riku_http::blocking_client_builder()
             .timeout(Duration::from_secs(config.timeout))
             .build()
             .unwrap_or_else(|_| Client::new());

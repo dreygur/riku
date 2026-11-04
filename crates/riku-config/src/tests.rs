@@ -111,21 +111,24 @@ fn root_dirs_reject_relative_or_climbing_paths() {
 }
 
 #[test]
-fn sites_enabled_defaults_to_the_system_nginx_directory() {
-    let p = paths_with_root("/srv/riku", "/home/riku");
+fn nginx_host_paths_default_to_the_system_nginx_directories() {
+    let p = NginxHostPaths::resolve(None, None);
+    assert_eq!(p.sites_enabled, Path::new(DEFAULT_NGINX_SITES_ENABLED));
     assert_eq!(
-        p.nginx_sites_enabled,
-        Path::new(DEFAULT_NGINX_SITES_ENABLED),
-        "without an override riku must enable sites where nginx reads them"
+        p.include_file,
+        Path::new("/etc/nginx/conf.d/riku.conf"),
+        "the include must land in a directory nginx loads inside http"
     );
+    assert_eq!(NginxHostPaths::system(), p);
 }
 
 #[test]
-fn for_tests_keeps_sites_enabled_inside_the_test_root() {
+fn for_tests_keeps_nginx_host_paths_inside_the_test_root() {
     let p = RikuPaths::for_tests(Path::new("/tmp/riku-case"));
-    assert_eq!(
-        p.nginx_sites_enabled,
-        Path::new("/tmp/riku-case/nginx-sites-enabled"),
-        "a test must never symlink into the machine's real nginx"
-    );
+    for path in [&p.nginx_sites_enabled, &p.nginx_include_file] {
+        assert!(
+            path.starts_with("/tmp/riku-case"),
+            "a test must never touch the machine's real nginx: {path:?}"
+        );
+    }
 }

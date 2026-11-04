@@ -128,50 +128,7 @@ fn test_cache_defaults_inserted() {
     assert!(ctx.get("RIKU_NGINX_CACHE_PATH").is_some());
 }
 
-// insert_include_file
-
-#[test]
-fn test_include_file_within_app_dir_is_inserted() {
-    let tmp = TempDir::new().unwrap();
-    let app_path = tmp.path().join("app");
-    std::fs::create_dir_all(&app_path).unwrap();
-    std::fs::write(app_path.join("nginx_extra.conf"), "proxy_read_timeout 60;").unwrap();
-
-    let paths = make_paths(&tmp);
-    let mut env = HashMap::new();
-    env.insert(
-        "RIKU_NGINX_INCLUDE_FILE".to_string(),
-        "nginx_extra.conf".to_string(),
-    );
-
-    let mut ctx = tera::Context::new();
-    insert_include_file(&mut ctx, &env, &app_path, &paths);
-
-    let val = ctx.get("RIKU_NGINX_INCLUDE_CONTENT").unwrap().to_string();
-    assert!(val.contains("proxy_read_timeout"));
-}
-
-#[test]
-fn test_include_file_outside_app_dir_is_rejected() {
-    let tmp = TempDir::new().unwrap();
-    let app_path = tmp.path().join("app");
-    std::fs::create_dir_all(&app_path).unwrap();
-    let paths = make_paths(&tmp);
-
-    let mut env = HashMap::new();
-    // Path traversal attempt
-    env.insert(
-        "RIKU_NGINX_INCLUDE_FILE".to_string(),
-        "../secret.conf".to_string(),
-    );
-
-    let mut ctx = tera::Context::new();
-    insert_include_file(&mut ctx, &env, &app_path, &paths);
-
-    // The key is always present (so templates never see an undefined
-    // variable), but a rejected traversal attempt leaves it empty.
-    assert_eq!(ctx_str(&ctx, "RIKU_NGINX_INCLUDE_CONTENT"), "");
-}
+// insert_include_file (the snippet checks are in app_snippet_tests.rs)
 
 #[test]
 fn test_include_file_content_runs_through_the_filter_chain() {
@@ -206,7 +163,7 @@ fn test_include_file_content_runs_through_the_filter_chain() {
 
     let env = HashMap::new();
     let mut ctx = tera::Context::new();
-    insert_include_file(&mut ctx, &env, &app_path, &paths);
+    insert_include_file(&mut ctx, &env, &app_path, &paths).unwrap();
 
     let val = ctx.get("RIKU_NGINX_INCLUDE_CONTENT").unwrap().to_string();
     assert!(val.contains("augmented"), "got: {val}");

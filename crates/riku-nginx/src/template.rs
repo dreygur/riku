@@ -1,34 +1,16 @@
 //! Nginx config template rendering and config file installation.
 //!
 //! Registers Tera templates, selects the right template for an app's config,
-//! renders the file, and manages the nginx sites-enabled symlink.
+//! renders it, and installs it in `nginx_root`.
 
 use anyhow::Result;
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
 use super::context::build_context;
+use super::install::install_site;
 use super::sanitize::{sanitize_env_for_nginx, sanitize_nginx_value};
-use super::validate::validate_nginx_config;
 use crate::util::backend::Backend;
-
-/// Use a custom nginx configuration file from the app directory.
-pub(super) fn use_custom_nginx_config(
-    custom_path: &Path,
-    app: &str,
-    paths: &crate::config::RikuPaths,
-) -> Result<()> {
-    let config_content = fs::read_to_string(custom_path)?;
-    let config_file = paths.nginx_root.join(format!("{}.conf", app));
-    crate::util::write_atomic(&config_file, config_content.as_bytes())?;
-    validate_nginx_config(&config_file)?;
-    crate::util::echo(
-        &format!("-----> Custom nginx config installed for '{}'", app),
-        "green",
-    );
-    Ok(())
-}
 
 /// Generate nginx configuration from template.
 pub(super) fn generate_nginx_config_from_template(
@@ -47,19 +29,7 @@ pub(super) fn generate_nginx_config_from_template(
         }
     };
 
-    let config_file = paths.nginx_root.join(format!("{}.conf", app));
-    if let Err(e) = crate::util::write_atomic(&config_file, config_content.as_bytes()) {
-        return Err(anyhow::anyhow!("cannot write {config_file:?}: {e}"));
-    }
-    if let Err(e) = validate_nginx_config(&config_file) {
-        return Err(anyhow::anyhow!(
-            "nginx rejected the config for '{app}': {e}"
-        ));
-    }
-
-    install_nginx_symlink(&config_file, app, paths);
-
-    Ok(())
+    install_site(app, &config_content, paths)
 }
 
 /// Render the app's config text without writing it.
@@ -179,33 +149,6 @@ fn select_template(env: &HashMap<String, String>) -> &'static str {
         "nginx_static.conf.tera"
     } else {
         "nginx.conf.tera"
-    }
-}
-
-/// Create or update the app's sites-enabled symlink. The caller reloads nginx.
-///
-/// Does nothing when the sites-enabled directory is absent, which is the
-/// normal case on a host with no nginx installed.
-fn install_nginx_symlink(config_file: &Path, app: &str, paths: &crate::config::RikuPaths) {
-    let sites_enabled = &paths.nginx_sites_enabled;
-    if !sites_enabled.exists() {
-        return;
-    }
-
-    let symlink_path = sites_enabled.join(format!("{}.conf", app));
-
-    if symlink_path.symlink_metadata().is_ok() {
-        if let Err(e) = fs::remove_file(&symlink_path) {
-            tracing::warn!(
-                "could not remove old nginx symlink {:?}: {}",
-                symlink_path,
-                e
-            );
-        }
-    }
-
-    if let Err(e) = std::os::unix::fs::symlink(config_file, &symlink_path) {
-        tracing::warn!("could not create nginx symlink {:?}: {}", symlink_path, e);
     }
 }
 

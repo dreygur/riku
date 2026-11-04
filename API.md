@@ -126,8 +126,15 @@ The full contract is `PLUGIN_PROTOCOL.md`; this is the module map.
   seed value, then runs it through the `nginx.include_content` filter chain
   before inserting it
 - `template.rs`: `generate_nginx_config_from_template()`, `select_template()`
-  (picks one of 5 `.tera` templates by env flags), install/reload the
-  `/etc/nginx/sites-enabled/` symlink
+  (picks one of 5 `.tera` templates by env flags)
+- `install.rs`: `install_site()` writes `<name>.conf.new`, validates it, and
+  renames it to the live `<name>.conf` in `~/.riku/nginx`
+- `host.rs`: the `/etc/nginx/conf.d/riku.conf` include line and file
+- `host_check.rs`: `check_host_ready()`, run before deploy and destroy and
+  by `riku doctor`: include present, no old sites-enabled links, no stray
+  `*.conf` in `~/.riku/nginx`; skipped on a host without nginx
+- `remove.rs`: `remove_nginx_files()`; `acme.rs`: the (disabled) ACME
+  challenge config
 - `ssl.rs`, `cloudflare.rs`, `sanitize.rs`, `validate.rs`
 
 ## `riku-dashboard`: embedded dashboard

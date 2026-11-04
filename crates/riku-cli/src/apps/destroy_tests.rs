@@ -1,9 +1,13 @@
+use std::fs;
+use std::path::Path;
+
 use super::*;
 
 #[test]
 fn removes_the_repo_link_but_not_the_repo_it_points_to() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());
+    crate::nginx::write_include_file(&paths).unwrap();
     let user_repo = tmp.path().join("shop.git");
     fs::create_dir_all(&user_repo).unwrap();
     fs::create_dir_all(paths.app_root.join("shop")).unwrap();
@@ -21,8 +25,57 @@ fn removes_the_repo_link_but_not_the_repo_it_points_to() {
     assert!(user_repo.exists(), "destroy followed the link");
 }
 
+#[test]
+fn destroy_refuses_before_deleting_anything_when_nginx_does_not_load_riku_sites() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut paths = RikuPaths::for_tests(tmp.path());
+    paths.reload_programs.nginx = tmp.path().join("nginx");
+    fs::write(&paths.reload_programs.nginx, "").unwrap();
+    fs::create_dir_all(paths.nginx_include_file.parent().unwrap()).unwrap();
+    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+    fs::create_dir_all(&paths.nginx_root).unwrap();
+    fs::write(paths.nginx_root.join("shop.conf"), "server {}\n").unwrap();
+
+    let err = cmd_destroy(&paths, "shop", DestroyMode::Safe).unwrap_err();
+
+    let message = format!("{err:#}");
+    assert!(message.contains("sudo riku init"), "{message}");
+    assert!(
+        paths.app_root.join("shop").exists() && paths.nginx_root.join("shop.conf").exists(),
+        "a refused destroy deleted files"
+    );
+}
+
+#[test]
+fn destroy_deletes_the_app_dir_last_so_a_failure_can_be_retried() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut paths = RikuPaths::for_tests(tmp.path());
+    paths.reload_programs.nginx = tmp.path().join("nginx");
+    fs::write(&paths.reload_programs.nginx, "").unwrap();
+    crate::nginx::write_include_file(&paths).unwrap();
+    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+    fs::create_dir_all(paths.env_root.join("shop")).unwrap();
+    // A file where the log directory should be: removing it as a directory
+    // fails, after the env dir and before the app dir.
+    fs::create_dir_all(&paths.log_root).unwrap();
+    fs::write(paths.log_root.join("shop"), "not a directory").unwrap();
+
+    let err = cmd_destroy(&paths, "shop", DestroyMode::Safe).unwrap_err();
+
+    assert!(format!("{err:#}").contains("logs/shop"), "{err:#}");
+    assert!(
+        !paths.env_root.join("shop").exists(),
+        "steps before the failure did not run"
+    );
+    assert!(
+        paths.app_root.join("shop").exists(),
+        "the app dir went before a later step failed, so a retry cannot find the app"
+    );
+}
+
 fn container_app_without_engine(root: &Path) -> RikuPaths {
     let paths = RikuPaths::for_tests(root);
+    crate::nginx::write_include_file(&paths).unwrap();
     let app_dir = paths.app_root.join("shop");
     fs::create_dir_all(&app_dir).unwrap();
     fs::write(

@@ -243,6 +243,7 @@ riku/
 │   ├── riku-supervisor/    # Process supervisor: daemon/, process/, health/, stats/, cgroups/
 │   ├── riku-util/          # Shared helpers: cron, env, fs, display, procfile, resource_limits
 │   ├── riku-sync/          # Own file sync (no rsync): manifest scan, transfer plan, verified apply
+│   ├── riku-http/          # Shared blocking reqwest client builder (rustls with ring); kept out of rk
 │   ├── riku-error/         # Shared error types
 │   ├── riku-dashboard/     # Server-rendered control dashboard routes
 │   ├── riku-container/     # Container services: shared types, engine driver, compose parsing

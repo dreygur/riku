@@ -50,7 +50,7 @@ fn test_health_endpoint() {
     let _tx = start_test_server(port, running.clone(), stats_file);
     wait_for_server(port);
 
-    let client = reqwest::blocking::Client::builder()
+    let client = riku_http::blocking_client_builder()
         .timeout(Duration::from_secs(5))
         .build()
         .unwrap();
@@ -81,7 +81,7 @@ fn test_metrics_endpoint_empty() {
     let _tx = start_test_server(port, running.clone(), stats_file);
     wait_for_server(port);
 
-    let client = reqwest::blocking::Client::builder()
+    let client = riku_http::blocking_client_builder()
         .timeout(Duration::from_secs(5))
         .build()
         .unwrap();
@@ -110,7 +110,7 @@ fn test_metrics_apps_endpoint_empty() {
     let _tx = start_test_server(port, running.clone(), stats_file);
     wait_for_server(port);
 
-    let client = reqwest::blocking::Client::builder()
+    let client = riku_http::blocking_client_builder()
         .timeout(Duration::from_secs(5))
         .build()
         .unwrap();
@@ -141,7 +141,7 @@ fn test_metrics_apps_endpoint_with_data() {
     let _tx = start_test_server(port, running.clone(), stats_file);
     wait_for_server(port);
 
-    let client = reqwest::blocking::Client::builder()
+    let client = riku_http::blocking_client_builder()
         .timeout(Duration::from_secs(5))
         .build()
         .unwrap();
@@ -174,7 +174,7 @@ fn test_metrics_app_specific_found() {
     let _tx = start_test_server(port, running.clone(), stats_file);
     wait_for_server(port);
 
-    let client = reqwest::blocking::Client::builder()
+    let client = riku_http::blocking_client_builder()
         .timeout(Duration::from_secs(5))
         .build()
         .unwrap();
@@ -208,7 +208,7 @@ fn test_metrics_app_specific_not_found() {
     let _tx = start_test_server(port, running.clone(), stats_file);
     wait_for_server(port);
 
-    let client = reqwest::blocking::Client::builder()
+    let client = riku_http::blocking_client_builder()
         .timeout(Duration::from_secs(5))
         .build()
         .unwrap();
@@ -243,7 +243,7 @@ fn test_404_response() {
     let _tx = start_test_server(port, running.clone(), stats_file);
     wait_for_server(port);
 
-    let client = reqwest::blocking::Client::builder()
+    let client = riku_http::blocking_client_builder()
         .timeout(Duration::from_secs(5))
         .build()
         .unwrap();
@@ -269,7 +269,7 @@ fn test_metrics_stream_returns_sse_headers() {
     let _tx = start_test_server(port, running.clone(), stats_file);
     wait_for_server(port);
 
-    let client = reqwest::blocking::Client::builder()
+    let client = riku_http::blocking_client_builder()
         .timeout(Duration::from_secs(3))
         .build()
         .unwrap();

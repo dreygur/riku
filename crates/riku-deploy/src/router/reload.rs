@@ -99,7 +99,7 @@ pub fn reload(router: &Router, paths: &RikuPaths, before: &Baseline) -> Result<(
 
 #[cfg(test)]
 #[path = "reload/mock_systemctl.rs"]
-mod mock_systemctl;
+pub(super) mod mock_systemctl;
 
 #[cfg(test)]
 #[path = "reload_tests.rs"]

@@ -82,9 +82,9 @@ Or create an `ENV` file in `~/.riku/envs/myapp/ENV`.
 
 **Q: Can I use custom nginx configuration?**
 
-**A:** Yes. Place `nginx.conf`, `nginx.custom.conf`, or `.nginx.conf` in your app directory, or use:
+**A:** Not as a full replacement. An `nginx.conf`, `nginx.custom.conf`, `nginx.custom` or `.nginx.conf` in your app directory is not supported: riku ignores it, prints a warning at deploy, and uses the generated config. To add directives from a short allowlist (headers, expiry, body size, timeouts, proxy buffering, gzip; see the environment reference) to the generated `server` block, put a snippet in your app directory and point to it:
 ```bash
-RIKU_NGINX_INCLUDE_FILE=custom.conf
+RIKU_NGINX_INCLUDE_FILE=nginx.include
 ```
 
 **Q: Can I store my bare git repo in a custom location?**
@@ -104,7 +104,7 @@ git push riku main
 
 **Q: Does Riku auto-start the supervisor?**
 
-**A:** Yes. On first deployment, Riku automatically starts the supervisor daemon if not running. Nginx configs are also automatically symlinked to `/etc/nginx/sites-enabled/`.
+**A:** Yes. On first deployment, Riku automatically starts the supervisor daemon if not running. Nginx configs are written to `~/.riku/nginx/`, which nginx loads through `/etc/nginx/conf.d/riku.conf` (installed by `sudo riku init`).
 
 **Q: Do I need to install python3-venv for Python apps?**
 
