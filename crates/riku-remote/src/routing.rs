@@ -42,7 +42,6 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
         Commands::Dashboard { .. } => None,
         Commands::Server(_) => None,
         Commands::Addon(_) => None,
-        Commands::Update => None,
         Commands::InstallPlugins { .. } => None,
         Commands::PluginEmit { .. } => None,
         Commands::Supervisor => None,

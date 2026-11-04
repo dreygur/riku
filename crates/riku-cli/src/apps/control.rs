@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 use super::control_target::{control_target, ControlTarget};
 use riku_supervisor::config::app_worker_configs;
 
-use crate::config::{RikuPaths, INSTALL_SCRIPT_URL};
+use crate::config::RikuPaths;
 use crate::supervisor::Supervisor;
 use crate::util::{display, exit_if_invalid, parse_settings};
 
@@ -85,14 +85,6 @@ pub fn cmd_stop(paths: &RikuPaths, app: &str, service: Option<&str>) -> Result<(
     }
 }
 
-/// Refuses: riku cannot replace its own binary yet, so it points at the installer.
-pub fn cmd_update() -> Result<()> {
-    Err(anyhow::anyhow!(
-        "riku update is not implemented; reinstall the latest release with: \
-         curl -fsSL {INSTALL_SCRIPT_URL} | sh"
-    ))
-}
-
 /// Start the supervisor daemon.
 /// For production use, prefer 'riku supervisor --daemon' or the systemd service.
 pub fn cmd_supervisor(paths: &RikuPaths) -> Result<()> {
@@ -117,7 +109,3 @@ fn do_stop(paths: &RikuPaths, app: &str) {
         display::error(&format!("Error: app '{}' not deployed!", app));
     }
 }
-
-#[cfg(test)]
-#[path = "control_tests.rs"]
-mod tests;

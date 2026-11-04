@@ -134,7 +134,7 @@ In a hurry? `riku quickstart` scaffolds a sample app and prints the exact
 | `riku plugins …` | install/search/scaffold/sign plugins (see below) |
 | `riku dashboard [--bind … --token …]` | serve the web dashboard |
 | `riku doctor` | diagnose the host |
-| `riku init` / `riku update` / `riku supervisor` | setup & maintenance |
+| `riku init` / `riku supervisor` | setup & maintenance |
 
 ## Runtime plugins
 

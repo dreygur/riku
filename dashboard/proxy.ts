@@ -3,7 +3,9 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 
 const PUBLIC_PATHS = ["/login", "/api/login"];
 
-export async function middleware(req: NextRequest) {
+// A Node proxy, not Edge middleware: it must share `process.env` with the
+// route handlers so a logout's session epoch bump (lib/auth.ts) reaches it.
+export async function proxy(req: NextRequest) {
   // No password configured: auth is off (matches the rest of riku's
   // philosophy of not breaking default/local usage when a feature's env
   // var is unset).

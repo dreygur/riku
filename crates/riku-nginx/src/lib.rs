@@ -20,6 +20,7 @@ mod reload;
 mod remove;
 mod sanitize;
 mod snippet_grammar;
+mod snippet_limits;
 mod ssl;
 mod template;
 mod validate;

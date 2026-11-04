@@ -12,9 +12,11 @@
 //! 3. Every statement must start with a directive in [`ALLOWED_DIRECTIVES`]
 //!    (headers, expiry, body size, timeouts, proxy buffering, gzip), spelled
 //!    exactly.
+//! 4. Every size, time, count and header value must sit under its cap in
+//!    [`super::snippet_limits`].
 //!
 //! Installed filter plugins may then rewrite the text through the
-//! `nginx.include_content` chain. Checks 2 and 3 run again on the chain's
+//! `nginx.include_content` chain. Checks 2 to 4 run again on the chain's
 //! output, so a filter cannot add what the app's file may not contain.
 
 use std::fs;
@@ -24,6 +26,7 @@ use std::path::Path;
 use anyhow::{anyhow, Result};
 
 use super::snippet_grammar::statements;
+use super::snippet_limits::check_limits;
 
 /// The env key naming the snippet, relative to the app directory.
 pub(super) const SNIPPET_KEY: &str = "RIKU_NGINX_INCLUDE_FILE";
@@ -65,6 +68,9 @@ fn check_snippet(content: &str, source: impl std::fmt::Display) -> Result<Vec<St
         Ok(parsed) => parsed,
         Err(reason) => return Err(anyhow!("{source} {reason}")),
     };
+    if let Err(reason) = check_limits(&parsed) {
+        return Err(anyhow!("{source} {reason}"));
+    }
     let names: Vec<String> = parsed
         .iter()
         .filter_map(|statement| statement.split_whitespace().next())

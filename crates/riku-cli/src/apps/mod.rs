@@ -36,7 +36,7 @@ pub mod stats;
 pub use config::{
     cmd_config_get, cmd_config_live, cmd_config_set, cmd_config_show, cmd_config_unset,
 };
-pub use control::{cmd_restart, cmd_run, cmd_stop, cmd_supervisor, cmd_update};
+pub use control::{cmd_restart, cmd_run, cmd_stop, cmd_supervisor};
 pub use create::cmd_apps_create;
 pub use deploy::cmd_deploy;
 pub use destroy::{cmd_destroy, DestroyMode};

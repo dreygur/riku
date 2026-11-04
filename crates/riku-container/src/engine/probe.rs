@@ -18,8 +18,13 @@ pub const REQUIRED_COMMANDS: [&str; 16] = [
 
 /// Run `<program> --version` within `limit` and return whether it exited 0.
 pub fn answers_version(program: &Path, limit: Duration) -> bool {
-    let args = [OsString::from("--version")];
-    match capture(program, &args, limit) {
+    exits_zero_within(program, &[OsString::from("--version")], limit)
+}
+
+/// Run `program` with `args` within `limit` and return whether it exited 0.
+/// A spawn failure or timeout counts as a non zero exit.
+pub fn exits_zero_within(program: &Path, args: &[OsString], limit: Duration) -> bool {
+    match capture(program, args, limit) {
         Ok(out) => out.status.success(),
         Err(_) => false,
     }

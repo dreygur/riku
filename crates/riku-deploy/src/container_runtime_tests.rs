@@ -17,7 +17,17 @@ fn test_get_container_runtime() {
 }
 
 #[test]
-fn test_check_remote_runtime_format() {
-    let result = check_remote_runtime("localhost");
-    assert!(result.is_ok(), "check_remote_runtime failed: {result:?}");
+fn remote_version_check_times_out_the_connect_and_keeps_the_host_an_operand() {
+    let args = remote_version_args("-oProxyCommand=evil", "docker");
+    let args: Vec<&str> = args.iter().map(|a| a.to_str().unwrap()).collect();
+    assert_eq!(
+        args,
+        [
+            "-o",
+            "ConnectTimeout=10",
+            "--",
+            "-oProxyCommand=evil",
+            "docker --version"
+        ]
+    );
 }

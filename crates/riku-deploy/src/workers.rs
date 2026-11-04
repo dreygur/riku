@@ -39,7 +39,7 @@ mod web_rollout;
 
 pub use scaling::read_scaling_count;
 
-use files::{remove_stale_configs, write_worker_config};
+use files::{remove_stale_configs, remove_surplus_configs, write_worker_config};
 use pinned::check_pinned_port;
 use socket::check_custom_socket;
 use web_env::{build_worker_env, is_web_facing};
@@ -137,19 +137,26 @@ pub(crate) fn create_workers_with(
         env,
         paths,
     };
-    let processes = entries
+    let processes: Vec<(&String, &String)> = entries
         .iter()
-        .filter(|(kind, _)| !ONE_SHOT_KINDS.contains(&kind.as_str()));
+        .filter(|(kind, _)| !ONE_SHOT_KINDS.contains(&kind.as_str()))
+        .collect();
+    let mut counts = HashMap::new();
+    for (kind, _) in &processes {
+        match read_scaling_count(paths, app, kind) {
+            Ok(count) => counts.insert(kind.to_string(), count),
+            Err(e) => return Err(e),
+        };
+    }
+    remove_surplus_configs(app, paths, &counts);
+
     for (kind, command) in processes {
         let effective_cmd = if command.is_empty() {
             start_cmd.unwrap_or(command.as_str())
         } else {
             command.as_str()
         };
-        let count = match read_scaling_count(paths, app, kind) {
-            Ok(count) => count,
-            Err(e) => return Err(e),
-        };
+        let count = counts[kind.as_str()];
         let outcome = match (is_web_facing(kind), count) {
             (true, 0) => stop_web_kind(&deploy, kind),
             (true, want) => roll_web_kind(&deploy, kind, effective_cmd, want, routes),
@@ -168,7 +175,8 @@ pub(crate) fn create_workers_with(
 /// free slot, must pass its health check, and joins the router before an old
 /// copy is drained and stopped. A pinned `PORT` or shared socket stops the
 /// old copy first instead. Other kinds have their configs rewritten, stop
-/// first, unless `RIKU_AUTO_RESTART` is off. Needs the supervisor running.
+/// first, unless `RIKU_AUTO_RESTART` is off. Copies above the scale count are
+/// removed either way. Needs the supervisor running.
 ///
 /// `start_cmd` is an optional fallback command supplied by the runtime plugin
 /// via its `start` subcommand. It fills a Procfile entry with an empty

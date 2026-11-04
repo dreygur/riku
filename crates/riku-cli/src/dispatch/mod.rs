@@ -160,7 +160,6 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
         Commands::Doctor => doctor::cmd_doctor(paths),
         Commands::Dashboard { .. } => Err(anyhow!("dashboard is run by the riku binary")),
         Commands::Addon(cmd) => app_cmds::run_addon(paths, cmd),
-        Commands::Update => apps::cmd_update(),
         Commands::InstallPlugins { plugins } => install_plugins(paths, plugins),
         Commands::PluginEmit {
             event_name,

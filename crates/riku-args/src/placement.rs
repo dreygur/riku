@@ -30,7 +30,7 @@ pub fn placement_of(name: &str) -> Option<Placement> {
             Some(Placement::Server)
         }
         "apps" | "ps" | "logs" | "stats" | "config" | "deploy" | "restart" | "stop" | "destroy"
-        | "rollback" | "run" | "backup" | "restore" | "addon" | "doctor" | "update" | "agent"
+        | "rollback" | "run" | "backup" | "restore" | "addon" | "doctor" | "agent"
         | "install-plugins" | "plugins" | "hook" => Some(Placement::Forwarded),
         _ => None,
     }

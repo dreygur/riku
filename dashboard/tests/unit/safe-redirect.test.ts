@@ -7,7 +7,15 @@ describe("safeRedirectPath", () => {
   });
 
   it("refuses targets that leave the dashboard origin", () => {
-    const hostile = ["https://evil.example", "//evil.example", "/\\evil.example", "\\/evil.example", "javascript:alert(1)"];
+    const hostile = [
+      "https://evil.example",
+      "//evil.example",
+      "/\\evil.example",
+      "\\/evil.example",
+      "/.//evil.example",
+      "/..//evil.example",
+      "javascript:alert(1)",
+    ];
     expect(hostile.map(safeRedirectPath)).toEqual(hostile.map(() => "/"));
     expect(safeRedirectPath(null)).toBe("/");
   });

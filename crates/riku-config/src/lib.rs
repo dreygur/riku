@@ -23,10 +23,6 @@ use root_dirs::root_dirs;
 pub use nginx_host::{NginxHostPaths, DEFAULT_NGINX_INCLUDE_FILE, DEFAULT_NGINX_SITES_ENABLED};
 pub use reload_programs::ReloadPrograms;
 
-/// The one-line installer that fetches and checks the latest release binary.
-pub const INSTALL_SCRIPT_URL: &str =
-    "https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh";
-
 /// Default worker timeout in seconds (2 hours).
 pub const RIKU_WORKER_TIMEOUT: u64 = 7200;
 

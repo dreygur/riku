@@ -1,6 +1,6 @@
 # login
 
-`/login`: the password form. `middleware.ts` sends unauthenticated page
+`/login`: the password form. `proxy.ts` sends unauthenticated page
 requests here with the original path in `?from=`.
 
 ## Interface
@@ -8,7 +8,7 @@ requests here with the original path in `?from=`.
 - `dynamic` [page.tsx:dynamic] (const)
 
 ## Side Effects
-- [page.tsx] Posts the password to `/api/login`, then `router.replace`s to `?from=` or `/`. The `from` value is not checked to be a same-site path.
+- [page.tsx] Posts the password to `/api/login`, then `router.replace`s to `?from=` or `/`. The `from` value passes through `lib/safe-redirect.ts`, so only same-origin paths are followed.
 
 ## Verification
 - Run: `nub run test:e2e`

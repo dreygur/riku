@@ -314,10 +314,6 @@ pub enum Commands {
     )]
     Addon(AddonCmd),
 
-    /// Self-update the riku binary (not implemented, prints the installer command)
-    #[command(after_help = "Examples:\n  riku update")]
-    Update,
-
     /// Install bundled plugins to ~/.riku/plugins/
     ///
     /// Installs runtimes like node/python and first-party bundles like the

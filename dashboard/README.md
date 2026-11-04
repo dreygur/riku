@@ -26,7 +26,7 @@ loopback-only default (see [Dashboard](../docs/docs/dashboard.md)).
 A single shared password gates the whole frontend, every page and the
 `/api/riku/*` proxy: via a signed session cookie:
 
-- **`middleware.ts`** checks a session cookie (`riku_session`) on every
+- **`proxy.ts`** checks a session cookie (`riku_session`) on every
   request. No `RIKU_DASHBOARD_PASSWORD_HASH` set → auth is fully bypassed
   (local/dev default). Unauthenticated pages redirect to `/login`;
   unauthenticated API calls get `401` JSON instead.
@@ -40,10 +40,16 @@ A single shared password gates the whole frontend, every page and the
 - **`lib/auth.ts`**: the session cookie is an HMAC-SHA256 token
   (`${expiryMs}.${signature}`), keyed off `SHA-256(RIKU_DASHBOARD_PASSWORD_HASH)`,
   the stored hash itself and never the plaintext, via Web Crypto
-  (`crypto.subtle`), so the same code runs in both the Edge middleware and the
-  Node `/api/login` route. 7-day expiry, `HttpOnly`, `SameSite=Strict`,
+  (`crypto.subtle`). 12-hour expiry, `HttpOnly`, `SameSite=Strict`,
   `Secure` only when the request actually arrived over HTTPS (checked via
   `x-forwarded-proto`, so it still works during local/plain-HTTP testing).
+  The signature also covers a session epoch held in the process environment;
+  logging out bumps it and so signs out every session. A restart does too.
+- **`lib/login-throttle.ts`**: the fifth failed login from one client locks
+  it out for 30 s, doubling per further failure up to 15 min. The client is
+  the last `X-Forwarded-For` entry, set by riku's router. Keep the dashboard
+  bound to loopback (`next start -H 127.0.0.1`): bound to a public address,
+  clients could forge that header and dodge the limit.
 
 ### Environment variables
 

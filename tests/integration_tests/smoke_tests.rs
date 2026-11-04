@@ -250,12 +250,6 @@ mod routing_tests {
         assert_eq!(get_plugin_command(&cmd), None);
     }
 
-    #[test]
-    fn update_command_returns_none() {
-        let cmd = Commands::Update;
-        assert_eq!(get_plugin_command(&cmd), None);
-    }
-
     // build_plugin_args
 
     #[test]

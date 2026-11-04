@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-04-rootless-engine-design.md`, addendum to `docs/superpowers/specs/2026-10-30-container-services-design.md`. Ledger: `.superpowers/sdd/2026-11-04-rootless-engine/progress.md` (this machine only).
 
-**Not in this plan:** rootless docker on OpenRC (deferred until users ask), Procfile worker cgroup delegation, installing any engine or helper package, a real self update (`riku update` is a stub today and stays one, now root only).
+**Not in this plan:** rootless docker on OpenRC (deferred until users ask), Procfile worker cgroup delegation, installing any engine or helper package, a self update (`riku update` was removed in 3a; update by installing the new binary as root, then `sudo riku init`).
 
 riku has one user, so there is no migration; reinstall and redeploy.
 
@@ -25,7 +25,7 @@ riku has one user, so there is no migration; reinstall and redeploy.
 - Engine access only through `riku-container`'s `Engine`. Capability probing, never engine or distribution name checks; engine names appear in messages only.
 - Containers stay an add-on: no engine installed means no rootless step, no engine check and no engine line from init or doctor.
 - One binary: `/usr/local/bin/riku`, root owned. No second copy, no path under the deploy user's home in any unit, hook, forced command or relaunch.
-- `riku router-helper` and `riku update` are `Placement::Server` in `crates/riku-args/src/placement.rs` and refuse to run unless euid is 0.
+- `riku router-helper` is `Placement::Server` in `crates/riku-args/src/placement.rs` and refuses to run unless euid is 0.
 - Rootless never ships without the router helper. Tasks 6 to 10 land before Task 12, and Task 12's mode write refuses unless the helper answers `status`. The branch is not merged to main before Task 19 passes.
 - Footprint check (F), the last step before every commit from Task 2 on: run `benches/footprint.sh` (Task 1). The binary must stay within the limit in the ledger below. Tasks that add or change a resident process (7, 10, 12, 13, 14) also run its idle RSS part. A failed F stops the task and goes to the owner.
 
@@ -128,7 +128,6 @@ Opus review: every way the deploy user reaches riku changes path. Runs on every 
 
 **Interfaces:**
 - Root init installs the running binary to `/usr/local/bin/riku` (root owned, 0755) before anything else. Every unit, hook and forced command it writes names that path.
-- `rk update` refuses on the laptop with "run on the server: sudo riku update". `riku update` as non root refuses the same way.
 - doctor: `/usr/local/bin/riku` root owned and not group or world writable; no forced command, unit or hook naming another path.
 
 **Security model:** `binary.rs` doc comment: root writes only `/usr/local/bin/riku` and the system units; root never executes or trusts a file from the deploy user's tree.
@@ -365,7 +364,7 @@ Opus review: root steps acting for the deploy user.
 - Modify: `docs/docs/runtimes.md`, `nginx.md`, `caddy.md`, `systemd.md`, `settings.md`, `doctor.md`, `installation.md`, `cli.md`, `README.md` (install path, footprint figures from the ledger, add-on costs stated apart), `CHANGELOG.md`, `docs/superpowers/ROADMAP.md`
 
 - [ ] **Step 1: Docs:** the one binary at `/usr/local/bin/riku` and that updates need root; rootless mode per init system and engine, OpenRC docker deferred, the grant and its warning, `engine.mode` and `engine.host`, the router helper and `/etc/riku`, starting the helper by hand on other init systems, Caddy's admin socket, low port refusal, footprint with the engine's cost stated as the add-on's.
-- [ ] **Step 2: CHANGELOG**, under Unreleased. From the 3a ledger, unless 3a Task 16 already wrote them: run `sudo riku init` and redeploy apps after upgrading; a stray `.conf` in `~/.riku/nginx` refuses deploys; `RIKU_NGINX_INCLUDE_FILE` is grammar plus allowlist and old snippets may be refused; an app `nginx.conf` is ignored; filter plugins adding non allowlisted directives fail deploys; container app detection (a compose file or a root `Dockerfile`/`Containerfile` deploys as riku containers, owner decision); port host IP form refused, use the `riku.public` label; `destroy --force`; the logs glob change. From this plan: riku lives at `/usr/local/bin/riku`, root owned, and `riku update` needs root; rootless by default when an engine is present; root router helper and `/etc/riku`; `RIKU_NGINX_CACHE_PATH` removed; Caddy admin on a unix socket; legacy container plugin retired; host ports below the unprivileged start refused.
+- [ ] **Step 2: CHANGELOG**, under Unreleased. From the 3a ledger, unless 3a Task 16 already wrote them: run `sudo riku init` and redeploy apps after upgrading; a stray `.conf` in `~/.riku/nginx` refuses deploys; `RIKU_NGINX_INCLUDE_FILE` is grammar plus allowlist and old snippets may be refused; an app `nginx.conf` is ignored; filter plugins adding non allowlisted directives fail deploys; container app detection (a compose file or a root `Dockerfile`/`Containerfile` deploys as riku containers, owner decision); port host IP form refused, use the `riku.public` label; `destroy --force`; the logs glob change. From this plan: riku lives at `/usr/local/bin/riku`, root owned; rootless by default when an engine is present; root router helper and `/etc/riku`; `RIKU_NGINX_CACHE_PATH` removed; Caddy admin on a unix socket; legacy container plugin retired; host ports below the unprivileged start refused.
 - [ ] **Step 3: Run** `NO_MKDOCS_2_WARNING=1 uvx --with mkdocs-material --with mkdocs-minify-plugin mkdocs build --strict -d <scratch>/site`. Expected: no warnings.
 - [ ] **Step 4:** ROADMAP status lines with commits.
 - [ ] **Step 5: Commit** `Document the rootless engine and router helper`.
@@ -375,7 +374,7 @@ Opus review: root steps acting for the deploy user.
 Three hosts: systemd with docker, systemd with podman, OpenRC (Alpine VM) with podman. Plus one systemd host with neither router nor engine, one OpenRC host with docker only, and one runit or sysvinit VM. Results go in the ledger; each failure is a bug fixed before Task 20, never a skipped item.
 
 - [ ] Footprint: F on the no engine host within the ledger limits; helper idle RSS on OpenRC recorded; lingering user manager recorded as add-on cost.
-- [ ] One binary, on a host with a router and on the host with neither: `git push`, `rk` commands and the supervisor run `/usr/local/bin/riku`; `/usr/local/bin` is on the deploy user's `PATH` over ssh and sudo (unverified outside Debian and Alpine); `rk update` and non root `riku update` refuse with the root message.
+- [ ] One binary, on a host with a router and on the host with neither: `git push`, `rk` commands and the supervisor run `/usr/local/bin/riku`; `/usr/local/bin` is on the deploy user's `PATH` over ssh and sudo (unverified outside Debian and Alpine).
 - [ ] Init from clean on each of the three hosts; refusals on cgroup v1, missing network helper, missing `newuidmap`.
 - [ ] No engine host: init and doctor print nothing about engines.
 - [ ] OpenRC docker only and runit or sysvinit: init sets rootful, prints the grant, the warning and the reason, runs nothing; on runit or sysvinit init prints the helper start command and deploys work once the operator starts it.

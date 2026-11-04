@@ -519,12 +519,8 @@ run. That path is written into:
 
 `scripts/install.sh:74-76` already picks `/usr/local/bin` when run as root.
 
-`riku update` (crates/riku-args/src/cli.rs:321-323, dispatched at
-crates/riku-cli/src/dispatch/mod.rs:163) is a stub: `cmd_update`
-(crates/riku-cli/src/apps/control.rs:86-113) only checks that a URL
-answers, prints that self update is not implemented, and prints "Done.".
-It is `Forwarded` (crates/riku-args/src/placement.rs:33), so `rk update`
-sends it to the deploy user.
+`riku update` was removed in phase 3a. Updating means installing the new
+binary as root (`scripts/install.sh` as root), then `sudo riku init`.
 
 ### Design
 
@@ -536,10 +532,6 @@ sends it to the deploy user.
 - Every reference above names `/usr/local/bin/riku` as an absolute path.
   The supervisor relaunch uses `/usr/local/bin/riku`, then `current_exe`;
   `~/.local/bin` is never consulted.
-- `riku update` becomes `Placement::Server` and refuses unless euid is 0.
-  `rk update` then refuses on the laptop with "run on the server: sudo riku
-  update". Until a real self update exists, the update path is: install the
-  new binary as root (`scripts/install.sh` as root), then `sudo riku init`.
 - Init no longer appends a `PATH` line. Non interactive ssh needs no `PATH`
   for riku: the forced command, the units and the hooks use the absolute
   path, and `/usr/local/bin` is in the default `PATH` of sshd and sudo's

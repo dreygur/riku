@@ -217,6 +217,36 @@ fn test_auto_restart_false_skips_removal_of_existing_configs() -> anyhow::Result
     Ok(())
 }
 
+#[test]
+fn scale_down_removes_surplus_copies_with_auto_restart_off() -> anyhow::Result<()> {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let app_path = tmp.path().join("app");
+    fs::create_dir_all(&app_path).unwrap();
+    fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
+    fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+    fs::write(app_path.join("Procfile"), "worker: echo hello\n")?;
+    let mut env = HashMap::new();
+    env.insert("RIKU_AUTO_RESTART".to_string(), "false".to_string());
+
+    fs::write(paths.env_root.join("myapp/SCALING"), "worker=3\n")?;
+    create_workers_generic("myapp", &app_path, &env, &paths, None)?;
+    fs::write(paths.env_root.join("myapp/SCALING"), "worker=1\n")?;
+    create_workers_generic("myapp", &app_path, &env, &paths, None)?;
+
+    let mut enabled: Vec<String> = fs::read_dir(&paths.workers_enabled)?
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    enabled.sort();
+    assert_eq!(
+        enabled,
+        ["myapp@worker.1.toml"],
+        "copies 2 and 3 should be gone"
+    );
+    Ok(())
+}
+
 /// Redeploying allocates fresh ports, so what the router is given must be
 /// the ports of the latest deploy's copies, every copy of them.
 #[test]

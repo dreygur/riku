@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Removed `riku-plugin-container`: riku runs container apps itself, so `riku install-plugins container` and the plugin `pull-service` path for `RIKU_WATCH_SERVICES` are gone.
 - Container names changed to `<app>.<service>.<n>` and volume names to `<app>.<key>`, and compose service and volume names may not contain `.`; redeploy container apps. Data in volumes under the old `<project>_<key>` names is not reused, and the compose `name` key and `COMPOSE_PROJECT_NAME` no longer affect any name.
+- The browser dashboard's login backs off per client: the fifth failed password locks that client out for 30 s, doubling with each further failure up to 15 min, and a success clears it. The client is the last `X-Forwarded-For` entry, so keep the dashboard bound to loopback behind riku's router.
+- Dashboard logout now signs out every session, and sessions last 12 hours instead of 7 days. Restarting the dashboard also signs everyone out.
+- `RIKU_NGINX_INCLUDE_FILE` snippets are refused when a value is above its cap: `client_max_body_size` 1g (and not 0), every `*_timeout` 3600s, `proxy_buffer_size` 1m, `proxy_buffers` 64 of 1m, `proxy_busy_buffers_size` 2m, `gzip_comp_level` 1 to 9, at most 32 `add_header` lines of 4 KiB each. Sizes and times must be a number with an optional nginx unit; compound times such as `1m30s` are refused.
+- Scaling a worker kind down now removes its surplus copies even with `RIKU_AUTO_RESTART=false`; the flag only decides whether the kept copies restart.
+- Removed `riku update` (and `rk update`). It never updated anything; rerun the installer to upgrade.
 
 ### Upgrade Notes: Worker and Socket File Names
 
@@ -147,13 +152,10 @@ The Next.js browser dashboard (`dashboard/`) gets its own login, independent
 of the backend's `RIKU_DASHBOARD_TOKEN`: a single shared password, never
 stored in plaintext (`RIKU_DASHBOARD_PASSWORD_HASH`, scrypt salt+hash,
 generated via `nub run hash-password`), gating every route through a
-signed session cookie (`middleware.ts`). Fully bypassed when the hash env
+signed session cookie (`proxy.ts`). Fully bypassed when the hash env
 var is unset, so existing local/dev usage is unaffected. After login the
 page only follows a same-origin `from` path, so a crafted login link cannot
 send the user to another site. The stale `audit:dashboard` script is gone.
-
-`riku update` now exits with an error that prints the installer command,
-instead of probing a dead URL and printing "Done.".
 
 ### Incident Alerting
 
