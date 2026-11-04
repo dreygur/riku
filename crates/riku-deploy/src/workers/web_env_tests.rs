@@ -103,6 +103,20 @@ fn each_wsgi_copy_listens_on_its_own_socket() {
 }
 
 #[test]
+fn uwsgi_socket_is_group_only_and_stops_on_sigterm() {
+    let tmp = TempDir::new().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+
+    let env = build_worker_env("shop", "php", copy_one(), &HashMap::new(), &[], &paths).unwrap();
+
+    assert_eq!(
+        env.get("UWSGI_CHMOD_SOCKET").map(String::as_str),
+        Some("660")
+    );
+    assert_eq!(env.get("UWSGI_DIE_ON_TERM").map(String::as_str), Some("1"));
+}
+
+#[test]
 fn rejects_a_pinned_port_that_is_not_a_port() {
     let tmp = TempDir::new().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());

@@ -159,6 +159,29 @@ pub(crate) fn write_scaling(
         Err(e) => return Err(e),
     };
     counts.insert(service.to_string(), copies);
+    save_scaling(app, paths, &counts)
+}
+
+/// Drop every `SCALING` entry `keep` refuses. The file is left alone when
+/// nothing is dropped.
+pub(crate) fn retain_scaling(
+    app: &str,
+    paths: &RikuPaths,
+    keep: impl Fn(&str) -> bool,
+) -> Result<()> {
+    let mut counts = match read_scaling(app, paths) {
+        Ok(counts) => counts,
+        Err(e) => return Err(e),
+    };
+    let before = counts.len();
+    counts.retain(|name, _| keep(name));
+    if counts.len() == before {
+        return Ok(());
+    }
+    save_scaling(app, paths, &counts)
+}
+
+fn save_scaling(app: &str, paths: &RikuPaths, counts: &BTreeMap<String, u32>) -> Result<()> {
     let text: String = counts
         .iter()
         .map(|(name, count)| format!("{name}={count}\n"))

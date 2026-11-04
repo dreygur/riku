@@ -87,6 +87,28 @@ fn web_copy_overlaps_on_deploy() {
     );
 }
 
+#[test]
+fn a_stopped_wsgi_copy_leaves_no_socket_behind() {
+    let tmp = TempDir::new().unwrap();
+    let (paths, app_path) = web_app(&tmp);
+    fs::write(app_path.join("Procfile"), "wsgi: app:application\n").unwrap();
+
+    deploy_twice(&paths, &app_path, &HashMap::new());
+
+    let mut sockets: Vec<String> = fs::read_dir(&paths.nginx_root)
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.ends_with(".sock"))
+        .collect();
+    sockets.sort();
+    assert_eq!(
+        sockets,
+        ["myapp@2.sock"],
+        "the replaced copy's socket stayed"
+    );
+}
+
 /// A pinned PORT cannot be held by two copies, so the old copy stops before
 /// its replacement starts.
 #[test]

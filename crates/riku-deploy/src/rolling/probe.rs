@@ -8,7 +8,9 @@
 //! probe at another service. A socket probe connects to the path riku wrote
 //! into the copy's own worker config.
 
+use std::fs;
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::thread::sleep;
@@ -20,6 +22,7 @@ use reqwest::redirect::Policy;
 
 const PROBE_INTERVAL: Duration = Duration::from_millis(500);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
+const GROUP_READ_WRITE: u32 = 0o060;
 
 pub(super) fn probe_client() -> Result<Client> {
     match riku_http::blocking_client_builder()
@@ -51,11 +54,29 @@ pub(super) fn probe_port(port: u16) -> Result<()> {
     }
 }
 
-pub(super) fn probe_socket(path: &Path) -> Result<()> {
-    match UnixStream::connect(path) {
-        Ok(_) => Ok(()),
-        Err(e) => Err(anyhow!("connect failed: {e}")),
+/// One socket poll: `Ok(false)` while nothing listens, `Err` once a
+/// listener is up on a socket its group cannot read and write.
+///
+/// The probe connects as the deploy user, who owns the socket, so a connect
+/// alone cannot see what nginx sees. nginx connects through the deploy
+/// group (root init adds it), and without group access every request is
+/// a 502 while the deploy looks healthy.
+pub(super) fn probe_socket(path: &Path) -> Result<bool> {
+    if UnixStream::connect(path).is_err() {
+        return Ok(false);
     }
+    let mode = match fs::metadata(path) {
+        Ok(meta) => meta.permissions().mode() & 0o777,
+        Err(e) => return Err(anyhow!("cannot inspect {}: {e}", path.display())),
+    };
+    if mode & GROUP_READ_WRITE != GROUP_READ_WRITE {
+        return Err(anyhow!(
+            "{} is mode {mode:o}, so nginx cannot connect to it; \
+             the socket needs group read and write (uWSGI chmod-socket=660)",
+            path.display()
+        ));
+    }
+    Ok(true)
 }
 
 /// Calls `attempt` every `PROBE_INTERVAL` until it returns `Ok(true)`, an

@@ -2,7 +2,8 @@
 //!
 //! riku writes every site config into the deploy user's `~/.riku/nginx` and
 //! never under `/etc/nginx`. Setup installs the one root-owned file that
-//! loads that directory, `/etc/nginx/conf.d/riku.conf`.
+//! loads that directory, `/etc/nginx/conf.d/riku.conf`, and puts the nginx
+//! worker user in the deploy group (see [`super::nginx_worker`]).
 //!
 //! Security: the include file's text is built from the riku root path only
 //! and refused if that path holds nginx syntax (see
@@ -22,6 +23,7 @@ use crate::nginx::{include_file_contents, write_include_file};
 use crate::util::echo;
 
 use super::deploy_user::DeployUser;
+use super::nginx_worker::grant_nginx_sockets;
 
 /// Write the include file unless it already holds the same text. Returns
 /// whether it was written.
@@ -134,7 +136,10 @@ pub fn setup_nginx_host(user: &DeployUser) -> Result<()> {
     if let Err(e) = check_write_dir(dir, ROOT_UID) {
         return Err(e);
     }
-    load_riku_sites(&paths)
+    if let Err(e) = load_riku_sites(&paths) {
+        return Err(e);
+    }
+    grant_nginx_sockets(user, &paths)
 }
 
 #[cfg(test)]

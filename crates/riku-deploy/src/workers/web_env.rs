@@ -46,6 +46,12 @@ fn listen_socket(
 }
 
 /// Inject uwsgi unix-socket variables into the environment.
+///
+/// uWSGI reads `UWSGI_<OPTION>` variables as its own options. The socket is
+/// `0660` so nginx, which root init puts in the deploy user's group, can
+/// connect without the socket being world writable. `die-on-term` makes
+/// SIGTERM stop uWSGI instead of reloading it, so a stopped copy exits
+/// at once rather than after the supervisor's SIGKILL timeout.
 fn configure_wsgi_env(socket_path: &Path, env: &mut HashMap<String, String>) {
     env.insert(
         "SOCKET".to_string(),
@@ -58,6 +64,8 @@ fn configure_wsgi_env(socket_path: &Path, env: &mut HashMap<String, String>) {
     env.insert("RIKU_NGINX_WSGI".to_string(), "true".to_string());
     env.insert("UWSGI_PROCESSES".to_string(), UWSGI_PROCESSES.to_string());
     env.insert("UWSGI_THREADS".to_string(), UWSGI_THREADS.to_string());
+    env.insert("UWSGI_CHMOD_SOCKET".to_string(), "660".to_string());
+    env.insert("UWSGI_DIE_ON_TERM".to_string(), "1".to_string());
 }
 
 /// Use the pinned port or allocate a free one, and inject nginx port-map

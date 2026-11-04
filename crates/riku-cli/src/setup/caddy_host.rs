@@ -44,7 +44,8 @@ fn caddyfile_with_import(current: &str, line: &str) -> Option<String> {
     Some(updated)
 }
 
-fn run(program: &str, args: &[&str]) -> Result<()> {
+/// Run `program` with a fixed argv and no shell.
+pub(super) fn run(program: &str, args: &[&str]) -> Result<()> {
     let command = format!("{program} {}", args.join(" "));
     match Command::new(program).args(args).output() {
         Ok(output) if output.status.success() => Ok(()),

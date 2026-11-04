@@ -2,6 +2,7 @@ use std::fs;
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, TcpListener};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::os::unix::fs::PermissionsExt;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -196,6 +197,17 @@ fn socket_target_needs_a_listener() {
     );
 
     let _listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+    fs::set_permissions(&socket, fs::Permissions::from_mode(0o755)).unwrap();
+    let err = wait_healthy(&HealthTarget::Socket(socket.clone()), None).unwrap_err();
+    assert!(
+        err.to_string().contains("nginx cannot connect"),
+        "a 0755 socket must fail the deploy: {err}"
+    );
+
+    fs::set_permissions(&socket, fs::Permissions::from_mode(0o660)).unwrap();
     let outcome = wait_healthy(&HealthTarget::Socket(socket), None);
-    assert!(outcome.is_ok(), "a bound socket is healthy: {outcome:?}");
+    assert!(
+        outcome.is_ok(),
+        "a bound 0660 socket is healthy: {outcome:?}"
+    );
 }

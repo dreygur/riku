@@ -80,6 +80,20 @@ impl ProcessRuntime<'_> {
             .unwrap_or(riku_config::RIKU_WORKER_GRACE_PERIOD);
         Duration::from_secs(configured)
     }
+
+    /// Remove the stopped copy's own `<app>@<n>.sock`, which uWSGI leaves
+    /// behind. A `RIKU_NGINX_SOCKET` path is the app's, so it stays.
+    fn remove_copy_socket(&self, copy: &LiveCopy) -> Result<()> {
+        let own = crate::router::copy_socket(self.paths, self.app, copy.copy);
+        if copy.backend != Some(Backend::Unix(own.clone())) {
+            return Ok(());
+        }
+        match fs::remove_file(&own) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(anyhow!("cannot remove {}: {e}", own.display())),
+        }
+    }
 }
 
 impl CopyRuntime for ProcessRuntime<'_> {
@@ -149,6 +163,9 @@ impl CopyRuntime for ProcessRuntime<'_> {
         }
         crate::supervisor_ctl::notify_supervisor_reload(self.paths);
         wait_stopped(self.paths, &process_id, grace + STOP_MARGIN);
+        if let Err(e) = self.remove_copy_socket(copy) {
+            return Err(e);
+        }
         let available = self.paths.workers_available.join(name.file_name());
         match fs::remove_file(&available) {
             Ok(()) => Ok(()),
