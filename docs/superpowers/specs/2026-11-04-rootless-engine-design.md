@@ -8,6 +8,8 @@ Claims about today's code carry a file:line. Claims about engines, kernels
 and init systems come from upstream docs or memory and are marked unverified
 until the real host check runs.
 
+riku has one user, so there is no migration; reinstall and redeploy.
+
 ## Why
 
 The deploy user is meant to be unprivileged. Two things make it root
@@ -34,10 +36,7 @@ release (owner decision).
 4. Containers stay an add-on. A host with no engine gets no rootless setup
    and no engine checks, and init and doctor say nothing about engines.
 5. The base footprint the README promises is kept (see "Footprint").
-6. Named volumes of existing compose apps are copied once into the rootless
-   store, ownership shifted through the subuid map. Affected apps refuse to
-   deploy until then. The rootful volumes stay as a backup.
-7. The deploy user never writes a file a root process parses as router
+6. The deploy user never writes a file a root process parses as router
    config.
 
 ## Non goals
@@ -55,8 +54,6 @@ release (owner decision).
 ## Anti goals
 
 - Adding the deploy user to the docker group, or riku running any grant.
-- An app starting on an empty volume while its data sits in the rootful
-  store.
 - Changing or deleting rootful volumes.
 - Quietly running rootful because rootless setup failed. init refuses.
 - Branching on the engine's or the distribution's name. Engine binary names
@@ -82,7 +79,6 @@ release (owner decision).
    user.
 5. Defaults, owner may override:
    - root owned state lives in `/var/lib/riku/`;
-   - the volume copy uses a helper container with a digest pinned image;
    - the image import in crates/riku-deploy/src/container_runtime.rs moves
      onto the driver;
    - the legacy container plugin path is retired.
@@ -95,11 +91,9 @@ release (owner decision).
    binary may grow by at most 10 percent of main's size, rounded up to
    0.5 MiB.
 9. One root owned binary at `/usr/local/bin/riku`. The deploy user runs it
-   and cannot change it. Updates need root. Existing `~/.local/bin/riku`
-   installs are moved (see "One root owned binary").
-10. An absent `engine.mode` means init has not been rerun since the
-    upgrade. The router helper is installed on every host with a router.
-    On init systems other than systemd and OpenRC the operator starts the
+   and cannot change it. Updates need root.
+10. An absent `engine.mode` means the default, `rootless`. The router
+    helper is installed on every host with a router. On init systems other than systemd and OpenRC the operator starts the
     helper by hand.
 
 ## How the engine runs today
@@ -140,11 +134,8 @@ files carry none of it.
   exists (podman's systemd cgroup manager uses it, unverified).
 - `settings.toml` gains `engine.host`, passed as `DOCKER_HOST`, and
   `engine.mode = "rootless" | "rootful"`. init writes `rootless` unless the
-  owner set `rootful` or the host falls back to it. An absent key means init
-  has not run since the upgrade: `open_engine` behaves as it does today and
-  doctor says to run `sudo riku init`, so installing the new binary changes
-  nothing on its own (see "Upgrade path"). init writes
-  `host` only when the engine fails `info` without it and answers with
+  owner set `rootful` or the host falls back to it. An absent key means
+  `rootless`, the default. init writes `host` only when the engine fails `info` without it and answers with
   `unix://$XDG_RUNTIME_DIR/docker.sock`. Data, not a name check.
 - In rootless mode `open_engine` refuses an engine whose `info` does not
   report rootless. Docker reports `name=rootless` in `SecurityOptions`,
@@ -192,7 +183,6 @@ installs the one binary (see "One root owned binary").
    unless step 0 left a helper that answers `status`.
 9. Verify as the deploy user: `open_engine` reports rootless, and a
    container run with `--memory 64m` shows that limit in `stats`.
-10. Record volumes to move (see "Moving volumes").
 
 ## Init systems
 
@@ -329,54 +319,6 @@ init does not change it.
   (crates/riku-supervisor/src/containers/listing.rs:83-91), so missing
   delegation shows as stale numbers with no error. doctor reports it.
 
-## Moving volumes
-
-Today a declared volume `key` is named `<project>_<key>`
-(crates/riku-container/src/compose/project.rs:199-210); `name:`,
-`external:` and `driver_opts` are refused (compose/volume_decl.rs:34-49).
-riku creates no volume itself: `run -v` lets the engine create it
-(run_args.rs:57-70). Compose made volumes carry `com.docker.compose.project`,
-which the declared name check requires
-(crates/riku-deploy/src/containers/project_check.rs:46-93). The legacy
-migration reuses those names (crates/riku-deploy/src/containers/migrate.rs:1-9;
-4aef6ba).
-
-The copy is a one time root command, `sudo riku migrate-volumes [<app>...]`,
-not part of init. It stops the app, takes time in proportion to the data and
-must be retryable per app; init is rerun on every upgrade (4294a66) and must
-stay quick and never take an app down.
-
-1. init, as root, lists rootful volumes rootless riku will need: named
-   volumes mounted by containers labelled `riku.app`, and `<project>_<key>`
-   for each compose app's declared keys. It writes them to
-   `/var/lib/riku/volume-moves.toml` (root owned, 0644). init refuses to
-   switch while any app still runs the legacy plugin
-   (crates/riku-cli/src/doctor/container_check.rs:31-46): its
-   `docker compose up` worker would start against the rootless engine on
-   empty volumes. Those are redeployed first, under rootful.
-2. Deploy, restart and the supervisor's restart of a copy refuse for an app
-   on the list, naming the command.
-3. Per app, the command checks the helper image is present, stops the app's
-   rootful containers, and for each volume creates the rootless volume with
-   the same name and labels, then streams a tar of the rootful data, read
-   by root, keeping container uids, into
-   `<engine> run --rm -i --network none -v <vol>:/dst <image> tar -x -p -C /dst`
-   run as the deploy user. The engine's own map shifts ownership: container
-   uid 0 to the deploy user, `n` to `subuid_start + n - 1`. Files with a uid
-   outside the range are refused, not squashed. A rootful daemon with
-   `userns-remap` is refused. After a count and size check the app leaves
-   the list, and the operator redeploys (images are pulled or built again).
-4. Rootful volumes are never touched.
-
-Helper image (default, owner may override): the official `busybox` image,
-pinned in riku's source by the digest of its multi architecture index,
-chosen when this is built (no digest is named here). The command pulls
-`busybox@sha256:<digest>` through the rootless engine. Offline, the pull
-fails and the command stops before touching any container; the message says
-to `<engine> load` a saved copy of that exact digest and rerun. Presence is
-checked with `image inspect` (`image` is already a required command,
-probe.rs:14-17).
-
 ## Router helper
 
 ### The problem
@@ -402,6 +344,9 @@ over a unix socket. It validates the data, renders the config with the
 existing `riku-nginx` and `riku-caddy` renderers, installs it into a root
 owned directory, checks it with the real router as root, reloads, and
 replies. The deploy user no longer writes any file the router parses.
+init writes `/etc/nginx/conf.d/riku.conf` as
+`include /etc/riku/nginx/*.conf;` and installs no `riku-nginx.path` or
+`riku-nginx-reload.service`.
 
 Files:
 - `/etc/riku/nginx/<app>.conf` and `/etc/riku/caddy/<app>.caddy`, root
@@ -416,8 +361,8 @@ Files:
 `/run/riku/router.sock`. `/run/riku` is root owned, mode 0750, group the
 deploy user's primary group; the socket is 0660 with the same group. The
 helper also checks `SO_PEERCRED` and refuses any uid other than the deploy
-user's and root. The `caddy` user is removed from the deploy group (see
-Caddy), so the group holds only the deploy user.
+user's and root. The `caddy` user is not in the deploy group (see Caddy),
+so the group holds only the deploy user.
 
 ### Protocol
 
@@ -529,28 +474,11 @@ With the helper:
   has a global block it cannot merge;
 - the helper runs `caddy reload --config /etc/caddy/Caddyfile --address
   unix//run/caddy/admin.sock` as root (flag unverified);
-- `caddy` leaves the deploy group, and the `g+x` grants on the home and riku
-  root are undone (caddy_host.rs:82-92).
+- init no longer adds `caddy` to the deploy group or grants `g+x` on the
+  home and riku root (caddy_host.rs:82-92).
 
 crates/riku-caddy/src/lib.rs:3-4 says a path unit reloads Caddy, while
 router_units.rs:3-7 says Caddy has none; that doc comment is stale.
-
-### Upgrade from the current include
-
-1. `sudo riku init` installs the helper and its units or scripts, then runs
-   `riku router republish` as the deploy user, which sends `apply` for every
-   app. The helper installs them into `/etc/riku/nginx/` while nginx still
-   loads the old include.
-2. Only when every app applied, init rewrites
-   `/etc/nginx/conf.d/riku.conf` to `include /etc/riku/nginx/*.conf;`,
-   checks with `nginx -t` as root and reloads. On failure it restores the
-   old include and stops.
-3. init disables and removes `riku-nginx.path` and
-   `riku-nginx-reload.service` (the removal pattern of router_units.rs:127-149).
-4. Deploys refuse with "run: sudo riku init" while the old include is in
-   place, as 4294a66 does for missing includes.
-5. `~/.riku/nginx/*.conf` and the `.crt`/`.key` there are left; doctor lists
-   them as unused.
 
 ### Rejected
 
@@ -616,31 +544,9 @@ sends it to the deploy user.
   for riku: the forced command, the units and the hooks use the absolute
   path, and `/usr/local/bin` is in the default `PATH` of sshd and sudo's
   `secure_path` on Debian and Alpine (unverified elsewhere).
-
-### Moving an existing install
-
-Runs on every root init, before the router helper, with or without a router
-or engine. Idempotent.
-
-1. Install `/usr/local/bin/riku` as above.
-2. As the deploy user (through `DeployUser`): rewrite each forced command in
-   `authorized_keys` from the old path to `/usr/local/bin/riku`, extending
-   the existing migration (`migrate_text`,
-   crates/riku-cli/src/doctor/forced_commands.rs:12, 34-54); rewrite every
-   `post-receive` hook under `~/.riku/repos/` from the current template.
-3. As root: rewrite the system unit and, in rootless mode, the user unit;
-   on OpenRC the `riku` script names `/usr/local/bin/riku` from the start.
-   `daemon-reload` and restart the supervisor.
-4. Only after steps 1 to 3 succeed, remove `~/.local/bin/riku` as the deploy
-   user. A failure before this leaves the old binary and every old
-   reference working.
-
-`rk` never names a server path: it runs commands through the deploy key's
-forced command, so step 2 is what keeps `rk` and `git push` working. The
-dashboard script finds the binary through `command -v riku` under sudo.
-
-The deploy user can still create a new `~/.local/bin/riku`. Nothing riku
-writes runs it; doctor reports it as a leftover.
+- `rk` never names a server path: it runs commands through the deploy key's
+  forced command. The dashboard script finds the binary through
+  `command -v riku` under sudo.
 
 ## Footprint
 
@@ -660,8 +566,7 @@ How each part affects it:
 - Router helper on OpenRC and other init systems: resident, one more process
   plus its `supervise-daemon`. Its idle RSS counts toward the base
   footprint.
-- One binary on disk, at `/usr/local/bin/riku`; the move removes the old
-  `~/.local/bin/riku`, so disk use does not grow.
+- One binary on disk, at `/usr/local/bin/riku`, so disk use does not grow.
 - Binary size: the helper reuses `riku-nginx`, `riku-caddy` and
   `serde_json`, already linked. New code only, no new runtime dependency.
   Growth is capped at 10 percent of main's size, rounded up to 0.5 MiB
@@ -683,29 +588,13 @@ How each part affects it:
   riku subcommand through the forced command instead of
   `ssh <host> "<engine> load"`, so it gets the engine env.
 - The legacy container plugin (crates/riku-plugin-container) is no longer
-  shipped or installed. Legacy worker detection and migration in
-  crates/riku-deploy/src/containers/ stay for rootful installs that have not
-  migrated; init refuses rootless while any remain.
-
-## Upgrade path for rootful installs
-
-1. Install the new riku. Nothing changes until init runs.
-2. Redeploy legacy compose apps while still rootful (doctor lists them).
-3. `sudo riku init`: binary moved to `/usr/local/bin`, checks, router
-   helper and republish, engine setup,
-   volume list, `engine.mode = "rootless"`, supervisor moved to the user
-   unit or OpenRC script. Apps with no volumes to move come up rootless on
-   their next deploy. On a host with no engine only the router helper part
-   runs.
-4. `sudo riku migrate-volumes`, app by app, then redeploy each.
-5. The rootful daemon and its volumes stay until the owner removes them.
-   doctor lists leftover rootful riku volumes as a reminder.
+  shipped or installed.
 
 ## doctor
 
 On every host: `/usr/local/bin/riku` is root owned and not group or world
-writable; no forced command, unit or hook names another path; a leftover
-`~/.local/bin/riku` is reported. With no engine installed, doctor adds only
+writable; no forced command, unit or hook names another path. With no
+engine installed, doctor adds only
 the router helper and init system lines and prints nothing about engines.
 With an engine:
 
@@ -716,10 +605,9 @@ With an engine:
   overlay or fuse-overlayfs, cgroup v2, delegated memory and cpu.
 - `/run/user/<uid>` owner and mode; lingering on systemd.
 - `info` reports rootless with the computed env.
-- Apps blocked on a volume move; leftover rootful riku volumes.
 - `riku.public` ports below `ip_unprivileged_port_start`.
 - Router helper socket answers `status`; no router config the deploy user
-  can write is loaded by the router; leftover files in `~/.riku/nginx`.
+  can write is loaded by the router.
 
 ## Test strategy
 
@@ -731,8 +619,6 @@ Unit tests, no engine:
 - `settings.toml` `mode` and `host`; `info` parsing for both shapes.
 - subuid range choice; uid shift edges (0, 1, last, first outside).
 - init system detection from a fake root; template rendering per row.
-- volume list from labelled containers and compose keys; deploy refusal for
-  a listed app.
 - router helper: schema refusals (unknown field, nginx syntax in a value,
   path outside the app, non loopback TCP host, mismatched cert and key);
   snippet grammar and allowlist applied to filtered text; rendered output
@@ -750,18 +636,12 @@ with podman, and OpenRC with podman:
   warning and the OpenRC reason, and runs nothing.
 - a host with no engine: init and doctor print nothing about engines;
   idle footprint within the plan's limit.
-- moving a `~/.local/bin/riku` install, on a host with a router and one
-  with neither router nor engine: `git push`, `rk` and the supervisor keep
-  working, the old file is gone, and `/usr/local/bin` is on the deploy
-  user's `PATH` over ssh and sudo.
+- `/usr/local/bin` is on the deploy user's `PATH` over ssh and sudo.
 - deploy through git push and through `rk` in a session without
   `XDG_RUNTIME_DIR`.
 - a supervisor restart leaves containers running; `--memory` shows in
   `stats`; containers are not in the supervisor unit's cgroup (decides the
   `MemoryMax` question).
-- `migrate-volumes` on a postgres volume: data intact, shifted owners,
-  rootful volume unchanged, rerun is a no-op; offline run stops before
-  stopping containers.
 - `riku.public` port 80 refused with the sysctl named.
 - a `.conf` with `access_log /etc/cron.d/x;` written by the deploy user is
   never loaded; a snippet filter adding `access_log` is refused; the Caddy

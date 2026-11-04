@@ -301,9 +301,6 @@ that containers may still be running:
 riku destroy myapp --force
 ```
 
-With the nginx router, destroy also refuses until `sudo riku init` has set up
-the nginx include (see [Nginx](nginx.md#how-it-works)).
-
 ---
 
 ### `riku logs <app> [process]`

@@ -1,8 +1,8 @@
 //! `riku doctor` checks for the host router named in `<riku root>/ROUTER`.
 //!
 //! Read-only like every doctor check: it runs `nginx -t` or
-//! `caddy validate` and reads the nginx include file, sites-enabled or the
-//! system Caddyfile, but changes nothing.
+//! `caddy validate` and reads the nginx include file, riku's nginx site
+//! directory or the system Caddyfile, but changes nothing.
 
 use std::fs;
 use std::io::ErrorKind;
@@ -14,7 +14,7 @@ use crate::config::program::find_program;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::deploy::router::RELOAD_ERROR_FILE;
-use crate::nginx::{app_named_links, check_host_ready, HostReadiness, RouteChange};
+use crate::nginx::{check_host_ready, includes_riku_sites, HostReadiness};
 use crate::setup::system_service::SYSTEMD_DIR;
 
 use super::Check;
@@ -56,34 +56,33 @@ fn installed_program(name: &str) -> Option<PathBuf> {
     path.is_file().then_some(path)
 }
 
-/// Whether nginx loads riku's sites, and whether links from an older riku
-/// would load them twice.
+/// Whether the include file that makes nginx load riku's sites is in place.
 fn nginx_include(paths: &RikuPaths) -> Check {
-    match check_host_ready(paths, RouteChange::Install) {
-        Ok(HostReadiness::Ready) => Check::ok(
+    let file = &paths.nginx_include_file;
+    if includes_riku_sites(paths) {
+        Check::ok(
             "nginx include",
-            format!("{} loads riku sites", paths.nginx_include_file.display()),
-        ),
-        Ok(HostReadiness::NoNginx(reason)) => Check::warn("nginx include", reason),
-        Err(e) => Check::fail("nginx include", e.to_string()),
+            format!("{} loads riku sites", file.display()),
+        )
+    } else {
+        Check::fail(
+            "nginx include",
+            format!(
+                "{} does not load riku sites, run: sudo riku init",
+                file.display()
+            ),
+        )
     }
 }
 
-/// Warns about sites-enabled links named like an app's config that point
-/// elsewhere. riku leaves them alone, but they may serve the app's domain.
-fn app_named_sites(paths: &RikuPaths) -> Option<Check> {
-    let links = app_named_links(paths);
-    links.first().map(|first| {
-        Check::warn(
-            "nginx sites",
-            format!(
-                "{} link(s) in {} share a riku app's name, such as {}: check they do not serve the same domain",
-                links.len(),
-                paths.nginx_sites_enabled.display(),
-                first.display()
-            ),
-        )
-    })
+/// Whether `nginx_root` holds a `*.conf` that is no app's config, which
+/// would block the next deploy.
+fn nginx_sites(paths: &RikuPaths) -> Check {
+    match check_host_ready(paths) {
+        Ok(HostReadiness::Ready) => Check::ok("nginx sites", "no stray config"),
+        Ok(HostReadiness::NoNginx(reason)) => Check::warn("nginx sites", reason),
+        Err(e) => Check::fail("nginx sites", e.to_string()),
+    }
 }
 
 fn nginx(paths: &RikuPaths) -> Vec<Check> {
@@ -94,13 +93,12 @@ fn nginx(paths: &RikuPaths) -> Vec<Check> {
         )];
     };
     let run = Command::new(&program).arg("-t").output();
-    let mut checks = vec![
+    vec![
         Check::ok("nginx", format!("found at {}", program.display())),
         nginx_include(paths),
-    ];
-    checks.extend(app_named_sites(paths));
-    checks.push(validator_check("nginx config", "nginx -t", run));
-    checks
+        nginx_sites(paths),
+        validator_check("nginx config", "nginx -t", run),
+    ]
 }
 
 /// Whether `caddyfile` imports riku's site directory.

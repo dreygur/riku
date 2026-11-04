@@ -137,7 +137,7 @@ fn apply_to(
     paths: &RikuPaths,
     backends: &[Backend],
 ) -> Result<()> {
-    if let Err(e) = ready_for(active, paths, crate::nginx::RouteChange::Install) {
+    if let Err(e) = ready_for(active, paths) {
         return Err(e);
     }
     let baseline = match active {

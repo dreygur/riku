@@ -5,7 +5,6 @@ use super::*;
 fn host_paths(dir: &std::path::Path) -> RikuPaths {
     let paths = RikuPaths::for_tests(dir);
     fs::create_dir_all(paths.nginx_include_file.parent().unwrap()).unwrap();
-    fs::create_dir_all(&paths.nginx_sites_enabled).unwrap();
     paths
 }
 
@@ -26,28 +25,6 @@ fn include_is_written_once_and_left_alone_on_a_second_run() {
         includes,
         vec![format!("include {}/*.conf;", paths.nginx_root.display())]
     );
-}
-
-#[test]
-fn setup_removes_old_riku_links_keeps_other_sites_and_installs_the_include() {
-    let tmp = tempfile::tempdir().unwrap();
-    let paths = host_paths(tmp.path());
-    let old_link = paths.nginx_sites_enabled.join("shop.conf");
-    std::os::unix::fs::symlink(paths.nginx_root.join("shop.conf"), &old_link).unwrap();
-    let default_site = paths.nginx_sites_enabled.join("default");
-    std::os::unix::fs::symlink("/etc/nginx/sites-available/default", &default_site).unwrap();
-
-    load_riku_sites(&paths).unwrap();
-
-    assert!(
-        old_link.symlink_metadata().is_err(),
-        "old link would load shop a second time"
-    );
-    assert!(
-        default_site.symlink_metadata().is_ok(),
-        "a site riku does not own was removed"
-    );
-    assert!(crate::nginx::includes_riku_sites(&paths), "no include");
 }
 
 #[test]

@@ -111,7 +111,7 @@ pub fn do_deploy(
             app_path.display()
         ));
     }
-    if let Err(e) = router::ensure_host_ready(paths, crate::nginx::RouteChange::Install) {
+    if let Err(e) = router::ensure_host_ready(paths) {
         return Err(anyhow::anyhow!("not deploying '{app}': {e:#}"));
     }
 

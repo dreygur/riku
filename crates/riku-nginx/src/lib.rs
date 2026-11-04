@@ -16,7 +16,6 @@ mod context;
 mod context_cache;
 mod host;
 mod host_check;
-mod host_links;
 mod install;
 mod reload;
 mod remove;
@@ -43,10 +42,7 @@ use crate::util::backend::Backend;
 pub use acme::{generate_acme_nginx_config, ACME_CONFIG_FILE};
 pub use backends::{bind_address, default_backends, upstream_port_number};
 pub use host::{include_file_contents, include_line, includes_riku_sites, write_include_file};
-pub use host_check::{
-    check_host_ready, stray_site_configs, HostReadiness, RouteChange, STALE_VALIDATION_FILE,
-};
-pub use host_links::{app_named_links, legacy_site_links};
+pub use host_check::{check_host_ready, stray_site_configs, HostReadiness};
 pub use reload::{reload_nginx, reload_nginx_with};
 pub use remove::{remove_nginx_files, NginxRemoval};
 use template::generate_nginx_config_from_template;

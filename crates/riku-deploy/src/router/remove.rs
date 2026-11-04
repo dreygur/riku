@@ -6,12 +6,10 @@
 
 use anyhow::Result;
 
-use super::host_guard::ready_for;
 use super::plugin::remove_plugin;
 use super::reload::{record_outcome, reload, Baseline};
 use crate::config::router::Router;
 use crate::config::RikuPaths;
-use crate::nginx::RouteChange;
 
 /// Remove `app` from the active router.
 ///
@@ -29,9 +27,6 @@ pub fn remove(app: &str, paths: &RikuPaths) -> Result<()> {
         Ok(router) => router,
         Err(e) => return Err(e),
     };
-    if let Err(e) = ready_for(&active, paths, RouteChange::Remove) {
-        return Err(e);
-    }
 
     let outcome = match &active {
         Router::Nginx => remove_nginx_app(app, paths, &active),

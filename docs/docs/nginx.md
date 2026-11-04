@@ -14,7 +14,7 @@ When you deploy an app, Riku:
 4. Writes it as `<app>.conf.new`, checks it with `nginx -t`, and only then renames it to `<app>.conf`
 5. Reloads nginx and waits for the reload to be confirmed (see [Caddy reloads](caddy.md#reloads) for what confirmed means for each router). A failed reload fails the deploy, and `riku doctor` reports the last failure
 
-nginx loads every `~/.riku/nginx/*.conf` through one file, `/etc/nginx/conf.d/riku.conf`, which `sudo riku init` installs. It holds a single line, `include /home/<user>/.riku/nginx/*.conf;`. Riku never writes anything else under `/etc/nginx`. Re-running `sudo riku init` also removes the per-app symlinks older versions left in `/etc/nginx/sites-enabled/`, which would otherwise load each site twice. Until that is in order, deploy and destroy refuse to run and say what to fix: a missing include file, leftover links, or a `*.conf` in `~/.riku/nginx/` that is no app's config. `riku doctor` reports the same. On a host without nginx this check is skipped.
+nginx loads every `~/.riku/nginx/*.conf` through one file, `/etc/nginx/conf.d/riku.conf`, which `sudo riku init` installs. It holds a single line, `include /home/<user>/.riku/nginx/*.conf;`. Riku never writes anything else under `/etc/nginx`. A deploy refuses to run while `~/.riku/nginx/` holds a `*.conf` that is no app's config, since the include would load it, and names the file. `riku doctor` reports the same. On a host without nginx this check is skipped.
 
 ---
 

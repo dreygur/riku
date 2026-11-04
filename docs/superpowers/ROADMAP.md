@@ -142,7 +142,7 @@ work they describe.
   - Task 16 docs, changelog, roadmap: done
 - Rootless engine (owner, 2026-11-04): spec
   `specs/2026-11-04-rootless-engine-design.md`, plan
-  `plans/2026-11-04-rootless-engine.md` (22 tasks, Task 1 is a footprint
+  `plans/2026-11-04-rootless-engine.md` (20 tasks, Task 1 is a footprint
   gate). Not started. Rootless ships only together with the router helper.
 - Owner decisions 2026-11-01: engine time limits in a new
   `~/.riku/settings.toml` (short calls 30 s, stop grace plus 30 s, pull and
