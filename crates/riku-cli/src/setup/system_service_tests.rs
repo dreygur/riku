@@ -20,10 +20,10 @@ fn units_follow_router() {
 }
 
 #[test]
-fn uwsgi_copies_may_bind_in_the_socket_directory() {
+fn sockets_and_caddy_sites_stay_writable() {
     let unit = render_system_unit(&Router::Nginx, "deploy", "/home/deploy", "/usr/bin/riku");
     assert!(
-        unit.contains("ReadWritePaths=/home/deploy/.riku -/run/riku-sockets\n"),
-        "ProtectSystem=strict would leave the socket directory read only: {unit}"
+        unit.contains("ReadWritePaths=/home/deploy/.riku -/run/riku-sockets -/etc/riku/caddy\n"),
+        "ProtectSystem=strict would leave the socket or Caddy site directory read only: {unit}"
     );
 }

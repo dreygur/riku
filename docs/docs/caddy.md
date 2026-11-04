@@ -24,14 +24,14 @@ Root init creates the deploy user when it does not exist: `riku`, or the name in
 Under Caddy, a root `riku init`:
 
 - writes `caddy` to `/home/riku/.riku/ROUTER`
+- creates `/etc/riku` (root owned, `0755`) and `/etc/riku/caddy`, owned by the deploy user, group set to the `caddy` user's primary group, mode `2750`
 - appends one line to `/etc/caddy/Caddyfile`, once:
   ```
-  import /home/riku/.riku/caddy/*.caddy
+  import /etc/riku/caddy/*.caddy
   ```
-- adds the `caddy` user to the deploy user's primary group
-- gives that group traverse access (`g+x`, not listing) to the deploy home and `~/.riku`
-- creates `~/.riku/caddy` with mode `0750`, owned by the deploy user
 - disables `riku-nginx.path` if an earlier init enabled it
+
+The site files are the only thing Caddy reads from riku. It proxies to TCP ports, keeps its certificates in its own storage, and serves no files from disk, so the `caddy` user is put in no extra group and gets no access to the deploy user's home. The setgid bit gives every site file the `caddy` group, so Caddy can read it and other local users cannot.
 
 ### Reloads
 
@@ -59,7 +59,7 @@ Then `sudo systemctl reload caddy`. The `RIKU_ACME_*` keys only apply to nginx.
 
 ## Site Files
 
-Each app with a domain gets one file, `~/.riku/caddy/<app>.caddy`:
+Each app with a domain gets one file, `/etc/riku/caddy/<app>.caddy`:
 
 ```
 # riku app: shop

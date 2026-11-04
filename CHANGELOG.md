@@ -28,6 +28,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gets no access to the deploy user's home. Run `sudo riku init`, then
   redeploy wsgi, jwsgi, rwsgi and php apps; old sockets in `~/.riku/nginx`
   can be deleted.
+- Caddy site files moved from `~/.riku/caddy` to `/etc/riku/caddy` (owned
+  by the deploy user, group `caddy`, mode `2750`), and the Caddyfile imports
+  `/etc/riku/caddy/*.caddy`. `sudo riku init` no longer adds `caddy` to the
+  deploy user's group or opens the deploy home and `~/.riku` to that group.
+  On a host set up before this, run `sudo riku init`, delete the old
+  `import .../.riku/caddy/*.caddy` line from `/etc/caddy/Caddyfile`, take
+  `caddy` out of the deploy group (`sudo gpasswd -d caddy riku`), run
+  `chmod g-x ~ ~/.riku` as the deploy user, restart Caddy and redeploy each
+  app.
 - Worker configs, `ENV` and `LIVE_ENV` files are written `0600`, app env
   directories `0700`, and an app's TLS key `0600`. A deploy rewrites the
   worker configs and `LIVE_ENV` and tightens the env directory; an existing

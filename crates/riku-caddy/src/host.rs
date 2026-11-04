@@ -1,5 +1,5 @@
 //! How the system Caddy finds riku's sites: one `import` line in the
-//! system Caddyfile pointing at the deploy user's site directory.
+//! system Caddyfile pointing at riku's site directory, `/etc/riku/caddy`.
 
 use riku_config::RikuPaths;
 

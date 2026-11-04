@@ -2,8 +2,7 @@
 //!
 //! Root init runs with `HOME=/root`, but git push deploys run as this user
 //! and read `~/.riku` from its home. Everything deploys must see (the
-//! binary, `~/.riku`, the git hook, the Caddy site directory) belongs in
-//! this user's tree.
+//! binary, `~/.riku`, the git hook) belongs in this user's tree.
 //!
 //! Security: the deploy user owns that tree, so it can plant symlinks in it
 //! (`~/.riku/ROUTER -> /etc/shadow`). Root must never create, write, chmod or
@@ -20,7 +19,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, Result};
-use nix::unistd::{setsid, Gid, Group, Uid, User};
+use nix::unistd::{setsid, Gid, Uid, User};
 
 use crate::config::RikuPaths;
 
@@ -34,8 +33,6 @@ const PASSED_ENV: [&str; 4] = ["PATH", "TERM", "RIKU_ROUTER", BRANCH_ENV];
 pub struct DeployUser {
     pub name: String,
     pub home: PathBuf,
-    /// Primary group name, for adding other users to it.
-    pub group: String,
     uid: Uid,
     gid: Gid,
 }
@@ -70,14 +67,6 @@ fn printable(bytes: &[u8]) -> String {
         .collect()
 }
 
-fn group_name(gid: Gid) -> Result<String> {
-    match Group::from_gid(gid) {
-        Ok(Some(group)) => Ok(group.name),
-        Ok(None) => Err(anyhow!("no group with gid {gid}")),
-        Err(e) => Err(anyhow!("failed to look up gid {gid}: {e}")),
-    }
-}
-
 impl DeployUser {
     /// Look up the `RIKU_USER` account. Unlike the systemd unit writer, this
     /// does not guess a home: acting on a guessed path is worse than failing.
@@ -93,14 +82,9 @@ impl DeployUser {
             }
             Err(e) => return Err(anyhow!("failed to look up user {name}: {e}")),
         };
-        let group = match group_name(entry.gid) {
-            Ok(group) => group,
-            Err(e) => return Err(e),
-        };
         Ok(Self {
             name,
             home: entry.dir,
-            group,
             uid: entry.uid,
             gid: entry.gid,
         })

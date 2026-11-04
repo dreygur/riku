@@ -22,11 +22,7 @@ use super::systemd::setup_systemd_service;
 
 #[allow(clippy::question_mark)]
 fn create_directory_structure(paths: &RikuPaths, router: &Router) -> Result<()> {
-    let router_dir = match router {
-        Router::Caddy => ("caddy", &paths.caddy_root),
-        Router::Nginx | Router::Plugin(_) => ("nginx", &paths.nginx_root),
-    };
-    let dirs: Vec<(&str, &PathBuf)> = vec![
+    let mut dirs: Vec<(&str, &PathBuf)> = vec![
         ("apps", &paths.app_root),
         ("cache", &paths.cache_root),
         ("data", &paths.data_root),
@@ -36,10 +32,13 @@ fn create_directory_structure(paths: &RikuPaths, router: &Router) -> Result<()> 
         ("workers-available", &paths.workers_available),
         ("workers-enabled", &paths.workers_enabled),
         ("logs", &paths.log_root),
-        router_dir,
         ("acme", &paths.acme_www),
         ("plugins", &paths.plugin_root),
     ];
+    // Caddy's site directory sits outside the home; root init creates it.
+    if *router != Router::Caddy {
+        dirs.push(("nginx", &paths.nginx_root));
+    }
 
     for (name, dir) in &dirs {
         if dir.exists() {

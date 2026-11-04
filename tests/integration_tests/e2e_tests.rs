@@ -33,6 +33,7 @@ mod tests {
     /// file removal, so deploys here need no `nginx` binary for `nginx -t`.
     fn make_paths(tmp: &TempDir) -> riku::config::RikuPaths {
         let mut paths = riku::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
+        paths.caddy_root = tmp.path().join("caddy-sites");
         for dir in &[
             &paths.app_root,
             &paths.env_root,

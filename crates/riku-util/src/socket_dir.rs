@@ -1,6 +1,7 @@
 //! The uWSGI socket directory: created mode `2750` with the shared socket
 //! group, so every socket uWSGI binds in it inherits that group and only
-//! the owner and that group can reach it.
+//! the owner and that group can reach it. Root init gives the Caddy site
+//! directory the same shape through [`prepare`], with the `caddy` group.
 //!
 //! Security: a path that is not a real directory (a symlink planted in its
 //! place) is refused before any chown or chmod, so neither can be redirected
@@ -44,7 +45,7 @@ pub fn prepare(dir: &Path, owner: Option<u32>, group: &str) -> Result<()> {
     };
     if !meta.is_dir() {
         return Err(anyhow!(
-            "refusing to use {} as the socket directory: not a directory (a symlink?)",
+            "refusing to use {}: not a directory (a symlink?)",
             dir.display()
         ));
     }
