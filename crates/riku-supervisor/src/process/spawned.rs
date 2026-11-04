@@ -1,7 +1,8 @@
 //! `SpawnedProcess`: wrapper around a running child process with metadata.
 
 use anyhow::Result;
-use nix::sys::signal::Signal;
+use nix::errno::Errno;
+use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
 use std::path::Path;
 use std::process::Child;
@@ -112,6 +113,17 @@ impl SpawnedProcess {
         // Force kill the entire process group
         killpg(self.pid, Signal::SIGKILL)?;
         Ok(())
+    }
+
+    /// Whether any process is left in the worker's process group. Only
+    /// meaningful once the leader has been reaped: a zombie leader still
+    /// counts as a member.
+    pub fn group_alive(&self) -> bool {
+        match kill(Pid::from_raw(-self.pid.as_raw()), None) {
+            Ok(()) => true,
+            Err(Errno::EPERM) => true,
+            Err(_) => false,
+        }
     }
 
     /// Get the process ID as u32.

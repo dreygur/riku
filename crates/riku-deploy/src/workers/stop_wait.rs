@@ -1,45 +1,34 @@
-//! Waiting for the supervisor to report a stopped worker copy gone.
+//! Waiting for the supervisor to finish stopping one worker copy.
 //!
-//! The supervisor stops a copy when its enabled config disappears and records
-//! the outcome in `<riku_root>/stats.json`. Nothing here can fail a deploy:
-//! when the file is missing there is no supervisor to wait for, and when the
-//! limit passes the supervisor kills the process after its grace period on
-//! its own.
+//! The supervisor stops a copy when its enabled config disappears and
+//! removes the copy's pid file once the process and its group are gone.
+//! Nothing here can fail a deploy: when the limit passes the supervisor
+//! still kills the process after its grace period on its own.
 
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use riku_supervisor::stats::ProcessStatus;
-
 use crate::config::RikuPaths;
+use crate::supervisor::process::pid_file::{process_has_live_worker, worker_pid_dir};
 
 #[cfg(not(test))]
 const STOP_POLL: Duration = Duration::from_millis(200);
 #[cfg(test)]
 const STOP_POLL: Duration = Duration::from_millis(20);
 
-fn copy_is_gone(paths: &RikuPaths, process_id: &str) -> bool {
-    let stats_path = paths.riku_root.join("stats.json");
-    let apps = match riku_supervisor::stats::read_stats_file(&stats_path) {
-        Some(apps) => apps,
-        None => return true,
-    };
-    !apps.iter().flat_map(|app| &app.processes).any(|process| {
-        process.process_id == process_id
-            && matches!(
-                process.status,
-                ProcessStatus::Running | ProcessStatus::Starting | ProcessStatus::Restarting
-            )
-    })
-}
-
-/// Polls the supervisor's stats until `process_id` no longer runs or `limit`
-/// passes.
+/// Polls the supervisor's pid files until `process_id` no longer runs or
+/// `limit` passes.
 pub(super) fn wait_stopped(paths: &RikuPaths, process_id: &str, limit: Duration) {
+    let pid_dir = worker_pid_dir(&paths.riku_root);
     let deadline = Instant::now() + limit;
     loop {
-        if copy_is_gone(paths, process_id) {
-            return;
+        match process_has_live_worker(&pid_dir, process_id) {
+            Ok(false) => return,
+            Ok(true) => {}
+            Err(e) => {
+                tracing::warn!(process_id, "cannot read {}: {e}", pid_dir.display());
+                return;
+            }
         }
         if Instant::now() >= deadline {
             tracing::warn!(process_id, "copy still running {limit:?} after its stop");

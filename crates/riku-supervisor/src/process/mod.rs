@@ -70,6 +70,15 @@ impl ProcessManager {
         self
     }
 
+    /// Remove the markers a previous supervisor left behind. Call once,
+    /// before the first spawn.
+    pub fn clear_stale_pid_markers(&self) -> std::io::Result<()> {
+        match &self.pid_dir {
+            Some(dir) => pid_file::clear_markers(dir),
+            None => Ok(()),
+        }
+    }
+
     /// Get the number of managed processes.
     pub fn get_process_count(&self) -> usize {
         self.processes.len()

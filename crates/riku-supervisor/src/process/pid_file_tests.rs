@@ -1,6 +1,19 @@
 use std::fs::File;
 
-use super::{app_has_live_worker, WorkerPidFile};
+use super::{app_has_live_worker, clear_markers, WorkerPidFile};
+
+#[test]
+fn startup_clear_removes_markers_a_dead_supervisor_left() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("pids");
+    let leftover = WorkerPidFile::create(&dir, "myapp@web.1", std::process::id()).unwrap();
+    std::mem::forget(leftover);
+
+    clear_markers(&dir).unwrap();
+
+    let left: Vec<_> = std::fs::read_dir(&dir).unwrap().collect();
+    assert!(left.is_empty(), "markers survived the clear: {left:?}");
+}
 
 #[test]
 fn live_worker_is_seen_until_its_marker_is_dropped() {

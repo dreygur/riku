@@ -79,6 +79,12 @@ impl Supervisor {
             return Err(e);
         }
 
+        // Only after the lock: a second supervisor must not wipe the
+        // markers of the one that is running.
+        if let Err(e) = self.process_manager.clear_stale_pid_markers() {
+            return Err(anyhow::anyhow!("cannot clear stale worker pid files: {e}"));
+        }
+
         if let Err(e) = setup_signal_handlers() {
             return Err(e);
         }

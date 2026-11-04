@@ -1,55 +1,104 @@
 //! Process stopping and termination logic for the ProcessManager.
+//!
+//! A worker runs as the leader of its own process group, and every signal
+//! goes to the whole group. Group members can outlive the leader, so a stop
+//! is only done once the group is empty. Processes that left the group
+//! (`setsid`, a double-forked daemon) are out of reach here.
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use super::ProcessManager;
+use super::{ProcessManager, SpawnedProcess};
 
+/// How long a SIGKILLed group gets to disappear before the stop gives up.
+const KILL_SETTLE: Duration = Duration::from_secs(2);
+const STOP_POLL: Duration = Duration::from_millis(100);
+
+/// Polls `still_waiting` until it says false or `limit` passes.
+fn wait_while(limit: Duration, mut still_waiting: impl FnMut() -> bool) {
+    let deadline = Instant::now() + limit;
+    while still_waiting() && Instant::now() < deadline {
+        thread::sleep(STOP_POLL);
+    }
+}
+
+// Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
+#[allow(clippy::question_mark)]
 impl ProcessManager {
     /// Stop a specific process by its ID.
     pub(crate) fn stop_process_by_id(&mut self, process_id: &str) -> Result<()> {
         if let Some(mut process) = self.processes.remove(process_id) {
             self.stats.mark_stopped(process_id);
-            Self::stop_owned_process(process_id, &mut process)?;
+            if let Err(e) = Self::stop_owned_process(process_id, &mut process) {
+                return Err(e);
+            }
         }
         Ok(())
     }
 
     /// SIGTERM, wait up to the process's configured `grace_period`, then
-    /// SIGKILL if it's still alive. Takes an already-removed process so it
-    /// can run on its own thread without holding `&mut self`,
+    /// SIGKILL if it's still alive, and the same again for group members
+    /// left once the leader is reaped. Takes an already-removed process so
+    /// it can run on its own thread without holding `&mut self`;
     /// `stop_all_processes` parallelizes this across every managed process.
-    fn stop_owned_process(process_id: &str, process: &mut super::SpawnedProcess) -> Result<()> {
+    ///
+    /// The process keeps its pid marker until it is dropped, after this
+    /// returns, so deploy waits also cover the leftover group members.
+    fn stop_owned_process(process_id: &str, process: &mut SpawnedProcess) -> Result<()> {
         tracing::info!("Stopping process: {} (PID: {})", process_id, process.pid);
 
-        // Try graceful shutdown with SIGTERM
-        process.terminate()?;
-
-        // Wait for graceful shutdown using the configured grace_period (in seconds).
-        // Poll every 100 ms so we exit promptly when the process dies.
-        let grace_period = process.config.options.grace_period;
-        let deadline = Duration::from_secs(grace_period);
-        let poll_interval = Duration::from_millis(100);
-        let mut elapsed = Duration::ZERO;
-        while process.is_running() && elapsed < deadline {
-            thread::sleep(poll_interval);
-            elapsed += poll_interval;
+        if let Err(e) = process.terminate() {
+            return Err(e);
         }
+        let grace = Duration::from_secs(process.config.options.grace_period);
+        wait_while(grace, || process.is_running());
 
-        // If still running after the grace period, force kill with SIGKILL
         if process.is_running() {
             tracing::warn!(
-                "Process {} didn't respond to SIGTERM within {}s, sending SIGKILL",
+                "Process {} didn't respond to SIGTERM within {:?}, sending SIGKILL",
                 process_id,
-                grace_period
+                grace
             );
-            process.kill()?;
-
-            thread::sleep(Duration::from_millis(500));
+            if let Err(e) = process.kill() {
+                return Err(e);
+            }
+        }
+        if let Err(e) = process.child.wait() {
+            return Err(anyhow!("cannot reap {process_id}: {e}"));
+        }
+        if let Err(e) = Self::stop_group_leftovers(process_id, process, grace) {
+            return Err(e);
         }
 
         tracing::info!("Process {} stopped", process_id);
+        Ok(())
+    }
+
+    /// Members of the group already had their SIGTERM with the leader, so
+    /// they get the same grace before the group is SIGKILLed.
+    fn stop_group_leftovers(
+        process_id: &str,
+        process: &mut SpawnedProcess,
+        grace: Duration,
+    ) -> Result<()> {
+        if !process.group_alive() {
+            return Ok(());
+        }
+        tracing::info!("{process_id}: group members outlived the leader, waiting {grace:?}");
+        wait_while(grace, || process.group_alive());
+        if !process.group_alive() {
+            return Ok(());
+        }
+
+        tracing::warn!("{process_id}: group members ignored SIGTERM, sending SIGKILL");
+        if let Err(e) = process.kill() {
+            return Err(e);
+        }
+        wait_while(KILL_SETTLE, || process.group_alive());
+        if process.group_alive() {
+            tracing::warn!("{process_id}: group still has members {KILL_SETTLE:?} after SIGKILL");
+        }
         Ok(())
     }
 
@@ -78,7 +127,7 @@ impl ProcessManager {
     pub fn stop_all_processes(&mut self) -> Result<()> {
         let process_ids: Vec<String> = self.processes.keys().cloned().collect();
 
-        let mut to_stop: Vec<(String, super::SpawnedProcess)> = Vec::new();
+        let mut to_stop: Vec<(String, SpawnedProcess)> = Vec::new();
         for process_id in process_ids {
             if let Some(process) = self.processes.remove(&process_id) {
                 self.stats.mark_stopped(&process_id);
@@ -101,82 +150,5 @@ impl ProcessManager {
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::config::{WorkerConfig, WorkerInfo, WorkerOptions};
-    use crate::process::ProcessManager;
-    use std::collections::HashMap;
-    use tempfile::TempDir;
-
-    fn sleep_config(tmp: &TempDir) -> WorkerConfig {
-        let log = tmp.path().join("out.log");
-        WorkerConfig {
-            worker: WorkerInfo {
-                app: "testapp".to_string(),
-                kind: "web".to_string(),
-                command: "sleep 60".to_string(),
-                ordinal: 1,
-            },
-            env: HashMap::new(),
-            options: WorkerOptions {
-                working_dir: tmp.path().to_str().unwrap().to_string(),
-                log_file: log.to_str().unwrap().to_string(),
-                uid: None,
-                gid: None,
-                timeout: 30,
-                // short grace period so the test doesn't wait 30 s
-                grace_period: 1,
-                max_restarts: 3,
-                health_check: None,
-                isolation: None,
-            },
-        }
-    }
-
-    #[test]
-    fn test_stop_app_processes_removes_them_from_manager() {
-        let tmp = TempDir::new().unwrap();
-        let config = sleep_config(&tmp);
-
-        let mut pm = ProcessManager::new().unwrap();
-        pm.spawn_process(&config).expect("spawn should succeed");
-        assert_eq!(pm.get_process_count(), 1);
-
-        pm.stop_app_processes("testapp")
-            .expect("stop_app_processes should not fail");
-
-        assert_eq!(
-            pm.get_process_count(),
-            0,
-            "all processes for 'testapp' should be removed after stop"
-        );
-    }
-
-    #[test]
-    fn test_stop_all_processes_clears_manager() {
-        let tmp = TempDir::new().unwrap();
-        let mut config = sleep_config(&tmp);
-
-        let mut pm = ProcessManager::new().unwrap();
-
-        // Spawn two different workers.
-        pm.spawn_process(&config).expect("spawn 1");
-        config.worker.ordinal = 2;
-        pm.spawn_process(&config).expect("spawn 2");
-        assert_eq!(pm.get_process_count(), 2);
-
-        pm.stop_all_processes()
-            .expect("stop_all_processes should not fail");
-        assert_eq!(pm.get_process_count(), 0, "all processes should be removed");
-    }
-
-    #[test]
-    fn test_stop_nonexistent_process_is_noop() {
-        let tmp = TempDir::new().unwrap();
-        let _ = tmp; // keep alive
-
-        let mut pm = ProcessManager::new().unwrap();
-        // Stopping a process that was never registered must not panic or error.
-        pm.stop_app_processes("nonexistent-app")
-            .expect("stopping a nonexistent app should be a silent no-op");
-    }
-}
+#[path = "stop_tests.rs"]
+mod tests;

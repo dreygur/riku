@@ -23,6 +23,8 @@ Component package located at `crates/riku-supervisor/src/process`.
 - `worker_pid_dir` [pid_file.rs:worker_pid_dir] (fn)
 - `WorkerPidFile` [pid_file.rs:WorkerPidFile] (struct)
 - `app_has_live_worker` [pid_file.rs:app_has_live_worker] (fn)
+- `process_has_live_worker` [pid_file.rs:process_has_live_worker] (fn)
+- `clear_markers` [pid_file.rs:clear_markers] (fn)
 - `spawn_process` [spawn.rs:spawn_process] (fn)
 - `open_log_files` [spawn.rs:open_log_files] (fn)
 - `SpawnedProcess` [spawned.rs:SpawnedProcess] (struct)

@@ -303,6 +303,28 @@ impl ProcessManager {
         ));
     }
 
+    /// Stop every canary of `process_id` still probing and forget its
+    /// generations, so a canary does not outlive the config it came from.
+    /// A probe outcome that arrives later finds no generation and is ignored.
+    #[allow(clippy::question_mark)]
+    pub(crate) fn stop_canaries(&mut self, process_id: &str) -> Result<()> {
+        let temp_keys: Vec<String> = match self.generations.remove(process_id) {
+            Some(gens) => gens
+                .into_iter()
+                .filter(|g| g.status == GenerationStatus::Probing)
+                .map(|g| g.temp_key)
+                .collect(),
+            None => return Ok(()),
+        };
+        for temp_key in temp_keys {
+            if let Err(e) = self.stop_process_by_id(&temp_key) {
+                return Err(e);
+            }
+            self.stats.remove_process(&temp_key);
+        }
+        Ok(())
+    }
+
     /// Take and clear all pending deployment notifications. Called once per
     /// tick by the daemon loop so they can be pushed onto the same
     /// broadcast channel as the metrics SSE stream, non-blockingly.
@@ -318,3 +340,7 @@ pub(super) type ProbeResults = Arc<Mutex<Vec<ProbeOutcome>>>;
 pub(super) fn new_probe_results() -> ProbeResults {
     Arc::new(Mutex::new(Vec::new()))
 }
+
+#[cfg(test)]
+#[path = "orchestration_tests.rs"]
+mod tests;

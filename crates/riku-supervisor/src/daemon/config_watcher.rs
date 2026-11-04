@@ -288,8 +288,16 @@ impl Supervisor {
             // the app's jobs here is correct, not over-eager like the
             // process case would be.
             self.cron_scheduler.remove_app_jobs(app_name);
-        } else if let Err(e) = self.process_manager.stop_process_by_id(&name.to_string()) {
-            return Err(e);
+        } else {
+            // The canary goes first, so the canonical marker deploy waits on
+            // is the last one to disappear.
+            let process_id = name.to_string();
+            if let Err(e) = self.process_manager.stop_canaries(&process_id) {
+                return Err(e);
+            }
+            if let Err(e) = self.process_manager.stop_process_by_id(&process_id) {
+                return Err(e);
+            }
         }
 
         // `riku stop` removes worker configs but leaves the app's source
