@@ -45,6 +45,21 @@ fn switching_a_procfile_app_retires_its_workers() {
 }
 
 #[test]
+fn switch_drops_procfile_kinds_compose_does_not_have_from_scaling() {
+    let tmp = tempfile::tempdir().unwrap();
+    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
+    let _workers = procfile_workers(&server);
+    let scaling = server.paths.env_root.join("myapp").join("SCALING");
+    fs::create_dir_all(scaling.parent().unwrap()).unwrap();
+    fs::write(&scaling, "web=1\nworker=1\n").unwrap();
+
+    let outcome = deploy(&server);
+    assert!(outcome.is_ok(), "switch deploy failed: {outcome:?}");
+
+    assert_eq!(fs::read_to_string(&scaling).unwrap(), "web=1\n");
+}
+
+#[test]
 fn failed_rollout_keeps_procfile_workers() {
     let tmp = tempfile::tempdir().unwrap();
     let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);

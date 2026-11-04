@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::net::TcpListener;
 use std::os::fd::OwnedFd;
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixListener;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -57,7 +58,9 @@ fn address(config: &WorkerConfig) -> Option<&String> {
         .or_else(|| config.env.get("UWSGI_SOCKET"))
 }
 
-/// Listens on `address`. The listener stays open as long as the fd lives.
+/// Listens on `address`. The listener stays open as long as the fd lives. A
+/// socket gets the `0660` mode uWSGI's `chmod-socket` gives it, and is left
+/// in place on close, as uWSGI leaves it.
 fn listen_on(address: &str) -> Option<OwnedFd> {
     if let Ok(port) = address.parse::<u16>() {
         return TcpListener::bind(("127.0.0.1", port))
@@ -65,7 +68,9 @@ fn listen_on(address: &str) -> Option<OwnedFd> {
             .map(OwnedFd::from);
     }
     let _ = fs::remove_file(address);
-    UnixListener::bind(address).ok().map(OwnedFd::from)
+    let listener = UnixListener::bind(address).ok();
+    let _ = fs::set_permissions(address, fs::Permissions::from_mode(0o660));
+    listener.map(OwnedFd::from)
 }
 
 /// Records each published backend list with the number of web copies that

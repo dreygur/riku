@@ -38,7 +38,8 @@ pub enum HealthTarget {
     Url { port: u16, path: String },
     /// A TCP connect to `127.0.0.1:port` that must succeed.
     Port(u16),
-    /// A connect to the unix socket a uWSGI copy listens on that must succeed.
+    /// A connect to the unix socket a uWSGI copy listens on that must
+    /// succeed, on a socket its group can read and write.
     Socket(PathBuf),
 }
 
@@ -130,7 +131,7 @@ pub fn wait_healthy(target: &HealthTarget, engine: Option<&Engine>) -> Result<()
             poll_probe(PROBE_WAIT, || probe_url(&client, *port, path))
         }
         HealthTarget::Port(port) => poll_probe(PROBE_WAIT, || probe_port(*port)),
-        HealthTarget::Socket(path) => poll_probe(PROBE_WAIT, || probe_socket(path)),
+        HealthTarget::Socket(path) => poll_until(PROBE_WAIT, || probe_socket(path)),
     }
 }
 

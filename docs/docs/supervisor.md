@@ -109,6 +109,32 @@ name matches the `[worker]` table inside it.
 
 A uWSGI copy listens on `~/.riku/nginx/<app>@<n>.sock`.
 
+### uWSGI Procfile lines
+
+riku runs a `wsgi:`, `jwsgi:`, `rwsgi:` or `php:` line as written and
+passes uWSGI its options through the environment, which uWSGI reads as
+`UWSGI_<OPTION>`:
+
+| Variable | Value | Why |
+|----------|-------|-----|
+| `UWSGI_SOCKET` | `~/.riku/nginx/<app>@<n>.sock` | the copy's own socket |
+| `UWSGI_CHMOD_SOCKET` | `660` | nginx connects through the deploy user's group, which `sudo riku init` adds it to. The socket is never world writable |
+| `UWSGI_DIE_ON_TERM` | `1` | without it uWSGI reloads on SIGTERM and every copy stop waits for the SIGKILL timeout |
+| `UWSGI_PROCESSES`, `UWSGI_THREADS` | `4`, `4` | |
+
+So the line only names the app:
+
+```
+# Python
+wsgi: uwsgi --plugin python3 --module myproject.wsgi:application
+# PHP
+php: uwsgi --plugin php --php-docroot public --php-index index.php
+```
+
+Leave out `--plugin` with a uWSGI built by pip, which has Python built in.
+A deploy fails when a copy's socket does not give its group read and write,
+since nginx could not connect to it.
+
 ### Config Structure
 
 ```toml
