@@ -11,8 +11,36 @@ use crate::containers::{ContainerWatch, CONTAINER_WATCH_INTERVAL};
 const ENGINE_RETRY: Duration = Duration::from_secs(60);
 
 impl Supervisor {
+    /// Put the watch's rows into the stats and write `stats.json` at once,
+    /// so `riku ps` does not wait for the next stats write.
+    fn publish_container_rows(&mut self) {
+        let rows = match &self.container_watch {
+            Some(watch) => watch.rows(),
+            None => return,
+        };
+        self.process_manager
+            .stats_mut()
+            .replace_container_rows(rows);
+        if let Err(e) = self.write_stats() {
+            tracing::error!("Failed to write stats: {:?}", e);
+        }
+    }
+
+    fn apply_container_events(&mut self) {
+        let changed = match self.container_watch.as_mut() {
+            Some(watch) => watch.apply_events(),
+            None => false,
+        };
+        if changed {
+            self.publish_container_rows();
+        }
+    }
+
+    /// Runs on every maintenance pass: engine events are applied each pass,
+    /// the full watch tick every [`CONTAINER_WATCH_INTERVAL`].
     pub(super) fn containers_if_due(&mut self) {
         if !is_due(self.last_container_watch, CONTAINER_WATCH_INTERVAL) {
+            self.apply_container_events();
             return;
         }
 
@@ -45,9 +73,7 @@ impl Supervisor {
 
         if let Some(watch) = self.container_watch.as_mut() {
             watch.tick(Instant::now());
-            self.process_manager
-                .stats_mut()
-                .replace_container_rows(watch.rows());
+            self.publish_container_rows();
         }
 
         self.last_container_watch = SystemTime::now();

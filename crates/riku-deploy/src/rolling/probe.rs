@@ -8,6 +8,7 @@
 //! probe at another service. A socket probe connects to the path riku wrote
 //! into the copy's own worker config.
 
+use std::io::{ErrorKind, Read};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
@@ -20,6 +21,8 @@ use reqwest::redirect::Policy;
 
 const PROBE_INTERVAL: Duration = Duration::from_millis(500);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
+/// How long a TCP probe's connection must stay open to count.
+const HOLD_CHECK: Duration = Duration::from_millis(300);
 
 pub(super) fn probe_client() -> Result<Client> {
     match riku_http::blocking_client_builder()
@@ -43,11 +46,29 @@ pub(super) fn probe_url(client: &Client, port: u16, path: &str) -> Result<()> {
     }
 }
 
+/// A TCP connect that the peer keeps open for [`HOLD_CHECK`].
+///
+/// A connect alone proves nothing for a container: the engine's port proxy
+/// accepts on the published host port even when nothing listens inside the
+/// container, then closes the connection once it fails to reach the app. A
+/// connection closed at once therefore counts as nothing listening.
 pub(super) fn probe_port(port: u16) -> Result<()> {
     let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
-    match TcpStream::connect_timeout(&addr, PROBE_TIMEOUT) {
+    let mut stream = match TcpStream::connect_timeout(&addr, PROBE_TIMEOUT) {
+        Ok(stream) => stream,
+        Err(e) => return Err(anyhow!("connect failed: {e}")),
+    };
+    if let Err(e) = stream.set_read_timeout(Some(HOLD_CHECK)) {
+        return Err(anyhow!("cannot wait on the connection: {e}"));
+    }
+    let mut byte = [0u8; 1];
+    match stream.read(&mut byte) {
+        Ok(0) => Err(anyhow!(
+            "connection closed at once, nothing listens behind the port"
+        )),
         Ok(_) => Ok(()),
-        Err(e) => Err(anyhow!("connect failed: {e}")),
+        Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => Ok(()),
+        Err(e) => Err(anyhow!("connection dropped: {e}")),
     }
 }
 

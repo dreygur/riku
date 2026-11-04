@@ -120,6 +120,26 @@ impl StatsManager {
         crate::util::write_atomic(path, json.as_bytes())
     }
 
+    /// Drop the stopped process rows of every app `exists` says is gone.
+    ///
+    /// `riku destroy` removes an app's worker configs before its directory,
+    /// so the unload that purges a destroyed app's rows can run while the
+    /// directory is still there and keep them. Running rows and container
+    /// rows are left alone: the process manager and the container watch own
+    /// those.
+    pub fn forget_stopped_apps(&mut self, exists: impl Fn(&str) -> bool) {
+        let gone: Vec<String> = self
+            .stats
+            .values()
+            .filter(|s| s.container.is_none() && s.status == ProcessStatus::Stopped)
+            .filter(|s| !exists(&s.app))
+            .map(|s| s.process_id.clone())
+            .collect();
+        for process_id in gone {
+            self.remove_process(&process_id);
+        }
+    }
+
     /// Replace container rows with freshly polled process statistics.
     pub fn replace_container_rows(&mut self, rows: Vec<ProcessStats>) {
         self.stats.retain(|_, s| s.container.is_none());

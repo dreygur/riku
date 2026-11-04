@@ -20,10 +20,24 @@ impl Supervisor {
         self.last_log_rotation = SystemTime::now();
     }
 
+    fn forget_destroyed_apps(&mut self) {
+        let paths = match riku_config::RikuPaths::from_env() {
+            Ok(paths) => paths,
+            Err(e) => {
+                tracing::debug!("cannot read riku paths: {e}");
+                return;
+            }
+        };
+        self.process_manager
+            .stats_mut()
+            .forget_stopped_apps(|app| paths.app_root.join(app).exists());
+    }
+
     fn write_stats_if_due(&mut self) {
         if !is_due(self.last_stats_write, self.stats_write_interval) {
             return;
         }
+        self.forget_destroyed_apps();
         if let Err(e) = self.write_stats() {
             tracing::error!("Failed to write stats: {:?}", e);
         }

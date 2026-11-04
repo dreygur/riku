@@ -45,6 +45,7 @@ pub use events::event_container;
 pub use identity::{parse_identity, Engine, EngineIdentity};
 pub use ids::ContainerId;
 pub use inspect::{ContainerInfo, ContainerState};
+pub use logs::{LogRange, TimestampedLogs};
 pub use probe::{answers_version, exits_zero_within, REQUIRED_COMMANDS};
 pub use run_spec::{PullPolicy, RunSpec};
 pub use stats::ContainerStats;
