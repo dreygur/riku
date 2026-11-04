@@ -64,7 +64,7 @@ fn wsgi_copies_get_own_socket() {
 
     let backends = current(&paths, "myapp").unwrap();
 
-    let socket = |n: u32| paths.nginx_root.join(format!("myapp@{n}.sock"));
+    let socket = |n: u32| paths.socket_root.join(format!("myapp@{n}.sock"));
     assert_eq!(
         backends,
         vec![Backend::Unix(socket(1)), Backend::Unix(socket(2))]

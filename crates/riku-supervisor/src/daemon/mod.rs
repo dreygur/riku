@@ -95,6 +95,7 @@ impl Supervisor {
         crate::spawn_sighup_listener();
 
         self.check_cgroup_isolation();
+        self.ensure_socket_root();
         self.start_health_endpoint();
 
         if let Err(e) = self.load_initial_configs() {

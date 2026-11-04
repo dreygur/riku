@@ -1,4 +1,5 @@
-//! Removing an app's files from `nginx_root`. Nothing outside it is touched.
+//! Removing an app's files from `nginx_root` and its sockets from
+//! `socket_root`. Nothing outside those two is touched.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -70,8 +71,9 @@ pub fn remove_nginx_files(app: &str, paths: &RikuPaths) -> Result<NginxRemoval> 
 
     let side_files = [staged_file(app, paths)]
         .into_iter()
-        .chain(["sock", "key", "crt"].map(|ext| paths.nginx_root.join(format!("{app}.{ext}"))))
-        .chain(copy_sockets(app, &paths.nginx_root));
+        .chain(["key", "crt"].map(|ext| paths.nginx_root.join(format!("{app}.{ext}"))))
+        .chain([paths.socket_root.join(format!("{app}.sock"))])
+        .chain(copy_sockets(app, &paths.socket_root));
     let failures: Vec<String> = side_files
         .filter_map(|file| remove_if_present(&file).err())
         .map(|e| e.to_string())

@@ -187,7 +187,7 @@ fn save_scaling(app: &str, paths: &RikuPaths, counts: &BTreeMap<String, u32>) ->
         .map(|(name, count)| format!("{name}={count}\n"))
         .collect();
     let path = scaling_file(app, paths);
-    if let Err(e) = fs::create_dir_all(paths.env_root.join(app)) {
+    if let Err(e) = crate::util::create_private_dir(&paths.env_root.join(app)) {
         return Err(anyhow!("cannot create the env directory of '{app}': {e}"));
     }
     match fs::write(&path, text) {

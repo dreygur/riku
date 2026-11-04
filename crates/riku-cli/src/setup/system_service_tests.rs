@@ -18,3 +18,12 @@ fn units_follow_router() {
         "{nginx}"
     );
 }
+
+#[test]
+fn uwsgi_copies_may_bind_in_the_socket_directory() {
+    let unit = render_system_unit(&Router::Nginx, "deploy", "/home/deploy", "/usr/bin/riku");
+    assert!(
+        unit.contains("ReadWritePaths=/home/deploy/.riku -/run/riku-sockets\n"),
+        "ProtectSystem=strict would leave the socket directory read only: {unit}"
+    );
+}

@@ -43,7 +43,7 @@ pub(crate) fn upstream_name(app: &str) -> String {
     format!("riku_{hex}")
 }
 
-/// The app's unix socket: `RIKU_NGINX_SOCKET`, else `<nginx_root>/<app>.sock`.
+/// The app's unix socket: `RIKU_NGINX_SOCKET`, else `<socket_root>/<app>.sock`.
 pub(crate) fn socket_path(
     app: &str,
     env: &HashMap<String, String>,
@@ -52,7 +52,7 @@ pub(crate) fn socket_path(
     match env.get("RIKU_NGINX_SOCKET") {
         Some(socket) => socket.clone(),
         None => paths
-            .nginx_root
+            .socket_root
             .join(format!("{app}.sock"))
             .to_string_lossy()
             .to_string(),

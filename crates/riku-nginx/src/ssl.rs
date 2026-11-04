@@ -3,10 +3,27 @@
 //! Obtains certificates via acme.sh (Let's Encrypt) or generates
 //! a self-signed fallback certificate using openssl.
 
-use anyhow::Result;
+use std::fs;
+use std::os::unix::fs::PermissionsExt;
+
+use anyhow::{anyhow, Result};
+
+const KEY_FILE_MODE: u32 = 0o600;
+
+/// Make a private key readable by its owner only. nginx's master process
+/// runs as root and reads it before dropping to the worker user, so nothing
+/// else needs to.
+fn restrict_key(key_path: &std::path::Path) -> Result<()> {
+    match fs::set_permissions(key_path, fs::Permissions::from_mode(KEY_FILE_MODE)) {
+        Ok(()) => Ok(()),
+        Err(e) => Err(anyhow!("cannot chmod {}: {e}", key_path.display())),
+    }
+}
 
 /// Ensure SSL certificates exist for an app.
 /// First tries to use acme.sh (Let's Encrypt), falls back to self-signed cert.
+/// The key ends up `0600` whichever path made it, an existing one included.
+#[allow(clippy::question_mark)]
 pub fn ensure_ssl_certificates(
     app: &str,
     domains: &[String],
@@ -17,21 +34,37 @@ pub fn ensure_ssl_certificates(
 
     // If certs already exist and are valid, don't regenerate
     if key_path.exists() && crt_path.exists() {
+        if let Err(e) = restrict_key(&key_path) {
+            return Err(e);
+        }
         return Ok(true);
     }
 
     // Try acme.sh first
     let acme_sh = paths.acme_root.join("acme.sh");
     if acme_sh.exists() {
-        if let Some(issued) =
-            try_acme_certificates(app, domains, paths, &acme_sh, &key_path, &crt_path)?
-        {
+        let issued =
+            match try_acme_certificates(app, domains, paths, &acme_sh, &key_path, &crt_path) {
+                Ok(issued) => issued,
+                Err(e) => return Err(e),
+            };
+        if let Some(issued) = issued {
+            if let Err(e) = restrict_key(&key_path) {
+                return Err(e);
+            }
             return Ok(issued);
         }
     }
 
     // Fall back to self-signed certificate
-    generate_self_signed_certificate(app, domains, &key_path, &crt_path)
+    let generated = match generate_self_signed_certificate(app, domains, &key_path, &crt_path) {
+        Ok(generated) => generated,
+        Err(e) => return Err(e),
+    };
+    if let Err(e) = restrict_key(&key_path) {
+        return Err(e);
+    }
+    Ok(generated)
 }
 
 /// Attempt to issue certificates via acme.sh. Returns `Some(true)` on success,
@@ -158,18 +191,20 @@ mod tests {
     }
 
     #[test]
-    fn test_ensure_ssl_certs_returns_true_when_both_exist() {
+    fn an_existing_key_is_kept_and_made_owner_only() {
         let tmp = TempDir::new().unwrap();
         let paths = make_paths(&tmp);
-
-        // Pre-create the cert files so the function returns early
-        std::fs::write(paths.nginx_root.join("myapp.key"), "key-data").unwrap();
+        let key = paths.nginx_root.join("myapp.key");
+        std::fs::write(&key, "key-data").unwrap();
+        std::fs::set_permissions(&key, fs::Permissions::from_mode(0o644)).unwrap();
         std::fs::write(paths.nginx_root.join("myapp.crt"), "crt-data").unwrap();
 
         let domains = vec!["example.com".to_string()];
-        let result = ensure_ssl_certificates("myapp", &domains, &paths);
-        assert!(result.is_ok());
-        assert!(result.unwrap());
+        assert!(ensure_ssl_certificates("myapp", &domains, &paths).unwrap());
+
+        assert_eq!(std::fs::read_to_string(&key).unwrap(), "key-data");
+        let mode = fs::metadata(&key).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "private key is mode {mode:o}");
     }
 
     #[test]

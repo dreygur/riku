@@ -21,6 +21,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `<app>@<kind>.<n>.toml`, `<app>@<kind>.<n>` and `<app>@<n>.sock`, so two
   apps can no longer share a file name; redeploy every app after upgrading.
   App names ending in `.git` are refused.
+- uWSGI sockets moved from `~/.riku/nginx` to `/run/riku-sockets` (mode
+  `2750`, group `riku-sockets`), and are `0660`. `sudo riku init` creates
+  the group with the deploy user and the nginx worker user in it, the
+  directory, and `/etc/tmpfiles.d/riku.conf` to recreate it at boot. nginx
+  gets no access to the deploy user's home. Run `sudo riku init`, then
+  redeploy wsgi, jwsgi, rwsgi and php apps; old sockets in `~/.riku/nginx`
+  can be deleted.
+- Worker configs, `ENV` and `LIVE_ENV` files are written `0600`, app env
+  directories `0700`, and an app's TLS key `0600`. A deploy rewrites the
+  worker configs and `LIVE_ENV` and tightens the env directory; an existing
+  `ENV` file stays as it is until riku next writes it.
 
 ### Router Plugin Protocol 2
 

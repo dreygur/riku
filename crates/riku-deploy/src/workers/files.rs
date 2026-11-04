@@ -102,7 +102,8 @@ pub(super) fn write_worker_config(
         Ok(text) => text,
         Err(e) => return Err(anyhow!("cannot serialize worker config {filename}: {e}")),
     };
-    if let Err(e) = crate::util::write_atomic(&available, serialized.as_bytes()) {
+    // The config carries the app's whole environment, secrets included.
+    if let Err(e) = crate::util::write_private(&available, serialized.as_bytes()) {
         return Err(anyhow!("cannot write {}: {e}", available.display()));
     }
     if let Err(e) = crate::util::fs::replace_symlink(&available, &enabled) {

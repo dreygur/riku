@@ -65,6 +65,25 @@ impl Supervisor {
         }
     }
 
+    /// Recreate the uWSGI socket directory if it is gone, as after a reboot
+    /// on a host without systemd-tmpfiles. Non-fatal: the deploy user can
+    /// rarely write `/run`, and apps without uWSGI copies never need it, so
+    /// a failure is reported and the supervisor carries on.
+    pub(super) fn ensure_socket_root(&self) {
+        let paths = match riku_config::RikuPaths::from_env() {
+            Ok(paths) => paths,
+            Err(e) => {
+                tracing::warn!("cannot resolve riku paths to check the socket directory: {e}");
+                return;
+            }
+        };
+        if let Err(e) =
+            riku_util::socket_dir::ensure_exists(&paths.socket_root, riku_config::SOCKET_GROUP)
+        {
+            tracing::error!("{e}");
+        }
+    }
+
     /// Start the health-check HTTP server, storing the metrics broadcast
     /// sender on success so the event loop can push SSE frames to it later.
     /// Non-fatal on failure: the supervisor still runs without a health

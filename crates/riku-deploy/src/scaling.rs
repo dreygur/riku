@@ -97,7 +97,7 @@ pub(crate) fn apply_scaling_deltas(
         .into_iter()
         .map(|(kind, count)| format!("{kind}={count}\n"))
         .collect();
-    if let Err(e) = fs::create_dir_all(paths.env_root.join(app)) {
+    if let Err(e) = crate::util::create_private_dir(&paths.env_root.join(app)) {
         return Err(anyhow!("cannot create the env dir of '{app}': {e}"));
     }
     if let Err(e) = fs::write(&scaling_path, &scaling_content) {

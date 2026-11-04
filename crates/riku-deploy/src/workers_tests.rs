@@ -1,4 +1,5 @@
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 
 use super::mock_supervisor::{MockRoutes, MockSupervisor};
@@ -145,6 +146,11 @@ fn test_create_workers_generic_worker_kind_creates_config() -> anyhow::Result<()
 
     let config_path = paths.workers_available.join("myapp@worker.1.toml");
     assert!(config_path.exists(), "worker config should be created");
+    let mode = fs::metadata(&config_path)?.permissions().mode() & 0o777;
+    assert_eq!(
+        mode, 0o600,
+        "a worker config carries the app's secrets but is mode {mode:o}"
+    );
     Ok(())
 }
 

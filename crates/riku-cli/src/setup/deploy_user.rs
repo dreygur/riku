@@ -106,6 +106,11 @@ impl DeployUser {
         })
     }
 
+    /// The deploy user's numeric uid, for chowning a root-created path to it.
+    pub fn uid(&self) -> u32 {
+        self.uid.as_raw()
+    }
+
     /// The deploy user's riku paths, the ones git push deploys read.
     pub fn riku_paths(&self) -> RikuPaths {
         RikuPaths::from_dirs(self.home.join(".riku"), &self.home)

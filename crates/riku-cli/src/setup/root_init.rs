@@ -5,7 +5,8 @@
 //! and runs `riku init --user-steps` from there as the deploy user. That
 //! child installs itself into `~/.local/bin`, creates `~/.riku`, writes the
 //! `ROUTER` file and installs the git hook, all in its own home and owned
-//! by it. Root then reads the router back, prepares the router on the host
+//! by it. Root then reads the router back, creates the uWSGI socket
+//! directory (see [`super::socket_group`]), prepares the router on the host
 //! and installs the systemd units.
 //!
 //! Security: root never writes in the deploy user's home and never runs a
@@ -30,6 +31,7 @@ use super::deploy_user::{deploy_user_name, DeployUser};
 use super::init::InitOptions;
 use super::init_router::{deploy_router, setup_router_host};
 use super::prerequisites::check_prerequisites;
+use super::socket_group::setup_socket_root;
 use super::systemd::install_systemd_service;
 
 const BINARY_NAME: &str = "riku";
@@ -127,6 +129,10 @@ pub fn root_init(options: &InitOptions) -> Result<DeployUser> {
         Err(e) => return Err(e),
     };
     check_prerequisites(true, &router);
+    // Before the router: nginx host setup adds its worker to the group.
+    if let Err(e) = setup_socket_root(&user) {
+        return Err(e);
+    }
     if let Err(e) = setup_router_host(&router, &user) {
         return Err(e);
     }
