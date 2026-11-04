@@ -128,8 +128,22 @@ work they describe.
   - Task 5 wait for health: done (2bf098e..068157e)
   - Task 6 rolling replacement: done (b32713d..06ff205)
   - Task 10 supervisor fixes: done (334b7aa)
-  - Task 17 settings.toml and engine time limits: added 2026-11-01
-  - Tasks 7 to 9, 11 to 16: open
+  - Task 7 deploy container apps: done (db86594, cce8688, aad0492)
+  - Task 8 rolling replacement for Procfile web copies: done (12aff7d)
+  - Task 9 supervisor watches containers: done (4928fc2)
+  - Task 11 migrate compose apps: done (4aef6ba)
+  - Task 12 image watch: done (8144b8a)
+  - Task 13 state API fields: done (e6e3734)
+  - Task 14 dashboard rows and service actions: done (3c2a31b)
+  - Task 15 CLI rows and logs: done (f67db2a)
+  - Task 17 settings.toml and engine time limits: done (d32c08c..340ac0b)
+  - Real Docker check fixes: done (b20c8a8, nginx include and host guard
+    4294a66, merged 1fb66a4; filtered snippet check 1982cac)
+  - Task 16 docs, changelog, roadmap: open
+- Rootless engine (owner, 2026-11-04): spec
+  `specs/2026-11-04-rootless-engine-design.md`, plan
+  `plans/2026-11-04-rootless-engine.md` (22 tasks, Task 1 is a footprint
+  gate). Not started. Rootless ships only together with the router helper.
 - Owner decisions 2026-11-01: engine time limits in a new
   `~/.riku/settings.toml` (short calls 30 s, stop grace plus 30 s, pull and
   build 30 min); supervisor follows engine events and polls stats every
