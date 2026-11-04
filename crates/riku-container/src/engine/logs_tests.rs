@@ -67,7 +67,7 @@ fn timestamped_logs_asks_since_the_bound_and_keeps_both_streams() {
     let id = ContainerId::try_from(ID).unwrap();
     let since = LogRange::Since("2026-11-04T18:13:27.125923011Z".to_string());
 
-    let logs = engine.timestamped_logs(&id, &since).unwrap();
+    let logs = engine.timestamped_logs(&id, &since, 1024).unwrap();
 
     assert_eq!(logs.stdout, "T1 out\n");
     assert_eq!(logs.stderr, "T2 err\n");
@@ -76,6 +76,39 @@ fn timestamped_logs_asks_since_the_bound_and_keeps_both_streams() {
         [format!(
             "logs --timestamps --since 2026-11-04T18:13:27.125923011Z {ID}"
         )]
+    );
+}
+
+#[test]
+fn failed_logs_call_reports_only_a_short_engine_line() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _log) = logging_engine(
+        dir.path(),
+        "case \"$1\" in logs) \
+         echo '2026-11-04T10:00:00.000000001Z secret container output' >&2; \
+         printf 'Error: %0300d\\n' 0 >&2; \
+         echo '2026-11-04T10:00:00.000000002Z more container output' >&2; \
+         exit 1;; esac",
+    );
+    let id = ContainerId::try_from(ID).unwrap();
+
+    let err = engine
+        .timestamped_logs(&id, &LogRange::All, 1024)
+        .unwrap_err()
+        .to_string();
+
+    assert!(
+        !err.contains("container output"),
+        "leaked container stderr: {err}"
+    );
+    assert!(err.contains("exit status: 1"), "no exit status in {err}");
+    let expected: String = format!("Error: {}", "0".repeat(300))
+        .chars()
+        .take(200)
+        .collect();
+    assert!(
+        err.ends_with(&format!("{expected:?}")),
+        "detail not cut to 200 chars: {err}"
     );
 }
 

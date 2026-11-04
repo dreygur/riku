@@ -1,10 +1,12 @@
 //! Reading `inspect` JSON into [`ContainerInfo`].
 //!
-//! Security model: the JSON is untrusted. Ids become [`ContainerId`], service
-//! and copy labels their validated types, and a missing or malformed required
-//! field is an error, never a default. The one exception is a listing, which
-//! leaves out a container whose service or copy label does not parse (see
-//! [`BadLabels`]) so that one such container cannot break every app.
+//! Security model: the JSON is untrusted. Ids become [`ContainerId`], the app
+//! label must pass [`check_app_name`] (the supervisor uses it as a path part),
+//! service and copy labels become their validated types, and a missing or
+//! malformed required field is an error, never a default. The one exception
+//! is a listing, which leaves out a container whose app, service or copy label
+//! does not parse (see [`BadLabels`]) so that one such container cannot break
+//! every app.
 
 use std::collections::HashMap;
 
@@ -13,7 +15,7 @@ use serde::Deserialize;
 
 use super::inspect::{ContainerInfo, ContainerState};
 use super::ContainerId;
-use crate::types::{labels, CopyIndex, ServiceName};
+use crate::types::{check_app_name, labels, CopyIndex, ServiceName};
 
 #[derive(Deserialize)]
 struct RawContainer {
@@ -70,6 +72,16 @@ fn container_state(state: &RawState) -> Result<ContainerState> {
     }
 }
 
+fn app_label(label_map: &HashMap<String, String>) -> Result<Option<String>> {
+    match label_map.get(labels::APP) {
+        None => Ok(None),
+        Some(raw) => match check_app_name(raw) {
+            Ok(()) => Ok(Some(raw.clone())),
+            Err(e) => Err(anyhow!("label {}: {e}", labels::APP)),
+        },
+    }
+}
+
 fn service_label(label_map: &HashMap<String, String>) -> Result<Option<ServiceName>> {
     match label_map.get(labels::SERVICE) {
         None => Ok(None),
@@ -109,8 +121,8 @@ fn port_label(label_map: &HashMap<String, String>, container: &str) -> Option<u1
         })
 }
 
-/// What to do with a container whose `riku.service` or `riku.copy` label does
-/// not parse.
+/// What to do with a container whose `riku.app`, `riku.service` or `riku.copy`
+/// label does not parse.
 #[derive(Debug, Clone, Copy)]
 pub(super) enum BadLabels {
     /// Fail the whole read. For exact-name ownership checks, where an
@@ -126,16 +138,24 @@ enum Unreadable {
     Other(anyhow::Error),
 }
 
+struct RikuLabels {
+    app: Option<String>,
+    service: Option<ServiceName>,
+    copy: Option<CopyIndex>,
+}
+
 #[allow(clippy::question_mark)]
-fn riku_labels(
-    label_map: &HashMap<String, String>,
-) -> Result<(Option<ServiceName>, Option<CopyIndex>)> {
+fn riku_labels(label_map: &HashMap<String, String>) -> Result<RikuLabels> {
+    let app = match app_label(label_map) {
+        Ok(app) => app,
+        Err(e) => return Err(e),
+    };
     let service = match service_label(label_map) {
         Ok(service) => service,
         Err(e) => return Err(e),
     };
     match copy_label(label_map) {
-        Ok(copy) => Ok((service, copy)),
+        Ok(copy) => Ok(RikuLabels { app, service, copy }),
         Err(e) => Err(e),
     }
 }
@@ -151,19 +171,19 @@ fn into_info(raw: RawContainer) -> std::result::Result<ContainerInfo, Unreadable
         Err(e) => return Err(Unreadable::Other(anyhow!("container {name}: {e}"))),
     };
     let label_map = raw.config.labels.unwrap_or_default();
-    let (service, copy) = match riku_labels(&label_map) {
+    let riku = match riku_labels(&label_map) {
         Ok(parsed) => parsed,
         Err(e) => return Err(Unreadable::Labels(anyhow!("container {name}: {e}"))),
     };
     let host_port = port_label(&label_map, &name);
     Ok(ContainerInfo {
         id,
-        app: label_map.get(labels::APP).cloned(),
+        app: riku.app,
         restart: label_map.get(labels::RESTART).cloned(),
         host_port,
         name,
-        service,
-        copy,
+        service: riku.service,
+        copy: riku.copy,
         image: raw.config.image,
         image_id: raw.image_id,
         state,

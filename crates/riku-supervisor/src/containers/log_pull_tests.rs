@@ -58,3 +58,61 @@ fn pulls_append_each_line_once_in_timestamp_order() {
         ]
     );
 }
+
+/// The first call fills the stdout cap partway through `three`. Only the
+/// complete lines up to `two` are written, the later stderr line waits too,
+/// and the next call continues from `two` without writing anything twice.
+#[test]
+fn capped_pull_writes_complete_lines_and_continues_next_call() {
+    let dir = TempDir::new().unwrap();
+    let behaviour = "case \"$1\" in logs) case \"$*\" in\n\
+         *--since*) echo '2026-11-04T10:00:00.000000002Z two'; \
+                    echo '2026-11-04T10:00:00.000000003Z three'; \
+                    echo '2026-11-04T10:00:00.000000004Z four' >&2;;\n\
+         *) echo '2026-11-04T10:00:00.000000001Z one'; \
+            echo '2026-11-04T10:00:00.000000002Z two'; \
+            echo '2026-11-04T10:00:00.000000003Z three'; \
+            echo '2026-11-04T10:00:00.000000004Z four' >&2;;\n\
+         esac;; esac";
+    let (engine, argv_log) = mock_engine(dir.path(), behaviour);
+    let log_root = dir.path().join("logs");
+    let mut puller = LogPuller::new(log_root.clone());
+    puller.stream_cap = 80;
+    let info = running_copy();
+    let known = HashMap::from([(info.id.clone(), info)]);
+
+    puller.tick(&engine, &known, Start::All);
+    let first = fs::read_to_string(log_root.join("myapp").join("web.1.log")).unwrap();
+    puller.tick(&engine, &known, Start::All);
+
+    let written = fs::read_to_string(log_root.join("myapp").join("web.1.log")).unwrap();
+    assert_eq!(first, "one\ntwo\n", "first call kept lines past the cut");
+    assert_eq!(written, "one\ntwo\nthree\nfour\n");
+    assert_eq!(
+        logged(&argv_log)[1],
+        format!("logs --timestamps --since 2026-11-04T10:00:00.000000002Z {ID}")
+    );
+}
+
+#[test]
+fn refuses_to_append_through_a_symlinked_log_file() {
+    let dir = TempDir::new().unwrap();
+    let behaviour = "case \"$1\" in logs) echo '2026-11-04T10:00:00.000000001Z one';; esac";
+    let (engine, _argv_log) = mock_engine(dir.path(), behaviour);
+    let log_root = dir.path().join("logs");
+    let target = dir.path().join("authorized_keys");
+    fs::write(&target, "").unwrap();
+    fs::create_dir_all(log_root.join("myapp")).unwrap();
+    std::os::unix::fs::symlink(&target, log_root.join("myapp").join("web.1.log")).unwrap();
+    let mut puller = LogPuller::new(log_root);
+    let info = running_copy();
+    let known = HashMap::from([(info.id.clone(), info)]);
+
+    puller.tick(&engine, &known, Start::All);
+
+    assert_eq!(
+        fs::read_to_string(&target).unwrap(),
+        "",
+        "log line was written through the symlink"
+    );
+}

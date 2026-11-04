@@ -246,3 +246,14 @@ fn listing_skips_a_container_with_an_unparseable_service_label() {
         "an exact-name lookup must not read the unparseable container as absent"
     );
 }
+
+#[test]
+fn path_traversal_app_label_is_skipped_by_listings_and_fails_lookups() {
+    let crafted = inspect_json(ID, r#"{"Status":"running"}"#, r#"{"riku.app":"../.."}"#);
+
+    let listed = super::parse_inspect(&crafted, BadLabels::Skip).unwrap();
+    let err = parse_inspect(&crafted).unwrap_err().to_string();
+
+    assert!(listed.is_empty(), "listed a crafted app label: {listed:?}");
+    assert!(err.contains("riku.app"), "expected riku.app in {err:?}");
+}

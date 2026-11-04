@@ -40,7 +40,8 @@ pub struct ContainerInfo {
     pub id: ContainerId,
     /// Container name without the leading slash docker adds.
     pub name: String,
-    /// From the `riku.app` label; `None` when the container has none.
+    /// From the `riku.app` label; `None` when the container has none. Always
+    /// a name that passes [`check_app_name`], so it is safe as a path part.
     pub app: Option<String>,
     /// From the `riku.service` label; `None` when the container has none.
     pub service: Option<ServiceName>,
