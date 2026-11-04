@@ -6,7 +6,7 @@ Component package located at `crates/riku-config/src`.
 ## Interface
 - `ENGINE_FILE` [container_engine.rs:ENGINE_FILE] (const)
 - `load` [container_engine.rs:load] (fn)
-- `RIKU_RAW_SOURCE_URL` [lib.rs:RIKU_RAW_SOURCE_URL] (const)
+- `INSTALL_SCRIPT_URL` [lib.rs:INSTALL_SCRIPT_URL] (const)
 - `RIKU_WORKER_TIMEOUT` [lib.rs:RIKU_WORKER_TIMEOUT] (const)
 - `RIKU_WORKER_GRACE_PERIOD` [lib.rs:RIKU_WORKER_GRACE_PERIOD] (const)
 - `RikuPaths` [lib.rs:RikuPaths] (struct)

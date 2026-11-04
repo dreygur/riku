@@ -75,12 +75,6 @@ fn acme_root_respects_env_var() {
 }
 
 #[test]
-fn riku_raw_source_url_constant() {
-    assert!(RIKU_RAW_SOURCE_URL.starts_with("https://"));
-    assert!(RIKU_RAW_SOURCE_URL.contains("riku")); // Refers to the riku repo
-}
-
-#[test]
 fn from_env_uses_home() {
     let paths = RikuPaths::from_env().expect("HOME is set in the test environment");
     assert!(paths.riku_root.is_absolute() || env::var("RIKU_ROOT").is_ok());

@@ -74,7 +74,7 @@ impl Engine {
             Ok(()) => {}
             Err(e) => return Err(e),
         }
-        if image.contains(['*', '?']) {
+        if image.contains(['*', '?', '[']) {
             return Err(anyhow!("image {image:?} must not contain wildcards"));
         }
         let args: Vec<OsString> = ["image", "ls", "-q", "--no-trunc", image]

@@ -6,6 +6,11 @@ use crate::engine::fake::fake_engine;
 use crate::engine::probe::{answers_version, first_unanswered};
 use crate::engine::Engine;
 
+/// Limit for fake engines that exit at once. Only the hung program test needs
+/// a short limit. Under a loaded parallel test run a freshly written `exit 0`
+/// script has taken over 300 ms to finish, which failed the old 300 ms limit.
+const ANSWER_LIMIT: Duration = Duration::from_secs(10);
+
 const PODMAN_VERSION: &str = r#"{"Client":{"Version":"5.2.2"},"Server":{"Version":"5.2.2"}}"#;
 
 fn binary(dir: &std::path::Path, script: &str) -> EngineBinary {
@@ -124,7 +129,7 @@ fn answers_version_accepts_zero_exit() {
     let program = fake_engine(dir.path(), "docker", "exit 0");
 
     assert!(
-        answers_version(&program, Duration::from_millis(300)),
+        answers_version(&program, ANSWER_LIMIT),
         "program exiting 0 should return true"
     );
 }
@@ -135,7 +140,7 @@ fn answers_version_rejects_nonzero_exit() {
     let program = fake_engine(dir.path(), "docker", "exit 1");
 
     assert!(
-        !answers_version(&program, Duration::from_millis(300)),
+        !answers_version(&program, ANSWER_LIMIT),
         "program exiting 1 should return false"
     );
 }

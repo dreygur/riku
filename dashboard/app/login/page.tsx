@@ -3,6 +3,7 @@
 import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ function LoginForm() {
         setError(body.error ?? "login failed");
         return;
       }
-      router.replace(params.get("from") || "/");
+      router.replace(safeRedirectPath(params.get("from")));
       router.refresh();
     } finally {
       setPending(false);

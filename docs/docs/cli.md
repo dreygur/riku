@@ -765,13 +765,12 @@ riku container check-remote                 # Check remote for Docker/Podman
 
 ### `riku update`
 
-Update the Riku binary to the latest version.
+Not implemented yet. It exits with an error that prints the installer
+command; rerun the installer to get the latest release:
 
 ```bash
-riku update
+curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh
 ```
-
-Downloads and replaces the current binary from the official release.
 
 ---
 

@@ -314,7 +314,7 @@ pub enum Commands {
     )]
     Addon(AddonCmd),
 
-    /// Self-update the riku binary
+    /// Self-update the riku binary (not implemented, prints the installer command)
     #[command(after_help = "Examples:\n  riku update")]
     Update,
 

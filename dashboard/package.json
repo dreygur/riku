@@ -7,7 +7,6 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "audit:dashboard": "nubx tsx scripts/audit-dashboard.ts",
     "hash-password": "nubx tsx scripts/hash-password.ts",
     "test:unit": "vitest run",
     "test:e2e": "playwright test --project=e2e"

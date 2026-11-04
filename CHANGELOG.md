@@ -148,7 +148,12 @@ of the backend's `RIKU_DASHBOARD_TOKEN`: a single shared password, never
 stored in plaintext (`RIKU_DASHBOARD_PASSWORD_HASH`, scrypt salt+hash,
 generated via `nub run hash-password`), gating every route through a
 signed session cookie (`middleware.ts`). Fully bypassed when the hash env
-var is unset, so existing local/dev usage is unaffected.
+var is unset, so existing local/dev usage is unaffected. After login the
+page only follows a same-origin `from` path, so a crafted login link cannot
+send the user to another site. The stale `audit:dashboard` script is gone.
+
+`riku update` now exits with an error that prints the installer command,
+instead of probing a dead URL and printing "Done.".
 
 ### Incident Alerting
 

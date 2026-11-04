@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 use super::control_target::{control_target, ControlTarget};
 use riku_supervisor::config::app_worker_configs;
 
-use crate::config::{RikuPaths, RIKU_RAW_SOURCE_URL};
+use crate::config::{RikuPaths, INSTALL_SCRIPT_URL};
 use crate::supervisor::Supervisor;
 use crate::util::{display, exit_if_invalid, parse_settings};
 
@@ -85,33 +85,12 @@ pub fn cmd_stop(paths: &RikuPaths, app: &str, service: Option<&str>) -> Result<(
     }
 }
 
-/// Self-update the binary by downloading latest from RIKU_RAW_SOURCE_URL.
+/// Refuses: riku cannot replace its own binary yet, so it points at the installer.
 pub fn cmd_update() -> Result<()> {
-    display::info("Updating riku...");
-
-    let output = Command::new("curl")
-        .args([
-            "-sL",
-            "-w",
-            "%{http_code}",
-            RIKU_RAW_SOURCE_URL,
-            "-o",
-            "/dev/null",
-        ])
-        .output()?;
-
-    let http_code = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if http_code == "200" {
-        display::warn("Note: self-update for riku binary is not yet implemented.");
-        display::note("The reference source is accessible.");
-    } else {
-        display::note(&format!(
-            "Error updating riku - please check if {} is accessible from this machine.",
-            RIKU_RAW_SOURCE_URL
-        ));
-    }
-    display::success("Done.");
-    Ok(())
+    Err(anyhow::anyhow!(
+        "riku update is not implemented; reinstall the latest release with: \
+         curl -fsSL {INSTALL_SCRIPT_URL} | sh"
+    ))
 }
 
 /// Start the supervisor daemon.
@@ -138,3 +117,7 @@ fn do_stop(paths: &RikuPaths, app: &str) {
         display::error(&format!("Error: app '{}' not deployed!", app));
     }
 }
+
+#[cfg(test)]
+#[path = "control_tests.rs"]
+mod tests;

@@ -113,13 +113,12 @@ fn image_id_is_none_when_absent_and_refuses_an_ambiguous_reference() {
     let absent = tempfile::tempdir().unwrap();
     let (engine, _log) = logging_engine(absent.path(), "");
     assert_eq!(engine.image_id("shop/web:1.4").unwrap(), None);
+    for image in ["-q", "shop/*", "shop/we?", "shop/[wx]eb"] {
+        assert!(engine.image_id(image).is_err(), "accepted {image:?}");
+    }
 
     let several = tempfile::tempdir().unwrap();
     let (engine, _log) = logging_engine(several.path(), "echo sha256:aa; echo sha256:bb");
     let err = engine.image_id("shop/web").unwrap_err().to_string();
     assert!(err.contains("several images"), "{err}");
-
-    for image in ["-q", "shop/*", "shop/we?"] {
-        assert!(engine.image_id(image).is_err(), "accepted {image:?}");
-    }
 }

@@ -303,9 +303,10 @@ next filter in the chain. A broken filter can only become a no-op, never a
 hard failure: this is also why filters have no `gate`-equivalent mode: a
 filter can decline to transform, but never veto.
 
-**Shipped example: `nginx.include_content`.** The generated nginx config
-already supports a raw file-based passthrough (`RIKU_NGINX_INCLUDE_FILE`); that
-file's content (or an empty string if unset) is now the *seed* value run
+**Shipped example: `nginx.include_content`.** An app can add a checked
+snippet to its generated nginx `server` block with `RIKU_NGINX_INCLUDE_FILE`
+(path confined to the app directory, narrow grammar, directive allowlist).
+That file's content (or an empty string if unset) is the *seed* value run
 through this filter before being inlined into the config
 (`crates/riku-nginx/src/app_snippet.rs::insert_include_file`). This is the
 "augment, don't replace" alternative to the router seam's full-replace
