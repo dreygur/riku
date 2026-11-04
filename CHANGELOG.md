@@ -46,17 +46,85 @@ proxying to `127.0.0.1`.
   template failed and its parts did not pass `nginx -t`. They now render and
   pass, including for port mapped and wsgi apps, and wsgi apps pass a
   `unix:` socket to `uwsgi_pass`.
+- Run `sudo riku init` after upgrading. nginx now loads riku's sites through
+  one root-owned file, `/etc/nginx/conf.d/riku.conf`, which includes
+  `~/.riku/nginx/*.conf`, and init removes the per-app links older versions
+  left in `/etc/nginx/sites-enabled`. Riku no longer writes under
+  `/etc/nginx` at deploy time. Until init has run, deploys and destroys on
+  the nginx router refuse with "run: sudo riku init" and change nothing.
+  Hosts without nginx skip the check.
+- A `.conf` file in `~/.riku/nginx` that is no app's config refuses deploys,
+  because the include would load it. A `test_nginx.conf` left by an older
+  version is removed by init; any other stray file must be removed by hand.
+- An `nginx.conf`, `nginx.custom.conf`, `nginx.custom` or `.nginx.conf`
+  shipped in the app directory is ignored with a warning, and the generated
+  config is used.
+- `RIKU_NGINX_INCLUDE_FILE` must name a file that resolves inside the app
+  directory. Its text must fit a strict grammar: printable ASCII, space, tab
+  and newline only (no CR), no backslash, no `{` or `}`, quotes and `#`
+  only at the start of a word, and every statement ended by `;`. Every
+  statement must use one of `add_header`, `expires`,
+  `client_max_body_size`, `client_body_timeout`, `keepalive_timeout`,
+  `proxy_connect_timeout`, `proxy_read_timeout`, `proxy_send_timeout`,
+  `proxy_buffering`, `proxy_buffer_size`, `proxy_buffers`,
+  `proxy_busy_buffers_size`, `gzip`, `gzip_types`, `gzip_min_length`,
+  `gzip_comp_level` or `gzip_vary`. The fallback that passed the value to
+  nginx as an `include` path is gone. An existing snippet that breaks these
+  rules now fails the deploy, naming the file and the reason.
+- Output of `nginx.include_content` filter plugins gets the same check. A
+  filter chain that returns invalid text or a value that is not a string
+  fails the deploy instead of being passed through.
+- The ACME challenge config is written as `acme-challenge.conf.disabled`,
+  so the include does not load it.
+- Server side HTTPS requests go through the new `riku-http` crate: reqwest
+  on rustls with the ring provider. aws-lc is no longer built.
 
 ### Container Apps
 
-- An app with a Dockerfile, Containerfile or compose file now deploys as
-  containers on its next push. To keep the runtime it used before, set
-  `RIKU_RUNTIME` to that runtime (for example `riku config:set myapp
-  RIKU_RUNTIME=node`) before pushing.
+- An app with a compose file (or a `COMPOSE_FILE`), or a Dockerfile or
+  Containerfile at the app root, now deploys as containers on its next push.
+  To keep the runtime it used before, set `RIKU_RUNTIME` to that runtime
+  (for example `riku config:set myapp RIKU_RUNTIME=node`) before pushing. An
+  app that switches from Procfile workers keeps them until its containers
+  are healthy and routed.
+- Riku runs every compose service as its own containers, `<app>-<service>-<n>`
+  on the network `riku-<app>`, without a compose tool. The supervisor adopts
+  them on start, restarts exited copies per the compose `restart` policy,
+  and writes their output to `~/.riku/logs/<app>/<service>.<n>.log`.
+- Deploys, `riku restart` and image watch updates replace copies one at a
+  time. The routed service without writable storage overlaps: a new copy
+  must be healthy and routed before the old one leaves the router and gets
+  its stop signal and grace period. Other services, storage services among
+  them, stop first and are down until the new copy is healthy. Router
+  reloads are confirmed before an old copy stops.
+- Compose services scale through `SCALING` or `riku ps <app> --scale
+  <service>=<copies>`, without a rebuild. A service with writable storage,
+  or one publishing a port other than the routed HTTP one, stays at one
+  copy.
+- `riku restart <app> [service]` and `riku stop <app> [service]` act on one
+  compose service. Naming a service of a Procfile app is refused.
+- Apps deployed by the old container plugin are migrated on their next
+  deploy. Named volumes are reused under the names compose gave them. The
+  site is down from the old stack stopping until the new routed copy is
+  healthy; when the new containers fail, the old stack comes back.
+- A compose port that names a host IP, such as `"127.0.0.1:8080:8080"` or a
+  long form entry with `host_ip`, is refused. Ports bind 127.0.0.1 by
+  default; the service label `riku.public: "true"` publishes them on all
+  interfaces.
+- Setting only one of `RIKU_GHCR_USERNAME` and `RIKU_GHCR_TOKEN` now fails
+  the deploy. The old container plugin skipped the login in that case.
 - A container app's Procfile `release` command now runs in a one-off
   container from the newly built image, with the app's env and on the app's
-  network, instead of on the host. A nonzero exit stops the deploy before
-  any copy is replaced.
+  network, instead of on the host. It runs after the images are built and
+  pulled and before any copy is replaced. A nonzero exit stops the deploy.
+- `riku destroy` of a container app stops and removes its containers and
+  network and keeps its volumes. It refuses, removing nothing, when the
+  container engine does not answer. `riku destroy <app> --force` removes
+  riku's files and route anyway and warns that containers may still run.
+- `riku logs <app>` follows every `*.log` of the app except `deploy.log`.
+  `riku logs <app> <service>` follows that service's `<service>.<n>.log`
+  files, and a name with no log files is an error listing the names that
+  have them.
 - A compose file, or a folder on its path, may now be a symlink whose real
   target stays inside the app directory (for example
   `docker-compose.yml -> deploy/prod.yml`). A link that leaves the app is

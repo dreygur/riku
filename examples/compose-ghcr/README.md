@@ -26,19 +26,19 @@ docker push ghcr.io/$RIKU_GHCR_USERNAME/riku-compose-demo:latest
 Edit `compose.yml` (one directory up from `app/`) and replace `RIKU_GHCR_USERNAME`
 with the same username you used above.
 
-The web service must publish its port as `"${PORT}:8080"`: `${PORT}` is the
-port riku assigns and routes to. Riku refuses a port entry that names a host
-IP (such as `"127.0.0.1:${PORT}:8080"`) with "use the riku.public label
-instead of a host IP". Published ports bind loopback by default; set the
-service label `riku.public: "true"` only if the port must listen on all
-interfaces.
+The web service publishes its container port, `"8080"`. Riku picks a free
+host port on 127.0.0.1 for each copy and routes to it, so the compose file
+names no host port. Riku refuses a port entry that names a host IP (such as
+`"127.0.0.1:8080:8080"`) with "use the riku.public label instead of a host
+IP". Published ports bind loopback by default; set the service label
+`riku.public: "true"` only if the port must listen on all interfaces.
 
 ```yaml
 services:
   web:
     image: ghcr.io/<your-github-username>/riku-compose-demo:latest
     ports:
-      - "${PORT}:8080"
+      - "8080"
 ```
 
 ## 3. Deploy it to riku

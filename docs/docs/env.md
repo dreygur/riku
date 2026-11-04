@@ -88,8 +88,8 @@ riku config set myapp PORT=3000
 ```
 
 - **Default:** unset. Each deploy picks a free port, passes it to the `web` process as `PORT` and routes to it.
-- **Description:** pins the port instead, for an app that has to listen on a fixed one, such as a compose file that publishes `127.0.0.1:3000:3000`.
-- **Values:** 1 to 65535. A pinned port runs one `web` process: a deploy with `web` scaled above 1 is refused. So is a port another riku app uses, or one some other process on the host listens on, since the domain would otherwise be routed to that process. Both checks run before the running app is touched.
+- **Description:** pins the port instead, for a Procfile app that has to listen on a fixed one. Container apps are routed to the host port riku picks for each copy, not to `PORT` (see [Runtimes → Container](runtimes.md#container)).
+- **Values:** 1 to 65535. A pinned port runs one `web` process: a deploy with `web` scaled above 1 is refused. So is a port another riku app uses, or one some other process on the host listens on, since the domain would otherwise be routed to that process. Both checks run before the running app is touched. Two copies cannot share the port, so a deploy stops the old `web` process before the new one starts, and the site is down in between.
 
 ### Bind Address
 
@@ -373,7 +373,7 @@ COMPOSE_FILE=compose.prod.yml
 ```
 
 - **Default:** (none; the first of `compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml` present)
-- **Description:** The compose file a compose app deploys with, passed to every `compose` command as `-f`
+- **Description:** The compose file a compose app deploys with. Riku reads it itself; no `compose` tool runs
 - **Values:** One path relative to the app root, such as `compose.prod.yml` or `deploy/compose.yml`
 
 Setting it selects the container runtime even when the repo also has a `package.json` or other runtime marker. The path must stay inside the app: absolute paths, `..`, and symlinks pointing outside are rejected, as is a docker-style list (`a.yml:b.yml`). An invalid value fails the deploy instead of falling back to another runtime.
@@ -388,7 +388,7 @@ RIKU_GHCR_USERNAME=your-username
 - **Description:** Username for `docker login ghcr.io`, run before pulling a compose app's images
 - **Values:** Any GitHub username
 
-Required together with `RIKU_GHCR_TOKEN` only for private GHCR images; omit both for public images.
+Required together with `RIKU_GHCR_TOKEN` only for private GHCR images; omit both for public images. Setting only one of the two fails the deploy.
 
 ### GHCR Token
 
@@ -412,7 +412,7 @@ RIKU_WATCH_SERVICES=web,worker
 ```
 
 - **Default:** (none, auto-update disabled)
-- **Description:** Compose services to periodically re-pull and recreate on a new registry image, without a `git push`
+- **Description:** Compose services to re-pull periodically and replace, one copy at a time, when their registry tag names a new image, without a `git push`. Services built from source are skipped
 - **Values:** Comma-separated compose service names
 
 Checked every 60 seconds. Only meaningful for compose apps (see

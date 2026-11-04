@@ -12,7 +12,7 @@ When you deploy an app, Riku:
 2. Reads environment variables from `~/.riku/envs/<app>/ENV`
 3. Generates an nginx config using templates
 4. Writes it as `<app>.conf.new`, checks it with `nginx -t`, and only then renames it to `<app>.conf`
-5. Reloads nginx
+5. Reloads nginx and waits for the reload to be confirmed (see [Caddy reloads](caddy.md#reloads) for what confirmed means for each router). A failed reload fails the deploy, and `riku doctor` reports the last failure
 
 nginx loads every `~/.riku/nginx/*.conf` through one file, `/etc/nginx/conf.d/riku.conf`, which `sudo riku init` installs. It holds a single line, `include /home/<user>/.riku/nginx/*.conf;`. Riku never writes anything else under `/etc/nginx`. Re-running `sudo riku init` also removes the per-app symlinks older versions left in `/etc/nginx/sites-enabled/`, which would otherwise load each site twice. Until that is in order, deploy and destroy refuse to run and say what to fix: a missing include file, leftover links, or a `*.conf` in `~/.riku/nginx/` that is no app's config. `riku doctor` reports the same. On a host without nginx this check is skipped.
 
@@ -221,6 +221,8 @@ add_header X-Frame-Options DENY always;
 ```
 
 The deploy is refused, naming the file and the reason, if the file is missing or resolves outside the app directory, or if it uses any other directive, contains `{` or `}`, or has quoting nginx could read differently (see `RIKU_NGINX_INCLUDE_FILE` in the environment reference). Blocks such as `location`, and directives like `proxy_pass`, `root` or `proxy_set_header`, are therefore not possible here. Do not put extra `.conf` files in `~/.riku/nginx/`: nginx loads every `*.conf` there.
+
+Installed filter plugins on the `nginx.include_content` chain may rewrite the snippet. Their output gets the same grammar and directive check, and output that fails it, or is not a string, fails the deploy.
 
 Set in ENV:
 ```bash

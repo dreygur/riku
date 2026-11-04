@@ -291,6 +291,19 @@ This deletes:
 
 `~/.riku/data/<app>/` and `~/.riku/cache/<app>/` are **preserved** by destroy.
 
+For a container app, destroy first stops and removes every container and the
+app network, and keeps the volumes. When the container engine does not
+answer, destroy refuses and removes nothing, so no container is left running
+without an app. `--force` removes riku's files and route anyway and warns
+that containers may still be running:
+
+```bash
+riku destroy myapp --force
+```
+
+With the nginx router, destroy also refuses until `sudo riku init` has set up
+the nginx include (see [Nginx](nginx.md#how-it-works)).
+
 ---
 
 ### `riku logs <app> [process]`
@@ -308,29 +321,48 @@ riku logs myapp worker
 
 Logs are stored in `~/.riku/logs/<app>/` and automatically rotated at 10MB.
 
+Without a process, every `*.log` file of the app is followed except
+`deploy.log` (use `--deploy` for that one). With a process or service name,
+its `<name>.<n>.log` files are followed, one per copy. A name with no log
+files is an error that lists the names that have logs. Container services
+log to the same files, written by the supervisor.
+
 ---
 
-### `riku restart <app>`
+### `riku restart <app> [service]`
 
 Restart all processes for an application.
 
 ```bash
 riku restart myapp
+riku restart myapp worker   # one service of a container app
 ```
 
-Gracefully stops workers and restarts them. For zero-downtime rolling restarts, use `riku restart myapp --hot`.
+A Procfile app is stopped and deployed again. For zero-downtime rolling restarts, use `riku restart myapp --hot`.
+
+A container app replaces the copies of the named service, or of every
+service in start order, one at a time from the images they run now, without
+a rebuild. A stopped service starts again. `--hot` does the same for a
+container app and cannot be combined with a service. See
+[Rolling replacement](runtimes.md#rolling-replacement).
 
 ---
 
-### `riku stop <app>`
+### `riku stop <app> [service]`
 
 Stop all processes for an application.
 
 ```bash
 riku stop myapp
+riku stop myapp worker   # one service of a container app
 ```
 
 To restart, use `riku restart <app>` or push a new commit.
+
+For a container app, stop removes the copies of the named service, or every
+container of the app, and keeps the volumes. When the routed service is
+among them, the app is taken off the router first. Dependents stop before
+the services they depend on. Naming a service of a Procfile app is refused.
 
 ---
 
@@ -432,6 +464,9 @@ worker:  1/1 running
 cron:    1/1 running
 ```
 
+For a container app, each copy is a row with the columns SERVICE
+(`<service>.<n>`), STATUS, MEMORY, CPU, RESTARTS, CONTAINER ID and IMAGE.
+
 ---
 
 ### `riku ps <app> --scale web=N worker=N...`
@@ -443,6 +478,13 @@ riku ps myapp --scale web=4 worker=2
 ```
 
 This creates/updates the `SCALING` file and triggers a restart.
+
+For a container app, each named compose service grows or shrinks without a
+rebuild and without restarting the copies it keeps, and the count is
+recorded in `~/.riku/envs/<app>/SCALING`. A service that mounts writable
+storage, or publishes a port other than the routed HTTP one, cannot run more
+than one copy, and a count of 0 is refused. See
+[Scaling](runtimes.md#scaling).
 
 **Alternative:** Create a `SCALING` file directly:
 ```bash

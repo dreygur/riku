@@ -139,7 +139,7 @@ work they describe.
   - Task 17 settings.toml and engine time limits: done (d32c08c..340ac0b)
   - Real Docker check fixes: done (b20c8a8, nginx include and host guard
     4294a66, merged 1fb66a4; filtered snippet check 1982cac)
-  - Task 16 docs, changelog, roadmap: open
+  - Task 16 docs, changelog, roadmap: done
 - Rootless engine (owner, 2026-11-04): spec
   `specs/2026-11-04-rootless-engine-design.md`, plan
   `plans/2026-11-04-rootless-engine.md` (22 tasks, Task 1 is a footprint
@@ -155,7 +155,8 @@ work they describe.
   `.superpowers/sdd/2026-10-30-container-foundations/progress.md` (git
   ignored, this machine only). Read its "minor (deferred)", "Owner decided"
   and "Phase 3 note" lines while writing the plan.
-- Duties from phase 2, each owned by a 3a task unless marked 3b:
+- Duties from phase 2, each owned by a 3a task (the 3b ones moved to the
+  phase 3b entry below):
 - Compose migration duty from B4: a `Declared` project name (compose `name`,
   `COMPOSE_PROJECT_NAME`, the directory of a `COMPOSE_FILE` below the app
   root, or an app name that normalisation changes, such as `Shop` or `sh.op`)
@@ -163,8 +164,6 @@ work they describe.
   normalised (`Shop`, `sh.op` and `shop` all compare as `shop`) or its
   existing volumes lack the matching compose project label, and only then may
   `ComposeProject::confirm_declared_name` be called.
-- (3b) Sync receive runs under a process level deadline; a stalled client is killed
-  so the app's sync lock is released.
 - Before `run`, a container that already has the name but a different
   `riku.app` label is refused with a clear message (names can collide across
   apps: app `a-b` service `c` and app `a` service `b-c`).
@@ -173,9 +172,19 @@ work they describe.
 - The bind source symlink walk is repeated at container start.
 - Each copy's host port is stored (as a label) so backends can be rebuilt
   after a supervisor restart.
-- (3b) The sync size limit and free space margin (`ReceiveLimits`) are wired to a
-  server setting.
-- (3b) The ssh sync entry point logs the refusal cause `receive` returns.
+
+### Phase 3b: rk deploy --build and riku-sync wiring (no plan yet)
+
+- Same spec as 3a. The plan is written after 3a lands. Scope, from the 3a
+  plan header: `rk deploy --build`, the server platform query, image
+  streaming, Procfile builds in a container, and riku-sync wiring.
+- Duties moved from the phase 3 list:
+  - Sync receive runs under a process level deadline; a stalled client is
+    killed so the app's sync lock is released.
+  - The sync size limit and free space margin (`ReceiveLimits`) are wired to
+    a server setting.
+  - The ssh sync entry point logs the refusal cause `receive` returns.
+  - `.sync-new` and `.sync-old` are hidden from `riku apps`.
 
 ### After 3a: small boards and binary size
 

@@ -22,7 +22,7 @@
 # =============================================================================
 
 # Auto-restart workers on deploy (default: true)
-# PIKU_AUTO_RESTART=true
+# RIKU_AUTO_RESTART=true
 
 # Node.js version (requires nodeenv)
 # RIKU_NODE_VERSION=18.17.0
