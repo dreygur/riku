@@ -2,8 +2,14 @@
 //!
 //! A worker runs as the leader of its own process group, and every signal
 //! goes to the whole group. Group members can outlive the leader, so a stop
-//! is only done once the group is empty. Processes that left the group
-//! (`setsid`, a double-forked daemon) are out of reach here.
+//! is only done once the group is empty. An isolated worker also lives in a
+//! cgroup, which is killed and removed after the group, so processes that
+//! left the group (`setsid`, a double-forked daemon) die with it. A worker
+//! without isolation has no cgroup: whatever left its group survives the
+//! stop.
+//!
+//! Every stop goes through `SpawnedProcess::stop`: the normal stop, the
+//! promotion and rollback of a generation, and the cleanup in `Drop`.
 
 use anyhow::{anyhow, Result};
 use std::thread;
@@ -25,79 +31,92 @@ fn wait_while(limit: Duration, mut still_waiting: impl FnMut() -> bool) {
 
 // Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
 #[allow(clippy::question_mark)]
-impl ProcessManager {
-    /// Stop a specific process by its ID.
-    pub(crate) fn stop_process_by_id(&mut self, process_id: &str) -> Result<()> {
-        if let Some(mut process) = self.processes.remove(process_id) {
-            self.stats.mark_stopped(process_id);
-            if let Err(e) = Self::stop_owned_process(process_id, &mut process) {
-                return Err(e);
-            }
-        }
-        Ok(())
-    }
-
-    /// SIGTERM, wait up to the process's configured `grace_period`, then
-    /// SIGKILL if it's still alive, and the same again for group members
-    /// left once the leader is reaped. Takes an already-removed process so
-    /// it can run on its own thread without holding `&mut self`;
-    /// `stop_all_processes` parallelizes this across every managed process.
+impl SpawnedProcess {
+    /// Stops the process group, then kills and removes the cgroup. The
+    /// cgroup step runs even when the group step fails. Marks the process
+    /// stopped so `Drop` does not stop it a second time.
     ///
     /// The process keeps its pid marker until it is dropped, after this
     /// returns, so deploy waits also cover the leftover group members.
-    fn stop_owned_process(process_id: &str, process: &mut SpawnedProcess) -> Result<()> {
-        tracing::info!("Stopping process: {} (PID: {})", process_id, process.pid);
+    pub(crate) fn stop(&mut self, process_id: &str) -> Result<()> {
+        tracing::info!("Stopping process: {} (PID: {})", process_id, self.pid);
+        self.stopped = true;
+        let group = self.stop_group(process_id);
+        self.kill_cgroup(process_id);
+        if group.is_ok() {
+            tracing::info!("Process {} stopped", process_id);
+        }
+        group
+    }
 
-        if let Err(e) = process.terminate() {
+    /// SIGTERM, wait up to the configured `grace_period`, then SIGKILL if
+    /// the leader is still alive, and the same again for group members left
+    /// once the leader is reaped.
+    fn stop_group(&mut self, process_id: &str) -> Result<()> {
+        if let Err(e) = self.terminate() {
             return Err(e);
         }
-        let grace = Duration::from_secs(process.config.options.grace_period);
-        wait_while(grace, || process.is_running());
+        let grace = Duration::from_secs(self.config.options.grace_period);
+        wait_while(grace, || self.is_running());
 
-        if process.is_running() {
+        if self.is_running() {
             tracing::warn!(
                 "Process {} didn't respond to SIGTERM within {:?}, sending SIGKILL",
                 process_id,
                 grace
             );
-            if let Err(e) = process.kill() {
+            if let Err(e) = self.kill() {
                 return Err(e);
             }
         }
-        if let Err(e) = process.child.wait() {
+        if let Err(e) = self.child.wait() {
             return Err(anyhow!("cannot reap {process_id}: {e}"));
         }
-        if let Err(e) = Self::stop_group_leftovers(process_id, process, grace) {
-            return Err(e);
-        }
-
-        tracing::info!("Process {} stopped", process_id);
-        Ok(())
+        self.stop_group_leftovers(process_id, grace)
     }
 
     /// Members of the group already had their SIGTERM with the leader, so
     /// they get the same grace before the group is SIGKILLed.
-    fn stop_group_leftovers(
-        process_id: &str,
-        process: &mut SpawnedProcess,
-        grace: Duration,
-    ) -> Result<()> {
-        if !process.group_alive() {
+    fn stop_group_leftovers(&mut self, process_id: &str, grace: Duration) -> Result<()> {
+        if !self.group_alive() {
             return Ok(());
         }
         tracing::info!("{process_id}: group members outlived the leader, waiting {grace:?}");
-        wait_while(grace, || process.group_alive());
-        if !process.group_alive() {
+        wait_while(grace, || self.group_alive());
+        if !self.group_alive() {
             return Ok(());
         }
 
         tracing::warn!("{process_id}: group members ignored SIGTERM, sending SIGKILL");
-        if let Err(e) = process.kill() {
+        if let Err(e) = self.kill() {
             return Err(e);
         }
-        wait_while(KILL_SETTLE, || process.group_alive());
-        if process.group_alive() {
+        wait_while(KILL_SETTLE, || self.group_alive());
+        if self.group_alive() {
             tracing::warn!("{process_id}: group still has members {KILL_SETTLE:?} after SIGKILL");
+        }
+        Ok(())
+    }
+
+    fn kill_cgroup(&self, process_id: &str) {
+        let Some(cgroup) = &self.cgroup else {
+            return;
+        };
+        if let Err(e) = cgroup.kill_and_remove() {
+            tracing::warn!("{process_id}: cgroup left behind: {e:#}");
+        }
+    }
+}
+
+#[allow(clippy::question_mark)]
+impl ProcessManager {
+    /// Stop a specific process by its ID.
+    pub(crate) fn stop_process_by_id(&mut self, process_id: &str) -> Result<()> {
+        if let Some(mut process) = self.processes.remove(process_id) {
+            self.stats.mark_stopped(process_id);
+            if let Err(e) = process.stop(process_id) {
+                return Err(e);
+            }
         }
         Ok(())
     }
@@ -138,7 +157,7 @@ impl ProcessManager {
         thread::scope(|scope| {
             for (process_id, process) in &mut to_stop {
                 scope.spawn(move || {
-                    if let Err(e) = Self::stop_owned_process(process_id, process) {
+                    if let Err(e) = process.stop(process_id) {
                         tracing::error!("Error stopping process {}: {:?}", process_id, e);
                     }
                 });

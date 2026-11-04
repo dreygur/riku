@@ -7,13 +7,19 @@
 //! `/sys/fs/cgroup` and write access to it (root, or a delegated subtree).
 
 use anyhow::{Context, Result};
+use nix::sys::signal::{kill, Signal};
+use nix::unistd::Pid;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::{Duration, Instant};
 
 #[cfg(test)]
 mod tests;
 
 const CGROUP_ROOT: &str = "/sys/fs/cgroup/riku/apps";
+/// How long a killed cgroup gets to empty before its removal is tried.
+const KILL_SETTLE: Duration = Duration::from_secs(1);
 
 /// CPU/memory constraints for a single worker's cgroup.
 #[derive(Debug, Clone, Default)]
@@ -141,6 +147,43 @@ impl WorkerCgroup {
             .lines()
             .find_map(|line| line.strip_prefix("oom_kill "))
             .and_then(|value| value.trim().parse().ok())
+    }
+
+    /// Kill every process left in the cgroup and remove it. This reaches
+    /// processes that left the worker's process group (`setsid`, a double
+    /// fork) but cannot leave the cgroup. Writes `cgroup.kill` where the
+    /// kernel has it (Linux 5.14+), otherwise SIGKILLs each pid listed in
+    /// `cgroup.procs`, then waits up to `KILL_SETTLE` for it to empty.
+    pub fn kill_and_remove(&self) -> Result<()> {
+        if !self.path.exists() {
+            return Ok(());
+        }
+        self.kill_members();
+        let deadline = Instant::now() + KILL_SETTLE;
+        while !self.member_pids().is_empty() && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(50));
+        }
+        self.cleanup()
+    }
+
+    fn kill_members(&self) {
+        let kill_node = self.path.join("cgroup.kill");
+        if kill_node.exists() && fs::write(&kill_node, "1").is_ok() {
+            return;
+        }
+        for pid in self.member_pids() {
+            let _ = kill(Pid::from_raw(pid), Signal::SIGKILL);
+        }
+    }
+
+    fn member_pids(&self) -> Vec<i32> {
+        match fs::read_to_string(self.path.join("cgroup.procs")) {
+            Ok(procs) => procs
+                .lines()
+                .filter_map(|line| line.trim().parse().ok())
+                .collect(),
+            Err(_) => Vec::new(),
+        }
     }
 
     /// Remove the cgroup directory. Must be called after the worker has

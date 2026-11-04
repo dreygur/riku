@@ -64,6 +64,37 @@ fn test_provision_and_cleanup_lifecycle() {
     assert!(!cgroup.path.exists());
 }
 
+/// A plain directory stands in for the cgroup, so this runs anywhere and
+/// covers the `cgroup.procs` fallback only. The `cgroup.kill` path and the
+/// removal of a really emptied cgroup need a writable cgroup v2 tree.
+#[test]
+fn kill_and_remove_sigkills_listed_pids_and_reports_a_cgroup_it_cannot_remove() {
+    use std::os::unix::process::ExitStatusExt;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let mut member = std::process::Command::new("sleep")
+        .arg("60")
+        .spawn()
+        .unwrap();
+    std::fs::write(
+        tmp.path().join("cgroup.procs"),
+        format!("{}\n", member.id()),
+    )
+    .unwrap();
+    let cgroup = WorkerCgroup {
+        path: tmp.path().to_path_buf(),
+    };
+
+    let removal = cgroup.kill_and_remove();
+
+    let status = member.wait().unwrap();
+    assert_eq!(status.signal(), Some(9), "member not SIGKILLed: {status:?}");
+    assert!(
+        removal.is_err(),
+        "a cgroup that never empties must be reported, not ignored"
+    );
+}
+
 #[test]
 fn test_startup_diagnostic_is_structured_and_actionable() {
     let err = anyhow::anyhow!("permission denied");

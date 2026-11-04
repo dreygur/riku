@@ -1,13 +1,12 @@
 //! `SpawnedProcess`: wrapper around a running child process with metadata.
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use nix::errno::Errno;
-use nix::sys::signal::{kill, Signal};
+use nix::sys::signal::{kill, killpg, Signal};
+use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
 use nix::unistd::Pid;
 use std::path::Path;
 use std::process::Child;
-use std::thread;
-use std::time::Duration;
 
 use crate::cgroups::WorkerCgroup;
 use crate::config::{HealthCheck, WorkerConfig};
@@ -26,7 +25,7 @@ pub struct SpawnedProcess {
     /// When the last health probe ran; `None` until the first one.
     pub last_health_probe: Option<std::time::Instant>,
     /// Present only when the worker opted into cgroup v2 isolation. Used to
-    /// poll for OOM kills and removed once the process has exited.
+    /// poll for OOM kills, and killed and removed when the worker stops.
     pub cgroup: Option<WorkerCgroup>,
     /// Exit code from the most recent crash, captured by `is_running()` at
     /// the moment `try_wait()` first observes the process has died, used to
@@ -35,6 +34,8 @@ pub struct SpawnedProcess {
     /// Marker telling deploy this process is alive. Removed in `Drop` once
     /// the child is reaped, never earlier.
     pid_file: Option<WorkerPidFile>,
+    /// Set by `stop`, so `Drop` only stops a process nobody stopped.
+    pub(super) stopped: bool,
 }
 
 impl SpawnedProcess {
@@ -73,6 +74,7 @@ impl SpawnedProcess {
             cgroup,
             last_exit_code: None,
             pid_file,
+            stopped: false,
         })
     }
 
@@ -94,35 +96,48 @@ impl SpawnedProcess {
         }
     }
 
-    /// Send a termination signal to the process and its entire process group.
-    ///
-    /// This kills all child processes spawned by the main process,
-    /// preventing orphaned background jobs.
+    /// SIGTERM the worker's whole process group.
     pub fn terminate(&mut self) -> Result<()> {
-        use nix::sys::signal::killpg;
-
-        // Kill the entire process group (PGID == PID since we used process_group(0))
-        killpg(self.pid, Signal::SIGTERM)?;
-        Ok(())
+        self.signal_group(Signal::SIGTERM)
     }
 
-    /// Force kill the process and its entire process group.
+    /// SIGKILL the worker's whole process group.
     pub fn kill(&mut self) -> Result<()> {
-        use nix::sys::signal::killpg;
-
-        // Force kill the entire process group
-        killpg(self.pid, Signal::SIGKILL)?;
-        Ok(())
+        self.signal_group(Signal::SIGKILL)
     }
 
-    /// Whether any process is left in the worker's process group. Only
-    /// meaningful once the leader has been reaped: a zombie leader still
-    /// counts as a member.
+    /// The group id is the leader's pid, since workers spawn with
+    /// `process_group(0)`. An empty group is not an error: a crashed
+    /// worker may have nothing left to signal.
+    fn signal_group(&self, signal: Signal) -> Result<()> {
+        match killpg(self.pid, signal) {
+            Ok(()) | Err(Errno::ESRCH) => Ok(()),
+            Err(e) => Err(anyhow!("cannot send {signal} to group {}: {e}", self.pid)),
+        }
+    }
+
+    /// Whether any process is left in the worker's process group. Call only
+    /// once the leader has been reaped: this reaps any child of ours in the
+    /// group, which would include the leader.
     pub fn group_alive(&self) -> bool {
+        self.reap_group_zombies();
         match kill(Pid::from_raw(-self.pid.as_raw()), None) {
             Ok(()) => true,
             Err(Errno::EPERM) => true,
             Err(_) => false,
+        }
+    }
+
+    /// Group members whose parent died are reparented to PID 1. When the
+    /// supervisor is PID 1 (in a container) they become its children, and
+    /// once they exit they stay zombies in the group until reaped. Anywhere
+    /// else the members are not our children and `waitpid` finds nothing.
+    fn reap_group_zombies(&self) {
+        let group = Pid::from_raw(-self.pid.as_raw());
+        while let Ok(status) = waitpid(group, Some(WaitPidFlag::WNOHANG)) {
+            if status == WaitStatus::StillAlive {
+                break;
+            }
         }
     }
 
@@ -133,26 +148,19 @@ impl SpawnedProcess {
 }
 
 impl Drop for SpawnedProcess {
+    /// A crashed worker, or one dropped without a stop, still gets the full
+    /// stop: its group leftovers and its cgroup would otherwise outlive it.
     fn drop(&mut self) {
-        // Ensure the child process is cleaned up when SpawnedProcess is dropped.
-        // Child::drop does NOT kill the process, so we must do it explicitly.
-        if self.is_running() {
-            let _ = self.terminate();
-            // Give brief time for graceful shutdown
-            thread::sleep(Duration::from_millis(100));
-            if self.is_running() {
-                let _ = self.kill();
+        if !self.stopped {
+            let process_id = self.config.worker.name().to_string();
+            if let Err(e) = self.stop(&process_id) {
+                tracing::warn!("cleanup of {process_id} failed: {e:#}");
             }
-        }
-        // Reap the child to avoid zombies
-        let _ = self.child.wait();
-
-        // The cgroup must be empty before it can be removed, which is only
-        // guaranteed once the child (and any namespace-isolation shim) has
-        // been reaped above.
-        if let Some(cgroup) = &self.cgroup {
-            let _ = cgroup.cleanup();
         }
         drop(self.pid_file.take());
     }
 }
+
+#[cfg(test)]
+#[path = "spawned_tests.rs"]
+mod tests;

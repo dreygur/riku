@@ -99,3 +99,31 @@ fn stop_kills_group_members_that_outlive_the_leader_before_dropping_the_marker()
     let markers: Vec<_> = std::fs::read_dir(&pid_dir).unwrap().collect();
     assert!(markers.is_empty(), "marker left behind: {markers:?}");
 }
+
+#[test]
+fn dropping_a_crashed_worker_stops_the_group_members_it_left() {
+    let tmp = TempDir::new().unwrap();
+    let mut config = sleep_config(&tmp);
+    config.worker.command = "(trap '' TERM; sleep 60) & exit 1".to_string();
+
+    let mut pm = ProcessManager::new().unwrap();
+    pm.spawn_process(&config).expect("spawn");
+    let mut crashed = pm
+        .processes
+        .remove(&config.worker.name().to_string())
+        .unwrap();
+    let pgid = crashed.pid;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while crashed.is_running() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+
+    drop(crashed);
+
+    let group = nix::sys::signal::kill(nix::unistd::Pid::from_raw(-pgid.as_raw()), None);
+    assert_eq!(
+        group,
+        Err(nix::errno::Errno::ESRCH),
+        "the member left by the crashed leader must be gone once it is dropped"
+    );
+}

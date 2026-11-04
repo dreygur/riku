@@ -210,6 +210,7 @@ impl ProcessManager {
 
     /// Promote a probed generation into the canonical process slot,
     /// terminating the previous stable generation it replaces.
+    #[allow(clippy::question_mark)]
     fn promote_generation(&mut self, process_id: &str, version: u32) -> Result<()> {
         let Some(gens) = self.generations.get_mut(process_id) else {
             return Ok(());
@@ -224,17 +225,8 @@ impl ProcessManager {
         let canonical_ordinal = gens[idx].canonical_ordinal;
 
         if let Some(mut old) = self.processes.remove(process_id) {
-            let grace = old.config.options.grace_period;
-            old.terminate()?;
-            let deadline = Duration::from_secs(grace);
-            let poll = Duration::from_millis(100);
-            let mut elapsed = Duration::ZERO;
-            while old.is_running() && elapsed < deadline {
-                thread::sleep(poll);
-                elapsed += poll;
-            }
-            if old.is_running() {
-                old.kill()?;
+            if let Err(e) = old.stop(process_id) {
+                return Err(e);
             }
         }
         self.stats.remove_process(process_id);
@@ -284,10 +276,8 @@ impl ProcessManager {
         gens[idx].pids.clear();
 
         if let Some(mut failed) = self.processes.remove(&temp_key) {
-            let _ = failed.terminate();
-            thread::sleep(Duration::from_millis(100));
-            if failed.is_running() {
-                let _ = failed.kill();
+            if let Err(e) = failed.stop(&temp_key) {
+                tracing::warn!("stopping failed generation {temp_key}: {e:#}");
             }
         }
         self.stats.remove_process(&temp_key);
