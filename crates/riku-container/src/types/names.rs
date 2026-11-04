@@ -70,7 +70,8 @@ pub fn check_app_name(app: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Name of a service within an app, as written in the compose file.
+/// Name of a service within an app, as written in the compose file. It never
+/// contains `.`, which keeps [`ContainerName`] unambiguous.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ServiceName(String);
 
@@ -85,9 +86,14 @@ impl TryFrom<&str> for ServiceName {
     type Error = anyhow::Error;
 
     fn try_from(raw: &str) -> anyhow::Result<Self> {
+        if raw.contains('.') {
+            return Err(anyhow::anyhow!(
+                "invalid service name {raw:?}: service names may not contain '.'"
+            ));
+        }
         if raw.len() > SERVICE_NAME_MAX || !is_engine_safe(raw) {
             return Err(anyhow::anyhow!(
-                "invalid service name {raw:?}: use 1 to {SERVICE_NAME_MAX} letters, digits, '_', '.' or '-', starting with a letter or digit"
+                "invalid service name {raw:?}: use 1 to {SERVICE_NAME_MAX} letters, digits, '_' or '-', starting with a letter or digit"
             ));
         }
         Ok(ServiceName(raw.to_string()))
@@ -126,7 +132,15 @@ impl fmt::Display for CopyIndex {
     }
 }
 
-/// Engine name of one container, `<app>-<service>-<copy>`.
+/// Engine name of one container, `<app>.<service>.<copy>`.
+///
+/// The name reads back unambiguously from the right: the copy is digits only
+/// and the service never contains `.`, so the copy follows the last `.`, the
+/// service sits between the last two, and everything before them is the app.
+/// App names may contain `.` (`riku_util::validate_app_name` allows it), which
+/// is why the split has to start from the right. A `-` separator
+/// would not work: app `shop` with service `api-web` and app `shop-api` with
+/// service `web` would share `shop-api-web-1`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ContainerName(String);
 
@@ -140,12 +154,13 @@ impl ContainerName {
             Ok(()) => {}
             Err(e) => return Err(e),
         }
-        Ok(ContainerName(format!("{app}-{service}-{copy}")))
+        Ok(ContainerName(format!("{app}.{service}.{copy}")))
     }
 
     /// The one-off container that runs an app's Procfile `release` command:
     /// `<app>-release`. It cannot collide with a copy, whose name ends in a
-    /// number. Fails on the same `app` values as [`ContainerName::new`].
+    /// number, and two apps' release names differ because their app names do.
+    /// Fails on the same `app` values as [`ContainerName::new`].
     pub fn for_release(app: &str) -> anyhow::Result<ContainerName> {
         match check_app_name(app) {
             Ok(()) => {}

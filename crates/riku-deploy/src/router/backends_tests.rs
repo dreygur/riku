@@ -105,7 +105,7 @@ fn container_json(id: &str, copy: u32, port: Option<u16>, status: &str) -> Strin
         .map(|p| format!(r#","riku.port":"{p}""#))
         .unwrap_or_default();
     format!(
-        r#"{{"Id":"{id}","Name":"/myapp-web-{copy}","Image":"sha256:x","Config":{{"Image":"shop/web:1","Labels":{{"riku.app":"myapp","riku.service":"web","riku.copy":"{copy}"{port_label}}}}},"State":{{"Status":"{status}","ExitCode":0}}}}"#
+        r#"{{"Id":"{id}","Name":"/myapp.web.{copy}","Image":"sha256:x","Config":{{"Image":"shop/web:1","Labels":{{"riku.app":"myapp","riku.service":"web","riku.copy":"{copy}"{port_label}}}}},"State":{{"Status":"{status}","ExitCode":0}}}}"#
     )
 }
 

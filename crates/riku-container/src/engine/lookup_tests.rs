@@ -28,7 +28,7 @@ fn owner_of_reports_the_label_the_empty_string_or_nothing() {
     );
     assert_eq!(
         logged(&log)[0],
-        "ps -a -q --no-trunc --filter name=^myapp-web-2$"
+        r"ps -a -q --no-trunc --filter name=^myapp\.web\.2$"
     );
 
     let unlabelled = tempfile::tempdir().unwrap();
@@ -61,10 +61,10 @@ fn owner_of_escapes_dots_and_ignores_a_container_with_another_name() {
 
     let owner = engine.owner_of(&name("my.app", 2)).unwrap();
 
-    assert_eq!(owner, None, "took myapp-web-2 for my.app-web-2");
+    assert_eq!(owner, None, "took myapp.web.2 for my.app.web.2");
     assert_eq!(
         logged(&log)[0],
-        r"ps -a -q --no-trunc --filter name=^my\.app-web-2$"
+        r"ps -a -q --no-trunc --filter name=^my\.app\.web\.2$"
     );
 }
 
