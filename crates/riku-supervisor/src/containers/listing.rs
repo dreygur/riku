@@ -91,12 +91,12 @@ pub(crate) fn sample_stats(
     }
 }
 
-/// Inspect the containers the event stream named since the last tick. A
-/// closed stream turns the feed into polling.
-pub(crate) fn drain_events(engine: &Engine, feed: &mut Feed, known: &mut Known) {
+/// Inspect the containers the event stream named since the last call. A
+/// closed stream turns the feed into polling. True when `known` was updated.
+pub(crate) fn drain_events(engine: &Engine, feed: &mut Feed, known: &mut Known) -> bool {
     let drained = match feed {
         Feed::Events(stream) => stream.drain(),
-        Feed::Polling => return,
+        Feed::Polling => return false,
     };
     if drained.closed {
         tracing::warn!("container event stream closed, polling every 30 s instead");
@@ -109,10 +109,16 @@ pub(crate) fn drain_events(engine: &Engine, feed: &mut Feed, known: &mut Known) 
         .into_iter()
         .collect();
     if ids.is_empty() {
-        return;
+        return false;
     }
     match engine.inspect(&ids) {
-        Ok(infos) => merge_inspected(known, &ids, infos),
-        Err(e) => tracing::warn!("cannot inspect {} event containers: {e}", ids.len()),
+        Ok(infos) => {
+            merge_inspected(known, &ids, infos);
+            true
+        }
+        Err(e) => {
+            tracing::warn!("cannot inspect {} event containers: {e}", ids.len());
+            false
+        }
     }
 }

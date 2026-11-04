@@ -54,8 +54,9 @@ Measured on a 4 core x86_64 Ubuntu server, idle with no apps: the stripped `riku
 is 13.6 MB (a 5.9 MB download), the supervisor uses about 10 MB of RAM, and the
 supervisor plus nginx (master and 4 workers) about 22 MB. The binary plus `~/.riku`
 take about 14 MB of disk. With Docker installed, the supervisor also keeps one
-`docker events` process and one `docker logs` process per running container, about
-32 MB RSS each, of which about 10 MB is private to that process. Per-app memory is up
+`docker events` process, about 32 MB RSS, of which about 10 MB is private to it.
+Container logs are copied with one short `docker logs` call per running container
+every 5 s, so they reach `riku logs` up to about 5 s late. Per-app memory is up
 to your apps. For numbers on your own hardware, the scripts in [`benches/`](benches/)
 measure it rather than guess.
 

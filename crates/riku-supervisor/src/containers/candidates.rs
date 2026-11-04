@@ -79,6 +79,20 @@ pub(crate) fn find_candidates(
         .collect()
 }
 
+/// The app label is engine input, so it is logged escaped.
+fn log_restart(info: &ContainerInfo, code: i32, tally: &RestartTally) {
+    if let (Some(app), Some(service), Some(copy)) = (&info.app, &info.service, &info.copy) {
+        tracing::info!(
+            app = ?app,
+            service = %service,
+            copy = %copy,
+            exit_code = code,
+            restart = tally.count(&info.name) + 1,
+            "restarting a crashed container"
+        );
+    }
+}
+
 /// Inspect the candidates once more and dispatch those still exited.
 pub(crate) fn dispatch_restarts(
     engine: &Engine,
@@ -86,6 +100,7 @@ pub(crate) fn dispatch_restarts(
     actions: &SharedActions,
     restarts: &mut Restarts,
     known: &mut Known,
+    tally: &RestartTally,
     candidates: Vec<ContainerId>,
 ) {
     if candidates.is_empty() {
@@ -102,12 +117,20 @@ pub(crate) fn dispatch_restarts(
         }
     }
     for id in &candidates {
-        let info = match known.get(id) {
-            Some(info) if exit_code(info).is_some() => info,
-            _ => continue,
+        let (info, code) = match known.get(id) {
+            Some(info) => match exit_code(info) {
+                Some(code) => (info, code),
+                None => continue,
+            },
+            None => continue,
         };
+        log_restart(info, code, tally);
         if let Err(e) = restarts.dispatch(paths, actions, info) {
             tracing::warn!(name = %info.name, "cannot start the restart: {e}");
         }
     }
 }
+
+#[cfg(test)]
+#[path = "candidates_tests.rs"]
+mod tests;

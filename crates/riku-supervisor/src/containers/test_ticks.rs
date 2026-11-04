@@ -25,8 +25,8 @@ pub(crate) fn tick_until(
     }
 }
 
-/// Wait until `done` holds without ticking, for effects of processes the
-/// watch spawned, such as log followers.
+/// Wait until `done` holds without ticking, for effects of the watch's
+/// background threads, such as log copying.
 pub(crate) fn wait_until(done: impl Fn() -> bool, what: &str) {
     let started = Instant::now();
     while !done() {

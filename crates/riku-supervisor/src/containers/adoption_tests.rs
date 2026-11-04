@@ -52,13 +52,13 @@ fn adoption_never_stops_copies() {
     let now = Instant::now();
     watch.tick(now);
 
-    let followed = |id: &str| {
-        let line = format!("logs -f --tail 0 {id}");
-        logged(&log).contains(&line)
+    let starts_after_newest = |id: &str| {
+        let newest_line = format!("logs --timestamps --tail 1 {id}");
+        logged(&log).contains(&newest_line)
     };
     wait_until(
-        || followed(ID_1) && followed(ID_2),
-        "log followers for both copies",
+        || starts_after_newest(ID_1) && starts_after_newest(ID_2),
+        "both adopted copies to start after their newest log line",
     );
     let lines = logged(&log);
     for line in &lines {

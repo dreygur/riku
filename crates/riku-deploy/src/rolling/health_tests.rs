@@ -120,6 +120,26 @@ fn closed_port_times_out() {
     );
 }
 
+/// What Docker's port proxy does for a container that does not listen:
+/// accept on the host port, then close.
+#[test]
+fn port_that_closes_every_connection_is_not_healthy() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            drop(stream);
+        }
+    });
+
+    let err = wait_healthy(&HealthTarget::Port(port), None).unwrap_err();
+
+    assert!(
+        err.to_string().contains("nothing listens"),
+        "unexpected error: {err}"
+    );
+}
+
 #[test]
 fn health_label_beats_port() {
     let service = service_with("    labels:\n      riku.health: /healthz\n");

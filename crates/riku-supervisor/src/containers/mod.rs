@@ -1,15 +1,16 @@
-//! Container supervision: adoption, event watching, log following, and restarts.
+//! Container supervision: adoption, event watching, log copying, and restarts.
 //!
 //! Owns the container watch loop, restart tally bookkeeping, event stream
-//! ingestion, container log following, and container statistics mapping.
+//! ingestion, container log copying, and container statistics mapping.
 //!
 //! # Security Model
 //!
 //! Engine output and labels are untrusted input. Names and ids reach the
 //! engine only as validated types (such as `ContainerId` and `ContainerName`),
-//! preventing argument injection. No log or tracing statement outputs label
-//! values, environment values, or raw command arguments: only container names
-//! and counts are logged.
+//! preventing argument injection. No log or tracing statement outputs
+//! environment values or raw command arguments. Logs name containers, counts,
+//! validated service names and copy numbers, and the app label only through
+//! `Debug`, which escapes control characters.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -22,7 +23,8 @@ use riku_container::engine::{ContainerId, ContainerInfo, ContainerStats, Engine}
 mod candidates;
 mod feed;
 mod listing;
-mod log_follow;
+mod log_pull;
+mod log_thread;
 #[cfg(test)]
 mod mock_actions;
 #[cfg(test)]
@@ -44,7 +46,7 @@ pub const CONTAINER_STATS_INTERVAL: Duration = Duration::from_secs(30);
 pub use restart_policy::{should_restart, RestartPolicyLabel};
 
 use feed::EventStream;
-use log_follow::LogFollowers;
+use log_thread::LogThread;
 use restarts::Restarts;
 use stats::container_rows;
 use tally::RestartTally;
@@ -60,7 +62,7 @@ pub(crate) enum Feed {
 }
 
 /// The supervisor's view of riku containers: it adopts running copies,
-/// follows their logs, restarts dead ones through
+/// copies their logs every tick, restarts dead ones through
 /// [`crate::health::ControlActions::restart_copy`] and reports them as stats
 /// rows. It never stops, kills or removes a container itself.
 pub struct ContainerWatch {
@@ -71,7 +73,7 @@ pub struct ContainerWatch {
     pub(crate) known: HashMap<ContainerId, ContainerInfo>,
     pub(crate) samples: HashMap<String, ContainerStats>,
     pub(crate) tally: RestartTally,
-    pub(crate) followers: LogFollowers,
+    pub(crate) logs: LogThread,
     pub(crate) restarts: Restarts,
     pub(crate) adopted: bool,
     pub(crate) last_listing: Option<Instant>,
@@ -85,6 +87,7 @@ impl ContainerWatch {
         log_root: &Path,
     ) -> ContainerWatch {
         ContainerWatch {
+            logs: LogThread::spawn(engine.clone(), log_root.to_path_buf()),
             engine,
             paths,
             actions,
@@ -92,7 +95,6 @@ impl ContainerWatch {
             known: HashMap::new(),
             samples: HashMap::new(),
             tally: RestartTally::new(),
-            followers: LogFollowers::new(log_root.to_path_buf()),
             restarts: Restarts::new(),
             adopted: false,
             last_listing: None,
@@ -138,6 +140,17 @@ impl ContainerWatch {
     pub fn tick(&mut self, now: Instant) {
         watch::reconcile(self, now);
     }
+
+    /// Apply engine events that arrived since the last call, between ticks,
+    /// so a replaced or removed container leaves [`ContainerWatch::rows`]
+    /// without waiting for the next tick. True when the rows may have changed.
+    /// Restarts and log copying still wait for [`ContainerWatch::tick`].
+    pub fn apply_events(&mut self) -> bool {
+        if !self.adopted {
+            return false;
+        }
+        listing::drain_events(&self.engine, &mut self.feed, &mut self.known)
+    }
 }
 
 #[cfg(test)]
@@ -147,3 +160,7 @@ mod tests;
 #[cfg(test)]
 #[path = "adoption_tests.rs"]
 mod adoption_tests;
+
+#[cfg(test)]
+#[path = "events_tests.rs"]
+mod events_tests;

@@ -10,7 +10,7 @@ Component package located at `crates/riku-supervisor/src`.
 - `lib.rs` [lib.rs] (and 13 additional symbols)
 - [cgroups](./cgroups/README.md) - Child contract for `cgroups`
 - [config](./config/README.md) - Child contract for `config`
-- `containers` [lib.rs:containers] (module) - Container supervision: adoption, event watching, log following and restarts
+- `containers` [lib.rs:containers] (module) - Container supervision: adoption, event watching, log copying and restarts
 - [daemon](./daemon/README.md) - Child contract for `daemon`
 - [health](./health/README.md) - Child contract for `health`
 - [log_rotation](./log_rotation/README.md) - Child contract for `log_rotation`

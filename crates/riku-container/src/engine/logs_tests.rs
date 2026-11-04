@@ -1,11 +1,9 @@
-use std::process::Stdio;
-use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use riku_config::settings::EngineSettings;
 
-use crate::engine::fixture::{logging_engine, ID};
-use crate::engine::ContainerId;
+use crate::engine::fixture::{logged, logging_engine, ID};
+use crate::engine::{ContainerId, LogRange};
 
 fn short_limits() -> EngineSettings {
     EngineSettings {
@@ -60,31 +58,25 @@ fn print_logs_is_bounded_by_the_build_limit() {
 }
 
 #[test]
-fn follow_logs_are_not_cut_by_the_call_limit() {
+fn timestamped_logs_asks_since_the_bound_and_keeps_both_streams() {
     let dir = tempfile::tempdir().unwrap();
-    let (engine, _log) = logging_engine(dir.path(), "case \"$1\" in logs) exec sleep 30;; esac");
-    let engine = engine.with_settings(short_limits());
-    let id = ContainerId::try_from(ID).unwrap();
-
-    let mut command = engine.logs_command(&id, None);
-    command.stdin(Stdio::null());
-    command.stdout(Stdio::null());
-    command.stderr(Stdio::null());
-
-    let mut child = match command.spawn() {
-        Ok(child) => child,
-        Err(e) => panic!("cannot spawn logs command: {e}"),
-    };
-    sleep(Duration::from_millis(900));
-
-    assert_eq!(
-        child.try_wait().unwrap(),
-        None,
-        "logs follower was cut by call limit"
+    let (engine, log) = logging_engine(
+        dir.path(),
+        "case \"$1\" in logs) echo 'T1 out'; echo 'T2 err' >&2;; esac",
     );
+    let id = ContainerId::try_from(ID).unwrap();
+    let since = LogRange::Since("2026-11-04T18:13:27.125923011Z".to_string());
 
-    let _ = child.kill();
-    let _ = child.wait();
+    let logs = engine.timestamped_logs(&id, &since).unwrap();
+
+    assert_eq!(logs.stdout, "T1 out\n");
+    assert_eq!(logs.stderr, "T2 err\n");
+    assert_eq!(
+        logged(&log),
+        [format!(
+            "logs --timestamps --since 2026-11-04T18:13:27.125923011Z {ID}"
+        )]
+    );
 }
 
 #[test]

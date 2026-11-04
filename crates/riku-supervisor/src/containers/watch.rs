@@ -1,5 +1,5 @@
 //! One watch tick: adoption on the first, then events, the 30 s listing,
-//! log followers, restart counts and restarts.
+//! log copying, restart counts and restarts.
 
 use std::collections::HashSet;
 use std::time::Instant;
@@ -8,8 +8,7 @@ use riku_container::engine::Engine;
 
 use super::candidates::{collect_reports, dispatch_restarts, find_candidates};
 use super::feed::EventStream;
-use super::listing::{drain_events, is_running, running_ids, sample_stats, take_listing, Known};
-use super::log_follow::{LogFollowers, Tail};
+use super::listing::{drain_events, sample_stats, take_listing, Known};
 use super::restarts::Restarts;
 use super::tally::RestartTally;
 use super::{ContainerWatch, Feed, CONTAINER_STATS_INTERVAL};
@@ -31,26 +30,6 @@ fn listing_due(last: Option<Instant>, now: Instant) -> bool {
     match last {
         Some(last) => now.saturating_duration_since(last) >= CONTAINER_STATS_INTERVAL,
         None => true,
-    }
-}
-
-fn follow_running(engine: &Engine, followers: &mut LogFollowers, known: &Known, tail: Tail) {
-    for info in known.values().filter(|info| is_running(&info.state)) {
-        if let Err(e) = followers.follow(engine, info, tail) {
-            tracing::warn!(name = %info.name, "cannot follow logs: {e}");
-        }
-    }
-}
-
-fn refollow_exited(engine: &Engine, followers: &mut LogFollowers, known: &Known) {
-    for id in followers.reap() {
-        let info = match known.get(&id) {
-            Some(info) if is_running(&info.state) => info,
-            _ => continue,
-        };
-        if let Err(e) = followers.follow(engine, info, Tail::FromNow) {
-            tracing::warn!(name = %info.name, "cannot follow logs again: {e}");
-        }
     }
 }
 
@@ -78,12 +57,7 @@ fn adopt(watch: &mut ContainerWatch, now: Instant) {
         watch.last_listing = Some(now);
         sample_stats(&watch.engine, &watch.known, &mut watch.samples);
     }
-    follow_running(
-        &watch.engine,
-        &mut watch.followers,
-        &watch.known,
-        Tail::FromNow,
-    );
+    watch.logs.update(&watch.known);
     watch.adopted = true;
 }
 
@@ -98,9 +72,7 @@ fn refresh(watch: &mut ContainerWatch, now: Instant) {
         }
         watch.last_listing = Some(now);
     }
-    refollow_exited(&watch.engine, &mut watch.followers, &watch.known);
-    follow_running(&watch.engine, &mut watch.followers, &watch.known, Tail::All);
-    watch.followers.retain(&running_ids(&watch.known));
+    watch.logs.update(&watch.known);
 }
 
 pub(crate) fn reconcile(watch: &mut ContainerWatch, now: Instant) {
@@ -118,6 +90,7 @@ pub(crate) fn reconcile(watch: &mut ContainerWatch, now: Instant) {
         &watch.actions,
         &mut watch.restarts,
         &mut watch.known,
+        &watch.tally,
         candidates,
     );
 }

@@ -42,7 +42,7 @@ Component package located at `crates/riku-container/src/engine`.
 - `parse_inspect` [inspect_parse.rs:parse_inspect] (fn)
 - `login` [login.rs:login] (fn)
 - `print_logs` [logs.rs:print_logs] (fn)
-- `logs_command` [logs.rs:logs_command] (fn)
+- `timestamped_logs` [logs.rs:timestamped_logs] (fn)
 - `owner_of` [lookup.rs:owner_of] (fn)
 - `id_of` [lookup.rs:id_of] (fn)
 - `list_project` [lookup.rs:list_project] (fn)

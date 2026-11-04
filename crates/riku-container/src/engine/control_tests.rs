@@ -170,15 +170,3 @@ fn wait_fails_on_unparseable_output() {
 
     assert!(err.contains("cannot parse exit code"), "{err}");
 }
-
-#[test]
-fn logs_command_follows_and_tails() {
-    let dir = tempfile::tempdir().unwrap();
-    let (engine, _log) = logging_engine(dir.path(), "");
-
-    let command = engine.logs_command(&id(), Some(50));
-
-    assert_eq!(command.get_program(), engine.program().as_os_str());
-    let args: Vec<_> = command.get_args().map(|a| a.to_string_lossy()).collect();
-    assert_eq!(args, ["logs", "-f", "--tail", "50", ID]);
-}
