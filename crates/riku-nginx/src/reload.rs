@@ -14,7 +14,7 @@ use anyhow::{anyhow, Result};
 /// Fails when nginx is missing, not running, or rejects the config, with
 /// nginx's own message in the error.
 pub fn reload_nginx() -> Result<()> {
-    reload_nginx_with("nginx")
+    reload_nginx_with(crate::config::program::find_program("nginx"))
 }
 
 /// [`reload_nginx`] with an explicit nginx program.

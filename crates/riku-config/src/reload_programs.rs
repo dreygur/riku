@@ -2,6 +2,8 @@
 
 use std::path::PathBuf;
 
+use crate::program::find_program;
+
 /// Programs a router reload runs, looked up on `PATH` in production. Tests
 /// replace them with scripts in their own directory, so no test has to
 /// change `PATH`.
@@ -15,9 +17,9 @@ pub struct ReloadPrograms {
 impl Default for ReloadPrograms {
     fn default() -> Self {
         ReloadPrograms {
-            systemctl: PathBuf::from("systemctl"),
-            caddy: PathBuf::from("caddy"),
-            nginx: PathBuf::from("nginx"),
+            systemctl: find_program("systemctl"),
+            caddy: find_program("caddy"),
+            nginx: find_program("nginx"),
         }
     }
 }

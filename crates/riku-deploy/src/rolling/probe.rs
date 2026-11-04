@@ -22,7 +22,7 @@ const PROBE_INTERVAL: Duration = Duration::from_millis(500);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub(super) fn probe_client() -> Result<Client> {
-    match Client::builder()
+    match riku_http::blocking_client_builder()
         .timeout(PROBE_TIMEOUT)
         .redirect(Policy::none())
         .no_proxy()

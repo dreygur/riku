@@ -1,17 +1,20 @@
 //! `riku doctor` checks for the host router named in `<riku root>/ROUTER`.
 //!
 //! Read-only like every doctor check: it runs `nginx -t` or
-//! `caddy validate` and reads the system Caddyfile, but changes nothing.
+//! `caddy validate` and reads the nginx include file, sites-enabled or the
+//! system Caddyfile, but changes nothing.
 
 use std::fs;
 use std::io::ErrorKind;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use crate::caddy::{has_import, import_line, SYSTEM_CADDYFILE};
+use crate::config::program::find_program;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::deploy::router::RELOAD_ERROR_FILE;
+use crate::nginx::{app_named_links, check_host_ready, HostReadiness, RouteChange};
 use crate::setup::system_service::SYSTEMD_DIR;
 
 use super::Check;
@@ -47,18 +50,57 @@ fn validator_check(name: &str, command: &str, run: std::io::Result<Output>) -> C
     }
 }
 
-fn nginx() -> Vec<Check> {
-    if which::which("nginx").is_err() {
+/// The installed `name`, searched the way riku spawns it, or `None`.
+fn installed_program(name: &str) -> Option<PathBuf> {
+    let path = find_program(name);
+    path.is_file().then_some(path)
+}
+
+/// Whether nginx loads riku's sites, and whether links from an older riku
+/// would load them twice.
+fn nginx_include(paths: &RikuPaths) -> Check {
+    match check_host_ready(paths, RouteChange::Install) {
+        Ok(HostReadiness::Ready) => Check::ok(
+            "nginx include",
+            format!("{} loads riku sites", paths.nginx_include_file.display()),
+        ),
+        Ok(HostReadiness::NoNginx(reason)) => Check::warn("nginx include", reason),
+        Err(e) => Check::fail("nginx include", e.to_string()),
+    }
+}
+
+/// Warns about sites-enabled links named like an app's config that point
+/// elsewhere. riku leaves them alone, but they may serve the app's domain.
+fn app_named_sites(paths: &RikuPaths) -> Option<Check> {
+    let links = app_named_links(paths);
+    links.first().map(|first| {
+        Check::warn(
+            "nginx sites",
+            format!(
+                "{} link(s) in {} share a riku app's name, such as {}: check they do not serve the same domain",
+                links.len(),
+                paths.nginx_sites_enabled.display(),
+                first.display()
+            ),
+        )
+    })
+}
+
+fn nginx(paths: &RikuPaths) -> Vec<Check> {
+    let Some(program) = installed_program("nginx") else {
         return vec![Check::warn(
             "nginx",
             "not found: web serving disabled (apt install nginx)",
         )];
-    }
-    let run = Command::new("nginx").arg("-t").output();
-    vec![
-        Check::ok("nginx", "found on PATH"),
-        validator_check("nginx config", "nginx -t", run),
-    ]
+    };
+    let run = Command::new(&program).arg("-t").output();
+    let mut checks = vec![
+        Check::ok("nginx", format!("found at {}", program.display())),
+        nginx_include(paths),
+    ];
+    checks.extend(app_named_sites(paths));
+    checks.push(validator_check("nginx config", "nginx -t", run));
+    checks
 }
 
 /// Whether `caddyfile` imports riku's site directory.
@@ -85,18 +127,18 @@ fn caddy_import(paths: &RikuPaths, caddyfile: &Path) -> Check {
 }
 
 fn caddy(paths: &RikuPaths, caddyfile: &Path) -> Vec<Check> {
-    if which::which("caddy").is_err() {
+    let Some(program) = installed_program("caddy") else {
         return vec![Check::fail(
             "caddy",
             "not found: the Caddy router needs it (apt install caddy)",
         )];
-    }
-    let run = Command::new("caddy")
+    };
+    let run = Command::new(&program)
         .args(["validate", "--adapter", "caddyfile", "--config"])
         .arg(caddyfile)
         .output();
     vec![
-        Check::ok("caddy", "found on PATH"),
+        Check::ok("caddy", format!("found at {}", program.display())),
         caddy_import(paths, caddyfile),
         validator_check("caddy config", "caddy validate", run),
     ]
@@ -129,7 +171,7 @@ fn old_caddy_units(systemd_dir: &Path) -> Option<Check> {
 /// last reload and leftover Caddy units are reported for any router.
 pub fn router(paths: &RikuPaths) -> Vec<Check> {
     let mut checks = match Router::load(paths) {
-        Ok(Router::Nginx) => nginx(),
+        Ok(Router::Nginx) => nginx(paths),
         Ok(Router::Caddy) => caddy(paths, Path::new(SYSTEM_CADDYFILE)),
         Ok(Router::Plugin(name)) => vec![Check::ok("router", format!("plugin {name}"))],
         Err(e) => return vec![Check::fail("router", e.to_string())],

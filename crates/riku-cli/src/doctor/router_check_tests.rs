@@ -21,6 +21,41 @@ fn missing_import_warns() {
 }
 
 #[test]
+fn nginx_include_warns_without_nginx_and_fails_until_installed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut paths = RikuPaths::for_tests(tmp.path());
+    paths.reload_programs.nginx = tmp.path().join("nginx");
+
+    let check = nginx_include(&paths);
+    assert_eq!(check.status, Status::Warn, "{}", check.detail);
+    assert!(check.detail.contains("not found"), "{}", check.detail);
+
+    fs::write(&paths.reload_programs.nginx, "").unwrap();
+    let check = nginx_include(&paths);
+    assert_eq!(check.status, Status::Fail, "{}", check.detail);
+    assert!(check.detail.contains("create it"), "{}", check.detail);
+
+    crate::nginx::write_include_file(&paths).unwrap();
+    assert_eq!(nginx_include(&paths).status, Status::Ok);
+}
+
+#[test]
+fn an_admin_link_named_like_an_app_is_reported_not_failed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+    fs::create_dir_all(&paths.nginx_sites_enabled).unwrap();
+    std::os::unix::fs::symlink(
+        "/etc/nginx/sites-available/shop",
+        paths.nginx_sites_enabled.join("shop.conf"),
+    )
+    .unwrap();
+
+    let check = app_named_sites(&paths).expect("the link was not reported");
+    assert_eq!(check.status, Status::Warn, "{}", check.detail);
+}
+
+#[test]
 fn unreadable_router_file_fails() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());

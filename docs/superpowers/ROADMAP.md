@@ -190,8 +190,14 @@ work they describe.
   the leaf `<app>.crt`, not `<app>.fullchain.crt`; `nginx_acme_firstrun`
   is registered but never selected. Needs a design.
 
-- `riku install-plugins` failed to download inside a Docker test container
-  (reqwest); cause not confirmed.
+- `riku install-plugins` failed to download inside a Docker test container.
+  Cause: reqwest was built without a TLS backend, so every https request
+  failed. Fixed with its `rustls-no-provider` feature plus rustls on ring
+  (no aws-lc); `riku-http` installs ring before building any client.
+- `generate_acme_nginx_config` (run by init) always fails to render:
+  the template needs `RIKU_DOMAINS`, which it is never given. Its output
+  file is now `acme-challenge.conf.disabled`, outside the `*.conf` include,
+  so it stays off even once rendering works; turning it on needs a design.
 - The agent forced command `command="riku agent --scope ..."` now parses,
   but sshd runs it with the client's request only in `SSH_ORIGINAL_COMMAND`,
   which `riku agent` never reads, so an agent behind that key sees only the

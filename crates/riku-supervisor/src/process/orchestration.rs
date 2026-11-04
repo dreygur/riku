@@ -40,17 +40,16 @@ impl ProcessManager {
     /// left untouched and continues serving traffic until the new
     /// generation either passes its probe window (promoted) or fails it
     /// (rolled back).
+    #[allow(clippy::question_mark)]
     pub fn deploy_generation(&mut self, process_id: &str, new_config: WorkerConfig) -> Result<()> {
-        let port: u16 = new_config
-            .env
-            .get("PORT")
-            .and_then(|p| p.parse().ok())
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "cannot probe generation for {}: no PORT env var configured",
-                    process_id
-                )
-            })?;
+        let port: u16 = match new_config.env.get("PORT").and_then(|p| p.parse().ok()) {
+            Some(port) => port,
+            None => {
+                return Err(anyhow::anyhow!(
+                    "cannot probe generation for {process_id}: no PORT env var configured"
+                ))
+            }
+        };
 
         let health_path = new_config
             .options
@@ -85,7 +84,9 @@ impl ProcessManager {
             health_path
         );
 
-        self.spawn_process(&temp_config)?;
+        if let Err(e) = self.spawn_process(&temp_config) {
+            return Err(e);
+        }
         let pid = self
             .processes
             .get(&temp_key)
@@ -125,7 +126,7 @@ impl ProcessManager {
         let probe_process_id = process_id.to_string();
 
         thread::spawn(move || {
-            let client = reqwest::blocking::Client::builder()
+            let client = riku_http::blocking_client_builder()
                 .timeout(Duration::from_secs(2))
                 .build()
                 .unwrap_or_else(|_| reqwest::blocking::Client::new());

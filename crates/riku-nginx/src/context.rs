@@ -4,13 +4,12 @@
 //! sanitized environment variables and resolved path defaults.
 
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
-use crate::util::ensure_path_within;
-
+use super::app_snippet::{insert_include_file, SNIPPET_KEY};
 use super::backends::{socket_path, upstream_port};
 use super::cloudflare::generate_cloudflare_ips_config;
+use super::context_cache::insert_cache_context;
 use super::ssl::ensure_ssl_certificates;
 
 /// Insert address-related context values.
@@ -64,57 +63,6 @@ pub(super) fn insert_address_context(
     context.insert("RIKU_NGINX_DOCUMENT_ROOT", &nginx_document_root);
 }
 
-/// Insert cache-related context values.
-pub(super) fn insert_cache_context(
-    context: &mut tera::Context,
-    env: &HashMap<String, String>,
-    paths: &crate::config::RikuPaths,
-    app: &str,
-) {
-    let nginx_cache_size = env
-        .get("RIKU_NGINX_CACHE_SIZE")
-        .cloned()
-        .unwrap_or(crate::config::NGINX_CACHE_SIZE_DEFAULT.to_string());
-
-    let nginx_cache_time = env
-        .get("RIKU_NGINX_CACHE_TIME")
-        .cloned()
-        .unwrap_or(crate::config::NGINX_CACHE_TIME_DEFAULT.to_string());
-
-    let nginx_cache_redirects = env
-        .get("RIKU_NGINX_CACHE_REDIRECTS")
-        .cloned()
-        .unwrap_or(crate::config::NGINX_CACHE_REDIRECTS_DEFAULT.to_string());
-
-    let nginx_cache_any = env
-        .get("RIKU_NGINX_CACHE_ANY")
-        .cloned()
-        .unwrap_or(crate::config::NGINX_CACHE_ANY_DEFAULT.to_string());
-
-    let nginx_cache_control = env
-        .get("RIKU_NGINX_CACHE_CONTROL")
-        .cloned()
-        .unwrap_or(crate::config::NGINX_CACHE_CONTROL_DEFAULT.to_string());
-
-    let nginx_cache_expiry = env
-        .get("RIKU_NGINX_CACHE_EXPIRY")
-        .cloned()
-        .unwrap_or(crate::config::NGINX_CACHE_EXPIRY_DEFAULT.to_string());
-
-    let nginx_cache_path = env
-        .get("RIKU_NGINX_CACHE_PATH")
-        .cloned()
-        .unwrap_or(paths.cache_root.join(app).to_string_lossy().to_string());
-
-    context.insert("RIKU_NGINX_CACHE_SIZE", &nginx_cache_size);
-    context.insert("RIKU_NGINX_CACHE_TIME", &nginx_cache_time);
-    context.insert("RIKU_NGINX_CACHE_REDIRECTS", &nginx_cache_redirects);
-    context.insert("RIKU_NGINX_CACHE_ANY", &nginx_cache_any);
-    context.insert("RIKU_NGINX_CACHE_CONTROL", &nginx_cache_control);
-    context.insert("RIKU_NGINX_CACHE_EXPIRY", &nginx_cache_expiry);
-    context.insert("RIKU_NGINX_CACHE_PATH", &nginx_cache_path);
-}
-
 /// Insert feature-flag context values (Cloudflare ACL, git folder exposure).
 pub(super) fn insert_feature_flags(
     context: &mut tera::Context,
@@ -150,53 +98,6 @@ pub(super) fn insert_feature_flags(
     );
 }
 
-/// Read `RIKU_NGINX_INCLUDE_FILE` content (if set, guarding against path
-/// traversal) as the seed value, run it through the `nginx.include_content`
-/// filter chain (`PLUGIN_PROTOCOL.md` §7.3: lets an installed plugin augment
-/// the generated config without replacing it), and insert the result.
-/// Always inserts the key, even as an empty string, so it's never simply
-/// absent from the template context.
-pub(super) fn insert_include_file(
-    context: &mut tera::Context,
-    env: &HashMap<String, String>,
-    app_path: &Path,
-    paths: &crate::config::RikuPaths,
-) {
-    let mut content = String::new();
-
-    if let Some(include_file) = env.get("RIKU_NGINX_INCLUDE_FILE") {
-        let include_path = app_path.join(include_file);
-        if include_path.exists() {
-            match ensure_path_within(&include_path, app_path) {
-                Ok(()) => {
-                    if let Ok(file_content) = fs::read_to_string(&include_path) {
-                        content = file_content;
-                    }
-                }
-                Err(_) => {
-                    crate::util::echo(
-                        &format!(
-                            "Warning: RIKU_NGINX_INCLUDE_FILE '{}' is outside the app directory, ignoring",
-                            include_file
-                        ),
-                        "yellow",
-                    );
-                }
-            }
-        }
-    }
-
-    let filtered = riku_plugins::FilterBus::new(paths)
-        .apply("nginx.include_content", serde_json::json!(content));
-    match filtered.as_str() {
-        Some(s) => context.insert("RIKU_NGINX_INCLUDE_CONTENT", s),
-        // A filter returned something that isn't a string (a bug in that
-        // filter): degrade to the seed content rather than propagating a
-        // non-string value into the template.
-        None => context.insert("RIKU_NGINX_INCLUDE_CONTENT", &content),
-    }
-}
-
 /// Insert portmap/proxy port context values.
 pub(super) fn insert_portmap_context(context: &mut tera::Context, env: &HashMap<String, String>) {
     let nginx_external_port = env
@@ -218,7 +119,9 @@ pub(super) fn build_context(
 ) -> anyhow::Result<tera::Context> {
     let mut context = tera::Context::new();
 
-    for (key, value) in env {
+    // The snippet's file name stays out: templates get only its checked
+    // content, never a path they could `include`.
+    for (key, value) in env.iter().filter(|(key, _)| *key != SNIPPET_KEY) {
         context.insert(key.clone(), value);
     }
     // Inserted after the ENV copy so an app ENV key of the same name cannot
@@ -230,7 +133,9 @@ pub(super) fn build_context(
     insert_address_context(&mut context, env, paths, app, app_path);
     insert_cache_context(&mut context, env, paths, app);
     insert_feature_flags(&mut context, env, paths);
-    insert_include_file(&mut context, env, app_path, paths);
+    if let Err(e) = insert_include_file(&mut context, env, app_path, paths) {
+        return Err(e);
+    }
     insert_portmap_context(&mut context, env);
 
     context.insert("RIKU_ROOT", &paths.riku_root.to_string_lossy());

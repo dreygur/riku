@@ -361,9 +361,10 @@ KEY2=VALUE2
   `nginx` wrapper placed ahead of `/usr/sbin/nginx` in `PATH`. This keeps
   the supervisor and every application process fully unprivileged while
   still allowing config reloads to take effect.
-- The per-app nginx vhost symlink directory (`/etc/nginx/sites-enabled/`)
-  is made group-writable by the deploy user rather than granting broader
-  filesystem privileges.
+- The deploy user writes vhost configs only into its own `~/.riku/nginx/`.
+  A root `riku init` installs one root-owned file,
+  `/etc/nginx/conf.d/riku.conf`, that includes `~/.riku/nginx/*.conf`; no
+  directory under `/etc/nginx` is made writable by the deploy user.
 - See `tests/stress/container/sudoers-riku-nginx` and
   `tests/stress/container/nginx-wrapper.sh` for the reference
   implementation, verified end-to-end in the containerized integration

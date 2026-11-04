@@ -162,23 +162,6 @@ impl DeployUser {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     }
 
-    /// Create `dir` and its parents as the deploy user.
-    pub fn create_dir(&self, dir: &Path) -> Result<()> {
-        self.run_as("mkdir", &["-p", &dir.to_string_lossy()])
-            .map(drop)
-    }
-
-    /// Change `path`'s mode as the deploy user (`mode` in chmod syntax).
-    pub fn chmod(&self, mode: &str, path: &Path) -> Result<()> {
-        self.run_as("chmod", &[mode, &path.to_string_lossy()])
-            .map(drop)
-    }
-
-    /// Read `path` as the deploy user.
-    pub fn read_file(&self, path: &Path) -> Result<String> {
-        self.run_as("cat", &[&path.to_string_lossy()])
-    }
-
     /// Run `program` as the deploy user and replay its output on root's
     /// terminal once it exits, failure included, stripped of control
     /// characters (see [`printable`]).
@@ -200,6 +183,9 @@ impl DeployUser {
         Ok(())
     }
 }
+
+#[path = "deploy_user_files.rs"]
+mod files;
 
 #[cfg(test)]
 #[path = "deploy_user_tests.rs"]

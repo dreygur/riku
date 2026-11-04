@@ -1,0 +1,12 @@
+[package]
+name = "riku-http"
+version = "0.1.0"
+edition = "2021"
+description = "Riku server side HTTP client construction (reqwest on rustls with ring)"
+authors = ["Rakibul Yeasin"]
+repository = "https://github.com/dreygur/riku"
+license = "MIT"
+
+[dependencies]
+reqwest = { workspace = true }
+rustls = { workspace = true }

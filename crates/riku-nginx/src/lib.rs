@@ -1,38 +1,83 @@
 //! Nginx configuration generation module.
 //!
 //! Generates nginx configuration files from templates using the tera templating engine.
-//! Handles custom configs, ACME challenge configs, SSL certificates, and Cloudflare ACLs.
+//! Handles ACME challenge configs, SSL certificates, and Cloudflare ACLs.
 
 // Dependency crates aliased as their former module names so internal
 // `crate::config::` / `crate::util::` paths resolve unchanged.
 pub(crate) use riku_config as config;
 pub(crate) use riku_util as util;
 
+mod acme;
+mod app_snippet;
 mod backends;
 mod cloudflare;
 mod context;
+mod context_cache;
+mod host;
+mod host_check;
+mod host_links;
+mod install;
 mod reload;
+mod remove;
 mod sanitize;
+mod snippet_grammar;
 mod ssl;
 mod template;
 mod validate;
 
 #[cfg(test)]
+mod env_options_tests;
+#[cfg(test)]
+mod filter_tests;
+#[cfg(test)]
+mod test_support;
+#[cfg(test)]
 mod tests;
 
 use anyhow::Result;
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
 use crate::util::backend::Backend;
+pub use acme::{generate_acme_nginx_config, ACME_CONFIG_FILE};
 pub use backends::{bind_address, default_backends, upstream_port_number};
+pub use host::{include_file_contents, include_line, includes_riku_sites, write_include_file};
+pub use host_check::{
+    check_host_ready, stray_site_configs, HostReadiness, RouteChange, STALE_VALIDATION_FILE,
+};
+pub use host_links::{app_named_links, legacy_site_links};
 pub use reload::{reload_nginx, reload_nginx_with};
-use template::{generate_nginx_config_from_template, use_custom_nginx_config};
-use validate::validate_nginx_config;
+pub use remove::{remove_nginx_files, NginxRemoval};
+use template::generate_nginx_config_from_template;
 
-/// Generate nginx configuration for an app.
-/// Checks for custom nginx config first, otherwise generates from template.
+/// Files an app might ship hoping to replace its generated nginx config.
+/// None is used: nginx loads every riku site into one server-wide config,
+/// so a file from an app repo could take over other apps' domains.
+const UNSUPPORTED_APP_CONFIGS: [&str; 4] = [
+    "nginx.conf",
+    "nginx.custom.conf",
+    "nginx.custom",
+    ".nginx.conf",
+];
+
+fn warn_about_app_nginx_configs(app: &str, app_path: &Path) {
+    for name in UNSUPPORTED_APP_CONFIGS {
+        if !app_path.join(name).exists() {
+            continue;
+        }
+        tracing::warn!("app '{app}' ships {name}, which riku ignores");
+        crate::util::echo(
+            &format!(
+                "-----> Ignoring {name}: custom nginx configs are not supported, using the generated config"
+            ),
+            "yellow",
+        );
+    }
+}
+
+/// Generate and install the nginx config for an app from the templates.
+/// An nginx config file in the app's own directory is ignored with a warning.
 ///
 /// `backends` are the upstream servers the app's locations proxy to. An empty
 /// list is refused, since nginx rejects an upstream with no servers.
@@ -46,97 +91,6 @@ pub fn generate_nginx_config(
     if backends.is_empty() {
         return Err(anyhow::anyhow!("no backends to route '{app}' to"));
     }
-
-    // Check for custom nginx config files in the app directory
-    let custom_configs = [
-        "nginx.conf",
-        "nginx.custom.conf",
-        "nginx.custom",
-        ".nginx.conf",
-    ];
-
-    for custom_config in &custom_configs {
-        let custom_path = app_path.join(custom_config);
-        if custom_path.exists() {
-            crate::util::echo(
-                &format!("-----> Using custom nginx config: {}", custom_config),
-                "green",
-            );
-            return use_custom_nginx_config(&custom_path, app, paths);
-        }
-    }
-
-    // No custom config found, generate from template
+    warn_about_app_nginx_configs(app, app_path);
     generate_nginx_config_from_template(app, app_path, env, backends, paths)
-}
-
-/// Remove nginx configuration for an app: the rendered config, its
-/// sites-enabled symlink, and the socket/cert/key files beside it. Reloads
-/// nginx when a symlink was cleared, and returns the reload error after the
-/// files are gone.
-pub fn remove_nginx_config(app: &str, paths: &crate::config::RikuPaths) -> Result<()> {
-    let config_file = paths.nginx_root.join(format!("{}.conf", app));
-    if config_file.exists() {
-        if let Err(e) = fs::remove_file(&config_file) {
-            return Err(anyhow::anyhow!(
-                "failed to remove nginx config {:?}: {}",
-                config_file,
-                e
-            ));
-        }
-    }
-
-    let mut unlinked = false;
-    let sites_enabled = &paths.nginx_sites_enabled;
-    if sites_enabled.exists() {
-        let symlink_path = sites_enabled.join(format!("{}.conf", app));
-        // symlink_metadata, not exists: the config file this points at is
-        // removed just above, and exists() follows the link, so it reports
-        // false for the dangling symlink we still need to clear. Leaving one
-        // behind breaks every later `nginx -s reload` on the host.
-        if symlink_path.symlink_metadata().is_ok() {
-            let _ = fs::remove_file(&symlink_path);
-            unlinked = true;
-        }
-    }
-
-    let reloaded = if unlinked {
-        reload_nginx_with(&paths.reload_programs.nginx)
-    } else {
-        Ok(())
-    };
-
-    for ext in ["sock", "key", "crt"] {
-        let file = paths.nginx_root.join(format!("{}.{}", app, ext));
-        if file.exists() {
-            if let Err(e) = fs::remove_file(&file) {
-                return Err(anyhow::anyhow!("failed to remove {:?}: {}", file, e));
-            }
-        }
-    }
-
-    reloaded
-}
-
-/// Generate a minimal nginx configuration for ACME challenges.
-pub fn generate_acme_nginx_config(paths: &crate::config::RikuPaths) -> Result<()> {
-    let mut tera = tera::Tera::default();
-    tera.add_raw_template(
-        "acme.conf.tera",
-        include_str!("../../../templates/nginx_acme_firstrun.conf.tera"),
-    )?;
-
-    let mut context = tera::Context::new();
-    context.insert("ACME_WWW", &paths.acme_www.to_string_lossy());
-    context.insert("RIKU_NGINX_IPV4_ADDRESS", "0.0.0.0");
-    context.insert("RIKU_NGINX_IPV6_ADDRESS", "[::]");
-
-    let config_content = tera.render("acme.conf.tera", &context)?;
-
-    let config_file = paths.nginx_root.join("acme.conf");
-    crate::util::write_atomic(&config_file, config_content.as_bytes())?;
-
-    validate_nginx_config(&config_file)?;
-
-    Ok(())
 }
