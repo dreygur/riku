@@ -55,6 +55,9 @@ CPUQuota=50%
 WantedBy=multi-user.target
 "#,
         ordering = unit_ordering(router),
+        deploy_user = deploy_user,
+        deploy_home = deploy_home,
+        riku_binary_path = riku_binary_path,
     )
 }
 

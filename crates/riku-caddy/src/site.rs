@@ -57,6 +57,7 @@ pub fn render_site(app: &str, plan: &RoutePlan) -> Result<String> {
     };
     Ok(format!(
         "# riku app: {app}\n{addresses} {{\n\treverse_proxy {upstreams}\n}}\n",
+        app = app,
         addresses = site_addresses(plan).join(", "),
     ))
 }
