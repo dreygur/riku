@@ -7,8 +7,9 @@
 //! inside its project, so a [`ServiceMount`] holds a [`VolumeKey`] and is a
 //! different type from the engine's [`Mount`]. The only way from one to the
 //! other is [`ComposeProject::engine_mounts`], which qualifies each key as
-//! `<project>_<key>` through [`existing_volume_name`] and so refuses a project
-//! whose declared name is not confirmed.
+//! `<app>.<key>` with the riku app name. Keys never contain `.` (see
+//! `volume_decl`), so the name splits back at its last `.` and two apps cannot
+//! share a volume.
 //!
 //! Handing a service's mounts straight to the engine does not compile:
 //!
@@ -21,8 +22,8 @@
 //! }
 //! ```
 
-use super::{existing_volume_name, ComposeProject, ServiceDef};
-use crate::types::{Mount, MountSource};
+use super::{ComposeProject, ServiceDef};
+use crate::types::{check_app_name, Mount, MountSource};
 use anyhow::{anyhow, Result};
 use std::fmt;
 use std::path::PathBuf;
@@ -78,32 +79,33 @@ impl ServiceMount {
 }
 
 impl ComposeProject {
-    /// The engine mounts for `service`, with every volume key qualified as
-    /// `<project>_<key>`.
+    /// The engine mounts for `service` of the riku app `app`, with every
+    /// volume key qualified as `<app>.<key>`.
     ///
-    /// Fails for a volume of a project whose name is still `Declared`, and for
-    /// a key this project does not declare.
-    pub fn engine_mounts(&self, service: &ServiceDef) -> Result<Vec<Mount>> {
+    /// Fails for an app name the engine cannot take and for a key this project
+    /// does not declare.
+    pub fn engine_mounts(&self, app: &str, service: &ServiceDef) -> Result<Vec<Mount>> {
+        if let Err(e) = check_app_name(app) {
+            return Err(e);
+        }
         service
             .mounts
             .iter()
-            .map(|mount| self.engine_mount(service, mount))
+            .map(|mount| self.engine_mount(app, service, mount))
             .collect()
     }
 
-    fn engine_mount(&self, service: &ServiceDef, mount: &ServiceMount) -> Result<Mount> {
+    fn engine_mount(&self, app: &str, service: &ServiceDef, mount: &ServiceMount) -> Result<Mount> {
         let source = match &mount.source {
-            ServiceMountSource::Volume(key) => match existing_volume_name(self, key.as_str()) {
-                Ok(Some(name)) => MountSource::Volume(name),
-                Ok(None) => {
-                    return Err(anyhow!(
-                        "service '{}' mounts volume '{key}', which project '{}' does not declare",
-                        service.name,
-                        self.project_name()
-                    ))
-                }
-                Err(e) => return Err(e),
-            },
+            ServiceMountSource::Volume(key) if self.volumes().contains_key(key.as_str()) => {
+                MountSource::Volume(format!("{app}.{key}"))
+            }
+            ServiceMountSource::Volume(key) => {
+                return Err(anyhow!(
+                    "service '{}' mounts volume '{key}', which app '{app}' does not declare",
+                    service.name
+                ))
+            }
             ServiceMountSource::Bind(path) => MountSource::Bind(path.clone()),
             ServiceMountSource::Anonymous => MountSource::Anonymous,
         };

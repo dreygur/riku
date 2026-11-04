@@ -70,11 +70,10 @@ fn app_env_overrides_dotenv() {
 }
 
 #[test]
-fn name_volumes_and_unset_variable_warning_are_reported() {
+fn volumes_and_unset_variable_warning_are_reported_and_name_is_accepted() {
     let compose = "name: shop\nvolumes:\n  data:\nservices:\n  web:\n    image: ${NOPE}\n";
     let project = read(&app_with(compose, None), &[]).unwrap();
 
-    assert_eq!(project.name.as_deref(), Some("shop"));
     assert!(project.volumes["data"].is_null());
     assert_eq!(
         project.warnings,

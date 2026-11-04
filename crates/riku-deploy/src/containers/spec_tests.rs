@@ -64,7 +64,6 @@ fn restart_label_maps_policy() {
 #[test]
 fn dockerfile_app_copy_is_labelled_unless_stopped() {
     let project = riku_container::compose::single_image_project(
-        "myapp",
         std::path::Path::new("/srv/myapp"),
         std::path::Path::new("Dockerfile"),
     )

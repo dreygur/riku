@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - 2026-07-08
 
 - Removed `riku-plugin-container`: riku runs container apps itself, so `riku install-plugins container` and the plugin `pull-service` path for `RIKU_WATCH_SERVICES` are gone.
-- Container names changed to `<app>.<service>.<n>` and compose service names may not contain `.`; redeploy container apps.
+- Container names changed to `<app>.<service>.<n>` and volume names to `<app>.<key>`, and compose service and volume names may not contain `.`; redeploy container apps. Data in volumes under the old `<project>_<key>` names is not reused, and the compose `name` key and `COMPOSE_PROJECT_NAME` no longer affect any name.
 
 ### Upgrade Notes: Worker and Socket File Names
 

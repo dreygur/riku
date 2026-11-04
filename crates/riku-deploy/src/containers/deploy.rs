@@ -9,7 +9,6 @@ use riku_container::compose::{check_scale, ComposeProject, ServiceDef};
 use super::app::{read_scaling, wanted};
 use super::context::ContainerApp;
 use super::procfile_workers::ProcfileWorkers;
-use super::project_check::confirm_project_name;
 use super::release::run_release;
 use super::removal::remove_dropped;
 use super::retire::retire_procfile_workers;
@@ -79,8 +78,7 @@ fn roll_out_app(ctx: &ContainerApp, counts: &BTreeMap<String, u32>) -> Result<()
 
 /// Deploy `app` as riku managed containers.
 ///
-/// A project name the compose file or app env declares is checked against
-/// the other apps and existing volumes first. Every service's copy count
+/// Every service's copy count
 /// comes from `SCALING` (1 when absent) and is checked before anything is
 /// built. Services are replaced in start order, one copy at a time; a
 /// service with `service_healthy` dependencies starts only once their copies
@@ -97,13 +95,10 @@ pub fn deploy_containers(
     paths: &RikuPaths,
     env: &HashMap<String, String>,
 ) -> Result<()> {
-    let mut ctx = match ContainerApp::load(app, paths, env.clone()) {
+    let ctx = match ContainerApp::load(app, paths, env.clone()) {
         Ok(ctx) => ctx,
         Err(e) => return Err(e),
     };
-    if let Err(e) = confirm_project_name(&mut ctx.project, app, paths, &ctx.engine) {
-        return Err(e);
-    }
     let counts = match prepare(&ctx) {
         Ok(counts) => counts,
         Err(e) => return Err(e),

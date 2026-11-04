@@ -65,8 +65,8 @@ pub(crate) fn sorted_env(env: &HashMap<String, String>) -> BTreeMap<String, Stri
         .collect()
 }
 
-fn single_image(app: &str, app_path: &Path, dockerfile: &Path) -> Result<ComposeProject> {
-    let mut project = match single_image_project(app, app_path, dockerfile) {
+fn single_image(app_path: &Path, dockerfile: &Path) -> Result<ComposeProject> {
+    let mut project = match single_image_project(app_path, dockerfile) {
         Ok(project) => project,
         Err(e) => return Err(e),
     };
@@ -98,7 +98,7 @@ pub fn load_project(
         return read_project(app_path, &compose, &sorted_env(env));
     }
     match image_file(app_path) {
-        Some(dockerfile) => single_image(app, app_path, &dockerfile),
+        Some(dockerfile) => single_image(app_path, &dockerfile),
         None => Err(anyhow!(
             "app '{app}' has no compose file, Containerfile or Dockerfile"
         )),

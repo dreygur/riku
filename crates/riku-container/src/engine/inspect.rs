@@ -9,7 +9,7 @@ use std::ffi::OsString;
 
 use anyhow::{anyhow, Result};
 
-use super::inspect_parse::parse_inspect;
+use super::inspect_parse::{parse_inspect, BadLabels};
 use super::snapshot::fetch_present;
 use super::{ContainerId, Engine};
 use crate::types::{check_app_name, labels, CopyIndex, ServiceName};
@@ -103,10 +103,25 @@ impl Engine {
     /// State of each container in `ids`.
     ///
     /// Returns an empty list without running the engine when `ids` is empty.
-    /// A container removed after it was listed is left out of the result; any
-    /// other failure is an error. See [`super::snapshot`] for how the two are
-    /// told apart.
+    /// A container removed after it was listed is left out of the result, and
+    /// so is one whose `riku.service` or `riku.copy` label does not parse,
+    /// with a warning naming it. Any other failure is an error. See
+    /// [`super::snapshot`] for how a removed container is told apart.
     pub fn inspect(&self, ids: &[ContainerId]) -> Result<Vec<ContainerInfo>> {
+        self.inspect_with(ids, BadLabels::Skip)
+    }
+
+    /// Like [`Engine::inspect`], but a container whose riku labels do not
+    /// parse is an error, so an exact-name lookup never reads it as free.
+    pub(super) fn inspect_strict(&self, ids: &[ContainerId]) -> Result<Vec<ContainerInfo>> {
+        self.inspect_with(ids, BadLabels::Fail)
+    }
+
+    fn inspect_with(
+        &self,
+        ids: &[ContainerId],
+        bad_labels: BadLabels,
+    ) -> Result<Vec<ContainerInfo>> {
         let run = |ids: &[ContainerId]| {
             let mut args: Vec<OsString> = ["inspect", "--type", "container"]
                 .into_iter()
@@ -115,7 +130,8 @@ impl Engine {
             args.extend(ids.iter().map(|id| OsString::from(id.as_str())));
             self.output(&args)
         };
-        match fetch_present(self, ids, run, parse_inspect) {
+        let parse = |json: &str| parse_inspect(json, bad_labels);
+        match fetch_present(self, ids, run, parse) {
             Ok(infos) => Ok(infos),
             Err(e) => Err(anyhow!("cannot inspect containers: {e}")),
         }

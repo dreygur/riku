@@ -46,7 +46,7 @@ impl Engine {
             Ok(ids) => ids,
             Err(e) => return Err(e),
         };
-        let infos = match self.inspect(&ids) {
+        let infos = match self.inspect_strict(&ids) {
             Ok(infos) => infos,
             Err(e) => return Err(e),
         };

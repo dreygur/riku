@@ -25,7 +25,6 @@ mod order;
 mod paths;
 mod ports;
 mod project;
-mod project_name;
 mod raw;
 mod rules;
 mod scalar;
@@ -41,11 +40,7 @@ pub use definition::{BuildDef, Dependency, DependsCondition, ServiceContext, Ser
 pub use locate::{default_compose_file, find_compose_file, ComposeFile, COMPOSE_FILE_NAMES};
 pub use mounts::{ServiceMount, ServiceMountSource, VolumeKey};
 pub use paths::check_bind_source;
-pub use project::{
-    existing_volume_name, read_project, single_image_project, ComposeProject, ProjectNameSource,
-    VolumeDecl,
-};
-pub use project_name::normalise_project_name;
+pub use project::{read_project, single_image_project, ComposeProject, VolumeDecl};
 pub use raw::{read_raw, RawProject};
 pub use rules::{check_scale, replace_order, routed_http, ReplaceOrder, RoutedPort};
 pub use serde_json::Value;

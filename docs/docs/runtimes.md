@@ -499,6 +499,9 @@ containers in start order (see [Rolling replacement](#rolling-replacement)).
 Every copy is its own container, named `<app>.<service>.<n>`, on the app's
 network `riku-<app>`, where the other services reach it by its service name.
 Service names may not contain `.`, so no two apps can share a container name.
+A top level volume `<key>` is the engine volume `<app>.<key>`, and volume
+names may not contain `.` either, so no two apps can share a volume. The
+compose `name` key and `COMPOSE_PROJECT_NAME` do not affect any name.
 Containers of a service the compose file no longer has are removed.
 
 A container app's Procfile is read only for its `release` line. That command
@@ -671,10 +674,6 @@ deploy or `riku restart` replaces it. Each copy's output goes to
 follows.
 
 ### Switching an app to containers
-
-A project name set in the compose file or `COMPOSE_PROJECT_NAME` is refused
-when it matches another app's name or when an existing volume of that name was
-not created by compose for that project.
 
 An app that ran as a Procfile app and gains a compose file or Dockerfile
 keeps its old Procfile workers until the new containers are healthy and

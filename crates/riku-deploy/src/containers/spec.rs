@@ -114,7 +114,7 @@ pub fn copy_spec(
             ))
         }
     };
-    let mounts = match project.engine_mounts(service) {
+    let mounts = match project.engine_mounts(app.as_str(), service) {
         Ok(mounts) => mounts,
         Err(e) => return Err(e),
     };

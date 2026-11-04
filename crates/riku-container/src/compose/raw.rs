@@ -35,9 +35,6 @@ pub struct RawProject {
     /// Top level named volume declarations by volume name. A volume declared
     /// with no settings is `Value::Null`.
     pub volumes: BTreeMap<String, Value>,
-    /// The top level `name` key. It sets the project name docker compose used
-    /// for existing volumes, so it is kept for volume naming.
-    pub name: Option<String>,
     /// Non fatal findings, such as unset variables.
     pub warnings: Vec<String>,
     /// The variables interpolation used: the `.env` next to the compose file
@@ -50,7 +47,6 @@ impl fmt::Debug for RawProject {
         f.debug_struct("RawProject")
             .field("services", &self.services)
             .field("volumes", &self.volumes)
-            .field("name", &self.name)
             .field("warnings", &self.warnings)
             .field("var_names", &self.vars.keys().collect::<Vec<_>>())
             .finish()
@@ -149,11 +145,6 @@ fn split_project(
     warnings: Vec<String>,
     vars: BTreeMap<String, String>,
 ) -> Result<RawProject> {
-    let name = match project.remove("name") {
-        None | Some(Value::Null) => None,
-        Some(Value::String(name)) => Some(name),
-        Some(_) => bail!("top level 'name' must be a string"),
-    };
     let services = match take_entries(&mut project, "services") {
         Ok(services) => services,
         Err(e) => return Err(e),
@@ -165,7 +156,6 @@ fn split_project(
     Ok(RawProject {
         services,
         volumes,
-        name,
         warnings,
         vars,
     })

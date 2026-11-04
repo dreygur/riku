@@ -2,7 +2,9 @@
 //!
 //! Security model: the JSON is untrusted. Ids become [`ContainerId`], service
 //! and copy labels their validated types, and a missing or malformed required
-//! field is an error, never a default.
+//! field is an error, never a default. The one exception is a listing, which
+//! leaves out a container whose service or copy label does not parse (see
+//! [`BadLabels`]) so that one such container cannot break every app.
 
 use std::collections::HashMap;
 
@@ -107,24 +109,51 @@ fn port_label(label_map: &HashMap<String, String>, container: &str) -> Option<u1
         })
 }
 
-fn into_info(raw: RawContainer) -> Result<ContainerInfo> {
+/// What to do with a container whose `riku.service` or `riku.copy` label does
+/// not parse.
+#[derive(Debug, Clone, Copy)]
+pub(super) enum BadLabels {
+    /// Fail the whole read. For exact-name ownership checks, where an
+    /// unreadable container must never count as free.
+    Fail,
+    /// Leave the container out and log a warning naming it. For listings.
+    Skip,
+}
+
+/// Why a container could not be read.
+enum Unreadable {
+    Labels(anyhow::Error),
+    Other(anyhow::Error),
+}
+
+#[allow(clippy::question_mark)]
+fn riku_labels(
+    label_map: &HashMap<String, String>,
+) -> Result<(Option<ServiceName>, Option<CopyIndex>)> {
+    let service = match service_label(label_map) {
+        Ok(service) => service,
+        Err(e) => return Err(e),
+    };
+    match copy_label(label_map) {
+        Ok(copy) => Ok((service, copy)),
+        Err(e) => Err(e),
+    }
+}
+
+fn into_info(raw: RawContainer) -> std::result::Result<ContainerInfo, Unreadable> {
     let name = raw.name.trim_start_matches('/').to_string();
     let id = match ContainerId::try_from(raw.id.as_str()) {
         Ok(id) => id,
-        Err(e) => return Err(anyhow!("container {name}: {e}")),
+        Err(e) => return Err(Unreadable::Other(anyhow!("container {name}: {e}"))),
     };
     let state = match container_state(&raw.state) {
         Ok(state) => state,
-        Err(e) => return Err(anyhow!("container {name}: {e}")),
+        Err(e) => return Err(Unreadable::Other(anyhow!("container {name}: {e}"))),
     };
     let label_map = raw.config.labels.unwrap_or_default();
-    let service = match service_label(&label_map) {
-        Ok(service) => service,
-        Err(e) => return Err(anyhow!("container {name}: {e}")),
-    };
-    let copy = match copy_label(&label_map) {
-        Ok(copy) => copy,
-        Err(e) => return Err(anyhow!("container {name}: {e}")),
+    let (service, copy) = match riku_labels(&label_map) {
+        Ok(parsed) => parsed,
+        Err(e) => return Err(Unreadable::Labels(anyhow!("container {name}: {e}"))),
     };
     let host_port = port_label(&label_map, &name);
     Ok(ContainerInfo {
@@ -141,7 +170,7 @@ fn into_info(raw: RawContainer) -> Result<ContainerInfo> {
     })
 }
 
-pub(super) fn parse_inspect(json: &str) -> Result<Vec<ContainerInfo>> {
+pub(super) fn parse_inspect(json: &str, bad_labels: BadLabels) -> Result<Vec<ContainerInfo>> {
     let raws: Vec<RawContainer> = match serde_json::from_str(json) {
         Ok(raws) => raws,
         Err(e) => {
@@ -150,7 +179,17 @@ pub(super) fn parse_inspect(json: &str) -> Result<Vec<ContainerInfo>> {
             ))
         }
     };
-    raws.into_iter().map(into_info).collect()
+    let mut infos = Vec::with_capacity(raws.len());
+    for raw in raws {
+        match (into_info(raw), bad_labels) {
+            (Ok(info), _) => infos.push(info),
+            (Err(Unreadable::Labels(e)), BadLabels::Skip) => {
+                tracing::warn!("skipping a container whose riku labels do not parse: {e:#}");
+            }
+            (Err(Unreadable::Labels(e) | Unreadable::Other(e)), _) => return Err(e),
+        }
+    }
+    Ok(infos)
 }
 
 #[cfg(test)]

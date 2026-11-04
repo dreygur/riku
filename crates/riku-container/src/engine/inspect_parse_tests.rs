@@ -1,6 +1,10 @@
-use super::parse_inspect;
+use super::BadLabels;
 use crate::engine::fixture::{inspect_json, ID, ID_B, IMAGE_ID};
-use crate::engine::ContainerState;
+use crate::engine::{ContainerInfo, ContainerState};
+
+fn parse_inspect(json: &str) -> anyhow::Result<Vec<ContainerInfo>> {
+    super::parse_inspect(json, BadLabels::Fail)
+}
 
 /// Captured from `docker inspect` (docker 29.8.2) of a running alpine container
 /// started with the three riku labels. The capture was trimmed and scrubbed:
@@ -217,4 +221,28 @@ fn missing_or_malformed_fields_are_errors_naming_the_field() {
         let err = parse_inspect(json).unwrap_err().to_string();
         assert!(err.contains(field), "expected {field:?} in {err:?}");
     }
+}
+
+#[test]
+fn listing_skips_a_container_with_an_unparseable_service_label() {
+    let good = inspect_json(ID, r#"{"Status":"running"}"#, r#"{"riku.service":"web"}"#);
+    let old = inspect_json(
+        ID_B,
+        r#"{"Status":"running"}"#,
+        r#"{"riku.service":"api.v1"}"#,
+    );
+    let both = format!("[{},{}]", &good[1..good.len() - 1], &old[1..old.len() - 1]);
+
+    let listed = super::parse_inspect(&both, BadLabels::Skip).unwrap();
+
+    let ids: Vec<&str> = listed.iter().map(|info| info.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        [ID],
+        "only the container with readable labels is listed"
+    );
+    assert!(
+        parse_inspect(&both).is_err(),
+        "an exact-name lookup must not read the unparseable container as absent"
+    );
 }

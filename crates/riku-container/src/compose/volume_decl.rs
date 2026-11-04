@@ -3,10 +3,12 @@
 //! # Security model
 //!
 //! Engine volume names are shared by every app on the server, and a volume
-//! name is only safe when riku builds it from the project name and the key.
-//! `name:` and `external:` would let the compose file pick any name, so they
-//! are refused, and `driver_opts` can turn a volume into a bind mount of a
-//! host directory or device. Volume keys must be engine safe names.
+//! name is only safe when riku builds it as `<app>.<key>`. `name:` and
+//! `external:` would let the compose file pick any name, so they are refused,
+//! and `driver_opts` can turn a volume into a bind mount of a host directory or
+//! device. Volume keys must be engine safe names without `.`: app names may
+//! contain `.`, so a key with one would let app `shop` with key `db.data` and
+//! app `shop.db` with key `data` share `shop.db.data`.
 
 use super::project::VolumeDecl;
 use super::Value;
@@ -20,8 +22,13 @@ pub(super) fn parse_volume_decls(
 ) -> Result<BTreeMap<String, VolumeDecl>> {
     let mut volumes = BTreeMap::new();
     for (key, settings) in declared {
+        if key.contains('.') {
+            bail!("volume {key:?}: volume names may not contain '.'");
+        }
         if !is_engine_safe(key) {
-            bail!("volume {key:?}: use letters, digits, '_', '.' or '-', starting with a letter or digit");
+            bail!(
+                "volume {key:?}: use letters, digits, '_' or '-', starting with a letter or digit"
+            );
         }
         if let Err(e) = check_settings(key, settings) {
             return Err(e);
@@ -41,7 +48,7 @@ fn check_settings(key: &str, settings: &Value) -> Result<()> {
         match (field.as_str(), value) {
             ("driver", Value::String(driver)) if driver == "local" => {}
             ("name" | "external" | "driver_opts", _) => bail!(
-                "volume '{key}': '{field}' is not supported; riku names volumes from the project and the volume key"
+                "volume '{key}': '{field}' is not supported; riku names volumes from the app and the volume key"
             ),
             _ => bail!("volume '{key}': unsupported key or value for '{field}'"),
         }

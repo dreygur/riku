@@ -1,4 +1,4 @@
-use crate::compose::test_support::{project_of, TestApp};
+use crate::compose::test_support::project_of;
 use crate::types::{Mount, MountSource};
 use std::path::PathBuf;
 
@@ -11,17 +11,27 @@ volumes:
   pgdata:
 ";
 
+fn volume_of(app: &str, key: &str) -> MountSource {
+    let text =
+        format!("services:\n  db:\n    image: postgres:16\n    volumes: [\"{key}:/data\"]\nvolumes:\n  {key}:\n");
+    let project = project_of(&text).unwrap();
+    let mounts = project.engine_mounts(app, &project.services[0]).unwrap();
+    mounts[0].source.clone()
+}
+
 #[test]
-fn engine_mounts_qualify_volume_keys_with_the_project_name() {
+fn engine_mounts_qualify_volume_keys_with_the_app_name() {
     let project = project_of(WITH_PGDATA).unwrap();
 
-    let mounts = project.engine_mounts(&project.services[0]).unwrap();
+    let mounts = project
+        .engine_mounts("myapp", &project.services[0])
+        .unwrap();
 
     assert_eq!(
         mounts,
         vec![
             Mount {
-                source: MountSource::Volume("shop_pgdata".into()),
+                source: MountSource::Volume("myapp.pgdata".into()),
                 target: PathBuf::from("/var/lib/postgresql/data"),
                 read_only: false,
             },
@@ -35,22 +45,19 @@ fn engine_mounts_qualify_volume_keys_with_the_project_name() {
 }
 
 #[test]
-fn engine_mounts_refuse_an_unconfirmed_declared_project() {
-    let app = TestApp::new("myapp");
-    app.write("compose.yaml", &format!("name: shop\n{WITH_PGDATA}"));
-    let mut project = app.read(None, &[]).unwrap();
-    let service = project.services[0].clone();
+fn apps_whose_names_and_keys_share_underscores_get_different_volumes() {
+    let shop = volume_of("shop", "db_data");
+    let shop_db = volume_of("shop_db", "data");
 
-    let refusal = match project.engine_mounts(&service) {
-        Ok(mounts) => panic!("unconfirmed declared project got mounts {mounts:?}"),
-        Err(e) => format!("{e:#}"),
-    };
-    assert!(
-        refusal.contains("shop"),
-        "refusal should name the project: {refusal}"
+    assert_ne!(
+        shop, shop_db,
+        "app shop and app shop_db would share a volume"
     );
+}
 
-    project.confirm_declared_name();
-    let mounts = project.engine_mounts(&service).unwrap();
-    assert_eq!(mounts[0].source, MountSource::Volume("shop_pgdata".into()));
+#[test]
+fn engine_mounts_refuse_an_app_name_the_engine_cannot_take() {
+    let project = project_of(WITH_PGDATA).unwrap();
+
+    assert!(project.engine_mounts("-bad", &project.services[0]).is_err());
 }
