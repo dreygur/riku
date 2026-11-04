@@ -46,8 +46,8 @@ fn write_worker_toml(server: &MockServer, command: &str) -> TcpListener {
         &log_file.to_string_lossy(),
     );
     let toml_str = toml::to_string(&config).unwrap();
-    let available = server.paths.workers_available.join("myapp-web-1.toml");
-    let enabled = server.paths.workers_enabled.join("myapp-web-1.toml");
+    let available = server.paths.workers_available.join("myapp@web.1.toml");
+    let enabled = server.paths.workers_enabled.join("myapp@web.1.toml");
 
     fs::create_dir_all(&server.paths.workers_available).unwrap();
     fs::create_dir_all(&server.paths.workers_enabled).unwrap();

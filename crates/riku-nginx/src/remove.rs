@@ -1,9 +1,10 @@
 //! Removing an app's files from `nginx_root`. Nothing outside it is touched.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Result};
+use riku_util::file_names::copy_socket;
 
 use super::install::{site_file, staged_file};
 use crate::config::RikuPaths;
@@ -35,7 +36,24 @@ fn remove_if_present(file: &Path) -> Result<()> {
     }
 }
 
-/// Remove an app's live config first, then its staged config, socket, cert
+/// The `<app>@<n>.sock` sockets of `app`'s uWSGI copies in `dir`.
+fn copy_sockets(app: &str, dir: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .and_then(copy_socket::parse)
+                .is_some_and(|(owner, _)| owner == app)
+        })
+        .collect()
+}
+
+/// Remove an app's live config first, then its staged config, sockets, cert
 /// and key. Fails only when the live config cannot be removed, since then
 /// nothing nginx loads has changed. A later failure is returned in
 /// [`NginxRemoval::leftover_error`] so the caller still reloads.
@@ -52,7 +70,8 @@ pub fn remove_nginx_files(app: &str, paths: &RikuPaths) -> Result<NginxRemoval> 
 
     let side_files = [staged_file(app, paths)]
         .into_iter()
-        .chain(["sock", "key", "crt"].map(|ext| paths.nginx_root.join(format!("{app}.{ext}"))));
+        .chain(["sock", "key", "crt"].map(|ext| paths.nginx_root.join(format!("{app}.{ext}"))))
+        .chain(copy_sockets(app, &paths.nginx_root));
     let failures: Vec<String> = side_files
         .filter_map(|file| remove_if_present(&file).err())
         .map(|e| e.to_string())

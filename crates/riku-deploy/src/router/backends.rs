@@ -1,6 +1,6 @@
 //! The backends an app's router sends traffic to, one per running copy.
 //!
-//! A Procfile app's copies are the enabled `<app>-<kind>-<n>.toml` worker
+//! A Procfile app's copies are the enabled `<app>@<kind>.<n>.toml` worker
 //! configs of its web facing kinds; a container app's are the running
 //! containers that carry a published port. Both lists are in copy order.
 //!
@@ -20,11 +20,14 @@ use riku_supervisor::config::WorkerConfig;
 
 use crate::config::RikuPaths;
 use crate::util::backend::Backend;
+use crate::util::file_names::copy_socket;
 use crate::workers::web_env::{is_web_facing, is_wsgi_kind};
 
 /// The unix socket the `copy`th uWSGI worker of `app` listens on.
 pub fn copy_socket(paths: &RikuPaths, app: &str, copy: CopyIndex) -> PathBuf {
-    paths.nginx_root.join(format!("{app}.{copy}.sock"))
+    paths
+        .nginx_root
+        .join(copy_socket::file_name(app, copy.get()))
 }
 
 fn parsed_worker(path: &std::path::Path) -> Option<WorkerConfig> {
@@ -72,18 +75,13 @@ pub(crate) fn web_copies(app: &str, paths: &RikuPaths) -> Result<Vec<WorkerConfi
     Ok(copies)
 }
 
-fn worker_label(config: &WorkerConfig) -> String {
-    let info = &config.worker;
-    format!("{}-{}-{}", info.app, info.kind, info.ordinal)
-}
-
 /// Where the router reaches the copy `config` describes: its uWSGI socket for
 /// a wsgi kind, else its `PORT` on its bind address.
 pub(crate) fn worker_backend(config: &WorkerConfig) -> Result<Backend> {
     if is_wsgi_kind(&config.worker.kind) {
         return match config.env.get("UWSGI_SOCKET") {
             Some(socket) => Ok(Backend::Unix(PathBuf::from(socket))),
-            None => Err(anyhow!("{} has no UWSGI_SOCKET", worker_label(config))),
+            None => Err(anyhow!("{} has no UWSGI_SOCKET", config.worker.name())),
         };
     }
     let port = match config
@@ -95,13 +93,13 @@ pub(crate) fn worker_backend(config: &WorkerConfig) -> Result<Backend> {
         _ => {
             return Err(anyhow!(
                 "PORT of {} is not a port number",
-                worker_label(config)
+                config.worker.name()
             ))
         }
     };
     match crate::nginx::bind_address(&config.env) {
         Ok(host) => Ok(Backend::Tcp { host, port }),
-        Err(e) => Err(anyhow!("{}: {e}", worker_label(config))),
+        Err(e) => Err(anyhow!("{}: {e}", config.worker.name())),
     }
 }
 

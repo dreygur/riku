@@ -13,6 +13,7 @@ use std::path::Path;
 use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::{anyhow, Result};
+use riku_util::file_names::worker::WorkerName;
 
 use super::legacy::{enabled_entries, is_legacy_worker, read_worker};
 use crate::config::RikuPaths;
@@ -50,6 +51,17 @@ fn rename(paths: &RikuPaths, name: &str, from: &str, to: &str) -> Result<()> {
     }
 }
 
+/// The worker an enabled or parked entry is named after.
+fn worker_id(path: &Path) -> Option<WorkerName> {
+    let file_name = path.file_name().and_then(|name| name.to_str());
+    file_name
+        .and_then(|file| {
+            file.strip_suffix(ENABLED)
+                .or_else(|| file.strip_suffix(PARKED))
+        })
+        .and_then(WorkerName::parse)
+}
+
 fn remove_if_present(path: &Path) -> Result<()> {
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
@@ -58,7 +70,7 @@ fn remove_if_present(path: &Path) -> Result<()> {
     }
 }
 
-/// The legacy workers of one app, by process id (`<app>-<kind>-<ordinal>`).
+/// The legacy workers of one app, by process id (`<app>@<kind>.<ordinal>`).
 #[derive(Debug)]
 pub(crate) struct LegacyWorkers {
     app: String,
@@ -86,21 +98,13 @@ impl LegacyWorkers {
             Ok(entries) => entries,
             Err(e) => return Err(e),
         };
-        let prefix = format!("{app}-");
         let mut workers = LegacyWorkers {
             app: app.to_string(),
             names: Vec::new(),
             longest_grace: Duration::ZERO,
         };
         for path in entries {
-            let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned());
-            let name = match file_name.as_deref() {
-                Some(file) if file.starts_with(&prefix) => file
-                    .strip_suffix(ENABLED)
-                    .or_else(|| file.strip_suffix(PARKED)),
-                _ => None,
-            };
-            let Some(name) = name else {
+            let Some(name) = worker_id(&path).filter(|id| id.app == app) else {
                 continue;
             };
             let config = match read_worker(&path) {

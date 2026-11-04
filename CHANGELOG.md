@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-07-08
 
+### Upgrade Notes: Worker and Socket File Names
+
+- Worker configs, process ids and uWSGI copy sockets are now named
+  `<app>@<kind>.<n>.toml`, `<app>@<kind>.<n>` and `<app>@<n>.sock`, so two
+  apps can no longer share a file name; redeploy every app after upgrading.
+  App names ending in `.git` are refused.
+
 ### Router Plugin Protocol 2
 
 The `configure` request sent to a router plugin now carries a `backends` list

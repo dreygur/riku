@@ -63,7 +63,7 @@ fn enable_worker(paths: &RikuPaths, kind: &str, copy: u32, pairs: &[(&str, &str)
     );
     let file = paths
         .workers_enabled
-        .join(format!("shop-{kind}-{copy}.toml"));
+        .join(format!("shop@{kind}.{copy}.toml"));
     std::fs::write(file, toml::to_string(&config).unwrap()).unwrap();
 }
 

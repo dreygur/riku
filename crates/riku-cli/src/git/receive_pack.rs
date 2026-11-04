@@ -1,24 +1,73 @@
 //! Git receive-pack and upload-pack command handlers.
+//!
+//! Security: the repository path comes from the SSH command line. It is
+//! reduced to a validated app name plus an optional `.git` before it is
+//! joined under `repos/`, and git runs with an argument vector, no shell.
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
 
 use crate::config::RikuPaths;
 use crate::util::echo;
+use crate::util::validation::{validate_app_name, REPO_SUFFIX};
 
 use super::repo::{ensure_repo_symlink, POST_RECEIVE_HOOK};
 
+/// The directory under `repos/` a pushed path names. `riku@host:shop` and
+/// `riku@host:shop.git` both deploy app `shop`, and their repositories stay
+/// at `repos/shop` and `repos/shop.git` as before. App names cannot end in
+/// `.git`, so only one suffix is taken off. A trailing `/`, which git
+/// accepts in a remote path, goes first.
+fn repo_dir_name(requested: &str) -> Result<String> {
+    let requested = requested.trim_end_matches('/');
+    let (app, suffix) = match requested.strip_suffix(REPO_SUFFIX) {
+        Some(app) => (app, REPO_SUFFIX),
+        None => (requested, ""),
+    };
+    match validate_app_name(app) {
+        Ok(app) => Ok(format!("{app}{suffix}")),
+        Err(e) => Err(e),
+    }
+}
+
+fn install_post_receive_hook(hook_path: &std::path::Path) -> Result<()> {
+    if let Some(parent) = hook_path.parent() {
+        if let Err(e) = fs::create_dir_all(parent) {
+            return Err(anyhow!("cannot create {}: {e}", parent.display()));
+        }
+    }
+    if let Err(e) = fs::write(hook_path, POST_RECEIVE_HOOK) {
+        return Err(anyhow!("cannot write {}: {e}", hook_path.display()));
+    }
+    let mode = match fs::metadata(hook_path) {
+        Ok(meta) => meta.permissions().mode(),
+        Err(e) => return Err(anyhow!("cannot stat {}: {e}", hook_path.display())),
+    };
+    match fs::set_permissions(hook_path, fs::Permissions::from_mode(mode | 0o755)) {
+        Ok(()) => Ok(()),
+        Err(e) => Err(anyhow!(
+            "cannot make {} executable: {e}",
+            hook_path.display()
+        )),
+    }
+}
+
 /// Handle git pushes for an app. Sets up bare repo and hook if needed,
 /// then delegates to git-receive-pack directly.
+#[allow(clippy::question_mark)]
 pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
-    let app = crate::util::validate_app_name(app)?;
+    let repo = match repo_dir_name(app) {
+        Ok(repo) => repo,
+        Err(e) => return Err(e),
+    };
 
-    // Ensure symlink is set up for user's bare repo
-    ensure_repo_symlink(paths, &app)?;
+    if let Err(e) = ensure_repo_symlink(paths, &repo) {
+        return Err(e);
+    }
 
-    let riku_repo = paths.git_root.join(&app);
+    let riku_repo = paths.git_root.join(&repo);
 
     // Check for an actual bare-repo marker (HEAD), not just the directory's
     // existence. `git init --bare` always creates the target directory
@@ -27,49 +76,55 @@ pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
     // never run, leaving a directory with a hooks/ folder but no git
     // internals (fatal: '<path>' does not appear to be a git repository).
     if !riku_repo.join("HEAD").exists() {
-        fs::create_dir_all(&paths.git_root)?;
+        if let Err(e) = fs::create_dir_all(&paths.git_root) {
+            return Err(anyhow!("cannot create {}: {e}", paths.git_root.display()));
+        }
         let status = Command::new("git")
             .arg("init")
             .arg("--quiet")
             .arg("--bare")
-            .arg(&app)
+            .arg(&repo)
             .current_dir(&paths.git_root)
-            .status()?;
-        if !status.success() {
-            echo("Error: git init failed.", "red");
+            .status();
+        match status {
+            Ok(status) if status.success() => {}
+            Ok(_) => echo("Error: git init failed.", "red"),
+            Err(e) => return Err(anyhow!("cannot run git init: {e}")),
         }
     }
 
     let hook_path = riku_repo.join("hooks").join("post-receive");
     if !hook_path.exists() {
-        if let Some(parent) = hook_path.parent() {
-            fs::create_dir_all(parent)?;
+        if let Err(e) = install_post_receive_hook(&hook_path) {
+            return Err(e);
         }
-
-        fs::write(&hook_path, POST_RECEIVE_HOOK)?;
-
-        // Make hook executable
-        let meta = fs::metadata(&hook_path)?;
-        let mode = meta.permissions().mode();
-        fs::set_permissions(&hook_path, fs::Permissions::from_mode(mode | 0o755))?;
     }
 
-    // Delegate directly to git-receive-pack (avoiding shell interpolation)
-    let status = Command::new("git-receive-pack")
-        .arg(paths.git_root.join(&app))
-        .status()?;
-
+    let status = match Command::new("git-receive-pack").arg(&riku_repo).status() {
+        Ok(status) => status,
+        Err(e) => return Err(anyhow!("cannot run git-receive-pack: {e}")),
+    };
     std::process::exit(status.code().unwrap_or(1));
 }
 
 /// Handle git upload-pack for an app.
+#[allow(clippy::question_mark)]
 pub fn cmd_git_upload_pack(paths: &RikuPaths, app: &str) -> Result<()> {
-    let app = crate::util::validate_app_name(app)?;
+    let repo = match repo_dir_name(app) {
+        Ok(repo) => repo,
+        Err(e) => return Err(e),
+    };
 
-    // Call git-upload-pack directly (avoiding shell interpolation)
-    let status = Command::new("git-upload-pack")
-        .arg(paths.git_root.join(&app))
-        .status()?;
-
+    let status = match Command::new("git-upload-pack")
+        .arg(paths.git_root.join(&repo))
+        .status()
+    {
+        Ok(status) => status,
+        Err(e) => return Err(anyhow!("cannot run git-upload-pack: {e}")),
+    };
     std::process::exit(status.code().unwrap_or(1));
 }
+
+#[cfg(test)]
+#[path = "receive_pack_tests.rs"]
+mod tests;

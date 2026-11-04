@@ -274,8 +274,8 @@ esac
         riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         // Both worker configs must exist in workers-available
-        let web_cfg = paths.workers_available.join("nodeapp-web-1.toml");
-        let worker_cfg = paths.workers_available.join("nodeapp-worker-1.toml");
+        let web_cfg = paths.workers_available.join("nodeapp@web.1.toml");
+        let worker_cfg = paths.workers_available.join("nodeapp@worker.1.toml");
         assert!(web_cfg.exists(), "web worker config must be created");
         assert!(worker_cfg.exists(), "worker worker config must be created");
 
@@ -287,8 +287,8 @@ esac
         );
 
         // Symlinks in workers-enabled must exist
-        let web_enabled = paths.workers_enabled.join("nodeapp-web-1.toml");
-        let worker_enabled = paths.workers_enabled.join("nodeapp-worker-1.toml");
+        let web_enabled = paths.workers_enabled.join("nodeapp@web.1.toml");
+        let worker_enabled = paths.workers_enabled.join("nodeapp@worker.1.toml");
         assert!(web_enabled.exists(), "web enabled symlink must exist");
         assert!(worker_enabled.exists(), "worker enabled symlink must exist");
 
@@ -317,7 +317,7 @@ esac
         let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
-        let web_cfg = paths.workers_available.join("pyapp-web-1.toml");
+        let web_cfg = paths.workers_available.join("pyapp@web.1.toml");
         assert!(web_cfg.exists(), "web worker config must be created");
 
         let content = fs::read_to_string(&web_cfg)?;
@@ -558,8 +558,8 @@ esac
         let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
-        let cfg1 = paths.workers_available.join("scaledapp-web-1.toml");
-        let cfg2 = paths.workers_available.join("scaledapp-web-2.toml");
+        let cfg1 = paths.workers_available.join("scaledapp@web.1.toml");
+        let cfg2 = paths.workers_available.join("scaledapp@web.2.toml");
         assert!(cfg1.exists(), "web-1 config must exist");
         assert!(cfg2.exists(), "web-2 config must exist");
 
@@ -631,7 +631,7 @@ esac
         let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
-        let web_cfg = paths.workers_available.join("testapp-web-1.toml");
+        let web_cfg = paths.workers_available.join("testapp@web.1.toml");
         assert!(web_cfg.exists(), "web worker config must exist");
         assert!(app_dir.join("Procfile").exists());
         Ok(())
@@ -664,7 +664,7 @@ esac
         let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
-        let web_cfg = paths.workers_available.join("testapp-web-1.toml");
+        let web_cfg = paths.workers_available.join("testapp@web.1.toml");
         assert!(web_cfg.exists(), "web worker config must exist");
         let content = fs::read_to_string(&web_cfg)?;
         assert!(content.contains("gunicorn"), "config must mention gunicorn");
@@ -854,21 +854,21 @@ esac
         assert!(
             paths
                 .workers_available
-                .join("multiproc-web-1.toml")
+                .join("multiproc@web.1.toml")
                 .exists(),
             "web config must exist"
         );
         assert!(
             paths
                 .workers_available
-                .join("multiproc-worker-1.toml")
+                .join("multiproc@worker.1.toml")
                 .exists(),
             "worker config must exist"
         );
         assert!(
             paths
                 .workers_available
-                .join("multiproc-scheduler-1.toml")
+                .join("multiproc@scheduler.1.toml")
                 .exists(),
             "scheduler config must exist"
         );
@@ -899,7 +899,7 @@ esac
             assert!(
                 paths
                     .workers_available
-                    .join(format!("wscaled-worker-{}.toml", i))
+                    .join(format!("wscaled@worker.{}.toml", i))
                     .exists(),
                 "worker-{} config must exist",
                 i
@@ -935,7 +935,7 @@ esac
         assert!(
             paths
                 .workers_available
-                .join("commentapp-web-1.toml")
+                .join("commentapp@web.1.toml")
                 .exists(),
             "web config must exist"
         );
@@ -958,7 +958,7 @@ esac
         let env = HashMap::new();
         riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
-        let cfg = paths.workers_available.join("cmdapp-worker-1.toml");
+        let cfg = paths.workers_available.join("cmdapp@worker.1.toml");
         let content = fs::read_to_string(&cfg)?;
         assert!(
             content.contains("celery"),
@@ -1172,17 +1172,17 @@ esac
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
         assert!(
-            paths.workers_available.join("scaleapp-web-1.toml").exists(),
+            paths.workers_available.join("scaleapp@web.1.toml").exists(),
             "web-1 must exist"
         );
         assert!(
-            paths.workers_available.join("scaleapp-web-2.toml").exists(),
+            paths.workers_available.join("scaleapp@web.2.toml").exists(),
             "web-2 must exist (scaling=2)"
         );
         assert!(
             paths
                 .workers_available
-                .join("scaleapp-worker-1.toml")
+                .join("scaleapp@worker.1.toml")
                 .exists(),
             "worker-1 must exist"
         );
@@ -1246,14 +1246,14 @@ esac
         assert!(
             paths
                 .workers_available
-                .join("pyworkers-web-1.toml")
+                .join("pyworkers@web.1.toml")
                 .exists(),
             "web worker config must exist"
         );
         assert!(
             paths
                 .workers_available
-                .join("pyworkers-worker-1.toml")
+                .join("pyworkers@worker.1.toml")
                 .exists(),
             "celery worker config must exist"
         );

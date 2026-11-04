@@ -18,7 +18,7 @@ fn doctor_reports_legacy_app() {
         "/tmp/myapp.log",
     );
     let text = toml::to_string(&worker).unwrap();
-    std::fs::write(paths.workers_enabled.join("myapp-web-1.toml"), text).unwrap();
+    std::fs::write(paths.workers_enabled.join("myapp@web.1.toml"), text).unwrap();
 
     let check = legacy_containers(&paths);
 

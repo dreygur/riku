@@ -7,16 +7,10 @@
 //! worker's own configuration.
 
 use anyhow::{anyhow, Result};
-use riku_supervisor::config::WorkerConfig;
 
 use crate::config::RikuPaths;
 use crate::rolling::health::{wait_healthy, HealthTarget};
 use crate::router::web_copies;
-
-fn worker_label(config: &WorkerConfig) -> String {
-    let info = &config.worker;
-    format!("{}-{}-{}", info.app, info.kind, info.ordinal)
-}
 
 /// Wait for every restored old web worker port to answer before traffic is
 /// routed to it again.
@@ -35,7 +29,7 @@ pub(crate) fn wait_restored_workers(app: &str, paths: &RikuPaths) -> Result<()> 
             _ => {
                 return Err(anyhow!(
                     "PORT of {} is not a port number",
-                    worker_label(config)
+                    config.worker.name()
                 ))
             }
         };

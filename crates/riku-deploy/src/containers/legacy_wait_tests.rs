@@ -18,7 +18,7 @@ fn write_supervisor_pid(paths: &RikuPaths) {
 
 fn worker(status: ProcessStatus, pid: Option<u32>) -> ProcessStats {
     ProcessStats {
-        process_id: "myapp-web-1".to_string(),
+        process_id: "myapp@web.1".to_string(),
         app: "myapp".to_string(),
         kind: "web".to_string(),
         ordinal: 1,

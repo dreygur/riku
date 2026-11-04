@@ -1,18 +1,16 @@
 //! Which worker config files in `workers-available/` or `workers-enabled/`
 //! belong to an app.
 //!
-//! Files are named `{app}-{kind}-{ordinal}.toml`, and both app names and
-//! Procfile kinds may contain `-`. `shop-api-web-1.toml` could be app `shop`
-//! with kind `api-web` or app `shop-api` with kind `web`, so a `{app}-*`
-//! prefix match hands one app's files to another. Every TOML config riku
-//! writes records its app under `[worker] app`, and that field decides.
+//! Every TOML config riku writes records its app under `[worker] app`, and
+//! that field decides.
 //!
 //! A file with no readable owner (a `.ini` file, an unparsable TOML, a
-//! dangling symlink) falls back to its name, and only when the name is
-//! unambiguous: `{app}-{kind}-{ordinal}` with no `-` in the kind. A
-//! hyphenated kind in such a file is claimed by no app, because callers
+//! dangling symlink) falls back to its name, and only to the
+//! `<app>@<kind>.<n>` form (see [`riku_util::file_names::worker`]), which
+//! names one app. Any other name is claimed by no app, because callers
 //! delete what this returns and leaving a stray file is the safe failure.
 
+use riku_util::file_names::worker::WorkerName;
 use serde::Deserialize;
 use std::fs;
 use std::io::ErrorKind;
@@ -79,17 +77,8 @@ fn recorded_owner(path: &Path) -> Option<String> {
 }
 
 fn named_for(path: &Path, app: &str) -> bool {
-    let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
-        return false;
-    };
-    let Some(rest) = stem
-        .strip_prefix(app)
-        .and_then(|rest| rest.strip_prefix('-'))
-    else {
-        return false;
-    };
-    match rest.split_once('-') {
-        Some((kind, ordinal)) => !kind.is_empty() && ordinal.parse::<u32>().is_ok(),
-        None => false,
-    }
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .and_then(WorkerName::parse)
+        .is_some_and(|name| name.app == app)
 }

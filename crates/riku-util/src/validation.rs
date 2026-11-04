@@ -37,20 +37,30 @@ pub fn ensure_path_within(path: &Path, root: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Sanitize the app name: only allow alphanumeric, dots, underscores, hyphens.
-/// Strip leading slashes, trim trailing whitespace.
-/// Rejects path traversal attempts (`..`) and empty/dot-only names.
-pub fn sanitize_app_name(app: &str) -> String {
-    let stripped = app.trim_start_matches('/');
-    let sanitized: String = stripped
+/// Ending of a bare git repository's directory. A push to `<app>.git` deploys
+/// `<app>` and keeps its repository at `repos/<app>.git`, so no app name may
+/// end with it.
+pub const REPO_SUFFIX: &str = ".git";
+
+fn allowed_chars(app: &str) -> String {
+    app.trim_start_matches('/')
         .chars()
         .filter(|c| c.is_alphanumeric() || *c == '.' || *c == '_' || *c == '-')
         .collect::<String>()
         .trim_end()
-        .to_string();
+        .to_string()
+}
 
-    // Reject path traversal, empty names, and dot-only names (e.g. ".", "..")
-    if sanitized.contains("..") || sanitized.is_empty() || sanitized.trim_matches('.').is_empty() {
+/// Sanitize the app name: only allow alphanumeric, dots, underscores, hyphens.
+/// Strip leading slashes, trim trailing whitespace.
+/// Rejects path traversal attempts (`..`), empty and dot-only names, and
+/// names ending in [`REPO_SUFFIX`].
+pub fn sanitize_app_name(app: &str) -> String {
+    let sanitized = allowed_chars(app);
+    if sanitized.contains("..")
+        || sanitized.trim_matches('.').is_empty()
+        || sanitized.ends_with(REPO_SUFFIX)
+    {
         return String::new();
     }
     sanitized
@@ -58,6 +68,11 @@ pub fn sanitize_app_name(app: &str) -> String {
 
 /// Validate and sanitize app name, returning an error if invalid.
 pub fn validate_app_name(app: &str) -> Result<String> {
+    if allowed_chars(app).ends_with(REPO_SUFFIX) {
+        return Err(anyhow::anyhow!(
+            "Invalid app name '{app}': names ending in {REPO_SUFFIX} are reserved, because a push to <app>{REPO_SUFFIX} deploys <app>"
+        ));
+    }
     let sanitized = sanitize_app_name(app);
     if sanitized.is_empty() {
         return Err(anyhow::anyhow!(
@@ -77,7 +92,10 @@ pub fn exit_if_invalid(app: &str, app_root: &Path) -> Result<String> {
             "App names must contain only alphanumeric characters, dots, underscores, and hyphens.",
             "yellow",
         );
-        echo("Path traversal sequences (..) are not allowed.", "yellow");
+        echo(
+            "Path traversal sequences (..) and a trailing .git are not allowed.",
+            "yellow",
+        );
         process::exit(1);
     }
     if !app_root.join(&app).exists() {
@@ -100,72 +118,5 @@ pub fn exit_if_invalid(app: &str, app_root: &Path) -> Result<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-    use tempfile::TempDir;
-
-    #[test]
-    fn test_sanitize_valid_name() {
-        assert_eq!(sanitize_app_name("my-app"), "my-app");
-        assert_eq!(sanitize_app_name("my_app.v2"), "my_app.v2");
-        assert_eq!(sanitize_app_name("app123"), "app123");
-    }
-
-    #[test]
-    fn test_sanitize_invalid_chars() {
-        assert_eq!(sanitize_app_name("my app!@#"), "myapp");
-        assert_eq!(sanitize_app_name("app/name"), "appname");
-        assert_eq!(sanitize_app_name("a b c"), "abc");
-    }
-
-    #[test]
-    fn test_sanitize_leading_slashes() {
-        assert_eq!(sanitize_app_name("/my-app"), "my-app");
-        assert_eq!(sanitize_app_name("///app"), "app");
-        assert_eq!(sanitize_app_name("/"), "");
-    }
-
-    #[test]
-    fn test_sanitize_trailing_whitespace() {
-        assert_eq!(sanitize_app_name("my-app  "), "my-app");
-        assert_eq!(sanitize_app_name("app\t"), "app");
-    }
-
-    #[test]
-    fn test_sanitize_path_traversal() {
-        assert_eq!(sanitize_app_name(".."), "");
-        assert_eq!(sanitize_app_name("../etc/passwd"), "");
-        assert_eq!(sanitize_app_name("app/../secret"), "");
-        assert_eq!(sanitize_app_name("my..app"), "");
-        assert_eq!(sanitize_app_name("..."), "");
-    }
-
-    #[test]
-    fn test_sanitize_dot_only_names() {
-        assert_eq!(sanitize_app_name("."), "");
-        assert_eq!(sanitize_app_name("..."), "");
-    }
-
-    #[test]
-    fn test_sanitize_valid_dotted_names() {
-        assert_eq!(sanitize_app_name("my-app.v2"), "my-app.v2");
-        assert_eq!(sanitize_app_name(".hidden-app"), ".hidden-app");
-    }
-
-    #[test]
-    fn test_ensure_path_within_accepts_child() {
-        let temp_dir = TempDir::new().unwrap();
-        let child = temp_dir.path().join("subdir");
-        fs::create_dir(&child).unwrap();
-        assert!(ensure_path_within(&child, temp_dir.path()).is_ok());
-    }
-
-    #[test]
-    fn test_ensure_path_within_rejects_outside() {
-        let temp_dir = TempDir::new().unwrap();
-        let root = temp_dir.path().join("root");
-        fs::create_dir(&root).unwrap();
-        assert!(ensure_path_within(temp_dir.path(), &root).is_err());
-    }
-}
+#[path = "validation_tests.rs"]
+mod tests;

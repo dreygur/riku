@@ -1,4 +1,5 @@
-//! File system utilities: recursive copy, directory counting, atomic writes.
+//! File system utilities: recursive copy, directory counting, atomic writes
+//! and symlink swaps.
 
 use anyhow::{Context, Result};
 use std::fs;
@@ -44,6 +45,35 @@ pub fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {
 
     fs::rename(&tmp_path, path)
         .with_context(|| format!("renaming {} to {}", tmp_path.display(), path.display()))?;
+    Ok(())
+}
+
+/// Point the symlink `link` at `target`, replacing whatever `link` was.
+///
+/// The new link is made under a `.tmp-<pid>` name and renamed over `link`, so
+/// `link` always resolves to the old or the new target, never to nothing. The
+/// supervisor watches `workers-enabled`, and a moment without the link would
+/// read as the worker being removed.
+pub fn replace_symlink(target: &Path, link: &Path) -> Result<()> {
+    let dir = link
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let tmp_link = dir.join(format!(
+        ".{}.tmp-{}",
+        link.file_name()
+            .map(|n| n.to_string_lossy())
+            .unwrap_or_default(),
+        std::process::id()
+    ));
+    let _ = fs::remove_file(&tmp_link);
+    if let Err(e) = std::os::unix::fs::symlink(target, &tmp_link) {
+        return Err(anyhow::anyhow!("cannot link {}: {e}", tmp_link.display()));
+    }
+    if let Err(e) = fs::rename(&tmp_link, link) {
+        let _ = fs::remove_file(&tmp_link);
+        return Err(anyhow::anyhow!("cannot replace {}: {e}", link.display()));
+    }
     Ok(())
 }
 

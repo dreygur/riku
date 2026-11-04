@@ -5,6 +5,7 @@ use std::fs;
 
 use anyhow::Result;
 use riku_supervisor::stats::{AppStats, ContainerFacts, ProcessStatus};
+use riku_util::file_names::worker::WorkerName;
 
 use crate::config::RikuPaths;
 use crate::deploy::lock;
@@ -51,11 +52,11 @@ fn detect_engine(paths: &RikuPaths) -> Option<EngineInfo> {
     }
 }
 
-/// Whether `{app}-{kind}-{ordinal}.toml` is still enabled.
+/// Whether the worker's config is still enabled.
 fn worker_config_exists(paths: &RikuPaths, app: &str, kind: &str, ordinal: u32) -> bool {
     paths
         .workers_enabled
-        .join(format!("{app}-{kind}-{ordinal}.toml"))
+        .join(WorkerName::new(app, kind, ordinal).file_name())
         .exists()
 }
 

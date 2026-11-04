@@ -58,10 +58,7 @@ fn show_all_verbose(paths: &RikuPaths, apps: &[String]) -> Result<()> {
                 None => continue,
             };
 
-            let process_name = format!(
-                "{}-{}-{}",
-                worker_config.worker.app, worker_config.worker.kind, worker_config.worker.ordinal
-            );
+            let process_name = worker_config.worker.name().to_string();
             let (pid, status, health) = lookup_process_stats(&stats_data, &process_name);
 
             rows.push(vec![

@@ -192,7 +192,7 @@ fn test_concurrent_deploy_lockout() {
 
     // The winning deploy must have actually run to completion, not just
     // acquired the lock and stopped.
-    let web_cfg = paths.workers_available.join("lockapp-web-1.toml");
+    let web_cfg = paths.workers_available.join("lockapp@web.1.toml");
     assert!(
         web_cfg.exists(),
         "the winning deploy should have written the worker config"

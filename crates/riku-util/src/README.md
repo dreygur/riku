@@ -56,6 +56,11 @@ Component package located at `crates/riku-util/src`.
 - `sanitize_app_name` [validation.rs:sanitize_app_name] (fn)
 - `validate_app_name` [validation.rs:validate_app_name] (fn)
 - `validation.rs` [validation.rs] (and 1 additional symbols)
+- `REPO_SUFFIX` [validation.rs:REPO_SUFFIX] (const)
+- `replace_symlink` [fs.rs:replace_symlink] (fn)
+- `WorkerName` [file_names/worker.rs:WorkerName] (struct)
+- `file_name` [file_names/copy_socket.rs:file_name] (fn)
+- `parse` [file_names/copy_socket.rs:parse] (fn)
 - [cron](./cron/README.md) - Child contract for `cron`
 - [resource_limits](./resource_limits/README.md) - Child contract for `resource_limits`
 
@@ -67,6 +72,8 @@ Component package located at `crates/riku-util/src`.
 - [procfile.rs] Validates and sanitizes identifiers against path traversal and injection
 - [public_key.rs] Validates and sanitizes identifiers against path traversal and injection
 - [validation.rs] Validates and sanitizes identifiers against path traversal and injection
+- [validation.rs] App names never end in `.git` and never hold `@`
+- [file_names] Every file name built from an app name puts `@` right after it, so two apps never share one
 
 ## Side Effects
 - [deploy_logger.rs] Mutates local filesystem (creates/modifies/removes files)

@@ -135,7 +135,7 @@ fn seed_worker(paths: &RikuPaths, app: &str, kind: &str) -> String {
         "/srv",
         "/srv/log",
     );
-    let name = format!("{app}-{kind}-1.toml");
+    let name = format!("{app}@{kind}.1.toml");
     let available = paths.workers_available.join(&name);
     fs::create_dir_all(&paths.workers_available).unwrap();
     fs::create_dir_all(&paths.workers_enabled).unwrap();

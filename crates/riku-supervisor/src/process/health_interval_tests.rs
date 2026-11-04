@@ -51,7 +51,7 @@ fn health_check_honours_interval() {
 
     for _ in 0..2 {
         pm.run_health_checks(
-            vec![("testapp-web-1".to_string(), health.clone())],
+            vec![("testapp@web.1".to_string(), health.clone())],
             &mut vec![],
         );
         std::thread::sleep(std::time::Duration::from_secs(1));

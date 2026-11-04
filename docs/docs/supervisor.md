@@ -32,9 +32,9 @@ The supervisor:
          │
     ┌────┴─────────────────────────────┐
     │  ~/.riku/workers-enabled/        │
-     │  ├── myapp-web-1.toml            │
-     │  ├── myapp-worker-1.toml         │
-     │  └── myapp-cron-1.toml           │
+     │  ├── myapp@web.1.toml            │
+     │  ├── myapp@worker.1.toml         │
+     │  └── myapp@cron.1.toml           │
     └──────────────────────────────────┘
          │
     ┌────┴────┐
@@ -100,7 +100,14 @@ systemctl --user status riku
 
 ## Worker Configuration
 
-Worker configs are TOML files in `~/.riku/workers-enabled/`.
+Worker configs are TOML files in `~/.riku/workers-enabled/`, one per copy of
+a Procfile kind, named `<app>@<kind>.<n>.toml` (`myapp@web.2.toml` is the
+second `web` copy of `myapp`). The same `<app>@<kind>.<n>` is the process id
+in the supervisor's stats and the `instance` of plugin events. App names and
+kinds cannot contain `@`, so no two apps share a file name. The supervisor only runs a file whose
+name matches the `[worker]` table inside it.
+
+A uWSGI copy listens on `~/.riku/nginx/<app>@<n>.sock`.
 
 ### Config Structure
 
@@ -406,7 +413,7 @@ ps aux | grep myapp
 
 1. **Verify cron expression:**
    ```bash
-   cat ~/.riku/workers-enabled/myapp-cron-1.toml
+   cat ~/.riku/workers-enabled/myapp@cron.1.toml
    ```
 
 2. **Check supervisor logs:**

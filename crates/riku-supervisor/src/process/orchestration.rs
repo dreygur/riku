@@ -69,10 +69,7 @@ impl ProcessManager {
         let mut temp_config = new_config;
         temp_config.worker.ordinal =
             canonical_ordinal.wrapping_add(CANARY_ORDINAL_OFFSET + next_version);
-        let temp_key = format!(
-            "{}-{}-{}",
-            temp_config.worker.app, temp_config.worker.kind, temp_config.worker.ordinal
-        );
+        let temp_key = temp_config.worker.name().to_string();
 
         tracing::info!(
             "Deploying generation v{} for {} (temp key {}, probing {}:{}{})",

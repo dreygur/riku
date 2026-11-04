@@ -1,6 +1,6 @@
 //! [`CopyRuntime`] for the supervised copies of one web facing Procfile kind.
 //!
-//! A copy is an enabled `<app>-<kind>-<n>.toml` worker config. Starting one
+//! A copy is an enabled `<app>@<kind>.<n>.toml` worker config. Starting one
 //! writes the config into a free slot and the supervisor spawns it; stopping
 //! one removes the enabled symlink and waits for the supervisor to report the
 //! process gone. An existing config is never rewritten, so the supervisor's
@@ -20,6 +20,7 @@ use anyhow::{anyhow, Result};
 use riku_container::types::CopyIndex;
 use riku_supervisor::config::WorkerConfig;
 use riku_util::backend::Backend;
+use riku_util::file_names::worker::WorkerName;
 
 use super::files::write_worker_config;
 use super::ports::enabled_ports;
@@ -44,8 +45,8 @@ pub(crate) struct ProcessRuntime<'a> {
 }
 
 impl ProcessRuntime<'_> {
-    fn process_id(&self, copy: CopyIndex) -> String {
-        format!("{}-{}-{copy}", self.app, self.kind)
+    fn worker_name(&self, copy: CopyIndex) -> WorkerName {
+        WorkerName::new(self.app, self.kind, copy.get())
     }
 
     fn live_copy(&self, config: &WorkerConfig) -> Result<Option<LiveCopy>> {
@@ -136,11 +137,9 @@ impl CopyRuntime for ProcessRuntime<'_> {
     }
 
     fn stop(&mut self, copy: &LiveCopy) -> Result<()> {
-        let process_id = self.process_id(copy.copy);
-        let enabled = self
-            .paths
-            .workers_enabled
-            .join(format!("{process_id}.toml"));
+        let name = self.worker_name(copy.copy);
+        let process_id = name.to_string();
+        let enabled = self.paths.workers_enabled.join(name.file_name());
         let grace = self.grace_period(&enabled);
         match fs::remove_file(&enabled) {
             Ok(()) => {}

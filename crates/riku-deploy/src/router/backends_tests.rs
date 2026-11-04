@@ -21,7 +21,7 @@ fn enable_worker(paths: &RikuPaths, app: &str, kind: &str, copy: u32, pairs: &[(
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
     let config = create_worker_config(app, kind, "run", copy, env, "/srv/app", "/srv/log");
-    let name = format!("{app}-{kind}-{copy}.toml");
+    let name = format!("{app}@{kind}.{copy}.toml");
     let file = paths.workers_enabled.join(name);
     fs::write(file, toml::to_string(&config).unwrap()).unwrap();
 }
@@ -64,7 +64,7 @@ fn wsgi_copies_get_own_socket() {
 
     let backends = current(&paths, "myapp").unwrap();
 
-    let socket = |n: u32| paths.nginx_root.join(format!("myapp.{n}.sock"));
+    let socket = |n: u32| paths.nginx_root.join(format!("myapp@{n}.sock"));
     assert_eq!(
         backends,
         vec![Backend::Unix(socket(1)), Backend::Unix(socket(2))]

@@ -98,7 +98,7 @@ fn each_wsgi_copy_listens_on_its_own_socket() {
 
     let env = build_worker_env("shop", "wsgi", second, &HashMap::new(), &[], &paths).unwrap();
 
-    let expected = paths.nginx_root.join("shop.2.sock");
+    let expected = paths.nginx_root.join("shop@2.sock");
     assert_eq!(env["UWSGI_SOCKET"], expected.to_str().unwrap());
 }
 

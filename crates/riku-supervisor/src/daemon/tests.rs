@@ -16,7 +16,7 @@ fn write_sleep_worker_config(config_dir: &std::path::Path, log_dir: &std::path::
         log_dir.join("web.1.log").to_str().unwrap(),
     );
     let toml_str = toml::to_string(&config).unwrap();
-    std::fs::write(config_dir.join("sighuptest-web-1.toml"), toml_str).unwrap();
+    std::fs::write(config_dir.join("sighuptest@web.1.toml"), toml_str).unwrap();
 }
 
 /// End-to-end regression test for the SIGHUP hot-reload path: fires a
@@ -54,7 +54,7 @@ fn test_sighup_triggers_reload_without_disturbing_unchanged_worker() {
         .process_manager
         .list_processes()
         .into_iter()
-        .find(|p| p.process_id == "sighuptest-web-1")
+        .find(|p| p.process_id == "sighuptest@web.1")
         .expect("worker should be registered before reload")
         .pid;
 
@@ -95,7 +95,7 @@ fn test_sighup_triggers_reload_without_disturbing_unchanged_worker() {
         .process_manager
         .list_processes()
         .into_iter()
-        .find(|p| p.process_id == "sighuptest-web-1")
+        .find(|p| p.process_id == "sighuptest@web.1")
         .expect("worker should still be registered after reload")
         .pid;
     assert_eq!(
@@ -116,7 +116,7 @@ fn rewritten_toml_resets_restart_count() {
     std::fs::create_dir_all(&config_dir).unwrap();
     std::fs::create_dir_all(&log_dir).unwrap();
 
-    let toml_path = config_dir.join("testapp-web-1.toml");
+    let toml_path = config_dir.join("testapp@web.1.toml");
     let config = create_worker_config(
         "testapp",
         "web",
@@ -135,7 +135,7 @@ fn rewritten_toml_resets_restart_count() {
     // the count on its own.
     let mut supervisor = Supervisor::new(config_dir.clone()).unwrap();
 
-    let process_id = "testapp-web-1";
+    let process_id = "testapp@web.1";
     supervisor.process_manager.stats_mut().register_process(
         process_id.to_string(),
         "testapp".to_string(),

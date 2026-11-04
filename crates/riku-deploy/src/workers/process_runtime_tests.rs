@@ -32,7 +32,7 @@ fn enabled_web(paths: &RikuPaths) -> Vec<String> {
         .unwrap()
         .flatten()
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
-        .filter(|name| name.starts_with("myapp-web-") && name.ends_with(".toml"))
+        .filter(|name| name.starts_with("myapp@web.") && name.ends_with(".toml"))
         .collect();
     names.sort();
     names
@@ -70,7 +70,7 @@ fn web_copy_overlaps_on_deploy() {
     let enabled = enabled_web(&paths);
     assert_eq!(
         enabled,
-        ["myapp-web-2.toml"],
+        ["myapp@web.2.toml"],
         "the new copy should take the free slot"
     );
     let text = fs::read_to_string(paths.workers_enabled.join(&enabled[0])).unwrap();
@@ -103,5 +103,5 @@ fn pinned_port_keeps_stop_first() {
         "two copies ran on one pinned port; published: {:?}",
         routes.published
     );
-    assert_eq!(enabled_web(&paths), ["myapp-web-1.toml"]);
+    assert_eq!(enabled_web(&paths), ["myapp@web.1.toml"]);
 }

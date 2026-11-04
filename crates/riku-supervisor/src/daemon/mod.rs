@@ -3,6 +3,7 @@
 //! Monitors `workers-enabled/` for TOML config changes, spawns/restarts processes,
 //! drives log rotation, cron scheduling, and the periodic stats writer.
 
+mod config_file;
 pub mod config_watcher;
 pub mod container_tick;
 pub mod cron_tasks;

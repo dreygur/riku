@@ -361,7 +361,7 @@ max_restarts = 5
 
     // extra: worker config file naming convention
 
-    /// Regression: worker config files must follow the `<app>.<kind>.<ordinal>.toml`
+    /// Regression: worker config files follow the `<app>@<kind>.<ordinal>.toml`
     /// naming convention so the supervisor can glob them reliably.
     #[test]
     fn worker_config_filename_convention() {
@@ -369,11 +369,9 @@ max_restarts = 5
         let workers_enabled = tmp.path().join("workers-enabled");
         fs::create_dir_all(&workers_enabled).unwrap();
 
-        let app = "myapp";
-        let kind = "web";
-        let ordinal: u32 = 1;
-
-        let filename = format!("{}.{}.{}.toml", app, kind, ordinal);
+        let filename =
+            riku::util::file_names::worker::WorkerName::new("myapp", "web", 1).file_name();
+        assert_eq!(filename, "myapp@web.1.toml");
         let config_path = workers_enabled.join(&filename);
 
         fs::write(&config_path, "[worker]\napp = \"myapp\"\n").unwrap();

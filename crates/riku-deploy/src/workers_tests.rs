@@ -103,10 +103,10 @@ fn release_and_preflight_run_once_and_never_become_workers() {
     deploy(&app_path, &HashMap::new(), &paths, None).unwrap();
 
     for kind in ["release", "preflight"] {
-        let config = paths.workers_available.join(format!("myapp-{kind}-1.toml"));
+        let config = paths.workers_available.join(format!("myapp@{kind}.1.toml"));
         assert!(!config.exists(), "{kind} got a worker config");
     }
-    assert!(paths.workers_available.join("myapp-web-1.toml").exists());
+    assert!(paths.workers_available.join("myapp@web.1.toml").exists());
 }
 
 #[test]
@@ -121,7 +121,7 @@ fn runs_the_plugin_start_command_as_web_without_a_procfile() {
     let start = "docker compose -f compose.yml up";
     deploy(&app_path, &HashMap::new(), &paths, Some(start)).unwrap();
 
-    let config = fs::read_to_string(paths.workers_available.join("myapp-web-1.toml"))
+    let config = fs::read_to_string(paths.workers_available.join("myapp@web.1.toml"))
         .expect("web worker config should be created");
     assert!(
         config.contains(start),
@@ -143,7 +143,7 @@ fn test_create_workers_generic_worker_kind_creates_config() -> anyhow::Result<()
     let env = HashMap::new();
     create_workers_generic("myapp", &app_path, &env, &paths, None)?;
 
-    let config_path = paths.workers_available.join("myapp-worker-1.toml");
+    let config_path = paths.workers_available.join("myapp@worker.1.toml");
     assert!(config_path.exists(), "worker config should be created");
     Ok(())
 }
@@ -162,7 +162,7 @@ fn test_create_workers_generic_symlink_created_in_enabled() -> anyhow::Result<()
     let env = HashMap::new();
     create_workers_generic("myapp", &app_path, &env, &paths, None)?;
 
-    let symlink_path = paths.workers_enabled.join("myapp-worker-1.toml");
+    let symlink_path = paths.workers_enabled.join("myapp@worker.1.toml");
     assert!(
         symlink_path.exists(),
         "symlink in workers_enabled should exist"
@@ -201,7 +201,7 @@ fn test_auto_restart_false_skips_removal_of_existing_configs() -> anyhow::Result
     fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
     fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
 
-    let existing = paths.workers_enabled.join("myapp-web-1.toml");
+    let existing = paths.workers_enabled.join("myapp@web.1.toml");
     fs::write(&existing, "[worker]\n")?;
 
     fs::write(app_path.join("Procfile"), "worker: echo hello\n")?;
@@ -261,7 +261,7 @@ fn refuses_to_scale_web_past_one_on_a_pinned_port() {
     let err = create_workers_generic("myapp", &app_path, &env, &paths, None).unwrap_err();
 
     assert!(err.to_string().contains("3000"), "{err}");
-    assert!(!paths.workers_available.join("myapp-web-1.toml").exists());
+    assert!(!paths.workers_available.join("myapp@web.1.toml").exists());
 }
 
 fn pinned_app(tmp: &TempDir) -> (RikuPaths, std::path::PathBuf) {
@@ -285,7 +285,7 @@ fn custom_socket_refuses_scale() {
     let err = create_workers_generic("myapp", &app_path, &env, &paths, None).unwrap_err();
 
     assert!(err.to_string().contains("RIKU_NGINX_SOCKET"), "{err}");
-    assert!(!paths.workers_available.join("myapp-wsgi-1.toml").exists());
+    assert!(!paths.workers_available.join("myapp@wsgi.1.toml").exists());
 }
 
 #[test]
@@ -297,7 +297,7 @@ fn stale_custom_socket_does_not_stop_a_tcp_web_app_scaling() {
 
     deploy(&app_path, &env, &paths, None).unwrap();
 
-    assert!(paths.workers_available.join("myapp-web-2.toml").exists());
+    assert!(paths.workers_available.join("myapp@web.2.toml").exists());
 }
 
 #[test]

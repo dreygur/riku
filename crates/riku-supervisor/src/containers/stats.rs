@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use riku_container::engine::{ContainerInfo, ContainerState, ContainerStats};
+use riku_util::file_names::worker::WorkerName;
 
 use super::tally::RestartTally;
 use crate::stats::types::{ContainerFacts, HealthStatus, ProcessStats, ProcessStatus};
@@ -100,7 +101,7 @@ pub(crate) fn container_rows(
         };
 
         rows.push(ProcessStats {
-            process_id: format!("{app}-{service}-{copy}"),
+            process_id: WorkerName::new(app, service.as_str(), copy.get()).to_string(),
             app: app.clone(),
             kind: service.as_str().to_string(),
             ordinal: copy.get(),

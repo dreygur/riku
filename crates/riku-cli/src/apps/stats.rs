@@ -128,10 +128,7 @@ pub fn cmd_stats_app(paths: &RikuPaths, app: &str) -> Result<()> {
             Err(_) => continue,
         };
 
-        let process_name = format!(
-            "{}-{}-{}",
-            worker_config.worker.app, worker_config.worker.kind, worker_config.worker.ordinal
-        );
+        let process_name = worker_config.worker.name().to_string();
         println!(
             "{:<30} {:<10} {:<10}",
             process_name, worker_config.worker.kind, "running"

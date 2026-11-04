@@ -23,11 +23,11 @@ fn migration_reuses_volume_names() {
         "db run call must mount myapp_data: {db_run}"
     );
 
-    let enabled_toml = server.paths.workers_enabled.join("myapp-web-1.toml");
+    let enabled_toml = server.paths.workers_enabled.join("myapp@web.1.toml");
     let enabled_migrating = server
         .paths
         .workers_enabled
-        .join("myapp-web-1.toml.migrating");
+        .join("myapp@web.1.toml.migrating");
     assert!(
         fs::symlink_metadata(&enabled_toml).is_err(),
         "legacy worker .toml link must be gone from workers_enabled"
@@ -135,14 +135,14 @@ fn failed_start_restores_old_stack() {
         "error must indicate stack was restored: {err:#}"
     );
 
-    let enabled_toml = server.paths.workers_enabled.join("myapp-web-1.toml");
+    let enabled_toml = server.paths.workers_enabled.join("myapp@web.1.toml");
     let enabled_migrating = server
         .paths
         .workers_enabled
-        .join("myapp-web-1.toml.migrating");
+        .join("myapp@web.1.toml.migrating");
     assert!(
         enabled_toml.exists(),
-        "myapp-web-1.toml must be restored in workers_enabled"
+        "myapp@web.1.toml must be restored in workers_enabled"
     );
     assert!(
         !enabled_migrating.exists(),

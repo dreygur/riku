@@ -58,7 +58,7 @@ fn stats_rows_carry_engine_state() {
     assert_eq!(rows.len(), 2, "must generate exactly two rows");
 
     let row1 = &rows[0];
-    assert_eq!(row1.process_id, "myapp-web-1");
+    assert_eq!(row1.process_id, "myapp@web.1");
     assert_eq!(row1.kind, "web");
     assert_eq!(row1.ordinal, 1);
     assert_eq!(row1.pid, None);
@@ -76,7 +76,7 @@ fn stats_rows_carry_engine_state() {
     assert_eq!(facts1.exit_code, None);
 
     let row2 = &rows[1];
-    assert_eq!(row2.process_id, "myapp-web-2");
+    assert_eq!(row2.process_id, "myapp@web.2");
     assert_eq!(row2.status, ProcessStatus::Crashed);
 
     let facts2 = row2

@@ -11,18 +11,14 @@ use super::web_env::is_web_facing;
 use crate::config::RikuPaths;
 use crate::supervisor::config::{app_worker_configs, create_worker_config, WorkerConfig};
 use crate::util::echo;
+use crate::util::file_names::worker::WorkerName;
 
-/// The kind in a `<app>-<kind>-<n>.<ext>` file name, taken from the right
-/// because app names contain hyphens.
-fn file_kind(path: &Path) -> Option<&str> {
-    let stem = match path.file_stem().and_then(|stem| stem.to_str()) {
-        Some(stem) => stem,
-        None => return None,
-    };
-    match stem.rsplit_once('-') {
-        Some((rest, _ordinal)) => rest.rsplit_once('-').map(|(_, kind)| kind),
-        None => None,
-    }
+/// Whether `path` is named after a copy of a web facing kind.
+fn is_web_copy(path: &Path) -> bool {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .and_then(WorkerName::parse)
+        .is_some_and(|name| is_web_facing(&name.kind))
 }
 
 /// Remove existing worker symlinks from `workers_enabled` to trigger a restart.
@@ -32,7 +28,7 @@ fn file_kind(path: &Path) -> Option<&str> {
 pub(super) fn remove_stale_configs(app: &str, paths: &RikuPaths) {
     let stale = app_worker_configs(&paths.workers_enabled, app)
         .into_iter()
-        .filter(|entry| !file_kind(entry).is_some_and(is_web_facing));
+        .filter(|entry| !is_web_copy(entry));
     for entry in stale {
         if let Err(e) = fs::remove_file(&entry) {
             tracing::warn!("Could not remove stale worker config {:?}: {}", entry, e);
@@ -66,7 +62,7 @@ pub(super) fn write_worker_config(
         &log_path.to_string_lossy(),
     );
 
-    let filename = format!("{}-{}-{}.toml", app, kind, index);
+    let filename = config.worker.name().file_name();
     let available = paths.workers_available.join(&filename);
     let enabled = paths.workers_enabled.join(&filename);
 
@@ -77,21 +73,8 @@ pub(super) fn write_worker_config(
     if let Err(e) = crate::util::write_atomic(&available, serialized.as_bytes()) {
         return Err(anyhow!("cannot write {}: {e}", available.display()));
     }
-
-    // Atomic symlink swap: create the new symlink under a temp name, then
-    // `rename` it over `enabled`. A crash or concurrent reader between a
-    // `remove_file` and a fresh `symlink` would otherwise see `enabled`
-    // briefly missing entirely; `rename` guarantees the path always
-    // resolves to either the old or the new symlink, never nothing.
-    let tmp_link = paths
-        .workers_enabled
-        .join(format!(".{}.tmp-{}", filename, std::process::id()));
-    let _ = fs::remove_file(&tmp_link);
-    if let Err(e) = std::os::unix::fs::symlink(&available, &tmp_link) {
-        return Err(anyhow!("cannot link {}: {e}", tmp_link.display()));
-    }
-    if let Err(e) = fs::rename(&tmp_link, &enabled) {
-        return Err(anyhow!("cannot enable {}: {e}", enabled.display()));
+    if let Err(e) = crate::util::fs::replace_symlink(&available, &enabled) {
+        return Err(anyhow!("cannot enable {filename}: {e}"));
     }
 
     echo(
