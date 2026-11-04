@@ -34,7 +34,8 @@ git push riku main      # that's the deploy
 ## What it does
 
 - **`git push` to deploy**: language detected, built, supervised, and routed automatically.
-- **Many languages, no recompile**: Python, Node, Ruby, Go, Rust, Java, Clojure, and containers, each as an installable runtime plugin.
+- **Many languages, no recompile**: Python, Node, Ruby, Go, Rust, Java, and Clojure, each as an installable runtime plugin.
+- **Containers built in**: an app with a compose file or a Dockerfile is built and run by riku itself on Docker or Podman, no plugin needed.
 - **Built-in process supervisor**: health checks, restarts, scaling, and cron, written in Rust (no uWSGI Emperor).
 - **Zero-downtime deploys**: new processes are health-gated before old ones are retired.
 - **Rollback & backups**: `riku rollback`, `riku backup`/`riku restore`.
@@ -47,11 +48,16 @@ git push riku main      # that's the deploy
 ## Requirements
 
 - Linux (Debian/Ubuntu/RHEL/Arch)
-- 1 CPU core, 256 MB RAM, ~50 MB disk for Riku itself
+- 1 CPU core, 256 MB RAM, about 14 MB disk for Riku itself
 
-Base footprint is roughly 30 to 60 MB before you deploy anything (supervisor + binary +
-nginx). Per-app memory is up to your apps. If you want numbers for your own hardware,
-the scripts in [`benches/`](benches/) measure it rather than guess.
+Measured on a 4 core x86_64 Ubuntu server, idle with no apps: the stripped `riku` binary
+is 13.6 MB (a 5.9 MB download), the supervisor uses about 10 MB of RAM, and the
+supervisor plus nginx (master and 4 workers) about 22 MB. The binary plus `~/.riku`
+take about 14 MB of disk. With Docker installed, the supervisor also keeps one
+`docker events` process and one `docker logs` process per running container, about
+32 MB RSS each, of which about 10 MB is private to that process. Per-app memory is up
+to your apps. For numbers on your own hardware, the scripts in [`benches/`](benches/)
+measure it rather than guess.
 
 ## Install
 
@@ -150,7 +156,9 @@ set with `riku install-plugins` (or pick some: `riku install-plugins --plugins n
 | `rust-lang` | `Cargo.toml` | cargo build |
 | `java` | `pom.xml`, `build.gradle` | Maven / Gradle |
 | `clojure` | `project.clj`, `deps.edn` | Leiningen / Clojure CLI |
-| `container` | `Dockerfile`, `Containerfile`, a compose file | Docker / Podman |
+
+An app with a compose file, a `Dockerfile` or a `Containerfile` needs no plugin: riku
+builds and runs it as containers itself (see [`docs/docs/runtimes.md`](docs/docs/runtimes.md#container)).
 
 Detection runs in order: set `RIKU_RUNTIME=node` to skip it. To add your own language,
 drop an executable into `~/.riku/plugins/` implementing four subcommands:
