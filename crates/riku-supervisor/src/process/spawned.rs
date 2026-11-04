@@ -3,12 +3,15 @@
 use anyhow::Result;
 use nix::sys::signal::Signal;
 use nix::unistd::Pid;
+use std::path::Path;
 use std::process::Child;
 use std::thread;
 use std::time::Duration;
 
 use crate::cgroups::WorkerCgroup;
 use crate::config::{HealthCheck, WorkerConfig};
+
+use super::pid_file::WorkerPidFile;
 
 /// Represents a spawned application process with metadata.
 pub struct SpawnedProcess {
@@ -28,18 +31,34 @@ pub struct SpawnedProcess {
     /// the moment `try_wait()` first observes the process has died, used to
     /// annotate the `app.restarted` event fired for that crash.
     pub last_exit_code: Option<i32>,
+    /// Marker telling deploy this process is alive. Removed in `Drop` once
+    /// the child is reaped, never earlier.
+    pid_file: Option<WorkerPidFile>,
 }
 
 impl SpawnedProcess {
     /// Create a new SpawnedProcess instance, attaching the cgroup that was
-    /// provisioned for it (if isolation is enabled for this worker).
+    /// provisioned for it (if isolation is enabled for this worker) and
+    /// writing its pid marker into `pid_dir` when one is given.
+    #[allow(clippy::question_mark)]
     pub fn new_with_cgroup(
         child: Child,
         config: WorkerConfig,
         cgroup: Option<WorkerCgroup>,
+        pid_dir: Option<&Path>,
     ) -> Result<Self> {
         let pid = Pid::from_raw(child.id() as i32);
         let health_check_config = config.options.health_check.clone();
+        let pid_file = match pid_dir {
+            Some(dir) => {
+                let process_id = config.worker.name().to_string();
+                match WorkerPidFile::create(dir, &process_id, child.id()) {
+                    Ok(marker) => Some(marker),
+                    Err(e) => return Err(e),
+                }
+            }
+            None => None,
+        };
 
         Ok(SpawnedProcess {
             pid,
@@ -52,6 +71,7 @@ impl SpawnedProcess {
             last_health_probe: None,
             cgroup,
             last_exit_code: None,
+            pid_file,
         })
     }
 
@@ -121,5 +141,6 @@ impl Drop for SpawnedProcess {
         if let Some(cgroup) = &self.cgroup {
             let _ = cgroup.cleanup();
         }
+        drop(self.pid_file.take());
     }
 }

@@ -10,6 +10,7 @@ use threadpool::ThreadPool;
 
 use crate::cron::CronScheduler;
 use crate::log_rotation::{LogRotationConfig, LogRotator};
+use crate::process::pid_file::worker_pid_dir;
 use crate::process::ProcessManager;
 
 use super::Supervisor;
@@ -34,7 +35,7 @@ impl Supervisor {
         let router_file = riku_root.join(riku_config::router::ROUTER_FILE);
 
         let process_manager = match ProcessManager::new() {
-            Ok(pm) => pm,
+            Ok(pm) => pm.with_pid_dir(worker_pid_dir(&riku_root)),
             Err(e) => return Err(e.context("cannot start the process manager")),
         };
 

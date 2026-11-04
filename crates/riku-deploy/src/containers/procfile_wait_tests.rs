@@ -1,59 +1,19 @@
 use std::fs;
-use std::time::{Duration, SystemTime};
-
-use chrono::Utc;
+use std::process::{Child, Command};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use crate::config::RikuPaths;
 use crate::containers::mock_state::{mock_server, MockServer};
 use crate::containers::mock_workers::procfile_workers;
 use crate::containers::procfile_workers::ProcfileWorkers;
-use crate::supervisor::stats::{AppStats, ProcessStats, ProcessStatus};
+use crate::supervisor::process::pid_file::{worker_pid_dir, WorkerPidFile};
 
-const LIMIT: Duration = Duration::from_millis(300);
+const LIMIT: Duration = Duration::from_secs(3);
 
 fn write_supervisor_pid(paths: &RikuPaths) {
     let path = paths.riku_root.join("supervisor.pid");
     fs::write(path, std::process::id().to_string()).unwrap();
-}
-
-fn worker(status: ProcessStatus, pid: Option<u32>) -> ProcessStats {
-    ProcessStats {
-        process_id: "myapp@web.1".to_string(),
-        app: "myapp".to_string(),
-        kind: "web".to_string(),
-        ordinal: 1,
-        pid,
-        status,
-        ..Default::default()
-    }
-}
-
-fn write_stats(paths: &RikuPaths, process: ProcessStats) {
-    let running = u32::from(process.status == ProcessStatus::Running);
-    let stats = vec![AppStats {
-        app: "myapp".to_string(),
-        total_processes: 1,
-        running_processes: running,
-        healthy_processes: 0,
-        total_restarts: 0,
-        total_memory_bytes: 0,
-        total_cpu_time_ms: 0,
-        processes: vec![process],
-        last_updated: Utc::now(),
-    }];
-    fs::write(
-        paths.riku_root.join("stats.json"),
-        serde_json::to_string(&stats).unwrap(),
-    )
-    .unwrap();
-}
-
-fn set_stats_mtime(paths: &RikuPaths, mtime: SystemTime) {
-    let file = fs::OpenOptions::new()
-        .write(true)
-        .open(paths.riku_root.join("stats.json"))
-        .unwrap();
-    file.set_modified(mtime).unwrap();
 }
 
 fn procfile_server() -> (tempfile::TempDir, MockServer, ProcfileWorkers) {
@@ -64,11 +24,20 @@ fn procfile_server() -> (tempfile::TempDir, MockServer, ProcfileWorkers) {
     (tmp, server, workers)
 }
 
+/// A long sleep standing in for a worker, with the marker the supervisor
+/// would have written for it.
+fn running_worker(paths: &RikuPaths) -> (Child, WorkerPidFile) {
+    let child = Command::new("sleep").arg("30").spawn().unwrap();
+    let dir = worker_pid_dir(&paths.riku_root);
+    let marker = WorkerPidFile::create(&dir, "myapp@web.1", child.id()).unwrap();
+    (child, marker)
+}
+
 #[test]
 fn no_running_supervisor_means_nothing_to_wait_for() {
     let (_tmp, server, workers) = procfile_server();
 
-    let outcome = workers.wait_stopped_since(&server.paths, SystemTime::now(), LIMIT);
+    let outcome = workers.wait_stopped_within(&server.paths, LIMIT);
 
     assert!(
         outcome.is_ok(),
@@ -77,45 +46,45 @@ fn no_running_supervisor_means_nothing_to_wait_for() {
 }
 
 #[test]
-fn stop_wait_ignores_stats_older_than_the_park() {
+fn returns_as_soon_as_the_supervisor_reaps_the_worker() {
     let (_tmp, server, workers) = procfile_server();
     write_supervisor_pid(&server.paths);
-    let parked_at = SystemTime::now();
-    write_stats(&server.paths, worker(ProcessStatus::Stopped, None));
-    set_stats_mtime(&server.paths, parked_at - Duration::from_secs(10));
+    let (mut child, marker) = running_worker(&server.paths);
+    let reaper = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(300));
+        child.kill().unwrap();
+        child.wait().unwrap();
+        drop(marker);
+    });
 
-    let outcome = workers.wait_stopped_since(&server.paths, parked_at, LIMIT);
+    let start = Instant::now();
+    let outcome = workers.wait_stopped_within(&server.paths, LIMIT);
+    let waited = start.elapsed();
+    reaper.join().unwrap();
 
+    assert!(outcome.is_ok(), "reaped worker must release: {outcome:?}");
     assert!(
-        outcome.is_err(),
-        "a snapshot older than the park proves nothing"
+        waited < Duration::from_secs(1),
+        "waited {waited:?} for a worker reaped after 300 ms"
     );
 }
 
 #[test]
-fn running_worker_blocks_until_snapshot_shows_it_stopped() {
+fn live_worker_times_out_with_the_app_named() {
     let (_tmp, server, workers) = procfile_server();
     write_supervisor_pid(&server.paths);
-    let parked_at = SystemTime::now();
-    let mut child = std::process::Command::new("sleep")
-        .arg("5")
-        .spawn()
-        .unwrap();
-    write_stats(
-        &server.paths,
-        worker(ProcessStatus::Running, Some(child.id())),
-    );
+    let (mut child, _marker) = running_worker(&server.paths);
 
-    let blocked = workers.wait_stopped_since(&server.paths, parked_at, LIMIT);
+    let outcome = workers.wait_stopped_within(&server.paths, Duration::from_millis(300));
 
     let _ = child.kill();
     let _ = child.wait();
-    assert!(blocked.is_err(), "a running worker must block the wait");
-
-    write_stats(&server.paths, worker(ProcessStatus::Stopped, None));
-    let released = workers.wait_stopped_since(&server.paths, parked_at, LIMIT);
+    let message = format!(
+        "{:#}",
+        outcome.expect_err("a live worker must block the wait")
+    );
     assert!(
-        released.is_ok(),
-        "stopped snapshot must release: {released:?}"
+        message.contains("old workers of 'myapp' did not stop"),
+        "unclear timeout error: {message}"
     );
 }

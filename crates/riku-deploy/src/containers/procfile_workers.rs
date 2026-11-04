@@ -6,39 +6,23 @@
 //! reload stops it. A parked link left by an interrupted retire is picked up
 //! again here.
 
-use std::collections::BTreeSet;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::Path;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use riku_util::file_names::worker::WorkerName;
 
 use super::worker_files::{enabled_entries, read_worker};
 use crate::config::RikuPaths;
-use crate::supervisor::stats::{read_stats_file, ProcessStats, ProcessStatus};
-use crate::supervisor_ctl::{notify_supervisor_reload, pid_is_alive, supervisor_is_running};
+use crate::supervisor::process::pid_file::{app_has_live_worker, worker_pid_dir};
+use crate::supervisor_ctl::{notify_supervisor_reload, supervisor_is_running};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
 const STOP_EXTRA: Duration = Duration::from_secs(30);
 const ENABLED: &str = ".toml";
 const PARKED: &str = ".toml.migrating";
-
-fn snapshot_is_fresh(stats_file: &Path, parked_at: SystemTime) -> bool {
-    match fs::metadata(stats_file).and_then(|meta| meta.modified()) {
-        Ok(modified) => modified >= parked_at,
-        Err(_) => false,
-    }
-}
-
-fn is_running(process: &ProcessStats) -> bool {
-    let alive = process
-        .pid
-        .and_then(|pid| i32::try_from(pid).ok())
-        .is_some_and(pid_is_alive);
-    process.status == ProcessStatus::Running || alive
-}
 
 fn rename(paths: &RikuPaths, name: &str, from: &str, to: &str) -> Result<()> {
     let source = paths.workers_enabled.join(format!("{name}{from}"));
@@ -136,37 +120,23 @@ impl ProcfileWorkers {
         Ok(())
     }
 
-    fn any_running(&self, stats_file: &Path) -> bool {
-        let Some(apps) = read_stats_file(stats_file) else {
-            return true;
-        };
-        let names: BTreeSet<&str> = self.names.iter().map(String::as_str).collect();
-        apps.iter()
-            .filter(|stats| stats.app == self.app)
-            .flat_map(|stats| stats.processes.iter())
-            .filter(|process| names.contains(process.process_id.as_str()))
-            .any(is_running)
-    }
-
-    /// Wait until a supervisor snapshot taken after `parked_at` shows none of
-    /// these workers running, or fail once `limit` has passed. The supervisor
-    /// reloads before it writes the next snapshot, so a fresh snapshot proves
-    /// the workers it was told to stop are stopped. Without a running
-    /// supervisor there is nothing to wait for.
-    pub(crate) fn wait_stopped_since(
-        &self,
-        paths: &RikuPaths,
-        parked_at: SystemTime,
-        limit: Duration,
-    ) -> Result<()> {
+    /// Wait until the supervisor has reaped every worker process of the app,
+    /// or fail once `limit` has passed. The supervisor drops a process's pid
+    /// marker only after reaping it, so no live marker means nothing of the
+    /// old app still runs. Every Procfile worker of the app is parked, so
+    /// waiting on the whole app also covers a canary copy under a temporary
+    /// ordinal. Without a running supervisor there is nothing to wait for.
+    pub(crate) fn wait_stopped_within(&self, paths: &RikuPaths, limit: Duration) -> Result<()> {
         if !supervisor_is_running(paths) {
             return Ok(());
         }
-        let stats_file = paths.riku_root.join("stats.json");
+        let pid_dir = worker_pid_dir(&paths.riku_root);
         let start = Instant::now();
         loop {
-            if snapshot_is_fresh(&stats_file, parked_at) && !self.any_running(&stats_file) {
-                return Ok(());
+            match app_has_live_worker(&pid_dir, &self.app) {
+                Ok(false) => return Ok(()),
+                Ok(true) => {}
+                Err(e) => return Err(anyhow!("cannot read {}: {e}", pid_dir.display())),
             }
             if start.elapsed() >= limit {
                 return Err(anyhow!(
@@ -181,8 +151,8 @@ impl ProcfileWorkers {
 
     /// Wait for the old workers to stop, up to the longest grace period plus
     /// 30 s.
-    pub(crate) fn wait_stopped(&self, paths: &RikuPaths, parked_at: SystemTime) -> Result<()> {
-        self.wait_stopped_since(paths, parked_at, self.longest_grace + STOP_EXTRA)
+    pub(crate) fn wait_stopped(&self, paths: &RikuPaths) -> Result<()> {
+        self.wait_stopped_within(paths, self.longest_grace + STOP_EXTRA)
     }
 }
 

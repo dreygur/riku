@@ -1,8 +1,6 @@
 //! Stopping and removing the Procfile workers of an app that has switched to
 //! containers.
 
-use std::time::SystemTime;
-
 use anyhow::{anyhow, Result};
 
 use super::context::ContainerApp;
@@ -24,11 +22,10 @@ pub(crate) fn retire_procfile_workers(ctx: &ContainerApp, workers: ProcfileWorke
         &format!("-----> Stopping the old Procfile workers of '{}'", ctx.app),
         "green",
     );
-    let parked_at = SystemTime::now();
     if let Err(e) = workers.park(ctx.paths) {
         return Err(still_running(ctx.app.as_str(), e));
     }
-    if let Err(e) = workers.wait_stopped(ctx.paths, parked_at) {
+    if let Err(e) = workers.wait_stopped(ctx.paths) {
         return Err(still_running(ctx.app.as_str(), e));
     }
     if let Err(e) = workers.discard(ctx.paths) {
