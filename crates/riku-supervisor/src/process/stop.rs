@@ -57,9 +57,9 @@ impl ProcessManager {
     pub fn stop_app_processes(&mut self, app_name: &str) -> Result<()> {
         let processes_to_remove: Vec<String> = self
             .processes
-            .keys()
-            .filter(|id: &&String| id.starts_with(&format!("{}-", app_name)))
-            .cloned()
+            .iter()
+            .filter(|(_, process)| process.config.worker.app == app_name)
+            .map(|(id, _)| id.clone())
             .collect();
 
         for process_id in processes_to_remove {

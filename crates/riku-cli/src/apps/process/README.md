@@ -10,8 +10,6 @@ Component package located at `crates/riku-cli/src/apps/process`.
 - `load_stats` [helpers.rs:load_stats] (fn)
 - `lookup_process_stats` [helpers.rs:lookup_process_stats] (fn)
 - `read_worker_config` [helpers.rs:read_worker_config] (fn)
-- `collect_worker_configs` [helpers.rs:collect_worker_configs] (fn)
-- `count_worker_configs` [helpers.rs:count_worker_configs] (fn)
 - `helpers.rs` [helpers.rs] Process stats lookup and worker config file helpers, re-exported to the sibling modules through `ps_all.rs`
 - `cmd_ps_all` [ps_all.rs:cmd_ps_all] (fn)
 - `cmd_ps_scale` [ps_scale.rs:cmd_ps_scale] (fn)

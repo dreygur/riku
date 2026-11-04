@@ -124,3 +124,49 @@ fn forced_destroy_removes_the_app_when_the_engine_is_unreachable() {
         "forced destroy left the app directory"
     );
 }
+
+fn seed_worker(paths: &RikuPaths, app: &str, kind: &str) -> String {
+    let config = riku_supervisor::config::create_worker_config(
+        app,
+        kind,
+        "true",
+        1,
+        std::collections::HashMap::new(),
+        "/srv",
+        "/srv/log",
+    );
+    let name = format!("{app}-{kind}-1.toml");
+    let available = paths.workers_available.join(&name);
+    fs::create_dir_all(&paths.workers_available).unwrap();
+    fs::create_dir_all(&paths.workers_enabled).unwrap();
+    fs::write(&available, toml::to_string(&config).unwrap()).unwrap();
+    std::os::unix::fs::symlink(&available, paths.workers_enabled.join(&name)).unwrap();
+    name
+}
+
+#[test]
+fn destroy_leaves_worker_configs_of_an_app_whose_name_extends_it() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut paths = RikuPaths::for_tests(tmp.path());
+    paths.reload_programs.nginx = tmp.path().join("nginx");
+    fs::write(&paths.reload_programs.nginx, "").unwrap();
+    crate::nginx::write_include_file(&paths).unwrap();
+    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+    let own = seed_worker(&paths, "shop", "web");
+    let other = seed_worker(&paths, "shop-api", "web");
+
+    cmd_destroy(&paths, "shop", DestroyMode::Safe).unwrap();
+
+    for dir in [&paths.workers_available, &paths.workers_enabled] {
+        assert!(
+            fs::symlink_metadata(dir.join(&own)).is_err(),
+            "{own} survived in {}",
+            dir.display()
+        );
+        assert!(
+            dir.join(&other).exists(),
+            "destroying shop removed {other} from {}",
+            dir.display()
+        );
+    }
+}

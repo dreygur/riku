@@ -11,8 +11,8 @@ fn hot_reload_advances_worker_config_mtime_without_altering_content() {
     fs::create_dir_all(paths.app_root.join("shop")).unwrap();
     fs::create_dir_all(&paths.workers_enabled).unwrap();
 
-    let worker_path = paths.workers_enabled.join("shop-web.toml");
-    let content = "command = \"python app.py\"\n";
+    let worker_path = paths.workers_enabled.join("shop-web-1.toml");
+    let content = "[worker]\napp = \"shop\"\ncommand = \"python app.py\"\n";
     fs::write(&worker_path, content).unwrap();
 
     let old_time = match SystemTime::now().checked_sub(Duration::from_secs(3600)) {

@@ -2,6 +2,7 @@ use std::fs;
 
 use anyhow::Result;
 use colored::Colorize;
+use riku_supervisor::config::app_worker_configs;
 
 use crate::config::RikuPaths;
 use crate::util::display;
@@ -49,7 +50,7 @@ fn show_all_verbose(paths: &RikuPaths, apps: &[String]) -> Result<()> {
     let stats_data = load_stats(paths);
 
     for app in apps {
-        let worker_configs = collect_worker_configs(paths, app);
+        let worker_configs = app_worker_configs(&paths.workers_enabled, app);
 
         for config_path in worker_configs {
             let worker_config = match read_worker_config(&config_path) {
@@ -91,7 +92,7 @@ fn show_all_compact(paths: &RikuPaths, apps: &[String]) -> Result<()> {
     let mut rows: Vec<Vec<String>> = Vec::new();
 
     for app in apps {
-        let worker_count = count_worker_configs(paths, app);
+        let worker_count = app_worker_configs(&paths.workers_enabled, app).len();
         let prefix = if worker_count > 0 { "*" } else { " " };
         rows.push(vec![
             format!("{}{}", prefix, app),
@@ -107,7 +108,4 @@ fn show_all_compact(paths: &RikuPaths, apps: &[String]) -> Result<()> {
     Ok(())
 }
 
-pub(super) use super::helpers::{
-    collect_worker_configs, count_worker_configs, load_stats, lookup_process_stats,
-    read_worker_config,
-};
+pub(super) use super::helpers::{load_stats, lookup_process_stats, read_worker_config};

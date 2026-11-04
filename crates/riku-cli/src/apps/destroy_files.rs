@@ -3,6 +3,7 @@
 //! is deleted a failed destroy can be retried.
 
 use anyhow::{anyhow, Result};
+use riku_supervisor::config::app_worker_configs;
 use std::fs;
 use std::path::Path;
 
@@ -45,18 +46,14 @@ fn remove_repo_link(paths: &RikuPaths, app: &str) -> Result<()> {
     }
 }
 
+/// The enabled links go first: they are attributed by reading the config
+/// they point to, which is gone once `workers_available` is cleared.
 #[allow(clippy::question_mark)]
 fn remove_worker_configs(paths: &RikuPaths, app: &str) -> Result<()> {
-    for dir in [&paths.workers_available, &paths.workers_enabled] {
-        for ext in &["ini", "toml"] {
-            let pattern = dir.join(format!("{}-*.{}", app, ext));
-            let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) else {
-                continue;
-            };
-            for entry in entries.flatten() {
-                if let Err(e) = remove_file(&entry) {
-                    return Err(e);
-                }
+    for dir in [&paths.workers_enabled, &paths.workers_available] {
+        for config in app_worker_configs(dir, app) {
+            if let Err(e) = remove_file(&config) {
+                return Err(e);
             }
         }
     }

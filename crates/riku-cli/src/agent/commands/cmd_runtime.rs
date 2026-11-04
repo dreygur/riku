@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use riku_supervisor::config::app_worker_configs;
 use serde_json::json;
 
 use crate::config::RikuPaths;
@@ -59,10 +60,7 @@ pub fn cmd_agent_ps(paths: &RikuPaths, app: &str) -> AgentResponse {
         }
     };
 
-    let pattern = paths.workers_enabled.join(format!("{}-*.toml", app));
-    let worker_count = glob::glob(pattern.to_str().unwrap_or(""))
-        .map(|g| g.count())
-        .unwrap_or(0);
+    let worker_count = app_worker_configs(&paths.workers_enabled, &app).len();
 
     AgentResponse::success(json!({
         "app": app,

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use colored::Colorize;
+use riku_supervisor::config::app_worker_configs;
 use std::fs;
 
 use crate::config::RikuPaths;
@@ -38,21 +39,7 @@ pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
     let mut total_workers = 0;
 
     for a in &apps {
-        let ini_pattern = paths.workers_enabled.join(format!("{}-*.ini", a));
-        let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", a));
-        let ini_matches = glob::glob(ini_pattern.to_str().unwrap_or(""))
-            .map(|g| g.count())
-            .unwrap_or_else(|e| {
-                display::warn(&format!("Warning: glob failed for ini pattern: {}", e));
-                0
-            });
-        let toml_matches = glob::glob(toml_pattern.to_str().unwrap_or(""))
-            .map(|g| g.count())
-            .unwrap_or_else(|e| {
-                display::warn(&format!("Warning: glob failed for toml pattern: {}", e));
-                0
-            });
-        let worker_count = ini_matches + toml_matches;
+        let worker_count = app_worker_configs(&paths.workers_enabled, a).len();
         let status = if worker_count > 0 {
             "running"
         } else {

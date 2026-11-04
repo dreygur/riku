@@ -5,6 +5,9 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+mod ownership;
+pub use ownership::app_worker_configs;
+
 #[cfg(test)]
 mod tests;
 

@@ -1,6 +1,7 @@
 //! `riku restart --hot`: restarting an app without dropping requests.
 
 use anyhow::Result;
+use riku_supervisor::config::app_worker_configs;
 use std::fs;
 
 use super::control_target::{control_target, ControlTarget};
@@ -11,39 +12,35 @@ use crate::util::{display, exit_if_invalid};
 /// The supervisor's file watcher (notify) detects the Modify event and
 /// reloads the config. A real mtime bump needs the content written back.
 fn touch_worker_configs(paths: &RikuPaths, app: &str) {
-    let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", app));
-
-    if let Ok(entries) = glob::glob(toml_pattern.to_str().unwrap_or("")) {
-        let mut count = 0;
-        for entry in entries.flatten() {
-            match fs::read_to_string(&entry) {
-                Ok(content) => {
-                    if let Err(e) = fs::write(&entry, content) {
-                        display::warn(&format!(
-                            "Warning: failed to touch {}: {}",
-                            entry.display(),
-                            e
-                        ));
-                    } else {
-                        count += 1;
-                    }
-                }
-                Err(e) => {
+    let mut count = 0;
+    for entry in app_worker_configs(&paths.workers_enabled, app) {
+        match fs::read_to_string(&entry) {
+            Ok(content) => {
+                if let Err(e) = fs::write(&entry, content) {
                     display::warn(&format!(
-                        "Warning: failed to read {}: {}",
+                        "Warning: failed to touch {}: {}",
                         entry.display(),
                         e
                     ));
+                } else {
+                    count += 1;
                 }
             }
+            Err(e) => {
+                display::warn(&format!(
+                    "Warning: failed to read {}: {}",
+                    entry.display(),
+                    e
+                ));
+            }
         }
+    }
 
-        if count > 0 {
-            display::success(&format!("Triggered hot reload for {} worker(s)", count));
-            display::warn("Note: Supervisor must be running for hot reload to take effect.");
-        } else {
-            display::warn("No worker configs found. Is the app deployed?");
-        }
+    if count > 0 {
+        display::success(&format!("Triggered hot reload for {} worker(s)", count));
+        display::warn("Note: Supervisor must be running for hot reload to take effect.");
+    } else {
+        display::warn("No worker configs found. Is the app deployed?");
     }
 }
 

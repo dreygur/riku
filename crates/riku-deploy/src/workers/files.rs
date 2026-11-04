@@ -9,7 +9,7 @@ use anyhow::{anyhow, Result};
 
 use super::web_env::is_web_facing;
 use crate::config::RikuPaths;
-use crate::supervisor::config::{create_worker_config, WorkerConfig};
+use crate::supervisor::config::{app_worker_configs, create_worker_config, WorkerConfig};
 use crate::util::echo;
 
 /// The kind in a `<app>-<kind>-<n>.<ext>` file name, taken from the right
@@ -29,21 +29,13 @@ fn file_kind(path: &Path) -> Option<&str> {
 ///
 /// Web facing kinds are left alone: the deploy replaces their copies one at
 /// a time instead.
-///
-/// Uses `"{app}-*"` not `"{app}*"` to avoid touching configs for apps
-/// whose names share a prefix (e.g. "foo" would otherwise match "foobar").
 pub(super) fn remove_stale_configs(app: &str, paths: &RikuPaths) {
-    for ext in &["toml", "ini"] {
-        let pattern = paths.workers_enabled.join(format!("{}-*.{}", app, ext));
-        if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
-            let stale = entries
-                .flatten()
-                .filter(|entry| !file_kind(entry).is_some_and(is_web_facing));
-            for entry in stale {
-                if let Err(e) = fs::remove_file(&entry) {
-                    tracing::warn!("Could not remove stale worker config {:?}: {}", entry, e);
-                }
-            }
+    let stale = app_worker_configs(&paths.workers_enabled, app)
+        .into_iter()
+        .filter(|entry| !file_kind(entry).is_some_and(is_web_facing));
+    for entry in stale {
+        if let Err(e) = fs::remove_file(&entry) {
+            tracing::warn!("Could not remove stale worker config {:?}: {}", entry, e);
         }
     }
 }

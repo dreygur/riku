@@ -213,6 +213,11 @@ prints the exact `git remote add`/`git push` lines needed to deploy.
   as a host-level singleton); `dashboard/README.md` described a
   CSRF/Origin-check mechanism that didn't exist in the actual code.
 - Bumped `crossbeam-epoch` to clear RUSTSEC-2026-0204.
+- Worker config files are attributed to an app by the `[worker] app` field
+  they record, not by an `{app}-*` file name prefix. `riku destroy shop`
+  and `riku stop shop` no longer delete the worker configs of an app named
+  `shop-api`, and `ps`, `apps`, `info`, `stats`, hot reload and cron jobs
+  no longer count or read them as `shop`'s.
 
 ### Changed
 

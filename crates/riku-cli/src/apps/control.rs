@@ -4,6 +4,8 @@ use std::fs;
 use std::process::{Command, Stdio};
 
 use super::control_target::{control_target, ControlTarget};
+use riku_supervisor::config::app_worker_configs;
+
 use crate::config::{RikuPaths, RIKU_RAW_SOURCE_URL};
 use crate::supervisor::Supervisor;
 use crate::util::{display, exit_if_invalid, parse_settings};
@@ -123,16 +125,7 @@ pub fn cmd_supervisor(paths: &RikuPaths) -> Result<()> {
 
 /// Stop an app by removing its enabled worker config files.
 fn do_stop(paths: &RikuPaths, app: &str) {
-    let mut configs: Vec<std::path::PathBuf> = Vec::new();
-
-    for ext in &["ini", "toml"] {
-        let pattern = paths.workers_enabled.join(format!("{}-*.{}", app, ext));
-        if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
-            for entry in entries.flatten() {
-                configs.push(entry);
-            }
-        }
-    }
+    let configs = app_worker_configs(&paths.workers_enabled, app);
 
     if !configs.is_empty() {
         display::info(&format!("Stopping app '{}'...", app));

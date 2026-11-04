@@ -1,13 +1,12 @@
 //! Helper functions for process stats lookup and worker configuration files.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use riku_supervisor::config::WorkerConfig;
 use riku_supervisor::stats::AppStats;
 
 use crate::config::RikuPaths;
-use crate::util::display;
 
 /// Load stats JSON from supervisor stats file, if present.
 pub(crate) fn load_stats(paths: &RikuPaths) -> Option<Vec<AppStats>> {
@@ -60,46 +59,4 @@ pub(crate) fn read_worker_config(path: &Path) -> Option<WorkerConfig> {
         Err(_) => return None,
     };
     toml::from_str(&content).ok()
-}
-
-/// Collect all worker config paths (toml + ini) for an app.
-pub(crate) fn collect_worker_configs(paths: &RikuPaths, app: &str) -> Vec<PathBuf> {
-    let toml_pattern = paths.workers_enabled.join(format!("{app}-*.toml"));
-    let ini_pattern = paths.workers_enabled.join(format!("{app}-*.ini"));
-
-    let mut configs: Vec<PathBuf> = match glob::glob(toml_pattern.to_str().unwrap_or("")) {
-        Ok(g) => g.filter_map(Result::ok).collect(),
-        Err(e) => {
-            display::warn(&format!(
-                "Warning: glob failed for toml worker configs: {e}"
-            ));
-            Vec::new()
-        }
-    };
-
-    let ini_configs: Vec<PathBuf> = match glob::glob(ini_pattern.to_str().unwrap_or("")) {
-        Ok(g) => g.filter_map(Result::ok).collect(),
-        Err(e) => {
-            display::warn(&format!("Warning: glob failed for ini worker configs: {e}"));
-            Vec::new()
-        }
-    };
-    configs.extend(ini_configs);
-    configs
-}
-
-/// Count total worker configs for an app.
-pub(crate) fn count_worker_configs(paths: &RikuPaths, app: &str) -> usize {
-    let toml_pattern = paths.workers_enabled.join(format!("{app}-*.toml"));
-    let ini_pattern = paths.workers_enabled.join(format!("{app}-*.ini"));
-
-    let toml_count = match glob::glob(toml_pattern.to_str().unwrap_or("")) {
-        Ok(g) => g.count(),
-        Err(_) => 0,
-    };
-    let ini_count = match glob::glob(ini_pattern.to_str().unwrap_or("")) {
-        Ok(g) => g.count(),
-        Err(_) => 0,
-    };
-    toml_count + ini_count
 }

@@ -3,9 +3,9 @@ use std::fs;
 
 use anyhow::Result;
 
-use super::helpers::{
-    collect_worker_configs, load_stats, lookup_process_stats, read_worker_config,
-};
+use riku_supervisor::config::app_worker_configs;
+
+use super::helpers::{load_stats, lookup_process_stats, read_worker_config};
 use super::scaling_display::{show_desired_scale_verbose, show_scaling_compact};
 use crate::config::RikuPaths;
 use crate::util::exit_if_invalid;
@@ -97,7 +97,7 @@ pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
         return Ok(());
     }
 
-    let worker_configs = collect_worker_configs(paths, &app);
+    let worker_configs = app_worker_configs(&paths.workers_enabled, &app);
 
     if verbose && worker_configs.is_empty() {
         return show_desired_scale_verbose(paths, &app);
