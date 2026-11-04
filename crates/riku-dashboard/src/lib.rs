@@ -1,8 +1,9 @@
 //! Embedded read-only dashboard (Track A, Phase 1).
 //!
-//! A small Axum server, compiled **into the riku binary**, that serves a
-//! single embedded HTML page plus a read-only JSON API. No Node runtime, no
-//! separate web stack: the single-binary identity is preserved.
+//! A small Axum server, compiled **into the riku binary**, that serves an
+//! embedded HTML page with its stylesheet and ES modules, plus a read-only
+//! JSON API. No Node runtime and no build step: the single-binary identity is
+//! preserved.
 //!
 //! Once bound, it prints `riku-dashboard-bound <port>` on its own stdout
 //! line, so a remote session (`riku dashboard -s <server>`) can learn the
@@ -26,6 +27,7 @@ pub(crate) use riku_util as util;
 
 mod addons;
 mod appcfg;
+mod assets;
 mod installed;
 mod logs;
 mod market;

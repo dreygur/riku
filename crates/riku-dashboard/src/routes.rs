@@ -1,10 +1,11 @@
-//! Dashboard HTTP routes: one embedded page plus a read-only JSON API.
+//! Dashboard HTTP routes: the embedded page and its assets plus a read-only
+//! JSON API.
 
 use std::collections::HashMap;
 
 use axum::extract::{DefaultBodyLimit, Query, State};
 use axum::http::{header, HeaderMap, StatusCode};
-use axum::response::{Html, IntoResponse, Json, Response};
+use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{delete, get, post};
 use axum::Router;
 
@@ -14,12 +15,10 @@ const RESTORE_MAX_BYTES: usize = 2 * 1024 * 1024 * 1024;
 
 use super::DashboardState;
 
-/// The dashboard UI, embedded into the binary at compile time.
-const INDEX_HTML: &str = include_str!("index.html");
-
 pub(crate) fn router(state: DashboardState) -> Router {
     Router::new()
-        .route("/", get(index))
+        .route("/", get(super::assets::index))
+        .route("/assets/{*path}", get(super::assets::asset))
         .route("/healthz", get(healthz))
         .route("/api/state", get(api_state))
         .route("/api/apps/{app}/releases", get(api_releases))
@@ -71,10 +70,6 @@ pub(crate) fn router(state: DashboardState) -> Router {
         .route("/api/addons/{instance}/backup", post(super::addons::backup))
         .merge(super::mutations::router())
         .with_state(state)
-}
-
-async fn index() -> impl IntoResponse {
-    Html(INDEX_HTML)
 }
 
 async fn healthz() -> &'static str {
