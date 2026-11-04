@@ -26,7 +26,7 @@ use crate::workers::web_env::{is_web_facing, is_wsgi_kind};
 /// The unix socket the `copy`th uWSGI worker of `app` listens on.
 pub fn copy_socket(paths: &RikuPaths, app: &str, copy: CopyIndex) -> PathBuf {
     paths
-        .nginx_root
+        .socket_root
         .join(copy_socket::file_name(app, copy.get()))
 }
 

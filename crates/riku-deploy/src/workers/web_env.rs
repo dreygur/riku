@@ -5,7 +5,6 @@
 
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use riku_container::types::CopyIndex;
@@ -45,11 +44,22 @@ fn listen_socket(
     }
 }
 
+/// The socket directory must exist before uWSGI binds in it. Root init makes
+/// it; this only matters after a reboot on a host without systemd-tmpfiles,
+/// and in tests. A `RIKU_NGINX_SOCKET` lives wherever the app put it.
+fn ensure_socket_root(env: &HashMap<String, String>, paths: &RikuPaths) -> Result<()> {
+    if env.contains_key("RIKU_NGINX_SOCKET") {
+        return Ok(());
+    }
+    crate::util::socket_dir::ensure_exists(&paths.socket_root, crate::config::SOCKET_GROUP)
+}
+
 /// Inject uwsgi unix-socket variables into the environment.
 ///
 /// uWSGI reads `UWSGI_<OPTION>` variables as its own options. The socket is
-/// `0660` so nginx, which root init puts in the deploy user's group, can
-/// connect without the socket being world writable. `die-on-term` makes
+/// `0660` in the setgid `riku-sockets` directory, so it belongs to that
+/// group, which root init puts the nginx worker user in, and is never world
+/// writable. `die-on-term` makes
 /// SIGTERM stop uWSGI instead of reloading it, so a stopped copy exits
 /// at once rather than after the supervisor's SIGKILL timeout.
 fn configure_wsgi_env(socket_path: &Path, env: &mut HashMap<String, String>) {
@@ -130,10 +140,11 @@ fn apply_route_keys(kind: &str, persisted: &mut HashMap<String, String>) {
 /// Set the app ENV file's routing keys for `kind`, on every deploy, so the
 /// template the router picks follows the kind the Procfile has now. The
 /// addresses are not persisted, see `apply_route_keys`.
+#[allow(clippy::question_mark)]
 fn persist_route_env(app: &str, kind: &str, paths: &RikuPaths) -> Result<()> {
     let env_dir = paths.env_root.join(app);
-    if let Err(e) = fs::create_dir_all(&env_dir) {
-        return Err(anyhow!("failed to create {}: {e}", env_dir.display()));
+    if let Err(e) = crate::util::create_private_dir(&env_dir) {
+        return Err(e);
     }
     let env_file = env_dir.join("ENV");
 
@@ -172,6 +183,9 @@ pub(super) fn build_worker_env(
     let socket_path = listen_socket(app, copy, base_env, paths);
 
     if is_wsgi_kind(kind) {
+        if let Err(e) = ensure_socket_root(base_env, paths) {
+            return Err(e);
+        }
         configure_wsgi_env(&socket_path, &mut env);
     } else if let Err(e) = configure_web_env(&socket_path, &mut env, taken, free_loopback_port) {
         return Err(e);

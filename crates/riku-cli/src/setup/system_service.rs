@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::config::router::Router;
-use crate::config::RikuPaths;
+use crate::config::{RikuPaths, SOCKET_ROOT};
 use crate::util::echo;
 
 use super::binary::INSTALL_DIR;
@@ -44,8 +44,10 @@ ProtectSystem=strict
 ProtectHome=read-only
 PrivateTmp=true
 
-# Allow writing to riku directories
-ReadWritePaths={deploy_home}/.riku
+# Allow writing to riku directories. ProtectSystem=strict leaves /run read
+# only, and uWSGI copies, which inherit this namespace, bind their sockets in
+# the socket directory. The leading - keeps the unit starting without it.
+ReadWritePaths={deploy_home}/.riku -{socket_root}
 
 # Resource limits
 MemoryMax=512M
@@ -58,6 +60,7 @@ WantedBy=multi-user.target
         deploy_user = deploy_user,
         deploy_home = deploy_home,
         riku_binary_path = riku_binary_path,
+        socket_root = SOCKET_ROOT,
     )
 }
 

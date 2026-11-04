@@ -3,7 +3,7 @@
 //! riku writes every site config into the deploy user's `~/.riku/nginx` and
 //! never under `/etc/nginx`. Setup installs the one root-owned file that
 //! loads that directory, `/etc/nginx/conf.d/riku.conf`, and puts the nginx
-//! worker user in the deploy group (see [`super::nginx_worker`]).
+//! worker user in the `riku-sockets` group (see [`super::nginx_worker`]).
 //!
 //! Security: the include file's text is built from the riku root path only
 //! and refused if that path holds nginx syntax (see
@@ -61,14 +61,14 @@ fn load_riku_sites(paths: &RikuPaths) -> Result<()> {
     Ok(())
 }
 
-/// Root's uid, the owner the include directory must have.
-const ROOT_UID: u32 = 0;
+/// Root's uid, the owner a directory root writes into must have.
+pub(super) const ROOT_UID: u32 = 0;
 
 /// Refuses `dir` for a root write unless it is a real directory owned by
 /// `owner` that no group or other user can write. Otherwise another
-/// account could swap the include file for a symlink between check and
+/// account could swap the file root writes for a symlink between check and
 /// rename. `owner` is [`ROOT_UID`] in production; tests pass their own uid.
-fn check_write_dir(dir: &Path, owner: u32) -> Result<()> {
+pub(super) fn check_write_dir(dir: &Path, owner: u32) -> Result<()> {
     let meta = match dir.symlink_metadata() {
         Ok(meta) => meta,
         Err(e) => return Err(anyhow!("cannot inspect {}: {e}", dir.display())),
@@ -139,7 +139,7 @@ pub fn setup_nginx_host(user: &DeployUser) -> Result<()> {
     if let Err(e) = load_riku_sites(&paths) {
         return Err(e);
     }
-    grant_nginx_sockets(user, &paths)
+    grant_nginx_sockets()
 }
 
 #[cfg(test)]

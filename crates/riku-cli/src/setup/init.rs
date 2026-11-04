@@ -98,6 +98,23 @@ fn setup_user_service(paths: &RikuPaths, router: &Router, no_systemd: bool) -> R
     installed
 }
 
+/// Only root can create the uWSGI socket directory, so a plain init says
+/// when it is missing instead of letting the first wsgi deploy fail.
+fn warn_no_socket_root(paths: &RikuPaths) {
+    if paths.socket_root.is_dir() {
+        return;
+    }
+    echo(
+        &format!(
+            "      warning: {} does not exist, so wsgi, jwsgi, rwsgi and php apps cannot \
+             deploy. Create it with: sudo riku init",
+            paths.socket_root.display()
+        ),
+        "yellow",
+    );
+    echo("", "");
+}
+
 /// What `riku init` was asked to do.
 pub struct InitOptions {
     pub no_systemd: bool,
@@ -165,6 +182,7 @@ fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
         if let Err(e) = setup_user_service(paths, &router, options.no_systemd) {
             return Err(e);
         }
+        warn_no_socket_root(paths);
     }
 
     ssh_key_step(options)

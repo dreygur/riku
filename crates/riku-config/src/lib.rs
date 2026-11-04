@@ -50,6 +50,15 @@ pub const NGINX_CACHE_ANY_DEFAULT: u32 = 3600;
 /// Default nginx cache control time in seconds (1 hour).
 pub const NGINX_CACHE_CONTROL_DEFAULT: u32 = 3600;
 
+/// Where uWSGI copies put their unix sockets on a real host. It sits outside
+/// the deploy user's home so nginx needs no access to that home. Root init
+/// creates it owned by the deploy user, group [`SOCKET_GROUP`], mode `2750`.
+pub const SOCKET_ROOT: &str = "/run/riku-sockets";
+
+/// The group shared by the deploy user and the nginx worker user, and the
+/// only group that can reach [`SOCKET_ROOT`].
+pub const SOCKET_GROUP: &str = "riku-sockets";
+
 /// All resolved directory paths used by riku.
 #[derive(Debug, Clone)]
 pub struct RikuPaths {
@@ -62,6 +71,9 @@ pub struct RikuPaths {
     pub git_root: PathBuf,
     pub log_root: PathBuf,
     pub nginx_root: PathBuf,
+    /// The uWSGI socket directory, [`SOCKET_ROOT`] outside tests. Not taken
+    /// from the environment: root init creates it and must not be steered.
+    pub socket_root: PathBuf,
     /// Per app Caddy site files, imported by `/etc/caddy/Caddyfile`.
     pub caddy_root: PathBuf,
     /// Holds the host router name. See [`router::Router::load`].
@@ -123,6 +135,7 @@ impl RikuPaths {
             git_root: riku_root.join("repos"),
             log_root: riku_root.join("logs"),
             nginx_root: riku_root.join("nginx"),
+            socket_root: PathBuf::from(SOCKET_ROOT),
             caddy_root: riku_root.join("caddy"),
             router_file: riku_root.join(router::ROUTER_FILE),
             container_engine_file: riku_root.join(container_engine::ENGINE_FILE),
@@ -162,13 +175,16 @@ impl RikuPaths {
     /// attribute doesn't cross crate boundaries.
     ///
     /// The system nginx paths are placed inside `root` whatever the
-    /// environment says, so a test never touches the machine's real nginx.
+    /// environment says, so a test never touches the machine's real nginx,
+    /// and so is the socket directory, `root/sockets`. Tests create it.
     pub fn for_tests(root: &Path) -> Self {
         let nginx_host = NginxHostPaths {
             sites_enabled: root.join("nginx-sites-enabled"),
             include_file: root.join("nginx-conf.d").join("riku.conf"),
         };
-        Self::with_nginx_host(root.join(".riku"), root, nginx_host)
+        let mut paths = Self::with_nginx_host(root.join(".riku"), root, nginx_host);
+        paths.socket_root = root.join("sockets");
+        paths
     }
 }
 

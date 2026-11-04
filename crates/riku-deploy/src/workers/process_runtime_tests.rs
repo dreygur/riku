@@ -95,7 +95,7 @@ fn a_stopped_wsgi_copy_leaves_no_socket_behind() {
 
     deploy_twice(&paths, &app_path, &HashMap::new());
 
-    let mut sockets: Vec<String> = fs::read_dir(&paths.nginx_root)
+    let mut sockets: Vec<String> = fs::read_dir(&paths.socket_root)
         .unwrap()
         .flatten()
         .map(|entry| entry.file_name().to_string_lossy().into_owned())

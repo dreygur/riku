@@ -72,7 +72,7 @@ fn worker_only_and_static_apps_keep_their_default_backend() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = paths_with_workers(&tmp);
     enable_worker(&paths, "worker", 1, &[]);
-    let socket = Backend::Unix(paths.nginx_root.join("shop.sock"));
+    let socket = Backend::Unix(paths.socket_root.join("shop.sock"));
 
     let worker_only = routed_backends(&Router::Nginx, "shop", &env(&[]), &paths, None).unwrap();
     let static_env = env(&[("RIKU_NGINX_STATIC", "true")]);

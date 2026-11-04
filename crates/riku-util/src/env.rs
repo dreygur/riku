@@ -74,12 +74,15 @@ pub fn parse_settings(
 
 /// Write key=value config file atomically (temp file + fsync + rename), so a
 /// crash mid-write never leaves a truncated ENV file for the next reader.
+///
+/// An ENV file holds the app's secrets, so the file is `0600`. Callers
+/// create its directory with [`super::fs::create_private_dir`].
 pub fn write_config(filename: &Path, bag: &HashMap<String, String>, separator: &str) -> Result<()> {
     let mut content = String::new();
     for (k, v) in bag.iter() {
         content.push_str(&format!("{}{}{}\n", k, separator, v));
     }
-    super::fs::write_atomic(filename, content.as_bytes())
+    super::fs::write_private(filename, content.as_bytes())
 }
 
 #[cfg(test)]

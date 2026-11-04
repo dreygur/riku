@@ -36,8 +36,11 @@ fn side_file_failures_are_all_reported_and_the_removed_live_config_still_counts(
     let temp_dir = tempfile::TempDir::new().unwrap();
     let paths = paths_with_nginx(temp_dir.path(), "exit 0\n");
     fs::write(paths.nginx_root.join("myapp.conf"), "server {}\n").unwrap();
-    for stuck in ["myapp.sock", "myapp.crt"] {
-        fs::create_dir_all(paths.nginx_root.join(stuck).join("busy")).unwrap();
+    for stuck in [
+        paths.socket_root.join("myapp@1.sock"),
+        paths.nginx_root.join("myapp.crt"),
+    ] {
+        fs::create_dir_all(stuck.join("busy")).unwrap();
     }
 
     let removal = remove_nginx_files("myapp", &paths).unwrap();
@@ -48,7 +51,7 @@ fn side_file_failures_are_all_reported_and_the_removed_live_config_still_counts(
         .expect("side files could not be removed but no error came back")
         .to_string();
     assert!(
-        err.contains("myapp.sock") && err.contains("myapp.crt"),
+        err.contains("myapp@1.sock") && err.contains("myapp.crt"),
         "{err}"
     );
     assert!(!paths.nginx_root.join("myapp.conf").exists());

@@ -10,7 +10,7 @@
 
 use std::fs;
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::thread::sleep;
@@ -19,6 +19,9 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Result};
 use reqwest::blocking::Client;
 use reqwest::redirect::Policy;
+
+use crate::config::SOCKET_GROUP;
+use crate::util::socket_dir;
 
 const PROBE_INTERVAL: Duration = Duration::from_millis(500);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -55,26 +58,38 @@ pub(super) fn probe_port(port: u16) -> Result<()> {
 }
 
 /// One socket poll: `Ok(false)` while nothing listens, `Err` once a
-/// listener is up on a socket its group cannot read and write.
+/// listener is up on a socket nginx could not use.
 ///
 /// The probe connects as the deploy user, who owns the socket, so a connect
-/// alone cannot see what nginx sees. nginx connects through the deploy
-/// group (root init adds it), and without group access every request is
-/// a 502 while the deploy looks healthy.
+/// alone cannot see what nginx sees. nginx connects through the
+/// `riku-sockets` group (root init adds it), and without that group's read
+/// and write every request is a 502 while the deploy looks healthy. The
+/// group itself is checked only on a host that has it.
 pub(super) fn probe_socket(path: &Path) -> Result<bool> {
     if UnixStream::connect(path).is_err() {
         return Ok(false);
     }
-    let mode = match fs::metadata(path) {
-        Ok(meta) => meta.permissions().mode() & 0o777,
+    let meta = match fs::metadata(path) {
+        Ok(meta) => meta,
         Err(e) => return Err(anyhow!("cannot inspect {}: {e}", path.display())),
     };
+    let mode = meta.permissions().mode() & 0o777;
     if mode & GROUP_READ_WRITE != GROUP_READ_WRITE {
         return Err(anyhow!(
             "{} is mode {mode:o}, so nginx cannot connect to it; \
              the socket needs group read and write (uWSGI chmod-socket=660)",
             path.display()
         ));
+    }
+    if let Some(gid) = socket_dir::group_id(SOCKET_GROUP) {
+        if meta.gid() != gid {
+            return Err(anyhow!(
+                "{} has gid {}, not the {SOCKET_GROUP} group nginx connects through; \
+                 the socket directory must be setgid {SOCKET_GROUP} (run `sudo riku init`)",
+                path.display(),
+                meta.gid()
+            ));
+        }
     }
     Ok(true)
 }

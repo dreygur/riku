@@ -92,6 +92,34 @@ fn test_write_live_env_reads_existing_env_file() -> Result<()> {
 }
 
 #[test]
+fn live_env_and_its_dir_are_owner_only() -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let env_dir = paths.env_root.join("myapp");
+    setup_env_dir(&paths, "myapp");
+    fs::set_permissions(&env_dir, fs::Permissions::from_mode(0o755))?;
+
+    write_live_env("myapp", &paths, &HashMap::new())?;
+
+    let mode = |path: &std::path::Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
+    let live_env = env_dir.join("LIVE_ENV");
+    assert_eq!(
+        mode(&live_env),
+        0o600,
+        "LIVE_ENV is mode {:o}",
+        mode(&live_env)
+    );
+    assert_eq!(
+        mode(&env_dir),
+        0o700,
+        "env dir is mode {:o}",
+        mode(&env_dir)
+    );
+    Ok(())
+}
+
+#[test]
 fn test_write_live_env_skips_comment_lines_in_env_file() -> Result<()> {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);

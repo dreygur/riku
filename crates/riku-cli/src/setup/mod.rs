@@ -15,6 +15,7 @@ mod nginx_worker;
 mod prerequisites;
 mod root_init;
 mod router_units;
+mod socket_group;
 pub mod ssh;
 pub mod system_service;
 pub mod systemd;
