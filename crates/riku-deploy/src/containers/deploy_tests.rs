@@ -18,15 +18,15 @@ fn deploy_starts_services_in_order() {
     deploy(&server).unwrap();
 
     let calls = server.calls();
-    let db_ready = position(&calls, |l| l == "ready myapp-db-1");
+    let db_ready = position(&calls, |l| l == "ready myapp.db.1");
     let web_run = position(&calls, |l| {
-        l.starts_with("run") && l.contains("myapp-web-1")
+        l.starts_with("run") && l.contains("myapp.web.1")
     });
     assert!(
         db_ready < web_run,
         "web started before db was healthy: {calls:#?}"
     );
-    assert_eq!(server.containers(), ["myapp-db-1", "myapp-web-1"]);
+    assert_eq!(server.containers(), ["myapp.db.1", "myapp.web.1"]);
 }
 
 #[test]
@@ -42,12 +42,12 @@ fn redeploy_keeps_old_copy_on_failure() {
 
     assert!(format!("{err:#}").contains("exited with code 1"), "{err:#}");
     assert!(
-        server.containers().contains(&"myapp-web-1".to_string()),
+        server.containers().contains(&"myapp.web.1".to_string()),
         "old web copy is gone: {:?}",
         server.containers()
     );
     assert!(
-        !server.containers().contains(&"myapp-web-2".to_string()),
+        !server.containers().contains(&"myapp.web.2".to_string()),
         "failed copy left behind: {:?}",
         server.containers()
     );
@@ -74,7 +74,7 @@ fn release_runs_in_new_image_before_rollout() {
     let release_wait = position(&calls, |l| l.starts_with("wait"));
     let release_rm = position(&calls, |l| l.starts_with("rm"));
     let web_run = position(&calls, |l| {
-        l.starts_with("run") && l.contains("myapp-web-1")
+        l.starts_with("run") && l.contains("myapp.web.1")
     });
     let run_line = &calls[release_run];
     assert!(
@@ -86,7 +86,7 @@ fn release_runs_in_new_image_before_rollout() {
         release_run < release_wait && release_wait < release_rm && release_rm < web_run,
         "release run, wait and rm did not all come before the web copy: {calls:#?}"
     );
-    assert_eq!(server.containers(), ["myapp-db-1", "myapp-web-1"]);
+    assert_eq!(server.containers(), ["myapp.db.1", "myapp.web.1"]);
 }
 
 #[test]
@@ -104,13 +104,13 @@ fn failing_release_aborts_before_rollout() {
     let web_runs = server
         .calls()
         .iter()
-        .filter(|l| l.starts_with("run") && l.contains("myapp-web"))
+        .filter(|l| l.starts_with("run") && l.contains("myapp.web."))
         .count();
     assert_eq!(
         web_runs, 1,
         "a new web copy started after the failed release"
     );
-    assert_eq!(server.containers(), ["myapp-db-1", "myapp-web-1"]);
+    assert_eq!(server.containers(), ["myapp.db.1", "myapp.web.1"]);
 }
 
 #[test]

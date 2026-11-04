@@ -49,7 +49,7 @@ fn restart_copy_replaces_a_crashed_copy() {
     let tmp = tempfile::tempdir().unwrap();
     let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
     deploy(&server).unwrap();
-    server.crash("myapp-web-1");
+    server.crash("myapp.web.1");
     let before = server.calls().len();
 
     let outcome = restart_copy(
@@ -65,10 +65,10 @@ fn restart_copy_replaces_a_crashed_copy() {
     assert!(
         calls
             .iter()
-            .any(|l| l.starts_with("run") && l.contains("myapp-web-1")),
+            .any(|l| l.starts_with("run") && l.contains("myapp.web.1")),
         "no fresh web copy was started: {calls:#?}"
     );
-    assert_eq!(server.containers(), ["myapp-db-1", "myapp-web-1"]);
+    assert_eq!(server.containers(), ["myapp.db.1", "myapp.web.1"]);
 }
 
 #[test]
@@ -93,7 +93,7 @@ fn restart_copy_leaves_a_user_stopped_service_stopped() {
         calls.iter().all(|l| !l.starts_with("run")),
         "the supervisor undid the stop: {calls:#?}"
     );
-    assert_eq!(server.containers(), ["myapp-db-1"]);
+    assert_eq!(server.containers(), ["myapp.db.1"]);
 }
 
 #[test]
@@ -162,7 +162,7 @@ fn restart_copy_clears_route_when_restart_fails() {
         .and_then(|rest| rest.split_whitespace().next())
         .expect("could not find host port in site");
 
-    server.crash("myapp-web-1");
+    server.crash("myapp.web.1");
     server.mark("exits", "web");
 
     let err = restart_copy(

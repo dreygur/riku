@@ -39,7 +39,7 @@ fn switching_a_procfile_app_retires_its_workers() {
 
     assert_eq!(
         server.containers(),
-        ["myapp-db-1", "myapp-web-1"],
+        ["myapp.db.1", "myapp.web.1"],
         "server containers must match expected containers"
     );
 }

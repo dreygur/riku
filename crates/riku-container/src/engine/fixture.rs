@@ -50,7 +50,7 @@ pub fn logging_engine(dir: &Path, behaviour: &str) -> (Engine, PathBuf) {
     (Engine::open(binary).unwrap(), log)
 }
 
-/// A minimal valid spec for `myapp-web-1`; tests change the fields they care about.
+/// A minimal valid spec for `myapp.web.1`; tests change the fields they care about.
 pub fn sample_spec() -> RunSpec {
     let service = ServiceName::try_from("web").unwrap();
     let labels = [
@@ -89,11 +89,11 @@ pub const ID_B: &str = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba98
 pub const IMAGE_ID: &str =
     "sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a";
 
-/// `inspect` output for one container named `myapp-web-2` running image
+/// `inspect` output for one container named `myapp.web.2` running image
 /// `shop/web:1.4`, with the given `State` and `Labels` JSON.
 pub fn inspect_json(id: &str, state: &str, labels: &str) -> String {
     format!(
-        r#"[{{"Id":"{id}","Name":"/myapp-web-2","Image":"{IMAGE_ID}","Config":{{"Image":"shop/web:1.4","Labels":{labels}}},"State":{state}}}]"#
+        r#"[{{"Id":"{id}","Name":"/myapp.web.2","Image":"{IMAGE_ID}","Config":{{"Image":"shop/web:1.4","Labels":{labels}}},"State":{state}}}]"#
     )
 }
 

@@ -4,7 +4,17 @@ use super::*;
 fn container_name_joins_app_service_and_copy() {
     let web = ServiceName::try_from("web").unwrap();
     let name = ContainerName::new("myapp", &web, CopyIndex::new(1).unwrap()).unwrap();
-    assert_eq!(name.as_str(), "myapp-web-1");
+    assert_eq!(name.as_str(), "myapp.web.1");
+}
+
+#[test]
+fn container_names_of_apps_sharing_a_dashed_prefix_differ() {
+    let copy = CopyIndex::new(1).unwrap();
+    let api_web = ServiceName::try_from("api-web").unwrap();
+    let web = ServiceName::try_from("web").unwrap();
+    let shop = ContainerName::new("shop", &api_web, copy).unwrap();
+    let shop_api = ContainerName::new("shop-api", &web, copy).unwrap();
+    assert_ne!(shop, shop_api, "both named {}", shop.as_str());
 }
 
 #[test]
@@ -43,9 +53,18 @@ fn service_name_rejects_engine_unsafe_characters() {
     for bad in ["", "-web", "web/../x", "we b", "web;rm"] {
         assert!(ServiceName::try_from(bad).is_err(), "accepted {bad:?}");
     }
-    for good in ["web", "db_1", "api.v2"] {
+    for good in ["web", "db_1", "api-v2"] {
         assert!(ServiceName::try_from(good).is_ok(), "rejected {good:?}");
     }
+}
+
+#[test]
+fn service_name_with_a_dot_is_refused() {
+    let err = ServiceName::try_from("api.v2").unwrap_err().to_string();
+    assert!(
+        err.contains("service names may not contain '.'"),
+        "unexpected error: {err}"
+    );
 }
 
 #[test]

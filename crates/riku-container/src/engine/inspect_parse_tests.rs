@@ -26,7 +26,7 @@ const DOCKER_RUNNING: &str = r#"[
             "FinishedAt": "0001-01-01T00:00:00Z"
         },
         "Image": "sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a",
-        "Name": "/myapp-web-2",
+        "Name": "/myapp.web.2",
         "RestartCount": 0,
         "HostConfig": {"RestartPolicy": {"Name": "no", "MaximumRetryCount": 0}, "AutoRemove": true},
         "Mounts": [],
@@ -48,7 +48,7 @@ const DOCKER_RUNNING: &str = r#"[
 const DOCKER_STARTING: &str = r#"[
     {
         "Id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        "Name": "/myapp-web-1",
+        "Name": "/myapp.web.1",
         "Image": "sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a",
         "State": {
             "Status": "running", "Running": true, "Pid": 1234, "ExitCode": 0, "Error": "",
@@ -86,7 +86,7 @@ fn reads_state_labels_and_image_from_an_unhealthy_container() {
     let info = &parse_inspect(&json).unwrap()[0];
 
     assert_eq!(info.id.as_str(), ID);
-    assert_eq!(info.name, "myapp-web-2");
+    assert_eq!(info.name, "myapp.web.2");
     assert_eq!(info.service.as_ref().unwrap().as_str(), "web");
     assert_eq!(info.copy.unwrap().get(), 2);
     assert_eq!(info.image, "shop/web:1.4");
@@ -173,7 +173,7 @@ fn restarting_and_unknown_statuses_are_kept() {
 fn docker_capture_reads_with_unknown_fields_ignored() {
     let info = &parse_inspect(DOCKER_RUNNING).unwrap()[0];
 
-    assert_eq!(info.name, "myapp-web-2");
+    assert_eq!(info.name, "myapp.web.2");
     assert_eq!(info.service.as_ref().unwrap().as_str(), "web");
     assert_eq!(info.copy.unwrap().get(), 2);
     assert_eq!(info.image, "alpine");

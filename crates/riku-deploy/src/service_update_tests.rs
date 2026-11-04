@@ -88,11 +88,11 @@ fn new_digest_replaces_service() {
 
     let current_containers = server.containers();
     assert!(
-        current_containers.contains(&"myapp-db-1".to_string()),
+        current_containers.contains(&"myapp.db.1".to_string()),
         "db container must still be in containers: {current_containers:#?}"
     );
     assert!(
-        !current_containers.contains(&"myapp-web-1".to_string()),
+        !current_containers.contains(&"myapp.web.1".to_string()),
         "old web container must be gone: {current_containers:#?}"
     );
 }

@@ -28,7 +28,7 @@ fn name_owned_by_other_app_is_refused() {
     let (app_path, project) =
         project_in(dir.path(), "a-b", "services:\n  c:\n    image: nginx:1\n");
     let inspect = format!(
-        r#"[{{"Id":"{ID}","Name":"/a-b-c-1","Image":"sha256:x","Config":{{"Image":"nginx:1","Labels":{{"riku.app":"a"}}}},"State":{{"Status":"running"}}}}]"#
+        r#"[{{"Id":"{ID}","Name":"/a-b.c.1","Image":"sha256:x","Config":{{"Image":"nginx:1","Labels":{{"riku.app":"a"}}}},"State":{{"Status":"running"}}}}]"#
     );
     let behaviour = format!("case \"$1\" in ps) echo {ID};; inspect) echo '{inspect}';; esac");
     let (engine, log) = mock_engine(dir.path(), &behaviour);

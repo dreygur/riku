@@ -38,7 +38,7 @@ fn leading_flags_keep_the_engine_restart_policy_off() {
 
     assert!(
         args.starts_with(
-            "run -d --name myapp-web-1 --restart no --network riku-myapp --network-alias web \
+            "run -d --name myapp.web.1 --restart no --network riku-myapp --network-alias web \
              --label riku.app=myapp --label riku.copy=1 --label riku.service=web \
              --env-file /scratch/env-1 --stop-signal SIGTERM --stop-timeout 30 registry.example/myapp:1"
         ),
