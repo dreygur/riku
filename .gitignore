@@ -44,6 +44,7 @@ ENV
 logs/
 !dashboard/app/api/logs/
 !crates/*/src/**/logs/
+!crates/*/assets/**/logs/
 
 # Temporary files
 tmp/
