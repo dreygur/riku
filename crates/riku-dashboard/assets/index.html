@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<title>riku</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%23141416'/%3E%3Crect x='1.5' y='1.5' width='509' height='509' rx='110.5' fill='none' stroke='%23FFFFFF' stroke-opacity='0.08' stroke-width='3'/%3E%3Cg transform='translate(98 96) scale(2.08)' fill='%23F0F1F3'%3E%3Cpath d='M76 12 132 44 76 76 20 44 76 12Zm0 17L49 44l27 15 27-15-27-15Z'/%3E%3Cpath d='M20 57 68 84v58L20 114V57Z'/%3E%3Cpath d='M132 57 84 84v58l48-28V57Z'/%3E%3C/g%3E%3C/svg%3E" />
+<link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+
+<header class="top">
+  <div class="brand" role="img" aria-label="riku">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 450 160" aria-hidden="true" focusable="false">
+      <g fill="#F0F1F3">
+        <path d="M76 12 132 44 76 76 20 44 76 12Zm0 17L49 44l27 15 27-15-27-15Z"/>
+        <path d="M20 57 68 84v58L20 114V57Zm16 28v20l16 9V94L36 85Z"/>
+        <path d="M132 57 84 84v58l48-28V57Zm-16 28-16 9v20l16-9V85Z"/>
+        <path d="M174 112V53h15v10c7-9 17-13 31-12v15c-17-2-31 5-31 20v26h-15Z"/>
+        <path d="M239 53h15v59h-15zM239 27h15v15h-15z"/>
+        <path d="M278 27h15v51l27-25h20l-30 28 32 31h-21l-28-28v28h-15V27Z"/>
+        <path d="M357 53h15v34c0 9 5 14 14 14s15-6 15-16V53h15v59h-14v-9c-6 7-14 11-25 11-17 0-20-12-20-25V53Z"/>
+      </g>
+      <path class="cursor" fill="#39D98A" d="M431 27h14v85h-14z"/>
+    </svg>
+  </div>
+  <div class="sup" id="sup" role="status"><span class="sup-dot"></span><span id="supText">connecting...</span></div>
+  <span class="grow"></span>
+  <span class="synced" id="synced"></span>
+  <div class="auth" id="auth"></div>
+</header>
+
+<div class="banner" id="banner" role="alert" hidden>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5"/><path d="M12 17.5v.01"/></svg>
+  <p id="bannerText">Can't reach the supervisor.</p>
+  <span class="retry" id="bannerRetry"></span>
+  <button type="button" class="btn sm" id="retryBtn">Retry now</button>
+</div>
+
+<main>
+  <div class="page-head" id="pageHead" hidden>
+    <div>
+      <h1>Apps</h1>
+      <p id="pageSub"></p>
+    </div>
+    <div class="summary" id="summary"></div>
+  </div>
+  <div class="apps" id="apps"></div>
+</main>
+
+<section class="drawer" id="drawer" aria-labelledby="drawerTitle" inert>
+  <div class="drawer-head">
+    <div class="dh-title"><h2 class="label" id="drawerTitle">Logs</h2><span class="mono" id="drawerApp"></span></div>
+    <div class="seg" id="logFilter" role="group" aria-label="Filter by worker"></div>
+    <label class="search">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><rect x="3" y="3" width="13" height="13"/><path d="M16 16l5 5"/></svg>
+      <span class="sr">Filter lines</span>
+      <input id="logQ" type="search" placeholder="Filter lines" autocomplete="off" spellcheck="false" />
+    </label>
+    <button type="button" class="btn sm follow" id="followBtn" aria-pressed="true">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" aria-hidden="true"><path d="M12 4v15"/><path d="M6 13l6 6 6-6"/></svg>Following
+    </button>
+    <button type="button" class="btn sm" id="pauseBtn">Pause</button>
+    <button type="button" class="btn sm ghost" id="clearBtn">Clear</button>
+    <button type="button" class="btn sm icon" id="drawerClose" aria-label="Close logs">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="console" id="console" role="log" aria-live="off" tabindex="0"></div>
+  <div class="drawer-foot">
+    <span class="stream" id="streamState"><i></i><span>connecting</span></span>
+    <span id="lineCount">0 lines</span>
+    <span>keeps the last 2,000</span>
+    <span class="grow"></span>
+    <button type="button" class="link" id="jumpBtn" hidden>Jump to latest</button>
+  </div>
+</section>
+
+<dialog id="confirm" aria-labelledby="cfTitle" aria-describedby="cfDesc">
+  <form method="dialog">
+    <div class="dlg-body">
+      <div class="dlg-title">
+        <span class="dlg-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="miter" aria-hidden="true"><rect x="6" y="6" width="12" height="12"/></svg></span>
+        <h3 id="cfTitle"></h3>
+      </div>
+      <p id="cfDesc"></p>
+      <div class="dlg-list" id="cfList"></div>
+    </div>
+    <div class="dlg-foot">
+      <button type="submit" value="cancel" class="btn" id="cfCancel">Cancel</button>
+      <button type="submit" value="ok" class="btn danger-solid" id="cfOk">Stop</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toasts"></div>
+
+<script type="module" src="/assets/js/main.js"></script>
+</body>
+</html>

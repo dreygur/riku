@@ -95,6 +95,16 @@ jobs:
       - name: Build
         run: nub run build
 
+      # The embedded dashboard in crates/riku-dashboard/assets has no build
+      # step or dependencies: type-check its JSDoc and run its unit tests.
+      - name: Type-check embedded dashboard
+        working-directory: crates/riku-dashboard/assets
+        run: npx -y -p typescript@5 tsc -p jsconfig.json
+
+      - name: Unit tests for embedded dashboard
+        working-directory: crates/riku-dashboard/assets
+        run: node --test 'js/tests/*.test.js'
+
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
