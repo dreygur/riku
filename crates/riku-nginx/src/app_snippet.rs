@@ -12,6 +12,10 @@
 //! 3. Every statement must start with a directive in [`ALLOWED_DIRECTIVES`]
 //!    (headers, expiry, body size, timeouts, proxy buffering, gzip), spelled
 //!    exactly.
+//!
+//! Installed filter plugins may then rewrite the text through the
+//! `nginx.include_content` chain. Checks 2 and 3 run again on the chain's
+//! output, so a filter cannot add what the app's file may not contain.
 
 use std::fs;
 use std::io::ErrorKind;
@@ -50,12 +54,16 @@ const ALLOWED_DIRECTIVES: &[&str] = &[
     "gzip_vary",
 ];
 
+/// The filter chain the snippet runs through before it reaches the template.
+const INCLUDE_FILTER: &str = "nginx.include_content";
+
 /// Refuse snippet text that does not fit the grammar or uses a directive
-/// outside the allowlist.
-fn check_snippet(content: &str, path: &Path) -> Result<()> {
+/// outside the allowlist. `source` names where the text came from in the
+/// error.
+fn check_snippet(content: &str, source: impl std::fmt::Display) -> Result<()> {
     let parsed = match statements(content) {
         Ok(parsed) => parsed,
-        Err(reason) => return Err(anyhow!("{} {reason}", path.display())),
+        Err(reason) => return Err(anyhow!("{source} {reason}")),
     };
     let refused = parsed
         .iter()
@@ -63,8 +71,7 @@ fn check_snippet(content: &str, path: &Path) -> Result<()> {
         .find(|name| !ALLOWED_DIRECTIVES.contains(name));
     match refused {
         Some(name) => Err(anyhow!(
-            "{} uses `{name}`, which a {SNIPPET_KEY} snippet may not; allowed: {}",
-            path.display(),
+            "{source} uses `{name}`, which a {SNIPPET_KEY} snippet may not; allowed: {}",
             ALLOWED_DIRECTIVES.join(", ")
         )),
         None => Ok(()),
@@ -107,7 +114,7 @@ pub(super) fn read_app_snippet(
         Ok(content) => content,
         Err(e) => return Err(anyhow!("cannot read {}: {e}", path.display())),
     };
-    match check_snippet(&content, &path) {
+    match check_snippet(&content, path.display()) {
         Ok(()) => Ok(content),
         Err(e) => Err(e),
     }
@@ -116,9 +123,13 @@ pub(super) fn read_app_snippet(
 /// Read the app's checked snippet as the seed value, run it through the
 /// `nginx.include_content` filter chain (`PLUGIN_PROTOCOL.md` §7.3: lets an
 /// installed plugin augment the generated config without replacing it), and
-/// insert the result. The checks apply to the app's file, not to what an
-/// installed plugin adds. Always inserts the key, even as an empty string,
-/// so it's never simply absent from the template context.
+/// insert the result. Always inserts the key, even as an empty string, so
+/// it's never simply absent from the template context.
+///
+/// The chain's output gets the same grammar and allowlist check as the
+/// app's file. Filter plugins sit in the deploy user's tree, so without it
+/// a filter could put back any directive the app's file is refused for. A
+/// chain that returns a non-string or refused text fails the deploy.
 #[allow(clippy::question_mark)]
 pub(super) fn insert_include_file(
     context: &mut tera::Context,
@@ -131,15 +142,17 @@ pub(super) fn insert_include_file(
         Err(e) => return Err(e),
     };
 
-    let filtered = riku_plugins::FilterBus::new(paths)
-        .apply("nginx.include_content", serde_json::json!(content));
-    match filtered.as_str() {
-        Some(s) => context.insert("RIKU_NGINX_INCLUDE_CONTENT", s),
-        // A filter returned something that isn't a string (a bug in that
-        // filter): degrade to the seed content rather than propagating a
-        // non-string value into the template.
-        None => context.insert("RIKU_NGINX_INCLUDE_CONTENT", &content),
+    let filtered =
+        riku_plugins::FilterBus::new(paths).apply(INCLUDE_FILTER, serde_json::json!(content));
+    let Some(filtered) = filtered.as_str() else {
+        return Err(anyhow!(
+            "the {INCLUDE_FILTER} filter chain returned {filtered}, not a string; refusing the nginx config"
+        ));
+    };
+    if let Err(e) = check_snippet(filtered, format!("{INCLUDE_FILTER} filter output")) {
+        return Err(e);
     }
+    context.insert("RIKU_NGINX_INCLUDE_CONTENT", filtered);
     Ok(())
 }
 

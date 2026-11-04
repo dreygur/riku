@@ -307,11 +307,17 @@ filter can decline to transform, but never veto.
 already supports a raw file-based passthrough (`RIKU_NGINX_INCLUDE_FILE`); that
 file's content (or an empty string if unset) is now the *seed* value run
 through this filter before being inlined into the config
-(`crates/riku-nginx/src/context.rs::insert_include_file`). This is the
+(`crates/riku-nginx/src/app_snippet.rs::insert_include_file`). This is the
 "augment, don't replace" alternative to the router seam's full-replace
 singleton (§6.2): any number of plugins can each contribute a snippet to
 the *default* nginx output, rather than one plugin taking over routing
 entirely.
+
+The chain's final output must pass the same grammar and directive
+allowlist as a `RIKU_NGINX_INCLUDE_FILE` snippet. This is the one place a
+filter result can fail its caller: if the output is not a string or uses a
+refused directive, riku refuses the deploy and names the filter stage and
+the reason, rather than inlining it or falling back to the seed.
 
 ### 7.4 Plugin-emitted custom events _(new)_
 

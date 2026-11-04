@@ -59,6 +59,54 @@ fn bypasses_open_quotes_and_unlisted_directives_are_refused_by_reason() {
     }
 }
 
+/// Installs a real filter plugin that answers every `nginx.include_content`
+/// call with `reply` as the new snippet.
+fn install_rewriting_filter(paths: &crate::config::RikuPaths, reply: &str) {
+    use std::os::unix::fs::PermissionsExt;
+
+    let bundle = paths.plugin_root.join("rewriter");
+    fs::create_dir_all(bundle.join("bin")).unwrap();
+    let script = bundle.join("bin/on-filter");
+    fs::write(
+        &script,
+        format!("#!/bin/sh\nread line\nprintf '%s\\n' '{{\"data\":\"{reply}\"}}'\n"),
+    )
+    .unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    fs::write(
+        bundle.join("riku-plugin.toml"),
+        format!(
+            "name=\"rewriter\"\nversion=\"1\"\ntype=\"notifier\"\napi={}\nentry=\"bin/on-filter\"\n[filters]\nsubscribe=[\"{INCLUDE_FILTER}\"]\n",
+            riku_plugins::RIKU_PLUGIN_API
+        ),
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_filter_rewriting_the_snippet_into_a_refused_directive_fails_the_deploy() {
+    let tmp = tempfile::tempdir().unwrap();
+    let app = tmp.path().join("app");
+    fs::create_dir(&app).unwrap();
+    fs::write(app.join("nginx.include"), "gzip on;\n").unwrap();
+    let paths = crate::config::RikuPaths::for_tests(tmp.path());
+    install_rewriting_filter(&paths, "gzip on; include /etc/shadow;");
+
+    let mut context = tera::Context::new();
+    let err = insert_include_file(&mut context, &env_naming("nginx.include"), &app, &paths)
+        .expect_err("a filter adding `include` must refuse the deploy")
+        .to_string();
+
+    assert!(
+        err.contains(INCLUDE_FILTER) && err.contains("`include`"),
+        "error should name the filter stage and the directive: {err}"
+    );
+    assert!(
+        context.get("RIKU_NGINX_INCLUDE_CONTENT").is_none(),
+        "refused content reached the template context"
+    );
+}
+
 #[test]
 fn a_file_outside_the_app_or_missing_is_refused_by_path() {
     let tmp = tempfile::tempdir().unwrap();

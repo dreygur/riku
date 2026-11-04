@@ -154,7 +154,9 @@ content is now the *seed* value run through this filter before being
 inlined into the generated `.conf`. This is the "augment the default config"
 alternative to writing a full router plugin (below), any number of
 installed plugins can each contribute a snippet, rather than one plugin
-replacing routing entirely.
+replacing routing entirely. The chain's final output must pass the same
+directive allowlist as the app's own snippet; if it does not, or is not a
+string, the deploy is refused with the reason.
 
 ```toml
 [filters]
