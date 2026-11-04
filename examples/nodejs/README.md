@@ -27,6 +27,9 @@ riku config set nodejs-example PORT=3000
 
 # Set Node environment
 riku config set nodejs-example NODE_ENV=production
+
+# Health-gate deploys on the /health endpoint instead of an open port
+riku config set nodejs-example RIKU_HEALTH_CHECK_URL=/health
 ```
 
 ### 3. Access Your App
@@ -44,7 +47,7 @@ curl http://your-server-ip
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/` | GET | Welcome message |
-| `/health` | GET | Health check (used by Riku) |
+| `/health` | GET | Health check (used by Riku when `RIKU_HEALTH_CHECK_URL=/health`) |
 | `/env` | GET | Environment information |
 | `/echo` | POST | Echo request body |
 
@@ -60,7 +63,7 @@ curl http://localhost:3000/env
 # Test echo endpoint
 curl -X POST http://localhost:3000/echo \
   -H "Content-Type: application/json" \
-  -d '{"message": "Hello Riku!"}'
+  -d '{"message": "Hello Riku"}'
 ```
 
 ## Configuration
@@ -71,7 +74,7 @@ curl -X POST http://localhost:3000/echo \
 |----------|---------|-------------|
 | `PORT` | 3000 | Server port |
 | `NODE_ENV` | development | Environment mode |
-| `HOSTNAME` | - | Auto-set by Riku |
+| `HOSTNAME` | `unknown` | Reported by `/env`, read from the process environment |
 
 ### Scaling
 
@@ -95,10 +98,13 @@ git push riku main
 ```
 nodejs/
 ├── package.json      # Dependencies and scripts
+├── nub.lock          # Lockfile
 ├── server.js         # Main application
-├── Procfile          # Riku process definition
 └── README.md         # This file
 ```
+
+There is no `Procfile`: the node runtime plugin starts `node <main>` from the
+`main` field in `package.json`, here `node server.js`.
 
 ## Local Development
 
@@ -158,7 +164,7 @@ Ensure `package.json` is in the app root and has valid syntax:
 
 ```bash
 # Validate package.json
-cat package.json | jq .
+jq . package.json
 ```
 
 ## Next Steps

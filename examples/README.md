@@ -27,11 +27,15 @@ git push riku main
 
 | Example | Runtime | Description |
 |---------|---------|-------------|
+| `nodejs/` | Node.js | Express HTTP server |
 | `nodejs-wisp/` | Node.js | Simple HTTP server |
 | `golang/` | Go | Go web application |
 | `rust/` | Rust | Rust web server |
 | `python-postgres/` | Python | Django app with PostgreSQL |
-| `client-plugins/` | Plugin | Example Riku plugin |
+| `compose-ghcr/` | Container | Compose app pulling a GHCR image, with auto-update |
+| `client-plugins/` | Plugin | Example client-side plugins |
+| `server-hooks/` | Plugin | Example server-side lifecycle hook plugins |
+| `plugins/` | Plugin | Addon and event bundles: postgres, redis, sqlite-volume, webhook-notify |
 
 ## Configuration Files
 
@@ -50,14 +54,13 @@ RIKU_BIND_ADDRESS=127.0.0.1
 
 # Node.js specific
 RIKU_NODE_VERSION=18.17.0
-NODE_PACKAGE_MANAGER=npm
 
 # Nginx caching
 RIKU_NGINX_CACHE_PREFIXES=/api/cache
 RIKU_NGINX_CACHE_TIME=3600
 ```
 
-See `../docs/ENV.md` for the complete list of environment variables.
+See `../docs/docs/env.md` for the complete list of environment variables.
 
 ### SCALING File
 
@@ -95,7 +98,7 @@ You can test examples before deploying:
 ../tests/deploy-smoke/quick-test.sh test-node node
 
 # Or run manually
-cd nodejs-wisp
+cd nodejs
 node server.js
 ```
 
@@ -128,6 +131,6 @@ riku run myapp python3 --version
 ```
 
 **Need help?**
-- See `../docs/FAQ.md`
-- Check `../docs/INSTALL.md`
-- Review `../docs/ENV.md`
+- See `../docs/docs/faq.md`
+- Check `../docs/docs/installation.md`
+- Review `../docs/docs/env.md`

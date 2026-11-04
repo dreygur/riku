@@ -82,5 +82,13 @@ nub install                 # nub ci / nub install --frozen-lockfile in CI
 nub run dev         # next dev --turbopack
 nub run build       # next build
 nub run typecheck   # tsc --noEmit
-nub run test:e2e    # playwright test
+nub run test:unit   # vitest run
+nub run test:e2e    # playwright test --project=e2e
 ```
+
+## Layout
+
+- [`app/`](app/README.md): App Router pages and the `/api` route handlers.
+- [`components/`](components/README.md): shared UI and Riku-specific components.
+- [`lib/`](lib/README.md): API client, auth, password hashing, shared types.
+- [`scripts/`](scripts/README.md): `hash-password` and the dashboard audit script.
