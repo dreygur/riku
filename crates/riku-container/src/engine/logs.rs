@@ -2,13 +2,17 @@
 //!
 //! Security model: container ids are [`ContainerId`]s (hex only) and reach
 //! the engine as a separate argv element, never through a shell. A `--since`
-//! bound is a timestamp the caller formatted itself, not engine output.
+//! bound is a timestamp the caller formatted itself, not engine output. A
+//! container controls its own output, so each stream is read up to a byte
+//! cap and a failed call reports only a short, escaped engine line (see
+//! `failure_summary`).
 
 use std::ffi::OsString;
+use std::process::ExitStatus;
 
 use anyhow::{anyhow, Result};
 
-use super::bounded::capture;
+use super::bounded::capture_capped;
 use super::{ContainerId, Engine};
 
 /// Which part of a container's log history [`Engine::timestamped_logs`] returns.
@@ -24,13 +28,69 @@ pub enum LogRange {
 }
 
 /// The output of one bounded `logs --timestamps` call. Every line starts
-/// with the engine's RFC 3339 timestamp and a space.
+/// with the engine's RFC 3339 timestamp and a space, and ends with a newline.
 #[derive(Debug, Default)]
 pub struct TimestampedLogs {
     /// What the container wrote to stdout.
     pub stdout: String,
     /// What the container wrote to stderr.
     pub stderr: String,
+    /// True when stdout reached the byte cap. It then holds only the
+    /// complete lines read before the cap, and later lines need another call.
+    pub stdout_capped: bool,
+    /// The same as `stdout_capped`, for stderr.
+    pub stderr_capped: bool,
+}
+
+/// Longest failure detail kept from the engine's stderr.
+const DETAIL_CHARS: usize = 200;
+
+/// Whether `line` starts like an RFC 3339 timestamp (`YYYY-MM-DDT`).
+fn is_timestamped(line: &str) -> bool {
+    let head = line.as_bytes();
+    head.len() >= 11
+        && head[..11].iter().enumerate().all(|(i, b)| match i {
+            4 | 7 => *b == b'-',
+            10 => *b == b'T',
+            _ => b.is_ascii_digit(),
+        })
+}
+
+/// Why a `logs` call failed, without the container's own output.
+///
+/// With `--timestamps`, the stderr of `docker logs` is mostly what the
+/// container wrote to stderr, and every such line starts with a timestamp.
+/// Only the exit status and the last line the engine wrote itself are kept,
+/// shortened and escaped, so a container cannot fill or forge the
+/// supervisor log through a failing call.
+fn failure_summary(status: ExitStatus, stderr: &[u8]) -> String {
+    let stderr = String::from_utf8_lossy(stderr);
+    let engine_line = stderr
+        .lines()
+        .rev()
+        .map(str::trim)
+        .find(|line| !line.is_empty() && !is_timestamped(line));
+    match engine_line {
+        Some(line) => {
+            let detail: String = line.chars().take(DETAIL_CHARS).collect();
+            format!("container engine 'logs' failed ({status}): {detail:?}")
+        }
+        None => format!("container engine 'logs' failed ({status})"),
+    }
+}
+
+/// A stream as text. A capped stream ends at its last newline, so the line
+/// the byte cap cut is left for the next call.
+fn stream_text(bytes: &[u8], capped: bool) -> String {
+    let end = if capped {
+        bytes
+            .iter()
+            .rposition(|b| *b == b'\n')
+            .map_or(0, |at| at + 1)
+    } else {
+        bytes.len()
+    };
+    String::from_utf8_lossy(&bytes[..end]).into_owned()
 }
 
 fn args_of<const N: usize>(parts: [&str; N]) -> Vec<OsString> {
@@ -58,22 +118,31 @@ impl Engine {
     }
 
     /// Read the part of the container's logs `range` names, with timestamps,
-    /// within the call limit. The engine process exits when it is done, so
-    /// no client stays running between calls.
+    /// within the call limit and keeping at most `stream_cap` bytes of each
+    /// stream. The engine process exits when it is done, so no client stays
+    /// running between calls.
     #[allow(clippy::question_mark)]
-    pub fn timestamped_logs(&self, id: &ContainerId, range: &LogRange) -> Result<TimestampedLogs> {
+    pub fn timestamped_logs(
+        &self,
+        id: &ContainerId,
+        range: &LogRange,
+        stream_cap: usize,
+    ) -> Result<TimestampedLogs> {
         let mut args = args_of(["logs", "--timestamps"]);
         args.extend(range_args(range));
         args.push(id.as_str().into());
-        let out = match capture(self.program(), &args, self.settings().call_timeout) {
+        let out = match capture_capped(
+            self.program(),
+            &args,
+            self.settings().call_timeout,
+            stream_cap,
+        ) {
             Ok(out) => out,
             Err(e) => return Err(e),
         };
-        if !out.status.success() {
-            return Err(anyhow!(
-                "container engine 'logs' failed: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            ));
+        let capped = out.stdout_capped || out.stderr_capped;
+        if !out.status.success() && !capped {
+            return Err(anyhow!(failure_summary(out.status, &out.stderr)));
         }
         if out.truncated {
             return Err(anyhow!(
@@ -81,8 +150,10 @@ impl Engine {
             ));
         }
         Ok(TimestampedLogs {
-            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
-            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+            stdout: stream_text(&out.stdout, out.stdout_capped),
+            stderr: stream_text(&out.stderr, out.stderr_capped),
+            stdout_capped: out.stdout_capped,
+            stderr_capped: out.stderr_capped,
         })
     }
 }

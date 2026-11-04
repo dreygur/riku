@@ -7,11 +7,18 @@
 //! bound, so those lines come back on the next call and the cursor skips the
 //! ones already written. Lines from stdout and stderr are merged in
 //! timestamp order. A line whose timestamp does not parse is dropped.
+//!
+//! Security model: a container controls its labels and its output. The app,
+//! service and copy labels are validated when the listing is parsed, the log
+//! path must stay under the log root, and the file is opened with
+//! `O_NOFOLLOW`. Each call keeps at most [`STREAM_CAP`] bytes per stream, so
+//! a container that floods its output cannot exhaust supervisor memory.
 
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -52,12 +59,40 @@ fn stamped(output: &str) -> impl Iterator<Item = Stamped<'_>> {
     })
 }
 
-/// Both streams in timestamp order. The sort is stable, so lines stamped
-/// alike keep the same order on every call.
+/// The time up to which both streams are complete when one of them hit the
+/// byte cap: the newest line of the capped stream, or the older of the two
+/// when both were capped. `None` when neither was.
+fn cut_off(logs: &TimestampedLogs) -> Option<DateTime<Utc>> {
+    [
+        (&logs.stdout, logs.stdout_capped),
+        (&logs.stderr, logs.stderr_capped),
+    ]
+    .into_iter()
+    .filter(|(_, capped)| *capped)
+    .filter_map(|(text, _)| stamped(text).last().map(|line| line.at))
+    .min()
+}
+
+/// Both streams in timestamp order, without lines past the [`cut_off`] so
+/// the next call picks them up. The sort is stable, so lines stamped alike
+/// keep the same order on every call.
 fn merged(logs: &TimestampedLogs) -> Vec<Stamped<'_>> {
     let mut lines: Vec<Stamped> = stamped(&logs.stdout).chain(stamped(&logs.stderr)).collect();
     lines.sort_by_key(|line| line.at);
+    if let Some(cut) = cut_off(logs) {
+        lines.retain(|line| line.at <= cut);
+    }
     lines
+}
+
+/// Whether `path` is `root` followed by plain names only.
+fn stays_under(path: &Path, root: &Path) -> bool {
+    match path.strip_prefix(root) {
+        Ok(rest) => rest
+            .components()
+            .all(|part| matches!(part, Component::Normal(_))),
+        Err(_) => false,
+    }
 }
 
 fn unseen<'a, 'b>(lines: &'a [Stamped<'b>], cursor: Option<Cursor>) -> &'a [Stamped<'b>] {
@@ -85,11 +120,15 @@ fn cursor_after(lines: &[Stamped]) -> Option<Cursor> {
     })
 }
 
+/// Most bytes one `logs` call keeps from each stream.
+const STREAM_CAP: usize = 8 * 1024 * 1024;
+
 /// Log cursors of the containers being copied, keyed by id. `None` means
 /// nothing was written yet, so the next call asks for the whole history.
 pub(crate) struct LogPuller {
     log_root: PathBuf,
     cursors: HashMap<ContainerId, Option<Cursor>>,
+    stream_cap: usize,
 }
 
 impl LogPuller {
@@ -97,6 +136,7 @@ impl LogPuller {
         Self {
             log_root,
             cursors: HashMap::new(),
+            stream_cap: STREAM_CAP,
         }
     }
 
@@ -125,16 +165,20 @@ impl LogPuller {
     }
 
     /// `{log_root}/{app}/{service}.{copy}.log`, or `None` for a container
-    /// missing one of those labels.
+    /// missing one of those labels or whose labels lead outside the root.
     fn log_path(&self, info: &ContainerInfo) -> Option<PathBuf> {
-        match (&info.app, &info.service, &info.copy) {
-            (Some(app), Some(service), Some(copy)) => Some(
-                self.log_root
-                    .join(app)
-                    .join(format!("{service}.{copy}.log")),
-            ),
-            _ => None,
+        let path = match (&info.app, &info.service, &info.copy) {
+            (Some(app), Some(service), Some(copy)) => self
+                .log_root
+                .join(app)
+                .join(format!("{service}.{copy}.log")),
+            _ => return None,
+        };
+        if !stays_under(&path, &self.log_root) {
+            tracing::warn!(name = %info.name, "not copying logs: labels lead outside the log directory");
+            return None;
         }
+        Some(path)
     }
 
     fn start(&mut self, engine: &Engine, info: &ContainerInfo, start: Start) {
@@ -143,13 +187,15 @@ impl LogPuller {
         }
         let cursor = match start {
             Start::All => None,
-            Start::FromNow => match engine.timestamped_logs(&info.id, &LogRange::Newest) {
-                Ok(logs) => cursor_after(&merged(&logs)),
-                Err(e) => {
-                    tracing::warn!(name = %info.name, "cannot read the newest log line: {e}");
-                    return;
+            Start::FromNow => {
+                match engine.timestamped_logs(&info.id, &LogRange::Newest, self.stream_cap) {
+                    Ok(logs) => cursor_after(&merged(&logs)),
+                    Err(e) => {
+                        tracing::warn!(name = %info.name, "cannot read the newest log line: {e}");
+                        return;
+                    }
                 }
-            },
+            }
         };
         self.cursors.insert(info.id.clone(), cursor);
     }
@@ -163,7 +209,7 @@ impl LogPuller {
             Some(cursor) => LogRange::Since(cursor.at.to_rfc3339_opts(SecondsFormat::Nanos, true)),
             None => LogRange::All,
         };
-        let logs = match engine.timestamped_logs(&info.id, &range) {
+        let logs = match engine.timestamped_logs(&info.id, &range, self.stream_cap) {
             Ok(logs) => logs,
             Err(e) => {
                 tracing::warn!(name = %info.name, "cannot read logs: {e}");
@@ -193,7 +239,12 @@ impl LogPuller {
                 return Err(anyhow!("cannot create log directory: {e}"));
             }
         }
-        let mut file = match fs::OpenOptions::new().create(true).append(true).open(&path) {
+        let mut file = match fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(&path)
+        {
             Ok(file) => file,
             Err(e) => return Err(anyhow!("cannot open log file: {e}")),
         };

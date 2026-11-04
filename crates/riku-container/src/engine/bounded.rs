@@ -84,13 +84,38 @@ pub(super) fn drain(mut pipe: impl Read + Send + 'static) -> JoinHandle<Vec<u8>>
     })
 }
 
-fn joined(handle: Option<JoinHandle<Vec<u8>>>) -> Vec<u8> {
+/// One output stream read up to a byte cap.
+#[derive(Default)]
+struct Drained {
+    bytes: Vec<u8>,
+    capped: bool,
+}
+
+/// Read at most `cap` bytes. Past the cap the whole process group gets
+/// SIGKILL, so the client neither blocks on a full pipe until the deadline
+/// nor keeps the caller busy reading output it will throw away.
+fn drain_capped(pipe: impl Read + Send + 'static, cap: usize, pgid: Pid) -> JoinHandle<Drained> {
+    spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = pipe
+            .take((cap as u64).saturating_add(1))
+            .read_to_end(&mut bytes);
+        let capped = bytes.len() > cap;
+        if capped {
+            bytes.truncate(cap);
+            let _ = killpg(pgid, Signal::SIGKILL);
+        }
+        Drained { bytes, capped }
+    })
+}
+
+fn joined<T: Default>(handle: Option<JoinHandle<T>>) -> T {
     handle
         .map(|h| h.join().unwrap_or_default())
         .unwrap_or_default()
 }
 
-fn is_finished(handle: &Option<JoinHandle<Vec<u8>>>) -> bool {
+fn is_finished<T>(handle: &Option<JoinHandle<T>>) -> bool {
     match handle {
         Some(h) => h.is_finished(),
         None => true,
@@ -105,6 +130,11 @@ pub(super) struct Captured {
     /// True when stdout or stderr was still open when the capture deadline
     /// passed, so the output may be incomplete.
     pub truncated: bool,
+    /// True when stdout reached the byte cap of [`capture_capped`] and the
+    /// client was killed. `status` is then the kill, not the client's own.
+    pub stdout_capped: bool,
+    /// The same as `stdout_capped`, for stderr.
+    pub stderr_capped: bool,
 }
 
 /// Run `program` with `args` and capture its output, within `limit`.
@@ -112,8 +142,19 @@ pub(super) struct Captured {
 /// When it is still running after `limit` the process group is stopped and
 /// the error names the subcommand and the limit. Output is marked truncated
 /// when a helper held a pipe open past the limit.
-#[allow(clippy::question_mark)]
 pub(super) fn capture(program: &Path, args: &[OsString], limit: Duration) -> Result<Captured> {
+    capture_capped(program, args, limit, usize::MAX)
+}
+
+/// [`capture`], keeping at most `cap` bytes of each stream. The first stream
+/// to pass the cap stops the client; see [`Captured::stdout_capped`].
+#[allow(clippy::question_mark)]
+pub(super) fn capture_capped(
+    program: &Path,
+    args: &[OsString],
+    limit: Duration,
+    cap: usize,
+) -> Result<Captured> {
     let command = args
         .first()
         .map(|a| a.to_string_lossy().into_owned())
@@ -133,8 +174,14 @@ pub(super) fn capture(program: &Path, args: &[OsString], limit: Duration) -> Res
         }
     };
     let pgid = Pid::from_raw(child.id() as i32);
-    let stdout = child.stdout.take().map(drain);
-    let stderr = child.stderr.take().map(drain);
+    let stdout = child
+        .stdout
+        .take()
+        .map(|pipe| drain_capped(pipe, cap, pgid));
+    let stderr = child
+        .stderr
+        .take()
+        .map(|pipe| drain_capped(pipe, cap, pgid));
     let deadline = Instant::now() + limit;
     let status = match wait_until(&mut child, &command, deadline, limit) {
         Ok(status) => status,
@@ -150,11 +197,15 @@ pub(super) fn capture(program: &Path, args: &[OsString], limit: Duration) -> Res
     if truncated {
         let _ = killpg(pgid, Signal::SIGKILL);
     }
+    let stdout = joined(stdout);
+    let stderr = joined(stderr);
     Ok(Captured {
         status,
-        stdout: joined(stdout),
-        stderr: joined(stderr),
+        stdout: stdout.bytes,
+        stderr: stderr.bytes,
         truncated,
+        stdout_capped: stdout.capped,
+        stderr_capped: stderr.capped,
     })
 }
 
