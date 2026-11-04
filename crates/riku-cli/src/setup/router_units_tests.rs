@@ -3,16 +3,16 @@ use std::path::PathBuf;
 use super::*;
 
 #[test]
-fn nginx_path_unit_watches_its_config_dir() {
+fn nginx_path_unit_watches_only_the_reload_request_and_tolerates_bursts() {
     let tmp = tempfile::tempdir().unwrap();
-    let nginx_dir = PathBuf::from("/home/deploy/.riku/nginx");
+    let trigger = PathBuf::from("/home/deploy/.riku/nginx-reload.request");
 
-    let enabled = write_router_units(tmp.path(), &Router::Nginx, &nginx_dir).unwrap();
+    let enabled = write_router_units(tmp.path(), &Router::Nginx, &trigger).unwrap();
     assert_eq!(enabled.as_deref(), Some("riku-nginx.path"));
 
     let path_unit = fs::read_to_string(tmp.path().join("riku-nginx.path")).unwrap();
     assert!(
-        path_unit.contains("PathModified=/home/deploy/.riku/nginx"),
+        path_unit.contains("PathModified=/home/deploy/.riku/nginx-reload.request\n"),
         "{path_unit}"
     );
     assert!(
@@ -25,6 +25,7 @@ fn nginx_path_unit_watches_its_config_dir() {
         reload.contains("ExecStart=/usr/bin/systemctl reload nginx"),
         "{reload}"
     );
+    assert!(reload.contains("StartLimitIntervalSec=0"), "{reload}");
 }
 
 #[test]

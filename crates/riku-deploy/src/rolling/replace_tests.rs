@@ -186,17 +186,46 @@ fn scale_down_drains_before_stop() {
     assert_eq!(
         calls(&log),
         [
-            "start 4",
-            "healthy 4",
-            "publish 4",
-            "publish 3",
-            "stop 1",
             "publish 2",
             "stop 3",
             "publish 1",
             "stop 2",
+            "start 2",
+            "healthy 2",
+            "publish 2",
+            "publish 1",
+            "stop 1",
         ]
     );
+}
+
+#[test]
+fn a_refused_router_config_fails_before_any_copy_starts() {
+    let log = CallLog::default();
+    let mut runtime = mock_runtime(&log, &[1]);
+    let mut routes = mock_routes(&log, None);
+    routes.refuse_check = true;
+
+    let outcome = replace_all(&mut runtime, &mut routes, ReplaceOrder::Overlap, 1);
+
+    let message = format!("{:#}", outcome.unwrap_err());
+    assert!(message.contains("snippet refused"), "got: {message}");
+    assert!(calls(&log).is_empty(), "touched: {:?}", calls(&log));
+}
+
+/// Copy 3 is the one an earlier deploy started and could not route. With
+/// the router still failing, this deploy must stop before starting a copy.
+#[test]
+fn a_copy_left_by_a_failed_deploy_is_drained_before_any_new_copy() {
+    let log = CallLog::default();
+    let mut runtime = mock_runtime(&log, &[1, 3]);
+    let mut routes = mock_routes(&log, Some(1));
+
+    let outcome = replace_all(&mut runtime, &mut routes, ReplaceOrder::Overlap, 1);
+
+    assert!(outcome.is_err(), "the failing router must fail the deploy");
+    assert_eq!(calls(&log), ["publish 1"], "nothing may start first");
+    assert_eq!(runtime.running.len(), 2, "no copy was added");
 }
 
 #[test]

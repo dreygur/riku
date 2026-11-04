@@ -8,7 +8,6 @@
 pub(crate) use riku_config as config;
 pub(crate) use riku_util as util;
 
-mod acme;
 mod app_snippet;
 mod backends;
 mod cloudflare;
@@ -39,12 +38,12 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::util::backend::Backend;
-pub use acme::{generate_acme_nginx_config, ACME_CONFIG_FILE};
 pub use backends::{bind_address, default_backends, upstream_port_number};
 pub use host::{include_file_contents, include_line, includes_riku_sites, write_include_file};
 pub use host_check::{check_host_ready, stray_site_configs, HostReadiness};
-pub use reload::{reload_nginx, reload_nginx_with};
+pub use reload::reload_nginx_with;
 pub use remove::{remove_nginx_files, NginxRemoval};
+pub use template::check_nginx_config;
 use template::generate_nginx_config_from_template;
 
 /// Files an app might ship hoping to replace its generated nginx config.

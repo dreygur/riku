@@ -40,8 +40,6 @@ pub struct Supervisor {
     pub(super) stats_file: std::path::PathBuf,
     pub(super) pid_file: std::path::PathBuf,
     pub(super) control_token_file: std::path::PathBuf,
-    /// `<riku root>/ROUTER`, read on every SIGHUP to pick the router reload.
-    pub(super) router_file: std::path::PathBuf,
     pub(super) last_stats_write: std::time::SystemTime,
     pub(super) stats_write_interval: Duration,
     pub(super) cron_scheduler: CronScheduler,

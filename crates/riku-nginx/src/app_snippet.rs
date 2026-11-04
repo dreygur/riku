@@ -58,23 +58,27 @@ const ALLOWED_DIRECTIVES: &[&str] = &[
 const INCLUDE_FILTER: &str = "nginx.include_content";
 
 /// Refuse snippet text that does not fit the grammar or uses a directive
-/// outside the allowlist. `source` names where the text came from in the
-/// error.
-fn check_snippet(content: &str, source: impl std::fmt::Display) -> Result<()> {
+/// outside the allowlist, and return the directive names it uses. `source`
+/// names where the text came from in the error.
+fn check_snippet(content: &str, source: impl std::fmt::Display) -> Result<Vec<String>> {
     let parsed = match statements(content) {
         Ok(parsed) => parsed,
         Err(reason) => return Err(anyhow!("{source} {reason}")),
     };
-    let refused = parsed
+    let names: Vec<String> = parsed
         .iter()
         .filter_map(|statement| statement.split_whitespace().next())
-        .find(|name| !ALLOWED_DIRECTIVES.contains(name));
-    match refused {
+        .map(str::to_string)
+        .collect();
+    match names
+        .iter()
+        .find(|name| !ALLOWED_DIRECTIVES.contains(&name.as_str()))
+    {
         Some(name) => Err(anyhow!(
             "{source} uses `{name}`, which a {SNIPPET_KEY} snippet may not; allowed: {}",
             ALLOWED_DIRECTIVES.join(", ")
         )),
-        None => Ok(()),
+        None => Ok(names),
     }
 }
 
@@ -115,7 +119,7 @@ pub(super) fn read_app_snippet(
         Err(e) => return Err(anyhow!("cannot read {}: {e}", path.display())),
     };
     match check_snippet(&content, path.display()) {
-        Ok(()) => Ok(content),
+        Ok(_) => Ok(content),
         Err(e) => Err(e),
     }
 }
@@ -149,10 +153,15 @@ pub(super) fn insert_include_file(
             "the {INCLUDE_FILTER} filter chain returned {filtered}, not a string; refusing the nginx config"
         ));
     };
-    if let Err(e) = check_snippet(filtered, format!("{INCLUDE_FILTER} filter output")) {
-        return Err(e);
-    }
+    let directives = match check_snippet(filtered, format!("{INCLUDE_FILTER} filter output")) {
+        Ok(directives) => directives,
+        Err(e) => return Err(e),
+    };
     context.insert("RIKU_NGINX_INCLUDE_CONTENT", filtered);
+    // The templates leave out their own line for each directive the snippet
+    // sets: nginx refuses a second `client_max_body_size` or `gzip` in one
+    // server block.
+    context.insert("RIKU_NGINX_SNIPPET_DIRECTIVES", &directives);
     Ok(())
 }
 

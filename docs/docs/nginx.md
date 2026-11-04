@@ -220,6 +220,8 @@ client_max_body_size 50m;
 add_header X-Frame-Options DENY always;
 ```
 
+A `client_max_body_size` or `gzip*` directive in the snippet replaces the value riku's generated config would otherwise set (100M for the body size), since nginx refuses the same directive twice in one block.
+
 The deploy is refused, naming the file and the reason, if the file is missing or resolves outside the app directory, or if it uses any other directive, contains `{` or `}`, or has quoting nginx could read differently (see `RIKU_NGINX_INCLUDE_FILE` in the environment reference). Blocks such as `location`, and directives like `proxy_pass`, `root` or `proxy_set_header`, are therefore not possible here. Do not put extra `.conf` files in `~/.riku/nginx/`: nginx loads every `*.conf` there.
 
 Installed filter plugins on the `nginx.include_content` chain may rewrite the snippet. Their output gets the same grammar and directive check, and output that fails it, or is not a string, fails the deploy.

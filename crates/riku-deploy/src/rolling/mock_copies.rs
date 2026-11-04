@@ -28,6 +28,8 @@ pub struct MockRoutes {
     log: CallLog,
     publishes: usize,
     fail_publish: Option<usize>,
+    /// Makes `check` fail, as for a snippet nginx refuses.
+    pub refuse_check: bool,
     /// Every list handed to `publish`, in order.
     pub published: Vec<Vec<Backend>>,
 }
@@ -59,6 +61,7 @@ pub fn mock_routes(log: &CallLog, fail_publish: Option<usize>) -> MockRoutes {
         log: log.clone(),
         publishes: 0,
         fail_publish,
+        refuse_check: false,
         published: Vec::new(),
     }
 }
@@ -108,6 +111,13 @@ impl RouteSink for MockRoutes {
             .push(format!("publish {}", backends.len()));
         if self.fail_publish == Some(self.publishes) {
             return Err(anyhow!("reload not confirmed"));
+        }
+        Ok(())
+    }
+
+    fn check(&mut self) -> Result<()> {
+        if self.refuse_check {
+            return Err(anyhow!("snippet refused"));
         }
         Ok(())
     }

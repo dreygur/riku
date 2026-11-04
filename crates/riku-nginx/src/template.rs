@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use super::context::build_context;
-use super::install::install_site;
+use super::install::{check_site, install_site};
 use super::sanitize::{sanitize_env_for_nginx, sanitize_nginx_value};
 use crate::util::backend::Backend;
 
@@ -30,6 +30,28 @@ pub(super) fn generate_nginx_config_from_template(
     };
 
     install_site(app, &config_content, paths)
+}
+
+/// Render the app's config for `backends` and have `nginx -t` check it,
+/// without touching the live config. A deploy runs this before it starts a
+/// copy, so a refused `RIKU_NGINX_INCLUDE_FILE` snippet or a config nginx
+/// rejects fails the deploy while the old copies still serve alone.
+pub fn check_nginx_config(
+    app: &str,
+    app_path: &Path,
+    env: &HashMap<String, String>,
+    backends: &[Backend],
+    paths: &crate::config::RikuPaths,
+) -> Result<()> {
+    let config_content = match render_nginx_config(app, app_path, env, backends, paths) {
+        Ok(content) => content,
+        Err(e) => {
+            return Err(anyhow::anyhow!(
+                "cannot render nginx config for '{app}': {e}"
+            ))
+        }
+    };
+    check_site(app, &config_content, paths)
 }
 
 /// Render the app's config text without writing it.
@@ -98,10 +120,6 @@ fn register_templates(tera: &mut tera::Tera) -> Result<()> {
         (
             "nginx_portmap.conf.tera",
             include_str!("../../../templates/nginx_portmap.conf.tera"),
-        ),
-        (
-            "nginx_acme_firstrun.conf.tera",
-            include_str!("../../../templates/nginx_acme_firstrun.conf.tera"),
         ),
         (
             "nginx_static.conf.tera",

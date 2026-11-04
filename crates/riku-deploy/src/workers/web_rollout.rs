@@ -56,6 +56,14 @@ impl RouteSink for WebRoutes<'_> {
         };
         crate::router::apply(self.app, self.app_path, &env, self.paths, backends)
     }
+
+    fn check(&mut self) -> Result<()> {
+        let env = match crate::supervisor_ctl::read_app_env(self.app, self.paths) {
+            Ok(env) => env,
+            Err(e) => return Err(e),
+        };
+        crate::router::check(self.app, self.app_path, &env, self.paths)
+    }
 }
 
 /// Copies overlap unless two of them would need the same address: a pinned

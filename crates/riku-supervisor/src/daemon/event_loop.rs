@@ -1,7 +1,6 @@
 //! Supervisor event loop, reload handling, and clean shutdown.
 
 use anyhow::Result;
-use riku_config::router::Router;
 use std::fs;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
@@ -15,26 +14,12 @@ use crate::{is_running, RELOAD_COUNTER};
 // a `return Err(...)`.
 #[allow(clippy::question_mark)]
 impl Supervisor {
-    /// Refresh the router's config too, so a SIGHUP-triggered reload
-    /// reconciles both halves of "live config" together. `nginx -s reload` is
-    /// itself graceful (finishes in-flight connections on old workers), so
-    /// this never drops traffic for unaffected apps either.
-    fn reload_router(&self) {
-        match Router::load_file(&self.router_file) {
-            Ok(Router::Nginx) => {
-                if let Err(e) = crate::nginx::reload_nginx() {
-                    tracing::warn!("nginx reload failed: {e}");
-                }
-            }
-            // Caddy is reloaded by each deploy; a router plugin reloads itself.
-            Ok(Router::Caddy | Router::Plugin(_)) => {}
-            Err(e) => tracing::error!("not reloading the router: {e}"),
-        }
-    }
-
     /// Reload all worker configs if a SIGHUP was received since the last
     /// check. Uses `swap` to atomically get-and-reset the counter, so a
     /// signal delivered between ticks is never lost.
+    ///
+    /// The router is left alone: every command that writes router config
+    /// requests and confirms its own reload.
     fn reload_if_requested(&mut self) -> Result<()> {
         let pending_reloads = RELOAD_COUNTER.swap(0, Ordering::SeqCst);
         if pending_reloads > 0 {
@@ -49,8 +34,6 @@ impl Supervisor {
             if let Err(e) = self.reload_all_configs() {
                 return Err(e);
             }
-
-            self.reload_router();
         }
         Ok(())
     }

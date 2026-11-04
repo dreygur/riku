@@ -99,6 +99,13 @@ impl RikuPaths {
         self.log_root.join(app).join("deploy.log")
     }
 
+    /// The file `riku-nginx.path` watches. riku writes it once per nginx
+    /// reload request, and nothing else touches it, so config writes in
+    /// `nginx_root` never start a reload on their own.
+    pub fn nginx_reload_trigger(&self) -> PathBuf {
+        self.riku_root.join("nginx-reload.request")
+    }
+
     /// Build paths using the given root directory and home directory, with
     /// the system nginx paths from the environment ([`NginxHostPaths::from_env`]).
     pub fn from_dirs(riku_root: PathBuf, home: &Path) -> Self {

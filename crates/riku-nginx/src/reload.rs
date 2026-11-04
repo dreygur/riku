@@ -9,15 +9,10 @@ use std::process::Command;
 
 use anyhow::{anyhow, Result};
 
-/// Ask the running nginx master to reload its configuration.
+/// Ask the nginx master run by `program` to reload its configuration.
 ///
 /// Fails when nginx is missing, not running, or rejects the config, with
 /// nginx's own message in the error.
-pub fn reload_nginx() -> Result<()> {
-    reload_nginx_with(crate::config::program::find_program("nginx"))
-}
-
-/// [`reload_nginx`] with an explicit nginx program.
 pub fn reload_nginx_with(program: impl AsRef<OsStr>) -> Result<()> {
     let output = match crate::util::spawn::output_retrying_etxtbsy(
         Command::new(program.as_ref()).args(["-s", "reload"]),

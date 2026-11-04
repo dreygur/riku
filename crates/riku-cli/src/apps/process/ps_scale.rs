@@ -18,9 +18,12 @@ fn service_count(setting: &str) -> Result<(ServiceName, u32)> {
         Err(e) => return Err(e.context(format!("in scale setting '{setting}'"))),
     };
     match count.trim().parse::<u32>() {
+        Ok(0) => Err(anyhow!(
+            "cannot apply '{setting}': copies must be at least 1; `riku stop <app> {service}` stops a service"
+        )),
         Ok(count) => Ok((service, count)),
         Err(_) => Err(anyhow!(
-            "malformed setting '{setting}', copies must be 0 or more"
+            "malformed setting '{setting}', copies must be a whole number"
         )),
     }
 }

@@ -48,8 +48,8 @@ fn publish_live(routes: &mut impl RouteSink, copies: &[LiveCopy]) -> Result<()> 
 }
 
 /// Routes to `fresh`, already pushed onto `copies`. When the router cannot
-/// confirm, the copy stays running: it may already be serving, and the next
-/// deploy replaces it.
+/// confirm, the copy stays running: it may already be serving. The next
+/// deploy drains it if it is surplus, or replaces it.
 pub(super) fn publish_added(
     routes: &mut impl RouteSink,
     copies: &[LiveCopy],
@@ -58,7 +58,7 @@ pub(super) fn publish_added(
     match publish_live(routes, copies) {
         Ok(()) => Ok(()),
         Err(e) => Err(e.context(format!(
-            "router not confirmed for copy {fresh}; copy {fresh} left running, the next deploy replaces it"
+            "router not confirmed for copy {fresh}; copy {fresh} left running, the next deploy drains or replaces it"
         ))),
     }
 }
@@ -108,6 +108,9 @@ pub fn scale_to(
 ) -> Result<()> {
     if want == 0 {
         return Err(anyhow!("cannot scale a service to 0 copies"));
+    }
+    if let Err(e) = routes.check() {
+        return Err(e.context("not starting a copy: the router config would be refused"));
     }
     let mut copies = match runtime.live() {
         Ok(copies) => copies,

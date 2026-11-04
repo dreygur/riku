@@ -14,7 +14,10 @@ use super::bounded::capture;
 use super::{ContainerId, Engine};
 use crate::types::labels;
 
-const EVENT_NAMES: [&str; 3] = ["start", "die", "health_status"];
+/// `destroy` makes the watch inspect a removed container, find it gone and
+/// forget it. Without it a removed copy stays listed, in its last state,
+/// until the next full listing.
+const EVENT_NAMES: [&str; 4] = ["start", "die", "health_status", "destroy"];
 
 impl Engine {
     /// Check whether the engine supports streaming events.

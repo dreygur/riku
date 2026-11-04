@@ -29,6 +29,21 @@ pub(super) fn install_site(name: &str, contents: &str, paths: &RikuPaths) -> Res
     install_checked(&site_file(name, paths), contents, paths)
 }
 
+/// Run `nginx -t` on `contents` as `name`'s config without making it live.
+pub(super) fn check_site(name: &str, contents: &str, paths: &RikuPaths) -> Result<()> {
+    let target = site_file(name, paths);
+    let staged = staged_file(name, paths);
+    if let Err(e) = crate::util::write_atomic(&staged, contents.as_bytes()) {
+        return Err(anyhow!("cannot write {staged:?}: {e}"));
+    }
+    let checked = validate_nginx_config(&staged, &paths.reload_programs.nginx);
+    let _ = fs::remove_file(&staged);
+    match checked {
+        Ok(()) => Ok(()),
+        Err(e) => Err(anyhow!("nginx rejected {}: {e}", target.display())),
+    }
+}
+
 /// Validate `contents` and write it to `target` through a staged copy
 /// `<target>.new`. `target` may be a name the include does not load.
 pub(super) fn install_checked(target: &Path, contents: &str, paths: &RikuPaths) -> Result<()> {

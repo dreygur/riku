@@ -30,6 +30,7 @@ use crate::util::route_plan::{HttpsPolicy, RoutePlan};
 
 mod backends;
 mod caddy;
+mod check;
 mod fallback;
 mod host_guard;
 mod plugin;
@@ -39,6 +40,7 @@ mod remove;
 pub use backends::{copy_socket, current_backends};
 pub(crate) use backends::{web_copies, worker_backend};
 use caddy::configure_caddy;
+pub use check::check;
 use fallback::fallback_backends;
 pub use host_guard::ensure_host_ready;
 use host_guard::ready_for;

@@ -4,8 +4,6 @@
 Component package located at `crates/riku-nginx/src`.
 
 ## Interface
-- `generate_acme_nginx_config` [acme.rs:generate_acme_nginx_config] (fn)
-- `ACME_CONFIG_FILE` [acme.rs:ACME_CONFIG_FILE] (const)
 - `read_app_snippet` [app_snippet.rs:read_app_snippet] (fn)
 - `insert_include_file` [app_snippet.rs:insert_include_file] (fn)
 - `upstream_port` [backends.rs:upstream_port] (fn)
@@ -29,8 +27,9 @@ Component package located at `crates/riku-nginx/src`.
 - `HostReadiness` [host_check.rs:HostReadiness] (enum)
 - `install_site` [install.rs:install_site] (fn)
 - `install_checked` [install.rs:install_checked] (fn)
+- `check_site` [install.rs:check_site] (fn)
+- `check_nginx_config` [template.rs:check_nginx_config] (fn)
 - `generate_nginx_config` [lib.rs:generate_nginx_config] (fn)
-- `reload_nginx` [reload.rs:reload_nginx] (fn)
 - `reload_nginx_with` [reload.rs:reload_nginx_with] (fn)
 - `remove_nginx_files` [remove.rs:remove_nginx_files] (fn)
 - `NginxRemoval` [remove.rs:NginxRemoval] (struct)
@@ -45,7 +44,6 @@ Component package located at `crates/riku-nginx/src`.
 - `test_support.rs` holds fixtures shared by the crate's test modules
 
 ## Modules
-- `acme.rs`: the first-run ACME challenge config, written under a name that does not end in `.conf` so the host include never loads it
 - `app_snippet.rs`: the app's own snippet named by `RIKU_NGINX_INCLUDE_FILE`, checked for path, grammar and directive allowlist, and checked again after the `nginx.include_content` filter chain
 - `context_cache.rs`: the proxy cache section of the template context (zone size, cache times, cache path)
 - `host.rs`: the one root-owned include file, `nginx_include_file`, holding `include <nginx_root>/*.conf;`

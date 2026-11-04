@@ -2,8 +2,9 @@
 //!
 //! A copy is an enabled `<app>@<kind>.<n>.toml` worker config. Starting one
 //! writes the config into a free slot and the supervisor spawns it; stopping
-//! one removes the enabled symlink and waits for the supervisor to report the
-//! process gone. An existing config is never rewritten, so the supervisor's
+//! one removes the enabled symlink, waits for the supervisor to report the
+//! process gone, then deletes the config from `workers_available`. An
+//! existing config is never rewritten, so the supervisor's
 //! in place canary path is not involved.
 //!
 //! Security: worker configs are riku's own files. Ports and sockets are read
@@ -148,7 +149,12 @@ impl CopyRuntime for ProcessRuntime<'_> {
         }
         crate::supervisor_ctl::notify_supervisor_reload(self.paths);
         wait_stopped(self.paths, &process_id, grace + STOP_MARGIN);
-        Ok(())
+        let available = self.paths.workers_available.join(name.file_name());
+        match fs::remove_file(&available) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(anyhow!("cannot remove {}: {e}", available.display())),
+        }
     }
 
     fn discard(&mut self, copy: &LiveCopy) {

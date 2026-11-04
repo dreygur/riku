@@ -11,7 +11,6 @@ use std::time::Duration;
 
 // Dependency crates aliased as their former module names.
 pub(crate) use riku_error as error;
-pub(crate) use riku_nginx as nginx;
 pub(crate) use riku_plugins as plugins;
 pub(crate) use riku_util as util;
 

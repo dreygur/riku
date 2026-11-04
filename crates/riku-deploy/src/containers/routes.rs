@@ -35,4 +35,16 @@ impl RouteSink for ServiceRoutes<'_> {
             ServiceRoutes::Unrouted => Ok(()),
         }
     }
+
+    fn check(&mut self) -> Result<()> {
+        match self {
+            ServiceRoutes::Router {
+                app,
+                app_path,
+                env,
+                paths,
+            } => crate::router::check(app, app_path, env, paths),
+            ServiceRoutes::Unrouted => Ok(()),
+        }
+    }
 }

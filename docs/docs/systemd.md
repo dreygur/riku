@@ -48,24 +48,25 @@ The binary is installed at `~/.local/bin/riku` (i.e., `%h/.local/bin/riku` in sy
 
 A root `riku init` installs this watcher system-wide for the active router (see [Caddy](caddy.md) for the Caddy one). The steps below are for a user-level install.
 
-To automatically reload nginx when Riku generates new configurations, enable a path watcher. Create `~/.config/systemd/user/riku-nginx.path`:
+Riku writes `~/.riku/nginx-reload.request` once each time it wants nginx reloaded. Watch that file, not the nginx config directory: temporary config files and uWSGI sockets land in the directory, and each would start a reload. Create `~/.config/systemd/user/riku-nginx.path`:
 
 ```ini
 [Unit]
-Description=Watch for Riku nginx config changes
+Description=Watch for Riku nginx reload requests
 
 [Path]
-PathChanged=%h/.riku/nginx
+PathModified=%h/.riku/nginx-reload.request
 
 [Install]
 WantedBy=default.target
 ```
 
-And `~/.config/systemd/user/riku-nginx-reload.service`:
+And `~/.config/systemd/user/riku-nginx-reload.service`. `StartLimitIntervalSec=0` keeps a burst of deploys from tripping systemd's start limit, which would leave the watcher failed:
 
 ```ini
 [Unit]
-Description=Reload nginx on Riku config change
+Description=Reload nginx when Riku asks for it
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot

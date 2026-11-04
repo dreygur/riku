@@ -62,9 +62,12 @@ fn nginx_reload_fails_when_only_the_old_run_finishes() {
     assert!(err.contains("did not confirm"), "{err}");
 }
 
+/// Phase 0 answers the baseline, phase 1 follows the first request, which
+/// lands while an older run is active and is lost.
 #[test]
 fn nginx_reload_retriggers_the_path_unit_once_the_old_run_ends() {
     let (outcome, _paths, _tmp) = nginx_reload(&[
+        &[(150, OLD, 0, "activating")],
         &[(150, OLD, 0, "activating"), (150, 160, 0, "inactive")],
         &[(NEW, NEW + 1, 0, "inactive")],
     ]);
@@ -75,7 +78,8 @@ fn nginx_reload_retriggers_the_path_unit_once_the_old_run_ends() {
 #[test]
 fn nginx_reload_retriggers_after_a_run_that_started_unseen_and_finished() {
     let (outcome, _paths, _tmp) = nginx_reload(&[
-        &[(50, OLD, 0, "inactive"), (150, 160, 0, "inactive")],
+        &[(50, OLD, 0, "inactive")],
+        &[(150, 160, 0, "inactive")],
         &[(NEW, NEW + 1, 0, "inactive")],
     ]);
 
@@ -106,6 +110,7 @@ fn nginx_reload_times_out() {
 #[test]
 fn nginx_reload_retriggers_again_when_a_trigger_is_lost() {
     let (outcome, _paths, _tmp) = nginx_reload(&[
+        &[(50, OLD, 0, "inactive")],
         &[(50, OLD, 0, "inactive")],
         &[(150, OLD, 0, "active"), (150, 160, 0, "inactive")],
         &[(NEW, NEW + 1, 0, "inactive")],

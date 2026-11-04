@@ -55,17 +55,6 @@ fn create_directory_structure(paths: &RikuPaths, router: &Router) -> Result<()> 
     Ok(())
 }
 
-fn generate_acme_config(paths: &RikuPaths) {
-    if let Err(e) = crate::nginx::generate_acme_nginx_config(paths) {
-        echo(
-            &format!(
-                "  ⚠ Could not generate ACME nginx config (nginx may not be installed): {}",
-                e
-            ),
-            "yellow",
-        );
-    }
-}
 #[allow(clippy::question_mark)]
 fn default_branch_step() -> Result<()> {
     let home = match env::var("HOME") {
@@ -75,8 +64,7 @@ fn default_branch_step() -> Result<()> {
     set_default_branch(&home, env::var(BRANCH_ENV).ok())
 }
 
-/// Directories, binary, ACME config, git hook and default branch in
-/// `paths`' tree.
+/// Directories, binary, git hook and default branch in `paths`' tree.
 #[allow(clippy::question_mark)]
 fn prepare_tree(paths: &RikuPaths, router: &Router, note: PathNote) -> Result<()> {
     echo("[1/4] Creating directory structure...", "");
@@ -85,9 +73,6 @@ fn prepare_tree(paths: &RikuPaths, router: &Router, note: PathNote) -> Result<()
     }
     if let Err(e) = install_riku_binary(note) {
         return Err(e);
-    }
-    if *router != Router::Caddy {
-        generate_acme_config(paths);
     }
 
     echo("", "");

@@ -29,7 +29,7 @@ fn service_count_parses_and_trims_valid_setting() {
 
 #[test]
 fn service_count_rejects_invalid_settings_naming_the_setting() {
-    for setting in ["web", "web=-1", "=2"] {
+    for setting in ["web", "web=-1", "=2", "web=0"] {
         let err = match service_count(setting) {
             Ok(v) => panic!("expected '{setting}' to fail, got {v:?}"),
             Err(e) => e,

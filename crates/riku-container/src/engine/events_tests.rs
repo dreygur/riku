@@ -64,6 +64,8 @@ fn events_command_filters_riku_containers() {
             "event=die",
             "--filter",
             "event=health_status",
+            "--filter",
+            "event=destroy",
         ]
     );
 }

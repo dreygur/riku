@@ -305,6 +305,59 @@ fn wsgi_app_balances_over_every_socket_backend() {
     );
 }
 
+/// `nginx -t` runs on a wrapper in the riku nginx dir, and a relative include
+/// resolves against that dir, so every include must be absolute.
+#[test]
+fn wsgi_config_includes_no_relative_path() {
+    let config = render(&[("RIKU_NGINX_WSGI", "true")]);
+
+    let relative: Vec<&str> = config
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with("include ") && !line.starts_with("include /"))
+        .collect();
+    assert!(
+        relative.is_empty(),
+        "relative includes {relative:?}:\n{config}"
+    );
+}
+
+/// nginx refuses a directive set twice in one server block, so the
+/// template's own line gives way to the app's snippet.
+#[test]
+fn a_snippet_directive_replaces_the_templates_own_line() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let paths = crate::config::RikuPaths::for_tests(temp_dir.path());
+    std::fs::write(
+        temp_dir.path().join("nginx.include"),
+        "client_max_body_size 50m;\ngzip off;\n",
+    )
+    .unwrap();
+
+    for template in ["RIKU_NGINX_PORTMAP", "RIKU_NGINX_WSGI", "RIKU_HTTPS_ONLY"] {
+        let env: HashMap<String, String> = [
+            ("RIKU_NGINX_INCLUDE_FILE", "nginx.include"),
+            (template, "true"),
+        ]
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+        let backends = default_backends("myapp", &env, &paths).unwrap();
+        let config =
+            render_nginx_config("myapp", temp_dir.path(), &env, &backends, &paths).unwrap();
+
+        assert_eq!(
+            config.matches("client_max_body_size").count(),
+            1,
+            "{template}:\n{config}"
+        );
+        assert!(
+            config.contains("gzip off;") && !config.contains("gzip on;"),
+            "{template}:\n{config}"
+        );
+    }
+}
+
 #[test]
 fn https_only_false_keeps_plain_template() {
     let env = HashMap::from([("RIKU_HTTPS_ONLY".to_string(), "false".to_string())]);

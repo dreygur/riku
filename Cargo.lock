@@ -2010,7 +2010,6 @@ dependencies = [
  "riku-container",
  "riku-error",
  "riku-http",
- "riku-nginx",
  "riku-plugins",
  "riku-util",
  "serde",

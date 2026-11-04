@@ -1,4 +1,6 @@
+{% if "client_max_body_size" not in RIKU_NGINX_SNIPPET_DIRECTIVES %}
 client_max_body_size 100M;
+{% endif %}
 large_client_header_buffers 4 16k;
 
 location ^~ /.well-known/acme-challenge {

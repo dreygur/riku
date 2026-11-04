@@ -1,8 +1,8 @@
 //! systemd units that reload the host router when riku changes its config.
 //!
-//! nginx gets a path unit watching its config directory under the deploy
-//! user's riku root, plus a oneshot service that runs `systemctl reload`
-//! on it. Caddy and router plugins get no units: riku reloads them itself
+//! nginx gets a path unit watching the reload request file under the deploy
+//! user's riku root (`RikuPaths::nginx_reload_trigger`), plus a oneshot
+//! service that runs `systemctl reload` on it. Caddy and router plugins get no units: riku reloads them itself
 //! and waits for the result.
 
 use std::fs;
@@ -49,30 +49,34 @@ fn reload_unit_name(service: &str) -> String {
     format!("riku-{service}-reload.service")
 }
 
-fn render_path_unit(service: &str, watched: &Path) -> String {
+fn render_path_unit(service: &str, trigger: &Path) -> String {
     format!(
         "[Unit]
-Description=Watch for Riku {service} configuration changes
+Description=Watch for Riku {service} reload requests
 Documentation=https://dreygur.github.io/riku/
 PartOf=riku.service
 
 [Path]
-PathModified={watched}
+PathModified={trigger}
 Unit={reload}
 
 [Install]
 WantedBy=multi-user.target
 ",
-        watched = watched.display(),
+        trigger = trigger.display(),
         reload = reload_unit_name(service),
     )
 }
 
+/// `StartLimitIntervalSec=0` because several deploys in a few seconds are
+/// normal. With systemd's default limit the sixth start in 10s fails the
+/// path unit, and every later reload waits for a run that never comes.
 fn render_reload_unit(service: &str) -> String {
     format!(
         "[Unit]
-Description=Reload {service} when Riku configuration changes
+Description=Reload {service} when Riku asks for it
 Documentation=https://dreygur.github.io/riku/
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
@@ -92,23 +96,20 @@ fn write_unit(systemd_dir: &Path, name: &str, content: &str) -> Result<()> {
     }
 }
 
-/// Write the watcher units for `router`, watching `config_dir`. Returns the
-/// path unit to enable, `None` for a plugin router.
+/// Write the watcher units for `router`, watching the reload request file
+/// `trigger`. Returns the path unit to enable, `None` for Caddy or a plugin
+/// router.
 #[allow(clippy::question_mark)]
 pub fn write_router_units(
     systemd_dir: &Path,
     router: &Router,
-    config_dir: &Path,
+    trigger: &Path,
 ) -> Result<Option<String>> {
     let Some(service) = router_service(router) else {
         return Ok(None);
     };
     let path_unit = path_unit_name(service);
-    if let Err(e) = write_unit(
-        systemd_dir,
-        &path_unit,
-        &render_path_unit(service, config_dir),
-    ) {
+    if let Err(e) = write_unit(systemd_dir, &path_unit, &render_path_unit(service, trigger)) {
         return Err(e);
     }
     if let Err(e) = write_unit(

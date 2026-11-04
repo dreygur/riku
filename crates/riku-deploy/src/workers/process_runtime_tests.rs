@@ -73,6 +73,10 @@ fn web_copy_overlaps_on_deploy() {
         ["myapp@web.2.toml"],
         "the new copy should take the free slot"
     );
+    assert!(
+        !paths.workers_available.join("myapp@web.1.toml").exists(),
+        "the replaced copy's config stayed in workers-available"
+    );
     let text = fs::read_to_string(paths.workers_enabled.join(&enabled[0])).unwrap();
     let config: WorkerConfig = toml::from_str(&text).unwrap();
     let port: u16 = config.env["PORT"].parse().unwrap();

@@ -58,14 +58,11 @@ WantedBy=multi-user.target
     )
 }
 
-/// The directory the router's path unit watches in the deploy user's tree.
-fn router_config_dir(router: &Router, deploy_home: &str) -> PathBuf {
+/// The reload request file the nginx path unit watches in the deploy
+/// user's tree.
+fn reload_trigger(deploy_home: &str) -> PathBuf {
     let home = PathBuf::from(deploy_home);
-    let paths = RikuPaths::from_dirs(home.join(".riku"), &home);
-    match router {
-        Router::Caddy => paths.caddy_root,
-        Router::Nginx | Router::Plugin(_) => paths.nginx_root,
-    }
+    RikuPaths::from_dirs(home.join(".riku"), &home).nginx_reload_trigger()
 }
 
 fn write_system_unit(systemd_dir: &Path, content: &str) -> Result<()> {
@@ -119,7 +116,9 @@ fn enable_router_watch(router: &Router, path_unit: Option<&str>) {
     let Some(path_unit) = path_unit else {
         return;
     };
-    if systemctl_ok(&["enable", "--now", path_unit]) {
+    // Restart, not start: a path unit already running keeps watching the
+    // path it was started with, and one left failed stays down.
+    if systemctl_ok(&["enable", path_unit]) && systemctl_ok(&["restart", path_unit]) {
         echo(
             &format!("✓ Enabled {} auto-reload watcher", router.name()),
             "green",
@@ -154,8 +153,8 @@ pub fn install_systemd_service(router: &Router) -> Result<()> {
     if let Err(e) = write_system_unit(systemd_dir, &unit) {
         return Err(e);
     }
-    let config_dir = router_config_dir(router, &deploy_home);
-    let path_unit = match write_router_units(systemd_dir, router, &config_dir) {
+    let trigger = reload_trigger(&deploy_home);
+    let path_unit = match write_router_units(systemd_dir, router, &trigger) {
         Ok(path_unit) => path_unit,
         Err(e) => return Err(e),
     };

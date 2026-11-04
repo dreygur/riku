@@ -24,7 +24,7 @@ fn a_conf_that_is_no_apps_config_blocks_installs_by_name() {
     fs::create_dir_all(paths.app_root.join("shop")).unwrap();
     fs::write(paths.nginx_root.join("shop.conf"), "server {}\n").unwrap();
     fs::write(
-        paths.nginx_root.join(crate::ACME_CONFIG_FILE),
+        paths.nginx_root.join("acme-challenge.conf.disabled"),
         "server {}\n",
     )
     .unwrap();

@@ -28,26 +28,25 @@ fn lines(runs: &[Run]) -> String {
         .collect()
 }
 
-/// A `systemctl` that answers from `phases`. Phase 0 answers until the nginx
-/// config directory is touched; each touch moves to the next phase when there
-/// is one, and is ignored when there is none. Within a phase the Nth call
-/// gets line N, repeating the last line once they run out. The mock puts the
-/// directory's time back after it sees a touch, so the next touch shows too.
+/// A `systemctl` that answers from `phases`. Phase 0 answers until riku
+/// writes the reload request file; each write moves to the next phase when
+/// there is one, and is ignored when there is none. Within a phase the Nth
+/// call gets line N, repeating the last line once they run out. The mock puts
+/// the file's time back after it sees a write, so the next write shows too.
 pub fn mock_systemctl(dir: &Path, phases: &[&[Run]]) -> PathBuf {
     for (i, phase) in phases.iter().enumerate() {
         std::fs::write(dir.join(format!("phase_{i}")), lines(phase)).unwrap();
     }
-    let watched = dir.join(".riku/nginx");
-    std::fs::create_dir_all(&watched).unwrap();
+    std::fs::create_dir_all(dir.join(".riku/nginx")).unwrap();
     std::fs::write(dir.join("marker"), "").unwrap();
-    set_mtime(&watched, 1_000_000_000);
     set_mtime(&dir.join("marker"), 1_100_000_000);
     let body = format!(
         "dir={dir}\n\
+         trigger=\"$dir/.riku/nginx-reload.request\"\n\
          phase=$(cat \"$dir/phase\" 2>/dev/null || echo 0)\n\
          calls=$(cat \"$dir/calls\" 2>/dev/null || echo 0)\n\
-         if [ \"$dir/.riku/nginx\" -nt \"$dir/marker\" ]; then\n\
-             touch -t 200101010000 \"$dir/.riku/nginx\"\n\
+         if [ \"$trigger\" -nt \"$dir/marker\" ]; then\n\
+             touch -t 200101010000 \"$trigger\"\n\
              next=$((phase + 1))\n\
              if [ -s \"$dir/phase_$next\" ]; then\n\
                  phase=$next\n\

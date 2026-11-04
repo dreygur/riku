@@ -1,6 +1,7 @@
 //! Watching `riku-nginx-reload.service` to confirm an nginx reload.
 //!
-//! The unit is started by a path unit when riku changes the nginx config.
+//! The unit is started by a path unit watching one request file, which riku
+//! writes after it changed the nginx config.
 //! A reload counts as confirmed only by a run that started after riku wrote
 //! the config, finished, and exited 0. A run already in flight when the
 //! config was written, or one a concurrent deploy triggered earlier, may have
@@ -15,7 +16,7 @@
 
 use std::fs;
 use std::path::Path;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use nix::time::{clock_gettime, ClockId};
@@ -77,12 +78,13 @@ fn monotonic_micros() -> Result<u64> {
     }
 }
 
-fn touch_watched_dir(dir: &Path) {
-    let touched = fs::File::open(dir).and_then(|handle| handle.set_modified(SystemTime::now()));
-    if let Err(e) = touched {
+/// Start the reload unit by writing the request file `riku-nginx.path`
+/// watches. The content is only there so each write is a modification.
+fn request_reload(trigger: &Path) {
+    if let Err(e) = fs::write(trigger, format!("{}\n", std::process::id())) {
         tracing::warn!(
-            "cannot retrigger {NGINX_UNIT} through {}: {e}",
-            dir.display()
+            "cannot request a reload from {NGINX_UNIT} through {}: {e}",
+            trigger.display()
         );
     }
 }
@@ -105,19 +107,22 @@ fn unit_idle(state: &UnitState) -> bool {
     state.active_state == "inactive" || state.active_state == "failed"
 }
 
-/// Wait for a run of the reload unit that started after the config was
-/// written. While no such run has started (a run already in flight, or a
-/// concurrent deploy's run, took the path unit's trigger), the watched
-/// directory is touched each time the unit is seen idle and `RETRIGGER_AFTER`
-/// has passed since the last trigger. A trigger that lands while the unit is
-/// active is lost, so one touch is not enough, and touching an active unit
-/// is pointless. An older run is never accepted.
+/// Request a reload and wait for a run of the reload unit that started after
+/// the config was written. While no such run has started (a run already in
+/// flight, or a concurrent deploy's run, took the path unit's trigger), the
+/// request is written again each time the unit is seen idle and
+/// `RETRIGGER_AFTER` has passed since the last request. A trigger that lands
+/// while the unit is active is lost, so one request is not enough, and
+/// requesting while the unit is active is pointless. An older run is never
+/// accepted.
 #[allow(clippy::question_mark)]
 pub fn await_unit(paths: &RikuPaths) -> Result<()> {
     let written_at = match monotonic_micros() {
         Ok(now) => now,
         Err(e) => return Err(e),
     };
+    let trigger = paths.nginx_reload_trigger();
+    request_reload(&trigger);
     let started = Instant::now();
     let mut last_trigger = started;
     loop {
@@ -132,7 +137,7 @@ pub fn await_unit(paths: &RikuPaths) -> Result<()> {
             && unit_idle(&state)
             && last_trigger.elapsed() >= RETRIGGER_AFTER
         {
-            touch_watched_dir(&paths.nginx_root);
+            request_reload(&trigger);
             last_trigger = Instant::now();
         }
         if started.elapsed() >= RELOAD_WAIT {
