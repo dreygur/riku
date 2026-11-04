@@ -2,7 +2,7 @@
 //!
 //! Downloads shell script plugins from the Riku GitHub repository into
 //! `~/.riku/plugins/` and makes them executable. Rust binary plugins
-//! (java, clojure, container) are downloaded from GitHub releases.
+//! (java, clojure) are downloaded from GitHub releases.
 
 use anyhow::{anyhow, bail, Result};
 use std::fs;
@@ -19,7 +19,7 @@ const SHELL_PLUGINS: &[&str] = &["node", "python", "ruby", "go", "rust-lang"];
 /// These are downloaded as pre-compiled binaries named `riku-plugin-<name>-<target-triple>`
 /// (see `.github/workflows/release.yml`, which builds and uploads them
 /// alongside the main `riku` binary for every release).
-const BINARY_PLUGINS: &[&str] = &["java", "clojure", "container"];
+const BINARY_PLUGINS: &[&str] = &["java", "clojure"];
 
 /// Event-subscriber plugin bundles available in the repo's `plugins/`
 /// directory: each is a *directory* (manifest + entry script), unlike the

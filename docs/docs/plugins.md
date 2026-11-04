@@ -43,7 +43,7 @@ Each runtime plugin is an executable that implements four subcommands, plus an o
 | `<plugin> build` | install dependencies; stdout/stderr streamed to deploy log |
 | `<plugin> env` | print `KEY=VALUE` lines to stdout; merged into worker environment |
 | `<plugin> start` | print default start command; fills a Procfile entry with no command, and runs as `web` when the app has no Procfile |
-| `<plugin> destroy` | optional: remove what the plugin started outside the app directory (the container plugin runs `compose down`); called by `riku destroy` before the app's files go, and a non-zero exit is shown as a warning |
+| `<plugin> destroy` | optional: remove what the plugin started outside the app directory (for example containers or networks it started); called by `riku destroy` before the app's files go, and a non-zero exit is shown as a warning |
 
 Context is passed as environment variables:
 

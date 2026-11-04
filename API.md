@@ -28,7 +28,7 @@ language-specific code at all.
 | `riku-supervisor` | service | Process supervisor: spawn/health-check/restart, cgroups, log rotation, cron, and its own axum HTTP API (`/health`, `/metrics`, `/control/*`) |
 | `riku-cli` | provider | CLI command handlers, argument parsing (clap), user-facing output |
 | `riku-dashboard` | provider | Embedded, single-binary HTML+JS dashboard and its own read/write API, served by `riku dashboard` |
-| `riku-plugin-java`, `riku-plugin-clojure`, `riku-plugin-container` | - | Standalone Rust binary runtime plugins, compiled separately and distributed as GitHub release assets |
+| `riku-plugin-java`, `riku-plugin-clojure` | - | Standalone Rust binary runtime plugins, compiled separately and distributed as GitHub release assets |
 
 There is also a separate, non-workspace Next.js application at `dashboard/`
 (top-level, not under `crates/`), a fuller browser dashboard that proxies

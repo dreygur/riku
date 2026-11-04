@@ -17,7 +17,6 @@ only; `riku` is one member crate among these.
 - riku-http: builds the reqwest HTTP clients for the server side crates with ring as the rustls provider. Kept out of riku-util because `rk` links riku-util and must not link reqwest.
 - [riku-nginx](./riku-nginx/README.md): nginx configuration generation.
 - [riku-plugin-clojure](./riku-plugin-clojure/README.md): Clojure runtime plugin.
-- [riku-plugin-container](./riku-plugin-container/README.md): container runtime plugin (Dockerfile, Containerfile or compose file).
 - [riku-plugin-java](./riku-plugin-java/README.md): Java runtime plugin.
 - [riku-plugins](./riku-plugins/README.md): the plugin system (discovery, hooks, events, addons).
 - [riku-remote](./riku-remote/README.md): laptop side behaviour shared by the `riku` and `rk` binaries.

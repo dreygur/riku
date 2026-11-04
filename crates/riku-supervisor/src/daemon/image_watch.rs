@@ -2,10 +2,9 @@
 //! (e.g. `ghcr.io/org/app:latest`), so a freshly pushed image is picked up
 //! without a git push or any inbound connection to this host.
 //!
-//! Each check calls the `pull_service` action; for riku container apps that
-//! pulls the image and replaces the service's copies only when the pulled
-//! image id differs from what the running copies run; legacy compose apps
-//! still go through the plugin until migrated.
+//! Each check calls the `pull_service` action, which pulls the image and
+//! replaces the service's copies only when the pulled image id differs from
+//! what the running copies run.
 
 use anyhow::Result;
 

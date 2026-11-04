@@ -248,8 +248,7 @@ riku/
 │   ├── riku-dashboard/     # Server-rendered control dashboard routes
 │   ├── riku-container/     # Container services: shared types, engine driver, compose parsing
 │   ├── riku-plugin-java/
-│   ├── riku-plugin-clojure/
-│   └── riku-plugin-container/
+│   └── riku-plugin-clojure/
 ├── plugins/               # Bundled shell script runtime plugins
 │   ├── node
 │   ├── python

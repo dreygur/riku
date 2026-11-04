@@ -1946,15 +1946,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "riku-plugin-container"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "riku-container",
- "tempfile",
-]
-
-[[package]]
 name = "riku-plugin-java"
 version = "0.1.0"
 dependencies = [

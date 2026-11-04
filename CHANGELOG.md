@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-07-08
 
+- Removed `riku-plugin-container`: riku runs container apps itself, so `riku install-plugins container` and the plugin `pull-service` path for `RIKU_WATCH_SERVICES` are gone.
+
 ### Upgrade Notes: Worker and Socket File Names
 
 - Worker configs, process ids and uWSGI copy sockets are now named

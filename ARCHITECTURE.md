@@ -52,7 +52,7 @@ the crates were split out.
 | Repository | `riku-config` (`RikuPaths`), `riku-util`, `riku-error` |
 | Service | `riku-nginx`, `riku-deploy`, `riku-supervisor`, `riku-plugins` |
 | Provider | `riku-cli`, `riku-dashboard` |
-| Standalone runtime plugins | `riku-plugin-java`, `riku-plugin-clojure`, `riku-plugin-container` |
+| Standalone runtime plugins | `riku-plugin-java`, `riku-plugin-clojure` |
 
 `riku-plugins` is Service, not Provider, despite living next to `riku-cli`
 in spirit: `riku-supervisor`, `riku-deploy`, and `riku-nginx` all depend on
@@ -121,8 +121,6 @@ Plugins receive context via environment variables: `RIKU_APP`,
 - `rust-lang`: Rust (Cargo), detects `Cargo.toml` + `rust-toolchain.toml`
 - `riku-plugin-java`: Java (Maven/Gradle), detects `pom.xml` / `build.gradle`
 - `riku-plugin-clojure`: Clojure (Lein/deps.edn), detects `project.clj` / `deps.edn`
-- `riku-plugin-container`: Docker/Podman, detects `Dockerfile` / `Containerfile` / `docker-compose.yml`
-
 ### 4. Process Supervisor (`riku-supervisor`)
 
 Manages application processes and provides process lifecycle management:
