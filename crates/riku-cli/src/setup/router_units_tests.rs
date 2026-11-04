@@ -44,20 +44,3 @@ fn caddy_and_plugin_routers_get_no_units() {
         "After=network.target"
     );
 }
-
-#[test]
-fn old_caddy_units_are_removed() {
-    let tmp = tempfile::tempdir().unwrap();
-    for name in ["riku-caddy.path", "riku-caddy-reload.service"] {
-        fs::write(tmp.path().join(name), "").unwrap();
-    }
-    fs::write(tmp.path().join("riku.service"), "").unwrap();
-
-    remove_caddy_units(tmp.path());
-
-    let left: Vec<_> = fs::read_dir(tmp.path())
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name())
-        .collect();
-    assert_eq!(left, vec![std::ffi::OsString::from("riku.service")]);
-}

@@ -1,7 +1,7 @@
 use std::fs;
 
-use crate::containers::mock_legacy::procfile_workers;
 use crate::containers::mock_state::{deploy, mock_server, DB_AND_WEB};
+use crate::containers::mock_workers::procfile_workers;
 
 const ENV: &str = "RIKU_DOMAINS=myapp.example.com\n";
 

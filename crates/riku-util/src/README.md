@@ -5,9 +5,7 @@ Component package located at `crates/riku-util/src`.
 
 ## Interface
 - `RIKU_KEY_MARKER` [authorized_keys.rs:RIKU_KEY_MARKER] (const)
-- `migrate_line` [authorized_keys.rs:migrate_line] (fn)
-- `migrate_file` [authorized_keys.rs:migrate_file] (fn)
-- `authorized_keys.rs` [authorized_keys.rs] (and 3 additional symbols)
+- `authorized_keys_path` [authorized_keys.rs:authorized_keys_path] (fn)
 - `Backend` [backend.rs:Backend] (enum)
 - `loopback` [backend.rs:loopback] (fn)
 - `DeployLogger` [deploy_logger.rs:DeployLogger] (struct)
@@ -81,7 +79,6 @@ Component package located at `crates/riku-util/src`.
 - [fs.rs] Mutates local filesystem (creates/modifies/removes files)
 - [process_util.rs] Performs network I/O or binds socket
 - [ssh_keys.rs] Mutates local filesystem (creates/modifies/removes files)
-- [authorized_keys.rs] Rewrites `authorized_keys` by renaming a mode 600 sibling over it; refuses to run as root
 - [ssh_keys.rs] Reads `HOME` from the process environment
 
 ## Verification

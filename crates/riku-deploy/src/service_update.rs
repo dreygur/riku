@@ -2,8 +2,8 @@
 //!
 //! Called by the supervisor's periodic image watch. For riku container apps
 //! it pulls the service image, compares engine image ids and replaces only
-//! that service's copies when they differ. Legacy compose apps still go
-//! through the container plugin's `pull_service` until they are migrated.
+//! that service's copies when they differ. Apps run by the old container
+//! plugin go through its `pull_service`.
 
 // Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
 #![allow(clippy::question_mark)]

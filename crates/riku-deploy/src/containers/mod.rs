@@ -21,14 +21,12 @@ mod deploy;
 mod engine_open;
 mod image_update;
 mod images;
-mod legacy;
-mod legacy_workers;
-mod migrate;
-#[cfg(test)]
-mod mock_legacy;
 #[cfg(test)]
 pub(crate) mod mock_state;
+#[cfg(test)]
+mod mock_workers;
 mod ports;
+mod procfile_workers;
 mod project_check;
 mod release;
 mod removal;
@@ -36,12 +34,12 @@ mod retire;
 #[cfg(test)]
 #[path = "retire_tests.rs"]
 mod retire_tests;
-mod rollback_wait;
 mod rollout;
 mod routes;
 mod runtime;
 mod spec;
 mod start;
+mod worker_files;
 
 pub use app::{is_container_app, load_project, read_scaling, SINGLE_IMAGE_PORT};
 pub use control::{restart_service, runs_containers, scale_service, stop_service};
@@ -50,7 +48,6 @@ pub use deploy::{deploy_containers, CONTAINER_RUNTIME};
 pub use engine_open::{open_engine, EngineUnreachable};
 pub use image_update::{is_built_service, update_service, ImageUpdate};
 pub use images::prepare_images;
-pub use legacy::{is_legacy_worker, legacy_apps};
 pub use ports::pick_free_port;
 pub use project_check::confirm_project_name;
 pub use removal::destroy_containers;

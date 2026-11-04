@@ -160,36 +160,6 @@ ssh riku@edge.example ps myapp
 ssh riku@edge.example riku ps myapp
 ```
 
-### Upgrading existing servers
-
-Three changes break older setups.
-
-- `ps --scale` lost its `-s` short form, because `-s` now means `--server`.
-  Write `--scale`.
-- Quoted arguments over ssh now arrive intact. A command that relied on the
-  old splitting or glob expansion on the server behaves differently.
-- Keys installed by an older riku force `riku $SSH_ORIGINAL_COMMAND`. They
-  must be rewritten, and the order matters.
-
-Do this on each server:
-
-1. Install the new riku binary on the server, the way you installed the old
-   one. **Do this first.** A migrated key passes no arguments, which an
-   old binary cannot run: with the old binary and migrated keys, no command
-   works over ssh.
-2. As the deploy user, run `sudo -H -u riku riku doctor --fix`. It rewrites the
-   `command=` part of each old riku key in `~/.ssh/authorized_keys`, keeping
-   the key, its options and its name, and replacing the file atomically with
-   mode 600. It refuses to run as root.
-
-Until then `riku doctor` warns: `N deploy keys use the old forced command, run:
-riku doctor --fix`. `riku init` also migrates the keys when it adds a key,
-but never as root: a root `init` prints the `doctor --fix` instruction instead.
-
-Update the server binary before forwarding from a new laptop binary as well.
-Older servers reject the hidden `--app-hint` option that carries the app from
-your git remote, so those commands fail until the server is updated.
-
 ## The `rk` Client
 
 `rk` runs riku commands on your servers from your laptop. Start with:
@@ -726,12 +696,7 @@ Diagnose the installation (deps, dirs, systemd, nginx, disk, SSH). See
 ```bash
 riku doctor
 sudo riku doctor   # most complete report
-sudo -H -u riku riku doctor --fix   # rewrite old deploy key forced commands
 ```
-
-`--fix` is the only thing doctor writes. It must run as the deploy user, not
-root, and only after the new binary is installed on the server. See
-[Upgrading existing servers](#upgrading-existing-servers).
 
 ---
 

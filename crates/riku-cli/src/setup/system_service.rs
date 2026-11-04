@@ -10,9 +10,7 @@ use crate::util::echo;
 
 use super::binary::INSTALL_DIR;
 use super::deploy_user::{deploy_user_name, passwd_home, running_as_root};
-use super::router_units::{
-    other_path_units, remove_caddy_units, unit_ordering, write_router_units,
-};
+use super::router_units::{other_path_units, unit_ordering, write_router_units};
 
 pub const SYSTEMD_DIR: &str = "/etc/systemd/system";
 
@@ -165,7 +163,6 @@ pub fn install_systemd_service(router: &Router) -> Result<()> {
     echo("Enabling riku systemd service...", "green");
     start_riku_service();
     enable_router_watch(router, path_unit.as_deref());
-    remove_caddy_units(systemd_dir);
     Ok(())
 }
 

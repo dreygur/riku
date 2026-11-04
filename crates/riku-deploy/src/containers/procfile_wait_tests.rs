@@ -4,9 +4,9 @@ use std::time::{Duration, SystemTime};
 use chrono::Utc;
 
 use crate::config::RikuPaths;
-use crate::containers::legacy_workers::LegacyWorkers;
-use crate::containers::mock_legacy::legacy_stack;
 use crate::containers::mock_state::{mock_server, MockServer};
+use crate::containers::mock_workers::procfile_workers;
+use crate::containers::procfile_workers::ProcfileWorkers;
 use crate::supervisor::stats::{AppStats, ProcessStats, ProcessStatus};
 
 const LIMIT: Duration = Duration::from_millis(300);
@@ -56,19 +56,19 @@ fn set_stats_mtime(paths: &RikuPaths, mtime: SystemTime) {
     file.set_modified(mtime).unwrap();
 }
 
-fn legacy_server() -> (tempfile::TempDir, MockServer, LegacyWorkers) {
+fn procfile_server() -> (tempfile::TempDir, MockServer, ProcfileWorkers) {
     let tmp = tempfile::tempdir().unwrap();
     let server = mock_server(tmp.path(), "myapp", "", "");
-    let _old = legacy_stack(&server);
-    let legacy = LegacyWorkers::load("myapp", &server.paths).unwrap();
-    (tmp, server, legacy)
+    let _old = procfile_workers(&server);
+    let workers = ProcfileWorkers::load("myapp", &server.paths).unwrap();
+    (tmp, server, workers)
 }
 
 #[test]
 fn no_running_supervisor_means_nothing_to_wait_for() {
-    let (_tmp, server, legacy) = legacy_server();
+    let (_tmp, server, workers) = procfile_server();
 
-    let outcome = legacy.wait_stopped_since(&server.paths, SystemTime::now(), LIMIT);
+    let outcome = workers.wait_stopped_since(&server.paths, SystemTime::now(), LIMIT);
 
     assert!(
         outcome.is_ok(),
@@ -78,13 +78,13 @@ fn no_running_supervisor_means_nothing_to_wait_for() {
 
 #[test]
 fn stop_wait_ignores_stats_older_than_the_park() {
-    let (_tmp, server, legacy) = legacy_server();
+    let (_tmp, server, workers) = procfile_server();
     write_supervisor_pid(&server.paths);
     let parked_at = SystemTime::now();
     write_stats(&server.paths, worker(ProcessStatus::Stopped, None));
     set_stats_mtime(&server.paths, parked_at - Duration::from_secs(10));
 
-    let outcome = legacy.wait_stopped_since(&server.paths, parked_at, LIMIT);
+    let outcome = workers.wait_stopped_since(&server.paths, parked_at, LIMIT);
 
     assert!(
         outcome.is_err(),
@@ -94,7 +94,7 @@ fn stop_wait_ignores_stats_older_than_the_park() {
 
 #[test]
 fn running_worker_blocks_until_snapshot_shows_it_stopped() {
-    let (_tmp, server, legacy) = legacy_server();
+    let (_tmp, server, workers) = procfile_server();
     write_supervisor_pid(&server.paths);
     let parked_at = SystemTime::now();
     let mut child = std::process::Command::new("sleep")
@@ -106,14 +106,14 @@ fn running_worker_blocks_until_snapshot_shows_it_stopped() {
         worker(ProcessStatus::Running, Some(child.id())),
     );
 
-    let blocked = legacy.wait_stopped_since(&server.paths, parked_at, LIMIT);
+    let blocked = workers.wait_stopped_since(&server.paths, parked_at, LIMIT);
 
     let _ = child.kill();
     let _ = child.wait();
     assert!(blocked.is_err(), "a running worker must block the wait");
 
     write_stats(&server.paths, worker(ProcessStatus::Stopped, None));
-    let released = legacy.wait_stopped_since(&server.paths, parked_at, LIMIT);
+    let released = workers.wait_stopped_since(&server.paths, parked_at, LIMIT);
     assert!(
         released.is_ok(),
         "stopped snapshot must release: {released:?}"

@@ -106,10 +106,6 @@ proxying to `127.0.0.1`.
   copy.
 - `riku restart <app> [service]` and `riku stop <app> [service]` act on one
   compose service. Naming a service of a Procfile app is refused.
-- Apps deployed by the old container plugin are migrated on their next
-  deploy. Named volumes are reused under the names compose gave them. The
-  site is down from the old stack stopping until the new routed copy is
-  healthy; when the new containers fail, the old stack comes back.
 - A compose port that names a host IP, such as `"127.0.0.1:8080:8080"` or a
   long form entry with `host_ip`, is refused. Ports bind 127.0.0.1 by
   default; the service label `riku.public: "true"` publishes them on all

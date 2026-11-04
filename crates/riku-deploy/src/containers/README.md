@@ -37,16 +37,13 @@ Component package located at `crates/riku-deploy/src/containers`.
 - `remove_containers` [removal.rs:remove_containers] (fn)
 - `remove_dropped` [removal.rs:remove_dropped] (fn)
 - `removal.rs` [removal.rs] (and 1 additional symbols)
+- `ProcfileWorkers` [procfile_workers.rs:ProcfileWorkers] (struct): an app's enabled or parked Procfile workers, parked and waited on while they stop
 - `retire_procfile_workers` [retire.rs:retire_procfile_workers] (fn): stops and removes the Procfile workers of an app that has switched to containers
-- `wait_restored_workers` [rollback_wait.rs:wait_restored_workers] (fn): during a migration rollback, waits for the restored old web workers to answer
 - `roll_out` [rollout.rs:roll_out] (fn)
 - `ServiceRoutes` [routes.rs:ServiceRoutes] (enum)
 - `ContainerRuntime` [runtime.rs:ContainerRuntime] (struct)
 - `copy_spec` [spec.rs:copy_spec] (fn)
 - `start_copy` [start.rs:start_copy] (fn)
-
-## Invariants
-- [rollback_wait.rs] Health probes only connect to `127.0.0.1` on the port recorded in the restored worker's own config
 
 ## Side Effects
 - [app.rs] Mutates local filesystem (reads and writes the app's `SCALING` file)

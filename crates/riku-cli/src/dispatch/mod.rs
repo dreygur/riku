@@ -157,7 +157,7 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
             require_app(app).and_then(|app| backup::cmd_backup(paths, &app, out.as_deref()))
         }
         Commands::Restore { app, file } => backup::cmd_restore(paths, &app, &file),
-        Commands::Doctor { fix } => doctor::cmd_doctor(paths, fix),
+        Commands::Doctor => doctor::cmd_doctor(paths),
         Commands::Dashboard { .. } => Err(anyhow!("dashboard is run by the riku binary")),
         Commands::Addon(cmd) => app_cmds::run_addon(paths, cmd),
         Commands::Update => apps::cmd_update(),

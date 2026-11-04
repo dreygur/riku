@@ -669,20 +669,11 @@ deploy or `riku restart` replaces it. Each copy's output goes to
 `~/.riku/logs/<app>/<service>.<n>.log`, which `riku logs <app> <service>`
 follows.
 
-### Moving from the old container plugin
+### Switching an app to containers
 
-Apps first deployed by the old container plugin run as a supervised `compose up`
-(or `docker run`) worker. Their next deploy builds and pulls the new images while
-the old stack still serves, then stops the old worker and the old stack's
-containers, removes the old `<project>_default` network, and starts riku's own
-containers in start order. The site is down from the old stack stopping until
-the new routed copy is healthy. Named volumes are kept and reused under the same
-names (`<project>_<key>`), so data carries over; riku never removes a volume. If
-the new containers fail, riku removes them and brings the old worker back, so the
-old stack serves again. A project name set in the compose file or
-`COMPOSE_PROJECT_NAME` is refused when it matches another app's name or when an
-existing volume of that name was not created by compose for that project. `riku
-doctor` lists apps still on the old plugin.
+A project name set in the compose file or `COMPOSE_PROJECT_NAME` is refused
+when it matches another app's name or when an existing volume of that name was
+not created by compose for that project.
 
 An app that ran as a Procfile app and gains a compose file or Dockerfile
 keeps its old Procfile workers until the new containers are healthy and

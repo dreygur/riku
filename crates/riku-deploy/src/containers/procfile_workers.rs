@@ -1,10 +1,10 @@
-//! Taking one app's legacy workers out of the supervisor during a migration
-//! and putting them back when it fails.
+//! Taking the Procfile workers of an app that switched to containers out of
+//! the supervisor.
 //!
 //! A worker is parked by renaming its `workers_enabled` link to
 //! `<name>.toml.migrating`: the supervisor only loads `.toml` files, so a
-//! reload stops it, and renaming it back brings the old stack up again. A
-//! parked link left by an interrupted migration is picked up again here.
+//! reload stops it. A parked link left by an interrupted retire is picked up
+//! again here.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -15,9 +15,8 @@ use std::time::{Duration, Instant, SystemTime};
 use anyhow::{anyhow, Result};
 use riku_util::file_names::worker::WorkerName;
 
-use super::legacy::{enabled_entries, is_legacy_worker, read_worker};
+use super::worker_files::{enabled_entries, read_worker};
 use crate::config::RikuPaths;
-use crate::supervisor::config::WorkerConfig;
 use crate::supervisor::stats::{read_stats_file, ProcessStats, ProcessStatus};
 use crate::supervisor_ctl::{notify_supervisor_reload, pid_is_alive, supervisor_is_running};
 
@@ -70,35 +69,22 @@ fn remove_if_present(path: &Path) -> Result<()> {
     }
 }
 
-/// The legacy workers of one app, by process id (`<app>@<kind>.<ordinal>`).
+/// The Procfile workers of one app, by process id (`<app>@<kind>.<ordinal>`).
 #[derive(Debug)]
-pub(crate) struct LegacyWorkers {
+pub(crate) struct ProcfileWorkers {
     app: String,
     names: Vec<String>,
     longest_grace: Duration,
 }
 
-impl LegacyWorkers {
-    /// Find the app's enabled or already parked legacy workers.
-    pub(crate) fn load(app: &str, paths: &RikuPaths) -> Result<LegacyWorkers> {
-        Self::load_matching(app, paths, is_legacy_worker)
-    }
-
-    /// Find every enabled or parked worker of the app, whatever its command.
-    pub(crate) fn load_procfile(app: &str, paths: &RikuPaths) -> Result<LegacyWorkers> {
-        Self::load_matching(app, paths, |_| true)
-    }
-
-    fn load_matching(
-        app: &str,
-        paths: &RikuPaths,
-        keep: fn(&WorkerConfig) -> bool,
-    ) -> Result<LegacyWorkers> {
+impl ProcfileWorkers {
+    /// Find every enabled or parked worker of the app.
+    pub(crate) fn load(app: &str, paths: &RikuPaths) -> Result<ProcfileWorkers> {
         let entries = match enabled_entries(paths) {
             Ok(entries) => entries,
             Err(e) => return Err(e),
         };
-        let mut workers = LegacyWorkers {
+        let mut workers = ProcfileWorkers {
             app: app.to_string(),
             names: Vec::new(),
             longest_grace: Duration::ZERO,
@@ -111,7 +97,7 @@ impl LegacyWorkers {
                 Ok(config) => config,
                 Err(e) => return Err(e),
             };
-            if config.worker.app == app && keep(&config) {
+            if config.worker.app == app {
                 let grace = Duration::from_secs(config.options.grace_period);
                 workers.longest_grace = workers.longest_grace.max(grace);
                 workers.names.push(name.to_string());
@@ -129,17 +115,6 @@ impl LegacyWorkers {
     pub(crate) fn park(&self, paths: &RikuPaths) -> Result<()> {
         for name in &self.names {
             if let Err(e) = rename(paths, name, ENABLED, PARKED) {
-                return Err(e);
-            }
-        }
-        notify_supervisor_reload(paths);
-        Ok(())
-    }
-
-    /// Rename every parked link back and have the supervisor start them.
-    pub(crate) fn restore(&self, paths: &RikuPaths) -> Result<()> {
-        for name in &self.names {
-            if let Err(e) = rename(paths, name, PARKED, ENABLED) {
                 return Err(e);
             }
         }
@@ -212,5 +187,5 @@ impl LegacyWorkers {
 }
 
 #[cfg(test)]
-#[path = "legacy_wait_tests.rs"]
+#[path = "procfile_wait_tests.rs"]
 mod wait_tests;

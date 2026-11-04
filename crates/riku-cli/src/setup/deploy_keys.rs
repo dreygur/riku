@@ -13,7 +13,7 @@ use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, Result};
 
-use crate::util::authorized_keys::{authorized_keys_path, migrate_file};
+use crate::util::authorized_keys::authorized_keys_path;
 use crate::util::public_key::{parse_public_keys, PublicKey};
 use crate::util::{echo, setup_authorized_keys};
 
@@ -116,27 +116,5 @@ pub fn add_deploy_keys(keys: &[PublicKey]) -> Result<()> {
         }
         echo(&format!("      ✓ Added deploy key {fp}"), "green");
     }
-
-    let path = match authorized_keys_file() {
-        Ok(path) => path,
-        Err(e) => return Err(e),
-    };
-    if nix::unistd::geteuid().is_root() {
-        echo(
-            "      ! Skipped migrating existing deploy keys as root: run sudo -H -u <deploy user> riku doctor --fix",
-            "yellow",
-        );
-        return Ok(());
-    }
-    match migrate_file(&path) {
-        Ok(0) => Ok(()),
-        Ok(count) => {
-            echo(
-                &format!("      ✓ Migrated {count} existing deploy key(s)"),
-                "green",
-            );
-            Ok(())
-        }
-        Err(e) => Err(anyhow!("failed to migrate existing deploy keys: {e}")),
-    }
+    Ok(())
 }

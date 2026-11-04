@@ -15,7 +15,6 @@ use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::deploy::router::RELOAD_ERROR_FILE;
 use crate::nginx::{check_host_ready, includes_riku_sites, HostReadiness};
-use crate::setup::system_service::SYSTEMD_DIR;
 
 use super::Check;
 
@@ -151,22 +150,10 @@ fn last_reload(paths: &RikuPaths) -> Option<Check> {
     }
 }
 
-/// Warns about the Caddy watcher units older versions installed, which now
-/// reload Caddy a second time on every change.
-fn old_caddy_units(systemd_dir: &Path) -> Option<Check> {
-    if !systemd_dir.join("riku-caddy.path").exists() {
-        return None;
-    }
-    Some(Check::warn(
-        "caddy units",
-        "riku-caddy.path is obsolete, re-run: sudo riku setup",
-    ))
-}
-
 /// Checks for the active router: nginx keeps its `nginx -t` check, Caddy
 /// gets a binary, import line and `caddy validate` check, and a plugin
 /// router is reported by name. An unreadable `ROUTER` file fails. A failed
-/// last reload and leftover Caddy units are reported for any router.
+/// last reload is reported for any router.
 pub fn router(paths: &RikuPaths) -> Vec<Check> {
     let mut checks = match Router::load(paths) {
         Ok(Router::Nginx) => nginx(paths),
@@ -175,7 +162,6 @@ pub fn router(paths: &RikuPaths) -> Vec<Check> {
         Err(e) => return vec![Check::fail("router", e.to_string())],
     };
     checks.extend(last_reload(paths));
-    checks.extend(old_caddy_units(Path::new(SYSTEMD_DIR)));
     checks
 }
 

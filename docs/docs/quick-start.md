@@ -240,9 +240,7 @@ rk -s edge ps myapp
 exits with `no server selected; add one with rk server add <name> <user@host>,
 or pass -s <name>`. See [The rk Client](cli.md#the-rk-client).
 
-Servers set up with an older riku need their deploy keys migrated first. See
-[Upgrading existing servers](cli.md#upgrading-existing-servers). The full
-rules are in [Remote Servers](cli.md#remote-servers).
+The full rules are in [Remote Servers](cli.md#remote-servers).
 
 ---
 

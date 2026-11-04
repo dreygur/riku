@@ -31,7 +31,6 @@ Under Caddy, a root `riku init`:
 - adds the `caddy` user to the deploy user's primary group
 - gives that group traverse access (`g+x`, not listing) to the deploy home and `~/.riku`
 - creates `~/.riku/caddy` with mode `0750`, owned by the deploy user
-- removes `riku-caddy.path` and `riku-caddy-reload.service` if an earlier init installed them
 - disables `riku-nginx.path` if an earlier init enabled it
 
 ### Reloads

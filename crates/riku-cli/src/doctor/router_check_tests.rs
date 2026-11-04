@@ -77,13 +77,3 @@ fn failed_reload_is_reported() {
     assert_eq!(check.status, Status::Fail);
     assert_eq!(check.detail, "caddy reload failed: admin endpoint disabled");
 }
-
-#[test]
-fn old_caddy_path_unit_warns() {
-    let tmp = tempfile::tempdir().unwrap();
-    assert!(old_caddy_units(tmp.path()).is_none());
-
-    fs::write(tmp.path().join("riku-caddy.path"), "").unwrap();
-    let check = old_caddy_units(tmp.path()).expect("the old unit should be reported");
-    assert_eq!(check.status, Status::Warn, "{}", check.detail);
-}

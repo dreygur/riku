@@ -45,7 +45,6 @@ Component package located at `crates/riku-cli/src/setup`.
 - `router_unit_after` [router_units.rs:router_unit_after] (fn)
 - `unit_ordering` [router_units.rs:unit_ordering] (fn)
 - `write_router_units` [router_units.rs:write_router_units] (fn)
-- `remove_caddy_units` [router_units.rs:remove_caddy_units] (fn)
 - `other_path_units` [router_units.rs:other_path_units] (fn)
 - `setup_ssh_key_interactive` [ssh.rs:setup_ssh_key_interactive] (fn)
 - `SYSTEMD_DIR` [system_service.rs:SYSTEMD_DIR] (const)

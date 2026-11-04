@@ -7,7 +7,7 @@
 use anyhow::Result;
 
 use super::plugin::remove_plugin;
-use super::reload::{record_outcome, reload, Baseline};
+use super::reload::{record_outcome, reload, Baseline, ERROR_FILE};
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 
@@ -40,19 +40,28 @@ pub fn remove(app: &str, paths: &RikuPaths) -> Result<()> {
     outcome
 }
 
+/// Whether the last router reload failed, so nginx may still serve a config
+/// that is already gone from disk.
+fn last_reload_failed(paths: &RikuPaths) -> bool {
+    paths.riku_root.join(ERROR_FILE).exists()
+}
+
 /// Delete `app`'s nginx files, then reload nginx the way a deploy does if
-/// its config was live. The reload method is decided before the files go,
-/// so a reload unit watching the config directory sees the change. When a
-/// side file could not be removed the reload still runs, then that error
-/// is returned.
+/// its config was live or the last reload failed. A retried removal finds
+/// the config already gone, and skipping the reload then would clear the
+/// recorded error without a confirmed reload. The reload method is decided
+/// before the files go, so a reload unit watching the config directory sees
+/// the change. When a side file could not be removed the reload still runs,
+/// then that error is returned.
 #[allow(clippy::question_mark)]
 fn remove_nginx_app(app: &str, paths: &RikuPaths, active: &Router) -> Result<()> {
     let baseline = Baseline::capture(&paths.reload_programs);
+    let reload_pending = last_reload_failed(paths);
     let removal = match crate::nginx::remove_nginx_files(app, paths) {
         Ok(removal) => removal,
         Err(e) => return Err(e),
     };
-    let reloaded = if removal.was_live {
+    let reloaded = if removal.was_live || reload_pending {
         reload(active, paths, &baseline)
     } else {
         Ok(())

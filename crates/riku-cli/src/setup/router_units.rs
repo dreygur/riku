@@ -3,8 +3,7 @@
 //! nginx gets a path unit watching its config directory under the deploy
 //! user's riku root, plus a oneshot service that runs `systemctl reload`
 //! on it. Caddy and router plugins get no units: riku reloads them itself
-//! and waits for the result. Units written for Caddy by older versions are
-//! removed.
+//! and waits for the result.
 
 use std::fs;
 use std::path::Path;
@@ -15,7 +14,6 @@ use crate::config::router::Router;
 
 const SYSTEMCTL: &str = "/usr/bin/systemctl";
 const NGINX_SERVICE: &str = "nginx";
-const CADDY_SERVICE: &str = "caddy";
 
 /// The systemd service of a built-in router, `None` for a plugin.
 fn router_service(router: &Router) -> Option<&'static str> {
@@ -123,29 +121,13 @@ pub fn write_router_units(
     Ok(Some(path_unit))
 }
 
-/// Delete the Caddy path and reload units that older versions installed.
-pub fn remove_caddy_units(systemd_dir: &Path) {
-    for name in [
-        path_unit_name(CADDY_SERVICE),
-        reload_unit_name(CADDY_SERVICE),
-    ] {
-        let unit = systemd_dir.join(&name);
-        if let Err(e) = fs::remove_file(&unit) {
-            if e.kind() != std::io::ErrorKind::NotFound {
-                tracing::warn!("could not remove {}: {e}", unit.display());
-            }
-        }
-    }
-}
-
-/// Path units of the built-in routers other than `router`, to disable when
-/// a host switches routers.
+/// The nginx path unit when `router` is not nginx, to disable when a host
+/// switches away from nginx.
 pub fn other_path_units(router: &Router) -> Vec<String> {
-    [NGINX_SERVICE, CADDY_SERVICE]
-        .into_iter()
-        .filter(|service| router_service(router) != Some(service))
-        .map(path_unit_name)
-        .collect()
+    match router {
+        Router::Nginx => Vec::new(),
+        Router::Caddy | Router::Plugin(_) => vec![path_unit_name(NGINX_SERVICE)],
+    }
 }
 
 #[cfg(test)]

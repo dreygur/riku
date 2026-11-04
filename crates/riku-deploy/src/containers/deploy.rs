@@ -1,5 +1,4 @@
-//! Deploying a container app: build or pull its images, migrate it off the
-//! old container plugin's workers when it still has them, then replace every
+//! Deploying a container app: build or pull its images, then replace every
 //! service's copies in start order.
 
 use std::collections::{BTreeMap, HashMap};
@@ -9,8 +8,7 @@ use riku_container::compose::{check_scale, ComposeProject, ServiceDef};
 
 use super::app::{read_scaling, wanted};
 use super::context::ContainerApp;
-use super::legacy_workers::LegacyWorkers;
-use super::migrate::migrate;
+use super::procfile_workers::ProcfileWorkers;
 use super::project_check::confirm_project_name;
 use super::release::run_release;
 use super::removal::remove_dropped;
@@ -48,8 +46,7 @@ fn build_images(ctx: &ContainerApp) -> Result<()> {
     run_release(ctx)
 }
 
-/// Copy counts checked, images ready and the release command run. The old
-/// stack of a migrating app still serves during all of this.
+/// Copy counts checked, images ready and the release command run.
 fn prepare(ctx: &ContainerApp) -> Result<BTreeMap<String, u32>> {
     let counts = match read_scaling(ctx.app.as_str(), ctx.paths) {
         Ok(counts) => counts,
@@ -66,7 +63,7 @@ fn prepare(ctx: &ContainerApp) -> Result<BTreeMap<String, u32>> {
 
 /// Replace every service's copies, remove containers of dropped services,
 /// and take an app with no routed port off the router.
-pub(crate) fn roll_out_app(ctx: &ContainerApp, counts: &BTreeMap<String, u32>) -> Result<()> {
+fn roll_out_app(ctx: &ContainerApp, counts: &BTreeMap<String, u32>) -> Result<()> {
     let services: Vec<&ServiceDef> = ctx.project.services.iter().collect();
     if let Err(e) = roll_out(ctx, counts, &services) {
         return Err(e);
@@ -85,8 +82,7 @@ pub(crate) fn roll_out_app(ctx: &ContainerApp, counts: &BTreeMap<String, u32>) -
 /// A project name the compose file or app env declares is checked against
 /// the other apps and existing volumes first. Every service's copy count
 /// comes from `SCALING` (1 when absent) and is checked before anything is
-/// built. An app still run by the old container plugin is then migrated (see
-/// [`migrate`]). Services are replaced in start order, one copy at a time; a
+/// built. Services are replaced in start order, one copy at a time; a
 /// service with `service_healthy` dependencies starts only once their copies
 /// are healthy. A failure stops the deploy and leaves the copies not yet
 /// replaced serving. Containers of services the compose file no longer has
@@ -112,21 +108,13 @@ pub fn deploy_containers(
         Ok(counts) => counts,
         Err(e) => return Err(e),
     };
-    let stale = match LegacyWorkers::load_procfile(app.as_str(), paths) {
+    let stale = match ProcfileWorkers::load(app.as_str(), paths) {
         Ok(stale) => stale,
         Err(e) => return Err(e),
     };
-    let legacy = match LegacyWorkers::load(app.as_str(), paths) {
-        Ok(legacy) => legacy,
-        Err(e) => return Err(e),
-    };
-    if legacy.is_empty() {
-        match roll_out_app(&ctx, &counts) {
-            Ok(()) => retire_procfile_workers(&ctx, stale),
-            Err(e) => Err(e),
-        }
-    } else {
-        migrate(&ctx, legacy, &counts)
+    match roll_out_app(&ctx, &counts) {
+        Ok(()) => retire_procfile_workers(&ctx, stale),
+        Err(e) => Err(e),
     }
 }
 

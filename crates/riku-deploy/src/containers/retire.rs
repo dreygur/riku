@@ -6,7 +6,7 @@ use std::time::SystemTime;
 use anyhow::{anyhow, Result};
 
 use super::context::ContainerApp;
-use super::legacy_workers::LegacyWorkers;
+use super::procfile_workers::ProcfileWorkers;
 use crate::util::echo;
 
 fn still_running(app: &str, cause: anyhow::Error) -> anyhow::Error {
@@ -16,7 +16,7 @@ fn still_running(app: &str, cause: anyhow::Error) -> anyhow::Error {
 /// Park the old workers, wait until the supervisor has stopped them, then
 /// delete their configs. Runs only after the containers are healthy and
 /// routed, so a failed rollout leaves the Procfile app as it was.
-pub(crate) fn retire_procfile_workers(ctx: &ContainerApp, workers: LegacyWorkers) -> Result<()> {
+pub(crate) fn retire_procfile_workers(ctx: &ContainerApp, workers: ProcfileWorkers) -> Result<()> {
     if workers.is_empty() {
         return Ok(());
     }
