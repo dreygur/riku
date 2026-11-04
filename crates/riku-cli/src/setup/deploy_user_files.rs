@@ -20,12 +20,6 @@ impl DeployUser {
             .map(drop)
     }
 
-    /// Remove the file `path` as the deploy user. A missing file is fine.
-    pub fn remove_file(&self, path: &Path) -> Result<()> {
-        self.run_as("rm", &["-f", "--", &path.to_string_lossy()])
-            .map(drop)
-    }
-
     /// Read `path` as the deploy user.
     pub fn read_file(&self, path: &Path) -> Result<String> {
         self.run_as("cat", &[&path.to_string_lossy()])

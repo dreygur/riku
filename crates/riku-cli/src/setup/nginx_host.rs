@@ -1,20 +1,14 @@
 //! Root-only host setup for the nginx router.
 //!
 //! riku writes every site config into the deploy user's `~/.riku/nginx` and
-//! never under `/etc/nginx`. Setup removes the per-app symlinks older riku
-//! versions put in `/etc/nginx/sites-enabled`, which would otherwise load
-//! each site a second time, and the `test_nginx.conf` they could leave in
-//! `~/.riku/nginx`, then installs the one root-owned file that loads that
-//! directory, `/etc/nginx/conf.d/riku.conf`.
+//! never under `/etc/nginx`. Setup installs the one root-owned file that
+//! loads that directory, `/etc/nginx/conf.d/riku.conf`.
 //!
 //! Security: the include file's text is built from the riku root path only
 //! and refused if that path holds nginx syntax (see
 //! [`crate::nginx::include_line`]), and it is written only into a directory
-//! root owns and nobody else can write. Root removes only symlinks in
-//! sites-enabled whose resolved target is inside the deploy user's nginx
-//! directory. The stale file in the deploy user's home is removed as that
-//! user, so a planted symlink cannot steer a root delete. No directory
-//! under `/etc/nginx` changes owner or mode.
+//! root owns and nobody else can write. No directory under `/etc/nginx`
+//! changes owner or mode.
 
 use std::fs;
 use std::io::ErrorKind;
@@ -24,9 +18,7 @@ use std::path::Path;
 use anyhow::{anyhow, Result};
 
 use crate::config::{NginxHostPaths, RikuPaths};
-use crate::nginx::{
-    include_file_contents, legacy_site_links, write_include_file, STALE_VALIDATION_FILE,
-};
+use crate::nginx::{include_file_contents, write_include_file};
 use crate::util::echo;
 
 use super::deploy_user::DeployUser;
@@ -52,34 +44,7 @@ fn install_include(paths: &RikuPaths) -> Result<bool> {
     }
 }
 
-/// Remove the sites-enabled symlinks an older riku made. Returns how many.
-fn remove_legacy_links(paths: &RikuPaths) -> Result<usize> {
-    let links = legacy_site_links(paths);
-    for link in &links {
-        if let Err(e) = fs::remove_file(link) {
-            return Err(anyhow!(
-                "cannot remove old riku link {}: {e}",
-                link.display()
-            ));
-        }
-    }
-    Ok(links.len())
-}
-
-/// Remove the old links first, so nginx never sees a site twice, then
-/// install the include.
 fn load_riku_sites(paths: &RikuPaths) -> Result<()> {
-    match remove_legacy_links(paths) {
-        Ok(0) => {}
-        Ok(removed) => echo(
-            &format!(
-                "      removed {removed} old riku link(s) from {}",
-                paths.nginx_sites_enabled.display()
-            ),
-            "green",
-        ),
-        Err(e) => return Err(e),
-    }
     match install_include(paths) {
         Ok(true) => echo(
             &format!(
@@ -145,11 +110,10 @@ fn missing_dir_warning(paths: &RikuPaths, dir: &Path) -> String {
 /// Make the system nginx load riku's sites. Root only. A host without the
 /// include directory gets a warning saying what to do.
 ///
-/// nginx is not reloaded here. The next deploy reloads it, and the configs
-/// it then loads are the ones the old symlinks pointed at.
+/// nginx is not reloaded here. The next deploy reloads it.
 #[allow(clippy::question_mark)]
 pub fn setup_nginx_host(user: &DeployUser) -> Result<()> {
-    // Root writes and deletes under these paths, so the environment (kept
+    // Root writes under these paths, so the environment (kept
     // by `sudo -E`) must not pick them.
     let paths = RikuPaths::with_nginx_host(
         user.home.join(".riku"),
@@ -168,11 +132,6 @@ pub fn setup_nginx_host(user: &DeployUser) -> Result<()> {
         return Ok(());
     }
     if let Err(e) = check_write_dir(dir, ROOT_UID) {
-        return Err(e);
-    }
-
-    let stale = paths.nginx_root.join(STALE_VALIDATION_FILE);
-    if let Err(e) = user.remove_file(&stale) {
         return Err(e);
     }
     load_riku_sites(&paths)

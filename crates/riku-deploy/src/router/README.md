@@ -23,7 +23,7 @@ Component package located at `crates/riku-deploy/src/router`.
 
 ## Invariants
 - [plugin.rs] The request carries already validated domains and goes to the plugin as JSON on stdin, with no shell interpolation; a plugin not declaring router protocol 2 is refused before `configure`
-- [host_guard.rs] Router work is refused on a host whose nginx would not load riku's sites exactly once (the state an upgrade leaves until `sudo riku init` is re-run); Caddy and router plugins have no such host step
+- [host_guard.rs] A router install is refused while `nginx_root` holds a `*.conf` that is no app's config; Caddy and router plugins have no such host step
 - [remove.rs] For nginx, only paths built from the app name inside `nginx_root` are touched, never anything under `/etc/nginx`
 
 ## Side Effects

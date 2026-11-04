@@ -25,7 +25,7 @@ Component package located at `crates/riku-cli/src/setup`.
 - `lookup` [deploy_user.rs:lookup] (fn)
 - `riku_paths` [deploy_user.rs:riku_paths] (fn)
 - `run_relayed` [deploy_user.rs:run_relayed] (fn)
-- `deploy_user_files.rs` [deploy_user_files.rs] `DeployUser` methods (`create_dir`, `chmod`, `remove_file`, `read_file`) for the changes root init makes inside the deploy user's tree, each run as that user so a planted symlink can only lead where the user could already go
+- `deploy_user_files.rs` [deploy_user_files.rs] `DeployUser` methods (`create_dir`, `chmod`, `read_file`) for the changes root init makes inside the deploy user's tree, each run as that user so a planted symlink can only lead where the user could already go
 - `create_git_hook` [git_hook.rs:create_git_hook] (fn)
 - `InstallScope` [guidance.rs:InstallScope] (enum)
 - `print_finish` [guidance.rs:print_finish] (fn)
@@ -38,7 +38,7 @@ Component package located at `crates/riku-cli/src/setup`.
 - `git_hook` [mod.rs:git_hook] (module)
 - `init` [mod.rs:init] (module)
 - `mod.rs` [mod.rs] (the other module declarations and the `cmd_init`/`InitOptions` re-export)
-- `setup_nginx_host` [nginx_host.rs:setup_nginx_host] (fn) Root-only nginx host setup: removes the per-app symlinks older riku versions left in `/etc/nginx/sites-enabled` and installs the one root-owned include `/etc/nginx/conf.d/riku.conf`
+- `setup_nginx_host` [nginx_host.rs:setup_nginx_host] (fn) Root-only nginx host setup: installs the one root-owned include `/etc/nginx/conf.d/riku.conf`
 - `warn_not_root` [prerequisites.rs:warn_not_root] (fn)
 - `check_prerequisites` [prerequisites.rs:check_prerequisites] (fn)
 - `root_init` [root_init.rs:root_init] (fn)
@@ -58,7 +58,7 @@ Component package located at `crates/riku-cli/src/setup`.
 - [deploy_keys.rs] Keeps only validated `PublicKey`s read from `--ssh-key`
 - [root_init.rs] Passes on only keys `deploy_keys.rs` read and validated as root
 - [deploy_user_files.rs] Every change inside the deploy user's tree runs as that user, never as root
-- [nginx_host.rs] Writes the include only into a root-owned directory no one else can write, and removes only sites-enabled symlinks that resolve into the deploy user's nginx directory
+- [nginx_host.rs] Writes the include only into a root-owned directory no one else can write
 
 ## Side Effects
 - [binary.rs] Mutates local filesystem (creates/modifies/removes files)
@@ -75,7 +75,7 @@ Component package located at `crates/riku-cli/src/setup`.
 - [init.rs] Reads process environment variables
 - [init_router.rs] Mutates local filesystem (creates/modifies/removes files)
 - [init_router.rs] Reads process environment variables
-- [nginx_host.rs] Mutates local filesystem under `/etc/nginx` (as root) and in the deploy user's `~/.riku/nginx` (as that user)
+- [nginx_host.rs] Writes the include file under `/etc/nginx` (as root)
 - [prerequisites.rs] Spawns external child processes via `std::process::Command`
 - [root_init.rs] Spawns external child processes and mutates local filesystem
 - [router_units.rs] Mutates local filesystem (creates/modifies/removes files)

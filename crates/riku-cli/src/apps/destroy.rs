@@ -1,12 +1,11 @@
 //! `riku destroy`: stop an app's containers and runtime, remove its route,
 //! then its files (see [`super::destroy_files`]). Data and cache stay.
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 use super::destroy_engine::container_cleanup;
 use super::destroy_files::remove_app_files;
 use crate::config::RikuPaths;
-use crate::nginx::RouteChange;
 use crate::util::{echo, exit_if_invalid};
 
 /// The runtime plugin removes what it started outside the app directory.
@@ -47,11 +46,6 @@ pub fn cmd_destroy(paths: &RikuPaths, app: &str, mode: DestroyMode) -> Result<()
         Ok(app) => app,
         Err(e) => return Err(e),
     };
-    if let Err(e) = crate::deploy::router::ensure_host_ready(paths, RouteChange::Remove) {
-        return Err(anyhow!(
-            "not destroying '{app}', nothing was deleted: {e:#}"
-        ));
-    }
 
     if let Err(e) = container_cleanup(paths, &app, mode) {
         if e.downcast_ref::<crate::deploy::containers::EngineUnreachable>()

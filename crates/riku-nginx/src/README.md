@@ -26,11 +26,7 @@ Component package located at `crates/riku-nginx/src`.
 - `includes_riku_sites` [host.rs:includes_riku_sites] (fn)
 - `check_host_ready` [host_check.rs:check_host_ready] (fn)
 - `stray_site_configs` [host_check.rs:stray_site_configs] (fn)
-- `RouteChange` [host_check.rs:RouteChange] (enum)
 - `HostReadiness` [host_check.rs:HostReadiness] (enum)
-- `STALE_VALIDATION_FILE` [host_check.rs:STALE_VALIDATION_FILE] (const)
-- `legacy_site_links` [host_links.rs:legacy_site_links] (fn)
-- `app_named_links` [host_links.rs:app_named_links] (fn)
 - `install_site` [install.rs:install_site] (fn)
 - `install_checked` [install.rs:install_checked] (fn)
 - `generate_nginx_config` [lib.rs:generate_nginx_config] (fn)
@@ -53,8 +49,7 @@ Component package located at `crates/riku-nginx/src`.
 - `app_snippet.rs`: the app's own snippet named by `RIKU_NGINX_INCLUDE_FILE`, checked for path, grammar and directive allowlist, and checked again after the `nginx.include_content` filter chain
 - `context_cache.rs`: the proxy cache section of the template context (zone size, cache times, cache path)
 - `host.rs`: the one root-owned include file, `nginx_include_file`, holding `include <nginx_root>/*.conf;`
-- `host_check.rs`: whether the host nginx loads riku's sites exactly once; deploy and destroy check this first, and `riku doctor` reports it
-- `host_links.rs`: symlinks in `nginx_sites_enabled` left by older riku versions; only links resolving inside `nginx_root` are riku's to remove
+- `host_check.rs`: refuses a router install while `nginx_root` holds a `*.conf` that is no app's config; deploy and router apply check this first, and `riku doctor` reports it
 - `install.rs`: writes a config as `<name>.conf.new`, checks it with `nginx -t`, and renames it into place only when nginx accepts it
 - `remove.rs`: removes an app's files from `nginx_root` and nothing outside it
 - `snippet_grammar.rs`: the strict grammar an app snippet must fit and its split into statements

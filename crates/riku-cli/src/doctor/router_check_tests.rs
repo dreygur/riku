@@ -21,38 +21,31 @@ fn missing_import_warns() {
 }
 
 #[test]
-fn nginx_include_warns_without_nginx_and_fails_until_installed() {
+fn nginx_include_fails_until_installed() {
     let tmp = tempfile::tempdir().unwrap();
-    let mut paths = RikuPaths::for_tests(tmp.path());
-    paths.reload_programs.nginx = tmp.path().join("nginx");
+    let paths = RikuPaths::for_tests(tmp.path());
 
-    let check = nginx_include(&paths);
-    assert_eq!(check.status, Status::Warn, "{}", check.detail);
-    assert!(check.detail.contains("not found"), "{}", check.detail);
-
-    fs::write(&paths.reload_programs.nginx, "").unwrap();
     let check = nginx_include(&paths);
     assert_eq!(check.status, Status::Fail, "{}", check.detail);
-    assert!(check.detail.contains("create it"), "{}", check.detail);
+    assert!(check.detail.contains("sudo riku init"), "{}", check.detail);
 
     crate::nginx::write_include_file(&paths).unwrap();
     assert_eq!(nginx_include(&paths).status, Status::Ok);
 }
 
 #[test]
-fn an_admin_link_named_like_an_app_is_reported_not_failed() {
+fn a_stray_conf_in_nginx_root_fails_naming_it() {
     let tmp = tempfile::tempdir().unwrap();
-    let paths = RikuPaths::for_tests(tmp.path());
-    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
-    fs::create_dir_all(&paths.nginx_sites_enabled).unwrap();
-    std::os::unix::fs::symlink(
-        "/etc/nginx/sites-available/shop",
-        paths.nginx_sites_enabled.join("shop.conf"),
-    )
-    .unwrap();
+    let mut paths = RikuPaths::for_tests(tmp.path());
+    paths.reload_programs.nginx = tmp.path().join("nginx");
+    fs::write(&paths.reload_programs.nginx, "").unwrap();
+    fs::create_dir_all(&paths.nginx_root).unwrap();
+    assert_eq!(nginx_sites(&paths).status, Status::Ok);
 
-    let check = app_named_sites(&paths).expect("the link was not reported");
-    assert_eq!(check.status, Status::Warn, "{}", check.detail);
+    fs::write(paths.nginx_root.join("ghost.conf"), "server {}\n").unwrap();
+    let check = nginx_sites(&paths);
+    assert_eq!(check.status, Status::Fail, "{}", check.detail);
+    assert!(check.detail.contains("ghost.conf"), "{}", check.detail);
 }
 
 #[test]

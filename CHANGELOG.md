@@ -53,16 +53,12 @@ proxying to `127.0.0.1`.
   template failed and its parts did not pass `nginx -t`. They now render and
   pass, including for port mapped and wsgi apps, and wsgi apps pass a
   `unix:` socket to `uwsgi_pass`.
-- Run `sudo riku init` after upgrading. nginx now loads riku's sites through
-  one root-owned file, `/etc/nginx/conf.d/riku.conf`, which includes
-  `~/.riku/nginx/*.conf`, and init removes the per-app links older versions
-  left in `/etc/nginx/sites-enabled`. Riku no longer writes under
-  `/etc/nginx` at deploy time. Until init has run, deploys and destroys on
-  the nginx router refuse with "run: sudo riku init" and change nothing.
-  Hosts without nginx skip the check.
+- After upgrading, run `sudo riku init` and redeploy apps.
+- nginx now loads riku's sites through one root-owned file,
+  `/etc/nginx/conf.d/riku.conf`, which includes `~/.riku/nginx/*.conf`.
+  Riku no longer writes under `/etc/nginx` at deploy time.
 - A `.conf` file in `~/.riku/nginx` that is no app's config refuses deploys,
-  because the include would load it. A `test_nginx.conf` left by an older
-  version is removed by init; any other stray file must be removed by hand.
+  because the include would load it.
 - An `nginx.conf`, `nginx.custom.conf`, `nginx.custom` or `.nginx.conf`
   shipped in the app directory is ignored with a warning, and the generated
   config is used.
