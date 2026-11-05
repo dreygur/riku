@@ -111,7 +111,7 @@ work they describe.
   passed, 0 failed, 2 ignored. Merged into `feat/caddy-router` at 10e956b
   (gate green there too), not pushed.
 
-### Phase 3: container integration (next)
+### Phase 3: container integration (3a done, PR #73 open)
 
 - Same spec, split in two plans (owner, 2026-10-31). 3a server side: plan
   `plans/2026-10-30-container-integration.md` (owner approved), 16 tasks,
@@ -120,7 +120,13 @@ work they describe.
   yet, written after 3a. Owner decisions for 3a are in its Global
   Constraints. Ask the owner before pushing, merging elsewhere or touching
   the test server; ask for the confidential names before the first commit.
-- 3a task status (branch `feat/container-integration`, local only):
+- 3a status: all tasks done (2026-11-04), pushed, PR #73 against main,
+  open. Later fixes on the same branch through ffd7909: real host checks 2
+  to 5, @ naming, container and volume names, supervisor stops and pid
+  files, `riku-sockets` group, `/etc/riku/caddy`, `/var/lib/riku` static
+  and ACME roots, dashboard split, opt-level "z", push exit code. Ledger:
+  `.superpowers/sdd/2026-10-30-container-integration/progress.md`.
+- 3a task status (branch `feat/container-integration`):
   - Task 1 confirmed router reload: done (7673cc9..598bc97)
   - Task 2 every web copy a backend: done (42c59b4..01583ef)
   - Task 3 engine driver additions: done (a02dac2..b9f38ad)
@@ -142,8 +148,12 @@ work they describe.
   - Task 16 docs, changelog, roadmap: done
 - Rootless engine (owner, 2026-11-04): spec
   `specs/2026-11-04-rootless-engine-design.md`, plan
-  `plans/2026-11-04-rootless-engine.md` (20 tasks, Task 1 is a footprint
-  gate). Not started. Rootless ships only together with the router helper.
+  `plans/2026-11-04-rootless-engine.md`, refreshed 2026-11-05 against
+  ffd7909: 19 tasks, Task 1 is a footprint gate with a 9,198,584 B
+  baseline and a 10,247,160 B binary limit. Old Task 15 dropped (plugin
+  deleted bb4aa56; `riku container` left to 3b, owner to confirm). Three
+  open questions for the owner in the plan. Not started. Rootless ships
+  only together with the router helper.
 - Owner decisions 2026-11-01: engine time limits in a new
   `~/.riku/settings.toml` (short calls 30 s, stop grace plus 30 s, pull and
   build 30 min); supervisor follows engine events and polls stats every
