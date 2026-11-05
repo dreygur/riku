@@ -25,6 +25,7 @@ mod fake;
 mod fixture;
 mod identity;
 mod ids;
+mod info;
 mod inspect;
 mod inspect_parse;
 mod login;

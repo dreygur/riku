@@ -59,7 +59,7 @@ fn probe_waits_for_the_slowest_command_not_the_sum() {
     let unanswered = first_unanswered(&bin.program, &[], ANSWER_LIMIT);
 
     assert_eq!(unanswered, None);
-    // One after another the sixteen probes take at least 8 s.
+    // One after another the seventeen probes take at least 8.5 s.
     assert!(
         started.elapsed() < Duration::from_secs(4),
         "probes ran one after another: {:?}",

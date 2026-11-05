@@ -125,7 +125,7 @@ release (owner decision).
   env (crates/riku-deploy/src/containers/engine_open.rs:44). `settings.toml`
   `[engine]` holds timeouts and refuses unknown keys
   (crates/riku-config/src/settings.rs:86-101).
-- Probing. `Engine::open` runs `<cmd> --help` for the 16 REQUIRED_COMMANDS
+- Probing. `Engine::open` runs `<cmd> --help` for the 17 REQUIRED_COMMANDS
   (probe.rs:14), then `version --format json` (identity.rs:79). Nothing
   reads whether the engine is rootless.
 - Supervisor use. The events stream runs only while riku containers exist,

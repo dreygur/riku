@@ -11,9 +11,9 @@ use std::time::Duration;
 use super::bounded::capture;
 
 /// Engine subcommands riku depends on. An engine missing any of them is refused.
-pub const REQUIRED_COMMANDS: [&str; 16] = [
+pub const REQUIRED_COMMANDS: [&str; 17] = [
     "pull", "build", "run", "stop", "kill", "rm", "ps", "inspect", "stats", "logs", "version",
-    "network", "volume", "image", "login", "wait",
+    "network", "volume", "image", "login", "wait", "info",
 ];
 
 /// Run `<program> --version` within `limit` and return whether it exited 0.
@@ -44,7 +44,7 @@ pub fn exits_zero_within(
 /// error, or the exit status plus trimmed stderr.
 ///
 /// The probes run at the same time. Each one is a full client start, and run
-/// one after another the sixteen of them add a few hundred milliseconds to
+/// one after another the seventeen of them add a few hundred milliseconds to
 /// every engine open, which `riku doctor` and the dashboard state read do.
 pub fn first_unanswered(
     program: &Path,

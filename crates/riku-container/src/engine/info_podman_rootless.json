@@ -1,0 +1,1 @@
+{"host":{"arch":"amd64","cgroupManager":"systemd","os":"linux","security":{"apparmorEnabled":false,"capabilities":"CAP_CHOWN,CAP_SETUID","rootless":true,"seccompEnabled":true},"remoteSocket":{"exists":true,"path":"/run/user/1000/podman/podman.sock"}},"store":{"graphDriverName":"overlay"},"version":{"APIVersion":"5.2.2","Version":"5.2.2"}}

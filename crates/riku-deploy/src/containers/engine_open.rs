@@ -10,6 +10,7 @@
 
 use anyhow::{anyhow, Result};
 use nix::unistd::getuid;
+use riku_config::settings::EngineMode;
 use riku_container::engine::{detect, engine_env, Engine};
 
 use crate::config::RikuPaths;
@@ -61,6 +62,11 @@ pub fn open_engine(paths: &RikuPaths) -> Result<Engine> {
         Ok(engine) => engine,
         Err(e) => return Err(anyhow::Error::new(EngineUnreachable::new(e.to_string()))),
     };
+    if settings.engine.mode == EngineMode::Rootless {
+        if let Err(e) = engine.require_rootless() {
+            return Err(anyhow::Error::new(EngineUnreachable::new(e.to_string())));
+        }
+    }
     Ok(engine.with_settings(settings.engine))
 }
 

@@ -126,7 +126,7 @@ Status: done, binary 9,218,408 B. Was: no spawn sets any variable (bounded.rs:16
 
 ### Task 3: Probe rootless through info (S)
 
-Status: still needed. REQUIRED_COMMANDS has 16 entries and no `info` (probe.rs:14).
+Status: done, `REQUIRED_COMMANDS` now has 17 entries with `info`. The Docker rootful shape matches a real Docker 29.1.3; the rootless Docker and Podman fixtures stay unverified until Task 18.
 
 **Files:**
 - Create: `crates/riku-container/src/engine/info.rs`, `info_tests.rs`, fixtures `info_docker_rootless.json`, `info_podman_rootless.json`, `info_docker_rootful.json`
