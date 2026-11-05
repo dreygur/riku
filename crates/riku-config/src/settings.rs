@@ -8,6 +8,9 @@
 //! build_timeout = "30m"
 //! mode = "rootless"
 //! host = "unix:///run/user/1000/docker.sock"
+//!
+//! [router]
+//! cache_total_gb = 10
 //! ```
 //!
 //! Every key is optional. The file is operator owned input, so an unknown
@@ -25,6 +28,8 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 
+use crate::router_settings::router_settings;
+pub use crate::router_settings::RouterSettings;
 use crate::RikuPaths;
 
 /// File name of the server settings, directly under the riku root.
@@ -76,6 +81,7 @@ impl Default for EngineSettings {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ServerSettings {
     pub engine: EngineSettings,
+    pub router: RouterSettings,
 }
 
 fn parse_duration(text: &str) -> Option<Duration> {
@@ -169,17 +175,24 @@ fn parse_settings(raw: &str, file: &Path) -> Result<ServerSettings> {
     };
     let mut settings = ServerSettings::default();
     for (section, value) in &root {
-        if section != "engine" {
+        if section != "engine" && section != "router" {
             return Err(anyhow!("{}: unknown section [{section}]", file.display()));
         }
         let table = match value.as_table() {
             Some(table) => table,
-            None => return Err(anyhow!("{}: engine must be a table", file.display())),
+            None => return Err(anyhow!("{}: {section} must be a table", file.display())),
         };
-        settings.engine = match engine_settings(table, file) {
-            Ok(engine) => engine,
-            Err(e) => return Err(e),
-        };
+        if section == "engine" {
+            settings.engine = match engine_settings(table, file) {
+                Ok(engine) => engine,
+                Err(e) => return Err(e),
+            };
+        } else {
+            settings.router = match router_settings(table, file) {
+                Ok(router) => router,
+                Err(e) => return Err(e),
+            };
+        }
     }
     Ok(settings)
 }

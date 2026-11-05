@@ -190,27 +190,6 @@ pub fn app_snippet(
     }
 }
 
-/// Insert the filtered snippet into the template context. Always inserts
-/// the key, even as an empty string, so it's never simply absent.
-#[allow(clippy::question_mark)]
-pub(super) fn insert_include_file(
-    context: &mut tera::Context,
-    env: &std::collections::HashMap<String, String>,
-    app_path: &Path,
-    paths: &crate::config::RikuPaths,
-) -> Result<()> {
-    let (filtered, directives) = match filtered_snippet(env, app_path, paths) {
-        Ok(parts) => parts,
-        Err(e) => return Err(e),
-    };
-    context.insert("RIKU_NGINX_INCLUDE_CONTENT", &filtered);
-    // The templates leave out their own line for each directive the snippet
-    // sets: nginx refuses a second `client_max_body_size` or `gzip` in one
-    // server block.
-    context.insert("RIKU_NGINX_SNIPPET_DIRECTIVES", &directives);
-    Ok(())
-}
-
 #[cfg(test)]
 #[path = "app_snippet_tests.rs"]
 mod tests;

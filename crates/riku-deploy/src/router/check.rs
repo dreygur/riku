@@ -5,18 +5,17 @@ use std::path::Path;
 
 use anyhow::Result;
 
+use super::nginx_site::check_nginx_site;
+use super::send_to_helper;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
-use crate::util::backend::Backend;
 
-/// The backend the check renders with. The backend list only changes the
-/// upstream's `server` lines, and `nginx -t` never connects to them.
-const STAND_IN_PORT: u16 = 1;
-
-/// Render `app`'s nginx config and have `nginx -t` check it, leaving the live
-/// config alone. A deterministic failure, such as a refused
-/// `RIKU_NGINX_INCLUDE_FILE` snippet, then fails the deploy before any copy
-/// starts. Caddy and router plugins have nothing to check here.
+/// Build `app`'s nginx route and ask the helper whether it answers, leaving
+/// the live config alone. A deterministic failure, such as a refused
+/// `RIKU_NGINX_INCLUDE_FILE` snippet, or a helper that is not running, then
+/// fails the deploy before any copy starts. `nginx -t` runs in the helper
+/// when the site is applied. Caddy and router plugins have nothing to check
+/// here.
 #[allow(clippy::question_mark)]
 pub fn check(
     app: &str,
@@ -29,13 +28,7 @@ pub fn check(
         Err(e) => return Err(e),
     };
     match active {
-        Router::Nginx => crate::nginx::check_nginx_config(
-            app,
-            app_path,
-            env,
-            &[Backend::loopback(STAND_IN_PORT)],
-            paths,
-        ),
+        Router::Nginx => check_nginx_site(send_to_helper, app, app_path, env, paths),
         Router::Caddy | Router::Plugin(_) => Ok(()),
     }
 }

@@ -144,3 +144,32 @@ fn bad_duration_is_refused_naming_the_key() {
         );
     }
 }
+
+#[test]
+fn cache_total_defaults_to_ten_and_can_be_set() {
+    let (_tmp, paths) = paths();
+    assert_eq!(load(&paths).unwrap().router.cache_total_gb, 10);
+
+    std::fs::write(&paths.settings_file, "[router]\ncache_total_gb = 40\n").unwrap();
+
+    assert_eq!(load(&paths).unwrap().router.cache_total_gb, 40);
+}
+
+#[test]
+fn bad_cache_total_is_refused_naming_key_and_file() {
+    let (_tmp, paths) = paths();
+    for bad in ["0", "-3", "\"10\"", "1.5", "99999999999", "true"] {
+        std::fs::write(
+            &paths.settings_file,
+            format!("[router]\ncache_total_gb = {bad}\n"),
+        )
+        .unwrap();
+
+        let message = load(&paths).unwrap_err().to_string();
+
+        assert!(
+            message.contains("router.cache_total_gb") && message.contains("settings.toml"),
+            "{bad:?} should be refused naming key and file: {message}"
+        );
+    }
+}

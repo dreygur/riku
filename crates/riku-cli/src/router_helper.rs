@@ -13,6 +13,12 @@
 //! `riku_route::apply_nginx` and `remove_nginx`, which run the route gate
 //! again and write only under `/etc/riku` and `/var/cache/riku`. Caddy is not
 //! served yet.
+//!
+//! The one value read from the deploy user's tree is `router.cache_total_gb`
+//! in `settings.toml`. It is read once at start, before the socket is bound,
+//! and a bad file stops the helper with an error that goes to its own log,
+//! never into a reply. The deploy user can edit that file, so the cap guards
+//! against runaway configs and does not hold against the deploy user.
 
 use std::path::Path;
 use std::time::Duration;
@@ -82,6 +88,10 @@ pub fn cmd_router_helper() -> Result<()> {
         Ok(deploy) => deploy,
         Err(e) => return Err(anyhow!("router helper needs the deploy user: {e}")),
     };
+    let settings = match crate::config::settings::load(&deploy.riku_paths()) {
+        Ok(settings) => settings,
+        Err(e) => return Err(anyhow!("router helper settings: {e}")),
+    };
     let activated = match activated_listener() {
         Ok(listener) => listener,
         Err(e) => return Err(anyhow!("router helper socket activation: {e}")),
@@ -93,7 +103,7 @@ pub fn cmd_router_helper() -> Result<()> {
             Err(e) => return Err(anyhow!("router helper socket: {e}")),
         },
     };
-    let roots = NginxRoots::production();
+    let roots = NginxRoots::production(settings.router.cache_total_gb);
     run(&listener, idle, deploy.uid(), &mut |request| {
         handle(&roots, request)
     })

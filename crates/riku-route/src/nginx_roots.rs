@@ -41,11 +41,14 @@ pub struct NginxRoots {
     /// The uid every directory the helper writes into must belong to: root in
     /// production, the test's own uid in tests.
     pub owner_uid: u32,
+    /// GiB all proxy caches together may be allowed, from `settings.toml`.
+    pub cache_total_gb: u32,
 }
 
 impl NginxRoots {
     /// The roots of a real host, with programs looked up on `PATH`.
-    pub fn production() -> Self {
+    /// `cache_total_gb` is the operator's `router.cache_total_gb`.
+    pub fn production(cache_total_gb: u32) -> Self {
         let programs = ReloadPrograms::default();
         let reload = if Path::new(SYSTEMD_RUNTIME_DIR).is_dir() {
             ReloadMethod::Systemctl(programs.systemctl)
@@ -63,6 +66,7 @@ impl NginxRoots {
             nginx: programs.nginx,
             reload,
             owner_uid: ROOT_UID,
+            cache_total_gb,
         }
     }
 

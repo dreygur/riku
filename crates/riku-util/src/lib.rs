@@ -31,6 +31,7 @@ pub mod nginx_validation;
 pub mod process_util;
 pub mod procfile;
 pub mod public_key;
+pub mod quoted_text;
 pub mod resource_limits;
 pub mod root_binary;
 pub mod route_plan;

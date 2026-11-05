@@ -4,32 +4,25 @@
 Component package located at `crates/riku-deploy/src/router`.
 
 ## Interface
-- `copy_socket` [backends.rs:copy_socket] (fn)
-- `web_copies` [backends.rs:web_copies] (fn)
-- `current_backends` [backends.rs:current_backends] (fn)
-- `configure_caddy` [caddy.rs:configure_caddy] (fn)
-- `fallback_backends` [fallback.rs:fallback_backends] (fn)
-- `ready_for` [host_guard.rs:ready_for] (fn)
-- `ensure_host_ready` [host_guard.rs:ensure_host_ready] (fn)
-- `configure_plugin` [plugin.rs:configure_plugin] (fn)
-- `reload_plugin` [plugin.rs:reload_plugin] (fn)
-- `remove_plugin` [plugin.rs:remove_plugin] (fn)
-- `build_route` [route_build.rs:build_route] (fn)
-- `ERROR_FILE` [reload.rs:ERROR_FILE] (const)
-- `record_outcome` [reload.rs:record_outcome] (fn)
-- `reload` [reload.rs:reload] (fn)
-- `reload.rs` [reload.rs] (and 1 additional symbols)
-- `remove` [remove.rs:remove] (fn)
-- [reload](./reload/README.md) - Child contract for `reload`
+- `copy_socket`, `web_copies`, `current_backends` [backends.rs]: the app's running backends
+- `configure_caddy` [caddy.rs]: writes the Caddy site
+- `fallback_backends` [fallback.rs]: the default backend of an app with no web copy
+- `apply_nginx_site`, `check_nginx_site`, `remove_nginx_site` [nginx_site.rs]: the deploy user's part of an nginx site and the requests to the router helper
+- `send` [helper_client.rs]: one request to the router helper socket
+- `configure_plugin`, `reload_plugin`, `remove_plugin` [plugin.rs]: the router plugin verbs
+- `build_route` [route_build.rs]: the checked route sent to the helper
+- `ERROR_FILE`, `record_outcome`, `reload_caddy`, `reload_router_plugin` [reload.rs]: confirmed reloads and the failure file doctor reads
+- `remove` [remove.rs]: removes an app from the active router
 
 ## Invariants
 - [plugin.rs] The request carries already validated domains and goes to the plugin as JSON on stdin, with no shell interpolation; a plugin not declaring router protocol 2 is refused before `configure`
-- [host_guard.rs] A router install is refused while `nginx_root` holds a `*.conf` that is no app's config; Caddy and router plugins have no such host step
-- [remove.rs] For nginx, only paths built from the app name inside `nginx_root` are touched, never anything under `/etc/nginx`
+- [nginx_site.rs] The deploy user never writes an nginx config or runs nginx; a helper refusal is reported with its stage and message
+- [remove.rs] For nginx, local files are deleted only after the helper removed the site
 
 ## Side Effects
 - [reload.rs] Spawns external child processes via `std::process::Command`
 - [reload.rs] Mutates local filesystem (creates/modifies/removes files)
+- [helper_client.rs] Connects to `/run/riku-router.sock`
 
 ## Verification
 - Run: `cargo test -p riku-deploy`

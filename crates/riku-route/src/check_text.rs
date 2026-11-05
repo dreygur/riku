@@ -4,11 +4,7 @@
 
 use anyhow::{anyhow, Result};
 use riku_nginx::breaks_directive;
-
-/// Characters refused inside a double quoted value. nginx ends the string at
-/// `"`, reads `$` as a variable and `\` as an escape. `;`, `{`, `}`, `'` and
-/// `#` are plain text there.
-const QUOTED_REFUSED: [char; 3] = ['"', '$', '\\'];
+use riku_util::quoted_text::breaks_quoted_string;
 
 fn plain(c: char) -> bool {
     !breaks_directive(c) && !matches!(c, '\\' | '`')
@@ -43,7 +39,7 @@ pub(crate) fn relative_file(field: &str, value: &str) -> Result<()> {
 /// Text written inside double quotes, such as a `Content-Security-Policy`
 /// value: it must not close the string, interpolate or contain a line break.
 pub(crate) fn header_text(field: &str, value: &str) -> Result<()> {
-    if value.contains(|c: char| c.is_control() || QUOTED_REFUSED.contains(&c)) {
+    if breaks_quoted_string(value) {
         return Err(anyhow!(
             "{field} {value:?} must not contain control characters or any of \" $ \\"
         ));

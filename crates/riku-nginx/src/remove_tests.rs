@@ -1,41 +1,47 @@
 use std::fs;
 
-use super::remove_nginx_files;
-use crate::test_support::paths_with_nginx;
+use super::remove_deploy_files;
+use crate::config::RikuPaths;
 
-#[test]
-fn removal_reports_a_live_config_and_never_reloads_or_leaves_nginx_root() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
-    let marker = temp_dir.path().join("direct");
-    let paths = paths_with_nginx(
-        temp_dir.path(),
-        &format!("touch {}\nexit 0\n", marker.display()),
-    );
-    fs::write(paths.nginx_root.join("myapp.conf"), "server {}\n").unwrap();
-    fs::write(paths.nginx_root.join("myapp.conf.new"), "server {}\n").unwrap();
-    fs::create_dir_all(&paths.nginx_sites_enabled).unwrap();
-    let legacy = paths.nginx_sites_enabled.join("myapp.conf");
-    std::os::unix::fs::symlink(paths.nginx_root.join("myapp.conf"), &legacy).unwrap();
-
-    assert!(remove_nginx_files("myapp", &paths).unwrap().was_live);
-    assert!(!remove_nginx_files("myapp", &paths).unwrap().was_live);
-
-    assert!(
-        !marker.exists(),
-        "removal reloaded nginx directly, the caller owns the reload"
-    );
-    assert_eq!(fs::read_dir(&paths.nginx_root).unwrap().count(), 0);
-    assert!(
-        legacy.symlink_metadata().is_ok(),
-        "removal wrote outside nginx_root"
-    );
+fn paths_in(dir: &std::path::Path) -> RikuPaths {
+    let paths = RikuPaths::for_tests(dir);
+    fs::create_dir_all(&paths.nginx_root).unwrap();
+    fs::create_dir_all(&paths.socket_root).unwrap();
+    paths
 }
 
 #[test]
-fn side_file_failures_are_all_reported_and_the_removed_live_config_still_counts() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
-    let paths = paths_with_nginx(temp_dir.path(), "exit 0\n");
-    fs::write(paths.nginx_root.join("myapp.conf"), "server {}\n").unwrap();
+fn removes_the_certificate_files_and_sockets_of_one_app_only() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = paths_in(tmp.path());
+    for name in ["myapp.key", "myapp.crt", "myapp.fullchain.crt", "other.key"] {
+        fs::write(paths.nginx_root.join(name), "pem").unwrap();
+    }
+    for name in [
+        "myapp.sock",
+        "myapp@2.sock",
+        "other.sock",
+        "myapp-two@1.sock",
+    ] {
+        fs::write(paths.socket_root.join(name), "").unwrap();
+    }
+
+    remove_deploy_files("myapp", &paths).unwrap();
+    remove_deploy_files("myapp", &paths).unwrap();
+
+    let mut left: Vec<String> = fs::read_dir(&paths.nginx_root)
+        .unwrap()
+        .chain(fs::read_dir(&paths.socket_root).unwrap())
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    left.sort();
+    assert_eq!(left, ["myapp-two@1.sock", "other.key", "other.sock"]);
+}
+
+#[test]
+fn every_failure_is_reported_in_one_error() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = paths_in(tmp.path());
     for stuck in [
         paths.socket_root.join("myapp@1.sock"),
         paths.nginx_root.join("myapp.crt"),
@@ -43,32 +49,12 @@ fn side_file_failures_are_all_reported_and_the_removed_live_config_still_counts(
         fs::create_dir_all(stuck.join("busy")).unwrap();
     }
 
-    let removal = remove_nginx_files("myapp", &paths).unwrap();
-
-    assert!(removal.was_live, "the live config went but no reload asked");
-    let err = removal
-        .leftover_error
-        .expect("side files could not be removed but no error came back")
+    let err = remove_deploy_files("myapp", &paths)
+        .unwrap_err()
         .to_string();
+
     assert!(
         err.contains("myapp@1.sock") && err.contains("myapp.crt"),
         "{err}"
-    );
-    assert!(!paths.nginx_root.join("myapp.conf").exists());
-}
-
-#[test]
-fn a_dangling_config_link_is_removed_and_counts_as_live() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
-    let paths = paths_with_nginx(temp_dir.path(), "exit 0\n");
-    let link = paths.nginx_root.join("myapp.conf");
-    std::os::unix::fs::symlink(temp_dir.path().join("gone.conf"), &link).unwrap();
-
-    let removal = remove_nginx_files("myapp", &paths).unwrap();
-
-    assert!(removal.was_live, "nginx still globbed the link");
-    assert!(
-        link.symlink_metadata().is_err(),
-        "dangling link left behind"
     );
 }

@@ -1,9 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# The deploy path reloads nginx after writing a config. With no nginx running
-# that reload fails on an empty /run/nginx.pid and the tests never exercise it.
+# Only the router helper writes nginx config and reloads nginx, so it runs as
+# root before any case deploys. nginx loads what it installs in /etc/riku/nginx.
+mkdir -p /etc/riku /etc/nginx/conf.d
+chmod 755 /etc/riku
+printf 'include /etc/riku/nginx/*.conf;\n' > /etc/nginx/conf.d/riku.conf
 nginx
+riku router-helper &
+for _ in $(seq 1 50); do
+    [ -S /run/riku-router.sock ] && break
+    sleep 0.1
+done
+if [ ! -S /run/riku-router.sock ]; then
+    echo "the router helper did not create /run/riku-router.sock" >&2
+    exit 1
+fi
 
 PASS=0
 FAIL=0
@@ -21,13 +33,6 @@ run_test() {
     local sites_enabled="$test_home/nginx-sites-enabled"
     mkdir -p "$sites_enabled"
     export RIKU_NGINX_SITES_ENABLED="$sites_enabled"
-
-    # Deploy and destroy refuse unless nginx loads this root's sites, which
-    # `sudo riku init` arranges on a real host. Write the same include line
-    # init would, at a per-case path the system nginx never reads.
-    local host_include="$test_home/nginx-host-include.conf"
-    printf 'include %s/nginx/*.conf;\n' "$test_home" > "$host_include"
-    export RIKU_NGINX_HOST_INCLUDE="$host_include"
 
     echo ""
     echo "━━━ $name ━━━"

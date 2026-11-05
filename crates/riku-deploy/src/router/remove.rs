@@ -1,21 +1,27 @@
 //! Removing an app from the active router.
 //!
-//! Security: for nginx only paths built from the app name inside
-//! `nginx_root` are touched, never anything under `/etc/nginx`, and the
-//! reload uses the same fixed programs as a deploy.
+//! Security: for nginx the router helper removes the site and only the
+//! certificate files and sockets in the deploy user's own tree are deleted
+//! here, all named from the app name. Nothing under `/etc` is touched by
+//! the deploy user.
 
 use anyhow::Result;
 
+use super::nginx_site::remove_nginx_site;
 use super::plugin::remove_plugin;
-use super::reload::{record_outcome, reload, Baseline, ERROR_FILE};
+use super::reload::{record_outcome, reload_caddy};
+use super::send_to_helper;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 
 /// Remove `app` from the active router.
 ///
-/// nginx removal is built-in. For a plugin router this dispatches `unconfigure`
-/// (the app's config is keyed by `RIKU_APP`, which is still available even
-/// though the app's `ENV` is already gone by destroy time) then `reload`.
+/// nginx removal is the router helper's, followed by the deploy user's own
+/// leftovers. A removal that finds no site does not reload, and does not
+/// touch the recorded reload failure either: no reload was confirmed. For a
+/// plugin router this dispatches `unconfigure` (the app's config is keyed by
+/// `RIKU_APP`, which is still available even though the app's `ENV` is
+/// already gone by destroy time) then `reload`.
 ///
 /// `unconfigure` is **best-effort**: it was added within API v1, so a plugin
 /// predating it may not implement the verb and will exit non-zero, in that
@@ -29,9 +35,9 @@ pub fn remove(app: &str, paths: &RikuPaths) -> Result<()> {
     };
 
     let outcome = match &active {
-        Router::Nginx => remove_nginx_app(app, paths, &active),
+        Router::Nginx => return remove_nginx_app(app, paths),
         Router::Caddy => match crate::caddy::remove_site(app, paths) {
-            Ok(()) => reload(&active, paths, &Baseline::Direct),
+            Ok(()) => reload_caddy(paths),
             Err(e) => Err(e),
         },
         Router::Plugin(name) => remove_plugin(name, app, paths),
@@ -40,43 +46,17 @@ pub fn remove(app: &str, paths: &RikuPaths) -> Result<()> {
     outcome
 }
 
-/// Whether the last router reload failed, so nginx may still serve a config
-/// that is already gone from disk.
-fn last_reload_failed(paths: &RikuPaths) -> bool {
-    paths.riku_root.join(ERROR_FILE).exists()
-}
-
-/// Delete `app`'s nginx files, then reload nginx the way a deploy does if
-/// its config was live or the last reload failed. A retried removal finds
-/// the config already gone, and skipping the reload then would clear the
-/// recorded error without a confirmed reload. The reload method is decided
-/// before the files go, so a reload unit watching the config directory sees
-/// the change. When a side file could not be removed the reload still runs,
-/// then that error is returned.
-#[allow(clippy::question_mark)]
-fn remove_nginx_app(app: &str, paths: &RikuPaths, active: &Router) -> Result<()> {
-    let baseline = Baseline::capture(&paths.reload_programs);
-    let reload_pending = last_reload_failed(paths);
-    let removal = match crate::nginx::remove_nginx_files(app, paths) {
-        Ok(removal) => removal,
-        Err(e) => return Err(e),
-    };
-    let reloaded = if removal.was_live || reload_pending {
-        reload(active, paths, &baseline)
-    } else {
-        Ok(())
-    };
-    match (reloaded, removal.leftover_error) {
-        (Err(e), Some(leftover)) => {
-            tracing::warn!("also could not remove a file of '{app}': {leftover}");
-            Err(e)
+fn remove_nginx_app(app: &str, paths: &RikuPaths) -> Result<()> {
+    match remove_nginx_site(send_to_helper, app, paths) {
+        Ok(true) => {
+            record_outcome(paths, &Ok(()));
+            Ok(())
         }
-        (Err(e), None) => Err(e),
-        (Ok(()), Some(leftover)) => Err(leftover),
-        (Ok(()), None) => Ok(()),
+        Ok(false) => Ok(()),
+        Err(e) => {
+            let outcome = Err(e);
+            record_outcome(paths, &outcome);
+            outcome
+        }
     }
 }
-
-#[cfg(test)]
-#[path = "remove_tests.rs"]
-mod tests;

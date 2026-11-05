@@ -29,7 +29,7 @@ use crate::util::file_names::copy_socket;
 use crate::util::flag::{https_only, is_on};
 use crate::util::route_plan::HttpsPolicy;
 
-const CATCH_ALL_NAME: &str = "_";
+pub(super) const CATCH_ALL_NAME: &str = "_";
 const REFUSED_KEYS: [(&str, &str); 2] = [
     ("RIKU_NGINX_CACHE_PATH", "the helper picks the cache path"),
     ("RIKU_NGINX_SOCKET", "the helper picks socket paths"),
@@ -45,7 +45,7 @@ fn refused_key(env: &HashMap<String, String>) -> Option<&'static (&'static str, 
 
 /// What nginx's generator would serve: the listed names, `<app>.example.com`
 /// when `RIKU_DOMAINS` is unset, and `_` as the catch all name.
-fn nginx_domains(app: &AppName, env: &HashMap<String, String>) -> Result<Vec<String>> {
+pub(super) fn nginx_domains(app: &AppName, env: &HashMap<String, String>) -> Result<Vec<String>> {
     let Some(raw) = env.get("RIKU_DOMAINS") else {
         return Ok(vec![format!("{app}.example.com")]);
     };

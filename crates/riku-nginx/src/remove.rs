@@ -1,5 +1,7 @@
-//! Removing an app's files from `nginx_root` and its sockets from
-//! `socket_root`. Nothing outside those two is touched.
+//! Removing the files an app leaves in the deploy user's tree: its
+//! certificate files in `nginx_root` and its sockets in `socket_root`.
+//! Nothing outside those two is touched. The site config itself belongs to
+//! the router helper.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -7,22 +9,13 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Result};
 use riku_util::file_names::copy_socket;
 
-use super::install::{site_file, staged_file};
 use crate::config::RikuPaths;
 
-/// What [`remove_nginx_files`] did.
-#[derive(Debug)]
-pub struct NginxRemoval {
-    /// A live config was removed, so nginx needs a reload.
-    pub was_live: bool,
-    /// Every socket, cert, key or staged config that could not be removed,
-    /// in one error. The live config is gone either way when `was_live` is
-    /// set.
-    pub leftover_error: Option<anyhow::Error>,
-}
+/// Suffixes of the certificate files acme.sh and the self signed fallback
+/// leave next to each other in `nginx_root`.
+const CERTIFICATE_SUFFIXES: [&str; 3] = ["key", "crt", "fullchain.crt"];
 
-/// `symlink_metadata`, not `exists`: a dangling `<app>.conf` link is still
-/// an entry nginx's glob matches, and `exists` follows the link.
+/// `symlink_metadata`, not `exists`: a dangling link is still an entry.
 fn is_present(file: &Path) -> bool {
     file.symlink_metadata().is_ok()
 }
@@ -54,40 +47,23 @@ fn copy_sockets(app: &str, dir: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-/// Remove an app's live config first, then its staged config, sockets, cert
-/// and key. Fails only when the live config cannot be removed, since then
-/// nothing nginx loads has changed. A later failure is returned in
-/// [`NginxRemoval::leftover_error`] so the caller still reloads.
-///
-/// The caller does the reload: the deploy user may not signal the nginx
-/// master, so it goes through the router reload.
-#[allow(clippy::question_mark)]
-pub fn remove_nginx_files(app: &str, paths: &RikuPaths) -> Result<NginxRemoval> {
-    let config_file = site_file(app, paths);
-    let was_live = is_present(&config_file);
-    if let Err(e) = remove_if_present(&config_file) {
-        return Err(e);
-    }
-
-    let side_files = [staged_file(app, paths)]
-        .into_iter()
-        .chain(["key", "crt"].map(|ext| paths.nginx_root.join(format!("{app}.{ext}"))))
+/// Remove `app`'s certificate files, default socket and copy sockets. Every
+/// file is tried; the failures come back in one error.
+pub fn remove_deploy_files(app: &str, paths: &RikuPaths) -> Result<()> {
+    let certificates = CERTIFICATE_SUFFIXES
+        .map(|suffix| paths.nginx_root.join(format!("{app}.{suffix}")))
+        .into_iter();
+    let files = certificates
         .chain([paths.socket_root.join(format!("{app}.sock"))])
         .chain(copy_sockets(app, &paths.socket_root));
-    let failures: Vec<String> = side_files
+    let failures: Vec<String> = files
         .filter_map(|file| remove_if_present(&file).err())
         .map(|e| e.to_string())
         .collect();
-    let leftover_error = if failures.is_empty() {
-        None
-    } else {
-        Some(anyhow!("{}", failures.join("; ")))
-    };
-
-    Ok(NginxRemoval {
-        was_live,
-        leftover_error,
-    })
+    if failures.is_empty() {
+        return Ok(());
+    }
+    Err(anyhow!("{}", failures.join("; ")))
 }
 
 #[cfg(test)]

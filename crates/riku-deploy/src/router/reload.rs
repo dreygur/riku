@@ -1,17 +1,13 @@
-//! Confirmed router reloads.
+//! Confirmed reloads of the routers the deploy user reloads itself.
 //!
-//! [`reload`] returns only after the router accepted the reload, so a caller
-//! can act on that (drain a copy, report success) without guessing. What
-//! "confirmed" means depends on the router:
+//! Each function returns only after the router accepted the reload, so a
+//! caller can act on that (drain a copy, report success) without guessing:
 //!
-//! - nginx: the reload signal was delivered and accepted (`systemctl reload
-//!   nginx` or `nginx -s reload` exited 0). That does not prove nginx
-//!   finished loading the config.
 //! - Caddy: `caddy reload` exited 0, which means Caddy loaded the config.
 //! - Router plugin: its own `reload` verb exited 0.
 //!
-//! On a host with systemd, nginx is reloaded by `riku-nginx-reload.service`
-//! (see [`nginx_unit`]); otherwise nginx is reloaded directly.
+//! nginx is not here: the router helper installs, checks and reloads it as
+//! root, and the deploy side only maps its answer (see [`super::nginx_site`]).
 //!
 //! Security: every program and argument is fixed. Nothing from an app's ENV
 //! reaches a command line. The failure text is written to a file under the
@@ -24,19 +20,13 @@ use anyhow::{anyhow, Result};
 
 use super::plugin::reload_plugin;
 use crate::caddy::SYSTEM_CADDYFILE;
-use crate::config::router::Router;
 use crate::config::{ReloadPrograms, RikuPaths};
 use crate::util::spawn::output_retrying_etxtbsy;
-
-mod nginx_unit;
-mod unit_state;
-
-pub use nginx_unit::Baseline;
 
 /// File under the riku root holding the last failed reload's error text.
 pub const ERROR_FILE: &str = "router-reload.err";
 
-fn reload_caddy(programs: &ReloadPrograms) -> Result<()> {
+fn run_caddy_reload(programs: &ReloadPrograms) -> Result<()> {
     let output = match output_retrying_etxtbsy(Command::new(&programs.caddy).args([
         "reload",
         "--config",
@@ -56,17 +46,6 @@ fn reload_caddy(programs: &ReloadPrograms) -> Result<()> {
     ))
 }
 
-fn confirm(router: &Router, paths: &RikuPaths, before: &Baseline) -> Result<()> {
-    match (router, before) {
-        (Router::Nginx, Baseline::Unit) => nginx_unit::await_unit(paths),
-        (Router::Nginx, Baseline::Direct) => {
-            crate::nginx::reload_nginx_with(&paths.reload_programs.nginx)
-        }
-        (Router::Caddy, _) => reload_caddy(&paths.reload_programs),
-        (Router::Plugin(name), _) => reload_plugin(name, paths),
-    }
-}
-
 /// Write `outcome` to the doctor's error file, or clear the file on success.
 pub fn record_outcome(paths: &RikuPaths, outcome: &Result<()>) {
     let file = paths.riku_root.join(ERROR_FILE);
@@ -84,22 +63,21 @@ pub fn record_outcome(paths: &RikuPaths, outcome: &Result<()>) {
     }
 }
 
-/// Reload `router` and return once it has confirmed the new config.
-///
-/// `before` is the [`Baseline`] taken before the config was written, and
-/// this must be called after the write. The programs run come from
-/// `paths.reload_programs`. The last failure is also written to
-/// `<riku root>/router-reload.err` for `riku doctor`, and the file is
-/// removed on success.
-pub fn reload(router: &Router, paths: &RikuPaths, before: &Baseline) -> Result<()> {
-    let outcome = confirm(router, paths, before);
+/// Reload Caddy and return once it has confirmed the new config. The last
+/// failure is also written to `<riku root>/router-reload.err` for
+/// `riku doctor`, and the file is removed on success.
+pub fn reload_caddy(paths: &RikuPaths) -> Result<()> {
+    let outcome = run_caddy_reload(&paths.reload_programs);
     record_outcome(paths, &outcome);
     outcome
 }
 
-#[cfg(test)]
-#[path = "reload/mock_systemctl.rs"]
-pub(super) mod mock_systemctl;
+/// [`reload_caddy`] for the router plugin `name` and its `reload` verb.
+pub fn reload_router_plugin(name: &str, paths: &RikuPaths) -> Result<()> {
+    let outcome = reload_plugin(name, paths);
+    record_outcome(paths, &outcome);
+    outcome
+}
 
 #[cfg(test)]
 #[path = "reload_tests.rs"]

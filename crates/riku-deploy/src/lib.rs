@@ -112,9 +112,6 @@ pub fn do_deploy(
             app_path.display()
         ));
     }
-    if let Err(e) = router::ensure_host_ready(paths) {
-        return Err(anyhow::anyhow!("not deploying '{app}': {e:#}"));
-    }
 
     // Held for the rest of this function: serializes concurrent deploys of
     // the *same* app (e.g. a second git push landing mid-deploy, or a

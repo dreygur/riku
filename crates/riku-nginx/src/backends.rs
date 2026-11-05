@@ -26,11 +26,6 @@ fn upstream_port_entry(env: &HashMap<String, String>) -> (&'static str, &str) {
     }
 }
 
-/// The app's upstream port as written in its ENV.
-pub(crate) fn upstream_port(env: &HashMap<String, String>) -> String {
-    upstream_port_entry(env).1.to_string()
-}
-
 /// The name of the app's nginx `upstream` block: `riku_` and the lowercase hex
 /// of the app name's bytes.
 ///

@@ -18,11 +18,16 @@ use anyhow::{anyhow, Result};
 
 use crate::app_snippet::snippet_directives;
 use crate::backends::upstream_name;
-use crate::context_cache::CACHE_KEYS_ZONE;
 use crate::sanitize::sanitize_nginx_value;
 use crate::static_site::{document_root_in, static_path_dir_in};
 use crate::template::{backend_address, register_templates};
 use crate::util::backend::Backend;
+use crate::util::quoted_text::breaks_quoted_string;
+
+/// Shared memory for the cache's key index, about 80,000 keys. The disk the
+/// cache may fill is `max_size`, from the route's `size_gb`; this zone does
+/// not grow with it.
+const CACHE_KEYS_ZONE: &str = "10m";
 
 /// Which template a site takes after `https_only`, which wins over all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -147,6 +152,11 @@ fn insert_optional_text(context: &mut tera::Context, site: &RouteSite) -> Result
         }
     }
     if let Some(policy) = site.csp {
+        if breaks_quoted_string(policy) {
+            return Err(anyhow!(
+                "csp {policy:?} must not contain control characters or any of \" $ \\"
+            ));
+        }
         context.insert("RIKU_NGINX_CSP", policy);
     }
     Ok(())
@@ -223,3 +233,7 @@ pub fn render_route_site(site: &RouteSite) -> Result<String> {
         Err(e) => Err(anyhow!("failed to render {name} for '{}': {e}", site.app)),
     }
 }
+
+#[cfg(test)]
+#[path = "route_site_tests.rs"]
+mod tests;

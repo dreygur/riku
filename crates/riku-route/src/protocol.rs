@@ -42,6 +42,18 @@ pub enum Stage {
     Reload,
 }
 
+impl std::fmt::Display for Stage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            Stage::Schema => "schema",
+            Stage::Render => "render",
+            Stage::Check => "check",
+            Stage::Reload => "reload",
+        };
+        f.write_str(name)
+    }
+}
+
 /// What the helper answers.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(into = "ReplyWire", try_from = "ReplyWire")]

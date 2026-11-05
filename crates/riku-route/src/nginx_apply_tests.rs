@@ -44,6 +44,7 @@ impl Host {
             nginx,
             reload: ReloadMethod::Signal,
             owner_uid: fs::metadata(root).unwrap().uid(),
+            cache_total_gb: 100,
         };
         Host { dir, roots }
     }
@@ -122,36 +123,9 @@ fn failure(reply: Reply) -> (Stage, String) {
 }
 
 #[test]
-fn render_matches_generator() {
+fn every_route_field_reaches_the_rendered_site() {
     let host = Host::new();
-    let root = host.dir.path();
-    let mut paths = RikuPaths::for_tests(root);
-    paths.reload_programs.nginx = host.roots.nginx.clone();
-    let checkout = root.join("checkout");
-    fs::create_dir_all(checkout.join("assets")).unwrap();
-    fs::write(
-        checkout.join("snippet.conf"),
-        "add_header X-Frame-Options DENY;",
-    )
-    .unwrap();
-    fs::create_dir_all(&paths.nginx_root).unwrap();
-    let env = [
-        ("RIKU_DOMAINS", "myapp.example"),
-        ("RIKU_NGINX_STATIC_PATHS", "/assets/:assets"),
-        ("RIKU_NGINX_CACHE_PREFIXES", "/api/"),
-        ("RIKU_NGINX_CSP", "default-src self"),
-        ("RIKU_NGINX_CATCH_ALL", "index.html"),
-        ("RIKU_NGINX_INCLUDE_FILE", "snippet.conf"),
-    ]
-    .map(|(key, value)| (key.to_string(), value.to_string()))
-    .into_iter()
-    .collect();
-    let backends = [riku_util::backend::Backend::Unix(
-        paths.socket_root.join("myapp.sock"),
-    )];
-    riku_nginx::generate_nginx_config("myapp", &checkout, &env, &backends, &paths).unwrap();
-    let generated = fs::read_to_string(paths.nginx_root.join("myapp.conf")).unwrap();
-
+    let myapp = app("myapp");
     let mut sent = route("myapp.example");
     sent.backends = vec![RouteBackend::UnixDefault];
     sent.static_paths = vec!["/assets/".to_string()];
@@ -159,16 +133,29 @@ fn render_matches_generator() {
     sent.csp = Some("default-src self".to_string());
     sent.catch_all = Some("index.html".to_string());
     sent.snippet = Some("add_header X-Frame-Options DENY;".to_string());
-    let reply = apply_nginx(&host.roots, &app("myapp"), &sent);
+    let reply = apply_nginx(&host.roots, &myapp, &sent);
     assert_eq!(reply, Reply::Ok { reloaded: true }, "apply failed");
 
-    let rendered = host.conf(&app("myapp"));
-    let old_cache = paths.cache_root.join("myapp");
-    let new_cache = host.roots.cache_dir(&app("myapp"));
-    assert_eq!(
-        rendered,
-        generated.replace(old_cache.to_str().unwrap(), new_cache.to_str().unwrap())
-    );
+    let rendered = host.conf(&myapp);
+    let roots = &host.roots;
+    let expected = [
+        "server_name         myapp.example;".to_string(),
+        format!("server unix:{}/myapp.sock;", roots.socket_root.display()),
+        format!("alias {}/myapp/paths/0;", roots.static_root.display()),
+        format!(
+            "proxy_cache_path {} levels=1:2 keys_zone=myapp:10m",
+            roots.cache_dir(&myapp).display()
+        ),
+        "Content-Security-Policy \"default-src self\"".to_string(),
+        "try_files $uri /index.html;".to_string(),
+        "add_header X-Frame-Options DENY;".to_string(),
+    ];
+    for fragment in expected {
+        assert!(
+            rendered.contains(&fragment),
+            "{fragment:?} missing from:\n{rendered}"
+        );
+    }
 }
 
 #[test]

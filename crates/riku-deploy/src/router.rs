@@ -1,7 +1,7 @@
 //! Router seam orchestrator (service layer).
 //!
-//! Resolves the active router and routes app network exposure to either the
-//! built-in nginx generator or a router *plugin* via the
+//! Resolves the active router and routes app network exposure to nginx
+//! through the router helper, to Caddy, or to a router *plugin* via the
 //! [`crate::plugins::router`] seam. Callers (deploy, destroy) go through here
 //! instead of reaching into nginx directly, so swapping the router is a config
 //! change, not a code change. See `PLUGIN_PROTOCOL.md` §6.2.
@@ -33,7 +33,7 @@ mod caddy;
 mod check;
 mod fallback;
 mod helper_client;
-mod host_guard;
+mod nginx_site;
 mod plugin;
 mod reload;
 mod remove;
@@ -46,12 +46,13 @@ use caddy::configure_caddy;
 pub use check::check;
 use fallback::fallback_backends;
 pub use helper_client::send as send_to_helper;
-pub use host_guard::ensure_host_ready;
-use host_guard::ready_for;
+use nginx_site::apply_nginx_site;
 use plugin::configure_plugin;
-pub use reload::{reload, Baseline, ERROR_FILE as RELOAD_ERROR_FILE};
+pub use reload::ERROR_FILE as RELOAD_ERROR_FILE;
+use reload::{record_outcome, reload_caddy, reload_router_plugin};
 pub use remove::remove;
 pub use route_build::build_route;
+
 /// Caddy reaches an app over loopback whatever `RIKU_BIND_ADDRESS` says.
 /// nginx and router plugins keep the address each copy listens on, since a
 /// plugin may run elsewhere and must not be told a made up address.
@@ -117,8 +118,8 @@ pub fn configure(
     apply_to(&active, app, app_path, env, paths, &backends)
 }
 
-/// Render and write `app`'s router config for `backends`, then reload the
-/// active router and wait for it to confirm.
+/// Install `app`'s router config for `backends` and wait for the active
+/// router to confirm the reload. nginx goes through the router helper.
 #[allow(clippy::question_mark)]
 pub fn apply(
     app: &str,
@@ -143,22 +144,21 @@ fn apply_to(
     paths: &RikuPaths,
     backends: &[Backend],
 ) -> Result<()> {
-    if let Err(e) = ready_for(active, paths) {
-        return Err(e);
+    match active {
+        Router::Nginx => {
+            let outcome = apply_nginx_site(send_to_helper, app, app_path, env, backends, paths);
+            record_outcome(paths, &outcome);
+            outcome
+        }
+        Router::Caddy => match configure_caddy(app, env, backends, paths) {
+            Ok(()) => reload_caddy(paths),
+            Err(e) => Err(e),
+        },
+        Router::Plugin(name) => match configure_plugin(name, app, env, backends, paths) {
+            Ok(()) => reload_router_plugin(name, paths),
+            Err(e) => Err(e),
+        },
     }
-    let baseline = match active {
-        Router::Nginx => Baseline::capture(&paths.reload_programs),
-        Router::Caddy | Router::Plugin(_) => Baseline::Direct,
-    };
-    let written = match active {
-        Router::Nginx => crate::nginx::generate_nginx_config(app, app_path, env, backends, paths),
-        Router::Caddy => configure_caddy(app, env, backends, paths),
-        Router::Plugin(name) => configure_plugin(name, app, env, backends, paths),
-    };
-    if let Err(e) = written {
-        return Err(e);
-    }
-    reload(active, paths, &baseline)
 }
 
 /// The routing plan for an app: its domains and HTTPS policy from ENV, and

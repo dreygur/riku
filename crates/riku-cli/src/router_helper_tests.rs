@@ -17,6 +17,7 @@ fn roots_in(dir: &Path) -> NginxRoots {
         nginx: dir.join("no_nginx"),
         reload: ReloadMethod::Signal,
         owner_uid: 0,
+        cache_total_gb: 100,
     }
 }
 

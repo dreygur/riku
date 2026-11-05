@@ -12,6 +12,7 @@
 pub mod app_env;
 pub mod binary_check;
 pub mod checks;
+pub mod cloudflare_check;
 pub mod container_check;
 pub mod router_check;
 pub mod settings_check;

@@ -92,18 +92,13 @@ fn a_filter_rewriting_the_snippet_into_a_refused_directive_fails_the_deploy() {
     let paths = crate::config::RikuPaths::for_tests(tmp.path());
     install_rewriting_filter(&paths, "gzip on; include /etc/shadow;");
 
-    let mut context = tera::Context::new();
-    let err = insert_include_file(&mut context, &env_naming("nginx.include"), &app, &paths)
+    let err = app_snippet(&env_naming("nginx.include"), &app, &paths)
         .expect_err("a filter adding `include` must refuse the deploy")
         .to_string();
 
     assert!(
         err.contains(INCLUDE_FILTER) && err.contains("`include`"),
         "error should name the filter stage and the directive: {err}"
-    );
-    assert!(
-        context.get("RIKU_NGINX_INCLUDE_CONTENT").is_none(),
-        "refused content reached the template context"
     );
 }
 

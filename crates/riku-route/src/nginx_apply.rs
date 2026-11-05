@@ -140,7 +140,7 @@ pub fn apply_nginx(roots: &NginxRoots, app: &AppName, route: &Route) -> Reply {
     };
     let route = checked.route();
     if let Some(cache) = &route.cache {
-        if let Err(e) = within_budget(&roots.site_root, app, cache.size_gb) {
+        if let Err(e) = within_budget(&roots.site_root, app, cache.size_gb, roots.cache_total_gb) {
             return failed(Stage::Schema, e);
         }
     }

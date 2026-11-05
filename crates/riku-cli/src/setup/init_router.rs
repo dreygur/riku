@@ -19,6 +19,7 @@ use crate::config::RikuPaths;
 use crate::util::echo;
 
 use super::caddy_host::setup_caddy_host;
+use super::cloudflare_ranges::setup_cloudflare_ranges;
 use super::deploy_user::DeployUser;
 use super::nginx_host::setup_nginx_host;
 
@@ -68,10 +69,16 @@ pub fn deploy_router(user: &DeployUser) -> Result<Router> {
 }
 
 /// Router specific host setup that needs root. A router plugin has none.
+#[allow(clippy::question_mark)]
 pub fn setup_router_host(router: &Router, user: &DeployUser) -> Result<()> {
     match router {
         Router::Caddy => setup_caddy_host(&user.riku_paths(), user),
-        Router::Nginx => setup_nginx_host(user),
+        Router::Nginx => {
+            if let Err(e) = setup_nginx_host(user) {
+                return Err(e);
+            }
+            setup_cloudflare_ranges()
+        }
         Router::Plugin(_) => Ok(()),
     }
 }

@@ -19,8 +19,6 @@
 //! quotes, `#`) are defense in depth against nginx variable interpolation and
 //! template contexts that might quote or comment differently than today's.
 
-use std::collections::HashMap;
-
 const NGINX_DANGEROUS_CHARS: &[char] = &[';', '{', '}', '\n', '\r', '`', '$', '\\', '"', '\'', '#'];
 
 /// Sanitize a value destined for an nginx config template.
@@ -33,23 +31,6 @@ pub(super) fn sanitize_nginx_value(key: &str, value: &str) -> anyhow::Result<Str
         ));
     }
     Ok(value.to_string())
-}
-
-/// Sanitize all environment variables before inserting into nginx template context.
-/// Returns a new HashMap with validated values. Logs warnings for rejected values.
-pub(super) fn sanitize_env_for_nginx(env: &HashMap<String, String>) -> HashMap<String, String> {
-    let mut sanitized = HashMap::new();
-    for (key, value) in env {
-        match sanitize_nginx_value(key, value) {
-            Ok(clean) => {
-                sanitized.insert(key.clone(), clean);
-            }
-            Err(e) => {
-                tracing::warn!("{}", e);
-            }
-        }
-    }
-    sanitized
 }
 
 #[cfg(test)]
@@ -89,16 +70,5 @@ mod tests {
         assert!(sanitize_nginx_value("PORT", "8080").is_ok());
         assert!(sanitize_nginx_value("RIKU_BIND_ADDRESS", "127.0.0.1").is_ok());
         assert!(sanitize_nginx_value("RIKU_NGINX_IPV6_ADDRESS", "[::]").is_ok());
-    }
-
-    #[test]
-    fn test_sanitize_env_for_nginx_filters_dangerous() {
-        let mut env = HashMap::new();
-        env.insert("GOOD_KEY".to_string(), "clean-value".to_string());
-        env.insert("BAD_KEY".to_string(), "value; inject".to_string());
-
-        let sanitized = sanitize_env_for_nginx(&env);
-        assert!(sanitized.contains_key("GOOD_KEY"));
-        assert!(!sanitized.contains_key("BAD_KEY"));
     }
 }

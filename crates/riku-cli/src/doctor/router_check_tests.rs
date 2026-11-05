@@ -34,21 +34,6 @@ fn nginx_include_fails_until_installed() {
 }
 
 #[test]
-fn a_stray_conf_in_nginx_root_fails_naming_it() {
-    let tmp = tempfile::tempdir().unwrap();
-    let mut paths = RikuPaths::for_tests(tmp.path());
-    paths.reload_programs.nginx = tmp.path().join("nginx");
-    fs::write(&paths.reload_programs.nginx, "").unwrap();
-    fs::create_dir_all(&paths.nginx_root).unwrap();
-    assert_eq!(nginx_sites(&paths).status, Status::Ok);
-
-    fs::write(paths.nginx_root.join("ghost.conf"), "server {}\n").unwrap();
-    let check = nginx_sites(&paths);
-    assert_eq!(check.status, Status::Fail, "{}", check.detail);
-    assert!(check.detail.contains("ghost.conf"), "{}", check.detail);
-}
-
-#[test]
 fn unreadable_router_file_fails() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());

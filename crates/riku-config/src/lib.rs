@@ -17,6 +17,7 @@ pub mod program;
 pub mod reload_programs;
 mod root_dirs;
 pub mod router;
+mod router_settings;
 pub mod settings;
 
 use root_dirs::root_dirs;

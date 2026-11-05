@@ -2,6 +2,7 @@
 
 pub mod binary;
 mod caddy_host;
+mod cloudflare_ranges;
 mod default_branch;
 mod deploy_account;
 mod deploy_keys;

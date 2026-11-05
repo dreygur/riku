@@ -43,14 +43,15 @@ fn publishes_root_and_paths_as_group_only_copies_and_replaces_the_old_copy() {
     fs::write(app_path.join("public/index.html"), "home v2").unwrap();
     publish_static("myapp", &app_path, &env, &paths).unwrap();
 
-    let index = document_root("myapp", &paths).join("index.html");
+    let root = document_root_in(&paths.static_root, "myapp");
+    let index = root.join("index.html");
     assert_eq!(fs::read_to_string(&index).unwrap(), "home v2");
     assert_eq!(
-        fs::read_to_string(document_root("myapp", &paths).join("site.css")).unwrap(),
+        fs::read_to_string(root.join("site.css")).unwrap(),
         "body{}",
         "a symlink inside the checkout should be copied as its target"
     );
-    let css = static_path_dir("myapp", &paths, 0).join("css/site.css");
+    let css = static_path_dir_in(&paths.static_root, "myapp", 0).join("css/site.css");
     assert_eq!(fs::read_to_string(&css).unwrap(), "body{}");
     let mode = fs::metadata(&css).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o640, "published file mode is {mode:o}");
