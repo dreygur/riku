@@ -9,7 +9,7 @@ use crate::check_text::{header_text, location, relative_file};
 use crate::check_tls::check_tls;
 use crate::schema::{Cache, Listen, Route, RouteBackend, SiteKind, Tls};
 
-const CACHE_SIZE_GB: std::ops::RangeInclusive<u32> = 1..=100;
+const CACHE_SIZE_GB: std::ops::RangeInclusive<u32> = 1..=10;
 const MAX_CACHE_SECONDS: u32 = 365 * 24 * 3600;
 const HTTP_PORT: u16 = 80;
 const FIRST_UNPRIVILEGED_PORT: u16 = 1024;

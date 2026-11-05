@@ -3,9 +3,10 @@
 //! Tests of the deploy side need something on the helper's socket. This
 //! serves the real [`apply_caddy`] and [`remove_caddy`] over a socket in the
 //! test's own directory, with the mock `caddy` the test installed in
-//! `paths.reload_programs`. It is public because other crates' tests call it,
+//! `paths.reload_programs`. It is public because other crates' tests call it
 //! and must never be started by production code: it answers anyone who can
-//! reach its socket.
+//! reach its socket. The `test-server` feature gates it, and only the
+//! dev-dependencies of crates with such tests turn that feature on.
 
 use std::fs;
 use std::os::unix::net::UnixListener;

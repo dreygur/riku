@@ -16,13 +16,10 @@ fn docker(args: &[&str]) {
 
 fn engine() -> Engine {
     let program = PathBuf::from(std::env::var("RIKU_TEST_DOCKER").expect("set RIKU_TEST_DOCKER"));
-    Engine::open(
-        EngineBinary {
-            program,
-            binary_name: "docker".to_string(),
-        },
-        Vec::new(),
-    )
+    Engine::open(EngineBinary {
+        program,
+        binary_name: "docker".to_string(),
+    })
     .unwrap()
 }
 

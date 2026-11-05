@@ -360,7 +360,6 @@ fn engine_present_reports_info() {
         engine_bin.display().to_string(),
     )
     .unwrap();
-    fs::write(&paths.settings_file, "[engine]\nmode = \"rootful\"\n").unwrap();
 
     let dump = build_state_dump(&paths).unwrap();
     assert_eq!(

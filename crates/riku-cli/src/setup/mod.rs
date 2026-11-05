@@ -12,7 +12,6 @@ mod guidance;
 mod helper_install;
 pub mod init;
 mod init_router;
-mod init_system;
 mod nginx_host;
 mod nginx_worker;
 mod prerequisites;

@@ -36,24 +36,6 @@ fn unknown_field_is_refused_at_every_level() {
 }
 
 #[test]
-fn duplicate_keys_are_refused_at_every_level() {
-    let nested = format!(
-        r#"{{"v":1,"op":"apply","app":"a","route":{}}}"#,
-        ROUTE.replace(r#""https""#, r#""https":"only","https""#)
-    );
-    for body in [
-        r#"{"v":1,"op":"remove","app":"a","app":"b"}"#,
-        r#"{"v":1,"v":1,"op":"status"}"#,
-        nested.as_str(),
-    ] {
-        assert!(
-            parse_request(body.as_bytes()).is_err(),
-            "accepted a duplicate key: {body}"
-        );
-    }
-}
-
-#[test]
 fn other_versions_and_missing_versions_are_refused() {
     for body in [
         r#"{"v":2,"op":"status"}"#,
@@ -65,28 +47,17 @@ fn other_versions_and_missing_versions_are_refused() {
 }
 
 #[test]
-fn replies_use_the_documented_wire_shape() {
+fn replies_are_tagged_and_survive_a_round_trip() {
     let ok = encode_reply(&Reply::Ok { reloaded: true }).unwrap();
-    let failed = encode_reply(&Reply::Failed {
+    let failed = Reply::Failed {
         stage: Stage::Check,
         error: "bad".to_string(),
-    })
-    .unwrap();
+    };
 
-    assert_eq!(ok, br#"{"ok":true,"reloaded":true}"#);
-    assert_eq!(failed, br#"{"ok":false,"stage":"check","error":"bad"}"#);
+    assert_eq!(ok, br#"{"reply":"ok","reloaded":true}"#);
     assert_eq!(
-        parse_reply(&failed).unwrap(),
-        Reply::Failed {
-            stage: Stage::Check,
-            error: "bad".to_string()
-        }
+        parse_reply(&encode_reply(&failed).unwrap()).unwrap(),
+        failed
     );
-}
-
-#[test]
-fn contradictory_reply_is_refused() {
-    let body = br#"{"ok":true,"stage":"check","error":"bad"}"#;
-
-    assert!(parse_reply(body).is_err());
+    assert!(parse_reply(br#"{"reply":"maybe"}"#).is_err());
 }

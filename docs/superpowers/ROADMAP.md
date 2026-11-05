@@ -157,8 +157,9 @@ work they describe.
   baseline and a 10,247,160 B binary limit. Old Task 15 dropped (plugin
   deleted bb4aa56; `riku container` left to 3b, owner to confirm). Three
   open questions for the owner in the plan. Branch `feat/rootless-engine`
-  off `feat/container-integration`. Tasks 1 to 8 done. Rootless ships only
-  together with the router helper.
+  off `feat/container-integration`. Tasks 1, 5 to 10 and R done. Tasks 2, 3
+  and 4 (engine env, rootless probe, init detection) and the total cache cap,
+  socket activation and duplicate key visitor were removed 2026-11-06.
 - Owner decisions 2026-11-01: engine time limits in a new
   `~/.riku/settings.toml` (short calls 30 s, stop grace plus 30 s, pull and
   build 30 min); supervisor follows engine events and polls stats every

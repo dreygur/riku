@@ -6,20 +6,12 @@
 //! stop_extra   = "30s"
 //! pull_timeout = "30m"
 //! build_timeout = "30m"
-//! mode = "rootless"
-//! host = "unix:///run/user/1000/docker.sock"
-//!
-//! [router]
-//! cache_total_gb = 10
 //! ```
 //!
 //! Every key is optional. The file is operator owned input, so an unknown
-//! section or key, a value that is not a string, a duration that is not
-//! a positive integer followed by `s`, `m` or `h`, a `mode` other than
-//! `rootless` or `rootful`, and an empty `host` or one holding control
-//! characters are all refused with an error naming the key and the file.
-//! `host` becomes the engine client's `DOCKER_HOST`; it never reaches a
-//! shell or a path.
+//! section or key, a value that is not a string, or a duration that is not
+//! a positive integer followed by `s`, `m` or `h` is refused with an error
+//! naming the key and the file.
 
 use std::fs;
 use std::io::ErrorKind;
@@ -28,25 +20,12 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 
-use crate::router_settings::router_settings;
-pub use crate::router_settings::RouterSettings;
 use crate::RikuPaths;
 
 /// File name of the server settings, directly under the riku root.
 pub const SETTINGS_FILE: &str = "settings.toml";
 
-/// Which engine daemon riku talks to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum EngineMode {
-    /// A daemon running as the deploy user, reached through its own runtime
-    /// directory.
-    Rootless,
-    /// A system wide daemon reached through the address in `host`.
-    #[default]
-    Rootful,
-}
-
-/// Time limits and connection settings for container engine calls.
+/// Time limits for container engine calls.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EngineSettings {
     /// Limit for a single quick engine call such as `ps`, `inspect` or `rm`.
@@ -57,11 +36,6 @@ pub struct EngineSettings {
     pub pull_timeout: Duration,
     /// Limit for a whole image build.
     pub build_timeout: Duration,
-    /// Rootful unless `settings.toml` says otherwise.
-    pub mode: EngineMode,
-    /// Engine address passed as `DOCKER_HOST`. `None` leaves the engine
-    /// client on its own default socket.
-    pub host: Option<String>,
 }
 
 impl Default for EngineSettings {
@@ -71,8 +45,6 @@ impl Default for EngineSettings {
             stop_extra: Duration::from_secs(30),
             pull_timeout: Duration::from_secs(30 * 60),
             build_timeout: Duration::from_secs(30 * 60),
-            mode: EngineMode::default(),
-            host: None,
         }
     }
 }
@@ -81,7 +53,6 @@ impl Default for EngineSettings {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ServerSettings {
     pub engine: EngineSettings,
-    pub router: RouterSettings,
 }
 
 fn parse_duration(text: &str) -> Option<Duration> {
@@ -111,48 +82,11 @@ fn duration_at(key: &str, value: &toml::Value, file: &Path) -> Result<Duration> 
     }
 }
 
-fn mode_at(value: &toml::Value, file: &Path) -> Result<EngineMode> {
-    match value.as_str() {
-        Some("rootless") => Ok(EngineMode::Rootless),
-        Some("rootful") => Ok(EngineMode::Rootful),
-        _ => Err(anyhow!(
-            "{}: engine.mode must be \"rootless\" or \"rootful\"",
-            file.display()
-        )),
-    }
-}
-
-fn host_at(value: &toml::Value, file: &Path) -> Result<String> {
-    match value.as_str() {
-        Some(host) if !host.is_empty() && !host.chars().any(char::is_control) => {
-            Ok(host.to_string())
-        }
-        _ => Err(anyhow!(
-            "{}: engine.host must be a non empty string without control characters",
-            file.display()
-        )),
-    }
-}
-
 #[allow(clippy::question_mark)]
 fn engine_settings(table: &toml::Table, file: &Path) -> Result<EngineSettings> {
     let mut engine = EngineSettings::default();
     for (key, value) in table {
         let slot = match key.as_str() {
-            "mode" => {
-                engine.mode = match mode_at(value, file) {
-                    Ok(mode) => mode,
-                    Err(e) => return Err(e),
-                };
-                continue;
-            }
-            "host" => {
-                engine.host = match host_at(value, file) {
-                    Ok(host) => Some(host),
-                    Err(e) => return Err(e),
-                };
-                continue;
-            }
             "call_timeout" => &mut engine.call_timeout,
             "stop_extra" => &mut engine.stop_extra,
             "pull_timeout" => &mut engine.pull_timeout,
@@ -175,24 +109,17 @@ fn parse_settings(raw: &str, file: &Path) -> Result<ServerSettings> {
     };
     let mut settings = ServerSettings::default();
     for (section, value) in &root {
-        if section != "engine" && section != "router" {
+        if section != "engine" {
             return Err(anyhow!("{}: unknown section [{section}]", file.display()));
         }
         let table = match value.as_table() {
             Some(table) => table,
             None => return Err(anyhow!("{}: {section} must be a table", file.display())),
         };
-        if section == "engine" {
-            settings.engine = match engine_settings(table, file) {
-                Ok(engine) => engine,
-                Err(e) => return Err(e),
-            };
-        } else {
-            settings.router = match router_settings(table, file) {
-                Ok(router) => router,
-                Err(e) => return Err(e),
-            };
-        }
+        settings.engine = match engine_settings(table, file) {
+            Ok(engine) => engine,
+            Err(e) => return Err(e),
+        };
     }
     Ok(settings)
 }

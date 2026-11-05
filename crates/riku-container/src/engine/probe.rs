@@ -11,32 +11,27 @@ use std::time::Duration;
 use super::bounded::capture;
 
 /// Engine subcommands riku depends on. An engine missing any of them is refused.
-pub const REQUIRED_COMMANDS: [&str; 17] = [
+pub const REQUIRED_COMMANDS: [&str; 16] = [
     "pull", "build", "run", "stop", "kill", "rm", "ps", "inspect", "stats", "logs", "version",
-    "network", "volume", "image", "login", "wait", "info",
+    "network", "volume", "image", "login", "wait",
 ];
 
 /// Run `<program> --version` within `limit` and return whether it exited 0.
-pub fn answers_version(program: &Path, env: &[(String, String)], limit: Duration) -> bool {
-    exits_zero_within(program, env, &[OsString::from("--version")], limit)
+pub fn answers_version(program: &Path, limit: Duration) -> bool {
+    exits_zero_within(program, &[OsString::from("--version")], limit)
 }
 
-/// Run `program` with `args` and `env` within `limit` and return whether it
-/// exited 0. A spawn failure or timeout counts as a non zero exit.
-pub fn exits_zero_within(
-    program: &Path,
-    env: &[(String, String)],
-    args: &[OsString],
-    limit: Duration,
-) -> bool {
-    match capture(program, env, args, limit) {
+/// Run `program` with `args` within `limit` and return whether it exited 0.
+/// A spawn failure or timeout counts as a non zero exit.
+pub fn exits_zero_within(program: &Path, args: &[OsString], limit: Duration) -> bool {
+    match capture(program, args, limit) {
         Ok(out) => out.status.success(),
         Err(_) => false,
     }
 }
 
 /// Run `<program> <command> --help` for every required command, each within
-/// `limit`, with `env` set.
+/// `limit`.
 ///
 /// Capability is judged by the command answering, never by the engine's name.
 /// Returns the first command, in [`REQUIRED_COMMANDS`] order, that failed,
@@ -44,17 +39,13 @@ pub fn exits_zero_within(
 /// error, or the exit status plus trimmed stderr.
 ///
 /// The probes run at the same time. Each one is a full client start, and run
-/// one after another the seventeen of them add a few hundred milliseconds to
+/// one after another the sixteen of them add a few hundred milliseconds to
 /// every engine open, which `riku doctor` and the dashboard state read do.
-pub fn first_unanswered(
-    program: &Path,
-    env: &[(String, String)],
-    limit: Duration,
-) -> Option<(&'static str, String)> {
+pub fn first_unanswered(program: &Path, limit: Duration) -> Option<(&'static str, String)> {
     let failures: Vec<Option<String>> = std::thread::scope(|scope| {
         let probes: Vec<_> = REQUIRED_COMMANDS
             .iter()
-            .map(|command| scope.spawn(move || unanswered_reason(program, env, command, limit)))
+            .map(|command| scope.spawn(move || unanswered_reason(program, command, limit)))
             .collect();
         probes
             .into_iter()
@@ -71,14 +62,9 @@ pub fn first_unanswered(
 }
 
 /// Why `<program> <command> --help` did not answer, or `None` when it exited 0.
-fn unanswered_reason(
-    program: &Path,
-    env: &[(String, String)],
-    command: &str,
-    limit: Duration,
-) -> Option<String> {
+fn unanswered_reason(program: &Path, command: &str, limit: Duration) -> Option<String> {
     let args = [OsString::from(command), OsString::from("--help")];
-    match capture(program, env, &args, limit) {
+    match capture(program, &args, limit) {
         Ok(out) if out.status.success() => None,
         Ok(out) => {
             let stderr = String::from_utf8_lossy(&out.stderr);

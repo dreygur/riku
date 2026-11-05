@@ -1,1 +1,0 @@
-{"ID":"7TQE:K5XA:EDUD:5HJB:TZAL:FS3F:7DWG:J4NM:FGYE:ULZG:6PN3:ZZAU","Containers":0,"Images":0,"Driver":"overlay2","SecurityOptions":["name=seccomp,profile=builtin","name=cgroupns"],"ServerVersion":"29.8.2","OperatingSystem":"Alpine Linux","OSType":"linux","Architecture":"x86_64","NCPU":4}

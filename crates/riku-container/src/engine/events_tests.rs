@@ -87,6 +87,6 @@ fn has_events_follows_the_probe() {
         program,
         binary_name: "engine".to_string(),
     };
-    let unsupported = Engine::open(binary, Vec::new()).unwrap();
+    let unsupported = Engine::open(binary).unwrap();
     assert!(!unsupported.has_events());
 }

@@ -11,7 +11,6 @@ use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::schema::Route;
-use crate::unique_keys::refuse_duplicate_keys;
 
 /// The only protocol version this build speaks.
 pub const PROTOCOL_VERSION: u8 = 1;
@@ -74,7 +73,7 @@ impl std::fmt::Display for Stage {
 
 /// What the helper answers.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(into = "ReplyWire", try_from = "ReplyWire")]
+#[serde(tag = "reply", rename_all = "snake_case")]
 pub enum Reply {
     /// The request was carried out. `reloaded` says whether the router
     /// reloaded; a `remove` of an app with no config does not reload.
@@ -85,79 +84,6 @@ pub enum Reply {
     Status { version: String },
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ReplyWire {
-    ok: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    reloaded: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    stage: Option<Stage>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    version: Option<String>,
-}
-
-impl From<Reply> for ReplyWire {
-    fn from(reply: Reply) -> Self {
-        let empty = ReplyWire {
-            ok: true,
-            reloaded: None,
-            stage: None,
-            error: None,
-            version: None,
-        };
-        match reply {
-            Reply::Ok { reloaded } => ReplyWire {
-                reloaded: Some(reloaded),
-                ..empty
-            },
-            Reply::Failed { stage, error } => ReplyWire {
-                ok: false,
-                stage: Some(stage),
-                error: Some(error),
-                ..empty
-            },
-            Reply::Status { version } => ReplyWire {
-                version: Some(version),
-                ..empty
-            },
-        }
-    }
-}
-
-impl TryFrom<ReplyWire> for Reply {
-    type Error = String;
-
-    fn try_from(wire: ReplyWire) -> std::result::Result<Self, String> {
-        match wire {
-            ReplyWire {
-                ok: true,
-                reloaded: Some(reloaded),
-                stage: None,
-                error: None,
-                version: None,
-            } => Ok(Reply::Ok { reloaded }),
-            ReplyWire {
-                ok: true,
-                reloaded: None,
-                stage: None,
-                error: None,
-                version: Some(version),
-            } => Ok(Reply::Status { version }),
-            ReplyWire {
-                ok: false,
-                reloaded: None,
-                stage: Some(stage),
-                error: Some(error),
-                version: None,
-            } => Ok(Reply::Failed { stage, error }),
-            _ => Err("reply fields do not form a known reply".to_string()),
-        }
-    }
-}
-
 /// Parse one request. The caller has already bounded `bytes`; this refuses
 /// anything that is not exactly one known request of the current version.
 ///
@@ -165,9 +91,6 @@ impl TryFrom<ReplyWire> for Reply {
 /// [`Request`], because serde cannot refuse unknown fields on a flattened
 /// enum.
 pub fn parse_request(bytes: &[u8]) -> Result<Request> {
-    if let Err(e) = refuse_duplicate_keys(bytes) {
-        return Err(anyhow!("malformed request: {e}"));
-    }
     let mut object: serde_json::Map<String, serde_json::Value> = match serde_json::from_slice(bytes)
     {
         Ok(object) => object,

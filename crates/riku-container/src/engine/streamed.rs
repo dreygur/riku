@@ -16,7 +16,6 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 
 use super::bounded::{spawn_in_group, wait_bounded};
-use super::env::apply_env;
 use super::Engine;
 
 impl Engine {
@@ -31,14 +30,13 @@ impl Engine {
             .first()
             .map(|a| a.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let mut engine_call = Command::new(self.program());
-        engine_call
-            .args(args)
-            .stdin(Stdio::null())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit());
-        apply_env(&mut engine_call, self.env());
-        let mut child = match spawn_in_group(&mut engine_call) {
+        let mut child = match spawn_in_group(
+            Command::new(self.program())
+                .args(args)
+                .stdin(Stdio::null())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit()),
+        ) {
             Ok(child) => child,
             Err(e) => {
                 return Err(anyhow!(

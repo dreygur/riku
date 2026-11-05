@@ -7,6 +7,9 @@ authors = ["Rakibul Yeasin"]
 repository = "https://github.com/dreygur/riku"
 license = "MIT"
 
+[features]
+test-server = []
+
 [dependencies]
 riku-caddy = { path = "../riku-caddy" }
 riku-config = { path = "../riku-config" }

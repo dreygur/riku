@@ -33,7 +33,7 @@ pub fn mock_engine(dir: &Path, behaviour: &str) -> (Engine, PathBuf) {
         program,
         binary_name: "engine".to_string(),
     };
-    (Engine::open(binary, Vec::new()).unwrap(), log)
+    (Engine::open(binary).unwrap(), log)
 }
 
 /// Create a mock engine script in `dir` that fails `events --help`.
@@ -55,5 +55,5 @@ pub fn mock_engine_without_events(dir: &Path, behaviour: &str) -> (Engine, PathB
         program,
         binary_name: "engine".to_string(),
     };
-    (Engine::open(binary, Vec::new()).unwrap(), log)
+    (Engine::open(binary).unwrap(), log)
 }

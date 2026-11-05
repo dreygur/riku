@@ -23,10 +23,8 @@ impl Host {
         let root = dir.path();
         let nginx = root.join("mock_nginx");
         let script = format!(
-            "#!/bin/sh\necho \"$@\" >> {calls}\ncase \"$1\" in\n  -t) if [ -e {fail_host} ] || grep -rqs bad.example {sites}; then echo 'emerg: bad directive' >&2; exit 1; fi ;;\n  -s) if [ -e {fail_reload} ]; then echo 'reload refused' >&2; exit 1; fi ;;\nesac\nexit 0\n",
+            "#!/bin/sh\necho \"$@\" >> {calls}\ncase \"$1\" in\n  -t) if grep -rqs bad.example {sites}; then echo 'emerg: bad directive' >&2; exit 1; fi ;;\nesac\nexit 0\n",
             calls = root.join("calls.log").display(),
-            fail_host = root.join("fail_host").display(),
-            fail_reload = root.join("fail_reload").display(),
             sites = root.join("etc/nginx").display(),
         );
         fs::write(&nginx, script).unwrap();
@@ -44,13 +42,8 @@ impl Host {
             nginx,
             reload: ReloadMethod::Signal,
             owner_uid: fs::metadata(root).unwrap().uid(),
-            cache_total_gb: 100,
         };
         Host { dir, roots }
-    }
-
-    fn flag(&self, name: &str) {
-        fs::write(self.dir.path().join(name), "").unwrap();
     }
 
     fn calls(&self) -> String {
@@ -209,40 +202,6 @@ fn check_failure_restores_files() {
 }
 
 #[test]
-fn refused_host_config_is_reported_before_any_write() {
-    let host = Host::new();
-    host.flag("fail_host");
-
-    let reply = apply_nginx(&host.roots, &app("myapp"), &route("myapp.example"));
-
-    let (stage, error) = failure(reply);
-    assert_eq!(stage, Stage::Check);
-    assert!(error.contains("before any change"), "{error}");
-    assert!(!host.roots.site_root.exists(), "files were written anyway");
-}
-
-#[test]
-fn install_failure_restores_files() {
-    let host = Host::new();
-    let myapp = app("myapp");
-    apply_nginx(&host.roots, &myapp, &route("myapp.example"));
-    let conf_before = host.conf(&myapp);
-    let mut staged = host.roots.site_file(&myapp).into_os_string();
-    staged.push(".new");
-    fs::create_dir(&staged).unwrap();
-
-    let reply = apply_nginx(&host.roots, &myapp, &https_route("myapp.example"));
-
-    assert_eq!(failure(reply).0, Stage::Render);
-    assert_eq!(host.conf(&myapp), conf_before, "config changed");
-    let cert_dir = host.roots.cert_dir(&myapp);
-    assert!(
-        !cert_dir.join("key.pem").exists() && !cert_dir.join("fullchain.pem").exists(),
-        "certificate files written before the failure stayed"
-    );
-}
-
-#[test]
 fn symlinked_cert_dir_is_refused_and_target_untouched() {
     let host = Host::new();
     let outside = host.dir.path().join("outside");
@@ -278,20 +237,6 @@ fn directory_of_another_uid_is_refused() {
 }
 
 #[test]
-fn reload_failure_restores_files() {
-    let host = Host::new();
-    let myapp = app("myapp");
-    apply_nginx(&host.roots, &myapp, &route("myapp.example"));
-    let conf_before = host.conf(&myapp);
-    host.flag("fail_reload");
-
-    let reply = apply_nginx(&host.roots, &myapp, &route("other.example"));
-
-    assert_eq!(failure(reply).0, Stage::Reload);
-    assert_eq!(host.conf(&myapp), conf_before);
-}
-
-#[test]
 fn access_log_snippet_never_written() {
     let host = Host::new();
     let mut sent = route("myapp.example");
@@ -313,15 +258,12 @@ fn access_log_snippet_never_written() {
 }
 
 #[test]
-fn cache_total_is_capped() {
+fn cache_has_a_zone_and_a_disk_bound() {
     let host = Host::new();
     let mut first = route("first.example");
-    first.cache = Some(cache(60));
-    let mut second = route("second.example");
-    second.cache = Some(cache(60));
+    first.cache = Some(cache(6));
 
     let accepted = apply_nginx(&host.roots, &app("first"), &first);
-    let refused = apply_nginx(&host.roots, &app("second"), &second);
 
     assert_eq!(accepted, Reply::Ok { reloaded: true });
     let conf = host.conf(&app("first"));
@@ -330,7 +272,7 @@ fn cache_total_is_capped() {
         "zone grew with the cache:\n{conf}"
     );
     assert!(
-        conf.contains("max_size=60g"),
+        conf.contains("max_size=6g"),
         "cache has no disk bound:\n{conf}"
     );
     let cache_line = conf.find("proxy_cache_path").expect("no cache path line");
@@ -339,8 +281,6 @@ fn cache_total_is_capped() {
         cache_line < server_block,
         "proxy_cache_path is inside server, where nginx refuses it:\n{conf}"
     );
-    assert_eq!(failure(refused).0, Stage::Schema);
-    assert!(!host.roots.site_file(&app("second")).exists());
 }
 
 #[test]

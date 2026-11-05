@@ -16,29 +16,20 @@
 //! host, names the router until the root owned router setting of the install
 //! task exists; each router's files stay in that router's own directory.
 //!
-//! The one value read from the deploy user's tree is `router.cache_total_gb`
-//! in `settings.toml`. It is read once at start, before the socket is bound,
-//! and a bad file stops the helper with an error that goes to its own log,
-//! never into a reply. The deploy user can edit that file, so the cap guards
-//! against runaway configs and does not hold against the deploy user.
+//! The helper reads no file the deploy user can write.
 
 use std::path::Path;
-use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use nix::unistd::Uid;
 use riku_container::types::AppName;
 use riku_route::{
-    activated_listener, apply_caddy, apply_nginx, bind_socket, remove_caddy, remove_nginx,
-    restrict_umask, run, CaddyRoots, NginxRoots, Reply, Request, RouterKind, Stage,
+    apply_caddy, apply_nginx, bind_socket, remove_caddy, remove_nginx, restrict_umask, run,
+    CaddyRoots, NginxRoots, Reply, Request, RouterKind, Stage,
 };
 
 use crate::config::ROUTER_SOCKET;
 use crate::setup::deploy_user::DeployUser;
-
-/// How long a socket activated helper waits with no connection before it
-/// exits and leaves the socket to start it again.
-const IDLE_EXIT: Duration = Duration::from_secs(60);
 
 fn not_root(euid: Uid) -> Option<anyhow::Error> {
     if euid.is_root() {
@@ -85,8 +76,7 @@ fn handle(nginx: &NginxRoots, caddy: &CaddyRoots, request: Request) -> Reply {
     }
 }
 
-/// Serve the router helper socket until the process is stopped, or until it
-/// has been idle for [`IDLE_EXIT`] when systemd started it for a connection.
+/// Serve the router helper socket until the process is stopped.
 pub fn cmd_router_helper() -> Result<()> {
     if let Some(refusal) = not_root(Uid::effective()) {
         return Err(refusal);
@@ -96,24 +86,13 @@ pub fn cmd_router_helper() -> Result<()> {
         Ok(deploy) => deploy,
         Err(e) => return Err(anyhow!("router helper needs the deploy user: {e}")),
     };
-    let settings = match crate::config::settings::load(&deploy.riku_paths()) {
-        Ok(settings) => settings,
-        Err(e) => return Err(anyhow!("router helper settings: {e}")),
-    };
-    let activated = match activated_listener() {
+    let listener = match bind_socket(Path::new(ROUTER_SOCKET), deploy.gid()) {
         Ok(listener) => listener,
-        Err(e) => return Err(anyhow!("router helper socket activation: {e}")),
+        Err(e) => return Err(anyhow!("router helper socket: {e}")),
     };
-    let (listener, idle) = match activated {
-        Some(listener) => (listener, Some(IDLE_EXIT)),
-        None => match bind_socket(Path::new(ROUTER_SOCKET), deploy.gid()) {
-            Ok(listener) => (listener, None),
-            Err(e) => return Err(anyhow!("router helper socket: {e}")),
-        },
-    };
-    let nginx = NginxRoots::production(settings.router.cache_total_gb);
+    let nginx = NginxRoots::production();
     let caddy = CaddyRoots::production();
-    run(&listener, idle, deploy.uid(), &mut |request| {
+    run(&listener, deploy.uid(), &mut |request| {
         handle(&nginx, &caddy, request)
     })
 }

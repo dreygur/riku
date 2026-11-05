@@ -14,11 +14,11 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 
-use crate::config::host_file::InitSystem;
 use crate::util::{echo, ROOT_BINARY};
 
 use super::system_service::{systemctl_ok, SYSTEMD_DIR};
 
+const SYSTEMD_RUN_DIR: &str = "/run/systemd/system";
 const UNIT_NAME: &str = "riku-router-helper.service";
 
 fn is_account_name(name: &str) -> bool {
@@ -85,22 +85,19 @@ fn enable_and_restart(systemd_dir: &Path, deploy_user: &str) -> Result<()> {
     Ok(())
 }
 
-/// Install the helper for `init`, or say how to run it when init is not
-/// systemd.
-pub fn install_router_helper(init: InitSystem, deploy_user: &str) -> Result<()> {
-    match init {
-        InitSystem::Systemd => enable_and_restart(Path::new(SYSTEMD_DIR), deploy_user),
-        InitSystem::OpenRc | InitSystem::Other => {
-            echo(
-                &format!(
-                    "      This host does not run systemd. Start the router helper as root: \
-                     RIKU_USER={deploy_user} {ROOT_BINARY} router-helper"
-                ),
-                "yellow",
-            );
-            Ok(())
-        }
+/// Install the helper when systemd is running, or say how to run it by hand.
+pub fn install_router_helper(deploy_user: &str) -> Result<()> {
+    if Path::new(SYSTEMD_RUN_DIR).is_dir() {
+        return enable_and_restart(Path::new(SYSTEMD_DIR), deploy_user);
     }
+    echo(
+        &format!(
+            "      This host does not run systemd. Start the router helper as root: \
+             RIKU_USER={deploy_user} {ROOT_BINARY} router-helper"
+        ),
+        "yellow",
+    );
+    Ok(())
 }
 
 #[cfg(test)]

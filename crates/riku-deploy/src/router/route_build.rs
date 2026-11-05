@@ -18,7 +18,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 use riku_container::types::AppName;
-use riku_route::{check_caddy_route, check_nginx_route, Listen, Route, RouteBackend, SiteKind};
+use riku_route::{check_caddy_route, Listen, Route, RouteBackend, SiteKind};
 
 use super::route_env::{cache, listen, tls};
 use crate::config::router::Router;
@@ -260,13 +260,9 @@ pub fn build_route(
             Err(e) => Err(e),
         };
     }
-    let route = match nginx_route(app, app_path, env, base, paths) {
-        Ok(route) => route,
-        Err(e) => return Err(route_error(app, e)),
-    };
-    match check_nginx_route(app, &route) {
-        Ok(checked) => Ok(Some(checked.into_route())),
-        Err(e) => Err(e),
+    match nginx_route(app, app_path, env, base, paths) {
+        Ok(route) => Ok(Some(route)),
+        Err(e) => Err(route_error(app, e)),
     }
 }
 

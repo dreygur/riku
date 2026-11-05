@@ -197,7 +197,7 @@ fn quoted_and_file_text_refusals() {
 fn cache_limits_are_enforced() {
     let mut limited = route();
     limited.cache = Some(Cache {
-        size_gb: 101,
+        size_gb: 11,
         ..cache()
     });
     assert!(refusal(&limited).contains("size_gb"));

@@ -25,14 +25,14 @@
 //! - The plain HTTP port is 80 or unprivileged, since the root master binds it.
 //!
 //! [`check_nginx_route`] and [`check_caddy_route`] are the single gate. The
-//! helper calls one again on receipt whatever the sender already did; the deploy side calls it for an early
-//! error only. [`apply_nginx`] and [`remove_nginx`] are the nginx half of the
+//! helper calls one again on receipt whatever the sender already did; the
+//! deploy side calls only [`check_caddy_route`] for an early error. [`apply_nginx`] and [`remove_nginx`] are the nginx half of the
 //! helper and [`apply_caddy`] and [`remove_caddy`] the Caddy half: they call
 //! the gate themselves, then render, check and reload as root.
 
 mod bounded;
-mod cache_budget;
 mod caddy_apply;
+#[cfg(feature = "test-server")]
 mod caddy_test_server;
 mod check;
 mod check_text;
@@ -50,13 +50,13 @@ mod server;
 mod site_files;
 #[cfg(test)]
 mod test_pems;
-mod unique_keys;
 
 pub use bounded::{is_closed, read_bounded, MAX_MESSAGE_BYTES};
 pub use caddy_apply::{apply_caddy, remove_caddy, CaddyRoots};
+#[cfg(feature = "test-server")]
 pub use caddy_test_server::serve_caddy_for_tests;
 pub use check::{check_caddy_route, check_nginx_route, CheckedRoute};
-pub use listen::{activated_listener, bind_socket, restrict_umask, run};
+pub use listen::{bind_socket, restrict_umask, run};
 pub use nginx_apply::{apply_nginx, remove_nginx};
 pub use nginx_roots::{NginxRoots, ReloadMethod};
 pub use protocol::{

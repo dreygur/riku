@@ -27,7 +27,7 @@ pub fn mock_engine(dir: &Path, behaviour: &str) -> (Engine, PathBuf) {
         program,
         binary_name: "engine".to_string(),
     };
-    (Engine::open(binary, Vec::new()).unwrap(), log)
+    (Engine::open(binary).unwrap(), log)
 }
 
 pub fn logged(log: &Path) -> Vec<String> {

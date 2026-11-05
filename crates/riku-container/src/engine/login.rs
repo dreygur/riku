@@ -11,7 +11,6 @@ use std::process::{Command, Stdio};
 use anyhow::{anyhow, Result};
 
 use super::bounded::{drain, spawn_in_group, wait_bounded};
-use super::env::apply_env;
 use super::spec_check::check_positional;
 use super::Engine;
 
@@ -34,7 +33,6 @@ impl Engine {
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::piped());
-        apply_env(&mut command, self.env());
         let mut child = match spawn_in_group(&mut command) {
             Ok(child) => child,
             Err(e) => return Err(anyhow!("cannot run 'login' on the container engine: {e}")),

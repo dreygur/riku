@@ -121,15 +121,7 @@ impl ContainerWatch {
             Ok(settings) => settings,
             Err(e) => return Err(e.context("cannot read the server settings")),
         };
-        let env = match riku_container::engine::engine_env(
-            server_settings.engine.mode,
-            server_settings.engine.host.as_deref(),
-            nix::unistd::getuid().as_raw(),
-        ) {
-            Ok(env) => env,
-            Err(e) => return Err(e.context("cannot compute the container engine environment")),
-        };
-        let engine = match Engine::open(binary, env) {
+        let engine = match Engine::open(binary) {
             Ok(engine) => engine.with_settings(server_settings.engine),
             Err(e) => return Err(e.context("cannot open the container engine")),
         };

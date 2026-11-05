@@ -32,4 +32,5 @@ glob = { workspace = true }
 reqwest = { workspace = true }
 
 [dev-dependencies]
+riku-route = { path = "../riku-route", features = ["test-server"] }
 tempfile = { workspace = true }

@@ -11,13 +11,11 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 pub mod container_engine;
-pub mod host_file;
 pub mod nginx_host;
 pub mod program;
 pub mod reload_programs;
 mod root_dirs;
 pub mod router;
-mod router_settings;
 pub mod settings;
 
 use root_dirs::root_dirs;
@@ -90,9 +88,6 @@ pub const NGINX_CACHE_ROOT: &str = "/var/cache/riku/nginx";
 
 /// Root-owned `0755` parent of the directories nginx serves files from.
 pub const VAR_ROOT: &str = "/var/lib/riku";
-
-/// Host facts root init writes, root owned `0644`, inside [`VAR_ROOT`].
-pub const HOST_FILE: &str = "/var/lib/riku/host.toml";
 
 /// The ACME http-01 webroot on a real host. Root init creates it owned by
 /// the deploy user, group [`SOCKET_GROUP`], mode `2750`, so the nginx worker

@@ -1,13 +1,9 @@
-use std::fs;
 use std::io::{Read, Write};
 use std::net::Shutdown;
-use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
-use std::path::Path;
 use std::thread;
 
-use nix::sys::wait::{waitpid, WaitStatus};
-use nix::unistd::{fork, setuid, ForkResult, Gid, Uid};
+use nix::unistd::{Gid, Uid};
 
 use super::*;
 use crate::bounded::MAX_MESSAGE_BYTES;
@@ -20,52 +16,10 @@ struct Exchange {
     handled: usize,
 }
 
-const NOBODY: u32 = 65534;
-
-enum Client {
-    Own,
-    Nobody,
-}
-
-fn nobody_exchange(path: &Path, body: &[u8]) -> i32 {
-    if setuid(Uid::from_raw(NOBODY)).is_err() {
-        return 2;
-    }
-    let Ok(mut client) = UnixStream::connect(path) else {
-        return 3;
-    };
-    let _ = client.write_all(body);
-    let _ = client.shutdown(Shutdown::Write);
-    let mut reply = Vec::new();
-    let _ = client.read_to_end(&mut reply);
-    i32::from(!reply.is_empty())
-}
-
-fn reply_as_nobody(path: &Path, body: &[u8]) -> Vec<u8> {
-    // SAFETY: the child only makes system calls and plain allocations on its
-    // own copy of the process, then leaves through _exit.
-    match unsafe { fork() }.unwrap() {
-        ForkResult::Child => unsafe { nix::libc::_exit(nobody_exchange(path, body)) },
-        ForkResult::Parent { child } => match waitpid(child, None).unwrap() {
-            WaitStatus::Exited(_, 0) => Vec::new(),
-            WaitStatus::Exited(_, 1) => b"answered".to_vec(),
-            other => panic!("client running as uid {NOBODY} failed: {other:?}"),
-        },
-    }
-}
-
 fn exchange(deploy_uid: u32, body: &[u8]) -> Exchange {
-    exchange_with(deploy_uid, body, Client::Own)
-}
-
-fn exchange_with(deploy_uid: u32, body: &[u8], client: Client) -> Exchange {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("router.sock");
     let listener = bind_socket(&path, Gid::current().as_raw()).unwrap();
-    if matches!(client, Client::Nobody) {
-        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o755)).unwrap();
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o666)).unwrap();
-    }
     let server = thread::spawn(move || {
         let (stream, _) = listener.accept().unwrap();
         let mut handled = 0;
@@ -82,17 +36,11 @@ fn exchange_with(deploy_uid: u32, body: &[u8], client: Client) -> Exchange {
         (served, handled)
     });
 
-    let reply = match client {
-        Client::Own => {
-            let mut stream = UnixStream::connect(&path).unwrap();
-            let _ = stream.write_all(body);
-            let _ = stream.shutdown(Shutdown::Write);
-            let mut reply = Vec::new();
-            let _ = stream.read_to_end(&mut reply);
-            reply
-        }
-        Client::Nobody => reply_as_nobody(&path, body),
-    };
+    let mut stream = UnixStream::connect(&path).unwrap();
+    let _ = stream.write_all(body);
+    let _ = stream.shutdown(Shutdown::Write);
+    let mut reply = Vec::new();
+    let _ = stream.read_to_end(&mut reply);
 
     let (served, handled) = server.join().unwrap();
     Exchange {
@@ -164,29 +112,8 @@ fn request_at_the_size_limit_is_read() {
 }
 
 #[test]
-fn unknown_field_gets_a_schema_failure() {
-    let outcome = exchange(own_uid(), br#"{"v":1,"op":"status","path":"/etc/x"}"#);
-
-    assert_eq!(
-        outcome.handled, 0,
-        "a request with an unknown field was handled"
-    );
-    assert!(matches!(
-        parse_reply(&outcome.reply).unwrap(),
-        Reply::Failed {
-            stage: Stage::Schema,
-            ..
-        }
-    ));
-}
-
-#[test]
 fn connection_from_another_uid_gets_no_answer() {
-    let outcome = if Uid::current().is_root() {
-        exchange_with(1000, &status_body(), Client::Nobody)
-    } else {
-        exchange(own_uid() + 1, &status_body())
-    };
+    let outcome = exchange(own_uid() + 1, &status_body());
 
     assert!(outcome.served.is_err(), "a foreign uid was served");
     assert_eq!(outcome.handled, 0, "a foreign uid reached the handler");

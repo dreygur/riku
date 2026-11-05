@@ -4,14 +4,10 @@
 //!
 //! The engine program comes from the operator's `CONTAINER_ENGINE` setting or a
 //! fixed list searched on `PATH`, never from app input. `settings.toml` is
-//! operator owned input refused when invalid. The engine's runtime directory
-//! and address come from the running uid and `settings.toml`, never from the
-//! caller's environment.
+//! operator owned input refused when invalid.
 
 use anyhow::{anyhow, Result};
-use nix::unistd::getuid;
-use riku_config::settings::EngineMode;
-use riku_container::engine::{detect, engine_env, Engine};
+use riku_container::engine::{detect, Engine};
 
 use crate::config::RikuPaths;
 
@@ -50,23 +46,10 @@ pub fn open_engine(paths: &RikuPaths) -> Result<Engine> {
         Ok(binary) => binary,
         Err(e) => return Err(anyhow::Error::new(EngineUnreachable::new(e.to_string()))),
     };
-    let env = match engine_env(
-        settings.engine.mode,
-        settings.engine.host.as_deref(),
-        getuid().as_raw(),
-    ) {
-        Ok(env) => env,
-        Err(e) => return Err(anyhow::Error::new(EngineUnreachable::new(e.to_string()))),
-    };
-    let engine = match Engine::open(binary, env) {
+    let engine = match Engine::open(binary) {
         Ok(engine) => engine,
         Err(e) => return Err(anyhow::Error::new(EngineUnreachable::new(e.to_string()))),
     };
-    if settings.engine.mode == EngineMode::Rootless {
-        if let Err(e) = engine.require_rootless() {
-            return Err(anyhow::Error::new(EngineUnreachable::new(e.to_string())));
-        }
-    }
     Ok(engine.with_settings(settings.engine))
 }
 

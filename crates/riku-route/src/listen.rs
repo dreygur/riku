@@ -1,7 +1,6 @@
-//! Where the helper's connections come from: a socket systemd already bound,
-//! or one the helper creates itself.
+//! The socket the helper listens on and the loop that serves it.
 //!
-//! Security model: a socket the helper creates is owned by root, group the
+//! Security model: the socket is owned by root, group the
 //! deploy user's primary group, mode 0660. The helper sets umask 0177 at start
 //! ([`restrict_umask`]), so the socket is bound as mode 0600 (root only) and
 //! only then handed to the group: there is no moment where a wider set of
@@ -10,15 +9,11 @@
 //! at the path, is an error and is never removed.
 
 use std::fs;
-use std::os::fd::{FromRawFd, RawFd};
 use std::os::unix::fs::{chown, FileTypeExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
-use std::time::Duration;
 
 use anyhow::{anyhow, Result};
-use nix::fcntl::{fcntl, FcntlArg, FdFlag};
-use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
 use nix::sys::stat::{umask, Mode};
 
 use crate::protocol::{Reply, Request};
@@ -27,51 +22,6 @@ use crate::server::serve_one;
 const SOCKET_MODE: u32 = 0o660;
 /// Octal 0177: new files are readable and writable by their owner only.
 const PRIVATE_UMASK: Mode = Mode::S_IXUSR.union(Mode::S_IRWXG).union(Mode::S_IRWXO);
-const FIRST_ACTIVATED_FD: RawFd = 3;
-
-/// The descriptor systemd passed, when `LISTEN_PID` names this process. Any
-/// count but one is an error: falling back to binding our own socket would
-/// hide a unit that is misconfigured.
-fn activated_fd(
-    listen_pid: Option<&str>,
-    listen_fds: Option<&str>,
-    own_pid: u32,
-) -> Result<Option<RawFd>> {
-    if !listen_pid.is_some_and(|pid| pid.parse() == Ok(own_pid)) {
-        return Ok(None);
-    }
-    match listen_fds {
-        Some("1") => Ok(Some(FIRST_ACTIVATED_FD)),
-        other => Err(anyhow!(
-            "systemd passed {other:?} sockets to the router helper, expected exactly 1"
-        )),
-    }
-}
-
-/// The listener systemd passed to this process, or `None` when it was not
-/// socket activated. The variables are cleared so a child process the
-/// helper starts does not mistake the descriptor for its own.
-pub fn activated_listener() -> Result<Option<UnixListener>> {
-    let pid = std::env::var("LISTEN_PID").ok();
-    let fds = std::env::var("LISTEN_FDS").ok();
-    let fd = activated_fd(pid.as_deref(), fds.as_deref(), std::process::id());
-    std::env::remove_var("LISTEN_PID");
-    std::env::remove_var("LISTEN_FDS");
-    let fd = match fd {
-        Ok(Some(fd)) => fd,
-        Ok(None) => return Ok(None),
-        Err(e) => return Err(anyhow!("socket activation: {e}")),
-    };
-    // SAFETY: systemd handed this process descriptor 3 as its only socket
-    // (LISTEN_PID and LISTEN_FDS matched above) and nothing else owns it.
-    let listener = unsafe { UnixListener::from_raw_fd(fd) };
-    match fcntl(&listener, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)) {
-        Ok(_) => Ok(Some(listener)),
-        Err(e) => Err(anyhow!(
-            "failed to mark the activated socket close-on-exec: {e}"
-        )),
-    }
-}
 
 fn remove_stale_socket(path: &Path) -> Result<()> {
     let kind = match fs::symlink_metadata(path) {
@@ -132,42 +82,14 @@ pub fn bind_socket(path: &Path, gid: u32) -> Result<UnixListener> {
     }
 }
 
-fn wait_for_connection(listener: &UnixListener, idle: Duration) -> Result<bool> {
-    let timeout = match PollTimeout::try_from(idle) {
-        Ok(timeout) => timeout,
-        Err(e) => return Err(anyhow!("idle time {idle:?} is out of range: {e}")),
-    };
-    let mut fds = [PollFd::new(
-        std::os::fd::AsFd::as_fd(listener),
-        PollFlags::POLLIN,
-    )];
-    match poll(&mut fds, timeout) {
-        Ok(ready) => Ok(ready > 0),
-        Err(nix::errno::Errno::EINTR) => Ok(false),
-        Err(e) => Err(anyhow!("failed to wait for a connection: {e}")),
-    }
-}
-
-/// Accept and serve connections one at a time.
-///
-/// With `idle` set, returns `Ok` once that long passes with no connection
-/// waiting (the socket activated case, where systemd starts the helper
-/// again). With `None` it serves until killed. A connection that fails is
-/// logged and does not stop the loop.
+/// Accept and serve connections one at a time until killed. A connection that
+/// fails is logged and does not stop the loop.
 pub fn run(
     listener: &UnixListener,
-    idle: Option<Duration>,
     deploy_uid: u32,
     handle: &mut impl FnMut(Request) -> Reply,
 ) -> Result<()> {
     loop {
-        if let Some(idle) = idle {
-            match wait_for_connection(listener, idle) {
-                Ok(true) => {}
-                Ok(false) => return Ok(()),
-                Err(e) => return Err(anyhow!("router helper stopped waiting: {e}")),
-            }
-        }
         let stream = match listener.accept() {
             Ok((stream, _)) => stream,
             Err(e) => return Err(anyhow!("failed to accept a connection: {e}")),

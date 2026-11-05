@@ -496,11 +496,10 @@ schema error.
 
 ### Starting the helper
 
-- systemd: `riku-router-helper.socket` (`ListenStream=/run/riku-router.sock`,
-  `SocketMode=0660`, `SocketGroup=<deploy group>`, `Accept=no`) and
-  `riku-router-helper.service` running `/usr/local/bin/riku router-helper`
-  as root. The service exits after 60 s idle; the socket starts it again.
-  `NoNewPrivileges=true` and `ProtectHome=read-only`. A
+- systemd: `riku-router-helper.service`, `Type=simple`, running
+  `/usr/local/bin/riku router-helper` as root. The helper creates
+  `/run/riku-router.sock` itself and stays running; there is no socket unit
+  and no idle exit (removed 2026-11-06). `NoNewPrivileges=true` and `ProtectHome=read-only`. A
   `ProtectSystem=strict` sandbox must still let `nginx -t` open its log and
   pid paths, so its `ReadWritePaths` are set against a real nginx.
 - OpenRC: `/etc/init.d/riku-router-helper`, `supervise-daemon`, root, before
@@ -614,10 +613,8 @@ How each part affects it:
 
 - No engine installed: nothing engine related is set up or resident. The
   router helper is the only new piece on such a host.
-- Router helper on systemd: socket activated and exits after 60 s idle, so
-  it costs nothing at idle.
-- Router helper on OpenRC and other init systems: resident, one more process
-  plus its `supervise-daemon`. Its idle RSS counts toward the base.
+- Router helper: resident, one more process. Its idle RSS counts toward the
+  base.
 - One binary on disk, at `/usr/local/bin/riku`, so disk use does not grow.
 - Binary size: the helper reuses `riku-nginx`, `riku-caddy`, `serde_json`
   and `nix`, already linked. No new runtime dependency.

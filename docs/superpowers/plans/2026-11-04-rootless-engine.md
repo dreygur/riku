@@ -84,11 +84,10 @@ Sizes in bytes, RSS in KiB, all on the 4 core x86_64 Linux test server, release 
 The goal is a small self hosted Heroku replacement. This branch now ends with the router helper, not rootless engines.
 
 - Kept: Task 9 (Caddy through the helper), Task 10 (install the helper), plus Task R (certificate renewal, below). They run in parallel worktrees. Then a slim Task 16 (helper and Cloudflare checks, the two owner upgrade decisions), Task 17 (docs for the helper), one real host run of the helper, one review.
-- Dropped for now: Tasks 11 to 15 (port refusal, systemd rootless init, OpenRC, supervisor under the user manager, rootful grant). Tasks 2 and 3 stay in the code; an absent engine mode must therefore mean rootful again, so existing hosts keep working (Task 10 changes the default).
-- Task 10 also moves `cache_total_gb` out of the deploy user's `settings.toml` into a root owned `/etc/riku/router.toml`, so the root helper reads no file the deploy user owns.
+- Dropped for now: Tasks 11 to 15 (port refusal, systemd rootless init, OpenRC, supervisor under the user manager, rootful grant). Tasks 2, 3 and 4 were removed from the code (see below).
 - Process: no extras mid task, one Sonnet pass per task, Opus only on Task 10, one Linux run after the merge.
-- After Tasks 9, 10 and R merge: delete the rootless code nothing kept uses (owner, 2026-11-06), guided by the over engineering review: Task 4 init detection and `host.toml`, the rootless parts of Task 2's engine env and Task 3's rootless refusal, and their tests. Delete Tasks 2, 3 and 4 entirely, including the daemon variable stripping, which changed rootful behaviour.
-- Same cleanup, owner yes 2026-11-06: the total cache cap (`cache_budget.rs`, `router_settings.rs`, `[router]` in settings) is replaced by a fixed per app limit of 1 to 10 GB in the gate, so no `/etc/riku/router.toml`; the duplicate key visitor goes; `Reply` becomes a plain tagged enum; socket activation goes and the helper runs as a plain service; the threaded connect timeout becomes plain timeouts; the extra `nginx -t` before a change goes; the deploy side nginx gate call goes (helper checks); duplicate tests go (fork and setuid, unknown fields, three restore tests to one); the doctor stray path scan merges into `doctor --fix`.
+- Done 2026-11-06 (both bullets below): delete the rootless code nothing kept uses (owner, 2026-11-06), guided by the over engineering review: Task 4 init detection and `host.toml`, the rootless parts of Task 2's engine env and Task 3's rootless refusal, and their tests. Delete Tasks 2, 3 and 4 entirely, including the daemon variable stripping, which changed rootful behaviour.
+- Same cleanup, owner yes 2026-11-06, done: the total cache cap (`cache_budget.rs`, `router_settings.rs`, `[router]` in settings) is replaced by a fixed per app limit of 1 to 10 GB in the gate, so no `/etc/riku/router.toml`; the duplicate key visitor goes; `Reply` becomes a plain tagged enum; socket activation goes and the helper runs as a plain service; the threaded connect timeout becomes plain timeouts; the extra `nginx -t` before a change goes; the deploy side nginx gate call goes (helper checks); duplicate tests go (fork and setuid, unknown fields, three restore tests to one); the doctor stray path scan merges into `doctor --fix`.
 
 ### Task R: Certificate renewal (S)
 
@@ -121,7 +120,7 @@ Status: done. The start commit's binary is 9,213,048 B, under the limit, and the
 
 ### Task 2: Engine env and settings keys (M)
 
-Status: done, binary 9,218,408 B. Was: no spawn sets any variable (bounded.rs:163, streamed.rs:34, login.rs:30, events.rs:39); `[engine]` knows only timeouts (crates/riku-config/src/settings.rs:86-101).
+Status: removed 2026-11-06 with the rootless cleanup; the engine takes no env and settings have no `mode` or `host`. Was: no spawn sets any variable (bounded.rs:163, streamed.rs:34, login.rs:30, events.rs:39); `[engine]` knows only timeouts (crates/riku-config/src/settings.rs:86-101).
 
 **Files:**
 - Create: `crates/riku-container/src/engine/env.rs`, `env_tests.rs`
@@ -141,7 +140,7 @@ Status: done, binary 9,218,408 B. Was: no spawn sets any variable (bounded.rs:16
 
 ### Task 3: Probe rootless through info (S)
 
-Status: done, `REQUIRED_COMMANDS` now has 17 entries with `info`. The Docker rootful shape matches a real Docker 29.1.3; the rootless Docker and Podman fixtures stay unverified until Task 18.
+Status: removed 2026-11-06 with the rootless cleanup; `REQUIRED_COMMANDS` is back to 16 entries without `info`.
 
 **Files:**
 - Create: `crates/riku-container/src/engine/info.rs`, `info_tests.rs`, fixtures `info_docker_rootless.json`, `info_podman_rootless.json`, `info_docker_rootful.json`
@@ -161,7 +160,7 @@ Status: done, `REQUIRED_COMMANDS` now has 17 entries with `info`. The Docker roo
 
 ### Task 4: Init system detection (S)
 
-Status: done. Was: `/var/lib/riku` is already created root owned 0755 with a checked parent (crates/riku-cli/src/setup/var_root.rs:43-72), so `host.toml` goes there with no new directory code.
+Status: removed 2026-11-06 with the rootless cleanup; there is no `host.toml`, and Task 10 checks for `/run/systemd/system` itself. Was: `/var/lib/riku` is already created root owned 0755 with a checked parent (crates/riku-cli/src/setup/var_root.rs:43-72), so `host.toml` goes there with no new directory code.
 
 **Files:**
 - Create: `crates/riku-config/src/host_file.rs`, `host_file_tests.rs`, `crates/riku-cli/src/setup/init_system.rs`, `init_system_tests.rs`
@@ -226,12 +225,12 @@ Status: done, binary 9,221,816 B. Gate is `check_nginx_route` and `check_caddy_r
 Status: done, binary 9,329,080 B. Linux tests pass as root (fork and setuid foreign peer tests) and as a plain user. Deferred: the Status reply carries only the version; router and installed apps go to Task 16. Apply does not run the gate yet; Task 8 must call `check_nginx_route` or `check_caddy_route` there. Opus review: root process facing the deploy user.
 
 **Files:**
-- Create: `crates/riku-route/src/protocol.rs`, `protocol_tests.rs`, `src/server.rs`, `server_tests.rs`, `src/listen.rs` (socket activation or own socket), `crates/riku-deploy/src/router/helper_client.rs`, `helper_client_tests.rs`, `crates/riku-cli/src/router_helper.rs`
+- Create: `crates/riku-route/src/protocol.rs`, `protocol_tests.rs`, `src/server.rs`, `server_tests.rs`, `src/listen.rs` (own socket), `crates/riku-deploy/src/router/helper_client.rs`, `helper_client_tests.rs`, `crates/riku-cli/src/router_helper.rs`
 - Modify: `crates/riku-args/src/cli.rs`, `crates/riku-args/src/placement.rs` (`router-helper` as `Server`), `crates/riku-cli/src/dispatch/mod.rs`, `crates/riku-config/src/lib.rs` (`ROUTER_SOCKET = "/run/riku-router.sock"`)
 
 **Interfaces:**
 - Produces: `pub enum Request { Apply { app, route }, Remove { app }, Status }` with `v: 1`; `pub enum Reply { Ok { reloaded: bool }, Failed { stage: Stage, error: String }, Status { .. } }`, `pub enum Stage { Schema, Render, Check, Reload }`.
-- Server: one request per connection, one connection at a time, request at most 1 MiB then EOF, `SO_PEERCRED` through `nix` refusing any uid but the deploy user's and 0, exits after 60 s idle when socket activated (`LISTEN_FDS`/`LISTEN_PID`), otherwise creates `/run/riku-router.sock` itself (root, the deploy user's primary group, 0660) and stays running.
+- Server: one request per connection, one connection at a time, request at most 1 MiB then EOF, `SO_PEERCRED` through `nix` refusing any uid but the deploy user's and 0, creates `/run/riku-router.sock` itself (root, the deploy user's primary group, 0660) and stays running. Socket activation and the idle exit were removed 2026-11-06.
 - Client: `pub fn send(request: &Request) -> Result<Reply>`, giving up after 60 s.
 - `riku router-helper` runs the server; `Apply` replies `Failed { stage: Render }` until Task 8.
 
@@ -307,7 +306,7 @@ Status: done. The helper is a plain `Type=simple` service (no socket unit); the 
 
 **Security model:** `helper_install.rs` doc comment: the helper runs only the root owned `/usr/local/bin/riku` (Task 5); root never executes a file from the deploy user's tree.
 
-- [ ] **Step 1: Failing tests:** `include_names_etc_riku`, `units_render_per_init` (systemd socket unit carries `SocketMode=0660` and the deploy group; OpenRC script starts before `riku`; `Other` prints the start command).
+- [ ] **Step 1: Failing tests:** `include_names_etc_riku`, `units_render_per_init` (as planned; the built helper has no socket unit; OpenRC script starts before `riku`; `Other` prints the start command).
 - [ ] **Step 2: Run** `cargo test -q -p riku-cli helper_install`. Expected: FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run** `cargo test -q --workspace`; F with idle RSS. Expected: PASS, within limit.

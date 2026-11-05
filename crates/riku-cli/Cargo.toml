@@ -37,3 +37,4 @@ nix = { workspace = true, features = ["signal", "process", "user", "fs", "term"]
 which = { workspace = true }
 
 [dev-dependencies]
+riku-route = { path = "../riku-route", features = ["test-server"] }

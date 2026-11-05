@@ -33,7 +33,6 @@ use super::deploy_user::{deploy_user_name, DeployUser};
 use super::helper_install::install_router_helper;
 use super::init::InitOptions;
 use super::init_router::{deploy_router, setup_router_host};
-use super::init_system::record_init_system;
 use super::prerequisites::check_prerequisites;
 use super::socket_group::setup_socket_root;
 use super::systemd::install_systemd_service;
@@ -110,10 +109,6 @@ pub fn root_init(options: &InitOptions) -> Result<DeployUser> {
     if let Err(e) = setup_var_root(&user) {
         return Err(e);
     }
-    let init = match record_init_system() {
-        Ok(init) => init,
-        Err(e) => return Err(e),
-    };
     if let Err(e) = setup_router_host(&router, &user) {
         return Err(e);
     }
@@ -122,7 +117,7 @@ pub fn root_init(options: &InitOptions) -> Result<DeployUser> {
         echo("[2/4] Skipping systemd setup (--no-systemd)", "yellow");
     } else {
         if !matches!(router, Router::Plugin(_)) {
-            if let Err(e) = install_router_helper(init, &user.name) {
+            if let Err(e) = install_router_helper(&user.name) {
                 return Err(e);
             }
         }

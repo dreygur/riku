@@ -23,7 +23,6 @@ use anyhow::Error;
 use riku_container::types::AppName;
 use riku_util::route_plan::HttpsPolicy;
 
-use crate::cache_budget::within_budget;
 use crate::check::check_nginx_route;
 use crate::nginx_render::{render, CERTIFICATE_FILE, KEY_FILE};
 use crate::nginx_roots::NginxRoots;
@@ -92,17 +91,6 @@ fn check_and_reload(roots: &NginxRoots) -> Result<(), (Stage, Error)> {
     }
 }
 
-/// A reply when nginx already refuses the host config, so a failure after a
-/// change cannot be blamed on it and no file is touched for nothing.
-fn refused_host(roots: &NginxRoots) -> Option<Reply> {
-    check_config(roots).err().map(|e| {
-        failed(
-            Stage::Check,
-            format!("the host nginx config is refused before any change: {e}"),
-        )
-    })
-}
-
 /// Put the previous files back after `cause` and build the reply, saying so
 /// when the restore itself failed.
 pub(crate) fn rolled_back(snapshot: &Snapshot, stage: Stage, cause: Error) -> Reply {
@@ -139,11 +127,6 @@ pub fn apply_nginx(roots: &NginxRoots, app: &AppName, route: &Route) -> Reply {
         Err(e) => return failed(Stage::Schema, e),
     };
     let route = checked.route();
-    if let Some(cache) = &route.cache {
-        if let Err(e) = within_budget(&roots.site_root, app, cache.size_gb, roots.cache_total_gb) {
-            return failed(Stage::Schema, e);
-        }
-    }
     let config = match render(roots, app, route) {
         Ok(config) => config,
         Err(e) => return failed(Stage::Render, e),
@@ -152,9 +135,6 @@ pub fn apply_nginx(roots: &NginxRoots, app: &AppName, route: &Route) -> Reply {
         .tls
         .as_ref()
         .filter(|_| route.https == HttpsPolicy::Only);
-    if let Some(reply) = refused_host(roots) {
-        return reply;
-    }
     if let Err(e) = prepare_dirs(roots, app, tls.is_some()) {
         return failed(Stage::Render, e);
     }
@@ -179,9 +159,6 @@ pub fn remove_nginx(roots: &NginxRoots, app: &AppName) -> Reply {
         Ok(snapshot) if snapshot.is_empty() => return Reply::Ok { reloaded: false },
         Ok(_) => {}
         Err(e) => return failed(Stage::Render, e),
-    }
-    if let Some(reply) = refused_host(roots) {
-        return reply;
     }
     let reply = commit(roots, &planned);
     if matches!(reply, Reply::Ok { .. }) {

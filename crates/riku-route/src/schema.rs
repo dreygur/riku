@@ -121,7 +121,7 @@ pub struct Cache {
     pub prefixes: Vec<String>,
     /// Seconds a 200 or 304 answer stays valid.
     pub time_s: u32,
-    /// Size of the cache in GB, 1 to 100.
+    /// Size of the cache in GB, 1 to 10.
     pub size_gb: u32,
     /// Seconds an unused entry stays on disk.
     pub expiry_s: u32,
