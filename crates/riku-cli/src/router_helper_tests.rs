@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use riku_route::ReloadMethod;
+use riku_route::{CaddyRoots, ReloadMethod};
 use tempfile::TempDir;
 
 use super::*;
@@ -18,6 +18,16 @@ fn roots_in(dir: &Path) -> NginxRoots {
         reload: ReloadMethod::Signal,
         owner_uid: 0,
         cache_total_gb: 100,
+    }
+}
+
+fn caddy_roots_in(dir: &Path) -> CaddyRoots {
+    CaddyRoots {
+        site_root: dir.join("etc/caddy"),
+        caddy: dir.join("no_caddy"),
+        caddyfile: dir.join("Caddyfile"),
+        admin_address: "unix//none".to_string(),
+        owner_uid: 0,
     }
 }
 
@@ -42,8 +52,10 @@ fn bad_app_name_is_a_schema_failure() {
 
     let reply = handle(
         &roots_in(dir.path()),
+        &caddy_roots_in(dir.path()),
         Request::Remove {
             app: "../etc".to_string(),
+            router: RouterKind::Nginx,
         },
     );
 
@@ -54,12 +66,16 @@ fn bad_app_name_is_a_schema_failure() {
 fn remove_of_an_app_with_no_config_does_not_reload() {
     let dir = TempDir::new().unwrap();
 
-    let reply = handle(
-        &roots_in(dir.path()),
-        Request::Remove {
-            app: "myapp".to_string(),
-        },
-    );
+    for router in [RouterKind::Nginx, RouterKind::Caddy] {
+        let reply = handle(
+            &roots_in(dir.path()),
+            &caddy_roots_in(dir.path()),
+            Request::Remove {
+                app: "myapp".to_string(),
+                router,
+            },
+        );
 
-    assert_eq!(reply, Reply::Ok { reloaded: false });
+        assert_eq!(reply, Reply::Ok { reloaded: false }, "{router:?}");
+    }
 }

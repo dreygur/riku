@@ -16,14 +16,32 @@ use crate::unique_keys::refuse_duplicate_keys;
 /// The only protocol version this build speaks.
 pub const PROTOCOL_VERSION: u8 = 1;
 
+/// The router a request is for. A request that names none is for nginx.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RouterKind {
+    #[default]
+    Nginx,
+    Caddy,
+}
+
 /// What the deploy side asks the helper to do.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Request {
     /// Install or replace the router config of `app` and reload the router.
-    Apply { app: String, route: Box<Route> },
+    Apply {
+        app: String,
+        #[serde(default)]
+        router: RouterKind,
+        route: Box<Route>,
+    },
     /// Drop the router config of `app` and reload the router.
-    Remove { app: String },
+    Remove {
+        app: String,
+        #[serde(default)]
+        router: RouterKind,
+    },
     /// Ask whether the helper is alive and which build it is.
     Status {},
 }

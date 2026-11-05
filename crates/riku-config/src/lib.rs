@@ -122,6 +122,8 @@ pub struct RikuPaths {
     /// [`CADDY_SITE_ROOT`] outside tests, not taken from the environment for
     /// the same reason as `socket_root`.
     pub caddy_root: PathBuf,
+    /// The router helper's socket, [`ROUTER_SOCKET`] outside tests.
+    pub router_socket: PathBuf,
     /// Holds the host router name. See [`router::Router::load`].
     pub router_file: PathBuf,
     /// Holds the container engine choice. See [`container_engine::load`].
@@ -193,6 +195,7 @@ impl RikuPaths {
             nginx_root: riku_root.join("nginx"),
             socket_root: PathBuf::from(SOCKET_ROOT),
             caddy_root: PathBuf::from(CADDY_SITE_ROOT),
+            router_socket: PathBuf::from(ROUTER_SOCKET),
             router_file: riku_root.join(router::ROUTER_FILE),
             container_engine_file: riku_root.join(container_engine::ENGINE_FILE),
             settings_file: riku_root.join(settings::SETTINGS_FILE),

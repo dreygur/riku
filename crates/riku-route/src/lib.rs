@@ -27,11 +27,13 @@
 //! [`check_nginx_route`] and [`check_caddy_route`] are the single gate. The
 //! helper calls one again on receipt whatever the sender already did; the deploy side calls it for an early
 //! error only. [`apply_nginx`] and [`remove_nginx`] are the nginx half of the
-//! helper: they call the gate themselves, then render, check and reload as
-//! root.
+//! helper and [`apply_caddy`] and [`remove_caddy`] the Caddy half: they call
+//! the gate themselves, then render, check and reload as root.
 
 mod bounded;
 mod cache_budget;
+mod caddy_apply;
+mod caddy_test_server;
 mod check;
 mod check_text;
 mod check_tls;
@@ -51,12 +53,14 @@ mod test_pems;
 mod unique_keys;
 
 pub use bounded::{is_closed, read_bounded, MAX_MESSAGE_BYTES};
+pub use caddy_apply::{apply_caddy, remove_caddy, CaddyRoots};
+pub use caddy_test_server::serve_caddy_for_tests;
 pub use check::{check_caddy_route, check_nginx_route, CheckedRoute};
 pub use listen::{activated_listener, bind_socket, restrict_umask, run};
 pub use nginx_apply::{apply_nginx, remove_nginx};
 pub use nginx_roots::{NginxRoots, ReloadMethod};
 pub use protocol::{
-    encode_reply, encode_request, parse_reply, parse_request, Reply, Request, Stage,
+    encode_reply, encode_request, parse_reply, parse_request, Reply, Request, RouterKind, Stage,
     PROTOCOL_VERSION,
 };
 pub use schema::{Cache, Listen, Route, RouteBackend, SiteKind, Tls};

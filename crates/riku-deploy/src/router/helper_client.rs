@@ -19,7 +19,7 @@ use riku_route::{
     encode_request, is_closed, parse_reply, read_bounded, Reply, Request, MAX_MESSAGE_BYTES,
 };
 
-use crate::config::ROUTER_SOCKET;
+use crate::config::RikuPaths;
 
 /// How long a deploy waits for the helper in total: to connect, to send and
 /// to read the answer. Other deploys queue ahead of it, and a router check
@@ -27,8 +27,8 @@ use crate::config::ROUTER_SOCKET;
 const ANSWER_BUDGET: Duration = Duration::from_secs(60);
 
 /// Send `request` to the helper on its socket and return its reply.
-pub fn send(request: &Request) -> Result<Reply> {
-    send_to(Path::new(ROUTER_SOCKET), request, ANSWER_BUDGET)
+pub fn send(paths: &RikuPaths, request: &Request) -> Result<Reply> {
+    send_to(&paths.router_socket, request, ANSWER_BUDGET)
 }
 
 fn time_left(deadline: Instant, budget: Duration) -> Result<Duration> {

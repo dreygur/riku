@@ -3,8 +3,8 @@ use std::path::Path;
 
 use super::*;
 
-/// Route destroy through Caddy with a `caddy` that accepts every reload, so
-/// no test needs the router helper's socket.
+/// Route destroy through Caddy with a `caddy` that accepts every reload, and
+/// serve the router helper's socket from inside the test.
 fn use_mock_caddy(paths: &mut RikuPaths) {
     use std::os::unix::fs::PermissionsExt;
 
@@ -14,6 +14,7 @@ fn use_mock_caddy(paths: &mut RikuPaths) {
     paths.reload_programs.caddy = caddy;
     fs::create_dir_all(&paths.riku_root).unwrap();
     crate::config::router::save(paths, &crate::config::router::Router::Caddy).unwrap();
+    riku_route::serve_caddy_for_tests(paths);
 }
 
 #[test]

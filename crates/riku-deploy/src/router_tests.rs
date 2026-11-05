@@ -108,6 +108,7 @@ fn caddy_deploys_a_worker_only_app_to_the_port_from_its_env() {
     std::fs::write(&ok, "#!/bin/sh\nexit 0\n").unwrap();
     std::fs::set_permissions(&ok, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
     paths.reload_programs.caddy = ok;
+    riku_route::serve_caddy_for_tests(&mut paths);
     enable_worker(&paths, "worker", 1, &[]);
     let e = env(&[("RIKU_DOMAINS", "shop.example.com"), ("PORT", "5001")]);
 

@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::Result;
+use riku_route::Request;
 
 use super::nginx_site::check_nginx_site;
 use super::send_to_helper;
@@ -28,7 +29,10 @@ pub fn check(
         Err(e) => return Err(e),
     };
     match active {
-        Router::Nginx => check_nginx_site(send_to_helper, app, app_path, env, paths),
+        Router::Nginx => {
+            let send = |request: &Request| send_to_helper(paths, request);
+            check_nginx_site(send, app, app_path, env, paths)
+        }
         Router::Caddy | Router::Plugin(_) => Ok(()),
     }
 }

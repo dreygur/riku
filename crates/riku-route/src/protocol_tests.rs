@@ -8,6 +8,7 @@ fn apply_survives_encode_and_parse() {
     let route: Route = serde_json::from_str(ROUTE).unwrap();
     let request = Request::Apply {
         app: "myapp".to_string(),
+        router: RouterKind::Caddy,
         route: Box::new(route),
     };
 

@@ -70,7 +70,7 @@ fn apply_sends_the_route_and_a_refusal_names_its_stage() {
         .to_string();
 
     match &seen.borrow()[0] {
-        Request::Apply { app, route } => {
+        Request::Apply { app, route, .. } => {
             assert_eq!(app, "myapp");
             assert_eq!(route.domains, ["myapp.example"]);
         }

@@ -1,15 +1,22 @@
-//! Caddy branch of the router seam: turns an app's ENV into a site request
-//! and writes or clears its site file.
+//! Caddy branch of the router seam: turns an app's ENV into a route and asks
+//! the router helper to install or clear its site.
 //!
-//! Security: every value reaching the site file is typed. Domains go through
-//! [`parse_domains`], so a value like `a.com {` fails the deploy instead of
-//! injecting Caddyfile syntax.
+//! Security: nothing here writes a site file or runs Caddy. Domains go through
+//! [`parse_domains`], so a value like `a.com {` fails the deploy, and the
+//! route passes the `riku_route` Caddy gate here and again in the helper. The
+//! helper's answer is data: a refusal is reported with its stage, never
+//! acted on.
 
 use std::collections::HashMap;
+use std::path::Path;
 
 use anyhow::{anyhow, Result};
+use riku_route::{Reply, Request, RouterKind};
 
+use super::nginx_site::{app_name, helper_outcome};
+use super::route_build::build_route;
 use super::route_plan;
+use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::backend::Backend;
 use crate::util::echo;
@@ -44,28 +51,67 @@ fn caddy_request(env: &HashMap<String, String>, backends: &[Backend]) -> Result<
     Ok(Some(plan))
 }
 
-/// Write or clear `app`'s Caddy site. The caller reloads Caddy.
+/// Have the router helper write `app`'s Caddy site and reload Caddy, or take
+/// the site out when the app sets no domain. Returns once Caddy accepted the
+/// reload.
 #[allow(clippy::question_mark)]
-pub(super) fn configure_caddy(
+pub(super) fn apply_caddy_site(
+    send: impl Fn(&Request) -> Result<Reply>,
     app: &str,
+    app_path: &Path,
     env: &HashMap<String, String>,
     backends: &[Backend],
     paths: &RikuPaths,
 ) -> Result<()> {
+    let name = match app_name(app) {
+        Ok(name) => name,
+        Err(e) => return Err(e),
+    };
     let plan = match caddy_request(env, backends) {
         Ok(plan) => plan,
         Err(e) => return Err(e),
     };
+    if plan.is_none() {
+        echo(
+            &format!("-----> No {DOMAINS_KEY} set, app is not routed. Set one with: riku config set {app} {DOMAINS_KEY}=<domain>"),
+            "yellow",
+        );
+        return remove_caddy_site(send, app).map(|_| ());
+    }
+    let route = match build_route(&name, app_path, env, backends, paths, &Router::Caddy) {
+        Ok(Some(route)) => route,
+        Ok(None) => return Err(anyhow!("'{app}' has no Caddy route")),
+        Err(e) => return Err(e),
+    };
+    let request = Request::Apply {
+        app: name.to_string(),
+        router: RouterKind::Caddy,
+        route: Box::new(route),
+    };
+    match send(&request) {
+        Ok(reply) => helper_outcome(reply, "install the site").map(|_| ()),
+        Err(e) => Err(e),
+    }
+}
 
-    match plan {
-        Some(plan) => crate::caddy::write_site(app, &plan, paths),
-        None => {
-            echo(
-                &format!("-----> No {DOMAINS_KEY} set, app is not routed. Set one with: riku config set {app} {DOMAINS_KEY}=<domain>"),
-                "yellow",
-            );
-            crate::caddy::remove_site(app, paths)
-        }
+/// Take `app`'s Caddy site out through the helper. Returns whether Caddy was
+/// reloaded.
+#[allow(clippy::question_mark)]
+pub(super) fn remove_caddy_site(
+    send: impl Fn(&Request) -> Result<Reply>,
+    app: &str,
+) -> Result<bool> {
+    let name = match app_name(app) {
+        Ok(name) => name,
+        Err(e) => return Err(e),
+    };
+    let request = Request::Remove {
+        app: name.to_string(),
+        router: RouterKind::Caddy,
+    };
+    match send(&request) {
+        Ok(reply) => helper_outcome(reply, "remove the site"),
+        Err(e) => Err(e),
     }
 }
 

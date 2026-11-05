@@ -26,6 +26,7 @@ tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 [dev-dependencies]
+riku-route = { path = "../riku-route" }
 tempfile = { workspace = true }
 criterion = { version = "0.8", features = ["html_reports"] }
 serde_json = { workspace = true }

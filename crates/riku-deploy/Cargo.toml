@@ -15,7 +15,6 @@ riku-http = { path = "../riku-http" }
 riku-error = { path = "../riku-error" }
 riku-nginx = { path = "../riku-nginx" }
 riku-route = { path = "../riku-route" }
-riku-caddy = { path = "../riku-caddy" }
 riku-plugins = { path = "../riku-plugins" }
 riku-supervisor = { path = "../riku-supervisor" }
 riku-container = { path = "../riku-container" }
