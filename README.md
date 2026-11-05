@@ -48,12 +48,12 @@ git push riku main      # that's the deploy
 ## Requirements
 
 - Linux (Debian/Ubuntu/RHEL/Arch)
-- 1 CPU core, 256 MB RAM, about 14 MB disk for Riku itself
+- 1 CPU core, 256 MB RAM, about 10 MB disk for Riku itself
 
 Measured on a 4 core x86_64 Ubuntu server, idle with no apps: the stripped `riku` binary
-is 13.7 MB (a 6.0 MB download), the supervisor uses about 10 MB of RAM, and the
+is 9.2 MB, the supervisor uses about 10 MB of RAM, and the
 supervisor plus nginx (master and 4 workers) about 22 MB. The binary plus `~/.riku`
-take about 14 MB of disk. While riku containers exist, the supervisor also keeps one
+take about 9.3 MB of disk. While riku containers exist, the supervisor also keeps one
 `docker events` process of about 32 MB RSS; with no container app it runs none.
 Container logs are copied with one short `docker logs` call per running container
 every 5 s, so they reach `riku logs` up to about 5 s late. Per-app memory is up
