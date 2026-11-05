@@ -12,7 +12,7 @@ use tempfile::TempDir;
 
 use crate::nginx_render::render;
 use crate::nginx_roots::{NginxRoots, ReloadMethod};
-use crate::schema::{Cache, Listen, Route, RouteBackend, SiteKind, Tls};
+use crate::schema::{Listen, Route, RouteBackend, SiteKind, Tls};
 use crate::test_pems::{CERT_A, KEY_A};
 
 fn nginx_available() -> bool {
@@ -23,11 +23,9 @@ fn roots_in(root: &Path) -> NginxRoots {
     NginxRoots {
         site_root: root.join("sites"),
         cert_root: root.join("certs"),
-        cache_root: root.join("cache"),
         socket_root: root.join("sockets"),
         static_root: root.join("static"),
         acme_root: root.join("acme"),
-        cloudflare_conf: root.join("cloudflare.conf"),
         nginx: "nginx".into(),
         reload: ReloadMethod::Signal,
         owner_uid: 0,
@@ -46,40 +44,20 @@ fn base(domain: &str) -> Route {
         tls: None,
         static_paths: Vec::new(),
         kind: SiteKind::Plain,
-        cache: None,
-        cloudflare_acl: false,
         allow_git_folders: false,
-        catch_all: None,
-        csp: None,
-        snippet: None,
     }
 }
 
 fn mapped(domain: &str, kind: SiteKind, port: u16) -> Route {
     Route {
         kind,
-        listen: Listen {
-            port,
-            ..Listen::default()
-        },
+        listen: Listen { port },
         ..base(domain)
     }
 }
 
 fn sites() -> Vec<(&'static str, Route)> {
     let plain = Route {
-        cache: Some(Cache {
-            prefixes: vec!["/api/".to_string()],
-            time_s: 60,
-            size_gb: 1,
-            expiry_s: 600,
-            redirects_s: 60,
-            any_s: 60,
-            control_s: 60,
-        }),
-        catch_all: Some("index.html".to_string()),
-        csp: Some("default-src self".to_string()),
-        snippet: Some("add_header X-Frame-Options DENY;".to_string()),
         static_paths: vec!["/assets/".to_string()],
         ..base("plain.example")
     };
@@ -130,7 +108,6 @@ fn every_site_kind_passes_nginx_t() {
     let roots = roots_in(root);
     fs::create_dir_all(&roots.site_root).unwrap();
     fs::create_dir_all(root.join("tmp")).unwrap();
-    fs::create_dir_all(&roots.cache_root).unwrap();
     for (name, route) in sites() {
         let app = AppName::try_from(name).unwrap();
         let cert_dir = roots.cert_dir(&app);

@@ -2,14 +2,11 @@
 //!
 //! Security model: this runs as root on a route the deploy user sent. The
 //! route passes [`check_nginx_route`] here whatever the sender did, and only
-//! the checked route is rendered, so a snippet such as
-//! `access_log /etc/cron.d/x;` is refused before any file is written. Root
-//! writes only under the roots in [`NginxRoots`] (`/etc/riku` and
-//! `/var/cache/riku` in production), and every path is the root joined with
-//! the checked [`AppName`] and a fixed file name, never request text. TLS
-//! material is written from the gate's re-encoded PEM and never read from a
-//! path. The helper fetches nothing: a Cloudflare ACL includes a root owned
-//! file or nginx refuses the config.
+//! the checked route is rendered. Root writes only under the roots in
+//! [`NginxRoots`] (`/etc/riku` in production), and every path is the root
+//! joined with the checked [`AppName`] and a fixed file name, never request
+//! text. TLS material is written from the gate's re-encoded PEM and never
+//! read from a path. The helper fetches nothing.
 //!
 //! A change is all or nothing from nginx's point of view. The previous
 //! content of every file it touches is kept, the new files are written,
@@ -67,10 +64,7 @@ fn plan(
 }
 
 fn prepare_dirs(roots: &NginxRoots, app: &AppName, tls: bool) -> Result<(), Error> {
-    let mut dirs = vec![
-        (roots.site_root.clone(), PUBLIC_DIR),
-        (roots.cache_root.clone(), PUBLIC_DIR),
-    ];
+    let mut dirs = vec![(roots.site_root.clone(), PUBLIC_DIR)];
     if tls {
         dirs.push((roots.cert_root.clone(), PRIVATE_DIR));
         dirs.push((roots.cert_dir(app), PRIVATE_DIR));
@@ -141,16 +135,6 @@ pub fn apply_nginx(roots: &NginxRoots, app: &AppName, route: &Route) -> Reply {
     commit(roots, &plan(roots, app, Some(config), tls))
 }
 
-fn cache_left_behind(roots: &NginxRoots, app: &AppName) {
-    let dir = roots.cache_dir(app);
-    let is_dir = dir.symlink_metadata().is_ok_and(|meta| meta.is_dir());
-    if is_dir {
-        if let Err(e) = fs::remove_dir_all(&dir) {
-            tracing::warn!("cannot remove the proxy cache {}: {e}", dir.display());
-        }
-    }
-}
-
 /// Take `app` out of nginx. An app with no config is not an error and does
 /// not reload.
 pub fn remove_nginx(roots: &NginxRoots, app: &AppName) -> Reply {
@@ -163,7 +147,6 @@ pub fn remove_nginx(roots: &NginxRoots, app: &AppName) -> Reply {
     let reply = commit(roots, &planned);
     if matches!(reply, Reply::Ok { .. }) {
         let _ = fs::remove_dir(roots.cert_dir(app));
-        cache_left_behind(roots, app);
     }
     reply
 }

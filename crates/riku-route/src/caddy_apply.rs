@@ -2,8 +2,7 @@
 //!
 //! Security model: this runs as root on a route the deploy user sent. The
 //! route passes [`check_caddy_route`] here whatever the sender did, so a
-//! snippet, a TLS pair or a unix socket backend is refused before any file
-//! is written. Root writes one file, `<site root>/<app>.caddy`, named from
+//! TLS pair or a unix socket backend is refused before any file is written. Root writes one file, `<site root>/<app>.caddy`, named from
 //! the checked [`AppName`], with the text `riku-caddy` renders from typed
 //! domains and loopback backends. The reload goes to Caddy's admin API on a
 //! unix socket only `caddy` and root reach, so no other local process

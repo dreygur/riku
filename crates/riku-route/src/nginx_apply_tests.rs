@@ -9,7 +9,7 @@ use tempfile::TempDir;
 
 use super::*;
 use crate::nginx_roots::ReloadMethod;
-use crate::schema::{Cache, Listen, RouteBackend, SiteKind};
+use crate::schema::{Listen, RouteBackend, SiteKind};
 use crate::test_pems::{CERT_A, KEY_A};
 
 struct Host {
@@ -34,11 +34,9 @@ impl Host {
         let roots = NginxRoots {
             site_root: root.join("etc/nginx"),
             cert_root: root.join("etc/certs"),
-            cache_root: root.join("var/cache/nginx"),
             socket_root: paths.socket_root.clone(),
             static_root: paths.static_root.clone(),
             acme_root: paths.acme_root.clone(),
-            cloudflare_conf: root.join("etc/cloudflare.conf"),
             nginx,
             reload: ReloadMethod::Signal,
             owner_uid: fs::metadata(root).unwrap().uid(),
@@ -68,12 +66,7 @@ fn route(domain: &str) -> Route {
         tls: None,
         static_paths: Vec::new(),
         kind: SiteKind::Plain,
-        cache: None,
-        cloudflare_acl: false,
         allow_git_folders: false,
-        catch_all: None,
-        csp: None,
-        snippet: None,
     }
 }
 
@@ -89,18 +82,6 @@ fn https_route(domain: &str) -> Route {
             port: 5000,
         }],
         ..route(domain)
-    }
-}
-
-fn cache(size_gb: u32) -> Cache {
-    Cache {
-        prefixes: vec!["/api/".to_string()],
-        time_s: 3600,
-        size_gb,
-        expiry_s: 86400,
-        redirects_s: 3600,
-        any_s: 3600,
-        control_s: 3600,
     }
 }
 
@@ -122,10 +103,6 @@ fn every_route_field_reaches_the_rendered_site() {
     let mut sent = route("myapp.example");
     sent.backends = vec![RouteBackend::UnixDefault];
     sent.static_paths = vec!["/assets/".to_string()];
-    sent.cache = Some(cache(1));
-    sent.csp = Some("default-src self".to_string());
-    sent.catch_all = Some("index.html".to_string());
-    sent.snippet = Some("add_header X-Frame-Options DENY;".to_string());
     let reply = apply_nginx(&host.roots, &myapp, &sent);
     assert_eq!(reply, Reply::Ok { reloaded: true }, "apply failed");
 
@@ -135,13 +112,6 @@ fn every_route_field_reaches_the_rendered_site() {
         "server_name         myapp.example;".to_string(),
         format!("server unix:{}/myapp.sock;", roots.socket_root.display()),
         format!("alias {}/myapp/paths/0;", roots.static_root.display()),
-        format!(
-            "proxy_cache_path {} levels=1:2 keys_zone=myapp:10m",
-            roots.cache_dir(&myapp).display()
-        ),
-        "Content-Security-Policy \"default-src self\"".to_string(),
-        "try_files $uri /index.html;".to_string(),
-        "add_header X-Frame-Options DENY;".to_string(),
     ];
     for fragment in expected {
         assert!(
@@ -237,50 +207,21 @@ fn directory_of_another_uid_is_refused() {
 }
 
 #[test]
-fn access_log_snippet_never_written() {
+fn route_the_gate_refuses_is_never_written() {
     let host = Host::new();
     let mut sent = route("myapp.example");
-    sent.snippet = Some("access_log /etc/cron.d/x;".to_string());
+    sent.domains = vec!["myapp.example;".to_string()];
 
     let reply = apply_nginx(&host.roots, &app("myapp"), &sent);
 
     let (stage, error) = failure(reply);
     assert_eq!(stage, Stage::Schema);
-    assert!(
-        error.contains("access_log"),
-        "refusal does not name the directive: {error}"
-    );
+    assert!(error.contains("myapp.example;"), "{error}");
     assert!(
         !host.roots.site_root.exists(),
         "a site directory was created"
     );
     assert!(host.calls().is_empty(), "nginx ran for a refused route");
-}
-
-#[test]
-fn cache_has_a_zone_and_a_disk_bound() {
-    let host = Host::new();
-    let mut first = route("first.example");
-    first.cache = Some(cache(6));
-
-    let accepted = apply_nginx(&host.roots, &app("first"), &first);
-
-    assert_eq!(accepted, Reply::Ok { reloaded: true });
-    let conf = host.conf(&app("first"));
-    assert!(
-        conf.contains("keys_zone=first:10m"),
-        "zone grew with the cache:\n{conf}"
-    );
-    assert!(
-        conf.contains("max_size=6g"),
-        "cache has no disk bound:\n{conf}"
-    );
-    let cache_line = conf.find("proxy_cache_path").expect("no cache path line");
-    let server_block = conf.find("server {").expect("no server block");
-    assert!(
-        cache_line < server_block,
-        "proxy_cache_path is inside server, where nginx refuses it:\n{conf}"
-    );
 }
 
 #[test]

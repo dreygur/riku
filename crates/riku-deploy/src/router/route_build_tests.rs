@@ -6,7 +6,7 @@ use tempfile::TempDir;
 
 use super::*;
 use crate::router::tests::env;
-use riku_route::{Cache, Listen, Tls};
+use riku_route::{Listen, Tls};
 
 const CERT: &str = "-----BEGIN CERTIFICATE-----
 MIIBYzCCAQqgAwIBAgIUEgDLAO9GxEin/GHuNm5MpOnpncowCgYIKoZIzj0EAwIw
@@ -44,7 +44,7 @@ fn build_for(
     backends: &[Backend],
 ) -> Result<Option<Route>> {
     let paths = paths_in(tmp);
-    build_route(&app(), tmp.path(), &env(pairs), backends, &paths, router)
+    build_route(&app(), &env(pairs), backends, &paths, router)
 }
 
 fn build(tmp: &TempDir, pairs: &[(&str, &str)], backends: &[Backend]) -> Result<Route> {
@@ -55,11 +55,6 @@ fn build(tmp: &TempDir, pairs: &[(&str, &str)], backends: &[Backend]) -> Result<
 fn env_maps_to_route() {
     let tmp = TempDir::new().unwrap();
     let paths = paths_in(&tmp);
-    fs::write(
-        tmp.path().join("extra.inc"),
-        "add_header X-Frame-Options DENY;\n",
-    )
-    .unwrap();
     let backends = [
         Backend::loopback(5001),
         Backend::Unix(paths.socket_root.join("myapp@2.sock")),
@@ -73,18 +68,9 @@ fn env_maps_to_route() {
             ("RIKU_DOMAINS", "Myapp.example www.myapp.example"),
             ("RIKU_NGINX_PORTMAP", "80:5001"),
             ("RIKU_NGINX_EXTERNAL_PORT", "8080"),
-            ("RIKU_NGINX_IPV4_ADDRESS", "192.0.2.10"),
-            ("RIKU_DISABLE_IPV6", "true"),
             ("RIKU_NGINX_STATIC", "public"),
             ("RIKU_NGINX_STATIC_PATHS", "/assets:dist, /media:uploads"),
-            ("RIKU_NGINX_CACHE_PREFIXES", "/api/, /feed"),
-            ("RIKU_NGINX_CACHE_SIZE", "5"),
-            ("RIKU_NGINX_CACHE_TIME", "60"),
-            ("RIKU_NGINX_CLOUDFLARE_ACL", "true"),
             ("RIKU_NGINX_ALLOW_GIT_FOLDERS", "1"),
-            ("RIKU_NGINX_CATCH_ALL", "index.html"),
-            ("RIKU_NGINX_CSP", "default-src 'self'; img-src *"),
-            ("RIKU_NGINX_INCLUDE_FILE", "extra.inc"),
         ],
         &backends,
     )
@@ -102,28 +88,11 @@ fn env_maps_to_route() {
                 },
                 RouteBackend::UnixCopy(2)
             ],
-            listen: Listen {
-                bind: Ipv4Addr::new(192, 0, 2, 10),
-                port: 8080,
-                ipv6: None
-            },
+            listen: Listen { port: 8080 },
             tls: None,
             static_paths: vec!["/assets".to_string(), "/media".to_string()],
             kind: SiteKind::Portmap,
-            cache: Some(Cache {
-                prefixes: vec!["/api/".to_string(), "/feed".to_string()],
-                time_s: 60,
-                size_gb: 5,
-                expiry_s: 86400,
-                redirects_s: 3600,
-                any_s: 3600,
-                control_s: 3600
-            }),
-            cloudflare_acl: true,
             allow_git_folders: true,
-            catch_all: Some("index.html".to_string()),
-            csp: Some("default-src 'self'; img-src *".to_string()),
-            snippet: Some("add_header X-Frame-Options DENY;\n".to_string()),
         }
     );
 }
@@ -176,7 +145,6 @@ fn https_only_carries_the_normalized_certificate_pair() {
         "https_only ignores the external port"
     );
     assert_eq!(route.kind, SiteKind::Wsgi);
-    assert!(route.cache.is_none());
 }
 
 #[test]
@@ -199,17 +167,20 @@ fn a_certificate_without_its_key_is_an_error() {
 }
 
 #[test]
-fn keys_that_name_a_path_are_refused_by_name() {
+fn removed_and_path_keys_fail_the_deploy_naming_the_key() {
     let tmp = TempDir::new().unwrap();
-    for key in ["RIKU_NGINX_CACHE_PATH", "RIKU_NGINX_SOCKET"] {
-        let err = build(
-            &tmp,
-            &[("RIKU_DOMAINS", "myapp.example"), (key, "/etc/cron.d")],
-            &[Backend::loopback(5001)],
-        )
-        .unwrap_err();
+    for key in ["RIKU_NGINX_CSP", "RIKU_NGINX_SOCKET"] {
+        for router in [Router::Nginx, Router::Caddy] {
+            let err = build_for(
+                &tmp,
+                &router,
+                &[("RIKU_DOMAINS", "myapp.example"), (key, "x")],
+                &[Backend::loopback(5001)],
+            )
+            .unwrap_err();
 
-        assert!(err.to_string().contains(key), "{key}: {err}");
+            assert!(err.to_string().contains(key), "{key}: {err}");
+        }
     }
 }
 
@@ -256,12 +227,7 @@ fn catch_all_domain_and_bind_all_address_work_as_before() {
         port: 5001,
     };
 
-    let route = build(
-        &tmp,
-        &[("RIKU_DOMAINS", "_"), ("RIKU_NGINX_IPV6_ADDRESS", "")],
-        &[all],
-    )
-    .unwrap();
+    let route = build(&tmp, &[("RIKU_DOMAINS", "_")], &[all]).unwrap();
 
     assert_eq!(route.domains, vec!["_".to_string()]);
     assert_eq!(
@@ -271,7 +237,6 @@ fn catch_all_domain_and_bind_all_address_work_as_before() {
             port: 5001
         }]
     );
-    assert_eq!(route.listen.ipv6, None);
 }
 
 #[test]
@@ -289,16 +254,12 @@ fn caddy_route_keeps_only_what_caddy_uses() {
             ("RIKU_DOMAINS", "myapp.example"),
             ("RIKU_NGINX_PORTMAP", "80:5001"),
             ("RIKU_NGINX_EXTERNAL_PORT", "8080"),
-            ("RIKU_NGINX_CSP", "default-src 'self'"),
-            ("RIKU_NGINX_CLOUDFLARE_ACL", "true"),
-            ("RIKU_NGINX_INCLUDE_FILE", "missing.inc"),
         ],
         &backends,
     )
     .unwrap()
     .unwrap();
     assert_eq!(route.listen, Listen::default());
-    assert!(route.csp.is_none() && route.snippet.is_none() && !route.cloudflare_acl);
 
     let err = build_for(
         &tmp,

@@ -167,20 +167,13 @@ fn removal_deletes_local_files_only_after_the_helper_agrees() {
 
 #[test]
 fn check_asks_the_helper_for_its_status() {
-    let (tmp, paths) = setup();
+    let (_tmp, paths) = setup();
     let seen = RefCell::new(Vec::new());
     let status = Reply::Status {
         version: "0.1.2".to_string(),
     };
 
-    check_nginx_site(
-        mock_helper(status, &seen),
-        "myapp",
-        tmp.path(),
-        &env(&[]),
-        &paths,
-    )
-    .unwrap();
+    check_nginx_site(mock_helper(status, &seen), "myapp", &env(&[]), &paths).unwrap();
 
     assert_eq!(seen.borrow().as_slice(), [Request::Status {}]);
 }

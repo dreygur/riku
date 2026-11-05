@@ -1,11 +1,8 @@
 {% include "nginx_upstream.conf.tera" %}
-{% include "nginx_cache_path.conf.tera" %}
 
 server {
-  listen              {{ RIKU_NGINX_IPV4_ADDRESS }}:80;
-{% if RIKU_NGINX_IPV6_ADDRESS %}
-  listen              {{ RIKU_NGINX_IPV6_ADDRESS }}:80;
-{% endif %}
+  listen              0.0.0.0:80;
+  listen              [::]:80;
   server_name         {{ RIKU_DOMAINS }};
 
 {% include "nginx_common.conf.tera" %}

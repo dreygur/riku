@@ -1940,12 +1940,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "libc",
- "reqwest",
  "riku-config",
- "riku-http",
- "riku-plugins",
  "riku-util",
- "serde_json",
  "tempfile",
  "tera",
  "tracing",

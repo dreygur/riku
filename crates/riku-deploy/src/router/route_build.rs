@@ -20,7 +20,7 @@ use anyhow::{anyhow, Result};
 use riku_container::types::AppName;
 use riku_route::{check_caddy_route, Listen, Route, RouteBackend, SiteKind};
 
-use super::route_env::{cache, listen, tls};
+use super::route_env::{listen, tls};
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::backend::Backend;
@@ -30,17 +30,40 @@ use crate::util::flag::{https_only, is_on};
 use crate::util::route_plan::HttpsPolicy;
 
 pub(super) const CATCH_ALL_NAME: &str = "_";
-const REFUSED_KEYS: [(&str, &str); 2] = [
-    ("RIKU_NGINX_CACHE_PATH", "the helper picks the cache path"),
-    ("RIKU_NGINX_SOCKET", "the helper picks socket paths"),
+const REFUSED_KEYS: [(&str, &str); 1] = [("RIKU_NGINX_SOCKET", "the helper picks socket paths")];
+const REMOVED_KEYS: [&str; 15] = [
+    "RIKU_NGINX_CLOUDFLARE_ACL",
+    "RIKU_NGINX_CACHE_PATH",
+    "RIKU_NGINX_CACHE_PREFIXES",
+    "RIKU_NGINX_CACHE_SIZE",
+    "RIKU_NGINX_CACHE_TIME",
+    "RIKU_NGINX_CACHE_EXPIRY",
+    "RIKU_NGINX_CACHE_REDIRECTS",
+    "RIKU_NGINX_CACHE_ANY",
+    "RIKU_NGINX_CACHE_CONTROL",
+    "RIKU_NGINX_CATCH_ALL",
+    "RIKU_NGINX_CSP",
+    "RIKU_NGINX_INCLUDE_FILE",
+    "RIKU_NGINX_IPV4_ADDRESS",
+    "RIKU_NGINX_IPV6_ADDRESS",
+    "RIKU_DISABLE_IPV6",
 ];
 
 fn route_error(app: &AppName, cause: anyhow::Error) -> anyhow::Error {
     anyhow!("cannot build the route of '{app}': {cause}")
 }
 
-fn refused_key(env: &HashMap<String, String>) -> Option<&'static (&'static str, &'static str)> {
-    REFUSED_KEYS.iter().find(|(key, _)| env.contains_key(*key))
+/// The reason an ENV key set by the app fails the deploy, if one does.
+fn refused_key(env: &HashMap<String, String>) -> Option<String> {
+    if let Some(key) = REMOVED_KEYS.iter().find(|key| env.contains_key(**key)) {
+        return Some(format!(
+            "{key} is no longer supported, the core route dropped it"
+        ));
+    }
+    REFUSED_KEYS
+        .iter()
+        .find(|(key, _)| env.contains_key(*key))
+        .map(|(key, why)| format!("{key} is no longer supported, {why}"))
 }
 
 /// What nginx's generator would serve: the listed names, `<app>.example.com`
@@ -130,10 +153,6 @@ fn route_backends(
         .collect()
 }
 
-fn text_key(env: &HashMap<String, String>, key: &str) -> Option<String> {
-    env.get(key).filter(|value| !value.is_empty()).cloned()
-}
-
 fn flag(env: &HashMap<String, String>, key: &str) -> bool {
     env.get(key).is_some_and(|value| is_on(value))
 }
@@ -153,18 +172,12 @@ fn caddy_route(
         tls: None,
         static_paths: Vec::new(),
         kind,
-        cache: None,
-        cloudflare_acl: false,
         allow_git_folders: false,
-        catch_all: None,
-        csp: None,
-        snippet: None,
     }
 }
 
 fn nginx_route(
     app: &AppName,
-    app_path: &Path,
     env: &HashMap<String, String>,
     base: Route,
     paths: &RikuPaths,
@@ -174,10 +187,6 @@ fn nginx_route(
         Ok(listen) => listen,
         Err(e) => return Err(anyhow!("listen: {e}")),
     };
-    let cache = match cache(env) {
-        Ok(cache) => cache,
-        Err(e) => return Err(anyhow!("cache: {e}")),
-    };
     let tls = if only_https {
         match tls(app, paths) {
             Ok(found) => found,
@@ -186,20 +195,11 @@ fn nginx_route(
     } else {
         None
     };
-    let snippet = match riku_nginx::app_snippet(env, app_path, paths) {
-        Ok(snippet) => snippet,
-        Err(e) => return Err(anyhow!("snippet: {e}")),
-    };
     Ok(Route {
         listen,
         tls,
         static_paths: riku_nginx::static_locations(env),
-        cache,
-        cloudflare_acl: flag(env, "RIKU_NGINX_CLOUDFLARE_ACL"),
         allow_git_folders: flag(env, "RIKU_NGINX_ALLOW_GIT_FOLDERS"),
-        catch_all: text_key(env, "RIKU_NGINX_CATCH_ALL"),
-        csp: text_key(env, "RIKU_NGINX_CSP"),
-        snippet,
         ..base
     })
 }
@@ -211,24 +211,21 @@ fn nginx_route(
 /// caller removes its site as `configure_caddy` does today. nginx always gets
 /// a route, with `<app>.example.com` when `RIKU_DOMAINS` is unset.
 ///
-/// `RIKU_NGINX_CACHE_PATH` and `RIKU_NGINX_SOCKET` are refused: the helper
-/// picks both paths. `RIKU_NGINX_DOCUMENT_ROOT` and the sources in
-/// `RIKU_NGINX_STATIC_PATHS` only steer what a deploy publishes, not the
-/// route. A certificate and key found in `nginx_root` ride along when the app
-/// is `https_only`.
+/// An ENV key the core route dropped (Cloudflare ACL, proxy cache, catch
+/// all, CSP, the include file, listen addresses) or one that names a path the
+/// helper picks (`RIKU_NGINX_SOCKET`) fails the build, naming the key.
+/// `RIKU_NGINX_DOCUMENT_ROOT` and the sources in `RIKU_NGINX_STATIC_PATHS`
+/// only steer what a deploy publishes, not the route. A certificate and key
+/// found in `nginx_root` ride along when the app is `https_only`.
 pub fn build_route(
     app: &AppName,
-    app_path: &Path,
     env: &HashMap<String, String>,
     backends: &[Backend],
     paths: &RikuPaths,
     router: &Router,
 ) -> Result<Option<Route>> {
-    if let Some((key, why)) = refused_key(env) {
-        return Err(route_error(
-            app,
-            anyhow!("{key} is no longer supported, {why}"),
-        ));
+    if let Some(reason) = refused_key(env) {
+        return Err(route_error(app, anyhow!(reason)));
     }
     let caddy = matches!(router, Router::Caddy);
     let domains = if caddy {
@@ -260,7 +257,7 @@ pub fn build_route(
             Err(e) => Err(e),
         };
     }
-    match nginx_route(app, app_path, env, base, paths) {
+    match nginx_route(app, env, base, paths) {
         Ok(route) => Ok(Some(route)),
         Err(e) => Err(route_error(app, e)),
     }

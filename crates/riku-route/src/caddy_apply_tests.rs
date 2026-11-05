@@ -66,12 +66,7 @@ fn route(port: u16) -> Route {
         tls: None,
         static_paths: Vec::new(),
         kind: SiteKind::Plain,
-        cache: None,
-        cloudflare_acl: false,
         allow_git_folders: false,
-        catch_all: None,
-        csp: None,
-        snippet: None,
     }
 }
 
@@ -122,18 +117,21 @@ fn caddy_reload_failure_restores() {
 }
 
 #[test]
-fn snippet_for_caddy_is_refused() {
+fn nginx_only_field_for_caddy_is_refused() {
     let host = Host::new();
     let shop = app("shop");
-    let with_snippet = Route {
-        snippet: Some("add_header X-Test 1;".to_string()),
+    let with_static = Route {
+        static_paths: vec!["/assets/".to_string()],
         ..route(5000)
     };
 
-    let (stage, error) = failure(apply_caddy(&host.roots, &shop, &with_snippet));
+    let (stage, error) = failure(apply_caddy(&host.roots, &shop, &with_static));
 
     assert_eq!(stage, Stage::Schema);
-    assert!(error.contains("Caddy does not take a snippet"), "{error}");
+    assert!(
+        error.contains("Caddy does not take static sites"),
+        "{error}"
+    );
     assert!(!host.roots.site_file(&shop).exists());
     assert_eq!(host.calls(), "", "caddy ran for a refused route");
 }

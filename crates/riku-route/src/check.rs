@@ -5,12 +5,10 @@ use riku_container::types::{AppName, CopyIndex};
 use riku_util::domain::Domain;
 use riku_util::route_plan::HttpsPolicy;
 
-use crate::check_text::{header_text, location, relative_file};
+use crate::check_text::location;
 use crate::check_tls::check_tls;
-use crate::schema::{Cache, Listen, Route, RouteBackend, SiteKind, Tls};
+use crate::schema::{Listen, Route, RouteBackend, SiteKind, Tls};
 
-const CACHE_SIZE_GB: std::ops::RangeInclusive<u32> = 1..=10;
-const MAX_CACHE_SECONDS: u32 = 365 * 24 * 3600;
 const HTTP_PORT: u16 = 80;
 const FIRST_UNPRIVILEGED_PORT: u16 = 1024;
 const CATCH_ALL_NAME: &str = "_";
@@ -87,69 +85,8 @@ fn locations(route: &Route) -> Result<()> {
         .try_for_each(|prefix| location("static_paths entry", prefix))
 }
 
-fn cache_seconds(cache: &Cache) -> Result<()> {
-    let fields = [
-        ("time_s", cache.time_s),
-        ("expiry_s", cache.expiry_s),
-        ("redirects_s", cache.redirects_s),
-        ("any_s", cache.any_s),
-        ("control_s", cache.control_s),
-    ];
-    match fields
-        .iter()
-        .find(|(_, seconds)| *seconds > MAX_CACHE_SECONDS)
-    {
-        Some((name, seconds)) => Err(anyhow!(
-            "cache {name} {seconds} is above {MAX_CACHE_SECONDS} seconds"
-        )),
-        None => Ok(()),
-    }
-}
-
-fn cache(route: &Route) -> Result<()> {
-    let Some(cache) = &route.cache else {
-        return Ok(());
-    };
-    if cache.prefixes.is_empty() {
-        return Err(anyhow!("a cache needs at least one prefix"));
-    }
-    if !CACHE_SIZE_GB.contains(&cache.size_gb) {
-        return Err(anyhow!(
-            "cache size_gb {} is outside {} to {}",
-            cache.size_gb,
-            CACHE_SIZE_GB.start(),
-            CACHE_SIZE_GB.end()
-        ));
-    }
-    cache_seconds(cache).and_then(|()| {
-        cache
-            .prefixes
-            .iter()
-            .try_for_each(|prefix| location("cache prefix", prefix))
-    })
-}
-
-fn text(route: &Route) -> Result<()> {
-    let catch_all = match &route.catch_all {
-        Some(name) => relative_file("catch_all", name),
-        None => Ok(()),
-    };
-    catch_all.and_then(|()| match &route.csp {
-        Some(policy) => header_text("csp", policy),
-        None => Ok(()),
-    })
-}
-
-fn snippet(route: &Route) -> Result<()> {
-    match &route.snippet {
-        Some(content) => riku_nginx::check_snippet_text(content),
-        None => Ok(()),
-    }
-}
-
 fn common(route: &Route) -> Result<()> {
-    let checks: [fn(&Route) -> Result<()>; 7] =
-        [domains, backends, listen, locations, cache, text, snippet];
+    let checks: [fn(&Route) -> Result<()>; 4] = [domains, backends, listen, locations];
     checks.iter().try_for_each(|check| check(route))
 }
 
@@ -189,12 +126,7 @@ fn caddy_cannot_take(route: &Route) -> Option<&'static str> {
         .iter()
         .any(|b| matches!(b, RouteBackend::UnixCopy(_) | RouteBackend::UnixDefault));
     let refused = [
-        (route.snippet.is_some(), "a snippet"),
         (route.tls.is_some(), "a tls pair"),
-        (route.csp.is_some(), "a csp"),
-        (route.cache.is_some(), "a cache"),
-        (route.catch_all.is_some(), "a catch_all"),
-        (route.cloudflare_acl, "the cloudflare acl"),
         (route.allow_git_folders, "allow_git_folders"),
         (route.listen != Listen::default(), "a custom listen"),
         (

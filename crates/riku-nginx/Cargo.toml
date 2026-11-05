@@ -9,15 +9,11 @@ license = "MIT"
 
 [dependencies]
 riku-config = { path = "../riku-config" }
-riku-plugins = { path = "../riku-plugins" }
 riku-util = { path = "../riku-util" }
-riku-http = { path = "../riku-http" }
 anyhow = { workspace = true }
 libc = { workspace = true }
-serde_json = { workspace = true }
 tera = "2"
 tracing = { workspace = true }
-reqwest = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

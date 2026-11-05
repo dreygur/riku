@@ -62,7 +62,7 @@ impl RouteSink for WebRoutes<'_> {
             Ok(env) => env,
             Err(e) => return Err(e),
         };
-        crate::router::check(self.app, self.app_path, &env, self.paths)
+        crate::router::check(self.app, &env, self.paths)
     }
 }
 

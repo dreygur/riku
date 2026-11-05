@@ -5,7 +5,7 @@
 //! [`crate::check_route`] says it is safe to render.
 
 use std::fmt;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::IpAddr;
 
 use riku_util::route_plan::HttpsPolicy;
 use serde::{Deserialize, Serialize};
@@ -30,17 +30,8 @@ pub struct Route {
     /// Which template shape the site takes.
     #[serde(default)]
     pub kind: SiteKind,
-    pub cache: Option<Cache>,
-    #[serde(default)]
-    pub cloudflare_acl: bool,
     #[serde(default)]
     pub allow_git_folders: bool,
-    /// File name (relative, no `..`) tried for any URL nothing else serves.
-    pub catch_all: Option<String>,
-    /// Value of the `Content-Security-Policy` response header.
-    pub csp: Option<String>,
-    /// The app's nginx snippet after plugin filters. Refused for Caddy.
-    pub snippet: Option<String>,
 }
 
 /// The shape of the site, in the order nginx's template choice tries them
@@ -73,24 +64,18 @@ pub enum RouteBackend {
     UnixDefault,
 }
 
-/// Where the router listens for plain HTTP.
+/// Where the router listens for plain HTTP. The router listens on every
+/// address, IPv4 and IPv6.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Listen {
-    pub bind: Ipv4Addr,
     /// The plain HTTP port. HTTPS is always 443.
     pub port: u16,
-    /// The IPv6 address to listen on too; `None` serves IPv4 only.
-    pub ipv6: Option<Ipv6Addr>,
 }
 
 impl Default for Listen {
     fn default() -> Self {
-        Listen {
-            bind: Ipv4Addr::UNSPECIFIED,
-            port: 80,
-            ipv6: Some(Ipv6Addr::UNSPECIFIED),
-        }
+        Listen { port: 80 }
     }
 }
 
@@ -111,26 +96,6 @@ impl fmt::Debug for Tls {
             .field("key_pem", &"<redacted>")
             .finish()
     }
-}
-
-/// The proxy cache for the paths in `prefixes`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Cache {
-    /// Location prefixes that go through the cache.
-    pub prefixes: Vec<String>,
-    /// Seconds a 200 or 304 answer stays valid.
-    pub time_s: u32,
-    /// Size of the cache in GB, 1 to 10.
-    pub size_gb: u32,
-    /// Seconds an unused entry stays on disk.
-    pub expiry_s: u32,
-    /// Seconds a 301 or 307 answer stays valid.
-    pub redirects_s: u32,
-    /// Seconds any other answer stays valid.
-    pub any_s: u32,
-    /// `max-age` of the `Cache-Control` header sent with cached answers.
-    pub control_s: u32,
 }
 
 #[cfg(test)]

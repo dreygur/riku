@@ -12,15 +12,18 @@
 pub mod app_env;
 pub mod binary_check;
 pub mod checks;
-pub mod cloudflare_check;
 pub mod container_check;
+pub mod redeploy_sites;
 pub mod router_check;
 pub mod settings_check;
+
+use std::collections::HashMap;
+use std::path::Path;
 
 use anyhow::Result;
 use colored::Colorize;
 
-use crate::config::RikuPaths;
+use crate::config::{RikuPaths, NGINX_SITE_ROOT};
 use crate::setup::deploy_user::{running_as_root, DeployUser};
 use crate::util::display;
 
@@ -75,9 +78,18 @@ fn diagnosed_target(paths: &RikuPaths) -> Result<RikuPaths> {
     }
 }
 
+/// Redeploy the apps that exist only in the old per-user nginx directory.
+fn redeploy_old_sites(paths: &RikuPaths) -> Vec<Check> {
+    redeploy_sites::redeploy_orphaned_sites(&paths.riku_root, Path::new(NGINX_SITE_ROOT), |app| {
+        crate::deploy::do_deploy(app, paths, &HashMap::new(), None)
+    })
+}
+
 /// Run every diagnostic, render the report, and exit non-zero on any failure.
+/// With `fix`, apps still routed from the old nginx directory are redeployed
+/// first, so the checks see the result.
 #[allow(clippy::question_mark)]
-pub fn cmd_doctor(paths: &RikuPaths) -> Result<()> {
+pub fn cmd_doctor(paths: &RikuPaths, fix: bool) -> Result<()> {
     let paths = match diagnosed_target(paths) {
         Ok(paths) => paths,
         Err(e) => return Err(e),
@@ -88,7 +100,12 @@ pub fn cmd_doctor(paths: &RikuPaths) -> Result<()> {
     ));
     display::blank();
 
-    let checks = collect(&paths);
+    let mut checks = if fix {
+        redeploy_old_sites(&paths)
+    } else {
+        Vec::new()
+    };
+    checks.extend(collect(&paths));
     render(&checks);
     summarize_and_exit(&checks);
 

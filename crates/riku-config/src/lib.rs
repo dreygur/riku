@@ -32,24 +32,6 @@ pub const RIKU_WORKER_GRACE_PERIOD: u64 = 30;
 /// Default max restart attempts before marking app as failed.
 pub const RIKU_MAX_RESTARTS: u32 = 5;
 
-/// Default nginx cache size in GB.
-pub const NGINX_CACHE_SIZE_DEFAULT: u32 = 1;
-
-/// Default nginx cache time in seconds (1 hour).
-pub const NGINX_CACHE_TIME_DEFAULT: u32 = 3600;
-
-/// Default nginx cache expiry in seconds (24 hours).
-pub const NGINX_CACHE_EXPIRY_DEFAULT: u32 = 86400;
-
-/// Default nginx cache redirects time in seconds (1 hour).
-pub const NGINX_CACHE_REDIRECTS_DEFAULT: u32 = 3600;
-
-/// Default nginx cache any time in seconds (1 hour).
-pub const NGINX_CACHE_ANY_DEFAULT: u32 = 3600;
-
-/// Default nginx cache control time in seconds (1 hour).
-pub const NGINX_CACHE_CONTROL_DEFAULT: u32 = 3600;
-
 /// Where uWSGI copies put their unix sockets on a real host. It sits outside
 /// the deploy user's home so nginx needs no access to that home. Root init
 /// creates it owned by the deploy user, group [`SOCKET_GROUP`], mode `2750`.
@@ -76,15 +58,6 @@ pub const NGINX_SITE_ROOT: &str = "/etc/riku/nginx";
 /// Root-owned `0700` directory of per app TLS material, `<app>/fullchain.pem`
 /// and `<app>/key.pem`, written by the router helper.
 pub const CERT_ROOT: &str = "/etc/riku/certs";
-
-/// The Cloudflare address list a site with the Cloudflare ACL includes. Root
-/// writes it; the router helper never fetches it and never includes a file
-/// the deploy user can write.
-pub const CLOUDFLARE_CONF: &str = "/etc/riku/cloudflare.conf";
-
-/// Root-owned parent of the nginx proxy caches, `<app>` each. The nginx master
-/// creates the app directory as root and hands it to the worker user.
-pub const NGINX_CACHE_ROOT: &str = "/var/cache/riku/nginx";
 
 /// Root-owned `0755` parent of the directories nginx serves files from.
 pub const VAR_ROOT: &str = "/var/lib/riku";

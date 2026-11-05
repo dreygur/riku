@@ -8,7 +8,6 @@
 //! acted on.
 
 use std::collections::HashMap;
-use std::path::Path;
 
 use anyhow::{anyhow, Result};
 use riku_route::{Reply, Request, RouterKind};
@@ -58,7 +57,6 @@ fn caddy_request(env: &HashMap<String, String>, backends: &[Backend]) -> Result<
 pub(super) fn apply_caddy_site(
     send: impl Fn(&Request) -> Result<Reply>,
     app: &str,
-    app_path: &Path,
     env: &HashMap<String, String>,
     backends: &[Backend],
     paths: &RikuPaths,
@@ -78,7 +76,7 @@ pub(super) fn apply_caddy_site(
         );
         return remove_caddy_site(send, app).map(|_| ());
     }
-    let route = match build_route(&name, app_path, env, backends, paths, &Router::Caddy) {
+    let route = match build_route(&name, env, backends, paths, &Router::Caddy) {
         Ok(Some(route)) => route,
         Ok(None) => return Err(anyhow!("'{app}' has no Caddy route")),
         Err(e) => return Err(e),

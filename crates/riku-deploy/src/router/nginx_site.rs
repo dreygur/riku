@@ -82,12 +82,11 @@ fn ensure_certificates(
 
 fn nginx_route(
     app: &AppName,
-    app_path: &Path,
     env: &HashMap<String, String>,
     backends: &[Backend],
     paths: &RikuPaths,
 ) -> Result<riku_route::Route> {
-    match build_route(app, app_path, env, backends, paths, &Router::Nginx) {
+    match build_route(app, env, backends, paths, &Router::Nginx) {
         Ok(Some(route)) => Ok(route),
         Ok(None) => Err(anyhow!("'{app}' has no nginx route")),
         Err(e) => Err(e),
@@ -119,7 +118,7 @@ pub(super) fn apply_nginx_site(
     if let Err(e) = ensure_certificates(&name, env, paths) {
         return Err(e);
     }
-    let route = match nginx_route(&name, app_path, env, backends, paths) {
+    let route = match nginx_route(&name, env, backends, paths) {
         Ok(route) => route,
         Err(e) => return Err(e),
     };
@@ -141,7 +140,6 @@ pub(super) fn apply_nginx_site(
 pub(super) fn check_nginx_site(
     send: impl Fn(&Request) -> Result<Reply>,
     app: &str,
-    app_path: &Path,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
 ) -> Result<()> {
@@ -150,7 +148,7 @@ pub(super) fn check_nginx_site(
         Err(e) => return Err(e),
     };
     let stand_in = [Backend::loopback(STAND_IN_PORT)];
-    if let Err(e) = nginx_route(&name, app_path, env, &stand_in, paths) {
+    if let Err(e) = nginx_route(&name, env, &stand_in, paths) {
         return Err(e);
     }
     match send(&Request::Status {}) {

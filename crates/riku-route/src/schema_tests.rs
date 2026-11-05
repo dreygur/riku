@@ -14,7 +14,7 @@ fn minimal_route_takes_the_listen_defaults() {
     assert_eq!(route.https, HttpsPolicy::AlsoPlainHttp);
     assert_eq!(route.listen, Listen::default());
     assert_eq!(route.backends[1], RouteBackend::UnixCopy(2));
-    assert!(route.tls.is_none() && route.snippet.is_none());
+    assert!(route.tls.is_none());
 }
 
 #[test]

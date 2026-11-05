@@ -1,14 +1,7 @@
-{% if "client_max_body_size" not in RIKU_NGINX_SNIPPET_DIRECTIVES %}
 client_max_body_size 100M;
-{% endif %}
 large_client_header_buffers 4 16k;
 
 {% include "nginx_site_locations.conf.tera" %}
-
-{% if RIKU_NGINX_CLOUDFLARE_ACL == "true" %}
-# Cloudflare IP ACL
-include {{ CLOUDFLARE_CONF }};
-{% endif %}
 
 {% if RIKU_NGINX_ALLOW_GIT_FOLDERS != "true" %}
 # Block access to .git folders
@@ -20,30 +13,6 @@ location ~ /\.git {
 
 {% if RIKU_NGINX_WSGI %}
 {% include "nginx_uwsgi.conf.tera" %}
-{% elif RIKU_NGINX_CACHE_PREFIXES %}
-# Proxy cache configuration
-proxy_cache_key "$scheme$request_method$host$request_uri";
-
-{% for prefix in RIKU_NGINX_CACHE_PREFIXES | split(pat=",") %}
-location {{ prefix | trim }} {
-  proxy_pass http://{{ APP_UPSTREAM }};
-  proxy_set_header Host $host;
-  proxy_set_header X-Real-IP $remote_addr;
-  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-  proxy_set_header X-Forwarded-Proto $scheme;
-
-  proxy_cache {{ APP }};
-  proxy_cache_valid 200 304 {{ RIKU_NGINX_CACHE_TIME }}s;
-  proxy_cache_valid 301 307 {{ RIKU_NGINX_CACHE_REDIRECTS }}s;
-  proxy_cache_valid any {{ RIKU_NGINX_CACHE_ANY }}s;
-  proxy_cache_lock on;
-
-  add_header X-Cache-Status $upstream_cache_status;
-  {% if RIKU_NGINX_CACHE_CONTROL %}
-  add_header Cache-Control "public, max-age={{ RIKU_NGINX_CACHE_CONTROL }}";
-  {% endif %}
-}
-{% endfor %}
 {% else %}
 location / {
   proxy_pass http://{{ APP_UPSTREAM }};
@@ -57,26 +26,9 @@ location / {
 }
 {% endif %}
 
-{% if RIKU_NGINX_CATCH_ALL and RIKU_NGINX_CACHE_PREFIXES and not RIKU_NGINX_WSGI %}
-# Catch-all for client-side routing
-location / {
-  try_files $uri /{{ RIKU_NGINX_CATCH_ALL }};
-}
-{% endif %}
-
 # Security headers
 add_header X-Frame-Options "SAMEORIGIN" always;
 add_header X-Content-Type-Options "nosniff" always;
 add_header X-XSS-Protection "1; mode=block" always;
 add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
-
-{% if RIKU_NGINX_CSP %}
-# Content Security Policy (customizable via RIKU_NGINX_CSP env var)
-add_header Content-Security-Policy "{{ RIKU_NGINX_CSP }}" always;
-{% endif %}
-
-{% if RIKU_NGINX_INCLUDE_CONTENT %}
-# Custom nginx configuration from file
-{{ RIKU_NGINX_INCLUDE_CONTENT }}
-{% endif %}

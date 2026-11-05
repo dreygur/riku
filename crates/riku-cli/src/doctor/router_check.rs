@@ -8,16 +8,14 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::time::SystemTime;
 
 use crate::caddy::{has_import, import_line, SYSTEM_CADDYFILE};
 use crate::config::program::find_program;
 use crate::config::router::Router;
-use crate::config::{RikuPaths, CLOUDFLARE_CONF};
+use crate::config::RikuPaths;
 use crate::deploy::router::RELOAD_ERROR_FILE;
 use crate::nginx::includes_riku_sites;
 
-use super::cloudflare_check::cloudflare_ranges;
 use super::Check;
 
 /// The last non-empty stderr line of a failed validator run.
@@ -87,7 +85,6 @@ fn nginx(paths: &RikuPaths) -> Vec<Check> {
     vec![
         Check::ok("nginx", format!("found at {}", program.display())),
         nginx_include(paths),
-        cloudflare_ranges(Path::new(CLOUDFLARE_CONF), SystemTime::now()),
         validator_check("nginx config", "nginx -t", run),
     ]
 }

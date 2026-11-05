@@ -3,12 +3,12 @@
 //! Every path the text names is built here from the checked app name and the
 //! [`NginxRoots`]: unix backends become `<socket root>/<app>@<n>.sock` or
 //! `<socket root>/<app>.sock`, the certificate pair lives in the app's
-//! directory under the cert root, the cache in the app's directory under the
-//! cache root. The route only supplies copy numbers and text the gate checked.
+//! directory under the cert root. The route only supplies copy numbers and
+//! text the gate checked.
 
 use anyhow::Result;
 use riku_container::types::AppName;
-use riku_nginx::{render_route_site, RouteSite, SiteCache, SiteFiles, SiteShape};
+use riku_nginx::{render_route_site, RouteSite, SiteFiles, SiteShape};
 use riku_util::backend::Backend;
 use riku_util::file_names::copy_socket;
 use riku_util::route_plan::HttpsPolicy;
@@ -48,8 +48,6 @@ fn files(roots: &NginxRoots, app: &AppName) -> SiteFiles {
     SiteFiles {
         certificate: cert_dir.join(CERTIFICATE_FILE),
         certificate_key: cert_dir.join(KEY_FILE),
-        cloudflare_conf: roots.cloudflare_conf.clone(),
-        cache_dir: roots.cache_dir(app),
         acme_root: roots.acme_root.clone(),
         static_root: roots.static_root.clone(),
     }
@@ -68,25 +66,10 @@ pub(crate) fn render(roots: &NginxRoots, app: &AppName, route: &Route) -> Result
         domains: &route.domains,
         shape: shape(route.kind),
         https_only: route.https == HttpsPolicy::Only,
-        ipv4: route.listen.bind,
-        ipv6: route.listen.ipv6,
         port: route.listen.port,
         backends: &backends,
         static_locations: &route.static_paths,
-        cache: route.cache.as_ref().map(|cache| SiteCache {
-            prefixes: &cache.prefixes,
-            time_s: cache.time_s,
-            size_gb: cache.size_gb,
-            expiry_s: cache.expiry_s,
-            redirects_s: cache.redirects_s,
-            any_s: cache.any_s,
-            control_s: cache.control_s,
-        }),
-        cloudflare_acl: route.cloudflare_acl,
         allow_git_folders: route.allow_git_folders,
-        catch_all: route.catch_all.as_deref(),
-        csp: route.csp.as_deref(),
-        snippet: route.snippet.as_deref().unwrap_or_default(),
         files: &files,
     };
     render_route_site(&site)

@@ -8,13 +8,12 @@
 //! - Unknown fields are refused at every level, so a field a newer client
 //!   knows and this build does not never passes silently.
 //! - No field is a path. Paths the rendered config names (sockets, static
-//!   copies, certificates, the cache) are built by the renderer from the
+//!   copies, certificates) are built by the renderer from the
 //!   checked app name and riku-config constants. TLS material travels as PEM
 //!   text, never as a file name.
 //! - Text that lands in a config file is checked by [`check_nginx_route`]: domains
-//!   by the [`riku_util::domain::Domain`] rules, locations and file names
-//!   against the nginx directive breaking characters, snippets by the same
-//!   grammar, allowlist and caps the deploy side applies to an app's file.
+//!   by the [`riku_util::domain::Domain`] rules, locations against the nginx
+//!   directive breaking characters.
 //! - TCP backends must be loopback, so a route cannot point the router at
 //!   another host.
 //! - A TLS pair must be certificates only in one field and exactly one
@@ -63,5 +62,5 @@ pub use protocol::{
     encode_reply, encode_request, parse_reply, parse_request, Reply, Request, RouterKind, Stage,
     PROTOCOL_VERSION,
 };
-pub use schema::{Cache, Listen, Route, RouteBackend, SiteKind, Tls};
+pub use schema::{Listen, Route, RouteBackend, SiteKind, Tls};
 pub use server::{peer_allowed, serve_one, REQUEST_BUDGET};

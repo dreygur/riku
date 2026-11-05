@@ -1,8 +1,6 @@
 server {
-  listen              {{ RIKU_NGINX_IPV4_ADDRESS }}:80;
-{% if RIKU_NGINX_IPV6_ADDRESS %}
-  listen              {{ RIKU_NGINX_IPV6_ADDRESS }}:80;
-{% endif %}
+  listen              0.0.0.0:80;
+  listen              [::]:80;
   server_name         {{ RIKU_DOMAINS }};
   root                {{ RIKU_NGINX_DOCUMENT_ROOT }};
 
@@ -23,9 +21,4 @@ server {
   add_header X-XSS-Protection "1; mode=block" always;
   add_header Referrer-Policy "strict-origin-when-cross-origin" always;
   add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
-
-{% if RIKU_NGINX_INCLUDE_CONTENT %}
-  # Custom nginx configuration from file
-  {{ RIKU_NGINX_INCLUDE_CONTENT }}
-{% endif %}
 }

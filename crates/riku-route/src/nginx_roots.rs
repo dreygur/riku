@@ -9,8 +9,7 @@
 use std::path::{Path, PathBuf};
 
 use riku_config::{
-    ReloadPrograms, ACME_WEBROOT, CERT_ROOT, CLOUDFLARE_CONF, NGINX_CACHE_ROOT, NGINX_SITE_ROOT,
-    SOCKET_ROOT, STATIC_ROOT,
+    ReloadPrograms, ACME_WEBROOT, CERT_ROOT, NGINX_SITE_ROOT, SOCKET_ROOT, STATIC_ROOT,
 };
 use riku_container::types::AppName;
 use riku_util::write_dir::ROOT_UID;
@@ -31,11 +30,9 @@ pub enum ReloadMethod {
 pub struct NginxRoots {
     pub site_root: PathBuf,
     pub cert_root: PathBuf,
-    pub cache_root: PathBuf,
     pub socket_root: PathBuf,
     pub static_root: PathBuf,
     pub acme_root: PathBuf,
-    pub cloudflare_conf: PathBuf,
     pub nginx: PathBuf,
     pub reload: ReloadMethod,
     /// The uid every directory the helper writes into must belong to: root in
@@ -55,11 +52,9 @@ impl NginxRoots {
         NginxRoots {
             site_root: PathBuf::from(NGINX_SITE_ROOT),
             cert_root: PathBuf::from(CERT_ROOT),
-            cache_root: PathBuf::from(NGINX_CACHE_ROOT),
             socket_root: PathBuf::from(SOCKET_ROOT),
             static_root: PathBuf::from(STATIC_ROOT),
             acme_root: PathBuf::from(ACME_WEBROOT),
-            cloudflare_conf: PathBuf::from(CLOUDFLARE_CONF),
             nginx: programs.nginx,
             reload,
             owner_uid: ROOT_UID,
@@ -72,9 +67,5 @@ impl NginxRoots {
 
     pub(crate) fn cert_dir(&self, app: &AppName) -> PathBuf {
         self.cert_root.join(app.as_str())
-    }
-
-    pub(crate) fn cache_dir(&self, app: &AppName) -> PathBuf {
-        self.cache_root.join(app.as_str())
     }
 }

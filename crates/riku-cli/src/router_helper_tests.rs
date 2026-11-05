@@ -9,11 +9,9 @@ fn roots_in(dir: &Path) -> NginxRoots {
     NginxRoots {
         site_root: dir.join("etc/nginx"),
         cert_root: dir.join("etc/certs"),
-        cache_root: dir.join("var/cache/nginx"),
         socket_root: dir.join("sockets"),
         static_root: dir.join("static"),
         acme_root: dir.join("acme"),
-        cloudflare_conf: dir.join("etc/cloudflare.conf"),
         nginx: dir.join("no_nginx"),
         reload: ReloadMethod::Signal,
         owner_uid: 0,

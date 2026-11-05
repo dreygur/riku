@@ -50,14 +50,6 @@ pub(super) fn register_templates(tera: &mut tera::Tera) -> Result<()> {
             include_str!("../../../templates/nginx_static.conf.tera"),
         ),
         (
-            "nginx_cache_path.conf.tera",
-            include_str!("../../../templates/nginx_cache_path.conf.tera"),
-        ),
-        (
-            "nginx_cache.conf.tera",
-            include_str!("../../../templates/nginx_cache.conf.tera"),
-        ),
-        (
             "nginx_proxy.conf.tera",
             include_str!("../../../templates/nginx_proxy.conf.tera"),
         ),

@@ -157,7 +157,7 @@ fn apply_to(
         }
         Router::Caddy => {
             let send = |request: &Request| send_to_helper(paths, request);
-            let outcome = apply_caddy_site(send, app, app_path, env, backends, paths);
+            let outcome = apply_caddy_site(send, app, env, backends, paths);
             record_outcome(paths, &outcome);
             outcome
         }
