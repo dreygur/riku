@@ -10,8 +10,18 @@ fn redeploys_only_apps_missing_from_the_site_root_and_reports_them() {
     let site_root = tmp.path().join("etc/nginx");
     fs::create_dir_all(riku_root.join("nginx")).unwrap();
     fs::create_dir_all(&site_root).unwrap();
-    for file in ["old.conf", "moved.conf", "broken.conf", "old.key"] {
+    for file in [
+        "old.conf",
+        "moved.conf",
+        "broken.conf",
+        "old.key",
+        "gone.conf",
+        "-x.conf",
+    ] {
         fs::write(riku_root.join("nginx").join(file), "").unwrap();
+    }
+    for app in ["old", "moved", "broken", "-x"] {
+        fs::create_dir_all(riku_root.join("apps").join(app)).unwrap();
     }
     fs::write(site_root.join("moved.conf"), "").unwrap();
     let mut seen = Vec::new();
@@ -24,7 +34,11 @@ fn redeploys_only_apps_missing_from_the_site_root_and_reports_them() {
         }
     });
 
-    assert_eq!(seen, ["broken", "old"], "each orphan once, no other file");
+    assert_eq!(
+        seen,
+        ["broken", "old"],
+        "each orphan once; no app without a checkout or with a bad name"
+    );
     assert_eq!(checks.len(), 2);
     assert_eq!(checks[0].status, Status::Fail);
     assert!(

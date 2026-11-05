@@ -79,7 +79,15 @@ fn diagnosed_target(paths: &RikuPaths) -> Result<RikuPaths> {
 }
 
 /// Redeploy the apps that exist only in the old per-user nginx directory.
+/// A deploy runs the app's build, which is the deploy user's code, so it is
+/// refused as root.
 fn redeploy_old_sites(paths: &RikuPaths) -> Vec<Check> {
+    if nix::unistd::Uid::effective().is_root() {
+        return vec![Check::warn(
+            "nginx sites",
+            "redeploy skipped as root: run `riku doctor --fix` as the deploy user",
+        )];
+    }
     redeploy_sites::redeploy_orphaned_sites(&paths.riku_root, Path::new(NGINX_SITE_ROOT), |app| {
         crate::deploy::do_deploy(app, paths, &HashMap::new(), None)
     })

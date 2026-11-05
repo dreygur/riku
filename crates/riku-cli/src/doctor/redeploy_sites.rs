@@ -35,6 +35,11 @@ fn orphaned_apps(riku_root: &Path, site_root: &Path) -> Result<Vec<String>> {
             (Some(ext), Some(stem)) if ext == "conf" => stem,
             _ => continue,
         };
+        if riku_container::types::AppName::try_from(app).is_err()
+            || !riku_root.join("apps").join(app).is_dir()
+        {
+            continue;
+        }
         if !site_root.join(format!("{app}.conf")).exists() {
             apps.push(app.to_string());
         }
