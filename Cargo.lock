@@ -1897,6 +1897,7 @@ dependencies = [
  "riku-http",
  "riku-nginx",
  "riku-plugins",
+ "riku-route",
  "riku-supervisor",
  "riku-util",
  "serde",
@@ -1995,6 +1996,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "riku-route"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "riku-container",
+ "riku-nginx",
+ "riku-util",
+ "rustls",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "riku-supervisor"
 version = "0.1.0"
 dependencies = [
@@ -2056,6 +2071,7 @@ dependencies = [
  "once_cell",
  "rand",
  "regex",
+ "serde",
  "subtle",
  "tempfile",
  "tracing",

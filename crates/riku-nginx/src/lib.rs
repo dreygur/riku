@@ -42,13 +42,16 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::util::backend::Backend;
+pub use app_snippet::{app_snippet, check_snippet_text};
 pub use backends::{bind_address, default_backends, upstream_port_number};
 pub use default_server::needs_catch_all;
-pub use host::{include_file_contents, include_line, includes_riku_sites, write_include_file};
+pub use host::{
+    breaks_directive, include_file_contents, include_line, includes_riku_sites, write_include_file,
+};
 pub use host_check::{check_host_ready, stray_site_configs, HostReadiness};
 pub use reload::reload_nginx_with;
 pub use remove::{remove_nginx_files, NginxRemoval};
-pub use static_site::remove_static;
+pub use static_site::{remove_static, static_locations};
 pub use template::check_nginx_config;
 use template::generate_nginx_config_from_template;
 

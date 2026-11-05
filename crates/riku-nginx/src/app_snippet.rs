@@ -130,23 +130,28 @@ pub(super) fn read_app_snippet(
     }
 }
 
-/// Read the app's checked snippet as the seed value, run it through the
-/// `nginx.include_content` filter chain (`PLUGIN_PROTOCOL.md` §7.3: lets an
-/// installed plugin augment the generated config without replacing it), and
-/// insert the result. Always inserts the key, even as an empty string, so
-/// it's never simply absent from the template context.
+/// Check snippet text a caller received as text, with no file to name in the
+/// error. The router helper uses it on the `snippet` field of a route.
+pub fn check_snippet_text(content: &str) -> Result<()> {
+    check_snippet(content, "snippet").map(|_| ())
+}
+
+/// The app's checked snippet after the `nginx.include_content` filter chain
+/// (`PLUGIN_PROTOCOL.md` §7.3: lets an installed plugin augment the
+/// generated config without replacing it), with the directive names it uses.
+/// Empty when the app sets no `RIKU_NGINX_INCLUDE_FILE` and no filter adds
+/// text.
 ///
 /// The chain's output gets the same grammar and allowlist check as the
 /// app's file. Filter plugins sit in the deploy user's tree, so without it
 /// a filter could put back any directive the app's file is refused for. A
 /// chain that returns a non-string or refused text fails the deploy.
 #[allow(clippy::question_mark)]
-pub(super) fn insert_include_file(
-    context: &mut tera::Context,
+fn filtered_snippet(
     env: &std::collections::HashMap<String, String>,
     app_path: &Path,
     paths: &crate::config::RikuPaths,
-) -> Result<()> {
+) -> Result<(String, Vec<String>)> {
     let content = match read_app_snippet(env, app_path) {
         Ok(content) => content,
         Err(e) => return Err(e),
@@ -159,11 +164,40 @@ pub(super) fn insert_include_file(
             "the {INCLUDE_FILTER} filter chain returned {filtered}, not a string; refusing the nginx config"
         ));
     };
-    let directives = match check_snippet(filtered, format!("{INCLUDE_FILTER} filter output")) {
-        Ok(directives) => directives,
+    match check_snippet(filtered, format!("{INCLUDE_FILTER} filter output")) {
+        Ok(directives) => Ok((filtered.to_string(), directives)),
+        Err(e) => Err(e),
+    }
+}
+
+/// The final snippet text for a route: the app's file after the filter
+/// chain, checked, or `None` when it is empty.
+pub fn app_snippet(
+    env: &std::collections::HashMap<String, String>,
+    app_path: &Path,
+    paths: &crate::config::RikuPaths,
+) -> Result<Option<String>> {
+    match filtered_snippet(env, app_path, paths) {
+        Ok((text, _)) if text.is_empty() => Ok(None),
+        Ok((text, _)) => Ok(Some(text)),
+        Err(e) => Err(e),
+    }
+}
+
+/// Insert the filtered snippet into the template context. Always inserts
+/// the key, even as an empty string, so it's never simply absent.
+#[allow(clippy::question_mark)]
+pub(super) fn insert_include_file(
+    context: &mut tera::Context,
+    env: &std::collections::HashMap<String, String>,
+    app_path: &Path,
+    paths: &crate::config::RikuPaths,
+) -> Result<()> {
+    let (filtered, directives) = match filtered_snippet(env, app_path, paths) {
+        Ok(parts) => parts,
         Err(e) => return Err(e),
     };
-    context.insert("RIKU_NGINX_INCLUDE_CONTENT", filtered);
+    context.insert("RIKU_NGINX_INCLUDE_CONTENT", &filtered);
     // The templates leave out their own line for each directive the snippet
     // sets: nginx refuses a second `client_max_body_size` or `gzip` in one
     // server block.

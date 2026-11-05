@@ -16,6 +16,7 @@ only; `riku` is one member crate among these.
 - [riku-error](./riku-error/README.md): shared error types.
 - riku-http: builds the reqwest HTTP clients for the server side crates with ring as the rustls provider. Kept out of riku-util because `rk` links riku-util and must not link reqwest.
 - [riku-nginx](./riku-nginx/README.md): nginx configuration generation.
+- [riku-route](./riku-route/README.md): the route the router helper accepts and the one gate it passes before it is rendered.
 - [riku-plugin-clojure](./riku-plugin-clojure/README.md): Clojure runtime plugin.
 - [riku-plugin-java](./riku-plugin-java/README.md): Java runtime plugin.
 - [riku-plugins](./riku-plugins/README.md): the plugin system (discovery, hooks, events, addons).

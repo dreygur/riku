@@ -17,7 +17,9 @@ use anyhow::{anyhow, Result};
 use crate::config::RikuPaths;
 use crate::default_server::CATCH_ALL_SERVER;
 
-fn breaks_directive(c: char) -> bool {
+/// Whether `c` could end an nginx directive or start another inside a value
+/// written unquoted into a config file.
+pub fn breaks_directive(c: char) -> bool {
     c.is_whitespace() || c.is_control() || matches!(c, ';' | '{' | '}' | '#' | '"' | '\'' | '$')
 }
 

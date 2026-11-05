@@ -14,6 +14,7 @@ Component package located at `crates/riku-deploy/src/router`.
 - `configure_plugin` [plugin.rs:configure_plugin] (fn)
 - `reload_plugin` [plugin.rs:reload_plugin] (fn)
 - `remove_plugin` [plugin.rs:remove_plugin] (fn)
+- `build_route` [route_build.rs:build_route] (fn)
 - `ERROR_FILE` [reload.rs:ERROR_FILE] (const)
 - `record_outcome` [reload.rs:record_outcome] (fn)
 - `reload` [reload.rs:reload] (fn)

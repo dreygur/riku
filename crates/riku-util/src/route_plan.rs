@@ -1,10 +1,14 @@
 //! What a router is asked to route for one app.
 
+use serde::{Deserialize, Serialize};
+
 use crate::backend::Backend;
 use crate::domain::Domain;
 
-/// How a site answers plain HTTP.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// How a site answers plain HTTP. Written as `only` or `also_plain_http` in
+/// the router helper's route.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum HttpsPolicy {
     /// Caddy's automatic HTTP to HTTPS redirect applies.
     Only,

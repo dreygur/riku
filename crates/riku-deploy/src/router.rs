@@ -36,6 +36,8 @@ mod host_guard;
 mod plugin;
 mod reload;
 mod remove;
+mod route_build;
+mod route_env;
 
 pub use backends::{copy_socket, current_backends};
 pub(crate) use backends::{parsed_worker, web_copies, worker_backend};
@@ -47,7 +49,7 @@ use host_guard::ready_for;
 use plugin::configure_plugin;
 pub use reload::{reload, Baseline, ERROR_FILE as RELOAD_ERROR_FILE};
 pub use remove::remove;
-
+pub use route_build::build_route;
 /// Caddy reaches an app over loopback whatever `RIKU_BIND_ADDRESS` says.
 /// nginx and router plugins keep the address each copy listens on, since a
 /// plugin may run elsewhere and must not be told a made up address.

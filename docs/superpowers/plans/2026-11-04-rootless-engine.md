@@ -187,7 +187,7 @@ Today root init stages a root owned temp copy (root_init.rs:46-65) and runs `rik
 
 ### Task 6: Route schema and builder (M)
 
-Status: still needed. Opus review: this is the helper's input boundary.
+Status: done, binary 9,221,816 B. Gate is `check_nginx_route` and `check_caddy_route`; `build_route` takes the router. Was: Opus review: this is the helper's input boundary.
 
 **Files:**
 - Create: crate `crates/riku-route/` (`Cargo.toml`, `src/lib.rs`, `src/schema.rs`, `src/schema_tests.rs`, `src/check.rs`, `src/check_tests.rs`), `crates/riku-deploy/src/router/route_build.rs`, `route_build_tests.rs`
@@ -231,6 +231,14 @@ Status: still needed. Opus review: root process facing the deploy user.
 ### Task 8: nginx through the helper (L)
 
 Status: still needed. Opus review: Review Focus 1 and 3.
+
+Carried from the Task 6 review:
+- Call `ensure_ssl_certificates` before `build_route`; it runs in riku-nginx/src/context.rs:180 today, so a first https only deploy would otherwise build no TLS.
+- `apply_nginx` calls `check_nginx_route` and writes only the normalized PEM `check_tls` returns.
+- Cache: `keys_zone` is sized by `size_gb` (nginx_common.conf.tera:25), so 100 means a 100 GiB shared zone, and no `max_size` bounds the disk. Use a small fixed zone, render `max_size`, cap the total.
+- acme.sh renews as the deploy user with no reload hook, so helper held certificates go stale until the next deploy. Own the renewal path here.
+- The Cloudflare template includes `/etc/nginx/cloudflare.conf`, while cloudflare.rs:14 writes `<riku_root>/cloudflare.conf`. Never include the deploy owned file (Review Focus 1), and the helper does no network fetch.
+- Task 7 enforces the 1 MiB request limit before parsing; `check.rs` has no list or string caps of its own.
 
 Today the deploy user writes `<nginx root>/<app>.conf.new`, runs `nginx -t` and renames (crates/riku-nginx/src/install.rs:1-7), keeps TLS files in the same tree (ssl.rs:35-36), and asks for a reload through the trigger file (crates/riku-deploy/src/router/reload/nginx_unit.rs). All of that moves into the helper.
 

@@ -62,6 +62,15 @@ pub(crate) fn static_paths(env: &HashMap<String, String>) -> Vec<StaticPath> {
         .collect()
 }
 
+/// The URL prefixes of `RIKU_NGINX_STATIC_PATHS`, in the order their
+/// published copies are numbered.
+pub fn static_locations(env: &HashMap<String, String>) -> Vec<String> {
+    static_paths(env)
+        .into_iter()
+        .map(|mapping| mapping.location)
+        .collect()
+}
+
 fn site_link(app: &str, paths: &RikuPaths) -> PathBuf {
     paths.static_root.join(app)
 }

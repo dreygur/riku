@@ -70,6 +70,33 @@ pub fn check_app_name(app: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// An app name that is safe as part of a container, network and image name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppName(String);
+
+impl AppName {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<&str> for AppName {
+    type Error = anyhow::Error;
+
+    fn try_from(raw: &str) -> anyhow::Result<Self> {
+        match check_app_name(raw) {
+            Ok(()) => Ok(AppName(raw.to_string())),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl fmt::Display for AppName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 /// Name of a service within an app, as written in the compose file. It never
 /// contains `.`, which keeps [`ContainerName`] unambiguous.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

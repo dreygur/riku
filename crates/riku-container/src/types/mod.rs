@@ -14,6 +14,8 @@ mod ports;
 
 pub use lifecycle::{HealthCheck, HealthTest, RestartPolicy, StopSignal, DEFAULT_STOP_GRACE};
 pub use mounts::{Mount, MountSource};
-pub use names::{check_app_name, labels, ContainerName, CopyIndex, NetworkName, ServiceName};
+pub use names::{
+    check_app_name, labels, AppName, ContainerName, CopyIndex, NetworkName, ServiceName,
+};
 pub(crate) use names::{check_engine_name, is_engine_safe};
 pub use ports::{HostIp, PortBinding, Protocol};

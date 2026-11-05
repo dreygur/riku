@@ -157,7 +157,7 @@ work they describe.
   baseline and a 10,247,160 B binary limit. Old Task 15 dropped (plugin
   deleted bb4aa56; `riku container` left to 3b, owner to confirm). Three
   open questions for the owner in the plan. Branch `feat/rootless-engine`
-  off `feat/container-integration`. Tasks 1 to 5 done. Rootless ships only
+  off `feat/container-integration`. Tasks 1 to 6 done. Rootless ships only
   together with the router helper.
 - Owner decisions 2026-11-01: engine time limits in a new
   `~/.riku/settings.toml` (short calls 30 s, stop grace plus 30 s, pull and
@@ -223,6 +223,9 @@ work they describe.
 - nginx: `RIKU_NGINX_CACHE_PREFIXES` puts `proxy_cache_path` inside the
   `server` block; nginx allows it only at `http` level, so `nginx -t` fails
   for any app that sets it.
+- nginx: `RIKU_NGINX_CATCH_ALL` adds a second `location /`, a duplicate
+  wherever the template's default location or the uwsgi include is active.
+  Read from the templates, not run against nginx.
 - Certificates (`crates/riku-nginx/src/ssl.rs`): ACME issues per domain and
   stops at the first success, so other domains are uncovered; nginx serves
   the leaf `<app>.crt`, not `<app>.fullchain.crt`; `nginx_acme_firstrun`
