@@ -163,6 +163,7 @@ impl Engine {
         args.push(id.as_str().into());
         let out = match capture_capped(
             self.program(),
+            self.env(),
             &args,
             self.settings().call_timeout,
             stream_cap,

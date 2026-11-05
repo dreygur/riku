@@ -157,7 +157,7 @@ work they describe.
   baseline and a 10,247,160 B binary limit. Old Task 15 dropped (plugin
   deleted bb4aa56; `riku container` left to 3b, owner to confirm). Three
   open questions for the owner in the plan. Branch `feat/rootless-engine`
-  off `feat/container-integration`. Task 1 done. Rootless ships only
+  off `feat/container-integration`. Tasks 1 and 2 done. Rootless ships only
   together with the router helper.
 - Owner decisions 2026-11-01: engine time limits in a new
   `~/.riku/settings.toml` (short calls 30 s, stop grace plus 30 s, pull and

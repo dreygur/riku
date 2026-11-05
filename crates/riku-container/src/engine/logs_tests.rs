@@ -11,6 +11,7 @@ fn short_limits() -> EngineSettings {
         stop_extra: Duration::from_millis(300),
         pull_timeout: Duration::from_millis(300),
         build_timeout: Duration::from_millis(300),
+        ..EngineSettings::default()
     }
 }
 

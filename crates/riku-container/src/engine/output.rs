@@ -18,7 +18,7 @@ fn run_capture(engine: &Engine, args: &[OsString], limit: Duration) -> Result<(C
         Some(a) => a.to_string_lossy().into_owned(),
         None => String::new(),
     };
-    let out = match capture(engine.program(), args, limit) {
+    let out = match capture(engine.program(), engine.env(), args, limit) {
         Ok(out) => out,
         Err(e) => return Err(e),
     };

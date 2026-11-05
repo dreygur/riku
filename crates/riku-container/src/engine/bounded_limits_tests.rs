@@ -11,6 +11,7 @@ fn short_limits() -> EngineSettings {
         stop_extra: Duration::from_millis(300),
         pull_timeout: Duration::from_millis(300),
         build_timeout: Duration::from_millis(300),
+        ..EngineSettings::default()
     }
 }
 
@@ -117,6 +118,7 @@ fn wait_uses_the_build_limit_not_the_call_limit() {
         stop_extra: Duration::from_millis(300),
         pull_timeout: Duration::from_millis(300),
         build_timeout: Duration::from_secs(5),
+        ..EngineSettings::default()
     });
 
     assert_eq!(

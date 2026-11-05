@@ -16,6 +16,7 @@ mod control;
 mod detect;
 #[cfg(test)]
 mod docker_tests;
+mod env;
 mod env_file;
 mod events;
 #[cfg(test)]
@@ -41,6 +42,7 @@ mod streamed;
 
 pub use build::BuildSpec;
 pub use detect::{detect, EngineBinary, KNOWN_ENGINES};
+pub use env::engine_env;
 pub use events::event_container;
 pub use identity::{parse_identity, Engine, EngineIdentity};
 pub use ids::ContainerId;

@@ -47,7 +47,7 @@ pub fn logging_engine(dir: &Path, behaviour: &str) -> (Engine, PathBuf) {
         program: fake_engine(dir, "engine", &script),
         binary_name: "engine".to_string(),
     };
-    (Engine::open(binary).unwrap(), log)
+    (Engine::open(binary, Vec::new()).unwrap(), log)
 }
 
 /// A minimal valid spec for `myapp.web.1`; tests change the fields they care about.

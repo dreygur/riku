@@ -11,6 +11,7 @@ use anyhow::Result;
 use serde_json::Value;
 
 use super::bounded::capture;
+use super::env::apply_env;
 use super::{ContainerId, Engine};
 use crate::types::labels;
 
@@ -25,7 +26,12 @@ impl Engine {
     /// Engines without `events` make the supervisor fall back to polling.
     pub fn has_events(&self) -> bool {
         let args = [OsString::from("events"), OsString::from("--help")];
-        match capture(self.program(), &args, self.settings().call_timeout) {
+        match capture(
+            self.program(),
+            self.env(),
+            &args,
+            self.settings().call_timeout,
+        ) {
             Ok(out) => out.status.success(),
             Err(_) => false,
         }
@@ -37,6 +43,7 @@ impl Engine {
     /// events in [`EVENT_NAMES`].
     pub fn events_command(&self) -> Command {
         let mut command = Command::new(self.program());
+        apply_env(&mut command, self.env());
         command.arg("events");
         command.args(["--format", "{{json .}}"]);
         command.args(["--filter", "type=container"]);

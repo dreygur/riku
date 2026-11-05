@@ -16,7 +16,11 @@ fn open_engine_applies_server_settings() {
         tmp.path().join("engine").display().to_string(),
     )
     .unwrap();
-    fs::write(&paths.settings_file, "[engine]\ncall_timeout = \"5s\"\n").unwrap();
+    fs::write(
+        &paths.settings_file,
+        "[engine]\nmode = \"rootful\"\ncall_timeout = \"5s\"\n",
+    )
+    .unwrap();
 
     assert_eq!(
         open_engine(&paths).unwrap().settings().call_timeout,

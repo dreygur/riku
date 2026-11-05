@@ -51,7 +51,7 @@ fn ping_succeeds_for_healthy_engine_and_fails_when_version_fails() {
         program: fake_engine(dir.path(), "engine", &script),
         binary_name: "engine".to_string(),
     };
-    let engine = Engine::open(binary).unwrap();
+    let engine = Engine::open(binary, Vec::new()).unwrap();
 
     let ping_healthy = engine.ping();
     assert!(

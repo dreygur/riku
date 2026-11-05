@@ -106,7 +106,7 @@ fn capture_flags_output_cut_by_a_lingering_helper() {
     let (engine, _log) = logging_engine(dir.path(), &behaviour);
     let limit = Duration::from_millis(500);
 
-    let captured = super::capture(engine.program(), &[OsString::from("ps")], limit).unwrap();
+    let captured = super::capture(engine.program(), &[], &[OsString::from("ps")], limit).unwrap();
 
     assert!(captured.truncated, "output should be flagged as truncated");
     let pid = fs::read_to_string(&pid_file).unwrap();
@@ -123,7 +123,7 @@ fn capture_of_a_clean_exit_is_not_truncated() {
     let (engine, _log) = logging_engine(dir.path(), "echo ok");
     let limit = Duration::from_millis(500);
 
-    let captured = super::capture(engine.program(), &[OsString::from("ps")], limit).unwrap();
+    let captured = super::capture(engine.program(), &[], &[OsString::from("ps")], limit).unwrap();
 
     assert!(!captured.truncated, "clean exit should not be truncated");
     let stdout = String::from_utf8_lossy(&captured.stdout);

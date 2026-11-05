@@ -4,10 +4,13 @@
 //!
 //! The engine program comes from the operator's `CONTAINER_ENGINE` setting or a
 //! fixed list searched on `PATH`, never from app input. `settings.toml` is
-//! operator owned input refused when invalid.
+//! operator owned input refused when invalid. The engine's runtime directory
+//! and address come from the running uid and `settings.toml`, never from the
+//! caller's environment.
 
 use anyhow::{anyhow, Result};
-use riku_container::engine::{detect, Engine};
+use nix::unistd::getuid;
+use riku_container::engine::{detect, engine_env, Engine};
 
 use crate::config::RikuPaths;
 
@@ -46,7 +49,15 @@ pub fn open_engine(paths: &RikuPaths) -> Result<Engine> {
         Ok(binary) => binary,
         Err(e) => return Err(anyhow::Error::new(EngineUnreachable::new(e.to_string()))),
     };
-    let engine = match Engine::open(binary) {
+    let env = match engine_env(
+        settings.engine.mode,
+        settings.engine.host.as_deref(),
+        getuid().as_raw(),
+    ) {
+        Ok(env) => env,
+        Err(e) => return Err(anyhow::Error::new(EngineUnreachable::new(e.to_string()))),
+    };
+    let engine = match Engine::open(binary, env) {
         Ok(engine) => engine,
         Err(e) => return Err(anyhow::Error::new(EngineUnreachable::new(e.to_string()))),
     };

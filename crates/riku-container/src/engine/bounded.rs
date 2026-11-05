@@ -20,6 +20,8 @@ use nix::sys::signal::{killpg, Signal};
 use nix::unistd::Pid;
 use riku_util::spawn::spawn_retrying_etxtbsy;
 
+use super::env::apply_env;
+
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
 const TERM_GRACE: Duration = Duration::from_secs(2);
 
@@ -137,13 +139,18 @@ pub(super) struct Captured {
     pub stderr_capped: bool,
 }
 
-/// Run `program` with `args` and capture its output, within `limit`.
+/// Run `program` with `args` and `env` and capture its output, within `limit`.
 ///
 /// When it is still running after `limit` the process group is stopped and
 /// the error names the subcommand and the limit. Output is marked truncated
 /// when a helper held a pipe open past the limit.
-pub(super) fn capture(program: &Path, args: &[OsString], limit: Duration) -> Result<Captured> {
-    capture_capped(program, args, limit, usize::MAX)
+pub(super) fn capture(
+    program: &Path,
+    env: &[(String, String)],
+    args: &[OsString],
+    limit: Duration,
+) -> Result<Captured> {
+    capture_capped(program, env, args, limit, usize::MAX)
 }
 
 /// [`capture`], keeping at most `cap` bytes of each stream. The first stream
@@ -151,6 +158,7 @@ pub(super) fn capture(program: &Path, args: &[OsString], limit: Duration) -> Res
 #[allow(clippy::question_mark)]
 pub(super) fn capture_capped(
     program: &Path,
+    env: &[(String, String)],
     args: &[OsString],
     limit: Duration,
     cap: usize,
@@ -159,13 +167,14 @@ pub(super) fn capture_capped(
         .first()
         .map(|a| a.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let mut child = match spawn_in_group(
-        Command::new(program)
-            .args(args)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped()),
-    ) {
+    let mut engine_call = Command::new(program);
+    engine_call
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    apply_env(&mut engine_call, env);
+    let mut child = match spawn_in_group(&mut engine_call) {
         Ok(child) => child,
         Err(e) => {
             return Err(anyhow!(

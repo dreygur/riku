@@ -28,7 +28,7 @@ fn open_refuses_engine_missing_a_command() {
         "case \"$1\" in stats) echo 'unknown command' >&2; exit 1;; esac; exit 0",
     );
 
-    let err = Engine::open(bin).unwrap_err().to_string();
+    let err = Engine::open(bin, Vec::new()).unwrap_err().to_string();
 
     assert!(err.contains("does not answer 'stats'"), "{err}");
     assert!(err.contains("riku needs: pull, build, run"), "{err}");
@@ -41,7 +41,7 @@ fn probe_stops_a_command_that_never_answers() {
     let bin = binary(dir.path(), "case \"$1\" in ps) exec sleep 30;; esac");
 
     let (command, reason) =
-        first_unanswered(&bin.program, std::time::Duration::from_millis(1500)).unwrap();
+        first_unanswered(&bin.program, &[], std::time::Duration::from_millis(1500)).unwrap();
 
     assert_eq!(command, "ps", "{reason}");
     assert!(
@@ -56,7 +56,7 @@ fn probe_waits_for_the_slowest_command_not_the_sum() {
     let bin = binary(dir.path(), "sleep 0.5");
     let started = Instant::now();
 
-    let unanswered = first_unanswered(&bin.program, ANSWER_LIMIT);
+    let unanswered = first_unanswered(&bin.program, &[], ANSWER_LIMIT);
 
     assert_eq!(unanswered, None);
     // One after another the sixteen probes take at least 8 s.
@@ -75,7 +75,7 @@ fn probe_reports_the_first_failing_command_in_required_order() {
         "case \"$1\" in wait) exit 1;; build) sleep 0.3; exit 1;; esac",
     );
 
-    let (command, _) = first_unanswered(&bin.program, ANSWER_LIMIT).unwrap();
+    let (command, _) = first_unanswered(&bin.program, &[], ANSWER_LIMIT).unwrap();
 
     assert_eq!(command, "build", "a later command finished failing first");
 }
@@ -87,7 +87,7 @@ fn open_refuses_engine_without_login_or_image() {
         let script = format!("case \"$1\" in {command}) echo 'unknown' >&2; exit 1;; esac");
         let bin = binary(dir.path(), &script);
 
-        let err = Engine::open(bin).unwrap_err().to_string();
+        let err = Engine::open(bin, Vec::new()).unwrap_err().to_string();
 
         assert!(
             err.contains(&format!("does not answer '{command}'")),
@@ -102,7 +102,7 @@ fn open_reports_spawn_failure_instead_of_blaming_a_command() {
     let bin = binary(dir.path(), "exit 0");
     std::fs::set_permissions(&bin.program, std::fs::Permissions::from_mode(0o644)).unwrap();
 
-    let err = Engine::open(bin).unwrap_err().to_string();
+    let err = Engine::open(bin, Vec::new()).unwrap_err().to_string();
 
     assert!(err.contains("Permission denied"), "{err}");
 }
@@ -113,7 +113,7 @@ fn open_reads_identity_after_probe() {
     let script = format!("case \"$2\" in --help) exit 0;; esac; echo '{PODMAN_VERSION}'");
     let bin = binary(dir.path(), &script);
 
-    let engine = Engine::open(bin).unwrap();
+    let engine = Engine::open(bin, Vec::new()).unwrap();
 
     assert_eq!(engine.identity().version, "5.2.2");
     assert_eq!(engine.identity().name, "podman");
@@ -125,7 +125,7 @@ fn output_reports_command_and_stderr_on_failure() {
     let script = format!(
         "case \"$2\" in --help) exit 0;; esac; case \"$1\" in version) echo '{PODMAN_VERSION}';; *) echo ' no such thing ' >&2; exit 3;; esac"
     );
-    let engine = Engine::open(binary(dir.path(), &script)).unwrap();
+    let engine = Engine::open(binary(dir.path(), &script), Vec::new()).unwrap();
 
     let err = engine
         .output(&["rm".into(), "gone".into()])
@@ -144,7 +144,7 @@ fn answers_version_stops_hung_program_and_returns_false() {
     let program = fake_engine(dir.path(), "docker", "exec sleep 30");
     let started = Instant::now();
 
-    let answered = answers_version(&program, Duration::from_millis(300));
+    let answered = answers_version(&program, &[], Duration::from_millis(300));
 
     assert!(!answered, "sleeping program should return false");
     assert!(
@@ -159,7 +159,7 @@ fn answers_version_accepts_zero_exit() {
     let program = fake_engine(dir.path(), "docker", "exit 0");
 
     assert!(
-        answers_version(&program, ANSWER_LIMIT),
+        answers_version(&program, &[], ANSWER_LIMIT),
         "program exiting 0 should return true"
     );
 }
@@ -170,7 +170,7 @@ fn answers_version_rejects_nonzero_exit() {
     let program = fake_engine(dir.path(), "docker", "exit 1");
 
     assert!(
-        !answers_version(&program, ANSWER_LIMIT),
+        !answers_version(&program, &[], ANSWER_LIMIT),
         "program exiting 1 should return false"
     );
 }

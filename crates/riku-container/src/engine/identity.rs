@@ -52,16 +52,19 @@ pub struct Engine {
     program: PathBuf,
     identity: EngineIdentity,
     settings: EngineSettings,
+    env: Vec<(String, String)>,
 }
 
 impl Engine {
-    /// Probe the engine's commands, then read its identity.
+    /// Probe the engine's commands, then read its identity. Every call the
+    /// engine makes, the probes included, runs with `env` (see
+    /// [`super::engine_env`]).
     ///
     /// Settings cannot apply before the engine is open, so the probe and the
     /// version read use the default call limit.
-    pub fn open(binary: EngineBinary) -> Result<Engine> {
+    pub fn open(binary: EngineBinary, env: Vec<(String, String)>) -> Result<Engine> {
         let limit = EngineSettings::default().call_timeout;
-        if let Some((command, reason)) = first_unanswered(&binary.program, limit) {
+        if let Some((command, reason)) = first_unanswered(&binary.program, &env, limit) {
             return Err(anyhow!(
                 "container engine {} does not answer '{command}'; riku needs: {} ({reason})",
                 binary.program.display(),
@@ -75,6 +78,7 @@ impl Engine {
                 version: String::new(),
             },
             settings: EngineSettings::default(),
+            env,
         };
         let json = match engine.output(&["version".into(), "--format".into(), "json".into()]) {
             Ok(json) => json,
@@ -106,6 +110,10 @@ impl Engine {
 
     pub(crate) fn program(&self) -> &Path {
         &self.program
+    }
+
+    pub(super) fn env(&self) -> &[(String, String)] {
+        &self.env
     }
 
     /// The time limits this engine applies to its calls.

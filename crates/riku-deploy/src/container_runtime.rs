@@ -18,11 +18,11 @@ use crate::util::echo;
 pub fn get_container_runtime() -> Result<String> {
     let limit = EngineSettings::default().call_timeout;
 
-    if answers_version(Path::new("docker"), limit) {
+    if answers_version(Path::new("docker"), &[], limit) {
         return Ok("docker".to_string());
     }
 
-    if answers_version(Path::new("podman"), limit) {
+    if answers_version(Path::new("podman"), &[], limit) {
         return Ok("podman".to_string());
     }
 
@@ -190,6 +190,7 @@ pub fn check_remote_runtime(remote_host: &str) -> Result<Option<String>> {
     let found = ["docker", "podman"].into_iter().find(|engine| {
         exits_zero_within(
             Path::new("ssh"),
+            &[],
             &remote_version_args(remote_host, engine),
             limit,
         )

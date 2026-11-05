@@ -22,6 +22,55 @@ fn missing_settings_file_gives_defaults() {
 }
 
 #[test]
+fn absent_mode_means_rootless() {
+    let (_tmp, paths) = paths();
+    std::fs::write(&paths.settings_file, "[engine]\ncall_timeout = \"45s\"\n").unwrap();
+
+    let engine = load(&paths).unwrap().engine;
+
+    assert_eq!(engine.mode, EngineMode::Rootless);
+    assert_eq!(engine.host, None);
+}
+
+#[test]
+fn mode_and_host_are_read() {
+    let (_tmp, paths) = paths();
+    std::fs::write(
+        &paths.settings_file,
+        "[engine]\nmode = \"rootful\"\nhost = \"unix:///run/user/1000/docker.sock\"\n",
+    )
+    .unwrap();
+
+    let engine = load(&paths).unwrap().engine;
+
+    assert_eq!(engine.mode, EngineMode::Rootful);
+    assert_eq!(
+        engine.host.as_deref(),
+        Some("unix:///run/user/1000/docker.sock")
+    );
+}
+
+#[test]
+fn unknown_mode_and_bad_host_are_refused_naming_the_key() {
+    let (_tmp, paths) = paths();
+    for (bad, key) in [
+        ("mode = \"rootles\"", "engine.mode"),
+        ("mode = true", "engine.mode"),
+        ("host = \"\"", "engine.host"),
+        ("host = \"tcp://edge\\n:2375\"", "engine.host"),
+    ] {
+        std::fs::write(&paths.settings_file, format!("[engine]\n{bad}\n")).unwrap();
+
+        let message = load(&paths).unwrap_err().to_string();
+
+        assert!(
+            message.contains(key) && message.contains("settings.toml"),
+            "{bad:?} should be refused naming {key} and the file: {message}"
+        );
+    }
+}
+
+#[test]
 fn listed_keys_override_and_the_rest_keep_defaults() {
     let (_tmp, paths) = paths();
     std::fs::write(

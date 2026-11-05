@@ -106,7 +106,7 @@ Status: done. The start commit's binary is 9,213,048 B, under the limit, and the
 
 ### Task 2: Engine env and settings keys (M)
 
-Status: still needed. No spawn sets any variable (bounded.rs:163, streamed.rs:34, login.rs:30, events.rs:39); `[engine]` knows only timeouts (crates/riku-config/src/settings.rs:86-101).
+Status: done, binary 9,218,408 B. Was: no spawn sets any variable (bounded.rs:163, streamed.rs:34, login.rs:30, events.rs:39); `[engine]` knows only timeouts (crates/riku-config/src/settings.rs:86-101).
 
 **Files:**
 - Create: `crates/riku-container/src/engine/env.rs`, `env_tests.rs`
