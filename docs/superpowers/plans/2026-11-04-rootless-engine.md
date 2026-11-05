@@ -93,6 +93,17 @@ The goal is a small self hosted Heroku replacement. This branch now ends with th
 
 acme.sh renews as the deploy user with no reload hook, so the helper's copy under `/etc/riku/certs/<app>` goes stale, and a self signed fallback is never replaced. Pass `--reloadcmd '/usr/local/bin/riku router-renew <app>'` at issue; `riku router-renew <app>` (Placement::Server, deploy user) checks the app name, rebuilds the route as configure does and sends Apply. Issue a real certificate when only the self signed fallback exists. Tests: the issue argv carries the hook; renew sends one Apply for a checked app and refuses a bad name.
 
+### Task C: Small core route (owner, 2026-11-06)
+
+Riku is a small core with plugins, like a framework. The core route keeps domains, backends, TLS, static files, and the HTTP mode (plain HTTP, HTTPS, or HTTPS with a redirect). Drop from core: Cloudflare ACL, nginx cache, `catch_all`, CSP, the snippet include file with its allowlist, extra listen addresses and IPv6 overrides. An app that still sets one of their ENV keys gets a deploy error naming the key. `riku doctor --fix` also redeploys any app whose nginx config exists only in the old `~/.riku/nginx` (owner chose this over a docs note).
+
+### Framework design, after this branch (owner, 2026-11-06)
+
+Not built here; written down so the design starts from it.
+- Plugins can add routers (for example Traefik) over router plugin protocol 2, running without root.
+- Plugins can extend nginx or Caddy config only through files root installs: `sudo riku plugins install` checks the signature and copies the plugin's fragments into a root owned directory such as `/etc/riku/nginx/plugins/`. The deploy user never hands root config text. Per app values reach those fragments only as small generic fields the helper checks.
+- Review which parts of riku-plugins (signing, bundles, marketplace, UI, sandbox) earn their place; that is the repo wide over engineering sweep.
+
 ## Open questions
 
 These need the owner. Each has the plan's recommendation; the plan proceeds on it unless the owner says otherwise.
