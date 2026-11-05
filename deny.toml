@@ -23,6 +23,11 @@ allow = [
 # Confidence threshold for license detection (0.0 - 1.0).
 confidence-threshold = 0.8
 
+# Mozilla's root certificates as data, needed by rustls-platform-verifier.
+[[licenses.exceptions]]
+crate = "webpki-root-certs"
+allow = ["CDLA-Permissive-2.0"]
+
 [bans]
 # Warn on multiple versions of the same crate.
 multiple-versions = "warn"

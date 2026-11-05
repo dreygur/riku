@@ -146,6 +146,9 @@ work they describe.
   - Real Docker check fixes: done (b20c8a8, nginx include and host guard
     4294a66, merged 1fb66a4; filtered snippet check 1982cac)
   - Task 16 docs, changelog, roadmap: done
+  - CI license gate: `webpki-root-certs` gets a one crate exception in
+    `deny.toml` (owner, 2026-11-05). Every earlier CI run on the branch
+    failed at this check.
 - Rootless engine (owner, 2026-11-04): spec
   `specs/2026-11-04-rootless-engine-design.md`, plan
   `plans/2026-11-04-rootless-engine.md`, refreshed 2026-11-05 against
