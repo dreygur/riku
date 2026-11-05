@@ -1,9 +1,32 @@
 use std::os::unix::fs::PermissionsExt;
-use std::os::unix::net::UnixListener;
 
-use nix::unistd::Gid;
+use nix::sys::socket::{bind, socket, AddressFamily, SockFlag, SockType, UnixAddr};
+use nix::sys::wait::waitpid;
+use nix::unistd::{fork, ForkResult, Gid};
 
 use super::*;
+
+// A socket bound in this process can still accept a connect after it is
+// dropped, while a parallel test's fork holds a copy of the descriptor. Bind
+// it in a child that exits, so no process here ever holds it.
+fn leave_stale_socket(path: &std::path::Path) {
+    let addr = UnixAddr::new(path).unwrap();
+    match unsafe { fork() }.unwrap() {
+        ForkResult::Child => {
+            let bound = socket(
+                AddressFamily::Unix,
+                SockType::Stream,
+                SockFlag::empty(),
+                None,
+            )
+            .and_then(|fd| bind(std::os::fd::AsRawFd::as_raw_fd(&fd), &addr));
+            unsafe { nix::libc::_exit(if bound.is_ok() { 0 } else { 1 }) }
+        }
+        ForkResult::Parent { child } => {
+            waitpid(child, None).unwrap();
+        }
+    }
+}
 
 #[test]
 fn live_socket_is_not_replaced() {
@@ -32,7 +55,8 @@ fn socket_is_created_group_writable_only() {
 fn stale_socket_is_replaced_but_a_regular_file_is_not() {
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("router.sock");
-    drop(UnixListener::bind(&socket).unwrap());
+    leave_stale_socket(&socket);
+    assert!(socket.exists(), "the child did not leave a socket");
     let file = dir.path().join("notes.txt");
     fs::write(&file, "keep").unwrap();
     let gid = Gid::current().as_raw();
