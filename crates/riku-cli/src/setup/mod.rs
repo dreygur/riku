@@ -9,6 +9,7 @@ mod deploy_keys;
 pub(crate) mod deploy_user;
 pub mod git_hook;
 mod guidance;
+mod helper_install;
 pub mod init;
 mod init_router;
 mod init_system;

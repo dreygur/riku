@@ -22,13 +22,13 @@ fn missing_settings_file_gives_defaults() {
 }
 
 #[test]
-fn absent_mode_means_rootless() {
+fn absent_mode_means_rootful() {
     let (_tmp, paths) = paths();
     std::fs::write(&paths.settings_file, "[engine]\ncall_timeout = \"45s\"\n").unwrap();
 
     let engine = load(&paths).unwrap().engine;
 
-    assert_eq!(engine.mode, EngineMode::Rootless);
+    assert_eq!(engine.mode, EngineMode::Rootful);
     assert_eq!(engine.host, None);
 }
 
@@ -37,13 +37,13 @@ fn mode_and_host_are_read() {
     let (_tmp, paths) = paths();
     std::fs::write(
         &paths.settings_file,
-        "[engine]\nmode = \"rootful\"\nhost = \"unix:///run/user/1000/docker.sock\"\n",
+        "[engine]\nmode = \"rootless\"\nhost = \"unix:///run/user/1000/docker.sock\"\n",
     )
     .unwrap();
 
     let engine = load(&paths).unwrap().engine;
 
-    assert_eq!(engine.mode, EngineMode::Rootful);
+    assert_eq!(engine.mode, EngineMode::Rootless);
     assert_eq!(
         engine.host.as_deref(),
         Some("unix:///run/user/1000/docker.sock")

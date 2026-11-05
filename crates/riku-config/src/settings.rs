@@ -40,9 +40,9 @@ pub const SETTINGS_FILE: &str = "settings.toml";
 pub enum EngineMode {
     /// A daemon running as the deploy user, reached through its own runtime
     /// directory.
-    #[default]
     Rootless,
     /// A system wide daemon reached through the address in `host`.
+    #[default]
     Rootful,
 }
 
@@ -57,7 +57,7 @@ pub struct EngineSettings {
     pub pull_timeout: Duration,
     /// Limit for a whole image build.
     pub build_timeout: Duration,
-    /// Rootless unless `settings.toml` says otherwise.
+    /// Rootful unless `settings.toml` says otherwise.
     pub mode: EngineMode,
     /// Engine address passed as `DOCKER_HOST`. `None` leaves the engine
     /// client on its own default socket.

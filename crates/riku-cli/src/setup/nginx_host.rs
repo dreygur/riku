@@ -1,24 +1,27 @@
 //! Root-only host setup for the nginx router.
 //!
-//! riku writes every site config into the deploy user's `~/.riku/nginx` and
-//! never under `/etc/nginx`. Setup installs the one root-owned file that
-//! loads that directory, `/etc/nginx/conf.d/riku.conf`, and puts the nginx
-//! worker user in the `riku-sockets` group (see [`super::nginx_worker`]).
+//! The router helper writes every site config into `/etc/riku/nginx` and
+//! never under `/etc/nginx`. Setup creates that root owned directory, installs
+//! the one root-owned file that loads it, `/etc/nginx/conf.d/riku.conf`
+//! (replacing an older include of the deploy user's own nginx directory), and
+//! puts the nginx worker user in the `riku-sockets` group (see
+//! [`super::nginx_worker`]).
 //!
-//! Security: the include file's text is built from the riku root path only
-//! and refused if that path holds nginx syntax (see
+//! Security: the include file's text is a constant (see
 //! [`crate::nginx::include_line`]), and it is written only into a directory
-//! root owns and nobody else can write. No directory under `/etc/nginx`
-//! changes owner or mode.
+//! root owns and nobody else can write. `/etc/riku` must be root owned and
+//! writable by no one else before `/etc/riku/nginx` is created in it. No
+//! directory under `/etc/nginx` changes owner or mode.
 
 use std::fs;
 use std::io::ErrorKind;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, Result};
 
-use crate::config::{NginxHostPaths, RikuPaths};
+use crate::config::{NginxHostPaths, RikuPaths, NGINX_SITE_ROOT};
 use crate::nginx::{include_file_contents, needs_catch_all, write_include_file};
 use crate::util::echo;
 
@@ -50,13 +53,9 @@ fn wants_catch_all(paths: &RikuPaths) -> bool {
 
 /// Write the include file unless it already holds the same text. Returns
 /// whether it was written.
-#[allow(clippy::question_mark)]
 fn install_include(paths: &RikuPaths) -> Result<bool> {
     let catch_all = wants_catch_all(paths);
-    let contents = match include_file_contents(paths, catch_all) {
-        Ok(contents) => contents,
-        Err(e) => return Err(e),
-    };
+    let contents = include_file_contents(catch_all);
     let file = &paths.nginx_include_file;
     match fs::read_to_string(file) {
         Ok(current) if current == contents => return Ok(false),
@@ -100,6 +99,30 @@ fn missing_dir_warning(paths: &RikuPaths, dir: &Path) -> String {
     )
 }
 
+/// Create `site_root` (`/etc/riku/nginx`) as a `0755` directory owned by
+/// `owner` inside a parent that only `owner` can write.
+fn prepare_site_root(site_root: &Path, owner: u32) -> Result<()> {
+    let Some(parent) = site_root.parent() else {
+        return Err(anyhow!("{} has no parent directory", site_root.display()));
+    };
+    if let Err(e) = fs::create_dir_all(parent) {
+        return Err(anyhow!("failed to create {}: {e}", parent.display()));
+    }
+    if let Err(e) = check_write_dir(parent, owner) {
+        return Err(anyhow!("{e}"));
+    }
+    match fs::create_dir(site_root) {
+        Ok(()) => {
+            if let Err(e) = fs::set_permissions(site_root, fs::Permissions::from_mode(0o755)) {
+                return Err(anyhow!("failed to chmod {}: {e}", site_root.display()));
+            }
+        }
+        Err(e) if e.kind() == ErrorKind::AlreadyExists => {}
+        Err(e) => return Err(anyhow!("failed to create {}: {e}", site_root.display())),
+    }
+    check_write_dir(site_root, owner)
+}
+
 /// Make the system nginx load riku's sites. Root only. A host without the
 /// include directory gets a warning saying what to do.
 ///
@@ -125,6 +148,9 @@ pub fn setup_nginx_host(user: &DeployUser) -> Result<()> {
         return Ok(());
     }
     if let Err(e) = check_write_dir(dir, ROOT_UID) {
+        return Err(e);
+    }
+    if let Err(e) = prepare_site_root(Path::new(NGINX_SITE_ROOT), ROOT_UID) {
         return Err(e);
     }
     if let Err(e) = load_riku_sites(&paths) {

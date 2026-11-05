@@ -294,7 +294,7 @@ Status: partly done. c087210 already moved the sites to `/etc/riku/caddy` and to
 
 ### Task 10: Install the helper (M)
 
-Status: still needed. Opus review: root installs units and the nginx include. The include is already root owned and carries the catch all (nginx_host.rs:55-72, f3fee94); only its target changes.
+Status: done. The helper is a plain `Type=simple` service (no socket unit); the include names `/etc/riku/nginx/*.conf`; the path and reload units are removed; an absent engine mode means rootful. The `router.toml` move was dropped with the total cache cap. Opus review: root installs units and the nginx include. The include is already root owned and carries the catch all (nginx_host.rs:55-72, f3fee94); only its target changes.
 
 **Files:**
 - Create: `crates/riku-cli/src/setup/helper_install.rs`, `helper_install_tests.rs`
