@@ -23,6 +23,32 @@ fn import_added_once_and_points_outside_the_home() {
 }
 
 #[test]
+fn admin_socket_merged_or_refused() {
+    let added = caddyfile_with_admin(":80 {\n}\n").unwrap().unwrap();
+    assert!(
+        added.starts_with("{\n\tadmin unix//run/caddy/admin.sock\n}\n\n:80"),
+        "{added}"
+    );
+
+    let merged = caddyfile_with_admin("{\n\temail a@b.c\n}\n:80 {\n}\n")
+        .unwrap()
+        .unwrap();
+    assert!(
+        merged.starts_with("{\n\tadmin unix//run/caddy/admin.sock\n\temail"),
+        "{merged}"
+    );
+    assert_eq!(caddyfile_with_admin(&merged).unwrap(), None);
+
+    for bad in ["{ debug }\n:80 {\n}\n", "{\n\tadmin localhost:2019\n}\n"] {
+        let err = caddyfile_with_admin(bad).unwrap_err().to_string();
+        assert!(
+            err.contains("admin unix//run/caddy/admin.sock"),
+            "{bad}: {err}"
+        );
+    }
+}
+
+#[test]
 fn site_root_is_setgid_and_closed_to_others() {
     let tmp = tempfile::tempdir().unwrap();
     let site_root = tmp.path().join("etc-riku").join("caddy");

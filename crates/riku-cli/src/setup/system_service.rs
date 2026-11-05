@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::config::router::Router;
-use crate::config::{ACME_WEBROOT, CADDY_SITE_ROOT, SOCKET_ROOT, STATIC_ROOT};
+use crate::config::{ACME_WEBROOT, SOCKET_ROOT, STATIC_ROOT};
 use crate::util::{echo, ROOT_BINARY};
 
 use super::deploy_user::{deploy_user_name, passwd_home, running_as_root};
@@ -45,10 +45,11 @@ PrivateTmp=true
 
 # Allow writing to riku directories. ProtectSystem=strict leaves /run read
 # only, and uWSGI copies, which inherit this namespace, bind their sockets in
-# the socket directory. Deploys started from here write Caddy site files,
-# ACME challenge files and published static files.
+# the socket directory. Deploys started from here write
+# ACME challenge files and published static files. Caddy site files are
+# written by the router helper, not by this service.
 # The leading - keeps the unit starting when a directory is missing.
-ReadWritePaths={deploy_home}/.riku -{socket_root} -{caddy_site_root} -{acme_webroot} -{static_root}
+ReadWritePaths={deploy_home}/.riku -{socket_root} -{acme_webroot} -{static_root}
 
 # Resource limits
 MemoryMax=512M
@@ -62,7 +63,6 @@ WantedBy=multi-user.target
         deploy_home = deploy_home,
         riku_binary_path = riku_binary_path,
         socket_root = SOCKET_ROOT,
-        caddy_site_root = CADDY_SITE_ROOT,
         acme_webroot = ACME_WEBROOT,
         static_root = STATIC_ROOT,
     )
