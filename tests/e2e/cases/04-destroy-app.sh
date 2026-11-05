@@ -25,7 +25,7 @@ RIKU_SKIP_BUILD=1 push_app "$APP" "$src"
 
 # Confirm the app was deployed before destroying
 assert_dir_exists "$RIKU_ROOT/apps/${APP}"
-assert_file_exists "$RIKU_ROOT/workers-available/${APP}-web-1.toml"
+assert_file_exists "$RIKU_ROOT/workers-available/${APP}@web.1.toml"
 
 # CLI syntax: riku destroy APP  (or: riku apps destroy APP, both route to cmd_destroy)
 RIKU_ROOT="$RIKU_ROOT" riku destroy "$APP"
@@ -35,7 +35,7 @@ assert_dir_not_exists "$RIKU_ROOT/apps/${APP}"
 assert_dir_not_exists "$RIKU_ROOT/envs/${APP}"
 
 # Worker config must be gone
-assert_file_not_exists "$RIKU_ROOT/workers-available/${APP}-web-1.toml"
-assert_file_not_exists "$RIKU_ROOT/workers-enabled/${APP}-web-1.toml"
+assert_file_not_exists "$RIKU_ROOT/workers-available/${APP}@web.1.toml"
+assert_file_not_exists "$RIKU_ROOT/workers-enabled/${APP}@web.1.toml"
 
 echo "App destroyed and cleanup verified successfully"

@@ -28,10 +28,10 @@ RIKU_SKIP_BUILD=1 push_app "$APP" "$src"
 
 # The worker config is written to workers-available as {app}-{kind}-{ordinal}.toml
 # and symlinked into workers-enabled.
-assert_file_exists "$RIKU_ROOT/workers-available/${APP}-web-1.toml"
-assert_file_exists "$RIKU_ROOT/workers-enabled/${APP}-web-1.toml"
+assert_file_exists "$RIKU_ROOT/workers-available/${APP}@web.1.toml"
+assert_file_exists "$RIKU_ROOT/workers-enabled/${APP}@web.1.toml"
 
 # The toml must reference 'node' in the command
-assert_file_contains "$RIKU_ROOT/workers-available/${APP}-web-1.toml" "node"
+assert_file_contains "$RIKU_ROOT/workers-available/${APP}@web.1.toml" "node"
 
 echo "Node app deployed successfully"

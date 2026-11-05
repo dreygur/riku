@@ -148,7 +148,8 @@ work they describe.
   - Task 16 docs, changelog, roadmap: done
   - CI license gate: `webpki-root-certs` gets a one crate exception in
     `deny.toml` (owner, 2026-11-05). Every earlier CI run on the branch
-    failed at this check.
+    failed at this check, which also hid stale worker names in the Docker
+    e2e cases, now fixed.
 - Rootless engine (owner, 2026-11-04): spec
   `specs/2026-11-04-rootless-engine-design.md`, plan
   `plans/2026-11-04-rootless-engine.md`, refreshed 2026-11-05 against
