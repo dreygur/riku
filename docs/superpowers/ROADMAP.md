@@ -156,8 +156,9 @@ work they describe.
   ffd7909: 19 tasks, Task 1 is a footprint gate with a 9,198,584 B
   baseline and a 10,247,160 B binary limit. Old Task 15 dropped (plugin
   deleted bb4aa56; `riku container` left to 3b, owner to confirm). Three
-  open questions for the owner in the plan. Not started. Rootless ships
-  only together with the router helper.
+  open questions for the owner in the plan. Branch `feat/rootless-engine`
+  off `feat/container-integration`. Task 1 done. Rootless ships only
+  together with the router helper.
 - Owner decisions 2026-11-01: engine time limits in a new
   `~/.riku/settings.toml` (short calls 30 s, stop grace plus 30 s, pull and
   build 30 min); supervisor follows engine events and polls stats every

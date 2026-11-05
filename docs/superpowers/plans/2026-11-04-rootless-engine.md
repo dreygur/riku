@@ -67,8 +67,8 @@ Sizes in bytes, RSS in KiB, all on the 4 core x86_64 Linux test server, release 
 | Measure | Baseline | Source | Limit |
 |---|---|---|---|
 | stripped `riku` | 9,198,584 | optz-runtime-report.md, c69aa1f | 10,247,160 (baseline plus 10 percent, 919,859, rounded up to 0.5 MiB: 1,048,576) |
-| Supervisor idle RSS, no apps | 10,228 (opt-level 3 build); Task 1 re-measures | check-5-and-benchmark-report.md | Open question 2 |
-| Supervisor plus nginx (master and 4 workers), idle, no apps | 22,272 (opt-level 3 build); Task 1 re-measures | same | Open question 2 |
+| Supervisor idle RSS, no apps | 8,756 (median of 3, 79491da, binary 9,213,048 B) | `benches/footprint.sh` in a `debian:12` container on the test server, no cgroup delegation | 9,632 (baseline plus 10 percent, Open question 2) |
+| Supervisor plus nginx 1.22.1 (master and 4 workers), idle, no apps | 21,724 (median of 3, same run) | same | 23,897 (baseline plus 10 percent, Open question 2) |
 | Binary plus riku state on disk, no apps | about 9.3 MB | README.md:55-56 | the binary limit plus state; README says about 10 MB (Open question 3) |
 | Router helper idle RSS (OpenRC and other init systems) | none yet | Task 7 | counts toward the base |
 | Lingering user manager (rootless systemd hosts) | none yet | Task 12 | add-on cost, reported apart |
@@ -91,7 +91,7 @@ These need the owner. Each has the plan's recommendation; the plan proceeds on i
 
 ### Task 1: Footprint gate (S)
 
-Status: partly done. The baseline is in the ledger above; the script and a same commit RSS measurement are missing.
+Status: done. The start commit's binary is 9,213,048 B, under the limit, and the RSS rows above hold its medians.
 
 **Files:**
 - Create: `benches/footprint.sh`
