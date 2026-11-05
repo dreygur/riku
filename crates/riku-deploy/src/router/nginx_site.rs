@@ -24,7 +24,7 @@ use crate::util::flag::https_only;
 /// The backend a check renders with: the route gate never connects to it.
 const STAND_IN_PORT: u16 = 1;
 
-fn app_name(app: &str) -> Result<AppName> {
+pub(super) fn app_name(app: &str) -> Result<AppName> {
     match AppName::try_from(app) {
         Ok(name) => Ok(name),
         Err(e) => Err(anyhow!("cannot route '{app}': {e}")),

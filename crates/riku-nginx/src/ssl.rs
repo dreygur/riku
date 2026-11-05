@@ -32,25 +32,27 @@ pub fn ensure_ssl_certificates(
     domains: &[String],
     paths: &crate::config::RikuPaths,
 ) -> Result<bool> {
+    if !is_plain_name(app) {
+        return Err(anyhow!("'{app}' is not a valid app name for a certificate"));
+    }
     let key_path = paths.nginx_root.join(format!("{}.key", app));
     let crt_path = paths.nginx_root.join(format!("{}.crt", app));
+    let chain_path = paths.nginx_root.join(format!("{}.fullchain.crt", app));
+    let have_pair = key_path.exists() && crt_path.exists();
+    let acme_sh = paths.acme_sh_root.join("acme.sh");
 
-    // If certs already exist and are valid, don't regenerate
-    if key_path.exists() && crt_path.exists() {
+    if have_pair && (chain_path.exists() || !acme_sh.exists()) {
         if let Err(e) = restrict_key(&key_path) {
             return Err(e);
         }
         return Ok(true);
     }
 
-    // Try acme.sh first
-    let acme_sh = paths.acme_sh_root.join("acme.sh");
     if acme_sh.exists() {
-        let issued =
-            match try_acme_certificates(app, domains, paths, &acme_sh, &key_path, &crt_path) {
-                Ok(issued) => issued,
-                Err(e) => return Err(e),
-            };
+        let issued = match try_acme_certificates(app, domains, paths, &acme_sh) {
+            Ok(issued) => issued,
+            Err(e) => return Err(e),
+        };
         if let Some(issued) = issued {
             if let Err(e) = restrict_key(&key_path) {
                 return Err(e);
@@ -59,7 +61,12 @@ pub fn ensure_ssl_certificates(
         }
     }
 
-    // Fall back to self-signed certificate
+    if have_pair {
+        if let Err(e) = restrict_key(&key_path) {
+            return Err(e);
+        }
+        return Ok(true);
+    }
     let generated = match generate_self_signed_certificate(app, domains, &key_path, &crt_path) {
         Ok(generated) => generated,
         Err(e) => return Err(e),
@@ -88,6 +95,44 @@ fn acme_sh_command(acme_sh: &std::path::Path) -> std::process::Command {
     command
 }
 
+fn is_plain_name(app: &str) -> bool {
+    !app.is_empty()
+        && app
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+}
+
+/// The acme.sh argv that issues `domain` for `app`. `--reloadcmd` makes
+/// acme.sh run `riku router-renew` after each renewal, which sends the new
+/// files to the router helper. `app` reaches a shell there, which is why
+/// [`ensure_ssl_certificates`] accepts only plain names.
+fn acme_issue_args(app: &str, domain: &str, paths: &crate::config::RikuPaths) -> Vec<String> {
+    let nginx_file = |suffix: &str| {
+        paths
+            .nginx_root
+            .join(format!("{app}.{suffix}"))
+            .to_string_lossy()
+            .into_owned()
+    };
+    vec![
+        "--issue".to_string(),
+        "-d".to_string(),
+        domain.to_string(),
+        "-w".to_string(),
+        paths.acme_root.to_string_lossy().into_owned(),
+        "--server".to_string(),
+        "letsencrypt.org".to_string(),
+        "--key-file".to_string(),
+        nginx_file("key"),
+        "--cert-file".to_string(),
+        nginx_file("crt"),
+        "--fullchain-file".to_string(),
+        nginx_file("fullchain.crt"),
+        "--reloadcmd".to_string(),
+        format!("{} router-renew {app}", crate::util::ROOT_BINARY),
+    ]
+}
+
 /// Attempt to issue certificates via acme.sh. Returns `Some(true)` on success,
 /// `None` if issuance failed for all domains (caller should fall back).
 fn try_acme_certificates(
@@ -95,29 +140,10 @@ fn try_acme_certificates(
     domains: &[String],
     paths: &crate::config::RikuPaths,
     acme_sh: &std::path::Path,
-    key_path: &std::path::Path,
-    crt_path: &std::path::Path,
 ) -> Result<Option<bool>> {
     for domain in domains {
         let result = acme_sh_command(acme_sh)
-            .args([
-                "--issue",
-                "-d",
-                domain,
-                "-w",
-                &paths.acme_root.to_string_lossy(),
-                "--server",
-                "letsencrypt.org",
-                "--key-file",
-                &key_path.to_string_lossy(),
-                "--cert-file",
-                &crt_path.to_string_lossy(),
-                "--fullchain-file",
-                &paths
-                    .nginx_root
-                    .join(format!("{}.fullchain.crt", app))
-                    .to_string_lossy(),
-            ])
+            .args(acme_issue_args(app, domain, paths))
             .output();
 
         match result {
@@ -231,13 +257,42 @@ mod tests {
     }
 
     #[test]
-    fn test_ensure_ssl_certs_skips_acme_when_no_acme_sh() {
+    fn a_self_signed_pair_retries_acme_with_the_renew_hook_and_survives_a_failure() {
         let tmp = TempDir::new().unwrap();
         let paths = make_paths(&tmp);
-        // acme.sh does NOT exist → falls straight to openssl (ignored below)
+        std::fs::create_dir_all(&paths.acme_sh_root).unwrap();
+        let argv_log = tmp.path().join("argv.log");
         let acme_sh = paths.acme_sh_root.join("acme.sh");
-        assert!(!acme_sh.exists());
-        // We just verify the early-exit path (certs already present) works here
+        std::fs::write(
+            &acme_sh,
+            format!("#!/bin/sh\necho \"$@\" > {}\nexit 1\n", argv_log.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(&acme_sh, fs::Permissions::from_mode(0o755)).unwrap();
+        let key = paths.nginx_root.join("myapp.key");
+        std::fs::write(&key, "self-signed-key").unwrap();
+        std::fs::write(paths.nginx_root.join("myapp.crt"), "self-signed-crt").unwrap();
+
+        let domains = vec!["example.com".to_string()];
+        assert!(ensure_ssl_certificates("myapp", &domains, &paths).unwrap());
+
+        let argv = std::fs::read_to_string(&argv_log).expect("acme.sh was not run");
+        assert!(
+            argv.contains("--reloadcmd /usr/local/bin/riku router-renew myapp"),
+            "acme.sh argv was: {argv}"
+        );
+        assert_eq!(std::fs::read_to_string(&key).unwrap(), "self-signed-key");
+    }
+
+    #[test]
+    fn rejects_an_app_name_that_could_reach_the_reload_shell() {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        let domains = vec!["example.com".to_string()];
+
+        let err = ensure_ssl_certificates("app; touch /tmp/x", &domains, &paths).unwrap_err();
+
+        assert!(err.to_string().contains("not a valid app name"), "{err}");
     }
 
     #[test]

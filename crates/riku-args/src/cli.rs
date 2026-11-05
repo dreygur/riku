@@ -359,6 +359,16 @@ pub enum Commands {
     )]
     RouterHelper,
 
+    /// Send an app's renewed certificate to the router helper
+    #[command(
+        name = "router-renew",
+        after_help = "Examples:\n  riku router-renew myapp"
+    )]
+    RouterRenew {
+        /// App whose certificate was renewed
+        app: String,
+    },
+
     /// Manage client-side plugins (local scripts that extend riku CLI)
     #[command(
         subcommand,
