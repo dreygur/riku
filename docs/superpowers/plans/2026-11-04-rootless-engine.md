@@ -87,6 +87,7 @@ The goal is a small self hosted Heroku replacement. This branch now ends with th
 - Dropped for now: Tasks 11 to 15 (port refusal, systemd rootless init, OpenRC, supervisor under the user manager, rootful grant). Tasks 2 and 3 stay in the code; an absent engine mode must therefore mean rootful again, so existing hosts keep working (Task 10 changes the default).
 - Task 10 also moves `cache_total_gb` out of the deploy user's `settings.toml` into a root owned `/etc/riku/router.toml`, so the root helper reads no file the deploy user owns.
 - Process: no extras mid task, one Sonnet pass per task, Opus only on Task 10, one Linux run after the merge.
+- After Tasks 9, 10 and R merge: delete the rootless code nothing kept uses (owner, 2026-11-06), guided by the over engineering review: Task 4 init detection and `host.toml`, the rootless parts of Task 2's engine env and Task 3's rootless refusal, and their tests. Keep what the kept work uses, such as stripping caller variables that select a daemon.
 
 ### Task R: Certificate renewal (S)
 
