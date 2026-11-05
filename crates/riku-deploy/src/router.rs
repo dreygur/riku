@@ -38,6 +38,7 @@ mod nginx_site;
 mod plugin;
 mod reload;
 mod remove;
+mod renew;
 mod route_build;
 mod route_env;
 
@@ -52,6 +53,7 @@ use plugin::configure_plugin;
 pub use reload::ERROR_FILE as RELOAD_ERROR_FILE;
 use reload::{record_outcome, reload_router_plugin};
 pub use remove::remove;
+pub use renew::renew;
 pub use route_build::build_route;
 
 /// Caddy reaches an app over loopback whatever `RIKU_BIND_ADDRESS` says.

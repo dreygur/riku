@@ -168,6 +168,7 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
         } => apps::cmd_plugin_emit(paths, &event_name, &data, app.as_deref()),
         Commands::Supervisor => apps::cmd_supervisor(paths),
         Commands::RouterHelper => router_helper::cmd_router_helper(),
+        Commands::RouterRenew { app } => crate::deploy::router::renew(&app, paths),
         Commands::Plugin(cmd) => riku_remote::plugin_cmd::run_plugin(cmd),
         Commands::Plugins(cmd) => plugins::run_plugins(paths, cmd),
         Commands::Hook(cmd) => plugins::run_hook(paths, cmd),

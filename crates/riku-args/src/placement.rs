@@ -25,10 +25,9 @@ pub enum Placement {
 pub fn placement_of(name: &str) -> Option<Placement> {
     match name {
         "server" | "quickstart" | "container" | "plugin" => Some(Placement::Local),
-        "init" | "supervisor" | "router-helper" | "dashboard" | "git-hook" | "git-receive-pack"
-        | "git-upload-pack" | "scp" | "plugin-emit" | "__ns-shim" | "__dump-state" => {
-            Some(Placement::Server)
-        }
+        "init" | "supervisor" | "router-helper" | "router-renew" | "dashboard" | "git-hook"
+        | "git-receive-pack" | "git-upload-pack" | "scp" | "plugin-emit" | "__ns-shim"
+        | "__dump-state" => Some(Placement::Server),
         "apps" | "ps" | "logs" | "stats" | "config" | "deploy" | "restart" | "stop" | "destroy"
         | "rollback" | "run" | "backup" | "restore" | "addon" | "doctor" | "agent"
         | "install-plugins" | "plugins" | "hook" => Some(Placement::Forwarded),
