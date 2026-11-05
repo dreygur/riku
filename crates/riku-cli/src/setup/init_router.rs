@@ -72,7 +72,7 @@ pub fn deploy_router(user: &DeployUser) -> Result<Router> {
 #[allow(clippy::question_mark)]
 pub fn setup_router_host(router: &Router, user: &DeployUser) -> Result<()> {
     match router {
-        Router::Caddy => setup_caddy_host(&user.riku_paths(), user),
+        Router::Caddy => setup_caddy_host(&user.riku_paths()),
         Router::Nginx => {
             if let Err(e) = setup_nginx_host(user) {
                 return Err(e);
