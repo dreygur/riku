@@ -1,15 +1,15 @@
 /// System-wide (root) systemd service installation for riku.
 use anyhow::{anyhow, Result};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use crate::config::router::Router;
-use crate::config::{RikuPaths, ACME_WEBROOT, CADDY_SITE_ROOT, SOCKET_ROOT, STATIC_ROOT};
+use crate::config::{ACME_WEBROOT, CADDY_SITE_ROOT, SOCKET_ROOT, STATIC_ROOT};
 use crate::util::{echo, ROOT_BINARY};
 
 use super::deploy_user::{deploy_user_name, passwd_home, running_as_root};
-use super::router_units::{other_path_units, unit_ordering, write_router_units};
+use super::router_units::{remove_stale_units, unit_ordering, STALE_UNITS};
 
 pub const SYSTEMD_DIR: &str = "/etc/systemd/system";
 
@@ -68,13 +68,6 @@ WantedBy=multi-user.target
     )
 }
 
-/// The reload request file the nginx path unit watches in the deploy
-/// user's tree.
-fn reload_trigger(deploy_home: &str) -> PathBuf {
-    let home = PathBuf::from(deploy_home);
-    RikuPaths::from_dirs(home.join(".riku"), &home).nginx_reload_trigger()
-}
-
 fn write_system_unit(systemd_dir: &Path, content: &str) -> Result<()> {
     let service_path = systemd_dir.join("riku.service");
     if let Err(e) = fs::write(&service_path, content) {
@@ -87,7 +80,7 @@ fn write_system_unit(systemd_dir: &Path, content: &str) -> Result<()> {
     Ok(())
 }
 
-fn systemctl_ok(args: &[&str]) -> bool {
+pub(super) fn systemctl_ok(args: &[&str]) -> bool {
     Command::new("systemctl")
         .args(args)
         .output()
@@ -117,23 +110,22 @@ fn start_riku_service() {
     }
 }
 
-/// Enable the watcher for the active router and stop the other built-in
-/// router's watcher, which a host switching routers would otherwise keep.
-fn enable_router_watch(router: &Router, path_unit: Option<&str>) {
-    for stale in other_path_units(router) {
-        let _ = systemctl_ok(&["disable", "--now", &stale]);
+/// Stop and delete the reload watcher units an earlier init installed.
+/// On a host that never had them the disable calls fail and are ignored.
+fn remove_old_watchers(systemd_dir: &Path) -> Result<()> {
+    for unit in STALE_UNITS {
+        let _ = systemctl_ok(&["disable", "--now", unit]);
     }
-    let Some(path_unit) = path_unit else {
-        return;
+    let removed = match remove_stale_units(systemd_dir) {
+        Ok(removed) => removed,
+        Err(e) => return Err(anyhow!("{e}")),
     };
-    // Restart, not start: a path unit already running keeps watching the
-    // path it was started with, and one left failed stays down.
-    if systemctl_ok(&["enable", path_unit]) && systemctl_ok(&["restart", path_unit]) {
-        echo(
-            &format!("✓ Enabled {} auto-reload watcher", router.name()),
-            "green",
-        );
+    if !removed {
+        return Ok(());
     }
+    let _ = systemctl_ok(&["daemon-reload"]);
+    echo("✓ Removed the old nginx reload watcher", "green");
+    Ok(())
 }
 
 /// Install systemd service files for riku daemon (system-wide, requires root).
@@ -154,16 +146,10 @@ pub fn install_systemd_service(router: &Router) -> Result<()> {
     if let Err(e) = write_system_unit(systemd_dir, &unit) {
         return Err(e);
     }
-    let trigger = reload_trigger(&deploy_home);
-    let path_unit = match write_router_units(systemd_dir, router, &trigger) {
-        Ok(path_unit) => path_unit,
-        Err(e) => return Err(e),
-    };
 
     echo("Enabling riku systemd service...", "green");
     start_riku_service();
-    enable_router_watch(router, path_unit.as_deref());
-    Ok(())
+    remove_old_watchers(systemd_dir)
 }
 
 #[cfg(test)]

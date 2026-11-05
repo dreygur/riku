@@ -7,8 +7,8 @@
 //! installs the git hook, all in its own home and owned by it. Root then
 //! reads the router back, creates the uWSGI socket directory (see
 //! [`super::socket_group`]) and the ACME and static file directories (see
-//! [`super::var_root`]), prepares the router on the host and installs the
-//! systemd units.
+//! [`super::var_root`]), prepares the router on the host, installs the router
+//! helper (see [`super::helper_install`]) and the systemd units.
 //!
 //! Security: root never writes in the deploy user's home and never runs a
 //! binary from it: the deploy user could swap one between install and exec.
@@ -21,6 +21,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
+use crate::config::router::Router;
 use crate::util::echo;
 use crate::util::public_key::PublicKey;
 use crate::util::ROOT_BINARY;
@@ -29,6 +30,7 @@ use super::binary::install_root_binary;
 use super::deploy_account::ensure_account;
 use super::deploy_keys::read_key_file;
 use super::deploy_user::{deploy_user_name, DeployUser};
+use super::helper_install::install_router_helper;
 use super::init::InitOptions;
 use super::init_router::{deploy_router, setup_router_host};
 use super::init_system::record_init_system;
@@ -108,9 +110,10 @@ pub fn root_init(options: &InitOptions) -> Result<DeployUser> {
     if let Err(e) = setup_var_root(&user) {
         return Err(e);
     }
-    if let Err(e) = record_init_system() {
-        return Err(e);
-    }
+    let init = match record_init_system() {
+        Ok(init) => init,
+        Err(e) => return Err(e),
+    };
     if let Err(e) = setup_router_host(&router, &user) {
         return Err(e);
     }
@@ -118,6 +121,11 @@ pub fn root_init(options: &InitOptions) -> Result<DeployUser> {
     if options.no_systemd {
         echo("[2/4] Skipping systemd setup (--no-systemd)", "yellow");
     } else {
+        if !matches!(router, Router::Plugin(_)) {
+            if let Err(e) = install_router_helper(init, &user.name) {
+                return Err(e);
+            }
+        }
         echo("[2/4] Setting up systemd service...", "");
         if let Err(e) = install_systemd_service(&router) {
             return Err(e);

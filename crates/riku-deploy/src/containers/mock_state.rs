@@ -124,7 +124,6 @@ pub fn mock_server(root: &Path, app: &str, compose: &str, env: &str) -> MockServ
         root.join("engine").display().to_string(),
     )
     .unwrap();
-    fs::write(&paths.settings_file, "[engine]\nmode = \"rootful\"\n").unwrap();
     fs::write(&paths.router_file, "caddy").unwrap();
     fs::create_dir_all(&paths.caddy_root).unwrap();
     let caddy = root.join("mock_caddy");
