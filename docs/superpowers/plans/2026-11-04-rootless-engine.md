@@ -146,7 +146,7 @@ Status: done, `REQUIRED_COMMANDS` now has 17 entries with `info`. The Docker roo
 
 ### Task 4: Init system detection (S)
 
-Status: still needed. `/var/lib/riku` is already created root owned 0755 with a checked parent (crates/riku-cli/src/setup/var_root.rs:43-72), so `host.toml` goes there with no new directory code.
+Status: done. Was: `/var/lib/riku` is already created root owned 0755 with a checked parent (crates/riku-cli/src/setup/var_root.rs:43-72), so `host.toml` goes there with no new directory code.
 
 **Files:**
 - Create: `crates/riku-config/src/host_file.rs`, `host_file_tests.rs`, `crates/riku-cli/src/setup/init_system.rs`, `init_system_tests.rs`

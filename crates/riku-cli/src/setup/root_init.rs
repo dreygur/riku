@@ -31,6 +31,7 @@ use super::deploy_keys::read_key_file;
 use super::deploy_user::{deploy_user_name, DeployUser};
 use super::init::InitOptions;
 use super::init_router::{deploy_router, setup_router_host};
+use super::init_system::record_init_system;
 use super::prerequisites::check_prerequisites;
 use super::socket_group::setup_socket_root;
 use super::systemd::install_systemd_service;
@@ -136,6 +137,9 @@ pub fn root_init(options: &InitOptions) -> Result<DeployUser> {
         return Err(e);
     }
     if let Err(e) = setup_var_root(&user) {
+        return Err(e);
+    }
+    if let Err(e) = record_init_system() {
         return Err(e);
     }
     if let Err(e) = setup_router_host(&router, &user) {

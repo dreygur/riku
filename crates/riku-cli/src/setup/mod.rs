@@ -10,6 +10,7 @@ pub mod git_hook;
 mod guidance;
 pub mod init;
 mod init_router;
+mod init_system;
 mod nginx_host;
 mod nginx_worker;
 mod prerequisites;
