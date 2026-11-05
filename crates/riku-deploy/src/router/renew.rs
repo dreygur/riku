@@ -24,7 +24,11 @@ use crate::supervisor_ctl::read_app_env;
 /// Rebuild `app`'s nginx route from its saved ENV and running copies, then
 /// have the helper install it with the files now in `nginx_root`.
 pub fn renew(app: &str, paths: &RikuPaths) -> Result<()> {
-    renew_with(send_to_helper, app, paths)
+    renew_with(
+        |request: &Request| send_to_helper(paths, request),
+        app,
+        paths,
+    )
 }
 
 #[allow(clippy::question_mark)]

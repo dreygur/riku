@@ -37,7 +37,7 @@ fn renew_sends_one_apply_for_the_app() {
     let seen = seen.borrow();
     assert_eq!(seen.len(), 1, "expected one request, got {seen:?}");
     match &seen[0] {
-        Request::Apply { app, route } => {
+        Request::Apply { app, route, .. } => {
             assert_eq!(app, "myapp");
             assert_eq!(route.domains, ["myapp.example"]);
         }
