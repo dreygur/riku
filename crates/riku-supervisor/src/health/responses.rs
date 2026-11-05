@@ -6,6 +6,10 @@
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
+#[cfg(test)]
+#[path = "responses_tests.rs"]
+mod tests;
+
 /// Build the health check JSON value.
 ///
 /// Returns `{"status":"healthy","uptime":<secs>,"version":"<ver>","timestamp":<epoch>}`.
@@ -66,10 +70,12 @@ pub(super) fn build_app_metrics_json(stats_file: &Path, app: Option<&str>) -> St
                 match found {
                     Some(v) => serde_json::to_string(v)
                         .unwrap_or_else(|_| r#"{"error":"Serialization failed"}"#.to_string()),
-                    None => format!(
-                        r#"{{"error":"Not Found","app":"{}","message":"No metrics for this app"}}"#,
-                        app_name
-                    ),
+                    None => serde_json::json!({
+                        "error": "Not Found",
+                        "app": app_name,
+                        "message": "No metrics for this app"
+                    })
+                    .to_string(),
                 }
             } else {
                 raw

@@ -51,6 +51,36 @@ fn probe_stops_a_command_that_never_answers() {
 }
 
 #[test]
+fn probe_waits_for_the_slowest_command_not_the_sum() {
+    let dir = tempfile::tempdir().unwrap();
+    let bin = binary(dir.path(), "sleep 0.5");
+    let started = Instant::now();
+
+    let unanswered = first_unanswered(&bin.program, ANSWER_LIMIT);
+
+    assert_eq!(unanswered, None);
+    // One after another the sixteen probes take at least 8 s.
+    assert!(
+        started.elapsed() < Duration::from_secs(4),
+        "probes ran one after another: {:?}",
+        started.elapsed()
+    );
+}
+
+#[test]
+fn probe_reports_the_first_failing_command_in_required_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let bin = binary(
+        dir.path(),
+        "case \"$1\" in wait) exit 1;; build) sleep 0.3; exit 1;; esac",
+    );
+
+    let (command, _) = first_unanswered(&bin.program, ANSWER_LIMIT).unwrap();
+
+    assert_eq!(command, "build", "a later command finished failing first");
+}
+
+#[test]
 fn open_refuses_engine_without_login_or_image() {
     for command in ["login", "image"] {
         let dir = tempfile::tempdir().unwrap();

@@ -84,9 +84,16 @@ async fn api_state(
     if let Some(denied) = authorize(&state, &headers, &query) {
         return denied;
     }
-    match crate::cli::apps::state_json(&state.paths) {
-        Ok(value) => Json(value).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")).into_response(),
+    // The dump opens the container engine, which runs engine subprocesses.
+    let paths = state.paths.clone();
+    match tokio::task::spawn_blocking(move || crate::cli::apps::state_json(&paths)).await {
+        Ok(Ok(value)) => Json(value).into_response(),
+        Ok(Err(e)) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("task failed: {e}"),
+        )
+            .into_response(),
     }
 }
 
