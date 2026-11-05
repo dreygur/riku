@@ -4,9 +4,7 @@ use std::process::Command;
 
 use crate::config::router::Router;
 use crate::config::RikuPaths;
-use crate::util::echo;
-
-use super::binary::INSTALL_DIR;
+use crate::util::{echo, ROOT_BINARY};
 
 /// Setup systemd service for Riku supervisor (user-level, no root required).
 pub fn setup_systemd_service(paths: &RikuPaths, router: &Router) -> Result<()> {
@@ -22,9 +20,6 @@ pub fn setup_systemd_service(paths: &RikuPaths, router: &Router) -> Result<()> {
         ));
     }
 
-    // The copy init installed, not wherever init was launched from.
-    let riku_binary = home_dir.join(INSTALL_DIR).join("riku");
-    let riku_binary_path = riku_binary.to_string_lossy();
     let riku_root_abs = paths.riku_root.to_string_lossy();
 
     let service_content = format!(
@@ -59,7 +54,7 @@ CPUQuota=50%
 [Install]
 WantedBy=default.target
 "#,
-        riku_path = riku_binary_path,
+        riku_path = ROOT_BINARY,
         riku_root = riku_root_abs,
         ordering = super::router_units::unit_ordering(router),
     );

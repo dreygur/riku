@@ -4,11 +4,8 @@
 Component package located at `crates/riku-cli/src/setup`.
 
 ## Interface
-- `INSTALL_DIR` [binary.rs:INSTALL_DIR] (const)
-- `PathNote` [binary.rs:PathNote] (enum)
-- `install_riku_binary` [binary.rs:install_riku_binary] (fn)
-- `get_user_install_directory` [binary.rs:get_user_install_directory] (fn)
-- `is_in_path` [binary.rs:is_in_path] (fn)
+- `install_root_binary` [binary.rs:install_root_binary] (fn, installs the running binary as the root owned `/usr/local/bin/riku`)
+- `require_root_binary` [binary.rs:require_root_binary] (fn, a plain init needs that file to exist)
 - `setup_caddy_host` [caddy_host.rs:setup_caddy_host] (fn)
 - `BRANCH_ENV` [default_branch.rs:BRANCH_ENV] (const)
 - `set_default_branch` [default_branch.rs:set_default_branch] (fn)

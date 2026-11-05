@@ -1,19 +1,36 @@
-/// Binary installation: install riku binary to user's PATH.
-use anyhow::{anyhow, bail, Result};
-use std::env;
+//! Installs the one riku binary, `/usr/local/bin/riku`, for every user.
+//!
+//! Security: root writes only [`ROOT_BINARY`], and only into a directory
+//! that is root owned and closed to group and other writers (see
+//! `check_write_dir`), so no other account can plant a symlink in the way.
+//! The source is `/proc/self/exe`, the image root is actually running, not
+//! a path another account could swap after launch, and root refuses to
+//! install a running binary that the deploy user owns. The installed file
+//! is root owned and closed to writers, so the deploy user cannot change
+//! the binary that units, hooks and forced commands start.
+//!
+//! That is the extent of it. The hooks and `authorized_keys` live in the
+//! deploy user's tree and stay writable by the deploy user, so the deploy
+//! user can point them at any program. It runs with the deploy user's own
+//! privilege, never root's.
+
+use anyhow::{anyhow, Result};
+use nix::unistd::User;
 use std::fs;
-use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::path::Path;
 
-use crate::util::echo;
+use crate::util::{echo, ROOT_BINARY};
 
-/// Where riku installs itself, relative to the user's home. The git hook and
-/// the systemd unit run the binary from here.
-pub const INSTALL_DIR: &str = ".local/bin";
-/// The new binary's name in `INSTALL_DIR` until it is renamed into place.
+use super::deploy_user::deploy_user_name;
+use super::nginx_host::{check_write_dir, ROOT_UID};
+
+/// The new binary's name beside the target until it is renamed into place.
 const STAGED_NAME: &str = ".riku.new";
 const BINARY_MODE: u32 = 0o755;
+const RUNNING_EXE: &str = "/proc/self/exe";
+const EXEC_BITS: u32 = 0o111;
+const WRITE_BITS: u32 = 0o022;
 
 /// Swap `target` for a copy of `source` by rename, never writing into
 /// `target`: a running supervisor holds it open, and Linux refuses writes
@@ -35,158 +52,110 @@ fn replace_binary(source: &Path, target: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Whether install explains a missing PATH entry. A root init runs the
-/// deploy user's steps, and the note is for a person at that user's shell.
-pub enum PathNote {
-    Show,
-    Skip,
-}
-
-/// Install riku binary to user's PATH
-#[allow(clippy::question_mark)]
-pub fn install_riku_binary(note: PathNote) -> Result<()> {
-    let current_exe = match env::current_exe() {
-        Ok(exe) => exe,
-        Err(e) => return Err(anyhow!("failed to find the running riku binary: {e}")),
+/// Refuse `binary` unless it is a regular file owned by `owner`, closed to
+/// group and other writers.
+fn check_installed(binary: &Path, owner: u32) -> Result<()> {
+    let meta = match binary.symlink_metadata() {
+        Ok(meta) => meta,
+        Err(e) => return Err(anyhow!("cannot inspect {}: {e}", binary.display())),
     };
-
-    let target_dir = match get_user_install_directory() {
-        Ok(dir) => dir,
-        Err(e) => return Err(e),
-    };
-    let target_path = target_dir.join("riku");
-
-    // Already installed in correct location
-    if target_path.exists() && current_exe == target_path {
-        return Ok(());
+    if !meta.is_file() {
+        return Err(anyhow!(
+            "{} is not a regular file, refusing to trust it",
+            binary.display()
+        ));
     }
-
-    if !target_dir.exists() {
-        if let Err(e) = fs::create_dir_all(&target_dir) {
-            return Err(anyhow!("failed to create {}: {e}", target_dir.display()));
-        }
+    if meta.uid() != owner {
+        return Err(anyhow!(
+            "{} is owned by uid {}, not root: the deploy user could replace it. \
+             Remove it and run `sudo riku init` again",
+            binary.display(),
+            meta.uid()
+        ));
     }
-
-    echo(
-        &format!("Installing riku to '{}'...", target_path.display()),
-        "green",
-    );
-    if let Err(e) = replace_binary(&current_exe, &target_path) {
-        return Err(e);
+    if meta.mode() & WRITE_BITS != 0 {
+        return Err(anyhow!(
+            "{} is group or world writable (mode {:o}). Fix it with chmod 755, \
+             then run `sudo riku init` again",
+            binary.display(),
+            meta.mode() & 0o777
+        ));
     }
-
-    echo(
-        &format!("✓ Installed to {}", target_path.display()),
-        "green",
-    );
-
-    if !is_in_path(&target_dir) {
-        let added = try_add_to_shell_config();
-        if matches!(note, PathNote::Show) {
-            print_path_note(&target_dir, &target_path, added);
-        }
-    }
-
     Ok(())
 }
 
-fn print_path_note(target_dir: &Path, target_path: &Path, added: bool) {
-    echo("", "");
+/// Refuse a `source` the deploy user owns: it could have been written by an
+/// app. `deploy_uid` is `None` when the account does not exist yet.
+fn check_source_owner(source: &Path, deploy_uid: Option<u32>) -> Result<()> {
+    let meta = match fs::metadata(source) {
+        Ok(meta) => meta,
+        Err(e) => return Err(anyhow!("cannot inspect {}: {e}", source.display())),
+    };
+    if Some(meta.uid()) == deploy_uid {
+        return Err(anyhow!(
+            "the running riku binary is owned by the deploy user, so an app could have \
+             written it. Run `sudo riku init` from a copy that root owns"
+        ));
+    }
+    Ok(())
+}
+
+/// Copy `source` over `target` after checking that `target`'s directory is
+/// owned by `owner` and closed to other writers. When `source` already is
+/// `target`, nothing is copied but the file must pass [`check_installed`].
+#[allow(clippy::question_mark)]
+fn install_at(source: &Path, target: &Path, owner: u32) -> Result<()> {
+    if let (Ok(from), Ok(to)) = (fs::canonicalize(source), fs::canonicalize(target)) {
+        if from == to {
+            return check_installed(target, owner);
+        }
+    }
+    let Some(dir) = target.parent() else {
+        return Err(anyhow!("{} has no parent directory", target.display()));
+    };
+    if let Err(e) = check_write_dir(dir, owner) {
+        return Err(e);
+    }
     echo(
-        &format!("Note: {} is not in your PATH.", target_dir.display()),
-        "",
+        &format!("Installing riku to '{}'...", target.display()),
+        "green",
     );
-
-    if !added {
-        echo(
-            "Add it manually to your shell config (~/.bashrc, ~/.zshrc):",
-            "",
-        );
-        echo("  export PATH=\"$HOME/.local/bin:$PATH\"", "");
+    if let Err(e) = replace_binary(source, target) {
+        return Err(e);
     }
-
-    echo("", "");
-    echo("Or reload your shell, or use the full path:", "");
-    echo(&format!("  {}", target_path.display()), "");
-    echo("", "");
-    echo("After adding to PATH, run: exec $SHELL -l", "");
+    echo(&format!("✓ Installed to {}", target.display()), "green");
+    Ok(())
 }
 
-/// Attempt to add ~/.local/bin to shell config files; returns true if added.
-///
-/// Writes to `.profile` (sourced for login shells and SSH sessions) and
-/// `.bashrc`/`.zshrc` (sourced for interactive terminals) so `riku` is on
-/// PATH regardless of how the shell is started.
-fn try_add_to_shell_config() -> bool {
-    let line = "\n# Add Riku to PATH\nexport PATH=\"$HOME/.local/bin:$PATH\"\n";
-    let mut added = false;
-
-    if let Ok(home) = env::var("HOME") {
-        // .profile: sourced for login shells and non-interactive SSH
-        // command execution. This is the critical one for remote usage.
-        let profile = PathBuf::from(&home).join(".profile");
-        added |= append_once(&profile, line, true);
-
-        // .bashrc / .zshrc: sourced for interactive terminal sessions.
-        for config in &[".bashrc", ".zshrc"] {
-            let config_path = PathBuf::from(&home).join(config);
-            append_once(&config_path, line, false);
-        }
+fn deploy_uid() -> Option<u32> {
+    match User::from_name(&deploy_user_name()) {
+        Ok(Some(user)) => Some(user.uid.as_raw()),
+        _ => None,
     }
-
-    if added {
-        echo("✓ Added PATH export to ~/.profile", "");
-    }
-
-    added
 }
 
-/// Append `line` to `path` unless it already contains `.local/bin`.
-/// If `create` is false, does nothing when `path` doesn't exist.
-/// Returns true if the file was written to.
-fn append_once(path: &Path, line: &str, create: bool) -> bool {
-    if !path.exists() && !create {
-        return false;
+/// Install the running binary as [`ROOT_BINARY`]. Root only.
+pub fn install_root_binary() -> Result<()> {
+    let running = Path::new(RUNNING_EXE);
+    if let Err(e) = check_source_owner(running, deploy_uid()) {
+        return Err(anyhow!("refusing to install riku: {e}"));
     }
-    if let Ok(content) = fs::read_to_string(path) {
-        if content.contains(".local/bin") {
-            return false;
-        }
-    }
-    if let Ok(mut file) = fs::OpenOptions::new()
-        .create(create)
-        .append(true)
-        .open(path)
-    {
-        let _ = writeln!(file, "{}", line);
-        return true;
-    }
-    false
+    install_at(running, Path::new(ROOT_BINARY), ROOT_UID)
 }
 
-/// Get user-local installation directory (~/.local/bin)
-pub fn get_user_install_directory() -> Result<PathBuf> {
-    if let Ok(home) = env::var("HOME") {
-        return Ok(PathBuf::from(&home).join(INSTALL_DIR));
+/// Fail unless root already installed an executable [`ROOT_BINARY`]. A plain
+/// `riku init` has no right to install it and says who does.
+pub fn require_root_binary() -> Result<()> {
+    let installed = match fs::metadata(ROOT_BINARY) {
+        Ok(meta) => meta.is_file() && meta.mode() & EXEC_BITS != 0,
+        Err(_) => false,
+    };
+    if installed {
+        return Ok(());
     }
-
-    if let Ok(cwd) = env::current_dir() {
-        return Ok(cwd);
-    }
-
-    bail!("Could not determine home directory for installation")
-}
-
-/// Check if a directory is in the PATH environment variable
-pub fn is_in_path(dir: &Path) -> bool {
-    if let Ok(path) = env::var("PATH") {
-        for path_dir in env::split_paths(&path) {
-            if path_dir == dir {
-                return true;
-            }
-        }
-    }
-    false
+    Err(anyhow!(
+        "{ROOT_BINARY} is not installed or not executable. Run `sudo riku init` once to install it."
+    ))
 }
 
 #[cfg(test)]

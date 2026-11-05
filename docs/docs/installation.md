@@ -10,8 +10,8 @@ curl -LO https://github.com/dreygur/riku/releases/latest/download/riku-linux-amd
 tar -xzf riku-linux-amd64.tar.gz
 chmod +x riku
 
-# Run init (automatically installs riku to ~/.local/bin)
-./riku init
+# Run init as root (installs riku to /usr/local/bin/riku)
+sudo ./riku init
 
 # Create deploy user
 sudo adduser --disabled-password --gecos '' riku
@@ -21,7 +21,7 @@ sudo su - riku
 cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
 ```
 
-After running `riku init`, the binary will be installed to `~/.local/bin/riku` and you can use `riku` from anywhere.
+After running `sudo riku init`, the binary is installed to `/usr/local/bin/riku`, owned by root so the deploy user cannot change it. Units, git hooks and deploy keys all name that path. A plain `riku init` as the deploy user needs it to exist already.
 
 ## The rk laptop client
 
@@ -33,7 +33,7 @@ Install it with the install script and the `--rk` flag:
 curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh -s -- --rk
 ```
 
-The script downloads the release asset `rk-<os>-<arch>.tar.gz`, checks it against the release `.sha256` when one is published, and installs to `~/.local/bin` (or `/usr/local/bin` as root). `RIKU_INSTALL_DIR` and `RIKU_VERSION` override the directory and release tag. Without `--rk` the same script installs `riku`.
+The script downloads the release asset `rk-<os>-<arch>.tar.gz`, checks it against the release `.sha256` when one is published, and installs to `~/.local/bin` (or `/usr/local/bin` as root). `RIKU_INSTALL_DIR` and `RIKU_VERSION` override the directory and release tag. Without `--rk` the same script installs `riku`, which it only does as root, into `/usr/local/bin`.
 
 First use:
 

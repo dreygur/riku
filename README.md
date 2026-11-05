@@ -72,8 +72,8 @@ sudo ./riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
 Running `riku init` as root creates the `riku` deploy user if it is missing, sets
-up its home as that user (binary in `~/.local/bin`, `~/.riku`, the git hook, SSH
-keys), then creates a systemd service that starts on boot, launches the
+up its home as that user (`~/.riku`, the git hook, SSH keys), installs the binary
+once as a root owned `/usr/local/bin/riku`, then creates a systemd service that starts on boot, launches the
 supervisor, and enables router auto-reload. `--ssh-key` authorizes the keys in a
 `.pub` or `authorized_keys` file (here, the ones you used to log in) for
 `git push`; without it, run the command init prints before your first push.

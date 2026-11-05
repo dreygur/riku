@@ -9,30 +9,20 @@ use std::process::Command;
 use crate::config::RikuPaths;
 use crate::util::echo;
 
-/// The post-receive hook script content.
+/// The post-receive hook script content. It runs `/usr/local/bin/riku` and
+/// never searches `PATH` or the home directory.
 pub(crate) const POST_RECEIVE_HOOK: &str = r#"#!/usr/bin/env bash
 set -e; set -o pipefail;
-# Find riku binary from PATH or use common locations
-# `|| true`: under set -e a failed lookup would end the hook right here.
-RIKU_BIN="${RIKU_BIN:-$(command -v riku || true)}"
-if [ -z "$RIKU_BIN" ]; then
-    # Fallback to common installation paths
-    if [ -x "$HOME/.local/bin/riku" ]; then
-        RIKU_BIN="$HOME/.local/bin/riku"
-    elif [ -x "$HOME/riku" ]; then
-        RIKU_BIN="$HOME/riku"
-    elif [ -x "/usr/local/bin/riku" ]; then
-        RIKU_BIN="/usr/local/bin/riku"
-    else
-        echo "Error: riku binary not found" >&2
-        exit 1
-    fi
+BINARY="/usr/local/bin/riku"
+if [ ! -x "$BINARY" ]; then
+    echo "Error: riku binary not found at $BINARY" >&2
+    exit 1
 fi
 # Derive app name from the repo directory name (strip .git suffix).
 # $2 in post-receive is NOT an argument - all data comes from stdin.
 APP="$(basename "$(pwd)" .git)"
 REPO_PATH="$(pwd)"
-cat | RIKU_ROOT="${RIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$APP" "$REPO_PATH"
+cat | RIKU_ROOT="${RIKU_ROOT:-$HOME/.riku}" "$BINARY" git-hook "$APP" "$REPO_PATH"
 "#;
 
 /// Create symlink from user's bare repo to riku's repos directory.

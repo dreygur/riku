@@ -53,10 +53,9 @@ su - riku -c "RIKU_ROOT=$RIKU_ROOT /usr/local/bin/riku init --no-systemd" \
         exit 1;
     }
 cat "$LOG_DIR/riku-init.log"
-# riku init copies the running binary to ~/.local/bin/riku, the exact path
-# the post-receive hook `riku apps create` writes is hardcoded to look for
-# (src/cli/apps/create.rs). Deploying any app below before this point would
-# silently no-op: the hook would find no riku binary and skip the deploy.
+# The post-receive hook `riku apps create` writes looks for the binary at
+# /usr/local/bin/riku only, where the image installs it as root. A plain
+# `riku init` refuses to run until that file exists.
 
 echo "[entrypoint] starting nginx"
 nginx -t

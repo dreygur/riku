@@ -7,7 +7,7 @@ fn make_paths(tmp: &TempDir) -> RikuPaths {
     crate::config::RikuPaths::for_tests(tmp.path())
 }
 
-// Serialize tests that mutate the process-global PATH/HOME/RIKU_BIN env vars.
+// Serialize tests that mutate the process-global PATH/HOME env vars.
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 /// Save the current value of an env var, run `f`, then restore it
@@ -25,8 +25,8 @@ fn with_env_var<F: FnOnce()>(key: &str, value: &str, f: F) {
 // --- resolve_riku_bin ---
 
 /// Core regression test for fix #11: even with `PATH` empty or pointed
-/// entirely at attacker-controlled, malicious directories, and no
-/// `RIKU_BIN` override, `resolve_riku_bin` must never hand back a bare
+/// entirely at attacker-controlled, malicious directories,
+/// `resolve_riku_bin` must never hand back a bare
 /// `"riku"` for the OS loader to search `$PATH` for: it must resolve to
 /// an absolute path via `current_exe()`, which is immune to `$PATH`
 /// content entirely.
@@ -47,13 +47,8 @@ fn test_resolve_riku_bin_ignores_malicious_path_falls_back_to_current_exe() {
         fs::set_permissions(evil_dir.join("riku"), fs::Permissions::from_mode(0o755)).unwrap();
     }
 
-    // HOME with no ~/.local/bin/riku, so that branch can't satisfy
-    // resolution either: forces the current_exe() fallback.
-    let home_dir = tmp.path().join("home");
-    fs::create_dir_all(&home_dir).unwrap();
-
-    let original_riku_bin = std::env::var("RIKU_BIN").ok();
-    std::env::remove_var("RIKU_BIN");
+    // No root install on this path, so resolution must fall to current_exe().
+    let not_installed = tmp.path().join("no-such-riku");
 
     for malicious_path in [
         String::new(),                              // empty PATH
@@ -61,82 +56,57 @@ fn test_resolve_riku_bin_ignores_malicious_path_falls_back_to_current_exe() {
         format!("{}:/usr/bin", evil_dir.display()), // attacker's dir takes priority
     ] {
         with_env_var("PATH", &malicious_path, || {
-            with_env_var("HOME", home_dir.to_str().unwrap(), || {
-                let resolved = resolve_riku_bin();
+            let resolved = resolve_from(&not_installed);
 
-                assert!(
-                    resolved.starts_with('/'),
-                    "resolve_riku_bin() must return an absolute path regardless of PATH \
-                         content, got: {:?} (PATH={:?})",
-                    resolved,
-                    malicious_path
-                );
-                assert_ne!(
-                    resolved, "riku",
-                    "must never fall back to a bare name for $PATH to search"
-                );
-                assert!(
-                    !resolved.starts_with(evil_dir.to_str().unwrap()),
-                    "resolved binary must not come from the attacker-controlled PATH \
-                         directory, got: {:?}",
-                    resolved
-                );
+            assert!(
+                resolved.starts_with('/'),
+                "resolution must return an absolute path regardless of PATH \
+                     content, got: {:?} (PATH={:?})",
+                resolved,
+                malicious_path
+            );
+            assert_ne!(
+                resolved, "riku",
+                "must never fall back to a bare name for $PATH to search"
+            );
+            assert!(
+                !resolved.starts_with(evil_dir.to_str().unwrap()),
+                "resolved binary must not come from the attacker-controlled PATH \
+                     directory, got: {:?}",
+                resolved
+            );
 
-                let expected = std::env::current_exe()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .to_string();
-                assert_eq!(
-                    resolved, expected,
-                    "with no RIKU_BIN and no ~/.local/bin/riku, resolution must be \
-                         current_exe(), not a PATH-dependent lookup"
-                );
-            });
+            let expected = std::env::current_exe()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string();
+            assert_eq!(
+                resolved, expected,
+                "with no override and no root install, resolution must be \
+                     current_exe(), not a PATH-dependent lookup"
+            );
         });
     }
-
-    match original_riku_bin {
-        Some(v) => std::env::set_var("RIKU_BIN", v),
-        None => std::env::remove_var("RIKU_BIN"),
-    }
 }
 
+/// A binary the deploy user owns in its home must never be picked, however
+/// it got there: it could be swapped for anything an app can write.
 #[test]
-fn test_resolve_riku_bin_prefers_explicit_override_regardless_of_path() {
+fn relaunch_skips_home_binary() {
     let _guard = ENV_LOCK.lock().unwrap();
-    let original_riku_bin = std::env::var("RIKU_BIN").ok();
+    let tmp = TempDir::new().unwrap();
+    let home_bin = tmp.path().join(".local/bin");
+    fs::create_dir_all(&home_bin).unwrap();
+    fs::write(home_bin.join("riku"), "#!/bin/sh\n").unwrap();
 
-    std::env::set_var("RIKU_BIN", "/opt/riku/bin/riku");
-    with_env_var("PATH", "", || {
-        assert_eq!(
-            resolve_riku_bin(),
-            "/opt/riku/bin/riku",
-            "explicit RIKU_BIN must win even when PATH is empty"
+    with_env_var("HOME", tmp.path().to_str().unwrap(), || {
+        let resolved = resolve_riku_bin();
+        assert!(
+            !resolved.starts_with(tmp.path().to_str().unwrap()),
+            "relaunch picked a binary under the home: {resolved}"
         );
     });
-
-    match original_riku_bin {
-        Some(v) => std::env::set_var("RIKU_BIN", v),
-        None => std::env::remove_var("RIKU_BIN"),
-    }
-}
-
-#[test]
-fn test_resolve_riku_bin_ignores_empty_riku_bin_override() {
-    let _guard = ENV_LOCK.lock().unwrap();
-    let original_riku_bin = std::env::var("RIKU_BIN").ok();
-
-    // An empty RIKU_BIN (e.g. an unset-but-exported env var) must be
-    // treated as absent, not as a literal empty-string program name.
-    std::env::set_var("RIKU_BIN", "");
-    let resolved = resolve_riku_bin();
-    assert_ne!(resolved, "", "empty RIKU_BIN must not be used literally");
-
-    match original_riku_bin {
-        Some(v) => std::env::set_var("RIKU_BIN", v),
-        None => std::env::remove_var("RIKU_BIN"),
-    }
 }
 
 // --- read_supervisor_pid ---
@@ -227,21 +197,4 @@ fn test_notify_supervisor_reload_stale_pid_does_not_panic() {
     // Write a PID that almost certainly doesn't exist
     fs::write(paths.riku_root.join("supervisor.pid"), "999999999\n").unwrap();
     notify_supervisor_reload(&paths);
-}
-
-// --- ensure_supervisor_running ---
-
-#[test]
-fn test_ensure_supervisor_running_returns_false_when_no_binary() {
-    let _guard = ENV_LOCK.lock().unwrap();
-    let tmp = TempDir::new().unwrap();
-    let paths = make_paths(&tmp);
-    // RIKU_BIN points to a non-existent path so spawn will fail → false
-    std::env::set_var("RIKU_BIN", "/nonexistent/riku-binary-that-does-not-exist");
-    let result = ensure_supervisor_running(&paths);
-    std::env::remove_var("RIKU_BIN");
-    // Either true (if a stale riku binary somehow exists) or false, we just
-    // verify the function returns without panicking and doesn't claim success
-    // when no real supervisor started.
-    let _ = result; // result is bool; no panic is the key assertion
 }

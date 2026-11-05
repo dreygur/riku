@@ -659,7 +659,7 @@ Creates:
 - `~/.riku/plugins/` - Plugin executables
 - `~/.riku/acme/` - SSL certificates
 
-Also installs the riku binary to `~/.local/bin/riku` and generates a systemd user service.
+As root, also installs the riku binary to `/usr/local/bin/riku` (root owned) and generates the systemd service.
 
 ---
 
@@ -745,8 +745,7 @@ visible in the arguments of the `open` or `xdg-open` process for the moment it
 starts. Both stay on your machine and the token stops working when the session
 ends. This is accepted.
 
-The `riku` binary must be on the deploy user's `PATH` or at
-`~/.local/bin/riku` on the server.
+The `riku` binary must be at `/usr/local/bin/riku` on the server.
 
 ---
 

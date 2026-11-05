@@ -10,11 +10,22 @@ use crate::authorized_keys::authorized_keys_path;
 /// Append to ~/.ssh/authorized_keys with SSH restrictions.
 /// Set directory permissions to 700, file permissions to 600.
 pub fn setup_authorized_keys(ssh_fingerprint: &str, script_path: &str, pubkey: &str) -> Result<()> {
-    let home = match std::env::var("HOME") {
-        Ok(home) => home,
-        Err(e) => return Err(anyhow!("HOME is not usable: {e}")),
-    };
-    let authorized_keys = authorized_keys_path(Path::new(&home));
+    match std::env::var("HOME") {
+        Ok(home) => {
+            setup_authorized_keys_in(Path::new(&home), ssh_fingerprint, script_path, pubkey)
+        }
+        Err(e) => Err(anyhow!("HOME is not usable: {e}")),
+    }
+}
+
+/// [`setup_authorized_keys`] for the user whose home is `home`.
+pub fn setup_authorized_keys_in(
+    home: &Path,
+    ssh_fingerprint: &str,
+    script_path: &str,
+    pubkey: &str,
+) -> Result<()> {
+    let authorized_keys = authorized_keys_path(home);
     let ssh_dir = match authorized_keys.parent() {
         Some(dir) => dir.to_path_buf(),
         None => {

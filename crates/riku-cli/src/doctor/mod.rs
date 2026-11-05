@@ -10,6 +10,7 @@
 //! has [`Status::Fail`], so it composes in CI and provisioning scripts.
 
 pub mod app_env;
+pub mod binary_check;
 pub mod checks;
 pub mod container_check;
 pub mod router_check;
@@ -99,7 +100,7 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     let mut checks = Vec::new();
     checks.extend(checks::dependencies());
     checks.push(checks::directories(paths));
-    checks.extend(checks::binary());
+    checks.extend(binary_check::binary(paths));
     checks.push(checks::systemd_service());
     checks.extend(router_check::router(paths));
     checks.push(settings_check::settings_file(paths));

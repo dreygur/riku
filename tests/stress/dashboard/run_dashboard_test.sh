@@ -58,12 +58,12 @@ log "repo_root=$REPO_ROOT sandbox_root=$SANDBOX_ROOT health_port=$HEALTH_PORT wo
 # ---- Step 1: build the real riku release binary ----
 log "--- step 1: building riku release binary ---"
 (cd "$REPO_ROOT" && cargo build --release) 2>&1 | tee -a "$LOG"
-RIKU_BIN="$REPO_ROOT/target/release/riku"
-if [ ! -x "$RIKU_BIN" ]; then
-    log "FATAL: $RIKU_BIN not found after build"
+BUILT_RIKU="$REPO_ROOT/target/release/riku"
+if [ ! -x "$BUILT_RIKU" ]; then
+    log "FATAL: $BUILT_RIKU not found after build"
     exit 1
 fi
-log "binary ready: $RIKU_BIN"
+log "binary ready: $BUILT_RIKU"
 
 # ---- Step 2: lay out the sandbox RIKU_ROOT and a real worker config ----
 log "--- step 2: provisioning sandbox RIKU_ROOT ---"
@@ -106,7 +106,7 @@ RIKU_ROOT="$SANDBOX_ROOT" \
 RIKU_HEALTH_PORT="$HEALTH_PORT" \
 RIKU_MAX_PROCESSES="$MAX_PROCESSES" \
 RUST_LOG=info \
-    "$RIKU_BIN" supervisor > "$SANDBOX_ROOT/supervisor.log" 2>&1 &
+    "$BUILT_RIKU" supervisor > "$SANDBOX_ROOT/supervisor.log" 2>&1 &
 SUPERVISOR_PID=$!
 log "supervisor_pid=$SUPERVISOR_PID"
 

@@ -8,7 +8,7 @@ use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::echo;
 
-use super::binary::{install_riku_binary, PathNote};
+use super::binary::require_root_binary;
 use super::default_branch::{set_default_branch, BRANCH_ENV};
 use super::deploy_keys::{add_deploy_keys, parse_key_args, read_key_file};
 use super::deploy_user::running_as_root;
@@ -63,14 +63,11 @@ fn default_branch_step() -> Result<()> {
     set_default_branch(&home, env::var(BRANCH_ENV).ok())
 }
 
-/// Directories, binary, git hook and default branch in `paths`' tree.
+/// Directories, git hook and default branch in `paths`' tree.
 #[allow(clippy::question_mark)]
-fn prepare_tree(paths: &RikuPaths, router: &Router, note: PathNote) -> Result<()> {
+fn prepare_tree(paths: &RikuPaths, router: &Router) -> Result<()> {
     echo("[1/4] Creating directory structure...", "");
     if let Err(e) = create_directory_structure(paths, router) {
-        return Err(e);
-    }
-    if let Err(e) = install_riku_binary(note) {
         return Err(e);
     }
 
@@ -158,6 +155,11 @@ fn ssh_key_step(options: &InitOptions) -> Result<()> {
 #[allow(clippy::question_mark)]
 fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
     let user_steps = options.user_steps;
+    if !user_steps {
+        if let Err(e) = require_root_binary() {
+            return Err(e);
+        }
+    }
     let router = match persist_router(paths) {
         Ok(router) => router,
         Err(e) => return Err(e),
@@ -169,12 +171,7 @@ fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
         echo("", "");
     }
 
-    let note = if user_steps {
-        PathNote::Skip
-    } else {
-        PathNote::Show
-    };
-    if let Err(e) = prepare_tree(paths, &router, note) {
+    if let Err(e) = prepare_tree(paths, &router) {
         return Err(e);
     }
     if !user_steps {
@@ -190,7 +187,6 @@ fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
 fn own_scope() -> InstallScope {
     InstallScope::User {
         user: env::var("USER").unwrap_or_default(),
-        home: PathBuf::from(env::var("HOME").unwrap_or_default()),
     }
 }
 
@@ -207,10 +203,7 @@ pub fn cmd_init(options: InitOptions) -> Result<()> {
             Ok(user) => user,
             Err(e) => return Err(e),
         };
-        let scope = InstallScope::System {
-            user: user.name,
-            home: user.home,
-        };
+        let scope = InstallScope::System { user: user.name };
         print_finish(&scope, options.no_systemd);
         return Ok(());
     }

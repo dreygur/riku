@@ -166,7 +166,7 @@ Status: done. Was: `/var/lib/riku` is already created root owned 0755 with a che
 
 ### Task 5: One root owned binary (L)
 
-Status: still needed. Opus review: every way the deploy user reaches riku changes path. Runs on every host, with or without a router or engine.
+Status: done, binary 9,222,136 B. Was: Opus review: every way the deploy user reaches riku changes path. Runs on every host, with or without a router or engine.
 
 Today root init stages a root owned temp copy (root_init.rs:46-65) and runs `riku init --user-steps` from it as the deploy user (root_init.rs:81-94), and that child installs `~/.local/bin/riku` by copy and rename (binary.rs:47-91, from init.rs:73). This task makes root install `/usr/local/bin/riku` with the same copy and rename, run the user steps from there, and drop both the temp stage and the user side install.
 

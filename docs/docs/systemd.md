@@ -32,7 +32,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/riku supervisor
+ExecStart=/usr/local/bin/riku supervisor
 Restart=always
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 
@@ -40,7 +40,7 @@ Environment=PATH=/usr/local/bin:/usr/bin:/bin
 WantedBy=default.target
 ```
 
-The binary is installed at `~/.local/bin/riku` (i.e., `%h/.local/bin/riku` in systemd notation).
+The binary is installed at `/usr/local/bin/riku`, owned by root.
 
 ---
 
@@ -135,10 +135,10 @@ systemctl --user status riku
 journalctl --user -u riku -n 100
 
 # Verify binary exists
-ls -la ~/.local/bin/riku
+ls -la /usr/local/bin/riku
 
 # Test binary manually
-~/.local/bin/riku --help
+/usr/local/bin/riku --help
 ```
 
 ### Nginx Not Reloading

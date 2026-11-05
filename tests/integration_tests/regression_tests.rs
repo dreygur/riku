@@ -442,6 +442,11 @@ mod init_privilege_tests {
         if String::from_utf8_lossy(&uid.stdout).trim() == "0" {
             return;
         }
+        // With the root install present a plain init goes on instead of
+        // naming `sudo riku init`, so there is nothing to observe.
+        if std::path::Path::new("/usr/local/bin/riku").is_file() {
+            return;
+        }
         let home = TempDir::new().unwrap();
         let out = std::process::Command::new(riku_bin())
             .args(["init", "--no-systemd"])
@@ -454,6 +459,10 @@ mod init_privilege_tests {
         assert!(
             !stderr.contains("useradd"),
             "init took the root path for a non-root uid:\n{stderr}"
+        );
+        assert!(
+            stderr.contains("sudo riku init"),
+            "a non-root init must name the root install step:\n{stderr}"
         );
     }
 }

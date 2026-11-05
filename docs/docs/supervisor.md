@@ -74,7 +74,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/riku supervisor
+ExecStart=/usr/local/bin/riku supervisor
 Restart=always
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 

@@ -1,15 +1,15 @@
 #!/bin/sh
 # Riku one-line installer.
 #
-#   curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sudo sh
 #   curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh -s -- --rk
 #
 # Detects OS/arch, downloads the matching release binary, verifies its
 # checksum, and installs it. The default installs riku; --rk installs the rk
 # laptop client instead. Override with env vars:
 #   RIKU_VERSION      release tag to install (default: latest)
-#   RIKU_INSTALL_DIR  install directory (default: ~/.local/bin, or
-#                     /usr/local/bin when running as root)
+#   RIKU_INSTALL_DIR  install directory (default: /usr/local/bin as root, or
+#                     ~/.local/bin for rk; riku itself installs only as root)
 #   RIKU_NO_INIT=1    skip the post-install next-step hint
 set -eu
 
@@ -68,6 +68,10 @@ else
 fi
 
 # --- choose install dir ------------------------------------------------------
+if [ "$bin" = "riku" ] && [ "$(id -u)" != "0" ]; then
+  err "riku installs to /usr/local/bin as root, run this script with sudo (rk needs no root)"
+fi
+
 if [ -n "${RIKU_INSTALL_DIR:-}" ]; then
   install_dir="$RIKU_INSTALL_DIR"
 elif [ "$(id -u)" = "0" ]; then
@@ -103,10 +107,13 @@ else
 fi
 
 say "-----> Installing to ${install_dir}/${bin}..."
-tar -xzf "${tmp}/${asset}" -C "$tmp"
+tar -xzf "${tmp}/${asset}" --no-same-owner -C "$tmp"
+if [ "$(id -u)" = "0" ]; then
+  chown 0:0 "${tmp}/${bin}"
+fi
+chmod 755 "${tmp}/${bin}"
 mkdir -p "$install_dir"
 mv "${tmp}/${bin}" "${install_dir}/${bin}"
-chmod +x "${install_dir}/${bin}"
 
 say "-----> ${bin} installed: ${install_dir}/${bin}"
 

@@ -22,8 +22,7 @@ fn script_prompts_through_sudo_and_reads_the_token_after_ready() {
   echo riku-ready
   IFS= read -r t || exit 1
   export RIKU_DASHBOARD_TOKEN=\"$t\"
-  bin=$(command -v riku || echo \"$HOME/.local/bin/riku\")
-  \"$bin\" dashboard --local --bind 127.0.0.1:0 &
+  /usr/local/bin/riku dashboard --local --bind 127.0.0.1:0 &
   p=$!
   cat >/dev/null
   kill \"$p\"

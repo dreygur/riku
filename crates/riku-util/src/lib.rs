@@ -32,6 +32,7 @@ pub mod process_util;
 pub mod procfile;
 pub mod public_key;
 pub mod resource_limits;
+pub mod root_binary;
 pub mod route_plan;
 pub mod secure;
 pub mod socket_dir;
@@ -50,5 +51,6 @@ pub use fs::{
 pub use nginx_validation::{print_env_warnings, validate_env_vars};
 pub use process_util::get_free_port;
 pub use procfile::parse_procfile;
-pub use ssh_keys::setup_authorized_keys;
+pub use root_binary::ROOT_BINARY;
+pub use ssh_keys::{setup_authorized_keys, setup_authorized_keys_in};
 pub use validation::{ensure_path_within, exit_if_invalid, validate_app_name};

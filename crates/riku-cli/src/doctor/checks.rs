@@ -81,41 +81,6 @@ pub fn directories(paths: &RikuPaths) -> Check {
     }
 }
 
-/// Confirm the riku binary is installed where the git post-receive hook
-/// expects it (`~/.local/bin/riku`), and say whether a shell finds it.
-///
-/// PATH is informational only: hooks and the systemd unit run the binary by
-/// its full path, and `ssh riku@host doctor` always runs with sshd's
-/// default PATH, which never has `~/.local/bin`.
-pub fn binary() -> Vec<Check> {
-    let mut out = Vec::new();
-
-    match which::which("riku") {
-        Ok(p) => out.push(Check::ok("riku on PATH", p.display().to_string())),
-        Err(_) => out.push(Check::ok(
-            "riku on PATH",
-            "not on this PATH; hooks and services use the full path",
-        )),
-    }
-
-    if let Ok(home) = std::env::var("HOME") {
-        let installed = std::path::Path::new(&home).join(".local/bin/riku");
-        if installed.exists() {
-            out.push(Check::ok(
-                "installed binary",
-                installed.display().to_string(),
-            ));
-        } else {
-            out.push(Check::warn(
-                "installed binary",
-                format!("{} not found, run: riku init", installed.display()),
-            ));
-        }
-    }
-
-    out
-}
-
 /// Report whether the supervisor (`riku.service`) is active, checking the
 /// user scope first then the system scope.
 pub fn systemd_service() -> Check {

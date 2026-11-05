@@ -149,7 +149,7 @@ jobs:
               platform="${name#release-}"
               for bin in riku rk; do
                 chmod +x "$dir$bin"
-                tar -czf "$bin-$platform.tar.gz" -C "$dir" "$bin"
+                tar --owner=0 --group=0 --numeric-owner -czf "$bin-$platform.tar.gz" -C "$dir" "$bin"
                 sha256sum "$bin-$platform.tar.gz" > "$bin-$platform.sha256"
               done
             fi

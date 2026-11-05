@@ -6,9 +6,8 @@ use std::process::Command;
 
 use crate::config::router::Router;
 use crate::config::{RikuPaths, ACME_WEBROOT, CADDY_SITE_ROOT, SOCKET_ROOT, STATIC_ROOT};
-use crate::util::echo;
+use crate::util::{echo, ROOT_BINARY};
 
-use super::binary::INSTALL_DIR;
 use super::deploy_user::{deploy_user_name, passwd_home, running_as_root};
 use super::router_units::{other_path_units, unit_ordering, write_router_units};
 
@@ -146,21 +145,12 @@ pub fn install_systemd_service(router: &Router) -> Result<()> {
 
     let deploy_user = deploy_user_name();
     let deploy_home = passwd_home(&deploy_user).unwrap_or_else(|| format!("/home/{deploy_user}"));
-    // The binary init installed for the deploy user, not root's own copy:
-    // the unit runs as that user, who may not be able to reach root's.
-    let riku_binary = Path::new(&deploy_home).join(INSTALL_DIR).join("riku");
-
     let systemd_dir = Path::new(SYSTEMD_DIR);
     if let Err(e) = fs::create_dir_all(systemd_dir) {
         return Err(anyhow!("failed to create {SYSTEMD_DIR}: {e}"));
     }
 
-    let unit = render_system_unit(
-        router,
-        &deploy_user,
-        &deploy_home,
-        &riku_binary.to_string_lossy(),
-    );
+    let unit = render_system_unit(router, &deploy_user, &deploy_home, ROOT_BINARY);
     if let Err(e) = write_system_unit(systemd_dir, &unit) {
         return Err(e);
     }
