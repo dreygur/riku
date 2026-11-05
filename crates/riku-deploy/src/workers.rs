@@ -42,7 +42,7 @@ pub use scaling::read_scaling_count;
 use files::{remove_stale_configs, remove_surplus_configs, write_worker_config};
 use pinned::check_pinned_port;
 use socket::check_custom_socket;
-use web_env::{build_worker_env, is_web_facing};
+use web_env::{build_worker_env, clear_route_env, is_web_facing};
 use web_rollout::{roll_web_kind, stop_web_kind, WebDeploy, WebRoutes};
 
 /// Returns true when `RIKU_AUTO_RESTART` is not explicitly disabled.
@@ -130,6 +130,12 @@ pub(crate) fn create_workers_with(
         }
         (Err(e), _) => return Err(e),
     };
+
+    if !entries.keys().any(|kind| is_web_facing(kind)) {
+        if let Err(e) = clear_route_env(app, paths) {
+            return Err(e);
+        }
+    }
 
     let deploy = WebDeploy {
         app,

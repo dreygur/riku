@@ -21,7 +21,7 @@ fn include_file_is_recognised_once_written() {
     let paths = RikuPaths::for_tests(tmp.path());
     assert!(!includes_riku_sites(&paths), "no include file yet");
 
-    write_include_file(&paths).unwrap();
+    write_include_file(&paths, false).unwrap();
 
     let contents = fs::read_to_string(&paths.nginx_include_file).unwrap();
     assert!(

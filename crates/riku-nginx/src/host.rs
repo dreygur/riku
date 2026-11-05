@@ -1,5 +1,6 @@
 //! How the system nginx finds riku's sites: one root-owned file,
-//! `nginx_include_file`, holding a single `include <nginx_root>/*.conf;`.
+//! `nginx_include_file`, holding a single `include <nginx_root>/*.conf;`
+//! and, on a host with no default server for port 80, riku's catch-all.
 //!
 //! riku writes site configs only into its own `nginx_root`. Root writes the
 //! include file once at init and nothing else under `/etc/nginx`.
@@ -14,6 +15,7 @@ use std::fs;
 use anyhow::{anyhow, Result};
 
 use crate::config::RikuPaths;
+use crate::default_server::CATCH_ALL_SERVER;
 
 fn breaks_directive(c: char) -> bool {
     c.is_whitespace() || c.is_control() || matches!(c, ';' | '{' | '}' | '#' | '"' | '\'' | '$')
@@ -34,20 +36,27 @@ pub fn include_line(paths: &RikuPaths) -> Result<String> {
     Ok(format!("include {text}/*.conf;"))
 }
 
-/// The full text of the include file.
-pub fn include_file_contents(paths: &RikuPaths) -> Result<String> {
-    match include_line(paths) {
-        Ok(line) => Ok(format!(
-            "# Written by riku init. Loads the deploy user's site configs.\n{line}\n"
-        )),
-        Err(e) => Err(e),
+/// The full text of the include file, with riku's catch-all server when
+/// `catch_all` is set (see [`crate::needs_catch_all`]).
+#[allow(clippy::question_mark)]
+pub fn include_file_contents(paths: &RikuPaths, catch_all: bool) -> Result<String> {
+    let line = match include_line(paths) {
+        Ok(line) => line,
+        Err(e) => return Err(e),
+    };
+    let mut contents =
+        format!("# Written by riku init. Loads the deploy user's site configs.\n{line}\n");
+    if catch_all {
+        contents.push_str("\n# No other server is the default for port 80.\n");
+        contents.push_str(CATCH_ALL_SERVER);
     }
+    Ok(contents)
 }
 
 /// Write the include file atomically, creating its directory.
 #[allow(clippy::question_mark)]
-pub fn write_include_file(paths: &RikuPaths) -> Result<()> {
-    let contents = match include_file_contents(paths) {
+pub fn write_include_file(paths: &RikuPaths, catch_all: bool) -> Result<()> {
+    let contents = match include_file_contents(paths, catch_all) {
         Ok(contents) => contents,
         Err(e) => return Err(e),
     };

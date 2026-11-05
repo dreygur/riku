@@ -23,6 +23,26 @@ fn logs_unknown_service_lists_known() {
 }
 
 #[test]
+fn a_compose_service_without_a_log_file_yet_is_not_unknown() {
+    let tmp = TempDir::new().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    let app_path = paths.app_root.join("shop");
+    fs::create_dir_all(&app_path).unwrap();
+    fs::write(
+        app_path.join("compose.yml"),
+        "services:\n  web:\n    image: nginx\n  worker:\n    image: busybox\n",
+    )
+    .unwrap();
+    let app_log_dir = paths.log_root.join("shop");
+    fs::create_dir_all(&app_log_dir).unwrap();
+    fs::write(app_log_dir.join("worker.1.log"), "tick\n").unwrap();
+
+    let shown = cmd_logs(&paths, "shop", "web");
+
+    assert!(shown.is_ok(), "web was refused: {:#}", shown.unwrap_err());
+}
+
+#[test]
 fn refuses_service_names_that_would_widen_the_glob() {
     let tmp = TempDir::new().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());

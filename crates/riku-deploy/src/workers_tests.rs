@@ -281,6 +281,34 @@ fn redeploy_routes_every_copy_of_the_latest_deploy() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// nginx picks the port map template whenever `RIKU_NGINX_PORTMAP` is set,
+/// so a key left by the old `web:` line would proxy the static site to a
+/// port nothing listens on.
+#[test]
+fn dropping_the_web_line_lets_a_static_app_get_the_static_template() -> anyhow::Result<()> {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let app_path = tmp.path().join("app");
+    fs::create_dir_all(&app_path).unwrap();
+    fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+    let env_file = paths.env_root.join("myapp/ENV");
+    fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
+    fs::write(&env_file, "RIKU_NGINX_STATIC=true\n")?;
+
+    fs::write(app_path.join("Procfile"), "web: python app.py\n")?;
+    deploy(&app_path, &HashMap::new(), &paths, None)?;
+    fs::write(app_path.join("Procfile"), "worker: python worker.py\n")?;
+    deploy(&app_path, &HashMap::new(), &paths, None)?;
+
+    let saved = fs::read_to_string(&env_file)?;
+    assert!(
+        !saved.contains("RIKU_NGINX_PORTMAP") && !saved.contains("RIKU_NGINX_EXTERNAL_PORT"),
+        "routing keys of the old web line survived:\n{saved}"
+    );
+    assert!(saved.contains("RIKU_NGINX_STATIC=true"), "{saved}");
+    Ok(())
+}
+
 #[test]
 fn refuses_to_scale_web_past_one_on_a_pinned_port() {
     let tmp = TempDir::new().unwrap();

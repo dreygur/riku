@@ -29,7 +29,7 @@ fn nginx_include_fails_until_installed() {
     assert_eq!(check.status, Status::Fail, "{}", check.detail);
     assert!(check.detail.contains("sudo riku init"), "{}", check.detail);
 
-    crate::nginx::write_include_file(&paths).unwrap();
+    crate::nginx::write_include_file(&paths, false).unwrap();
     assert_eq!(nginx_include(&paths).status, Status::Ok);
 }
 

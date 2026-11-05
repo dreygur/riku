@@ -38,7 +38,7 @@ mod reload;
 mod remove;
 
 pub use backends::{copy_socket, current_backends};
-pub(crate) use backends::{web_copies, worker_backend};
+pub(crate) use backends::{parsed_worker, web_copies, worker_backend};
 use caddy::configure_caddy;
 pub use check::check;
 use fallback::fallback_backends;

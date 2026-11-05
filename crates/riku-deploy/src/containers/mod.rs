@@ -41,7 +41,7 @@ mod start;
 mod worker_files;
 
 pub use app::{is_container_app, load_project, read_scaling, SINGLE_IMAGE_PORT};
-pub use control::{restart_service, runs_containers, scale_service, stop_service};
+pub use control::{restart_service, runs_containers, scale_service, service_names, stop_service};
 pub use copy_restart::{restart_copy, RestartOutcome};
 pub use deploy::{deploy_containers, CONTAINER_RUNTIME};
 pub use engine_open::{open_engine, EngineUnreachable};

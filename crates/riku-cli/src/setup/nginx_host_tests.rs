@@ -3,7 +3,9 @@ use std::fs;
 use super::*;
 
 fn host_paths(dir: &std::path::Path) -> RikuPaths {
-    let paths = RikuPaths::for_tests(dir);
+    let mut paths = RikuPaths::for_tests(dir);
+    // `nginx -T` must not read the machine's own nginx config.
+    paths.reload_programs.nginx = dir.join("no-nginx");
     fs::create_dir_all(paths.nginx_include_file.parent().unwrap()).unwrap();
     paths
 }

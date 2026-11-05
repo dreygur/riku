@@ -18,6 +18,7 @@ Component package located at `crates/riku-nginx/src`.
 - `insert_portmap_context` [context.rs:insert_portmap_context] (fn)
 - `build_context` [context.rs:build_context] (fn)
 - `insert_cache_context` [context_cache.rs:insert_cache_context] (fn)
+- `needs_catch_all` [default_server.rs:needs_catch_all] (fn)
 - `include_line` [host.rs:include_line] (fn)
 - `include_file_contents` [host.rs:include_file_contents] (fn)
 - `write_include_file` [host.rs:write_include_file] (fn)
@@ -46,7 +47,8 @@ Component package located at `crates/riku-nginx/src`.
 ## Modules
 - `app_snippet.rs`: the app's own snippet named by `RIKU_NGINX_INCLUDE_FILE`, checked for path, grammar and directive allowlist, and checked again after the `nginx.include_content` filter chain
 - `context_cache.rs`: the proxy cache section of the template context (zone size, cache times, cache path)
-- `host.rs`: the one root-owned include file, `nginx_include_file`, holding `include <nginx_root>/*.conf;`
+- `default_server.rs`: decides from `nginx -T` whether root init adds riku's `return 444` catch-all for port 80; never when any other file already has a port 80 `default_server`
+- `host.rs`: the one root-owned include file, `nginx_include_file`, holding `include <nginx_root>/*.conf;` and, when `default_server.rs` says so, the catch-all
 - `host_check.rs`: refuses a router install while `nginx_root` holds a `*.conf` that is no app's config; deploy and router apply check this first, and `riku doctor` reports it
 - `install.rs`: writes a config as `<name>.conf.new`, checks it with `nginx -t`, and renames it into place only when nginx accepts it
 - `remove.rs`: removes an app's files from `nginx_root` and nothing outside it

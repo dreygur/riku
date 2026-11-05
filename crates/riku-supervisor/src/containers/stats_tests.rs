@@ -3,9 +3,53 @@ use std::collections::HashMap;
 use riku_container::engine::{ContainerId, ContainerInfo, ContainerState, ContainerStats};
 use riku_container::types::{CopyIndex, ServiceName};
 
+use riku_config::RikuPaths;
+
 use super::container_rows;
+use crate::containers::mock_actions::mock_actions;
+use crate::containers::restarts::Restarts;
 use crate::containers::tally::RestartTally;
+use crate::health::actions::{RestartOutcome, SharedActions};
 use crate::stats::types::ProcessStatus;
+
+fn web_copy(id: &str, state: ContainerState) -> ContainerInfo {
+    ContainerInfo {
+        id: ContainerId::try_from(id).unwrap(),
+        name: "myapp-web-1".to_string(),
+        app: Some("myapp".to_string()),
+        service: Some(ServiceName::try_from("web").unwrap()),
+        copy: Some(CopyIndex::new(1).unwrap()),
+        image: "myapp:latest".to_string(),
+        image_id: "sha256:img1".to_string(),
+        host_port: None,
+        restart: Some("always".to_string()),
+        state,
+    }
+}
+
+/// The supervisor logs `restart=1` when it dispatches the restart, and the
+/// tally counts it only once the report is collected on a later tick.
+#[test]
+fn replacement_seen_before_the_restart_report_already_counts() {
+    let dead = web_copy(&"1".repeat(64), ContainerState::Exited { code: 137 });
+    let fresh = web_copy(&"2".repeat(64), ContainerState::Running);
+    let tmp = tempfile::tempdir().unwrap();
+    let actions: SharedActions = mock_actions(RestartOutcome::Restarted);
+    let mut restarts = Restarts::new();
+    restarts
+        .dispatch(&RikuPaths::for_tests(tmp.path()), &actions, &dead)
+        .unwrap();
+    let tally = RestartTally::new();
+
+    let still_dead = container_rows(&[dead], &HashMap::new(), &tally, &restarts);
+    let replaced = container_rows(&[fresh], &HashMap::new(), &tally, &restarts);
+
+    assert_eq!(
+        (still_dead[0].restart_count, replaced[0].restart_count),
+        (0, 1),
+        "(dead copy, its replacement)"
+    );
+}
 
 #[test]
 fn stats_rows_carry_engine_state() {
@@ -53,7 +97,7 @@ fn stats_rows_carry_engine_state() {
     );
 
     let tally = RestartTally::new();
-    let rows = container_rows(&[info1, info2], &samples, &tally);
+    let rows = container_rows(&[info1, info2], &samples, &tally, &Restarts::new());
 
     assert_eq!(rows.len(), 2, "must generate exactly two rows");
 

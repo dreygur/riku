@@ -51,6 +51,7 @@ Component package located at `crates/riku-deploy/src`.
 - `notify_supervisor_reload` [supervisor_ctl.rs:notify_supervisor_reload] (fn)
 - `supervisor_ctl.rs` [supervisor_ctl.rs] (and 1 additional symbols)
 - `plugin_destroy` [teardown.rs:plugin_destroy] (fn)
+- `stop_procfile_app` [app_stop.rs:stop_procfile_app] (fn)
 - `restart_worker` [worker_control.rs:restart_worker] (fn)
 - `delete_worker` [worker_control.rs:delete_worker] (fn)
 - `read_scaling_count` [workers.rs:read_scaling_count] (fn)
@@ -68,6 +69,8 @@ Component package located at `crates/riku-deploy/src`.
 - [worker_control.rs] Validates the app name and worker kind before building paths from them
 
 ## Side Effects
+- [app_stop.rs] Removes an app's worker configs and the uWSGI sockets riku made for it
+- [deploy_env.rs] Sets the app's env dir to `0700` and its ENV file to `0600`
 - [backup.rs] Spawns external child processes via `std::process::Command`
 - [backup.rs] Mutates local filesystem (creates/modifies/removes files)
 - [container_runtime.rs] Spawns external child processes via `std::process::Command`

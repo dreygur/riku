@@ -11,7 +11,7 @@ use riku_container::compose::{check_scale, ServiceDef};
 use riku_container::engine::ContainerInfo;
 use riku_container::types::ServiceName;
 
-use super::app::{is_container_app, read_scaling, write_scaling};
+use super::app::{is_container_app, load_project, read_scaling, write_scaling};
 use super::context::{saved_env, ContainerApp};
 use super::engine_open::reclassify;
 use super::removal::{app_containers, remove_containers};
@@ -25,6 +25,23 @@ use crate::util::echo;
 pub fn runs_containers(app: &str, paths: &RikuPaths) -> Result<bool> {
     match saved_env(app, paths) {
         Ok(env) => is_container_app(&paths.app_root.join(app), &env),
+        Err(e) => Err(e),
+    }
+}
+
+/// The service names of the deployed container app `app`, from its compose
+/// file or its single image.
+pub fn service_names(app: &str, paths: &RikuPaths) -> Result<Vec<String>> {
+    let env = match saved_env(app, paths) {
+        Ok(env) => env,
+        Err(e) => return Err(e),
+    };
+    match load_project(app, &paths.app_root.join(app), &env) {
+        Ok(project) => Ok(project
+            .services
+            .iter()
+            .map(|service| service.name.to_string())
+            .collect()),
         Err(e) => Err(e),
     }
 }

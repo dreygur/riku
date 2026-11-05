@@ -132,7 +132,7 @@ impl ContainerWatch {
     pub fn rows(&self) -> Vec<ProcessStats> {
         let mut infos: Vec<ContainerInfo> = self.known.values().cloned().collect();
         infos.sort_by(|a, b| a.name.cmp(&b.name));
-        container_rows(&infos, &self.samples, &self.tally)
+        container_rows(&infos, &self.samples, &self.tally, &self.restarts)
     }
 
     /// Run one watch step. Engine errors are logged and the step goes on;

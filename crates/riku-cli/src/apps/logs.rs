@@ -1,8 +1,6 @@
 //! Log tailing commands for deployed apps.
 
-use std::collections::BTreeSet;
 use std::fs;
-use std::path::Path;
 
 use anyhow::{anyhow, Result};
 use riku_container::types::ServiceName;
@@ -10,8 +8,10 @@ use riku_container::types::ServiceName;
 use crate::config::RikuPaths;
 use crate::util::{display, exit_if_invalid, validate_app_name};
 
+mod services;
 mod tail;
 
+use services::app_services;
 use tail::{multi_tail, tail_deploy_log};
 
 /// Show the persistent deploy log for an app.
@@ -81,11 +81,18 @@ pub fn cmd_logs(paths: &RikuPaths, app: &str, service: &str) -> Result<()> {
         };
 
         if logfiles.is_empty() {
-            let known = known_services(&app_log_dir);
+            let known = app_services(paths, &app);
+            if known.contains(service.as_str()) {
+                display::warn(&format!(
+                    "'{service}' of '{app}' has not written any output yet."
+                ));
+                return Ok(());
+            }
             if known.is_empty() {
                 display::warn(&format!("No logs found for app '{app}'."));
                 return Ok(());
             }
+            let known: Vec<String> = known.into_iter().collect();
             return Err(anyhow!(
                 "unknown service '{service}' for app '{app}'; known services: {}",
                 known.join(", ")
@@ -119,26 +126,6 @@ pub fn cmd_logs(paths: &RikuPaths, app: &str, service: &str) -> Result<()> {
     }
 
     Ok(())
-}
-
-/// Find all known service names from `{service}.{n}.log` files in an app's log directory.
-pub(crate) fn known_services(app_log_dir: &Path) -> Vec<String> {
-    let mut services = BTreeSet::new();
-    if let Ok(entries) = fs::read_dir(app_log_dir) {
-        for entry in entries.flatten() {
-            let name = entry.file_name().to_string_lossy().to_string();
-            if name.ends_with(".log") && name != "deploy.log" {
-                let stem = &name[..name.len() - 4];
-                if let Some(pos) = stem.rfind('.') {
-                    let svc = &stem[..pos];
-                    if !svc.is_empty() {
-                        services.insert(svc.to_string());
-                    }
-                }
-            }
-        }
-    }
-    services.into_iter().collect()
 }
 
 #[cfg(test)]

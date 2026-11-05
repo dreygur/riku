@@ -84,6 +84,8 @@ Do not edit these files by hand: every deploy rewrites them.
 | `true`, `1`, `yes` or `on` | Bare domains only. Caddy serves HTTPS and redirects plain HTTP to it. |
 | anything else, or unset | Bare domains plus `http://` addresses. Caddy serves HTTPS and also answers plain HTTP without a redirect. |
 
+A bare domain makes Caddy ask Let's Encrypt and ZeroSSL for a certificate. A domain no public CA will sign, such as `shop.test`, is refused (`rejectedIdentifier`) and Caddy keeps retrying until the app is destroyed, so a test host makes outbound ACME requests for every such app. Riku does not change this.
+
 ---
 
 ## Limits

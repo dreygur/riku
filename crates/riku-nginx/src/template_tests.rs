@@ -381,17 +381,42 @@ fn static_files_and_acme_challenges_are_served_from_outside_the_home() {
         "{site}"
     );
 
-    let proxied = render_env(&[("RIKU_NGINX_STATIC_PATHS", "/assets:dist,broken,/img:images")]);
-    for (location, index) in [("/assets", 0), ("/img", 1)] {
-        let block = format!(
-            "location {location} {{\n  alias {}/paths/{index};",
-            published.display()
+    let paths_env = ("RIKU_NGINX_STATIC_PATHS", "/assets:dist,broken,/img:images");
+    let sites = [
+        render_env(&[paths_env]),
+        render_env(&[paths_env, ("RIKU_NGINX_PORTMAP", "true")]),
+        render_env(&[paths_env, ("RIKU_NGINX_WSGI", "true")]),
+        render_env(&[paths_env, ("RIKU_HTTPS_ONLY", "true")]),
+        render_env(&[paths_env, ("RIKU_NGINX_STATIC", "true")]),
+    ];
+    for site in &sites {
+        for (location, index) in [("/assets", 0), ("/img", 1)] {
+            let block = format!(
+                "location {location} {{\n    alias {}/paths/{index};",
+                published.display()
+            );
+            assert!(site.contains(&block), "missing {block:?} in:\n{site}");
+        }
+        assert!(
+            site.contains(&format!("root {};", paths.acme_root.display())),
+            "no ACME location in:\n{site}"
         );
-        assert!(proxied.contains(&block), "missing {block:?} in:\n{proxied}");
     }
+}
+
+/// nginx runs a server level `return` before it picks a location, so the
+/// redirect must sit in `location /` for the challenge to be answered.
+#[test]
+fn https_only_redirect_leaves_the_acme_challenge_on_plain_http() {
+    let config = render(&[("RIKU_HTTPS_ONLY", "true"), ("RIKU_NGINX_SOCKET", SOCKET)]);
+    let plain_server = match config.split_once("443 ssl") {
+        Some((plain, _)) => plain,
+        None => panic!("not an HTTPS config:\n{config}"),
+    };
+
     assert!(
-        proxied.contains(&format!("root {};", paths.acme_root.display())),
-        "{proxied}"
+        plain_server.contains("location / {\n    return 301"),
+        "redirect is not inside location /:\n{plain_server}"
     );
 }
 

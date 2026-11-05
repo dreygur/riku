@@ -48,6 +48,15 @@ pub fn create_private_dir(dir: &Path) -> Result<()> {
     }
 }
 
+/// Set an existing file to `0600`, for a secrets file written by hand or by
+/// an older riku with a looser mode.
+pub fn restrict_to_owner(path: &Path) -> Result<()> {
+    match fs::set_permissions(path, fs::Permissions::from_mode(PRIVATE_FILE_MODE)) {
+        Ok(()) => Ok(()),
+        Err(e) => Err(anyhow!("cannot chmod {}: {e}", path.display())),
+    }
+}
+
 const SHARED_FILE_MODE: u32 = 0o666;
 const PRIVATE_FILE_MODE: u32 = 0o600;
 const PRIVATE_DIR_MODE: u32 = 0o700;

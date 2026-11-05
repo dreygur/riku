@@ -15,21 +15,46 @@ use std::fs;
 use std::io::ErrorKind;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
+use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, Result};
 
 use crate::config::{NginxHostPaths, RikuPaths};
-use crate::nginx::{include_file_contents, write_include_file};
+use crate::nginx::{include_file_contents, needs_catch_all, write_include_file};
 use crate::util::echo;
 
 use super::deploy_user::DeployUser;
 use super::nginx_worker::grant_nginx_sockets;
 
+/// Whether the include file should carry riku's catch-all server, from what
+/// `nginx -T` shows. When nginx cannot dump its config the answer is no, so
+/// riku never risks a second `default_server` that would stop nginx.
+fn wants_catch_all(paths: &RikuPaths) -> bool {
+    let dumped = Command::new(&paths.reload_programs.nginx)
+        .arg("-T")
+        .stdin(Stdio::null())
+        .output();
+    match dumped {
+        Ok(output) if output.status.success() => needs_catch_all(
+            &String::from_utf8_lossy(&output.stdout),
+            &paths.nginx_include_file,
+        ),
+        _ => {
+            echo(
+                "      warning: nginx -T failed, so no catch-all server was added for unknown hosts",
+                "yellow",
+            );
+            false
+        }
+    }
+}
+
 /// Write the include file unless it already holds the same text. Returns
 /// whether it was written.
 #[allow(clippy::question_mark)]
 fn install_include(paths: &RikuPaths) -> Result<bool> {
-    let contents = match include_file_contents(paths) {
+    let catch_all = wants_catch_all(paths);
+    let contents = match include_file_contents(paths, catch_all) {
         Ok(contents) => contents,
         Err(e) => return Err(e),
     };
@@ -40,7 +65,7 @@ fn install_include(paths: &RikuPaths) -> Result<bool> {
         Err(e) if e.kind() == ErrorKind::NotFound => {}
         Err(e) => return Err(anyhow!("cannot read {}: {e}", file.display())),
     }
-    match write_include_file(paths) {
+    match write_include_file(paths, catch_all) {
         Ok(()) => Ok(true),
         Err(e) => Err(e),
     }

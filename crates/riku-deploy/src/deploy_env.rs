@@ -27,14 +27,25 @@ fn warn_about(env: &HashMap<String, String>, dlog: &mut DeployLogger) {
 /// The app's `ENV` file as a map, empty when the file does not exist.
 /// Invalid and renamed keys are reported on the terminal and in the deploy
 /// log, but do not stop the deploy.
+///
+/// Every deploy, container apps included, tightens the env dir to `0700`
+/// and the file to `0600`, since a hand written ENV keeps whatever mode it
+/// was created with until riku rewrites it.
 pub(crate) fn load_deploy_env(
     app: &str,
     paths: &RikuPaths,
     dlog: &mut DeployLogger,
 ) -> Result<HashMap<String, String>> {
-    let env_file = paths.env_root.join(app).join("ENV");
+    let env_dir = paths.env_root.join(app);
+    if let Err(e) = crate::util::create_private_dir(&env_dir) {
+        return Err(e);
+    }
+    let env_file = env_dir.join("ENV");
     let mut env = HashMap::new();
     if env_file.exists() {
+        if let Err(e) = crate::util::restrict_to_owner(&env_file) {
+            return Err(e);
+        }
         if let Err(e) = crate::util::parse_settings(&env_file, &mut env) {
             return Err(e);
         }
@@ -42,3 +53,7 @@ pub(crate) fn load_deploy_env(
     warn_about(&env, dlog);
     Ok(env)
 }
+
+#[cfg(test)]
+#[path = "deploy_env_tests.rs"]
+mod tests;

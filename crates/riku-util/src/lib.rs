@@ -43,7 +43,10 @@ pub mod validation;
 // Re-export items used via `crate::util::*` call-sites.
 pub use display::{echo, print_table, print_table_with_title};
 pub use env::{parse_settings, write_config};
-pub use fs::{copy_dir_recursive, count_files, create_private_dir, write_atomic, write_private};
+pub use fs::{
+    copy_dir_recursive, count_files, create_private_dir, restrict_to_owner, write_atomic,
+    write_private,
+};
 pub use nginx_validation::{print_env_warnings, validate_env_vars};
 pub use process_util::get_free_port;
 pub use procfile::parse_procfile;

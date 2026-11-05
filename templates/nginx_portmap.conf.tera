@@ -7,10 +7,7 @@ server {
 {% endif %}
   server_name         {{ RIKU_DOMAINS }};
 
-  location ^~ /.well-known/acme-challenge {
-    allow all;
-    root {{ ACME_WWW }};
-  }
+{% include "nginx_site_locations.conf.tera" %}
 
   location / {
     proxy_pass http://{{ APP_UPSTREAM }};

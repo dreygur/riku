@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use riku_container::engine::{ContainerInfo, ContainerState, ContainerStats};
 use riku_util::file_names::worker::WorkerName;
 
+use super::restarts::Restarts;
 use super::tally::RestartTally;
 use crate::stats::types::{ContainerFacts, HealthStatus, ProcessStats, ProcessStatus};
 
@@ -61,10 +62,15 @@ fn map_health_status(state: &ContainerState) -> HealthStatus {
 }
 
 /// Map container inspection and sample data into ProcessStats rows.
+///
+/// A copy a running restart already replaced counts that restart, so `riku
+/// ps` shows the same number as the supervisor's "restarting a crashed
+/// container" line before the restart's report reaches the tally.
 pub(crate) fn container_rows(
     infos: &[ContainerInfo],
     samples: &HashMap<String, ContainerStats>,
     tally: &RestartTally,
+    restarts: &Restarts,
 ) -> Vec<ProcessStats> {
     let mut rows = Vec::new();
     for info in infos {
@@ -110,7 +116,8 @@ pub(crate) fn container_rows(
             started_at: None,
             last_health_check: None,
             health_check_status: map_health_status(&info.state),
-            restart_count: tally.count(&info.name),
+            restart_count: tally.count(&info.name)
+                + u32::from(restarts.replaced(&info.name, &info.id)),
             last_restart_at: None,
             cpu_time_ms: 0,
             memory_bytes,

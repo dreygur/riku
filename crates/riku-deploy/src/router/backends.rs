@@ -30,7 +30,7 @@ pub fn copy_socket(paths: &RikuPaths, app: &str, copy: CopyIndex) -> PathBuf {
         .join(copy_socket::file_name(app, copy.get()))
 }
 
-fn parsed_worker(path: &std::path::Path) -> Option<WorkerConfig> {
+pub(crate) fn parsed_worker(path: &std::path::Path) -> Option<WorkerConfig> {
     let text = match fs::read_to_string(path) {
         Ok(text) => text,
         Err(e) => {

@@ -28,7 +28,7 @@ Component package located at `crates/riku-cli/src/apps`.
 - `cmd_apps` [list.rs:cmd_apps] (fn)
 - `cmd_deploy_logs` [logs.rs:cmd_deploy_logs] (fn)
 - `cmd_logs` [logs.rs:cmd_logs] (fn)
-- `known_services` [logs.rs:known_services] (fn)
+- `app_services` [logs/services.rs:app_services] (fn)
 - `tail_deploy_log` [logs/tail.rs:tail_deploy_log] (fn)
 - `multi_tail` [logs/tail.rs:multi_tail] (fn)
 - `logs/tail.rs` [logs/tail.rs] Log tailing for `riku logs`: follows several files at once and reopens a file after rotation

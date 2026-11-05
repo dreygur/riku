@@ -18,6 +18,12 @@ const RIKU_NGINX_EXTERNAL_PORT: &str = "80";
 
 /// Keys older riku versions persisted for the one address of the last copy.
 const LEGACY_ADDRESS_KEYS: [&str; 2] = ["RIKU_UPSTREAM_PORT", "UWSGI_SOCKET"];
+/// The keys a web facing kind persists to pick the router's template.
+const ROUTE_KEYS: [&str; 3] = [
+    "RIKU_NGINX_PORTMAP",
+    "RIKU_NGINX_EXTERNAL_PORT",
+    "RIKU_NGINX_WSGI",
+];
 
 /// Returns true when `kind` uses a WSGI unix socket (wsgi, jwsgi, rwsgi, php).
 pub(crate) fn is_wsgi_kind(kind: &str) -> bool {
@@ -137,11 +143,24 @@ fn apply_route_keys(kind: &str, persisted: &mut HashMap<String, String>) {
     );
 }
 
-/// Set the app ENV file's routing keys for `kind`, on every deploy, so the
-/// template the router picks follows the kind the Procfile has now. The
-/// addresses are not persisted, see `apply_route_keys`.
+/// Drop every routing key, for an app with no web facing kind left.
+/// Returns whether any key was there.
+pub(crate) fn drop_route_keys(persisted: &mut HashMap<String, String>) -> bool {
+    let before = persisted.len();
+    for key in ROUTE_KEYS.iter().chain(LEGACY_ADDRESS_KEYS.iter()) {
+        persisted.remove(*key);
+    }
+    persisted.len() != before
+}
+
+/// Read the app's ENV file, let `change` edit it, and write it back when
+/// `change` returns true.
 #[allow(clippy::question_mark)]
-fn persist_route_env(app: &str, kind: &str, paths: &RikuPaths) -> Result<()> {
+fn rewrite_app_env(
+    app: &str,
+    paths: &RikuPaths,
+    change: impl FnOnce(&mut HashMap<String, String>) -> bool,
+) -> Result<()> {
     let env_dir = paths.env_root.join(app);
     if let Err(e) = crate::util::create_private_dir(&env_dir) {
         return Err(e);
@@ -152,13 +171,30 @@ fn persist_route_env(app: &str, kind: &str, paths: &RikuPaths) -> Result<()> {
     if let Err(e) = crate::util::parse_settings(&env_file, &mut persisted) {
         return Err(anyhow!("failed to read {}: {e}", env_file.display()));
     }
-
-    apply_route_keys(kind, &mut persisted);
-
+    if !change(&mut persisted) {
+        return Ok(());
+    }
     match crate::util::write_config(&env_file, &persisted, "=") {
         Ok(()) => Ok(()),
         Err(e) => Err(anyhow!("failed to write {}: {e}", env_file.display())),
     }
+}
+
+/// Set the app ENV file's routing keys for `kind`, on every deploy, so the
+/// template the router picks follows the kind the Procfile has now. The
+/// addresses are not persisted, see `apply_route_keys`.
+fn persist_route_env(app: &str, kind: &str, paths: &RikuPaths) -> Result<()> {
+    rewrite_app_env(app, paths, |persisted| {
+        apply_route_keys(kind, persisted);
+        true
+    })
+}
+
+/// Remove the routing keys from the app's ENV file. A deploy with no web
+/// facing kind calls this, so a port map left by an old `web:` line cannot
+/// win over `RIKU_NGINX_STATIC` or proxy to a port nothing of the app uses.
+pub(crate) fn clear_route_env(app: &str, paths: &RikuPaths) -> Result<()> {
+    rewrite_app_env(app, paths, drop_route_keys)
 }
 
 /// Build the environment map for a single worker instance.

@@ -13,8 +13,11 @@ use super::restarts::Restarts;
 use super::tally::RestartTally;
 use super::{ContainerWatch, Feed, CONTAINER_STATS_INTERVAL};
 
-fn open_feed(engine: &Engine) -> Feed {
-    if !engine.has_events() {
+/// The event stream is an engine child process of about 30 MB, so it runs
+/// only while riku containers exist. With none, the 30 s listing finds the
+/// first copy a deploy starts and opens the stream then.
+fn open_feed(engine: &Engine, known: &Known) -> Feed {
+    if known.is_empty() || !engine.has_events() {
         return Feed::Polling;
     }
     match EventStream::open(engine) {
@@ -51,12 +54,22 @@ fn observe_copies(tally: &mut RestartTally, known: &Known, restarts: &Restarts) 
     tally.forget_missing(&names);
 }
 
+/// Open the event stream when containers appeared, and drop it, which ends
+/// the child, when the last one is gone.
+fn match_feed_to_containers(watch: &mut ContainerWatch) {
+    match (&watch.feed, watch.known.is_empty()) {
+        (Feed::Polling, false) => watch.feed = open_feed(&watch.engine, &watch.known),
+        (Feed::Events(_), true) => watch.feed = Feed::Polling,
+        _ => {}
+    }
+}
+
 fn adopt(watch: &mut ContainerWatch, now: Instant) {
-    watch.feed = open_feed(&watch.engine);
     if take_listing(&watch.engine, &mut watch.known) {
         watch.last_listing = Some(now);
         sample_stats(&watch.engine, &watch.known, &mut watch.samples);
     }
+    match_feed_to_containers(watch);
     watch.logs.update(&watch.known);
     watch.adopted = true;
 }
@@ -64,12 +77,10 @@ fn adopt(watch: &mut ContainerWatch, now: Instant) {
 fn refresh(watch: &mut ContainerWatch, now: Instant) {
     drain_events(&watch.engine, &mut watch.feed, &mut watch.known);
     if listing_due(watch.last_listing, now) {
-        if matches!(watch.feed, Feed::Polling) {
-            watch.feed = open_feed(&watch.engine);
-        }
         if take_listing(&watch.engine, &mut watch.known) {
             sample_stats(&watch.engine, &watch.known, &mut watch.samples);
         }
+        match_feed_to_containers(watch);
         watch.last_listing = Some(now);
     }
     watch.logs.update(&watch.known);

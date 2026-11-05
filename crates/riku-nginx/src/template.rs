@@ -106,6 +106,14 @@ fn backend_address(backend: &Backend) -> Result<String> {
 fn register_templates(tera: &mut tera::Tera) -> Result<()> {
     let templates = [
         (
+            "nginx_acme.conf.tera",
+            include_str!("../../../templates/nginx_acme.conf.tera"),
+        ),
+        (
+            "nginx_site_locations.conf.tera",
+            include_str!("../../../templates/nginx_site_locations.conf.tera"),
+        ),
+        (
             "nginx.conf.tera",
             include_str!("../../../templates/nginx.conf.tera"),
         ),

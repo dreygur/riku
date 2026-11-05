@@ -1,10 +1,8 @@
 use anyhow::Result;
 use std::collections::HashMap;
-use std::fs;
 use std::process::{Command, Stdio};
 
 use super::control_target::{control_target, ControlTarget};
-use riku_supervisor::config::app_worker_configs;
 
 use crate::config::RikuPaths;
 use crate::supervisor::Supervisor;
@@ -58,7 +56,9 @@ pub fn cmd_restart(paths: &RikuPaths, app: &str, service: Option<&str>) -> Resul
             crate::deploy::containers::restart_service(&app, paths, service.as_ref())
         }
         ControlTarget::Procfile => {
-            do_stop(paths, &app);
+            if let Err(e) = do_stop(paths, &app) {
+                return Err(e);
+            }
             crate::deploy::do_deploy(&app, paths, &HashMap::new(), None)
         }
     }
@@ -77,10 +77,7 @@ pub fn cmd_stop(paths: &RikuPaths, app: &str, service: Option<&str>) -> Result<(
         Ok(ControlTarget::Containers { app, service }) => {
             crate::deploy::containers::stop_service(&app, paths, service.as_ref())
         }
-        Ok(ControlTarget::Procfile) => {
-            do_stop(paths, &app);
-            Ok(())
-        }
+        Ok(ControlTarget::Procfile) => do_stop(paths, &app),
         Err(e) => Err(e),
     }
 }
@@ -94,18 +91,12 @@ pub fn cmd_supervisor(paths: &RikuPaths) -> Result<()> {
     supervisor.run()
 }
 
-/// Stop an app by removing its enabled worker config files.
-fn do_stop(paths: &RikuPaths, app: &str) {
-    let configs = app_worker_configs(&paths.workers_enabled, app);
-
-    if !configs.is_empty() {
-        display::info(&format!("Stopping app '{}'...", app));
-        for c in &configs {
-            if let Err(e) = fs::remove_file(c) {
-                tracing::warn!("Could not remove worker config {:?}: {}", c, e);
-            }
-        }
-    } else {
-        display::error(&format!("Error: app '{}' not deployed!", app));
+/// Stop an app by removing its worker configs and its copies' sockets.
+fn do_stop(paths: &RikuPaths, app: &str) -> Result<()> {
+    match crate::deploy::app_stop::stop_procfile_app(app, paths) {
+        Ok(0) => display::error(&format!("Error: app '{}' not deployed!", app)),
+        Ok(_) => display::info(&format!("Stopped app '{}'.", app)),
+        Err(e) => return Err(anyhow::anyhow!("cannot stop '{app}': {e}")),
     }
+    Ok(())
 }

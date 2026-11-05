@@ -4,7 +4,7 @@
 //! own background thread. In-flight tracking prevents duplicate restarts for
 //! the same container name while a restart is already running.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::sync::mpsc;
 use std::sync::Arc;
 
@@ -26,7 +26,8 @@ pub(crate) struct RestartReport {
 pub(crate) struct Restarts {
     tx: mpsc::Sender<RestartReport>,
     rx: mpsc::Receiver<RestartReport>,
-    in_flight: HashSet<String>,
+    /// The dead container id each running restart was asked for, by name.
+    in_flight: HashMap<String, ContainerId>,
 }
 
 impl Restarts {
@@ -35,16 +36,23 @@ impl Restarts {
         Self {
             tx,
             rx,
-            in_flight: HashSet::new(),
+            in_flight: HashMap::new(),
         }
     }
 
     pub(crate) fn is_in_flight(&self, name: &str) -> bool {
-        self.in_flight.contains(name)
+        self.in_flight.contains_key(name)
+    }
+
+    /// Whether a running restart of `name` already put `id` in place of the
+    /// dead copy. Its report, and so the tally, only catches up on a later
+    /// tick.
+    pub(crate) fn replaced(&self, name: &str, id: &ContainerId) -> bool {
+        self.in_flight.get(name).is_some_and(|dead| dead != id)
     }
 
     pub(crate) fn names(&self) -> impl Iterator<Item = String> + '_ {
-        self.in_flight.iter().cloned()
+        self.in_flight.keys().cloned()
     }
 
     pub(crate) fn collect(&mut self) -> Vec<RestartReport> {
@@ -80,7 +88,7 @@ impl Restarts {
         let actions = Arc::clone(actions);
         let tx = self.tx.clone();
 
-        self.in_flight.insert(name.clone());
+        self.in_flight.insert(name.clone(), id.clone());
 
         let thread_name = format!("restart-{name}");
         let spawn_res = std::thread::Builder::new()

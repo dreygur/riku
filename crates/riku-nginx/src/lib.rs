@@ -13,6 +13,7 @@ mod backends;
 mod cloudflare;
 mod context;
 mod context_cache;
+mod default_server;
 mod host;
 mod host_check;
 mod install;
@@ -42,6 +43,7 @@ use std::path::Path;
 
 use crate::util::backend::Backend;
 pub use backends::{bind_address, default_backends, upstream_port_number};
+pub use default_server::needs_catch_all;
 pub use host::{include_file_contents, include_line, includes_riku_sites, write_include_file};
 pub use host_check::{check_host_ready, stray_site_configs, HostReadiness};
 pub use reload::reload_nginx_with;

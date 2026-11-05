@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `RIKU_NGINX_INCLUDE_FILE` snippets are refused when a value is above its cap: `client_max_body_size` 1g (and not 0), every `*_timeout` 3600s, `proxy_buffer_size` 1m, `proxy_buffers` 64 of 1m, `proxy_busy_buffers_size` 2m, `gzip_comp_level` 1 to 9, at most 32 `add_header` lines of 4 KiB each. Sizes and times must be a number with an optional nginx unit; compound times such as `1m30s` are refused.
 - Scaling a worker kind down now removes its surplus copies even with `RIKU_AUTO_RESTART=false`; the flag only decides whether the kept copies restart.
 - Removed `riku update` (and `rk update`). It never updated anything; rerun the installer to upgrade.
+- `RIKU_NGINX_STATIC_PATHS` now works for every nginx site: the alias locations and the ACME challenge location come from one shared template, so plain HTTP web apps, wsgi apps and `RIKU_NGINX_STATIC` sites get them too. The HTTPS only redirect now sits in `location /`, so the challenge is answered on plain HTTP.
+- A deploy with no web facing Procfile kind, and every container app deploy, removes `RIKU_NGINX_PORTMAP`, `RIKU_NGINX_EXTERNAL_PORT` and `RIKU_NGINX_WSGI` from the app's ENV, so an app that dropped its `web:` line is served by the static or default template instead of a stale port map.
+- Every deploy sets the app's ENV file to `0600` and its env directory to `0700`, container apps included.
+- `riku logs <app> <service>` knows the app's Procfile kinds and compose services, and a known service with no output yet prints a note instead of "unknown service".
+- `riku stop` on a Procfile app also removes its `workers-available` configs and the uWSGI sockets riku made for its copies.
+- `sudo riku init` adds a `listen 80 default_server; return 444;` server to the riku nginx include when `nginx -T` shows no other port 80 default server, so an unknown Host is no longer answered by another app's site.
+- `riku ps` RESTARTS counts a container restart as soon as the replacement runs, matching the supervisor's `restart=` log line.
+- The supervisor runs its `docker events` child only while riku containers exist.
 
 ### Upgrade Notes: Worker and Socket File Names
 

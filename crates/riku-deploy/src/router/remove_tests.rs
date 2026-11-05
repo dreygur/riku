@@ -10,7 +10,7 @@ const NEW: u64 = 1 << 62;
 fn paths_with(dir: &Path, systemctl: PathBuf) -> RikuPaths {
     let mut paths = RikuPaths::for_tests(dir);
     std::fs::create_dir_all(&paths.nginx_root).unwrap();
-    crate::nginx::write_include_file(&paths).unwrap();
+    crate::nginx::write_include_file(&paths, false).unwrap();
     paths.reload_programs = ReloadPrograms {
         systemctl,
         caddy: write_script(dir, "mock_caddy", "exit 0\n"),

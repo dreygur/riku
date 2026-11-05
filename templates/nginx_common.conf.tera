@@ -3,10 +3,7 @@ client_max_body_size 100M;
 {% endif %}
 large_client_header_buffers 4 16k;
 
-location ^~ /.well-known/acme-challenge {
-  allow all;
-  root {{ ACME_WWW }};
-}
+{% include "nginx_site_locations.conf.tera" %}
 
 {% if RIKU_NGINX_CLOUDFLARE_ACL == "true" %}
 # Cloudflare IP ACL
@@ -19,17 +16,6 @@ location ~ /\.git {
   deny all;
   return 404;
 }
-{% endif %}
-
-{% if RIKU_STATIC_ALIASES | length > 0 %}
-# Static path mappings, published outside the deploy home
-{% for static in RIKU_STATIC_ALIASES %}
-location {{ static.location }} {
-  alias {{ static.alias }};
-  expires 30d;
-  add_header Cache-Control "public, immutable";
-}
-{% endfor %}
 {% endif %}
 
 {% if RIKU_NGINX_WSGI %}

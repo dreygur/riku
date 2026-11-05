@@ -161,6 +161,53 @@ fn die_event_triggers_restart() {
 }
 
 #[test]
+fn event_stream_runs_only_while_riku_containers_exist() {
+    let dir = tempfile::tempdir().unwrap();
+    let state_file = dir.path().join("state.json");
+    let ps_file = dir.path().join("ps.txt");
+    fs::write(&ps_file, "").unwrap();
+    fs::write(&state_file, "[]").unwrap();
+    let script = format!(
+        r#"case "$1" in
+           ps) cat '{ps_path}';;
+           inspect) cat '{state}';;
+           stats) exit 0;;
+           logs) exit 0;;
+           events) sleep 30;;
+           esac"#,
+        ps_path = ps_file.display(),
+        state = state_file.display()
+    );
+    let (engine, _log) = mock_engine(dir.path(), &script);
+    let paths = RikuPaths::for_tests(dir.path());
+    let actions = mock_actions(RestartOutcome::Restarted);
+    let log_root = dir.path().join("logs");
+    let mut watch = ContainerWatch::with_engine(engine, paths, actions, &log_root);
+    let streaming = |watch: &ContainerWatch| matches!(watch.feed, super::Feed::Events(_));
+
+    let t0 = Instant::now();
+    watch.tick(t0);
+    let idle = streaming(&watch);
+
+    fs::write(&ps_file, format!("{ID_1}\n")).unwrap();
+    let running = entry(ID_1, "myapp-web-1", "running", None, "always");
+    fs::write(&state_file, format!("[{running}]")).unwrap();
+    watch.tick(t0 + Duration::from_secs(31));
+    let deployed = streaming(&watch);
+
+    fs::write(&ps_file, "").unwrap();
+    fs::write(&state_file, "[]").unwrap();
+    watch.tick(t0 + Duration::from_secs(62));
+    let destroyed = streaming(&watch);
+
+    assert_eq!(
+        (idle, deployed, destroyed),
+        (false, true, false),
+        "event stream open (no containers, one container, none again)"
+    );
+}
+
+#[test]
 fn restarted_copy_keeps_its_count() {
     let dir = tempfile::tempdir().unwrap();
     let state_file = dir.path().join("state.json");

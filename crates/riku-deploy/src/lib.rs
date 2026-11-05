@@ -32,6 +32,7 @@ pub(crate) use riku_supervisor as supervisor;
 pub(crate) use riku_util as util;
 
 // Deployment infrastructure modules (kept in binary)
+pub mod app_stop;
 pub mod backup;
 pub mod container_runtime; // used by `riku container` CLI commands
 pub mod containers;
@@ -151,6 +152,12 @@ pub fn do_deploy(
         Err(e) => return Err(e),
     };
     let runtime = if is_container {
+        // Keys a former Procfile web kind left would pick the port map or
+        // uWSGI template for the containers.
+        workers::web_env::drop_route_keys(&mut env);
+        if let Err(e) = workers::web_env::clear_route_env(app, paths) {
+            return Err(e);
+        }
         match deploy_container_app(app, paths, deltas, &env, &mut dlog) {
             Ok(()) => containers::CONTAINER_RUNTIME.to_string(),
             Err(e) => return Err(e),
