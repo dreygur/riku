@@ -20,10 +20,11 @@ use riku_container::types::HealthTest;
 
 use super::probe::{poll_probe, poll_until, probe_client, probe_port, probe_socket, probe_url};
 
+/// The longest [`wait_healthy`] waits, reached with an engine health check.
 #[cfg(not(test))]
-const HEALTHCHECK_WAIT: Duration = Duration::from_secs(120);
+pub(crate) const HEALTHCHECK_WAIT: Duration = Duration::from_secs(120);
 #[cfg(test)]
-const HEALTHCHECK_WAIT: Duration = Duration::from_secs(2);
+pub(crate) const HEALTHCHECK_WAIT: Duration = Duration::from_secs(2);
 #[cfg(not(test))]
 const PROBE_WAIT: Duration = Duration::from_secs(60);
 #[cfg(test)]

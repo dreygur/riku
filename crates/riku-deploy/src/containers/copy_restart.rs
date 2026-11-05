@@ -124,7 +124,7 @@ pub fn restart_copy(
     service: &ServiceName,
     copy: CopyIndex,
 ) -> Result<RestartOutcome> {
-    let _lock = match crate::lock::acquire(app.as_str(), paths) {
+    let _lock = match crate::lock::acquire_for_restart(app.as_str(), paths) {
         Ok(lock) => lock,
         Err(e) if is_busy(&e) => return Ok(RestartOutcome::Busy),
         Err(e) => return Err(e),

@@ -120,7 +120,7 @@ pub fn do_deploy(
     // the *same* app (e.g. a second git push landing mid-deploy, or a
     // dashboard-triggered redeploy racing a git push) without blocking
     // deploys of other apps. See lock.rs for what breaks without this.
-    let _deploy_lock = match lock::acquire(app, paths) {
+    let _deploy_lock = match lock::acquire_for_deploy(app, paths) {
         Ok(lock) => lock,
         Err(e) => return Err(e),
     };

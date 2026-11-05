@@ -7,12 +7,15 @@
 use anyhow::{anyhow, Result};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::process::Command;
+use tempfile::NamedTempFile;
 
 use crate::config::RikuPaths;
 use crate::util::echo;
 use crate::util::validation::{validate_app_name, REPO_SUFFIX};
 
+use super::push_status::{deploy_failure, STATUS_ENV};
 use super::repo::{ensure_repo_symlink, POST_RECEIVE_HOOK};
 
 /// The directory under `repos/` a pushed path names. `riku@host:shop` and
@@ -100,11 +103,41 @@ pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
         }
     }
 
-    let status = match Command::new("git-receive-pack").arg(&riku_repo).status() {
+    let status_file = match NamedTempFile::new() {
+        Ok(file) => file,
+        Err(e) => return Err(anyhow!("cannot create the push status file: {e}")),
+    };
+    let status = match Command::new("git-receive-pack")
+        .arg(&riku_repo)
+        .env(STATUS_ENV, status_file.path())
+        .status()
+    {
         Ok(status) => status,
         Err(e) => return Err(anyhow!("cannot run git-receive-pack: {e}")),
     };
-    std::process::exit(status.code().unwrap_or(1));
+    let code = push_exit_code(status.code(), status_file.path());
+    drop(status_file);
+    std::process::exit(code);
+}
+
+/// git-receive-pack's own failure, else 1 when the deploy the hook ran
+/// failed. Its stderr reaches the pushing client, so the reason goes there.
+fn push_exit_code(receive_pack: Option<i32>, status_file: &Path) -> i32 {
+    match receive_pack {
+        Some(0) => {}
+        Some(code) => return code,
+        None => return 1,
+    }
+    match deploy_failure(status_file) {
+        Some(reason) => {
+            echo(
+                &format!("The push was received, but the deploy failed: {reason}"),
+                "red",
+            );
+            1
+        }
+        None => 0,
+    }
 }
 
 /// Handle git upload-pack for an app.

@@ -47,9 +47,18 @@ fn clone_app(paths: &RikuPaths, app: &str) -> Result<()> {
     }
 }
 
-/// Post-receive git hook handler.
-#[allow(clippy::question_mark)]
+/// Post-receive git hook handler. A failure is also recorded for the push
+/// that ran the hook, so `git push` exits non-zero (see `push_status`).
 pub fn cmd_git_hook(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> Result<()> {
+    let deployed = deploy_pushed_refs(paths, app, repo_path);
+    if let Err(e) = &deployed {
+        super::push_status::record_deploy_failure(e);
+    }
+    deployed
+}
+
+#[allow(clippy::question_mark)]
+fn deploy_pushed_refs(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> Result<()> {
     let app = match crate::util::validate_app_name(app) {
         Ok(app) => app,
         Err(e) => return Err(e),

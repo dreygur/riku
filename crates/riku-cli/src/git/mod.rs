@@ -1,6 +1,7 @@
 //! Git integration: bare repo setup, post-receive hook, and push handling.
 
 pub mod hook;
+mod push_status;
 pub mod receive_pack;
 pub mod repo;
 
