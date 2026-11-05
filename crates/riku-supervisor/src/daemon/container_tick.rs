@@ -36,6 +36,16 @@ impl Supervisor {
         }
     }
 
+    /// Make the next maintenance pass run a full watch tick with a listing,
+    /// and retry opening the engine if it was unavailable.
+    pub(super) fn request_container_listing(&mut self) {
+        if let Some(watch) = self.container_watch.as_mut() {
+            watch.request_listing();
+        }
+        self.last_engine_attempt = None;
+        self.last_container_watch = SystemTime::UNIX_EPOCH;
+    }
+
     /// Runs on every maintenance pass: engine events are applied each pass,
     /// the full watch tick every [`CONTAINER_WATCH_INTERVAL`].
     pub(super) fn containers_if_due(&mut self) {

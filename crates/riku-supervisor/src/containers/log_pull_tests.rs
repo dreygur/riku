@@ -94,6 +94,28 @@ fn capped_pull_writes_complete_lines_and_continues_next_call() {
     );
 }
 
+/// After a rolling deploy the watch lists a replaced copy for a few seconds
+/// while the engine has already removed it.
+#[test]
+fn container_the_engine_no_longer_has_is_not_asked_again() {
+    let dir = TempDir::new().unwrap();
+    let behaviour = "case \"$1\" in logs) \
+         echo \"Error response from daemon: No such container: $3\" >&2; exit 1;; esac";
+    let (engine, argv_log) = mock_engine(dir.path(), behaviour);
+    let mut puller = LogPuller::new(dir.path().join("logs"));
+    let info = running_copy();
+    let known = HashMap::from([(info.id.clone(), info)]);
+
+    puller.tick(&engine, &known, Start::All);
+    puller.tick(&engine, &known, Start::All);
+
+    assert_eq!(
+        logged(&argv_log),
+        [format!("logs --timestamps {ID}")],
+        "a container the engine reported gone must be dropped, not retried"
+    );
+}
+
 #[test]
 fn refuses_to_append_through_a_symlinked_log_file() {
     let dir = TempDir::new().unwrap();

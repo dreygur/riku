@@ -63,3 +63,47 @@ fn replaced_container_leaves_the_rows_before_the_next_tick() {
 
     assert_eq!(row_ids(&watch), [NEW], "the old container id must be gone");
 }
+
+#[test]
+fn requested_listing_finds_the_first_copy_before_the_interval() {
+    let dir = tempfile::tempdir().unwrap();
+    let state_file = dir.path().join("state.json");
+    let ps_file = dir.path().join("ps.txt");
+    fs::write(&ps_file, "").unwrap();
+    fs::write(&state_file, "[]").unwrap();
+    let script = format!(
+        r#"case "$1" in
+           ps) cat '{ps}';;
+           inspect) cat '{state}';;
+           stats) exit 0;;
+           logs) exit 0;;
+           events) sleep 30;;
+           esac"#,
+        ps = ps_file.display(),
+        state = state_file.display()
+    );
+    let (engine, _log) = mock_engine(dir.path(), &script);
+    let paths = RikuPaths::for_tests(dir.path());
+    let actions = mock_actions(RestartOutcome::Restarted);
+    let mut watch = ContainerWatch::with_engine(engine, paths, actions, &dir.path().join("logs"));
+    let t0 = Instant::now();
+    watch.tick(t0);
+
+    fs::write(&ps_file, format!("{OLD}\n")).unwrap();
+    fs::write(&state_file, running(OLD)).unwrap();
+    let t5 = t0 + Duration::from_secs(5);
+    watch.tick(t5);
+    let unrequested = row_ids(&watch);
+    watch.request_listing();
+    watch.tick(t5);
+
+    assert_eq!(
+        (unrequested, row_ids(&watch)),
+        (vec![], vec![OLD.to_string()]),
+        "the copy must show only once a listing is requested, before the 30 s listing"
+    );
+    assert!(
+        matches!(watch.feed, super::Feed::Events(_)),
+        "the requested listing must open the event stream"
+    );
+}

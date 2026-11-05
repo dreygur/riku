@@ -19,6 +19,7 @@ use super::rollout::roll_out;
 use super::AppName;
 use crate::config::RikuPaths;
 use crate::rolling::scale_to;
+use crate::supervisor_ctl::notify_supervisor_reload;
 use crate::util::echo;
 
 /// Whether the deployed app `app` runs as riku containers.
@@ -98,7 +99,9 @@ pub fn restart_service(
         Ok(locked) => locked,
         Err(e) => return Err(e),
     };
-    reclassify(&ctx.engine, restart_locked(&ctx, paths, service))
+    let restarted = restart_locked(&ctx, paths, service);
+    notify_supervisor_reload(paths);
+    reclassify(&ctx.engine, restarted)
 }
 
 /// Position of a container's service in start order; containers of services
@@ -183,7 +186,9 @@ pub fn scale_service(
     }
     let mut runtime = ctx.runtime(def);
     let mut routes = ctx.routes(service);
-    if let Err(e) = scale_to(&mut runtime, &mut routes, copies) {
+    let scaled = scale_to(&mut runtime, &mut routes, copies);
+    notify_supervisor_reload(paths);
+    if let Err(e) = scaled {
         return Err(e.context(format!("service '{service}'")));
     }
     write_scaling(app.as_str(), paths, service, copies)

@@ -141,6 +141,14 @@ impl ContainerWatch {
         watch::reconcile(self, now);
     }
 
+    /// Take the full listing on the next tick instead of waiting out
+    /// [`CONTAINER_STATS_INTERVAL`]. The supervisor asks for this on
+    /// `SIGHUP`, which container deploys, scales and restarts send, so the
+    /// first copies on an idle host are seen and get an event stream at once.
+    pub fn request_listing(&mut self) {
+        self.last_listing = None;
+    }
+
     /// Apply engine events that arrived since the last call, between ticks,
     /// so a replaced or removed container leaves [`ContainerWatch::rows`]
     /// without waiting for the next tick. True when the rows may have changed.

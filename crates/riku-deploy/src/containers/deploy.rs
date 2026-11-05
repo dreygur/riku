@@ -15,6 +15,7 @@ use super::retire::retire_procfile_workers;
 use super::rollout::roll_out;
 use super::{prepare_images, AppName};
 use crate::config::RikuPaths;
+use crate::supervisor_ctl::notify_supervisor_reload;
 
 /// The runtime name hooks receive for container apps.
 pub const CONTAINER_RUNTIME: &str = "container";
@@ -86,7 +87,8 @@ fn roll_out_app(ctx: &ContainerApp, counts: &BTreeMap<String, u32>) -> Result<()
 /// replaced serving. Containers of services the compose file no longer has
 /// are removed, and an app with no routed port is taken off the router. An app
 /// that ran as a Procfile app has its old workers stopped and deleted once the
-/// containers are healthy and routed (see [`super::retire`]).
+/// containers are healthy and routed (see [`super::retire`]). The supervisor
+/// is then signalled so it lists the new copies at once.
 ///
 /// Blocks for as long as builds and health waits take, so it must not run on
 /// a tokio runtime thread.
@@ -107,7 +109,9 @@ pub fn deploy_containers(
         Ok(stale) => stale,
         Err(e) => return Err(e),
     };
-    match roll_out_app(&ctx, &counts) {
+    let rolled = roll_out_app(&ctx, &counts);
+    notify_supervisor_reload(paths);
+    match rolled {
         Ok(()) => retire_procfile_workers(&ctx, stale),
         Err(e) => Err(e),
     }

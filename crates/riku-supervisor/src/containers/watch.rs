@@ -14,8 +14,9 @@ use super::tally::RestartTally;
 use super::{ContainerWatch, Feed, CONTAINER_STATS_INTERVAL};
 
 /// The event stream is an engine child process of about 30 MB, so it runs
-/// only while riku containers exist. With none, the 30 s listing finds the
-/// first copy a deploy starts and opens the stream then.
+/// only while riku containers exist. With none, the listing a deploy requests
+/// (see [`ContainerWatch::request_listing`]), or failing that the 30 s
+/// listing, finds the first copy and opens the stream then.
 fn open_feed(engine: &Engine, known: &Known) -> Feed {
     if known.is_empty() || !engine.has_events() {
         return Feed::Polling;

@@ -46,7 +46,12 @@ toml = "1"
 tracing = "0.1"
 which = "8"
 
+# opt-level "z": riku is mostly waiting on child processes, the engine and the
+# network, so a smaller binary is worth more than faster code. panic stays
+# "unwind": the supervisor catches panics in its threads and tasks and keeps
+# running, and "abort" would take every managed app down with it.
 [profile.release]
+opt-level = "z"
 lto = true
 strip = true
 codegen-units = 1

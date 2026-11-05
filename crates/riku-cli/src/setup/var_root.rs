@@ -9,14 +9,21 @@
 //! or that a group or other user can write, and refuses `/var/lib/riku`
 //! itself on the same terms, so no other account can plant a symlink that
 //! redirects root's chown or chmod. The two inner directories are refused
-//! when they are symlinks (see [`socket_dir::prepare`]).
+//! when they are symlinks (see [`socket_dir::prepare`]). The ACME challenge
+//! directory sits in a directory the deploy user owns, so it is made and
+//! changed through descriptors that never follow a symlink.
 
 use std::fs;
 use std::io::ErrorKind;
+use std::os::fd::OwnedFd;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
+use nix::errno::Errno;
+use nix::fcntl::{open, openat, OFlag};
+use nix::sys::stat::{fchmod, fstat, mkdirat, Mode};
+use nix::unistd::{fchown, Gid, Uid};
 
 use crate::config::{ACME_WEBROOT, SOCKET_GROUP, STATIC_ROOT, VAR_ROOT};
 use crate::util::echo;
@@ -26,6 +33,8 @@ use super::deploy_user::DeployUser;
 use super::nginx_host::{check_write_dir, ROOT_UID};
 
 const VAR_ROOT_MODE: u32 = 0o755;
+/// Where ACME HTTP-01 challenge files go, level by level under the webroot.
+const ACME_CHALLENGE_DIRS: [&str; 2] = [".well-known", "acme-challenge"];
 
 /// Make `var_root` a `0755` directory owned by `root_owner` under a parent
 /// only `root_owner` can write, then prepare each of `dirs` in it for
@@ -62,13 +71,67 @@ fn prepare_var_root(
     Ok(())
 }
 
-/// Create `/var/lib/riku` with the ACME webroot and the static root in it.
-/// Root only, and run after the socket group exists. Beyond
-/// [`prepare_var_root`] it is covered only by running init on a host.
+fn open_dir_at(parent: &OwnedFd, name: &str) -> Result<OwnedFd> {
+    if let Err(e) = mkdirat(parent, name, Mode::S_IRWXU) {
+        if e != Errno::EEXIST {
+            return Err(anyhow!("cannot create {name}: {e}"));
+        }
+    }
+    let flags = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC;
+    match openat(parent, name, flags, Mode::empty()) {
+        Ok(fd) => Ok(fd),
+        Err(e) => Err(anyhow!(
+            "refusing to use {name}: not a directory (a symlink?): {e}"
+        )),
+    }
+}
+
+/// Create `.well-known/acme-challenge` in `acme`, each level with the owner,
+/// group and mode of `acme`, so the first ACME run finds it.
+///
+/// `acme` belongs to the deploy user, who could swap a level for a symlink
+/// while root works in it. So each level is made and opened relative to the
+/// one before without following symlinks, and changed through its descriptor.
+fn prepare_challenge_dir(acme: &Path) -> Result<()> {
+    let flags = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC;
+    let mut dir = match open(acme, flags, Mode::empty()) {
+        Ok(fd) => fd,
+        Err(e) => return Err(anyhow!("cannot open {}: {e}", acme.display())),
+    };
+    let stat = match fstat(&dir) {
+        Ok(stat) => stat,
+        Err(e) => return Err(anyhow!("cannot inspect {}: {e}", acme.display())),
+    };
+    let owner = Uid::from_raw(stat.st_uid);
+    let group = Gid::from_raw(stat.st_gid);
+    let mode = Mode::from_bits_truncate(stat.st_mode);
+    for name in ACME_CHALLENGE_DIRS {
+        let next = match open_dir_at(&dir, name) {
+            Ok(fd) => fd,
+            Err(e) => return Err(e.context(format!("in {}", acme.display()))),
+        };
+        if let Err(e) = fchown(&next, Some(owner), Some(group)) {
+            return Err(anyhow!("cannot chown {name} in {}: {e}", acme.display()));
+        }
+        if let Err(e) = fchmod(&next, mode) {
+            return Err(anyhow!("cannot chmod {name} in {}: {e}", acme.display()));
+        }
+        dir = next;
+    }
+    Ok(())
+}
+
+/// Create `/var/lib/riku` with the ACME webroot, its challenge directory, and
+/// the static root in it. Root only, and run after the socket group exists.
+/// Beyond [`prepare_var_root`] and [`prepare_challenge_dir`] it is covered
+/// only by running init on a host.
 #[allow(clippy::question_mark)]
 pub(super) fn setup_var_root(user: &DeployUser) -> Result<()> {
     let dirs = [Path::new(ACME_WEBROOT), Path::new(STATIC_ROOT)];
     if let Err(e) = prepare_var_root(Path::new(VAR_ROOT), ROOT_UID, Some(user.uid()), &dirs) {
+        return Err(e);
+    }
+    if let Err(e) = prepare_challenge_dir(Path::new(ACME_WEBROOT)) {
         return Err(e);
     }
     echo(

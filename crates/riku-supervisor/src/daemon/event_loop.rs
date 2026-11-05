@@ -19,7 +19,9 @@ impl Supervisor {
     /// signal delivered between ticks is never lost.
     ///
     /// The router is left alone: every command that writes router config
-    /// requests and confirms its own reload.
+    /// requests and confirms its own reload. The container watch takes a
+    /// listing on the next maintenance pass, since container deploys signal
+    /// the same way.
     fn reload_if_requested(&mut self) -> Result<()> {
         let pending_reloads = RELOAD_COUNTER.swap(0, Ordering::SeqCst);
         if pending_reloads > 0 {
@@ -27,6 +29,7 @@ impl Supervisor {
                 "Received {} reload request(s). Reloading all configurations...",
                 pending_reloads
             );
+            self.request_container_listing();
             // reload_all_configs() diffs current worker TOML manifests
             // against `watched_configs` (riku's live process tree) and
             // only touches what's new, modified, or removed,

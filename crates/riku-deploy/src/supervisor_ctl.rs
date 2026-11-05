@@ -106,6 +106,9 @@ pub(crate) fn ensure_supervisor_running(paths: &RikuPaths) -> bool {
 
 /// Notify the supervisor to reload configurations by sending SIGHUP to the
 /// PID recorded in the PID file. Only signals our own supervisor process.
+///
+/// The same signal makes the supervisor list containers at once, so
+/// container deploys, scales and restarts send it after starting copies.
 pub(crate) fn notify_supervisor_reload(paths: &RikuPaths) {
     if let Some(pid) = read_supervisor_pid(paths) {
         if pid_is_alive(pid) {

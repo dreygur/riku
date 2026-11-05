@@ -14,7 +14,7 @@
 //! `O_NOFOLLOW`. Each call keeps at most [`STREAM_CAP`] bytes per stream, so
 //! a container that floods its output cannot exhaust supervisor memory.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
@@ -22,7 +22,9 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, SecondsFormat, Utc};
-use riku_container::engine::{ContainerId, ContainerInfo, Engine, LogRange, TimestampedLogs};
+use riku_container::engine::{
+    ContainerGone, ContainerId, ContainerInfo, Engine, LogRange, TimestampedLogs,
+};
 
 use super::listing::{is_running, Known};
 
@@ -128,6 +130,10 @@ const STREAM_CAP: usize = 8 * 1024 * 1024;
 pub(crate) struct LogPuller {
     log_root: PathBuf,
     cursors: HashMap<ContainerId, Option<Cursor>>,
+    /// Containers the engine said no longer exist while the watch still
+    /// lists them, as for a few seconds after a rolling deploy replaces a
+    /// copy. They are skipped until they leave the watch's list.
+    gone: HashSet<ContainerId>,
     stream_cap: usize,
 }
 
@@ -136,6 +142,7 @@ impl LogPuller {
         Self {
             log_root,
             cursors: HashMap::new(),
+            gone: HashSet::new(),
             stream_cap: STREAM_CAP,
         }
     }
@@ -144,7 +151,11 @@ impl LogPuller {
     /// that stopped or went away since the last tick one final call and
     /// forget it.
     pub(crate) fn tick(&mut self, engine: &Engine, known: &Known, start: Start) {
+        self.gone.retain(|id| known.contains_key(id));
         for info in known.values().filter(|info| is_running(&info.state)) {
+            if self.gone.contains(&info.id) {
+                continue;
+            }
             if !self.cursors.contains_key(&info.id) {
                 self.start(engine, info, start);
             }
@@ -190,6 +201,10 @@ impl LogPuller {
             Start::FromNow => {
                 match engine.timestamped_logs(&info.id, &LogRange::Newest, self.stream_cap) {
                     Ok(logs) => cursor_after(&merged(&logs)),
+                    Err(e) if e.is::<ContainerGone>() => {
+                        self.gone.insert(info.id.clone());
+                        return;
+                    }
                     Err(e) => {
                         tracing::warn!(name = %info.name, "cannot read the newest log line: {e}");
                         return;
@@ -211,6 +226,11 @@ impl LogPuller {
         };
         let logs = match engine.timestamped_logs(&info.id, &range, self.stream_cap) {
             Ok(logs) => logs,
+            Err(e) if e.is::<ContainerGone>() => {
+                self.cursors.remove(&info.id);
+                self.gone.insert(info.id.clone());
+                return;
+            }
             Err(e) => {
                 tracing::warn!(name = %info.name, "cannot read logs: {e}");
                 return;

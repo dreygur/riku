@@ -42,6 +42,22 @@ pub struct TimestampedLogs {
     pub stderr_capped: bool,
 }
 
+/// A `logs` call failed because the container no longer exists, such as a
+/// copy a rolling deploy just replaced. Callers find it with
+/// `anyhow::Error::is::<ContainerGone>()` and can stop asking for that id.
+#[derive(Debug)]
+pub struct ContainerGone {
+    summary: String,
+}
+
+impl std::fmt::Display for ContainerGone {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.summary)
+    }
+}
+
+impl std::error::Error for ContainerGone {}
+
 /// Longest failure detail kept from the engine's stderr.
 const DETAIL_CHARS: usize = 200;
 
@@ -63,19 +79,33 @@ fn is_timestamped(line: &str) -> bool {
 /// Only the exit status and the last line the engine wrote itself are kept,
 /// shortened and escaped, so a container cannot fill or forge the
 /// supervisor log through a failing call.
-fn failure_summary(status: ExitStatus, stderr: &[u8]) -> String {
-    let stderr = String::from_utf8_lossy(stderr);
-    let engine_line = stderr
-        .lines()
-        .rev()
-        .map(str::trim)
-        .find(|line| !line.is_empty() && !is_timestamped(line));
+fn failure_summary(status: ExitStatus, engine_line: Option<&str>) -> String {
     match engine_line {
         Some(line) => {
             let detail: String = line.chars().take(DETAIL_CHARS).collect();
             format!("container engine 'logs' failed ({status}): {detail:?}")
         }
         None => format!("container engine 'logs' failed ({status})"),
+    }
+}
+
+/// The error for a failed `logs` call: [`ContainerGone`] when the engine
+/// says the container does not exist (Docker: "No such container: ...",
+/// Podman: "... no such container"), otherwise a [`failure_summary`].
+fn logs_failure(status: ExitStatus, stderr: &[u8]) -> anyhow::Error {
+    let stderr = String::from_utf8_lossy(stderr);
+    let engine_line = stderr
+        .lines()
+        .rev()
+        .map(str::trim)
+        .find(|line| !line.is_empty() && !is_timestamped(line));
+    let summary = failure_summary(status, engine_line);
+    let gone =
+        engine_line.is_some_and(|line| line.to_ascii_lowercase().contains("no such container"));
+    if gone {
+        anyhow::Error::new(ContainerGone { summary })
+    } else {
+        anyhow!(summary)
     }
 }
 
@@ -142,7 +172,7 @@ impl Engine {
         };
         let capped = out.stdout_capped || out.stderr_capped;
         if !out.status.success() && !capped {
-            return Err(anyhow!(failure_summary(out.status, &out.stderr)));
+            return Err(logs_failure(out.status, &out.stderr));
         }
         if out.truncated {
             return Err(anyhow!(

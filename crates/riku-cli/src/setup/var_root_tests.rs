@@ -18,10 +18,19 @@ fn var_root_is_open_and_its_dirs_are_setgid_and_closed() {
         &[&acme, &static_root],
     )
     .unwrap();
+    prepare_challenge_dir(&acme).unwrap();
 
     let mode = |path: &Path| fs::metadata(path).unwrap().mode() & 0o7777;
+    let challenge = acme.join(".well-known/acme-challenge");
     assert_eq!(mode(&var_root), 0o755, "var root mode");
     assert_eq!(mode(&acme), 0o2750, "ACME webroot mode");
+    assert_eq!(mode(&acme.join(".well-known")), 0o2750, ".well-known mode");
+    assert_eq!(mode(&challenge), 0o2750, "ACME challenge dir mode");
+    assert_eq!(
+        fs::metadata(&challenge).unwrap().gid(),
+        fs::metadata(&acme).unwrap().gid(),
+        "ACME challenge dir group"
+    );
     assert_eq!(mode(&static_root), 0o2750, "static root mode");
 }
 
