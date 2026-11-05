@@ -397,6 +397,10 @@ Status: still needed.
 
 Status: still needed. doctor today has `container_check.rs`, `router_check.rs`, `settings_check.rs` and `checks.rs`; none reports engine mode, the helper or the init system.
 
+Owner decisions 2026-11-05, part of this task:
+- No automatic supervisor restart on upgrade. doctor fails when the running supervisor's `/proc/<pid>/exe` is not `/usr/local/bin/riku` or ends in `(deleted)`, and root init prints `sudo systemctl restart riku` (or the OpenRC equivalent) when it replaced the binary. Revisit only if Task 18 shows workers survive a supervisor restart.
+- `riku doctor --fix`, as the deploy user, rewrites riku-marked `authorized_keys` lines (`RIKU_KEY_MARKER`) and `repos/*/hooks/post-receive` that name another riku path so they name `/usr/local/bin/riku`, as phase 1 did for the old forced command keys. Atomic writes, own files only, no root. Tests: a stale key and a stale hook are rewritten, a non riku key line is left byte for byte.
+
 **Files:**
 - Create: `crates/riku-cli/src/doctor/rootless_check.rs`, `rootless_check_tests.rs`, `helper_check.rs`, `helper_check_tests.rs`
 - Modify: `crates/riku-cli/src/doctor/mod.rs`, `container_check.rs`, `router_check.rs` (the missing include and stray conf reports change to the `/etc/riku` layout), `checks.rs` (`systemd_service` at lines 121-151 learns the user unit and OpenRC)
