@@ -79,6 +79,19 @@ Sizes in bytes, RSS in KiB, all on the 4 core x86_64 Linux test server, release 
 2. The helper trusts nothing in a request: unknown fields, directive breaking strings, non loopback TCP, mismatched TLS pairs and a peer uid other than the deploy user or root are refused, and no request field becomes a path. Tests in Tasks 6 and 7.
 3. A refused or failed reload leaves the previous files live. Test in Task 8 (`check_failure_restores_files`).
 
+## Scope cut (owner, 2026-11-06)
+
+The goal is a small self hosted Heroku replacement. This branch now ends with the router helper, not rootless engines.
+
+- Kept: Task 9 (Caddy through the helper), Task 10 (install the helper), plus Task R (certificate renewal, below). They run in parallel worktrees. Then a slim Task 16 (helper and Cloudflare checks, the two owner upgrade decisions), Task 17 (docs for the helper), one real host run of the helper, one review.
+- Dropped for now: Tasks 11 to 15 (port refusal, systemd rootless init, OpenRC, supervisor under the user manager, rootful grant). Tasks 2 and 3 stay in the code; an absent engine mode must therefore mean rootful again, so existing hosts keep working (Task 10 changes the default).
+- Task 10 also moves `cache_total_gb` out of the deploy user's `settings.toml` into a root owned `/etc/riku/router.toml`, so the root helper reads no file the deploy user owns.
+- Process: no extras mid task, one Sonnet pass per task, Opus only on Task 10, one Linux run after the merge.
+
+### Task R: Certificate renewal (S)
+
+acme.sh renews as the deploy user with no reload hook, so the helper's copy under `/etc/riku/certs/<app>` goes stale, and a self signed fallback is never replaced. Pass `--reloadcmd '/usr/local/bin/riku router-renew <app>'` at issue; `riku router-renew <app>` (Placement::Server, deploy user) checks the app name, rebuilds the route as configure does and sends Apply. Issue a real certificate when only the self signed fallback exists. Tests: the issue argv carries the hook; renew sends one Apply for a checked app and refuses a bad name.
+
 ## Open questions
 
 These need the owner. Each has the plan's recommendation; the plan proceeds on it unless the owner says otherwise.
