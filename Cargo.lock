@@ -2013,6 +2013,7 @@ dependencies = [
  "anyhow",
  "base64",
  "nix",
+ "riku-config",
  "riku-container",
  "riku-nginx",
  "riku-util",

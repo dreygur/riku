@@ -12,6 +12,19 @@ use super::cloudflare::generate_cloudflare_ips_config;
 use super::context_cache::insert_cache_context;
 use super::ssl::ensure_ssl_certificates;
 use super::static_site::{document_root, static_path_dir, static_paths};
+use crate::config::RikuPaths;
+
+/// The file the Cloudflare ACL include names when the deploy user's riku
+/// writes the site config.
+const SYSTEM_CLOUDFLARE_CONF: &str = "/etc/nginx/cloudflare.conf";
+
+/// The certificate and key the https template names: `<app>.crt` and
+/// `<app>.key` in `nginx_root`.
+fn insert_certificate_paths(context: &mut tera::Context, app: &str, paths: &RikuPaths) {
+    let stem = paths.nginx_root.join(app);
+    context.insert("SSL_CERTIFICATE", &format!("{}.crt", stem.display()));
+    context.insert("SSL_CERTIFICATE_KEY", &format!("{}.key", stem.display()));
+}
 
 /// Insert address-related context values.
 pub(super) fn insert_address_context(
@@ -162,6 +175,8 @@ pub(super) fn build_context(
 
     context.insert("RIKU_ROOT", &paths.riku_root.to_string_lossy());
     context.insert("RIKU_NGINX_ROOT", &paths.nginx_root.to_string_lossy());
+    insert_certificate_paths(&mut context, app, paths);
+    context.insert("CLOUDFLARE_CONF", SYSTEM_CLOUDFLARE_CONF);
     context.insert("ACME_WWW", &paths.acme_root.to_string_lossy());
     context.insert(
         "RIKU_ACME_ROOT_CA",

@@ -8,6 +8,7 @@ repository = "https://github.com/dreygur/riku"
 license = "MIT"
 
 [dependencies]
+riku-config = { path = "../riku-config" }
 riku-container = { path = "../riku-container" }
 riku-nginx = { path = "../riku-nginx" }
 riku-util = { path = "../riku-util" }

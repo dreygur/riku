@@ -52,9 +52,13 @@ pub fn read_bounded(stream: &UnixStream, limit: usize, budget: Duration) -> Resu
 }
 
 /// Whether an I/O error means the peer is gone. Linux reports a peer that
-/// closed with unread data as a reset rather than end of file.
+/// closed with unread data as a reset rather than end of file, and macOS
+/// reports a shutdown on a socket the peer already closed as not connected.
 pub fn is_closed(kind: ErrorKind) -> bool {
-    matches!(kind, ErrorKind::ConnectionReset | ErrorKind::BrokenPipe)
+    matches!(
+        kind,
+        ErrorKind::ConnectionReset | ErrorKind::BrokenPipe | ErrorKind::NotConnected
+    )
 }
 
 /// Wait until `stream` has data or is closed. `false` means the deadline

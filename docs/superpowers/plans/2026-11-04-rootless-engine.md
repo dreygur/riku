@@ -230,7 +230,9 @@ Status: done, binary 9,329,080 B. Linux tests pass as root (fork and setuid fore
 
 ### Task 8: nginx through the helper (L)
 
-Status: still needed. Opus review: Review Focus 1 and 3.
+Status: root side done (binary 9,364,480 B): the helper renders, checks, installs and restores nginx sites; every site kind passes real `nginx -t` 1.22.1 on Linux. Deploy side still needed: `router.rs` and `router/reload.rs` send Apply and Remove, `nginx_unit.rs` and the direct reload go, the stray check in `host_check.rs` goes, destroy sends Remove, and the old ENV path in riku-nginx is removed. Opus review: Review Focus 1 and 3.
+
+Owner decisions 2026-11-05: the total cache cap is a `settings.toml` setting with a 10 GB default (today a 100 GB constant `TOTAL_CACHE_GB`); root init fetches the Cloudflare ranges into `/etc/riku/cloudflare.conf` and doctor warns when the file is old; the helper never fetches. `catch_all` renders only with cache prefixes and not wsgi, as before.
 
 Carried from the Task 6 review:
 - Call `ensure_ssl_certificates` before `build_route`; it runs in riku-nginx/src/context.rs:180 today, so a first https only deploy would otherwise build no TLS.

@@ -31,7 +31,7 @@ fn include_is_written_once_and_left_alone_on_a_second_run() {
 
 #[test]
 fn root_write_refuses_a_writable_or_foreign_owned_directory() {
-    use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path().join("conf.d");
@@ -41,7 +41,7 @@ fn root_write_refuses_a_writable_or_foreign_owned_directory() {
     assert!(check_write_dir(&dir, me).is_ok(), "a 0755 dir of the owner");
 
     let err = check_write_dir(&dir, me + 1).unwrap_err().to_string();
-    assert!(err.contains("not root"), "{err}");
+    assert!(err.contains("owned by uid"), "{err}");
 
     fs::set_permissions(&dir, fs::Permissions::from_mode(0o775)).unwrap();
     let err = check_write_dir(&dir, me).unwrap_err().to_string();

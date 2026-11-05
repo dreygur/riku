@@ -92,7 +92,7 @@ pub(super) fn render_nginx_config(
     }
 }
 
-fn backend_address(backend: &Backend) -> Result<String> {
+pub(super) fn backend_address(backend: &Backend) -> Result<String> {
     let address = backend.to_string();
     if matches!(backend, Backend::Unix(_)) && address.contains(|c: char| c.is_ascii_whitespace()) {
         return Err(anyhow::anyhow!(
@@ -103,7 +103,7 @@ fn backend_address(backend: &Backend) -> Result<String> {
 }
 
 /// Register all nginx Tera templates.
-fn register_templates(tera: &mut tera::Tera) -> Result<()> {
+pub(super) fn register_templates(tera: &mut tera::Tera) -> Result<()> {
     let templates = [
         (
             "nginx_acme.conf.tera",
@@ -132,6 +132,10 @@ fn register_templates(tera: &mut tera::Tera) -> Result<()> {
         (
             "nginx_static.conf.tera",
             include_str!("../../../templates/nginx_static.conf.tera"),
+        ),
+        (
+            "nginx_cache_path.conf.tera",
+            include_str!("../../../templates/nginx_cache_path.conf.tera"),
         ),
         (
             "nginx_cache.conf.tera",

@@ -6,7 +6,7 @@
 //! is executed or used as a path. The socket path is a constant, never taken
 //! from an app's ENV.
 
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
@@ -80,15 +80,18 @@ fn send_to(socket: &Path, request: &Request, budget: Duration) -> Result<Reply> 
         Ok(left) => left,
         Err(e) => return Err(anyhow!("request not sent: {e}")),
     };
-    if let Err(e) = stream.set_write_timeout(Some(left)) {
-        return Err(anyhow!("failed to set the write timeout: {e}"));
-    }
     // The helper may refuse and close before it has read everything. Its
     // reason is in the reply, so a write that failed because the peer is
-    // gone is only reported through the missing answer.
-    let written = stream
-        .write_all(&body)
-        .and_then(|()| stream.shutdown(Shutdown::Write));
+    // gone is only reported through the missing answer. macOS refuses to set
+    // a timeout on a socket whose peer already closed, with EINVAL; that is
+    // the same closed peer.
+    let written = match stream.set_write_timeout(Some(left)) {
+        Ok(()) => stream
+            .write_all(&body)
+            .and_then(|()| stream.shutdown(Shutdown::Write)),
+        Err(e) if e.kind() == ErrorKind::InvalidInput => Err(ErrorKind::BrokenPipe.into()),
+        Err(e) => return Err(anyhow!("failed to set the write timeout: {e}")),
+    };
     let left = match time_left(deadline, budget) {
         Ok(left) => left,
         Err(e) => return Err(anyhow!("no answer: {e}")),

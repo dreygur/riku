@@ -77,12 +77,22 @@ fn site_link(app: &str, paths: &RikuPaths) -> PathBuf {
 
 /// Where nginx finds the published document root.
 pub(crate) fn document_root(app: &str, paths: &RikuPaths) -> PathBuf {
-    site_link(app, paths).join("root")
+    document_root_in(&paths.static_root, app)
+}
+
+/// [`document_root`] under an explicit static root.
+pub(crate) fn document_root_in(static_root: &Path, app: &str) -> PathBuf {
+    static_root.join(app).join("root")
 }
 
 /// Where nginx finds the published copy of the `index`-th static path.
 pub(crate) fn static_path_dir(app: &str, paths: &RikuPaths, index: usize) -> PathBuf {
-    site_link(app, paths).join("paths").join(index.to_string())
+    static_path_dir_in(&paths.static_root, app, index)
+}
+
+/// [`static_path_dir`] under an explicit static root.
+pub(crate) fn static_path_dir_in(static_root: &Path, app: &str, index: usize) -> PathBuf {
+    static_root.join(app).join("paths").join(index.to_string())
 }
 
 /// Copy `app`'s static files from `app_path` into the static root, or

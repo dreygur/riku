@@ -1,4 +1,5 @@
 {% include "nginx_upstream.conf.tera" %}
+{% include "nginx_cache_path.conf.tera" %}
 
 server {
   listen              {{ RIKU_NGINX_IPV4_ADDRESS }}:80;
@@ -21,8 +22,8 @@ server {
 {% endif %}
   server_name         {{ RIKU_DOMAINS }};
 
-  ssl_certificate     {{ RIKU_NGINX_ROOT }}/{{ APP }}.crt;
-  ssl_certificate_key {{ RIKU_NGINX_ROOT }}/{{ APP }}.key;
+  ssl_certificate     {{ SSL_CERTIFICATE }};
+  ssl_certificate_key {{ SSL_CERTIFICATE_KEY }};
 
   ssl_protocols       TLSv1.2 TLSv1.3;
   ssl_ciphers         HIGH:!aNULL:!MD5;

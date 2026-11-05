@@ -7,7 +7,7 @@ large_client_header_buffers 4 16k;
 
 {% if RIKU_NGINX_CLOUDFLARE_ACL == "true" %}
 # Cloudflare IP ACL
-include /etc/nginx/cloudflare.conf;
+include {{ CLOUDFLARE_CONF }};
 {% endif %}
 
 {% if RIKU_NGINX_ALLOW_GIT_FOLDERS != "true" %}
@@ -22,7 +22,6 @@ location ~ /\.git {
 {% include "nginx_uwsgi.conf.tera" %}
 {% elif RIKU_NGINX_CACHE_PREFIXES %}
 # Proxy cache configuration
-proxy_cache_path {{ RIKU_NGINX_CACHE_PATH }} levels=1:2 keys_zone={{ APP }}:{{ RIKU_NGINX_CACHE_SIZE }}g inactive={{ RIKU_NGINX_CACHE_EXPIRY }}s;
 proxy_cache_key "$scheme$request_method$host$request_uri";
 
 {% for prefix in RIKU_NGINX_CACHE_PREFIXES | split(pat=",") %}
@@ -58,7 +57,7 @@ location / {
 }
 {% endif %}
 
-{% if RIKU_NGINX_CATCH_ALL %}
+{% if RIKU_NGINX_CATCH_ALL and RIKU_NGINX_CACHE_PREFIXES and not RIKU_NGINX_WSGI %}
 # Catch-all for client-side routing
 location / {
   try_files $uri /{{ RIKU_NGINX_CATCH_ALL }};

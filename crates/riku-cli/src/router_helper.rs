@@ -9,8 +9,10 @@
 //! starts, not from a request. A request names an app, which is validated as
 //! an app name before use; nothing a request carries is a path.
 //!
-//! Until the router config is installed through the helper, `apply` and
-//! `remove` answer with a render failure and change nothing.
+//! `apply` and `remove` install and remove nginx config through
+//! `riku_route::apply_nginx` and `remove_nginx`, which run the route gate
+//! again and write only under `/etc/riku` and `/var/cache/riku`. Caddy is not
+//! served yet.
 
 use std::path::Path;
 use std::time::Duration;
@@ -18,7 +20,10 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use nix::unistd::Uid;
 use riku_container::types::AppName;
-use riku_route::{activated_listener, bind_socket, restrict_umask, run, Reply, Request, Stage};
+use riku_route::{
+    activated_listener, apply_nginx, bind_socket, remove_nginx, restrict_umask, run, NginxRoots,
+    Reply, Request, Stage,
+};
 
 use crate::config::ROUTER_SOCKET;
 use crate::setup::deploy_user::DeployUser;
@@ -50,21 +55,19 @@ fn app_checked(app: &str) -> std::result::Result<AppName, Reply> {
     }
 }
 
-fn handle(request: Request) -> Reply {
-    let app = match &request {
-        Request::Apply { app, .. } | Request::Remove { app } => app_checked(app),
-        Request::Status {} => {
-            return Reply::Status {
-                version: env!("CARGO_PKG_VERSION").to_string(),
-            }
-        }
-    };
-    match app {
-        Ok(app) => failed(
-            Stage::Render,
-            format!("the helper does not install router config for '{app}' yet"),
-        ),
-        Err(reply) => reply,
+fn handle(roots: &NginxRoots, request: Request) -> Reply {
+    match request {
+        Request::Apply { app, route } => match app_checked(&app) {
+            Ok(app) => apply_nginx(roots, &app, &route),
+            Err(reply) => reply,
+        },
+        Request::Remove { app } => match app_checked(&app) {
+            Ok(app) => remove_nginx(roots, &app),
+            Err(reply) => reply,
+        },
+        Request::Status {} => Reply::Status {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+        },
     }
 }
 
@@ -90,7 +93,10 @@ pub fn cmd_router_helper() -> Result<()> {
             Err(e) => return Err(anyhow!("router helper socket: {e}")),
         },
     };
-    run(&listener, idle, deploy.uid(), &mut handle)
+    let roots = NginxRoots::production();
+    run(&listener, idle, deploy.uid(), &mut |request| {
+        handle(&roots, request)
+    })
 }
 
 #[cfg(test)]

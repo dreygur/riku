@@ -133,7 +133,13 @@ pub(super) fn read_app_snippet(
 /// Check snippet text a caller received as text, with no file to name in the
 /// error. The router helper uses it on the `snippet` field of a route.
 pub fn check_snippet_text(content: &str) -> Result<()> {
-    check_snippet(content, "snippet").map(|_| ())
+    snippet_directives(content).map(|_| ())
+}
+
+/// Check snippet text as [`check_snippet_text`] does and return the directive
+/// names it uses, so the template leaves out its own copy of each.
+pub fn snippet_directives(content: &str) -> Result<Vec<String>> {
+    check_snippet(content, "snippet")
 }
 
 /// The app's checked snippet after the `nginx.include_content` filter chain

@@ -19,6 +19,7 @@ mod host_check;
 mod install;
 mod reload;
 mod remove;
+mod route_site;
 mod sanitize;
 mod snippet_grammar;
 mod snippet_limits;
@@ -42,7 +43,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::util::backend::Backend;
-pub use app_snippet::{app_snippet, check_snippet_text};
+pub use app_snippet::{app_snippet, check_snippet_text, snippet_directives};
 pub use backends::{bind_address, default_backends, upstream_port_number};
 pub use default_server::needs_catch_all;
 pub use host::{
@@ -51,6 +52,7 @@ pub use host::{
 pub use host_check::{check_host_ready, stray_site_configs, HostReadiness};
 pub use reload::reload_nginx_with;
 pub use remove::{remove_nginx_files, NginxRemoval};
+pub use route_site::{render_route_site, RouteSite, SiteCache, SiteFiles, SiteShape};
 pub use static_site::{remove_static, static_locations};
 pub use template::check_nginx_config;
 use template::generate_nginx_config_from_template;

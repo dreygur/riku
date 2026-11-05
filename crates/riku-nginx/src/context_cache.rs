@@ -3,6 +3,11 @@
 
 use std::collections::HashMap;
 
+/// Shared memory for the cache's key index, about 80,000 keys. The disk the
+/// cache may fill is `max_size`, from `RIKU_NGINX_CACHE_SIZE`; this zone does
+/// not grow with it.
+pub(super) const CACHE_KEYS_ZONE: &str = "10m";
+
 /// Insert cache-related context values.
 pub(super) fn insert_cache_context(
     context: &mut tera::Context,
@@ -45,6 +50,7 @@ pub(super) fn insert_cache_context(
         .cloned()
         .unwrap_or(paths.cache_root.join(app).to_string_lossy().to_string());
 
+    context.insert("RIKU_NGINX_CACHE_ZONE", CACHE_KEYS_ZONE);
     context.insert("RIKU_NGINX_CACHE_SIZE", &nginx_cache_size);
     context.insert("RIKU_NGINX_CACHE_TIME", &nginx_cache_time);
     context.insert("RIKU_NGINX_CACHE_REDIRECTS", &nginx_cache_redirects);

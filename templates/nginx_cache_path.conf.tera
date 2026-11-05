@@ -1,0 +1,3 @@
+{% if RIKU_NGINX_CACHE_PREFIXES and not RIKU_NGINX_WSGI %}
+proxy_cache_path {{ RIKU_NGINX_CACHE_PATH }} levels=1:2 keys_zone={{ APP }}:{{ RIKU_NGINX_CACHE_ZONE }} inactive={{ RIKU_NGINX_CACHE_EXPIRY }}s max_size={{ RIKU_NGINX_CACHE_SIZE }}g;
+{% endif %}

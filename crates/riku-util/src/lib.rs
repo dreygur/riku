@@ -40,6 +40,7 @@ pub mod spawn;
 pub mod ssh_keys;
 pub mod token;
 pub mod validation;
+pub mod write_dir;
 
 // Re-export items used via `crate::util::*` call-sites.
 pub use display::{echo, print_table, print_table_with_title};

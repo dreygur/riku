@@ -70,6 +70,23 @@ pub const ROUTER_SOCKET: &str = "/run/riku-router.sock";
 /// creates it owned by the deploy user, group `caddy`, mode `2750`.
 pub const CADDY_SITE_ROOT: &str = "/etc/riku/caddy";
 
+/// Root-owned `0755` directory of the nginx site configs the router helper
+/// renders, one `<app>.conf` each. The host include loads `*.conf` from here.
+pub const NGINX_SITE_ROOT: &str = "/etc/riku/nginx";
+
+/// Root-owned `0700` directory of per app TLS material, `<app>/fullchain.pem`
+/// and `<app>/key.pem`, written by the router helper.
+pub const CERT_ROOT: &str = "/etc/riku/certs";
+
+/// The Cloudflare address list a site with the Cloudflare ACL includes. Root
+/// writes it; the router helper never fetches it and never includes a file
+/// the deploy user can write.
+pub const CLOUDFLARE_CONF: &str = "/etc/riku/cloudflare.conf";
+
+/// Root-owned parent of the nginx proxy caches, `<app>` each. The nginx master
+/// creates the app directory as root and hands it to the worker user.
+pub const NGINX_CACHE_ROOT: &str = "/var/cache/riku/nginx";
+
 /// Root-owned `0755` parent of the directories nginx serves files from.
 pub const VAR_ROOT: &str = "/var/lib/riku";
 
