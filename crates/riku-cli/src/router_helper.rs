@@ -9,10 +9,12 @@
 //! starts, not from a request. A request names an app, which is validated as
 //! an app name before use; nothing a request carries is a path.
 //!
-//! `apply` and `remove` install and remove nginx config through
-//! `riku_route::apply_nginx` and `remove_nginx`, which run the route gate
-//! again and write only under `/etc/riku` and `/var/cache/riku`. Caddy is not
-//! served yet.
+//! `apply` and `remove` install and remove the config of the router the
+//! request names, through `riku_route::apply_nginx` and `remove_nginx` or
+//! `apply_caddy` and `remove_caddy`. Each runs its route gate again and
+//! writes only under `/etc/riku` and `/var/cache/riku`. The request, not the
+//! host, names the router until the root owned router setting of the install
+//! task exists; each router's files stay in that router's own directory.
 //!
 //! The one value read from the deploy user's tree is `router.cache_total_gb`
 //! in `settings.toml`. It is read once at start, before the socket is bound,
@@ -27,8 +29,8 @@ use anyhow::{anyhow, Result};
 use nix::unistd::Uid;
 use riku_container::types::AppName;
 use riku_route::{
-    activated_listener, apply_nginx, bind_socket, remove_nginx, restrict_umask, run, NginxRoots,
-    Reply, Request, Stage,
+    activated_listener, apply_caddy, apply_nginx, bind_socket, remove_caddy, remove_nginx,
+    restrict_umask, run, CaddyRoots, NginxRoots, Reply, Request, RouterKind, Stage,
 };
 
 use crate::config::ROUTER_SOCKET;
@@ -61,14 +63,20 @@ fn app_checked(app: &str) -> std::result::Result<AppName, Reply> {
     }
 }
 
-fn handle(roots: &NginxRoots, request: Request) -> Reply {
+fn handle(nginx: &NginxRoots, caddy: &CaddyRoots, request: Request) -> Reply {
     match request {
-        Request::Apply { app, route } => match app_checked(&app) {
-            Ok(app) => apply_nginx(roots, &app, &route),
+        Request::Apply { app, router, route } => match app_checked(&app) {
+            Ok(app) => match router {
+                RouterKind::Nginx => apply_nginx(nginx, &app, &route),
+                RouterKind::Caddy => apply_caddy(caddy, &app, &route),
+            },
             Err(reply) => reply,
         },
-        Request::Remove { app } => match app_checked(&app) {
-            Ok(app) => remove_nginx(roots, &app),
+        Request::Remove { app, router } => match app_checked(&app) {
+            Ok(app) => match router {
+                RouterKind::Nginx => remove_nginx(nginx, &app),
+                RouterKind::Caddy => remove_caddy(caddy, &app),
+            },
             Err(reply) => reply,
         },
         Request::Status {} => Reply::Status {
@@ -103,9 +111,10 @@ pub fn cmd_router_helper() -> Result<()> {
             Err(e) => return Err(anyhow!("router helper socket: {e}")),
         },
     };
-    let roots = NginxRoots::production(settings.router.cache_total_gb);
+    let nginx = NginxRoots::production(settings.router.cache_total_gb);
+    let caddy = CaddyRoots::production();
     run(&listener, idle, deploy.uid(), &mut |request| {
-        handle(&roots, request)
+        handle(&nginx, &caddy, request)
     })
 }
 

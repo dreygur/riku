@@ -275,7 +275,7 @@ Today the deploy user writes `<nginx root>/<app>.conf.new`, runs `nginx -t` and 
 
 ### Task 9: Caddy through the helper (M)
 
-Status: partly done. c087210 already moved the sites to `/etc/riku/caddy` and took `caddy` out of the deploy group. Left: root ownership of that directory, the admin socket and the reload.
+Status: helper and deploy side done: the helper writes the site and reloads Caddy with `--address unix//run/caddy/admin.sock`, the deploy user no longer runs `caddy`. Left for host setup: `prepare_site_root` owner root, group `caddy`, 2750; Caddy's global `admin unix//run/caddy/admin.sock` block with the refusal lines; `CADDY_SITE_ROOT` out of `ReadWritePaths`. Until those land, a real Caddy host cannot reload. c087210 already moved the sites to `/etc/riku/caddy` and took `caddy` out of the deploy group.
 
 **Files:**
 - Create: `crates/riku-route/src/caddy_apply.rs`, `caddy_apply_tests.rs`

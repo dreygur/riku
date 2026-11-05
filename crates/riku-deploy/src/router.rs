@@ -1,7 +1,7 @@
 //! Router seam orchestrator (service layer).
 //!
-//! Resolves the active router and routes app network exposure to nginx
-//! through the router helper, to Caddy, or to a router *plugin* via the
+//! Resolves the active router and routes app network exposure to nginx or
+//! Caddy through the router helper, or to a router *plugin* via the
 //! [`crate::plugins::router`] seam. Callers (deploy, destroy) go through here
 //! instead of reaching into nginx directly, so swapping the router is a config
 //! change, not a code change. See `PLUGIN_PROTOCOL.md` §6.2.
@@ -20,6 +20,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 use riku_container::engine::Engine;
+use riku_route::Request;
 
 use crate::config::router::Router;
 use crate::config::RikuPaths;
@@ -42,14 +43,14 @@ mod route_env;
 
 pub use backends::{copy_socket, current_backends};
 pub(crate) use backends::{parsed_worker, web_copies, worker_backend};
-use caddy::configure_caddy;
+use caddy::apply_caddy_site;
 pub use check::check;
 use fallback::fallback_backends;
 pub use helper_client::send as send_to_helper;
 use nginx_site::apply_nginx_site;
 use plugin::configure_plugin;
 pub use reload::ERROR_FILE as RELOAD_ERROR_FILE;
-use reload::{record_outcome, reload_caddy, reload_router_plugin};
+use reload::{record_outcome, reload_router_plugin};
 pub use remove::remove;
 pub use route_build::build_route;
 
@@ -119,7 +120,8 @@ pub fn configure(
 }
 
 /// Install `app`'s router config for `backends` and wait for the active
-/// router to confirm the reload. nginx goes through the router helper.
+/// router to confirm the reload. nginx and Caddy go through the router
+/// helper.
 #[allow(clippy::question_mark)]
 pub fn apply(
     app: &str,
@@ -146,14 +148,17 @@ fn apply_to(
 ) -> Result<()> {
     match active {
         Router::Nginx => {
-            let outcome = apply_nginx_site(send_to_helper, app, app_path, env, backends, paths);
+            let send = |request: &Request| send_to_helper(paths, request);
+            let outcome = apply_nginx_site(send, app, app_path, env, backends, paths);
             record_outcome(paths, &outcome);
             outcome
         }
-        Router::Caddy => match configure_caddy(app, env, backends, paths) {
-            Ok(()) => reload_caddy(paths),
-            Err(e) => Err(e),
-        },
+        Router::Caddy => {
+            let send = |request: &Request| send_to_helper(paths, request);
+            let outcome = apply_caddy_site(send, app, app_path, env, backends, paths);
+            record_outcome(paths, &outcome);
+            outcome
+        }
         Router::Plugin(name) => match configure_plugin(name, app, env, backends, paths) {
             Ok(()) => reload_router_plugin(name, paths),
             Err(e) => Err(e),

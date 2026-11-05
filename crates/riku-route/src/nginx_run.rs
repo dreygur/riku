@@ -14,7 +14,7 @@ use riku_util::spawn::output_retrying_etxtbsy;
 
 use crate::nginx_roots::{NginxRoots, ReloadMethod};
 
-fn run(command: &mut Command, what: &str) -> Result<()> {
+pub(crate) fn run(command: &mut Command, what: &str) -> Result<()> {
     let output: Output = match output_retrying_etxtbsy(command) {
         Ok(output) => output,
         Err(e) => return Err(anyhow!("could not run {what}: {e}")),

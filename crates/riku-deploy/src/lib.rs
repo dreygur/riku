@@ -23,7 +23,6 @@ use crate::config::RikuPaths;
 use crate::util::{deploy_logger::DeployLogger, echo};
 
 // Dependency crates aliased as their former module names.
-pub(crate) use riku_caddy as caddy;
 pub(crate) use riku_config as config;
 pub(crate) use riku_error as error;
 pub(crate) use riku_nginx as nginx;

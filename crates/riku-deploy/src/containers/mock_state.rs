@@ -130,6 +130,7 @@ pub fn mock_server(root: &Path, app: &str, compose: &str, env: &str) -> MockServ
     let caddy = root.join("mock_caddy");
     executable(&caddy, "#!/bin/sh\nexit 0\n");
     paths.reload_programs.caddy = caddy;
+    riku_route::serve_caddy_for_tests(&mut paths);
     let app_path = paths.app_root.join(app);
     fs::create_dir_all(&app_path).unwrap();
     fs::write(app_path.join("compose.yaml"), compose).unwrap();

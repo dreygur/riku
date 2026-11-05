@@ -1,12 +1,12 @@
-//! Caddy router: one site file per app under `<riku root>/caddy`.
+//! Caddy router: one site file per app under `/etc/riku/caddy`.
 //!
-//! `/etc/caddy/Caddyfile` imports `<riku root>/caddy/*.caddy`, and a root
-//! systemd path unit reloads Caddy when that directory changes. riku never
-//! talks to the Caddy admin API: it listens on localhost with no auth.
+//! `/etc/caddy/Caddyfile` imports `/etc/riku/caddy/*.caddy`. The router
+//! helper writes the site files and reloads Caddy through its admin socket;
+//! the deploy user writes nothing here.
 
 mod host;
 mod site;
 
-pub use host::{has_import, import_line, SYSTEM_CADDYFILE};
+pub use host::{has_import, import_line, ADMIN_ADDRESS, SYSTEM_CADDYFILE};
 pub use riku_util::route_plan::HttpsPolicy;
 pub use site::{remove_site, render_site, site_path, write_site};

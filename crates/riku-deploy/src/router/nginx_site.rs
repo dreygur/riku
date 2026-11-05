@@ -13,7 +13,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 use riku_container::types::AppName;
-use riku_route::{Reply, Request};
+use riku_route::{Reply, Request, RouterKind};
 
 use super::route_build::{build_route, nginx_domains, CATCH_ALL_NAME};
 use crate::config::router::Router;
@@ -24,7 +24,7 @@ use crate::util::flag::https_only;
 /// The backend a check renders with: the route gate never connects to it.
 const STAND_IN_PORT: u16 = 1;
 
-fn app_name(app: &str) -> Result<AppName> {
+pub(super) fn app_name(app: &str) -> Result<AppName> {
     match AppName::try_from(app) {
         Ok(name) => Ok(name),
         Err(e) => Err(anyhow!("cannot route '{app}': {e}")),
@@ -34,7 +34,7 @@ fn app_name(app: &str) -> Result<AppName> {
 /// Turn the helper's answer to `action` into a result. A refusal keeps the
 /// stage that gave it, since a schema refusal and a failed reload are fixed
 /// in different places.
-fn helper_outcome(reply: Reply, action: &str) -> Result<bool> {
+pub(super) fn helper_outcome(reply: Reply, action: &str) -> Result<bool> {
     match reply {
         Reply::Ok { reloaded } => Ok(reloaded),
         Reply::Failed { stage, error } => Err(anyhow!(
@@ -125,6 +125,7 @@ pub(super) fn apply_nginx_site(
     };
     let request = Request::Apply {
         app: name.to_string(),
+        router: RouterKind::Nginx,
         route: Box::new(route),
     };
     match send(&request) {
@@ -175,6 +176,7 @@ pub(super) fn remove_nginx_site(
     };
     let reloaded = match send(&Request::Remove {
         app: name.to_string(),
+        router: RouterKind::Nginx,
     }) {
         Ok(reply) => match helper_outcome(reply, "remove the site") {
             Ok(reloaded) => reloaded,

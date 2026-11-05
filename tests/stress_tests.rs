@@ -51,6 +51,7 @@ static FORK_GATE: RwLock<()> = RwLock::new(());
 /// removal, so deploys here need no `nginx` binary for `nginx -t`.
 fn make_paths(tmp: &TempDir) -> RikuPaths {
     let mut paths = RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
+    paths.caddy_root = tmp.path().join("caddy-sites");
     for dir in &[
         &paths.app_root,
         &paths.env_root,
@@ -73,6 +74,7 @@ fn make_paths(tmp: &TempDir) -> RikuPaths {
         fs::Permissions::from_mode(0o755),
     )
     .expect("chmod mock caddy");
+    riku_route::serve_caddy_for_tests(&mut paths);
     paths
 }
 

@@ -34,7 +34,7 @@ use crate::site_files::{
     ensure_dir, install, Planned, Snapshot, PRIVATE_DIR, PRIVATE_FILE, PUBLIC_DIR, PUBLIC_FILE,
 };
 
-fn failed(stage: Stage, error: impl ToString) -> Reply {
+pub(crate) fn failed(stage: Stage, error: impl ToString) -> Reply {
     Reply::Failed {
         stage,
         error: error.to_string(),
@@ -105,7 +105,7 @@ fn refused_host(roots: &NginxRoots) -> Option<Reply> {
 
 /// Put the previous files back after `cause` and build the reply, saying so
 /// when the restore itself failed.
-fn rolled_back(snapshot: &Snapshot, stage: Stage, cause: Error) -> Reply {
+pub(crate) fn rolled_back(snapshot: &Snapshot, stage: Stage, cause: Error) -> Reply {
     match snapshot.restore() {
         Ok(()) => failed(stage, cause),
         Err(e) => failed(

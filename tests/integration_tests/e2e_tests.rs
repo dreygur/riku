@@ -58,6 +58,7 @@ mod tests {
             fs::Permissions::from_mode(0o755),
         )
         .expect("Failed to chmod mock caddy");
+        riku_route::serve_caddy_for_tests(&mut paths);
         paths
     }
 
