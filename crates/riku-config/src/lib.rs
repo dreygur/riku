@@ -60,6 +60,11 @@ pub const SOCKET_ROOT: &str = "/run/riku-sockets";
 /// only group that can reach [`SOCKET_ROOT`].
 pub const SOCKET_GROUP: &str = "riku-sockets";
 
+/// The router helper's socket. It sits directly in `/run` because systemd
+/// creates a missing parent of a `ListenStream` path as root:root, which the
+/// deploy user could not traverse.
+pub const ROUTER_SOCKET: &str = "/run/riku-router.sock";
+
 /// Where Caddy site files live on a real host. It sits outside the deploy
 /// user's home so the `caddy` user needs no access to that home. Root init
 /// creates it owned by the deploy user, group `caddy`, mode `2750`.

@@ -352,6 +352,13 @@ pub enum Commands {
     #[command(after_help = "Examples:\n  riku supervisor")]
     Supervisor,
 
+    /// Run the root router helper that installs router config for the deploy user
+    #[command(
+        name = "router-helper",
+        after_help = "Examples:\n  sudo riku router-helper"
+    )]
+    RouterHelper,
+
     /// Manage client-side plugins (local scripts that extend riku CLI)
     #[command(
         subcommand,

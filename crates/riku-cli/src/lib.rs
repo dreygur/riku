@@ -22,6 +22,7 @@ pub mod doctor;
 pub mod git;
 pub mod hooks;
 pub mod plugins;
+pub mod router_helper;
 pub mod scp;
 pub mod setup;
 pub mod ssh_command;

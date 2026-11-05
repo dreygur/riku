@@ -28,12 +28,24 @@
 //! helper calls one again on receipt whatever the sender already did; the deploy side calls it for an early
 //! error only.
 
+mod bounded;
 mod check;
 mod check_text;
 mod check_tls;
+mod listen;
+mod protocol;
 mod schema;
+mod server;
 #[cfg(test)]
 mod test_pems;
+mod unique_keys;
 
+pub use bounded::{is_closed, read_bounded, MAX_MESSAGE_BYTES};
 pub use check::{check_caddy_route, check_nginx_route, CheckedRoute};
+pub use listen::{activated_listener, bind_socket, restrict_umask, run};
+pub use protocol::{
+    encode_reply, encode_request, parse_reply, parse_request, Reply, Request, Stage,
+    PROTOCOL_VERSION,
+};
 pub use schema::{Cache, Listen, Route, RouteBackend, SiteKind, Tls};
+pub use server::{peer_allowed, serve_one, REQUEST_BUDGET};

@@ -70,7 +70,7 @@ Sizes in bytes, RSS in KiB, all on the 4 core x86_64 Linux test server, release 
 | Supervisor idle RSS, no apps | 8,756 (median of 3, 79491da, binary 9,213,048 B) | `benches/footprint.sh` in a `debian:12` container on the test server, no cgroup delegation | 9,632 (baseline plus 10 percent, Open question 2) |
 | Supervisor plus nginx 1.22.1 (master and 4 workers), idle, no apps | 21,724 (median of 3, same run) | same | 23,897 (baseline plus 10 percent, Open question 2) |
 | Binary plus riku state on disk, no apps | about 9.3 MB | README.md:55-56 | the binary limit plus state; README says about 10 MB (Open question 3) |
-| Router helper idle RSS (OpenRC and other init systems) | none yet | Task 7 | counts toward the base |
+| Router helper idle RSS (OpenRC and other init systems) | 7,068 (median of 3, Task 7, binary 9,329,080 B) | `riku router-helper` as root in a `debian:12` container on the test server, 5 s after start | counts toward the base |
 | Lingering user manager (rootless systemd hosts) | none yet | Task 12 | add-on cost, reported apart |
 
 ## Review Focus
@@ -208,7 +208,7 @@ Status: done, binary 9,221,816 B. Gate is `check_nginx_route` and `check_caddy_r
 
 ### Task 7: Helper socket, protocol and subcommand (M)
 
-Status: still needed. Opus review: root process facing the deploy user.
+Status: done, binary 9,329,080 B. Linux tests pass as root (fork and setuid foreign peer tests) and as a plain user. Deferred: the Status reply carries only the version; router and installed apps go to Task 16. Apply does not run the gate yet; Task 8 must call `check_nginx_route` or `check_caddy_route` there. Opus review: root process facing the deploy user.
 
 **Files:**
 - Create: `crates/riku-route/src/protocol.rs`, `protocol_tests.rs`, `src/server.rs`, `server_tests.rs`, `src/listen.rs` (socket activation or own socket), `crates/riku-deploy/src/router/helper_client.rs`, `helper_client_tests.rs`, `crates/riku-cli/src/router_helper.rs`

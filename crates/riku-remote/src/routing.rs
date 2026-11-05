@@ -44,7 +44,7 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
         Commands::Addon(_) => None,
         Commands::InstallPlugins { .. } => None,
         Commands::PluginEmit { .. } => None,
-        Commands::Supervisor => None,
+        Commands::Supervisor | Commands::RouterHelper => None,
         Commands::GitHook { .. } => None,
         Commands::GitReceivePack { .. } => None,
         Commands::GitUploadPack { .. } => None,

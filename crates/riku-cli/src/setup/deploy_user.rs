@@ -95,6 +95,11 @@ impl DeployUser {
         self.uid.as_raw()
     }
 
+    /// The deploy user's primary group id.
+    pub fn gid(&self) -> u32 {
+        self.gid.as_raw()
+    }
+
     /// The deploy user's riku paths, the ones git push deploys read.
     pub fn riku_paths(&self) -> RikuPaths {
         RikuPaths::from_dirs(self.home.join(".riku"), &self.home)

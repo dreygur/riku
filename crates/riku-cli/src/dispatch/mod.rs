@@ -14,7 +14,7 @@ use anyhow::{anyhow, Result};
 use crate::agent::auth::AgentSession;
 use crate::cli::{require_app, Commands};
 use crate::config::RikuPaths;
-use crate::{agent, apps, backup, container, doctor, git, quickstart, scp, setup};
+use crate::{agent, apps, backup, container, doctor, git, quickstart, router_helper, scp, setup};
 
 /// What `riku agent` was asked to do. The flags are checked in this order.
 enum AgentMode {
@@ -167,6 +167,7 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
             app,
         } => apps::cmd_plugin_emit(paths, &event_name, &data, app.as_deref()),
         Commands::Supervisor => apps::cmd_supervisor(paths),
+        Commands::RouterHelper => router_helper::cmd_router_helper(),
         Commands::Plugin(cmd) => riku_remote::plugin_cmd::run_plugin(cmd),
         Commands::Plugins(cmd) => plugins::run_plugins(paths, cmd),
         Commands::Hook(cmd) => plugins::run_hook(paths, cmd),

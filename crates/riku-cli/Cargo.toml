@@ -20,6 +20,7 @@ riku-plugins = { path = "../riku-plugins" }
 riku-supervisor = { path = "../riku-supervisor" }
 riku-deploy = { path = "../riku-deploy" }
 riku-container = { path = "../riku-container" }
+riku-route = { path = "../riku-route" }
 clap = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
