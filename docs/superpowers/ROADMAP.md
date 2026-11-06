@@ -8,17 +8,31 @@ work they describe.
 
 - Each project has a design in `docs/superpowers/specs/` (owner approved) and
   a plan in `docs/superpowers/plans/`, written just before it runs.
-- Plans run with superpowers:subagent-driven-development: one implementer
-  subagent per task, a review after each, a final whole branch review.
+- Plans run with superpowers:subagent-driven-development, cut for tokens
+  (owner, 2026-11-07):
+  - No review after each task. One whole branch review at the end, then
+    one fix round. The owner reviews everything last.
+  - Group small or related tasks into one implementer dispatch. Do work
+    that takes a handful of tool calls inline, without a subagent.
+  - Implementers run on Sonnet; mechanical work (deletions, renames,
+    moving code) on Haiku. Opus only for the final review.
+  - Briefs point at spec and plan sections and `file:line`; they do not
+    paste code or retype the spec.
+  - Per task, run only the touched crate's tests (`cargo test -p <crate>`).
+    The full suite, clippy, the Linux run and Docker e2e run once, before
+    the final review.
+  - Plans stay short: task goal, files, acceptance check. No full code in
+    the plan unless the change is subtle.
 - The run ledger lives in `.superpowers/sdd/<plan>/progress.md` (git ignored,
   this machine only). The committed record is git history plus the status
   lines below: a task is done when its commit is listed here.
 - Owner rules for agents: no python, perl or other script interpreters for
   reading or editing files; no AI attribution in commits; follow
   `.claude/CLAUDE.md`.
-- Implementers and reviewers run on Claude (Sonnet by default, Opus for
-  reviews of trust boundaries and the final review), not through agy, which
-  was too slow here.
+- Agents run on Claude, not through agy, which was too slow here.
+- Order agreed 2026-11-07: small boards and binary size, then the nginx
+  bugs (cache path, duplicate `location /`), then the framework design,
+  then phase 4.
 - The owner's real servers, organisation and projects are confidential. The
   repository is public. Never write their names in code, tests, docs, commit
   messages or PR text; use neutral names (`edge`, `prod`, `edge.example`,
