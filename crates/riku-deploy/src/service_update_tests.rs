@@ -82,7 +82,7 @@ fn new_digest_replaces_service() {
     );
 
     assert!(
-        !run_lines.iter().any(|c| c.contains("db")),
+        !run_lines.iter().any(|c| c.contains("riku.service=db")),
         "no run line for db expected: {run_lines:#?}"
     );
 

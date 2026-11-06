@@ -4,9 +4,11 @@
 //! Security: older versions put symlinks and riku named site files into the
 //! system nginx directories and kept Caddy's sites inside the deploy home.
 //! Root's service loading any file the deploy user controls is root code
-//! execution, so setup deletes them. Entries are inspected with
-//! `symlink_metadata`, so a link is never followed, and only files and links
-//! are removed from the nginx directories.
+//! execution, so setup deletes them. Ownership decides, not names or paths:
+//! in the nginx directories a file must be root owned, and a link must end
+//! at a root owned file that neither group nor others can write. Entries
+//! are inspected with `symlink_metadata`, and only files and links are
+//! removed from the nginx directories.
 
 use std::fs;
 use std::os::unix::fs::MetadataExt;
@@ -32,46 +34,59 @@ fn entries(dir: &Path) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
-/// Where a symlink points, resolved when the target exists and as written
-/// otherwise, so a dangling link into the home is still caught.
-fn link_target(link: &Path) -> Option<PathBuf> {
-    if let Ok(resolved) = fs::canonicalize(link) {
-        return Some(resolved);
-    }
-    fs::read_link(link).ok()
+/// A regular file owned by `root_uid` that no one else can write.
+pub(super) fn is_trusted_file(meta: &fs::Metadata, root_uid: u32) -> bool {
+    meta.is_file() && meta.uid() == root_uid && meta.mode() & 0o022 == 0
 }
 
-fn points_into(link: &Path, home: &Path) -> bool {
-    let Some(target) = link_target(link) else {
+/// Whether every directory from `/` down to `dir` is owned by `root_uid` (or
+/// by real root) and writable by no one else, so nobody but root can rename
+/// or replace what is inside.
+fn is_trusted_dir_chain(dir: &Path, root_uid: u32) -> bool {
+    dir.ancestors()
+        .all(|ancestor| match fs::metadata(ancestor) {
+            Ok(meta) => {
+                meta.is_dir()
+                    && (meta.uid() == root_uid || meta.uid() == 0)
+                    && meta.mode() & 0o022 == 0
+            }
+            Err(_) => false,
+        })
+}
+
+/// Whether root's nginx may keep loading `path`: a [`is_trusted_file`], or a
+/// link that points directly at one inside a trusted directory chain. A
+/// dangling link, or a link to another link, is not trusted.
+fn is_trusted_entry(path: &Path, meta: &fs::Metadata, root_uid: u32) -> bool {
+    if !meta.file_type().is_symlink() {
+        return is_trusted_file(meta, root_uid);
+    }
+    let Ok(written) = fs::read_link(path) else {
         return false;
     };
-    let real_home = fs::canonicalize(home).unwrap_or_else(|_| home.to_path_buf());
-    target.starts_with(home) || target.starts_with(real_home)
-}
-
-/// Whether `path` is a symlink into `home`, or a regular file named
-/// `riku*` (other than `keep`) owned by `deploy_uid`.
-fn is_deploy_owned_router_file(path: &Path, home: &Path, deploy_uid: u32, keep: &str) -> bool {
-    let Ok(meta) = fs::symlink_metadata(path) else {
+    let direct = path.parent().unwrap_or(Path::new("/")).join(written);
+    match fs::symlink_metadata(&direct) {
+        Ok(direct_meta) if !direct_meta.file_type().is_symlink() => {}
+        _ => return false,
+    }
+    let Ok(resolved) = fs::canonicalize(&direct) else {
         return false;
     };
-    if meta.file_type().is_symlink() && points_into(path, home) {
-        return true;
+    let Some(parent) = resolved.parent() else {
+        return false;
+    };
+    match fs::metadata(&resolved) {
+        Ok(target) => is_trusted_file(&target, root_uid) && is_trusted_dir_chain(parent, root_uid),
+        Err(_) => false,
     }
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
-    let riku_named = name
-        .as_deref()
-        .is_some_and(|n| n.starts_with("riku") && n != keep);
-    riku_named && !meta.is_dir() && meta.uid() == deploy_uid
 }
 
-/// Delete from each of `dirs` the entries [`is_deploy_owned_router_file`]
-/// accepts. Returns what was removed.
+/// Delete from each of `dirs` every file or link that [`is_trusted_entry`]
+/// rejects. Subdirectories are left in place and reported. Returns what was
+/// removed.
 pub(super) fn clear_deploy_owned_router_files(
     dirs: &[&Path],
-    home: &Path,
-    deploy_uid: u32,
-    keep: &str,
+    root_uid: u32,
 ) -> Result<Vec<PathBuf>> {
     let mut removed = Vec::new();
     for dir in dirs {
@@ -80,7 +95,23 @@ pub(super) fn clear_deploy_owned_router_files(
             Err(e) => return Err(anyhow!("{e}")),
         };
         for path in found {
-            if !is_deploy_owned_router_file(&path, home, deploy_uid, keep) {
+            let meta = match fs::symlink_metadata(&path) {
+                Ok(meta) => meta,
+                Err(e) => return Err(anyhow!("failed to inspect {}: {e}", path.display())),
+            };
+            if meta.is_dir() {
+                if meta.uid() != root_uid {
+                    echo(
+                        &format!(
+                            "      warning: {} is a directory not owned by root; remove it by hand",
+                            path.display()
+                        ),
+                        "yellow",
+                    );
+                }
+                continue;
+            }
+            if is_trusted_entry(&path, &meta, root_uid) {
                 continue;
             }
             if let Err(e) = fs::remove_file(&path) {

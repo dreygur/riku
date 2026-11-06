@@ -6,8 +6,8 @@
 //! (replacing an older include of the deploy user's own nginx directory), and
 //! puts the nginx worker user in the `riku-sockets` group (see
 //! [`super::nginx_worker`]). Older versions left links into the deploy home
-//! and deploy owned `riku*` files in `sites-enabled` and `conf.d`; those are
-//! removed (see [`super::host_cleanup`]).
+//! and deploy owned files in `sites-enabled` and `conf.d`; every entry root
+//! does not own is removed (see [`super::host_cleanup`]).
 //!
 //! Security: the include file's text is a constant (see
 //! [`crate::nginx::include_line`]), and it is written only into a directory
@@ -28,7 +28,7 @@ use crate::nginx::{include_file_contents, needs_catch_all, write_include_file};
 use crate::util::echo;
 
 use super::deploy_user::DeployUser;
-use super::host_cleanup::clear_deploy_owned_router_files;
+use super::host_cleanup::{clear_deploy_owned_router_files, is_trusted_file};
 use super::nginx_worker::grant_nginx_sockets;
 
 const SITES_ENABLED: &str = "/etc/nginx/sites-enabled";
@@ -56,14 +56,19 @@ fn wants_catch_all(paths: &RikuPaths) -> bool {
     }
 }
 
-/// Write the include file unless it already holds the same text. Returns
-/// whether it was written.
-fn install_include(paths: &RikuPaths) -> Result<bool> {
+/// Write the include file unless it already holds the same text and is a
+/// root owned regular file nobody else can write. Returns whether it was
+/// written.
+fn install_include(paths: &RikuPaths, root_uid: u32) -> Result<bool> {
     let catch_all = wants_catch_all(paths);
     let contents = include_file_contents(catch_all);
     let file = &paths.nginx_include_file;
+    let trusted = match fs::symlink_metadata(file) {
+        Ok(meta) => is_trusted_file(&meta, root_uid),
+        Err(_) => false,
+    };
     match fs::read_to_string(file) {
-        Ok(current) if current == contents => return Ok(false),
+        Ok(current) if trusted && current == contents => return Ok(false),
         Ok(_) => {}
         Err(e) if e.kind() == ErrorKind::NotFound => {}
         Err(e) => return Err(anyhow!("cannot read {}: {e}", file.display())),
@@ -75,7 +80,7 @@ fn install_include(paths: &RikuPaths) -> Result<bool> {
 }
 
 fn load_riku_sites(paths: &RikuPaths) -> Result<()> {
-    match install_include(paths) {
+    match install_include(paths, ROOT_UID) {
         Ok(true) => echo(
             &format!(
                 "      {} loads riku sites",
@@ -148,12 +153,8 @@ pub fn setup_nginx_host(user: &DeployUser) -> Result<()> {
             file.display()
         ));
     };
-    let keep = file
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
     let swept = [Path::new(SITES_ENABLED), dir];
-    if let Err(e) = clear_deploy_owned_router_files(&swept, &user.home, user.uid(), &keep) {
+    if let Err(e) = clear_deploy_owned_router_files(&swept, ROOT_UID) {
         return Err(e);
     }
     if !dir.is_dir() {

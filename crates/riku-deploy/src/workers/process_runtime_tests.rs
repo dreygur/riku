@@ -109,17 +109,22 @@ fn a_stopped_wsgi_copy_leaves_no_socket_behind() {
     );
 }
 
+/// A free port below every OS's ephemeral range. Sibling tests take their
+/// ports from `bind(0)`, which can hand them a port this test just released
+/// and make the pinned-port check see it as busy.
+fn free_port_below_ephemeral_range() -> u16 {
+    (20000..30000)
+        .find(|port| std::net::TcpListener::bind(("127.0.0.1", *port)).is_ok())
+        .expect("no free port in 20000..30000")
+}
+
 /// A pinned PORT cannot be held by two copies, so the old copy stops before
 /// its replacement starts.
 #[test]
 fn pinned_port_keeps_stop_first() {
     let tmp = TempDir::new().unwrap();
     let (paths, app_path) = web_app(&tmp);
-    let port = std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port();
+    let port = free_port_below_ephemeral_range();
     let env = HashMap::from([("PORT".to_string(), port.to_string())]);
 
     let (max_web, routes) = deploy_twice(&paths, &app_path, &env);

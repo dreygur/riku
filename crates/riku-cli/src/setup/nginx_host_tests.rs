@@ -1,4 +1,5 @@
 use std::fs;
+use std::os::unix::fs::MetadataExt;
 
 use super::*;
 
@@ -15,10 +16,19 @@ fn include_is_written_once_and_left_alone_on_a_second_run() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = host_paths(tmp.path());
 
-    assert!(install_include(&paths).unwrap(), "first run wrote nothing");
+    let me = fs::metadata(tmp.path()).unwrap().uid();
+
     assert!(
-        !install_include(&paths).unwrap(),
+        install_include(&paths, me).unwrap(),
+        "first run wrote nothing"
+    );
+    assert!(
+        !install_include(&paths, me).unwrap(),
         "second run rewrote the file"
+    );
+    assert!(
+        install_include(&paths, me + 1).unwrap(),
+        "a file root does not own was kept"
     );
 
     let text = fs::read_to_string(&paths.nginx_include_file).unwrap();
@@ -28,7 +38,7 @@ fn include_is_written_once_and_left_alone_on_a_second_run() {
 
 #[test]
 fn site_root_is_created_under_a_checked_parent_and_refused_when_writable() {
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    use std::os::unix::fs::PermissionsExt;
 
     let tmp = tempfile::tempdir().unwrap();
     let parent = tmp.path().join("riku");
@@ -46,7 +56,7 @@ fn site_root_is_created_under_a_checked_parent_and_refused_when_writable() {
 
 #[test]
 fn root_write_refuses_a_writable_or_foreign_owned_directory() {
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    use std::os::unix::fs::PermissionsExt;
 
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path().join("conf.d");

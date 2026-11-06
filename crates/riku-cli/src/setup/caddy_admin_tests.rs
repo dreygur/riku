@@ -9,5 +9,8 @@ fn drop_in_declares_the_runtime_directory_and_is_rewritable() {
 
     let text =
         fs::read_to_string(tmp.path().join("caddy.service.d/riku-runtime-dir.conf")).unwrap();
-    assert_eq!(text, "[Service]\nRuntimeDirectory=caddy\n");
+    assert_eq!(
+        text,
+        "[Service]\nRuntimeDirectory=caddy\nRuntimeDirectoryMode=0750\n"
+    );
 }

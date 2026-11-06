@@ -3,42 +3,67 @@ use std::os::unix::fs::{symlink, MetadataExt};
 use super::*;
 
 #[test]
-fn nginx_dirs_lose_links_into_the_home_and_deploy_owned_riku_files() {
+fn nginx_dirs_keep_only_root_owned_files_and_links_to_them() {
+    use std::os::unix::fs::PermissionsExt;
+
     let tmp = tempfile::tempdir().unwrap();
-    let home = tmp.path().join("home");
     let sites = tmp.path().join("sites-enabled");
     let conf_d = tmp.path().join("conf.d");
-    for dir in [&home, &sites, &conf_d] {
+    let outside = tmp.path().join("outside");
+    for dir in [&sites, &conf_d, &outside] {
         fs::create_dir(dir).unwrap();
     }
-    let me = fs::metadata(&home).unwrap().uid();
-    fs::write(home.join("app.conf"), "x").unwrap();
-    fs::write(tmp.path().join("elsewhere.conf"), "x").unwrap();
+    let me = fs::metadata(&sites).unwrap().uid();
+    let not_root = me + 1;
+    fs::write(outside.join("shared.conf"), "x").unwrap();
+    fs::write(outside.join("writable.conf"), "x").unwrap();
+    fs::set_permissions(
+        outside.join("writable.conf"),
+        fs::Permissions::from_mode(0o666),
+    )
+    .unwrap();
 
-    symlink(home.join("app.conf"), sites.join("app")).unwrap();
-    symlink(home.join("gone.conf"), sites.join("dangling")).unwrap();
-    symlink(tmp.path().join("elsewhere.conf"), sites.join("other")).unwrap();
-    fs::write(conf_d.join("riku-old.conf"), "x").unwrap();
-    fs::write(conf_d.join("riku.conf"), "include").unwrap();
+    symlink(outside.join("shared.conf"), sites.join("good-link")).unwrap();
+    symlink(outside.join("writable.conf"), sites.join("writable-link")).unwrap();
+    symlink(outside.join("gone.conf"), sites.join("dangling")).unwrap();
+    let loose = tmp.path().join("loose");
+    fs::create_dir(&loose).unwrap();
+    fs::write(loose.join("site.conf"), "x").unwrap();
+    fs::set_permissions(&loose, fs::Permissions::from_mode(0o777)).unwrap();
+    symlink(loose.join("site.conf"), sites.join("loose-link")).unwrap();
+    symlink(outside.join("shared.conf"), outside.join("hop")).unwrap();
+    symlink(outside.join("hop"), sites.join("chained")).unwrap();
     fs::write(conf_d.join("gzip.conf"), "x").unwrap();
+    fs::create_dir(conf_d.join("nested")).unwrap();
 
-    let removed =
-        clear_deploy_owned_router_files(&[&sites, &conf_d], &home, me, "riku.conf").unwrap();
-
+    let removed = clear_deploy_owned_router_files(&[&sites, &conf_d], me).unwrap();
     let mut names: Vec<_> = removed
         .iter()
         .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
         .collect();
     names.sort();
-    assert_eq!(names, ["app", "dangling", "riku-old.conf"]);
-    assert!(sites.join("other").exists(), "unrelated link was removed");
-    assert!(
-        conf_d.join("riku.conf").exists(),
-        "include file was removed"
+    assert_eq!(
+        names,
+        ["chained", "dangling", "loose-link", "writable-link"]
+    );
+    assert!(sites.join("good-link").exists(), "link to a root file went");
+    assert!(conf_d.join("gzip.conf").exists(), "root owned file went");
+    assert!(conf_d.join("nested").is_dir(), "directory was removed");
+
+    let removed = clear_deploy_owned_router_files(&[&sites, &conf_d], not_root).unwrap();
+    let mut names: Vec<_> = removed
+        .iter()
+        .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    assert_eq!(
+        names,
+        ["good-link", "gzip.conf"],
+        "deploy owned entries stayed"
     );
     assert!(
-        conf_d.join("gzip.conf").exists(),
-        "unrelated file was removed"
+        outside.join("shared.conf").exists(),
+        "link target was removed"
     );
 }
 

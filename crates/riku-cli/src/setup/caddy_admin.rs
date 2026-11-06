@@ -7,10 +7,11 @@
 //! for the Caddy that is already running.
 //!
 //! Security: the drop-in text is a constant written under `/etc/systemd`,
-//! and the directory is owned by `caddy` with mode `2750`, so only `caddy`
+//! and the directory is owned by `caddy` with mode `0750`, so only `caddy`
 //! and root reach the admin API. Every command runs with a fixed argv.
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
@@ -25,7 +26,8 @@ use super::system_service::{systemctl_ok, SYSTEMD_DIR};
 const RUN_DIR: &str = "/run/caddy";
 const DROP_IN_DIR: &str = "caddy.service.d";
 const DROP_IN_FILE: &str = "riku-runtime-dir.conf";
-const DROP_IN_TEXT: &str = "[Service]\nRuntimeDirectory=caddy\n";
+const DROP_IN_TEXT: &str = "[Service]\nRuntimeDirectory=caddy\nRuntimeDirectoryMode=0750\n";
+const RUN_DIR_MODE: u32 = 0o750;
 
 fn write_drop_in(systemd_dir: &Path) -> Result<()> {
     let dir = systemd_dir.join(DROP_IN_DIR);
@@ -48,7 +50,13 @@ fn create_run_dir(group: &str) -> Result<()> {
         Ok(None) => return Err(anyhow!("user {CADDY_USER} not found")),
         Err(e) => return Err(anyhow!("failed to look up user {CADDY_USER}: {e}")),
     };
-    socket_dir::prepare(Path::new(RUN_DIR), Some(caddy.uid.as_raw()), group)
+    if let Err(e) = socket_dir::prepare(Path::new(RUN_DIR), Some(caddy.uid.as_raw()), group) {
+        return Err(anyhow!("{e}"));
+    }
+    match fs::set_permissions(RUN_DIR, fs::Permissions::from_mode(RUN_DIR_MODE)) {
+        Ok(()) => Ok(()),
+        Err(e) => Err(anyhow!("failed to chmod {RUN_DIR}: {e}")),
+    }
 }
 
 /// Make `/run/caddy` exist for the admin socket, now and after every
