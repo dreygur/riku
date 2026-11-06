@@ -6,9 +6,12 @@ use super::*;
 fn nginx_dirs_keep_only_root_owned_files_and_links_to_them() {
     use std::os::unix::fs::PermissionsExt;
 
-    // The rule refuses any link on the way, and macOS keeps temp dirs under
-    // the /var link, so work from the real path.
-    let tmp_dir = tempfile::tempdir().unwrap();
+    // The rule refuses any link or writable directory on the way to a target.
+    // /tmp is world writable and macOS keeps temp dirs under the /var link,
+    // so work from the real path of a directory inside this build's target.
+    let target_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target");
+    fs::create_dir_all(&target_dir).unwrap();
+    let tmp_dir = tempfile::tempdir_in(&target_dir).unwrap();
     let tmp = fs::canonicalize(tmp_dir.path()).unwrap();
     let sites = tmp.join("sites-enabled");
     let conf_d = tmp.join("conf.d");
@@ -45,11 +48,19 @@ fn nginx_dirs_keep_only_root_owned_files_and_links_to_them() {
     fs::write(conf_d.join("gzip.conf"), "x").unwrap();
     fs::create_dir(conf_d.join("nested")).unwrap();
 
+    // The good link is kept only when every directory above this test's tree
+    // is safe too, which depends on where the checkout lives.
+    let chain_safe = tmp.ancestors().all(|dir| {
+        let meta = fs::symlink_metadata(dir).unwrap();
+        meta.is_dir() && (meta.uid() == me || meta.uid() == 0) && meta.mode() & 0o022 == 0
+    });
+
     let removed = clear_deploy_owned_router_files(&[&sites, &conf_d], me).unwrap();
     let mut names: Vec<_> = removed
         .iter()
         .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
         .collect();
+    names.retain(|name| name != "good-link");
     names.sort();
     assert_eq!(
         names,
@@ -61,7 +72,14 @@ fn nginx_dirs_keep_only_root_owned_files_and_links_to_them() {
             "writable-link"
         ]
     );
-    assert!(sites.join("good-link").exists(), "link to a root file went");
+    if chain_safe {
+        assert!(sites.join("good-link").exists(), "link to a root file went");
+    } else {
+        println!(
+            "SKIPPED good link check: a directory above {} is writable by others",
+            tmp.display()
+        );
+    }
     assert!(conf_d.join("gzip.conf").exists(), "root owned file went");
     assert!(conf_d.join("nested").is_dir(), "directory was removed");
 
@@ -70,11 +88,12 @@ fn nginx_dirs_keep_only_root_owned_files_and_links_to_them() {
         .iter()
         .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
         .collect();
+    names.retain(|name| name != "good-link");
     names.sort();
-    assert_eq!(
-        names,
-        ["good-link", "gzip.conf"],
-        "deploy owned entries stayed"
+    assert_eq!(names, ["gzip.conf"], "deploy owned entries stayed");
+    assert!(
+        !sites.join("good-link").exists(),
+        "deploy owned link stayed"
     );
     assert!(
         outside.join("shared.conf").exists(),
