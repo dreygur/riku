@@ -28,6 +28,47 @@ work they describe.
 
 ## Status
 
+### Resume here (2026-11-07)
+
+- `main` is at d35faaf, all merged and released: PR #73 (container
+  integration and the root router helper), #74 (registry builds, riku-sync
+  and `riku container` removed), #75 (version 0.1.2), #76 (32 bit rlim_t fix
+  for armv7). CI, CodeQL and the docs deploy are green on `main`.
+- Release v0.1.2 is published (riku and rk for linux amd64, arm64, armv7 and
+  macOS amd64, arm64, plus the Java and Clojure plugins). The v2.0.0 and
+  v2.1.0 releases and tags were deleted (owner). The version string is a
+  literal in four places: crates/riku/Cargo.toml, crates/riku-client/Cargo.toml,
+  crates/riku-args/src/cli.rs and crates/riku-cli/src/apps/dump_state/builder.rs.
+- Owner direction 2026-11-06: riku is a small, secure, self hosted Heroku
+  replacement; a small core extended by plugins like a framework; no over
+  engineering; one review round, smallest fix. Rootless engines were dropped.
+- Next: the framework design (see "Framework design" in
+  `plans/2026-11-04-rootless-engine.md`): routers as plugins over router
+  plugin protocol 2; nginx and Caddy fragments that `sudo riku plugins
+  install` copies into a root owned directory, never config text from the
+  deploy user; small generic checked fields for per app values; and a review
+  of which riku-plugins parts (signing, bundles, marketplace, UI, sandbox)
+  earn their place. Ask the owner questions before writing it.
+- Known gaps left open:
+  - A Caddy app with no domain is redeployed on every `riku doctor --fix`.
+  - The dashboard Playwright suite was not run after the `riku container`
+    removal.
+  - The installer (`scripts/install.sh`) was not run against v0.1.2; the
+    asset names match.
+  - Podman pulling from an HTTP registry on the server is unverified
+    (docs/docs/container-images.md says so).
+- Test server: Linux, reachable as the `.local` name only on the owner's
+  LAN, otherwise through a public address and port the owner gives each
+  session. Never write either in the repository. Checks run in throwaway
+  privileged systemd containers there; the host runs the owner's own apps
+  and an older riku, which must not be touched. Clean up `/tmp/rikufp` and
+  the `rikufp-cargo` volume after each run (done as of today).
+- Useful checks: `benches/footprint.sh`; the full suite as a plain user with
+  `--sysctl net.ipv4.ip_unprivileged_port_start=1024` (as the GitHub runner
+  sees ports); Docker e2e with `docker/Dockerfile.test`; release cross builds
+  for armv7 and aarch64 need `gcc-arm-linux-gnueabihf` and
+  `gcc-aarch64-linux-gnu` because of ring.
+
 ### Done
 
 - Remote CLI and redesigned embedded dashboard. Spec
@@ -111,7 +152,7 @@ work they describe.
   passed, 0 failed, 2 ignored. Merged into `feat/caddy-router` at 10e956b
   (gate green there too), not pushed.
 
-### Phase 3: container integration (3a done, PR #73 open)
+### Phase 3: container integration (done, merged in PR #73)
 
 - Same spec, split in two plans (owner, 2026-10-31). 3a server side: plan
   `plans/2026-10-30-container-integration.md` (owner approved), 16 tasks,
@@ -189,7 +230,7 @@ work they describe.
 - Each copy's host port is stored (as a label) so backends can be rebuilt
   after a supervisor restart.
 
-### Phase 3b: build off the server through a registry (done, pending push)
+### Phase 3b: build off the server through a registry (done, merged in PR #74)
 
 - Owner cut 2026-11-06 after an EGM review: spec
   `specs/2026-11-06-phase-3b-design.md`. Images built off the server go
