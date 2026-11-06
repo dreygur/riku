@@ -33,7 +33,6 @@ pub(crate) use riku_util as util;
 // Deployment infrastructure modules (kept in binary)
 pub mod app_stop;
 pub mod backup;
-pub mod container_runtime; // used by `riku container` CLI commands
 pub mod containers;
 mod deploy_env;
 mod deploy_finish;

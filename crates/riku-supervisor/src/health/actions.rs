@@ -8,7 +8,6 @@
 //! binary injects a concrete implementation at startup via
 //! [`super::super::daemon::Supervisor::with_actions`].
 
-use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -37,7 +36,6 @@ pub trait ControlActions: Send + Sync {
     fn stop(&self, paths: &RikuPaths, app: &str) -> Result<()>;
     fn destroy(&self, paths: &RikuPaths, app: &str) -> Result<()>;
     fn install_plugins(&self, paths: &RikuPaths, only: Option<Vec<String>>) -> Result<()>;
-    fn container_export(&self, app: &str, context: &Path, output: &Path) -> Result<()>;
     fn list_client_plugins(&self) -> Result<Vec<String>>;
     /// Pull a fresh image and recreate a single compose service, without a
     /// full redeploy. Used by the daemon's periodic image-watch check
@@ -84,9 +82,6 @@ impl ControlActions for NoopControlActions {
         Err(Self::unavailable())
     }
     fn install_plugins(&self, _: &RikuPaths, _: Option<Vec<String>>) -> Result<()> {
-        Err(Self::unavailable())
-    }
-    fn container_export(&self, _: &str, _: &Path, _: &Path) -> Result<()> {
         Err(Self::unavailable())
     }
     fn list_client_plugins(&self) -> Result<Vec<String>> {

@@ -107,8 +107,7 @@ pub fn command(forward_heading: &str) -> Command {
 }
 
 /// The root command as `rk` shows it: only what a laptop can run. The remote
-/// dashboard counts as local there, `container` and the server only commands
-/// are left out, and `--local` is hidden since `rk` has no local mode.
+/// dashboard counts as local there, the server only commands are left out, and `--local` is hidden since `rk` has no local mode.
 pub fn client_command(server: Option<&ServerName>) -> Command {
     let root = for_client(Cli::command(), CLIENT_PROGRAM)
         .name(CLIENT_PROGRAM)

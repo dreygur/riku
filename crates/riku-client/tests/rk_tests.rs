@@ -90,20 +90,12 @@ fn server_only_commands_and_container_are_refused() {
         "{}",
         stderr(&init)
     );
-    let container = rk(&home, &["container", "export", "myapp"]);
-    assert_eq!(container.status.code(), Some(1));
-    assert!(
-        stderr(&container)
-            .contains("'container' is not part of rk; run it with the full riku binary"),
-        "{}",
-        stderr(&container)
-    );
 }
 
 #[test]
 fn refusal_wins_over_a_help_request() {
     let home = TempDir::new().unwrap();
-    for args in [&["init", "-h"][..], &["help", "init"], &["container"]] {
+    for args in [&["init", "-h"][..], &["help", "init"], &["supervisor"]] {
         let output = rk(&home, args);
         assert_eq!(output.status.code(), Some(1), "rk {args:?}");
         assert!(

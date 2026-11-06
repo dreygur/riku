@@ -17,7 +17,6 @@ Component package located at `crates/riku-args/src`.
 - `ConfigCmd` [cmds.rs:ConfigCmd] (enum)
 - `StatsCmd` [cmds.rs:StatsCmd] (enum)
 - `cmds.rs` [cmds.rs] (and 7 additional symbols)
-- `ContainerSubCmd` [container_args.rs:ContainerSubCmd] (enum)
 - `FORWARD_HEADING` [help.rs:FORWARD_HEADING] (const)
 - `forward_heading` [help.rs:forward_heading] (fn)
 - `command` [help.rs:command] (fn)

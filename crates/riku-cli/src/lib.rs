@@ -15,7 +15,6 @@ pub mod addon;
 pub mod agent;
 pub mod apps;
 pub mod backup;
-pub mod container;
 pub mod control_actions;
 pub mod dispatch;
 pub mod doctor;

@@ -33,7 +33,7 @@ fn without_help_word(argv: &[String]) -> Vec<String> {
 }
 
 /// A refused command is reported as refused even when help is asked for or
-/// its own arguments do not parse, since `rk container export` should not
+/// its own arguments do not parse, since `rk init --force` should not
 /// complain about flags it will never use.
 fn refusal_behind(argv: &[String]) -> Result<()> {
     let name = match command_name(argv) {

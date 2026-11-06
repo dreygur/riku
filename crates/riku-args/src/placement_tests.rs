@@ -17,10 +17,6 @@ fn rk_runs_local_forwards_and_refuses_the_rest() {
     assert_eq!(client_rule("dashboard"), ClientRule::RunsHere);
     assert_eq!(client_rule("apps"), ClientRule::Forwards);
     assert_eq!(
-        client_rule("container"),
-        ClientRule::Refused(Elsewhere::FullBinary)
-    );
-    assert_eq!(
         client_rule("init"),
         ClientRule::Refused(Elsewhere::OnServer)
     );

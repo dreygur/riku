@@ -73,12 +73,6 @@ shelling out to the `riku` binary. Prefer (a) for anything mutating.
 | Backup app | `riku backup <app>` | yes, `POST /api/apps/:app/backup` | Backup action + artifact list |
 | Restore app | `riku restore <app> <file>` | no | Restore (guarded, file picker) |
 
-## 7. Containers
-
-| Feature | CLI | HTTP today | Dashboard surface |
-|---|---|---|---|
-| Build/export app image | `riku container …` | yes, `POST /control/apps/:app/container/export` | "Export image" action |
-
 ## 8. Diagnostics & system
 
 | Feature | CLI | HTTP today | Dashboard surface |

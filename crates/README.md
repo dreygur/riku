@@ -22,5 +22,4 @@ only; `riku` is one member crate among these.
 - [riku-plugins](./riku-plugins/README.md): the plugin system (discovery, hooks, events, addons).
 - [riku-remote](./riku-remote/README.md): laptop side behaviour shared by the `riku` and `rk` binaries.
 - [riku-supervisor](./riku-supervisor/README.md): the supervisor daemon that manages app processes.
-- [riku-sync](./riku-sync/README.md): riku's own file sync, used instead of rsync.
 - [riku-util](./riku-util/README.md): shared helpers.

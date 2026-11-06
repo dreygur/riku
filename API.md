@@ -56,7 +56,7 @@ Organized by subcommand area, one directory per area:
 - `app_hint.rs`, `ssh_command.rs`: fill an omitted app from the git remote; recover argv from `SSH_ORIGINAL_COMMAND`
 - `cli.rs`: all clap command/subcommand definitions
 - `routing.rs`: dispatches client-plugin overrides of built-in commands
-- `hooks.rs`, `backup.rs`, `container.rs`, `control_actions.rs`, `cmds.rs`, `scp.rs`, supporting handlers
+- `hooks.rs`, `backup.rs`, `control_actions.rs`, `cmds.rs`, `scp.rs`, supporting handlers
 
 ## `riku-deploy`: deployment orchestration
 
@@ -75,8 +75,7 @@ it to the router helper for nginx or Caddy, or call a router plugin) → spawn p
 `riku rollback`.
 
 `worker_control.rs` / `service_update.rs` handle restart/stop/scale outside
-the deploy path. `backup.rs`/`container_runtime.rs` back `riku backup` and
-`riku container` respectively.
+the deploy path. `backup.rs` backs `riku backup`.
 
 ## `riku-plugins`: the plugin system
 

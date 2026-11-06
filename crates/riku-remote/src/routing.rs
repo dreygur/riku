@@ -23,7 +23,6 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
         Commands::Restart { .. } => Some("restart".to_string()),
         Commands::Stop { .. } => Some("stop".to_string()),
         Commands::Rollback { .. } => None,
-        Commands::Container { .. } => Some("container".to_string()),
 
         // Plugin/Hook commands: don't recursively check for plugins
         Commands::Plugin(_) => None,
@@ -153,10 +152,6 @@ pub fn build_plugin_args(command: &Commands, server: Option<&SshAddress>) -> Vec
             if let Some(service) = service {
                 args.push(service.clone());
             }
-        }
-        Commands::Container { .. } => {
-            args.push(String::new());
-            args.push("container".to_string());
         }
         _ => {}
     }

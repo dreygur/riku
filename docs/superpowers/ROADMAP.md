@@ -189,18 +189,16 @@ work they describe.
 - Each copy's host port is stored (as a label) so backends can be rebuilt
   after a supervisor restart.
 
-### Phase 3b: rk deploy --build and riku-sync wiring (no plan yet)
+### Phase 3b: build off the server through a registry (done, pending push)
 
-- Same spec as 3a. The plan is written after 3a lands. Scope, from the 3a
-  plan header: `rk deploy --build`, the server platform query, image
-  streaming, Procfile builds in a container, and riku-sync wiring.
-- Duties moved from the phase 3 list:
-  - Sync receive runs under a process level deadline; a stalled client is
-    killed so the app's sync lock is released.
-  - The sync size limit and free space margin (`ReceiveLimits`) are wired to
-    a server setting.
-  - The ssh sync entry point logs the refusal cause `receive` returns.
-  - `.sync-new` and `.sync-old` are hidden from `riku apps`.
+- Owner cut 2026-11-06 after an EGM review: spec
+  `specs/2026-11-06-phase-3b-design.md`. Images built off the server go
+  through a registry and `image:` in compose; no upload path into riku. Delete
+  riku-sync and `riku container`, add one docs page. Branch `feat/phase-3b`
+  off main.
+- The old 3b scope (`rk deploy --build`, platform query, image streaming,
+  Procfile builds in a container, riku-sync wiring and its carried duties) is
+  dropped.
 
 ### After 3a: small boards and binary size
 
