@@ -41,6 +41,9 @@ Environment=RIKU_USER={deploy_user}
 ExecStart={ROOT_BINARY} router-helper
 Restart=always
 RestartSec=2
+ProtectHome=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=riku-router-helper

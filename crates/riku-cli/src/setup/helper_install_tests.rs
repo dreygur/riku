@@ -11,6 +11,17 @@ fn unit_is_a_plain_service_running_the_root_binary() {
     assert!(unit.contains("Type=simple\n"), "{unit}");
     assert!(unit.contains("Environment=RIKU_USER=deploy\n"), "{unit}");
     assert!(!unit.contains("Socket"), "no socket activation: {unit}");
+    for line in [
+        "ProtectHome=yes\n",
+        "NoNewPrivileges=yes\n",
+        "PrivateTmp=yes\n",
+    ] {
+        assert!(unit.contains(line), "missing {line:?}: {unit}");
+    }
+    assert!(
+        !unit.contains("ProtectSystem"),
+        "the helper writes under /etc: {unit}"
+    );
 }
 
 #[test]

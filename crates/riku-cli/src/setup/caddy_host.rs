@@ -30,9 +30,11 @@ use crate::config::RikuPaths;
 use crate::util::socket_dir;
 use crate::util::{echo, write_atomic};
 
+use super::caddy_admin::move_admin_to_socket;
+use super::host_cleanup::clear_foreign_entries;
 use super::nginx_host::{check_write_dir, ROOT_UID};
 
-const CADDY_USER: &str = "caddy";
+pub(super) const CADDY_USER: &str = "caddy";
 
 /// `current` with `line` appended on its own line, or `None` when that
 /// exact line is already there.
@@ -204,6 +206,9 @@ pub fn setup_caddy_host(paths: &RikuPaths) -> Result<()> {
     if let Err(e) = prepare_site_root(&paths.caddy_root, ROOT_UID, Some(ROOT_UID), &group) {
         return Err(e);
     }
+    if let Err(e) = clear_foreign_entries(&paths.caddy_root, ROOT_UID) {
+        return Err(e);
+    }
     if let Err(e) = add_caddyfile_import(paths) {
         return Err(e);
     }
@@ -214,7 +219,7 @@ pub fn setup_caddy_host(paths: &RikuPaths) -> Result<()> {
         ),
         "green",
     );
-    Ok(())
+    move_admin_to_socket(&group)
 }
 
 #[cfg(test)]

@@ -5,7 +5,9 @@
 //! the one root-owned file that loads it, `/etc/nginx/conf.d/riku.conf`
 //! (replacing an older include of the deploy user's own nginx directory), and
 //! puts the nginx worker user in the `riku-sockets` group (see
-//! [`super::nginx_worker`]).
+//! [`super::nginx_worker`]). Older versions left links into the deploy home
+//! and deploy owned `riku*` files in `sites-enabled` and `conf.d`; those are
+//! removed (see [`super::host_cleanup`]).
 //!
 //! Security: the include file's text is a constant (see
 //! [`crate::nginx::include_line`]), and it is written only into a directory
@@ -26,7 +28,10 @@ use crate::nginx::{include_file_contents, needs_catch_all, write_include_file};
 use crate::util::echo;
 
 use super::deploy_user::DeployUser;
+use super::host_cleanup::clear_deploy_owned_router_files;
 use super::nginx_worker::grant_nginx_sockets;
+
+const SITES_ENABLED: &str = "/etc/nginx/sites-enabled";
 
 /// Whether the include file should carry riku's catch-all server, from what
 /// `nginx -T` shows. When nginx cannot dump its config the answer is no, so
@@ -143,6 +148,14 @@ pub fn setup_nginx_host(user: &DeployUser) -> Result<()> {
             file.display()
         ));
     };
+    let keep = file
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let swept = [Path::new(SITES_ENABLED), dir];
+    if let Err(e) = clear_deploy_owned_router_files(&swept, &user.home, user.uid(), &keep) {
+        return Err(e);
+    }
     if !dir.is_dir() {
         echo(&missing_dir_warning(&paths, dir), "yellow");
         return Ok(());
