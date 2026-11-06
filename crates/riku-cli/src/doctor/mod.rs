@@ -13,9 +13,12 @@ pub mod app_env;
 pub mod binary_check;
 pub mod checks;
 pub mod container_check;
+pub mod helper_check;
 pub mod redeploy_sites;
 pub mod router_check;
 pub mod settings_check;
+pub mod stale_paths;
+pub mod supervisor_check;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -93,9 +96,31 @@ fn redeploy_old_sites(paths: &RikuPaths) -> Vec<Check> {
     })
 }
 
+/// Rewrite stale forced commands and post-receive hooks. They are the deploy
+/// user's own files, so this is refused as root, like the redeploy step.
+fn fix_launch_paths(paths: &RikuPaths) -> Vec<Check> {
+    if nix::unistd::Uid::effective().is_root() {
+        return vec![Check::warn(
+            "launch paths",
+            "rewrite skipped as root: run `riku doctor --fix` as the deploy user",
+        )];
+    }
+    let home = match std::env::var("HOME") {
+        Ok(home) => home,
+        Err(_) => {
+            return vec![Check::warn(
+                "launch paths",
+                "HOME not set, nothing rewritten",
+            )]
+        }
+    };
+    let keys = crate::util::authorized_keys::authorized_keys_path(Path::new(&home));
+    stale_paths::fix_stale_launch_paths(&keys, &paths.git_root)
+}
+
 /// Run every diagnostic, render the report, and exit non-zero on any failure.
 /// With `fix`, apps still routed from the old nginx directory are redeployed
-/// first, so the checks see the result.
+/// and stale launch paths rewritten first, so the checks see the result.
 #[allow(clippy::question_mark)]
 pub fn cmd_doctor(paths: &RikuPaths, fix: bool) -> Result<()> {
     let paths = match diagnosed_target(paths) {
@@ -108,11 +133,11 @@ pub fn cmd_doctor(paths: &RikuPaths, fix: bool) -> Result<()> {
     ));
     display::blank();
 
-    let mut checks = if fix {
-        redeploy_old_sites(&paths)
-    } else {
-        Vec::new()
-    };
+    let mut checks = Vec::new();
+    if fix {
+        checks.extend(redeploy_old_sites(&paths));
+        checks.extend(fix_launch_paths(&paths));
+    }
     checks.extend(collect(&paths));
     render(&checks);
     summarize_and_exit(&checks);
@@ -128,6 +153,11 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     checks.push(checks::directories(paths));
     checks.extend(binary_check::binary());
     checks.push(checks::systemd_service());
+    checks.extend(supervisor_check::supervisor_binary(
+        &paths.riku_root.join("supervisor.pid"),
+        Path::new("/proc"),
+    ));
+    checks.push(helper_check::router_helper(paths));
     checks.extend(router_check::router(paths));
     checks.push(settings_check::settings_file(paths));
     checks.push(container_check::container_engine(paths));
