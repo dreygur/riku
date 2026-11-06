@@ -81,7 +81,7 @@ install     = true               # both default false, so no existing plugin
 uninstall   = true               # is affected
 
 [filters]                        # present iff the plugin registers filters (§7.3)
-subscribe   = ["nginx.include_content"]
+subscribe   = ["example.filter"]
 priority    = 0                  # chain order, lower first (default 0)
 
 [ui]                              # present iff the plugin has a dashboard panel (§7.5)
@@ -173,16 +173,51 @@ chosen by the `<riku root>/ROUTER` file (`nginx`, `caddy`, or a router plugin
 name; written by `RIKU_ROUTER=<name> riku init`; default `nginx`). nginx and
 Caddy are built in; this seam is for third party routers.
 
-| Verb          | Input (stdin JSON)                                 | Output           |
-| ------------- | -------------------------------------------------- | ---------------- |
-| `configure`   | `{app, domains, upstream_port, https, …}`          | writes config    |
-| `unconfigure` | -                                                  | drops app config |
-| `reload`      | -                                                  | reloads router   |
+| Verb          | Input (stdin JSON)                                      | Output           |
+| ------------- | ------------------------------------------------------- | ---------------- |
+| `configure`   | `{protocol, app, domains, https, backends}`             | writes config    |
+| `unconfigure` | -                                                       | drops app config |
+| `reload`      | -                                                       | reloads router   |
+
+A `configure` request looks like this. `https` is true when the app is
+HTTPS only. `backends` lists every copy of the routed service, and the router
+balances across all of them. A backend is either `{"kind":"tcp","host":...,
+"port":...}` or `{"kind":"unix","path":...}`. A tcp `host` is the app's
+`RIKU_BIND_ADDRESS` (default `127.0.0.1`), always an IP literal; a bind
+address that is not one, or a `RIKU_UPSTREAM_PORT` or `PORT` that is set but
+not a port number, fails the deploy before the plugin runs.
+
+```json
+{"protocol":2,"app":"shop","domains":["shop.example.com"],"https":true,"backends":[{"kind":"tcp","host":"127.0.0.1","port":5001},{"kind":"unix","path":"/srv/riku/nginx/shop.sock"}]}
+```
+
+Router protocol 2 replaces protocol 1, which sent one `upstream_port`. A
+router plugin declares the protocol it speaks in its manifest:
+
+```toml
+[router]
+protocol = 2
+graceful_reload = true
+```
+
+A router plugin with no `[router]` table, or a `protocol` other than 2, is
+refused before any verb runs, with the message `router plugin '<name>' speaks
+router protocol <n>; this riku needs protocol 2`. A plugin without the table
+counts as protocol 1.
+
+`graceful_reload` defaults to false. Set it to true only when `reload` swaps
+configuration without dropping connections that are in flight. A router that
+does not say so is treated as not graceful, and riku will not drain old copies
+behind it during a rolling deploy.
+
+`domains` come from `RIKU_DOMAINS` after validation. An invalid value fails the
+deploy before the plugin is called.
 
 Owns its config directory. Env: `RIKU_APP` (for `configure`/`unconfigure`),
 `RIKU_ROOT`. `unconfigure` was added within API v1; the kernel treats a
 non-zero exit as "not implemented" and falls back to a plain `reload`, so older
-routers keep working.
+routers keep working. This holds for any protocol version, so an old plugin can
+still be unconfigured.
 
 ## 7. Event bus _(new)_
 
@@ -254,7 +289,7 @@ a plugin receives a value and hands back a (possibly modified) one. Declared
 in the manifest `[filters]` block (§3), invoked with verb `on_filter`:
 
 ```json
-{"filter": "nginx.include_content", "data": "proxy_read_timeout 60;"}
+{"filter": "example.filter", "data": "some value"}
 ```
 
 expecting `{"data": "<transformed value>"}` back on stdout. Multiple plugins
@@ -268,15 +303,7 @@ next filter in the chain. A broken filter can only become a no-op, never a
 hard failure: this is also why filters have no `gate`-equivalent mode: a
 filter can decline to transform, but never veto.
 
-**Shipped example: `nginx.include_content`.** The generated nginx config
-already supports a raw file-based passthrough (`RIKU_NGINX_INCLUDE_FILE`); that
-file's content (or an empty string if unset) is now the *seed* value run
-through this filter before being inlined into the config
-(`crates/riku-nginx/src/context.rs::insert_include_file`). This is the
-"augment, don't replace" alternative to the router seam's full-replace
-singleton (§6.2): any number of plugins can each contribute a snippet to
-the *default* nginx output, rather than one plugin taking over routing
-entirely.
+**No filter point ships in core today.** The only one, `nginx.include_content`, fed the per app snippet file (`RIKU_NGINX_INCLUDE_FILE`) into the nginx config. That file is gone with the smaller core route, and a deploy that sets the key fails. The filter mechanism stays for future filter points.
 
 ### 7.4 Plugin-emitted custom events _(new)_
 

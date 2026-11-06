@@ -107,7 +107,7 @@ fn crash_triggers_app_restarted_event_through_the_real_notify_plugin() {
             .expect("check_processes should not error");
         let restarted = pm
             .processes
-            .get("testapp-web-1")
+            .get("testapp@web.1")
             .map(|p| p.restart_count >= 1)
             .unwrap_or(false);
         if restarted {
@@ -142,7 +142,7 @@ fn crash_triggers_app_restarted_event_through_the_real_notify_plugin() {
     );
     assert!(request.contains("\"app\":\"testapp\""), "got: {request}");
     assert!(
-        request.contains("\"instance\":\"testapp-web-1\""),
+        request.contains("\"instance\":\"testapp@web.1\""),
         "got: {request}"
     );
     assert!(request.contains("\"exit_code\":42"), "got: {request}");
@@ -186,7 +186,7 @@ fn exhausted_retries_triggers_app_failed_event_through_the_real_notify_plugin() 
     loop {
         pm.check_processes()
             .expect("check_processes should not error");
-        if !pm.processes.contains_key("testapp-web-1") {
+        if !pm.processes.contains_key("testapp@web.1") {
             break;
         }
         assert!(
@@ -213,7 +213,7 @@ fn exhausted_retries_triggers_app_failed_event_through_the_real_notify_plugin() 
     );
     assert!(request.contains("\"app\":\"testapp\""), "got: {request}");
     assert!(
-        request.contains("\"instance\":\"testapp-web-1\""),
+        request.contains("\"instance\":\"testapp@web.1\""),
         "got: {request}"
     );
     assert!(request.contains("\"exit_code\":7"), "got: {request}");

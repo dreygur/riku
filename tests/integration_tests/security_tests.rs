@@ -363,7 +363,7 @@ HOST = "localhost"
 working_dir = "/tmp"
 "#;
 
-        let config_path = riku_root.join("workers-enabled").join("testapp-web-1.toml");
+        let config_path = riku_root.join("workers-enabled").join("testapp@web.1.toml");
         fs::write(&config_path, config_content)?;
 
         // Verify it parses as valid TOML

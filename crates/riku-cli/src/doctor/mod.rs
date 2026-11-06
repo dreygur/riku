@@ -2,25 +2,32 @@
 //!
 //! Solo devs have no ops team, so the tool *is* the ops team: `doctor` runs a
 //! battery of **read-only** health checks across dependencies, the `~/.riku`
-//! directory layout, the systemd supervisor service, the host router, runtime plugins,
-//! disk headroom, SSH deploy access, and renamed app ENV keys, then prints a
-//! summary. It is read only unless run with `--fix`, which only rewrites old style
-//! deploy key forced commands in `authorized_keys`.
+//! directory layout, the systemd supervisor service, the host router, the
+//! container engine, runtime plugins, disk headroom, SSH deploy access, and
+//! renamed app ENV keys, then prints a summary.
 //!
 //! Exit code: `0` when nothing failed (warnings allowed), `1` when any check
 //! has [`Status::Fail`], so it composes in CI and provisioning scripts.
 
 pub mod app_env;
+pub mod binary_check;
 pub mod checks;
-pub mod forced_commands;
+pub mod container_check;
+pub mod helper_check;
+pub mod redeploy_sites;
 pub mod router_check;
+pub mod settings_check;
+pub mod stale_paths;
+pub mod supervisor_check;
 
-use std::path::{Path, PathBuf};
+use std::collections::HashMap;
+use std::path::Path;
 
 use anyhow::Result;
 use colored::Colorize;
 
-use crate::config::RikuPaths;
+use crate::config::router::Router;
+use crate::config::{RikuPaths, CADDY_SITE_ROOT, NGINX_SITE_ROOT};
 use crate::setup::deploy_user::{running_as_root, DeployUser};
 use crate::util::display;
 
@@ -62,36 +69,73 @@ impl Check {
     }
 }
 
-/// The invoking user's home directory.
-pub fn current_home() -> Result<PathBuf> {
-    match dirs::home_dir() {
-        Some(home) => Ok(home),
-        None => Err(anyhow::anyhow!("could not determine the home directory")),
-    }
-}
-
-/// The riku tree to diagnose, with the home that owns it. Under `sudo`, HOME
-/// is root's, so a root run checks the deploy user's tree instead, the one
-/// deploys and the supervisor use. Only `--fix` writes, and it writes just
-/// the `authorized_keys` of that same user.
-fn diagnosed_target(paths: &RikuPaths) -> Result<(RikuPaths, PathBuf)> {
+/// The riku tree to diagnose. Under `sudo`, HOME is root's, so a root run
+/// checks the deploy user's tree instead, the one deploys and the supervisor
+/// use.
+fn diagnosed_target(paths: &RikuPaths) -> Result<RikuPaths> {
     if !running_as_root() {
-        return match current_home() {
-            Ok(home) => Ok((paths.clone(), home)),
-            Err(e) => Err(e),
-        };
+        return Ok(paths.clone());
     }
     match DeployUser::lookup() {
-        Ok(user) => Ok((user.riku_paths(), user.home)),
+        Ok(user) => Ok(user.riku_paths()),
         Err(e) => Err(e),
     }
 }
 
+/// Redeploy the apps that have no site file in the active router's site
+/// root. A deploy runs the app's build, which is the deploy user's code, so it
+/// is refused as root. A plugin router keeps its own sites, so nothing is
+/// redeployed for it.
+fn redeploy_old_sites(paths: &RikuPaths) -> Vec<Check> {
+    if nix::unistd::Uid::effective().is_root() {
+        return vec![Check::warn(
+            "router sites",
+            "redeploy skipped as root: run `riku doctor --fix` as the deploy user",
+        )];
+    }
+    let (site_root, extension) = match Router::load(paths) {
+        Ok(Router::Nginx) => (NGINX_SITE_ROOT, "conf"),
+        Ok(Router::Caddy) => (CADDY_SITE_ROOT, "caddy"),
+        Ok(Router::Plugin(_)) => return Vec::new(),
+        Err(e) => return vec![Check::fail("router sites", e.to_string())],
+    };
+    redeploy_sites::redeploy_unrouted_sites(
+        &paths.riku_root,
+        Path::new(site_root),
+        extension,
+        |app| crate::deploy::do_deploy(app, paths, &HashMap::new(), None),
+    )
+}
+
+/// Rewrite stale forced commands and post-receive hooks. They are the deploy
+/// user's own files, so this is refused as root, like the redeploy step.
+fn fix_launch_paths(paths: &RikuPaths) -> Vec<Check> {
+    if nix::unistd::Uid::effective().is_root() {
+        return vec![Check::warn(
+            "launch paths",
+            "rewrite skipped as root: run `riku doctor --fix` as the deploy user",
+        )];
+    }
+    let home = match std::env::var("HOME") {
+        Ok(home) => home,
+        Err(_) => {
+            return vec![Check::warn(
+                "launch paths",
+                "HOME not set, nothing rewritten",
+            )]
+        }
+    };
+    let keys = crate::util::authorized_keys::authorized_keys_path(Path::new(&home));
+    stale_paths::fix_stale_launch_paths(&keys, &paths.git_root)
+}
+
 /// Run every diagnostic, render the report, and exit non-zero on any failure.
+/// With `fix`, apps missing from the router's site root are redeployed
+/// and stale launch paths rewritten first, so the checks see the result.
 #[allow(clippy::question_mark)]
 pub fn cmd_doctor(paths: &RikuPaths, fix: bool) -> Result<()> {
-    let (paths, home) = match diagnosed_target(paths) {
-        Ok(target) => target,
+    let paths = match diagnosed_target(paths) {
+        Ok(paths) => paths,
         Err(e) => return Err(e),
     };
     display::info(&format!(
@@ -100,37 +144,37 @@ pub fn cmd_doctor(paths: &RikuPaths, fix: bool) -> Result<()> {
     ));
     display::blank();
 
+    let mut checks = Vec::new();
     if fix {
-        match forced_commands::fix(&home) {
-            Ok(count) => display::info(&format!(
-                "Migrated {count} deploy key(s) to the new forced command"
-            )),
-            Err(e) => return Err(anyhow::anyhow!("doctor --fix failed: {e}")),
-        }
-        display::blank();
+        checks.extend(redeploy_old_sites(&paths));
+        checks.extend(fix_launch_paths(&paths));
     }
-
-    let checks = collect(&paths, &home);
+    checks.extend(collect(&paths));
     render(&checks);
     summarize_and_exit(&checks);
 
     Ok(())
 }
 
-/// Gather all checks in display order. `home` is the home whose
-/// `authorized_keys` is inspected. The dashboard's `/api/doctor` serves this
-/// same list.
-pub fn collect(paths: &RikuPaths, home: &Path) -> Vec<Check> {
+/// Gather all checks in display order. The dashboard's `/api/doctor` serves
+/// this same list.
+pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     let mut checks = Vec::new();
     checks.extend(checks::dependencies());
     checks.push(checks::directories(paths));
-    checks.extend(checks::binary());
+    checks.extend(binary_check::binary());
     checks.push(checks::systemd_service());
+    checks.extend(supervisor_check::supervisor_binary(
+        &paths.riku_root.join("supervisor.pid"),
+        Path::new("/proc"),
+    ));
+    checks.push(helper_check::router_helper(paths));
     checks.extend(router_check::router(paths));
+    checks.push(settings_check::settings_file(paths));
+    checks.push(container_check::container_engine(paths));
     checks.push(checks::plugins(paths));
     checks.push(checks::disk(paths));
     checks.push(checks::ssh_access());
-    checks.push(forced_commands::forced_commands(home));
     checks.extend(app_env::renamed_keys(paths));
     checks
 }

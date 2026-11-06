@@ -1,2 +1,2 @@
 # Go web application
-web: ./server
+web: ./app

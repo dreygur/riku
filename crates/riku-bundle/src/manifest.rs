@@ -15,6 +15,7 @@ use std::path::{Component, Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
+use crate::router_section::RouterSection;
 use crate::RIKU_PLUGIN_API;
 
 /// Plugin category (`PLUGIN_PROTOCOL.md` §3). `runtime`/`addon`/`router` bind to
@@ -140,6 +141,9 @@ pub struct PluginManifest {
     pub filters: FilterSubscription,
     #[serde(default)]
     pub ui: UiPanel,
+    /// Present on router plugins. `None` means the plugin predates router protocol 2.
+    #[serde(default)]
+    pub router: Option<RouterSection>,
 }
 
 impl PluginManifest {

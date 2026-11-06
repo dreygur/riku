@@ -20,6 +20,7 @@ use crate::util::echo;
 
 use super::caddy_host::setup_caddy_host;
 use super::deploy_user::DeployUser;
+use super::nginx_host::setup_nginx_host;
 
 /// Write `RIKU_ROUTER` to `paths`' `ROUTER` file and return the router now in
 /// effect. Init is the only reader of the env var; unset leaves an existing
@@ -66,10 +67,11 @@ pub fn deploy_router(user: &DeployUser) -> Result<Router> {
     }
 }
 
-/// Router specific host setup that needs root. Only Caddy has any.
+/// Router specific host setup that needs root. A router plugin has none.
 pub fn setup_router_host(router: &Router, user: &DeployUser) -> Result<()> {
     match router {
-        Router::Caddy => setup_caddy_host(&user.riku_paths(), user),
-        Router::Nginx | Router::Plugin(_) => Ok(()),
+        Router::Caddy => setup_caddy_host(&user.riku_paths()),
+        Router::Nginx => setup_nginx_host(user),
+        Router::Plugin(_) => Ok(()),
     }
 }

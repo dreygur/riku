@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use crate::config::WorkerConfig;
+use crate::config::{app_worker_configs, WorkerConfig};
 use crate::daemon::Supervisor;
 
 impl Supervisor {
@@ -105,34 +105,15 @@ impl Supervisor {
     /// Return the working directory and environment variables for an app by
     /// reading the first matching worker config file from workers-enabled/.
     pub(super) fn get_app_context(&self, app: &str) -> (Option<String>, HashMap<String, String>) {
-        let workers_enabled = self.config_dir.clone();
-        let mut env_vars: HashMap<String, String> = HashMap::new();
-        let mut working_dir: Option<String> = None;
-
-        if let Ok(entries) = fs::read_dir(&workers_enabled) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) != Some("toml") {
-                    continue;
-                }
-                let fname = path
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or_default();
-                if !fname.starts_with(&format!("{}-", app)) {
-                    continue;
-                }
-                if let Ok(content) = fs::read_to_string(&path) {
-                    if let Ok(cfg) = toml::from_str::<WorkerConfig>(&content) {
-                        working_dir = Some(cfg.options.working_dir.clone());
-                        env_vars = cfg.env.clone();
-                        break;
-                    }
-                }
+        for path in app_worker_configs(&self.config_dir, app) {
+            let Ok(content) = fs::read_to_string(&path) else {
+                continue;
+            };
+            if let Ok(cfg) = toml::from_str::<WorkerConfig>(&content) {
+                return (Some(cfg.options.working_dir), cfg.env);
             }
         }
-
-        (working_dir, env_vars)
+        (None, HashMap::new())
     }
 
     /// Load cron jobs from an app's Procfile.

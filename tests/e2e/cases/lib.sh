@@ -45,24 +45,15 @@ setup_app() {
     cat > "$hook" << 'HOOK'
 #!/usr/bin/env bash
 set -e; set -o pipefail;
-# Find riku binary from PATH or use common locations
-RIKU_BIN="${RIKU_BIN:-$(command -v riku)}"
-if [ -z "$RIKU_BIN" ]; then
-    if [ -x "$HOME/.local/bin/riku" ]; then
-        RIKU_BIN="$HOME/.local/bin/riku"
-    elif [ -x "$HOME/riku" ]; then
-        RIKU_BIN="$HOME/riku"
-    elif [ -x "/usr/local/bin/riku" ]; then
-        RIKU_BIN="/usr/local/bin/riku"
-    else
-        echo "Error: riku binary not found" >&2
-        exit 1
-    fi
+BINARY="/usr/local/bin/riku"
+if [ ! -x "$BINARY" ]; then
+    echo "Error: riku binary not found at $BINARY" >&2
+    exit 1
 fi
 # Derive app name from the repo directory name (strip .git suffix).
 APP="$(basename "$(pwd)" .git)"
 REPO_PATH="$(pwd)"
-cat | RIKU_ROOT="${RIKU_ROOT:-$HOME/.riku}" "$RIKU_BIN" git-hook "$APP" "$REPO_PATH"
+cat | RIKU_ROOT="${RIKU_ROOT:-$HOME/.riku}" "$BINARY" git-hook "$APP" "$REPO_PATH"
 HOOK
     chmod +x "$hook"
 }

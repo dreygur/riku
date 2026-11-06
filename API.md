@@ -22,13 +22,15 @@ language-specific code at all.
 | `riku-config` | repository | `RikuPaths`: resolves every on-disk directory the rest of the system needs |
 | `riku-util` | repository | Shared helpers: env parsing, Procfile parsing, cron, SSH keys, resource limits, secure comparisons |
 | `riku-error` | repository | Shared error types (`DeployError`, …) |
-| `riku-nginx` | service | Nginx config generation: Tera context construction, template selection, SSL, Cloudflare ACLs |
+| `riku-nginx` | service | Nginx site rendering from a route, host include file, SSL, static publishing |
+| `riku-route` | service | The root router helper: route schema, the single gate, nginx and Caddy apply, socket server |
+| `riku-caddy` | service | Caddy site rendering and host Caddyfile import |
 | `riku-plugins` | service | The entire plugin system, see below (`riku-supervisor`, `riku-deploy`, and `riku-nginx` all depend on it for hook dispatch, so it sits below them, not above, despite the name) |
 | `riku-deploy` | service | Deployment orchestration: git sync, hooks, worker/env setup, router dispatch, releases, locking, scaling |
 | `riku-supervisor` | service | Process supervisor: spawn/health-check/restart, cgroups, log rotation, cron, and its own axum HTTP API (`/health`, `/metrics`, `/control/*`) |
 | `riku-cli` | provider | CLI command handlers, argument parsing (clap), user-facing output |
 | `riku-dashboard` | provider | Embedded, single-binary HTML+JS dashboard and its own read/write API, served by `riku dashboard` |
-| `riku-plugin-java`, `riku-plugin-clojure`, `riku-plugin-container` | - | Standalone Rust binary runtime plugins, compiled separately and distributed as GitHub release assets |
+| `riku-plugin-java`, `riku-plugin-clojure` | - | Standalone Rust binary runtime plugins, compiled separately and distributed as GitHub release assets |
 
 There is also a separate, non-workspace Next.js application at `dashboard/`
 (top-level, not under `crates/`), a fuller browser dashboard that proxies
@@ -67,8 +69,8 @@ hook (`hooks.rs`, abort-on-failure) → detect a runtime plugin
 (`riku_plugins::runtime`) → **pre-build** hook → build via the plugin →
 merge the plugin's `env` output → **post-build** hook → run `release` →
 write `LIVE_ENV` (`env_setup.rs`) → write worker TOML configs
-(`workers.rs`) → configure the router (`router.rs`: nginx by default, or
-a router plugin) → spawn processes (`supervisor_ctl.rs::spawn_app`) →
+(`workers.rs`) → configure the router (`router/`: build the route and send
+it to the router helper for nginx or Caddy, or call a router plugin) → spawn processes (`supervisor_ctl.rs::spawn_app`) →
 **post-deploy** hook (non-fatal) → record the release (`releases.rs`) for
 `riku rollback`.
 
@@ -121,14 +123,26 @@ The full contract is `PLUGIN_PROTOCOL.md`; this is the module map.
 
 ## `riku-nginx`: nginx config generation
 
-- `context.rs`: builds the Tera template context from sanitized env vars;
-  `insert_include_file()` reads the app's `RIKU_NGINX_INCLUDE_FILE` (if any) as a
-  seed value, then runs it through the `nginx.include_content` filter chain
-  before inserting it
-- `template.rs`: `generate_nginx_config_from_template()`, `select_template()`
-  (picks one of 5 `.tera` templates by env flags), install/reload the
-  `/etc/nginx/sites-enabled/` symlink
-- `ssl.rs`, `cloudflare.rs`, `sanitize.rs`, `validate.rs`
+- `route_site.rs`: renders a site config from a checked route
+- `backends.rs`: the default backend of an app from its ENV
+- `host.rs`: the `/etc/nginx/conf.d/riku.conf` include line and file, which
+  load `/etc/riku/nginx/*.conf`
+- `default_server.rs`: whether root init adds riku's `return 444` server
+- `ssl.rs`: acme.sh issue (with `riku router-renew` as its reload command)
+  and the self signed fallback
+- `static_site.rs`, `static_copy.rs`: publish static files to
+  `/var/lib/riku/static/<app>`
+- `remove.rs`, `sanitize.rs`
+
+## `riku-route`: the router helper
+
+The root side of routing. `riku router-helper` listens on
+`/run/riku-router.sock`, checks each route the deploy user sends
+(`check_nginx_route`, `check_caddy_route`), then renders the site into
+`/etc/riku/nginx` or `/etc/riku/caddy`, validates it and reloads the router.
+Certificates for nginx are kept in `/etc/riku/certs/<app>`. The route carries
+domains, backends, TLS material, static directories and the HTTP mode, and
+nothing else.
 
 ## `riku-dashboard`: embedded dashboard
 

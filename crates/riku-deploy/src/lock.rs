@@ -2,21 +2,56 @@
 //!
 //! `do_deploy` mutates state shared across concurrent triggers for the same
 //! app: it `git reset --hard`s the working tree, rewrites worker TOML
-//! configs, and read-modify-writes the ENV file's nginx port allocation.
+//! configs, and read-modify-writes the ENV file's routing keys.
 //! Two deploys for the same app racing (a second `git push` landing while
 //! the first `post-receive` hook is still running, or a dashboard-triggered
 //! redeploy firing mid-push) corrupt that shared state, e.g. a lost update
-//! on `RIKU_UPSTREAM_PORT` leaves nginx proxying to a port no worker is
-//! bound to. An advisory `flock` keyed by app name serializes deploys of the
-//! same app without affecting deploys of different apps.
+//! on the routing keys in ENV leaves nginx on the wrong template. An
+//! advisory `flock` keyed by app name serializes deploys of the same app
+//! without affecting deploys of different apps.
+//!
+//! The holder writes what it is into the lock file. A deploy that finds the
+//! lock taken by the supervisor restarting a crashed container waits for the
+//! restart to end instead of being refused, since a restart is bounded and a
+//! push should not fail because a copy happened to crash just before it.
 
 use anyhow::{Context, Result};
 use std::fs::{self, File, OpenOptions};
-use std::io;
+use std::io::{self, Write};
 use std::os::unix::io::{AsRawFd, RawFd};
+use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use crate::config::RikuPaths;
 use crate::error::DeployError;
+use crate::rolling::health::HEALTHCHECK_WAIT;
+
+const CONTENTION_GRACE: Duration = Duration::from_secs(1);
+const RETRY_INTERVAL: Duration = Duration::from_millis(10);
+
+/// How long a deploy waits out a supervisor restart: the longest health wait
+/// a restart can sit in, plus time to replace the container and reconfigure
+/// the router.
+const RESTART_WAIT: Duration = Duration::from_secs(HEALTHCHECK_WAIT.as_secs() + 30);
+
+/// What holds an app's lock, as recorded in the lock file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Holder {
+    /// A deploy or a user-started operation on the app.
+    Operation,
+    /// The supervisor replacing one crashed container copy.
+    Restart,
+}
+
+impl Holder {
+    fn tag(self) -> &'static str {
+        match self {
+            Holder::Operation => "operation",
+            Holder::Restart => "restart",
+        }
+    }
+}
 
 /// Apply a non-blocking `flock` operation, retrying on `EINTR`.
 ///
@@ -44,6 +79,51 @@ fn try_flock(fd: RawFd, operation: libc::c_int) -> io::Result<bool> {
     }
 }
 
+fn held_by_restart(lock_path: &Path) -> bool {
+    match fs::read_to_string(lock_path) {
+        Ok(tag) => tag.trim() == Holder::Restart.tag(),
+        Err(_) => false,
+    }
+}
+
+/// Whether a contender that has waited `waited` keeps polling.
+///
+/// A child process spawned by a concurrent thread can transiently inherit
+/// the lock file descriptor across fork until exec closes it. A real deploy
+/// holds the lock far longer than 1 s, so every contender waits out any
+/// transient child inheritance before declaring contention. Past that, only
+/// a contender allowed to outlast a restart keeps waiting, and only while
+/// the holder is a restart.
+fn keep_waiting(waited: Duration, restart_wait: Duration, lock_path: &Path) -> bool {
+    if waited < CONTENTION_GRACE {
+        return true;
+    }
+    waited < restart_wait && held_by_restart(lock_path)
+}
+
+fn retry_acquire(file: &File, lock_path: &Path, restart_wait: Duration) -> io::Result<bool> {
+    let start = Instant::now();
+    loop {
+        thread::sleep(RETRY_INTERVAL);
+        match try_flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) {
+            Ok(true) => return Ok(true),
+            Ok(false) => {
+                if !keep_waiting(start.elapsed(), restart_wait, lock_path) {
+                    return Ok(false);
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
+fn record_holder(mut file: &File, holder: Holder) -> io::Result<()> {
+    match file.set_len(0) {
+        Ok(()) => file.write_all(holder.tag().as_bytes()),
+        Err(e) => Err(e),
+    }
+}
+
 /// Acquire the deploy lock for `app`, non-blocking. Returns the locked file
 /// handle: the lock is held until it is dropped, so callers must keep the
 /// returned `File` alive for the duration of the deploy.
@@ -51,28 +131,65 @@ fn try_flock(fd: RawFd, operation: libc::c_int) -> io::Result<bool> {
 /// Returns `Err(DeployError::DeployInProgress)` if another deploy for this
 /// app already holds the lock.
 pub fn acquire(app: &str, paths: &RikuPaths) -> Result<File> {
-    let lock_dir = paths.riku_root.join("locks");
-    fs::create_dir_all(&lock_dir)?;
-    let lock_path = lock_dir.join(format!("{}.deploy.lock", app));
+    acquire_as(app, paths, Holder::Operation, Duration::ZERO)
+}
 
-    let file = OpenOptions::new()
+/// [`acquire`] for a deploy. A lock held by a supervisor restart is waited
+/// for, up to the longest a restart can take, before the deploy is refused.
+pub fn acquire_for_deploy(app: &str, paths: &RikuPaths) -> Result<File> {
+    acquire_as(app, paths, Holder::Operation, RESTART_WAIT)
+}
+
+/// [`acquire`] for the supervisor restarting a crashed copy. A deploy that
+/// finds the lock taken this way waits for it instead of failing.
+pub fn acquire_for_restart(app: &str, paths: &RikuPaths) -> Result<File> {
+    acquire_as(app, paths, Holder::Restart, Duration::ZERO)
+}
+
+fn acquire_as(
+    app: &str,
+    paths: &RikuPaths,
+    holder: Holder,
+    restart_wait: Duration,
+) -> Result<File> {
+    let lock_dir = paths.riku_root.join("locks");
+    match fs::create_dir_all(&lock_dir) {
+        Ok(()) => {}
+        Err(e) => return Err(e).context("failed to create lock directory"),
+    }
+    let lock_path = lock_path_for(app, paths);
+
+    let file = match OpenOptions::new()
         .create(true)
         .truncate(false)
         .write(true)
-        .open(&lock_path)?;
+        .open(&lock_path)
+    {
+        Ok(file) => file,
+        Err(e) => return Err(e).context("failed to open lock file"),
+    };
 
     // Use libc::flock directly, same as the supervisor's PID-file lock
     // (create_pid_file_with_lock): portable across Unix systems, no extra
     // dependency. EINTR is retried inside try_flock so a stray signal can't
     // make a legitimate deploy look like a concurrent one.
-    match try_flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) {
-        Ok(true) => Ok(file),
-        Ok(false) => Err(DeployError::DeployInProgress(app.to_string()).into()),
-        Err(e) => Err(e).context("failed to acquire deploy lock"),
+    let acquired = match try_flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) {
+        Ok(true) => Ok(true),
+        Ok(false) => retry_acquire(&file, &lock_path, restart_wait),
+        Err(e) => Err(e),
+    };
+    match acquired {
+        Ok(true) => {}
+        Ok(false) => return Err(DeployError::DeployInProgress(app.to_string()).into()),
+        Err(e) => return Err(e).context("failed to acquire deploy lock"),
+    }
+    match record_holder(&file, holder) {
+        Ok(()) => Ok(file),
+        Err(e) => Err(e).context("failed to record the deploy lock holder"),
     }
 }
 
-fn lock_path_for(app: &str, paths: &RikuPaths) -> std::path::PathBuf {
+fn lock_path_for(app: &str, paths: &RikuPaths) -> PathBuf {
     paths
         .riku_root
         .join("locks")
@@ -124,149 +241,5 @@ pub fn is_locked(app: &str, paths: &RikuPaths) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::Path;
-    use tempfile::TempDir;
-
-    fn make_paths(tmp: &TempDir) -> RikuPaths {
-        RikuPaths::for_tests(tmp.path())
-    }
-
-    #[test]
-    fn test_acquire_succeeds_when_unlocked() {
-        let tmp = TempDir::new().unwrap();
-        let paths = make_paths(&tmp);
-        assert!(acquire("myapp", &paths).is_ok());
-    }
-
-    #[test]
-    fn test_acquire_fails_when_already_locked() {
-        let tmp = TempDir::new().unwrap();
-        let paths = make_paths(&tmp);
-
-        let _first = acquire("myapp", &paths).expect("first lock should succeed");
-        let second = acquire("myapp", &paths);
-
-        assert!(second.is_err(), "second concurrent lock should fail");
-        let err = second.unwrap_err();
-        assert!(
-            matches!(
-                err.downcast_ref::<DeployError>(),
-                Some(DeployError::DeployInProgress(_))
-            ),
-            "error should be DeployError::DeployInProgress, got: {:?}",
-            err
-        );
-    }
-
-    #[test]
-    fn test_acquire_succeeds_again_after_lock_dropped() {
-        let tmp = TempDir::new().unwrap();
-        let paths = make_paths(&tmp);
-
-        {
-            let _first = acquire("myapp", &paths).expect("first lock should succeed");
-        } // dropped here, releasing the flock
-
-        // Poll rather than asserting instantly: a concurrent test in this
-        // process can `fork()` a child that transiently inherits the lock fd
-        // (see `eventually` / `test_is_locked_false_after_release`).
-        assert!(
-            eventually(|| acquire("myapp", &paths).is_ok()),
-            "lock should be acquirable again once released"
-        );
-    }
-
-    #[test]
-    fn test_acquire_different_apps_do_not_conflict() {
-        let tmp = TempDir::new().unwrap();
-        let paths = make_paths(&tmp);
-
-        let _a = acquire("app-a", &paths).expect("app-a lock should succeed");
-        let _b = acquire("app-b", &paths).expect("app-b lock should succeed independently");
-    }
-
-    // --- is_locked ---
-
-    #[test]
-    fn test_is_locked_false_when_never_acquired() {
-        let tmp = TempDir::new().unwrap();
-        let paths = make_paths(&tmp);
-        assert!(!is_locked("myapp", &paths));
-    }
-
-    #[test]
-    fn test_is_locked_true_while_held() {
-        let tmp = TempDir::new().unwrap();
-        let paths = make_paths(&tmp);
-        let _held = acquire("myapp", &paths).unwrap();
-        assert!(is_locked("myapp", &paths));
-    }
-
-    #[test]
-    fn test_is_locked_false_after_release() {
-        let tmp = TempDir::new().unwrap();
-        let paths = make_paths(&tmp);
-        {
-            let _held = acquire("myapp", &paths).unwrap();
-            assert!(is_locked("myapp", &paths));
-        }
-        // The lock is released as soon as the holder fd is dropped above.
-        // However, when other tests in this process `fork()` a child while
-        // this fd is briefly open, the child transiently inherits the lock's
-        // open file description (fork copies all fds; O_CLOEXEC only closes it
-        // at the child's `exec`, not at `fork`). For that window the lock can
-        // still be observed as held through the child. It settles to free once
-        // the child execs/exits, so we poll rather than asserting an instant
-        // flip.
-        assert!(
-            eventually(|| !is_locked("myapp", &paths)),
-            "lock should become free after the holder is dropped"
-        );
-    }
-
-    /// Poll a lock predicate until it holds, up to ~10s (returns false on
-    /// timeout). The uncontended case returns on the first iteration; the long
-    /// ceiling only matters when a concurrent test's child is slow to `exec`
-    /// (and thus slow to drop the inherited lock fd) under heavy load. See
-    /// `test_is_locked_false_after_release` for the full rationale.
-    fn eventually(mut pred: impl FnMut() -> bool) -> bool {
-        for _ in 0..200 {
-            if pred() {
-                return true;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(50));
-        }
-        false
-    }
-
-    #[test]
-    fn test_is_locked_probe_does_not_itself_hold_the_lock() {
-        // Calling is_locked() on a free lock must not leave it held for a
-        // subsequent real acquire(): the probe releases what it took.
-        let tmp = TempDir::new().unwrap();
-        let paths = make_paths(&tmp);
-        assert!(!is_locked("myapp", &paths));
-        assert!(
-            acquire("myapp", &paths).is_ok(),
-            "a probe must never leave the lock held behind it"
-        );
-    }
-
-    #[test]
-    fn test_lock_path_includes_app_name() {
-        let tmp = TempDir::new().unwrap();
-        let paths = make_paths(&tmp);
-        let path = lock_path_for("myapp", &paths);
-        assert!(path.to_string_lossy().contains("myapp"));
-    }
-
-    #[test]
-    fn test_lock_file_persists_on_disk() {
-        let tmp = TempDir::new().unwrap();
-        let paths = make_paths(&tmp);
-        let _lock = acquire("myapp", &paths).unwrap();
-        assert!(Path::new(&lock_path_for("myapp", &paths)).exists());
-    }
-}
+#[path = "lock_tests.rs"]
+mod tests;

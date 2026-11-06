@@ -7,14 +7,200 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-07-08
 
+- Router helper and a smaller core route. `riku` now lives at the root owned `/usr/local/bin/riku`, and `scripts/install.sh` needs root for it (`| sudo sh`; `rk` is unchanged). `sudo riku init` starts `riku-router-helper.service`, which listens on `/run/riku-router.sock` and writes the nginx and Caddy sites (`/etc/riku/nginx`, `/etc/riku/caddy`) and certificates (`/etc/riku/certs`) as root, so the deploy user writes no router config. acme.sh renewals call the new `riku router-renew <app>`. Sites listen on IPv6 when the host has it, and WebSocket upgrades are proxied by default. A deploy that finds a removed key in the app's ENV fails and names it: `RIKU_NGINX_CLOUDFLARE_ACL`, `RIKU_NGINX_CACHE_PATH`, `RIKU_NGINX_CACHE_PREFIXES`, `RIKU_NGINX_CACHE_SIZE`, `RIKU_NGINX_CACHE_TIME`, `RIKU_NGINX_CACHE_EXPIRY`, `RIKU_NGINX_CACHE_REDIRECTS`, `RIKU_NGINX_CACHE_ANY`, `RIKU_NGINX_CACHE_CONTROL`, `RIKU_NGINX_CATCH_ALL`, `RIKU_NGINX_CSP`, `RIKU_NGINX_INCLUDE_FILE`, `RIKU_NGINX_IPV4_ADDRESS`, `RIKU_NGINX_IPV6_ADDRESS`, `RIKU_DISABLE_IPV6` and `RIKU_NGINX_SOCKET`. The `nginx.include_content` filter point is gone with the include file. To upgrade a host, install the new binary, run `sudo riku init` again, run `riku doctor --fix` as the deploy user to redeploy apps and rewrite stale keys and hooks, then `sudo systemctl restart riku`.
+
+- Removed `riku-plugin-container`: riku runs container apps itself, so `riku install-plugins container` and the plugin `pull-service` path for `RIKU_WATCH_SERVICES` are gone.
+- Container names changed to `<app>.<service>.<n>` and volume names to `<app>.<key>`, and compose service and volume names may not contain `.`; redeploy container apps. Data in volumes under the old `<project>_<key>` names is not reused, and the compose `name` key and `COMPOSE_PROJECT_NAME` no longer affect any name.
+- The browser dashboard's login backs off per client: the fifth failed password locks that client out for 30 s, doubling with each further failure up to 15 min, and a success clears it. The client is the last `X-Forwarded-For` entry, so keep the dashboard bound to loopback behind riku's router.
+- Dashboard logout now signs out every session, and sessions last 12 hours instead of 7 days. Restarting the dashboard also signs everyone out.
+- `RIKU_NGINX_INCLUDE_FILE` snippets are refused when a value is above its cap: `client_max_body_size` 1g (and not 0), every `*_timeout` 3600s, `proxy_buffer_size` 1m, `proxy_buffers` 64 of 1m, `proxy_busy_buffers_size` 2m, `gzip_comp_level` 1 to 9, at most 32 `add_header` lines of 4 KiB each. Sizes and times must be a number with an optional nginx unit; compound times such as `1m30s` are refused.
+- Scaling a worker kind down now removes its surplus copies even with `RIKU_AUTO_RESTART=false`; the flag only decides whether the kept copies restart.
+- Removed `riku update` (and `rk update`). It never updated anything; rerun the installer to upgrade.
+- `RIKU_NGINX_STATIC_PATHS` now works for every nginx site: the alias locations and the ACME challenge location come from one shared template, so plain HTTP web apps, wsgi apps and `RIKU_NGINX_STATIC` sites get them too. The HTTPS only redirect now sits in `location /`, so the challenge is answered on plain HTTP.
+- A deploy with no web facing Procfile kind, and every container app deploy, removes `RIKU_NGINX_PORTMAP`, `RIKU_NGINX_EXTERNAL_PORT` and `RIKU_NGINX_WSGI` from the app's ENV, so an app that dropped its `web:` line is served by the static or default template instead of a stale port map.
+- Every deploy sets the app's ENV file to `0600` and its env directory to `0700`, container apps included.
+- `riku logs <app> <service>` knows the app's Procfile kinds and compose services, and a known service with no output yet prints a note instead of "unknown service".
+- `riku stop` on a Procfile app also removes its `workers-available` configs and the uWSGI sockets riku made for its copies.
+- `sudo riku init` adds a `listen 80 default_server; return 444;` server to the riku nginx include when `nginx -T` shows no other port 80 default server, so an unknown Host is no longer answered by another app's site.
+- `riku ps` RESTARTS counts a container restart as soon as the replacement runs, matching the supervisor's `restart=` log line.
+- The supervisor runs its `docker events` child only while riku containers exist.
+
+### Upgrade Notes: Worker and Socket File Names
+
+- Worker configs, process ids and uWSGI copy sockets are now named
+  `<app>@<kind>.<n>.toml`, `<app>@<kind>.<n>` and `<app>@<n>.sock`, so two
+  apps can no longer share a file name; redeploy every app after upgrading.
+  App names ending in `.git` are refused.
+- uWSGI sockets moved from `~/.riku/nginx` to `/run/riku-sockets` (mode
+  `2750`, group `riku-sockets`), and are `0660`. `sudo riku init` creates
+  the group with the deploy user and the nginx worker user in it, the
+  directory, and `/etc/tmpfiles.d/riku.conf` to recreate it at boot. nginx
+  gets no access to the deploy user's home. Run `sudo riku init`, then
+  redeploy wsgi, jwsgi, rwsgi and php apps; old sockets in `~/.riku/nginx`
+  can be deleted.
+- Caddy site files moved from `~/.riku/caddy` to `/etc/riku/caddy` (owned
+  by the deploy user, group `caddy`, mode `2750`), and the Caddyfile imports
+  `/etc/riku/caddy/*.caddy`. `sudo riku init` no longer adds `caddy` to the
+  deploy user's group or opens the deploy home and `~/.riku` to that group.
+  On a host set up before this, run `sudo riku init`, delete the old
+  `import .../.riku/caddy/*.caddy` line from `/etc/caddy/Caddyfile`, take
+  `caddy` out of the deploy group (`sudo gpasswd -d caddy riku`), run
+  `chmod g-x ~ ~/.riku` as the deploy user, restart Caddy and redeploy each
+  app.
+- nginx no longer serves files from the deploy home. The ACME http-01
+  webroot moved from `~/.riku/acme` to `/var/lib/riku/acme`, and acme.sh
+  now runs with umask `027` so its challenge files are group readable. A
+  deploy copies the `RIKU_NGINX_STATIC` document root and each
+  `RIKU_NGINX_STATIC_PATHS` source into `/var/lib/riku/static/<app>`
+  (swapped in through one rename, removed on destroy), and nginx's `root`
+  and `alias` point there. Both directories are owned by the deploy user,
+  group `riku-sockets`, mode `2750`, under a root-owned `0755`
+  `/var/lib/riku`, and are in the unit's `ReadWritePaths`. Sources must
+  resolve inside the app checkout, symlinks included, or the deploy fails;
+  an absolute `RIKU_NGINX_DOCUMENT_ROOT` outside it is refused. Run
+  `sudo riku init` and redeploy static apps. `~/.riku/acme` now only holds
+  the per app links to acme.sh certificate directories. In `RikuPaths`,
+  `acme_root` is now the webroot, the acme.sh install is `acme_sh_root`, and
+  `acme_www` became `acme_cert_links`.
+- Worker configs, `ENV` and `LIVE_ENV` files are written `0600`, app env
+  directories `0700`, and an app's TLS key `0600`. A deploy rewrites the
+  worker configs and `LIVE_ENV` and tightens the env directory; an existing
+  `ENV` file stays as it is until riku next writes it.
+
+### Router Plugin Protocol 2
+
+The `configure` request sent to a router plugin now carries a `backends` list
+(each a TCP host and port, or a unix socket path) and a `protocol` field, in
+place of the single `upstream_port`. A router plugin must declare
+`[router] protocol = 2` in its manifest. A plugin without that table, or with
+another protocol number, is refused before any verb runs. `unconfigure` still
+runs for any protocol. A plugin may set `graceful_reload = true` under
+`[router]` to say its `reload` keeps connections alive. See
+`PLUGIN_PROTOCOL.md` section 6.2.
+
+`RIKU_DOMAINS` now goes through domain validation for plugin routers, as it
+already did for Caddy. An invalid value fails a plugin router deploy.
+
+A tcp backend's `host` is the app's `RIKU_BIND_ADDRESS` (default
+`127.0.0.1`); a value that is not an IP literal fails the deploy. Caddy keeps
+proxying to `127.0.0.1`.
+
+### Upgrade Notes: Routing and nginx
+
+- `RIKU_BIND_ADDRESS` must be an IP literal (`127.0.0.1`, `::1`, `10.0.0.5`)
+  for port mapped apps (`RIKU_NGINX_PORTMAP`). `localhost` used to work and
+  now fails the deploy.
+- A `RIKU_UPSTREAM_PORT` or `PORT` that is set but not a port number now
+  fails the deploy, naming the key. This holds for nginx port mapped apps,
+  Caddy and router plugins; Caddy and router plugins used to fall back to
+  port 8080.
+- `RIKU_NGINX_SOCKET` holding whitespace or nginx syntax characters (`;`,
+  `{`, `}` and the like) now fails the deploy, for every app type including
+  static and wsgi apps.
+- nginx sites now proxy through a named `upstream` block. The name is
+  `riku_` followed by the lowercase hex of the app name's bytes (`myapp`
+  becomes `riku_6d79617070`), so apps whose names differ only in case no
+  longer collide. A hand written include that used `proxy_pass
+  http://<app>_UPSTREAM` must switch to the new name.
+- HTTPS only sites (`RIKU_HTTPS_ONLY`) on nginx never rendered before: the
+  template failed and its parts did not pass `nginx -t`. They now render and
+  pass, including for port mapped and wsgi apps, and wsgi apps pass a
+  `unix:` socket to `uwsgi_pass`.
+- After upgrading, run `sudo riku init` and redeploy apps.
+- nginx now loads riku's sites through one root-owned file,
+  `/etc/nginx/conf.d/riku.conf`, which includes `~/.riku/nginx/*.conf`.
+  Riku no longer writes under `/etc/nginx` at deploy time.
+- A `.conf` file in `~/.riku/nginx` that is no app's config refuses deploys,
+  because the include would load it.
+- An `nginx.conf`, `nginx.custom.conf`, `nginx.custom` or `.nginx.conf`
+  shipped in the app directory is ignored with a warning, and the generated
+  config is used.
+- `RIKU_NGINX_INCLUDE_FILE` must name a file that resolves inside the app
+  directory. Its text must fit a strict grammar: printable ASCII, space, tab
+  and newline only (no CR), no backslash, no `{` or `}`, quotes and `#`
+  only at the start of a word, and every statement ended by `;`. Every
+  statement must use one of `add_header`, `expires`,
+  `client_max_body_size`, `client_body_timeout`, `keepalive_timeout`,
+  `proxy_connect_timeout`, `proxy_read_timeout`, `proxy_send_timeout`,
+  `proxy_buffering`, `proxy_buffer_size`, `proxy_buffers`,
+  `proxy_busy_buffers_size`, `gzip`, `gzip_types`, `gzip_min_length`,
+  `gzip_comp_level` or `gzip_vary`. The fallback that passed the value to
+  nginx as an `include` path is gone. An existing snippet that breaks these
+  rules now fails the deploy, naming the file and the reason.
+- Output of `nginx.include_content` filter plugins gets the same check. A
+  filter chain that returns invalid text or a value that is not a string
+  fails the deploy instead of being passed through.
+- The ACME challenge config is written as `acme-challenge.conf.disabled`,
+  so the include does not load it.
+- Server side HTTPS requests go through the new `riku-http` crate: reqwest
+  on rustls with the ring provider. aws-lc is no longer built.
+
+### Container Apps
+
+- An app with a compose file (or a `COMPOSE_FILE`), or a Dockerfile or
+  Containerfile at the app root, now deploys as containers on its next push.
+  To keep the runtime it used before, set `RIKU_RUNTIME` to that runtime
+  (for example `riku config:set myapp RIKU_RUNTIME=node`) before pushing. An
+  app that switches from Procfile workers keeps them until its containers
+  are healthy and routed.
+- Riku runs every compose service as its own containers, `<app>-<service>-<n>`
+  on the network `riku-<app>`, without a compose tool. The supervisor adopts
+  them on start, restarts exited copies per the compose `restart` policy,
+  and writes their output to `~/.riku/logs/<app>/<service>.<n>.log`.
+- Deploys, `riku restart` and image watch updates replace copies one at a
+  time. The routed service without writable storage overlaps: a new copy
+  must be healthy and routed before the old one leaves the router and gets
+  its stop signal and grace period. Other services, storage services among
+  them, stop first and are down until the new copy is healthy. Router
+  reloads are confirmed before an old copy stops.
+- Compose services scale through `SCALING` or `riku ps <app> --scale
+  <service>=<copies>`, without a rebuild. A service with writable storage,
+  or one publishing a port other than the routed HTTP one, stays at one
+  copy.
+- `riku restart <app> [service]` and `riku stop <app> [service]` act on one
+  compose service. Naming a service of a Procfile app is refused.
+- A compose port that names a host IP, such as `"127.0.0.1:8080:8080"` or a
+  long form entry with `host_ip`, is refused. Ports bind 127.0.0.1 by
+  default; the service label `riku.public: "true"` publishes them on all
+  interfaces.
+- Setting only one of `RIKU_GHCR_USERNAME` and `RIKU_GHCR_TOKEN` now fails
+  the deploy. The old container plugin skipped the login in that case.
+- A container app's Procfile `release` command now runs in a one-off
+  container from the newly built image, with the app's env and on the app's
+  network, instead of on the host. It runs after the images are built and
+  pulled and before any copy is replaced. A nonzero exit stops the deploy.
+- `riku destroy` of a container app stops and removes its containers and
+  network and keeps its volumes. It refuses, removing nothing, when the
+  container engine does not answer. `riku destroy <app> --force` removes
+  riku's files and route anyway and warns that containers may still run.
+- `riku logs <app>` follows every `*.log` of the app except `deploy.log`.
+  `riku logs <app> <service>` follows that service's `<service>.<n>.log`
+  files, and a name with no log files is an error listing the names that
+  have them. A service name that is not a plain name, such as `../other` or
+  `a*`, is refused.
+- The service riku makes for a Dockerfile app now restarts with
+  `unless-stopped`: the supervisor starts a crashed copy again, and a copy
+  stopped with `riku stop` stays stopped. Before, it was never restarted.
+  The supervisor also no longer starts a copy that `riku stop` removed while
+  its restart waited for the app's lock.
+- A compose file, or a folder on its path, may now be a symlink whose real
+  target stays inside the app directory (for example
+  `docker-compose.yml -> deploy/prod.yml`). A link that leaves the app is
+  refused, naming the path. Bind mount sources, the build context, the
+  dockerfile and `env_file` still refuse every symlink.
+- Container apps need Docker 23 or newer, or an engine with a compatible
+  CLI.
+
 ### Dashboard Authentication
 
 The Next.js browser dashboard (`dashboard/`) gets its own login, independent
 of the backend's `RIKU_DASHBOARD_TOKEN`: a single shared password, never
 stored in plaintext (`RIKU_DASHBOARD_PASSWORD_HASH`, scrypt salt+hash,
 generated via `nub run hash-password`), gating every route through a
-signed session cookie (`middleware.ts`). Fully bypassed when the hash env
-var is unset, so existing local/dev usage is unaffected.
+signed session cookie (`proxy.ts`). Fully bypassed when the hash env
+var is unset, so existing local/dev usage is unaffected. After login the
+page only follows a same-origin `from` path, so a crafted login link cannot
+send the user to another site. The stale `audit:dashboard` script is gone.
 
 ### Incident Alerting
 
@@ -81,6 +267,11 @@ prints the exact `git remote add`/`git push` lines needed to deploy.
   as a host-level singleton); `dashboard/README.md` described a
   CSRF/Origin-check mechanism that didn't exist in the actual code.
 - Bumped `crossbeam-epoch` to clear RUSTSEC-2026-0204.
+- Worker config files are attributed to an app by the `[worker] app` field
+  they record, not by an `{app}-*` file name prefix. `riku destroy shop`
+  and `riku stop shop` no longer delete the worker configs of an app named
+  `shop-api`, and `ps`, `apps`, `info`, `stats`, hot reload and cron jobs
+  no longer count or read them as `shop`'s.
 
 ### Changed
 

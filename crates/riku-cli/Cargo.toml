@@ -11,6 +11,7 @@ license = "MIT"
 tempfile = { workspace = true }
 riku-config = { path = "../riku-config" }
 riku-util = { path = "../riku-util" }
+riku-http = { path = "../riku-http" }
 riku-args = { path = "../riku-args" }
 riku-remote = { path = "../riku-remote" }
 riku-nginx = { path = "../riku-nginx" }
@@ -18,6 +19,8 @@ riku-caddy = { path = "../riku-caddy" }
 riku-plugins = { path = "../riku-plugins" }
 riku-supervisor = { path = "../riku-supervisor" }
 riku-deploy = { path = "../riku-deploy" }
+riku-container = { path = "../riku-container" }
+riku-route = { path = "../riku-route" }
 clap = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
@@ -34,3 +37,4 @@ nix = { workspace = true, features = ["signal", "process", "user", "fs", "term"]
 which = { workspace = true }
 
 [dev-dependencies]
+riku-route = { path = "../riku-route", features = ["test-server"] }

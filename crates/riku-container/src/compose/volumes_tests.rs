@@ -1,0 +1,180 @@
+use super::*;
+use crate::compose::ServiceMountSource;
+use serde_json::json;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+use tempfile::TempDir;
+
+struct Fixture {
+    app: TempDir,
+    vars: BTreeMap<String, String>,
+    volumes: BTreeSet<String>,
+}
+
+impl Fixture {
+    fn new() -> Fixture {
+        Fixture {
+            app: TempDir::new().unwrap(),
+            vars: BTreeMap::new(),
+            volumes: ["pgdata".to_string()].into(),
+        }
+    }
+
+    fn parse(&self, value: Value) -> anyhow::Result<Vec<ServiceMount>> {
+        let ctx = ServiceContext {
+            app_path: self.app.path(),
+            compose_dir: self.app.path(),
+            vars: &self.vars,
+            declared_volumes: &self.volumes,
+        };
+        parse_volumes(&ctx, &value)
+    }
+}
+
+fn mount(source: ServiceMountSource, target: &str, read_only: bool) -> ServiceMount {
+    ServiceMount {
+        source,
+        target: Path::new(target).to_path_buf(),
+        read_only,
+    }
+}
+
+#[test]
+fn short_and_long_forms() {
+    let fx = Fixture::new();
+    let app = fx.app.path();
+    let mounts = fx
+        .parse(json!([
+            "pgdata:/var/lib/postgresql/data",
+            "./conf:/etc/app:ro",
+            "/scratch",
+            {"type": "bind", "source": "./static", "target": "/srv", "read_only": true},
+            {"type": "volume", "source": "pgdata", "target": "/more"},
+        ]))
+        .unwrap();
+    assert_eq!(
+        mounts,
+        vec![
+            mount(
+                ServiceMountSource::Volume(VolumeKey::declared("pgdata")),
+                "/var/lib/postgresql/data",
+                false
+            ),
+            mount(ServiceMountSource::Bind(app.join("conf")), "/etc/app", true),
+            mount(ServiceMountSource::Anonymous, "/scratch", false),
+            mount(ServiceMountSource::Bind(app.join("static")), "/srv", true),
+            mount(
+                ServiceMountSource::Volume(VolumeKey::declared("pgdata")),
+                "/more",
+                false
+            ),
+        ]
+    );
+}
+
+#[test]
+fn bind_source_may_be_missing_but_may_not_leave_the_app() {
+    let fx = Fixture::new();
+    assert!(fx.parse(json!(["./not-created-yet:/x"])).is_ok());
+    let inside_abs = format!("{}/data:/x", fx.app.path().display());
+    assert!(fx.parse(json!([inside_abs])).is_ok());
+
+    for source in [
+        "../other",
+        "./a/../../other",
+        "/etc",
+        "/var/run/docker.sock",
+    ] {
+        let err = fx
+            .parse(json!([format!("{source}:/x")]))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains(source), "{source}: {err}");
+    }
+    assert!(fx
+        .parse(json!([{"type": "bind", "source": "../other", "target": "/x"}]))
+        .is_err());
+}
+
+#[test]
+fn outside_bind_source_says_it_must_be_inside_the_app() {
+    let err = Fixture::new()
+        .parse(json!(["/etc:/x"]))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("bind sources must be inside the app directory") && err.contains("/etc"),
+        "{err}"
+    );
+}
+
+#[test]
+fn symlink_components_are_refused_and_missing_tails_are_allowed() {
+    let fx = Fixture::new();
+    let outside = TempDir::new().unwrap();
+    std::fs::create_dir(fx.app.path().join("real")).unwrap();
+    std::os::unix::fs::symlink(outside.path(), fx.app.path().join("data")).unwrap();
+    std::os::unix::fs::symlink("real", fx.app.path().join("alias")).unwrap();
+
+    for source in ["./data/sub", "./data", "./alias"] {
+        let err = fx
+            .parse(json!([format!("{source}:/x")]))
+            .unwrap_err()
+            .to_string();
+        let component = source.trim_start_matches("./").split('/').next().unwrap();
+        assert!(
+            err.contains("symlink") && err.contains(component),
+            "{source}: {err}"
+        );
+    }
+    assert!(fx.parse(json!(["./real/not-created-yet:/x"])).is_ok());
+    assert!(fx
+        .parse(json!([{"type": "bind", "source": "./data", "target": "/x"}]))
+        .is_err());
+}
+
+#[test]
+fn bind_path_never_resolves_to_a_sibling_with_the_same_prefix() {
+    let fx = Fixture::new();
+    let sibling = PathBuf::from(format!("{}-evil/data", fx.app.path().display()));
+    let err = fx.parse(json!([format!("{}:/x", sibling.display())]));
+    assert!(err.is_err());
+}
+
+#[test]
+fn whitespace_and_control_characters_are_refused_in_sources_and_targets() {
+    // The engine refuses these at run time; a compose file holding them must
+    // fail at parse time instead of halfway through a deploy.
+    let fx = Fixture::new();
+    for value in [
+        json!(["./my data:/x"]),
+        json!(["pgdata:/my dir"]),
+        json!(["pgdata:/x\ty"]),
+        json!([{"type": "bind", "source": "./a\u{7}b", "target": "/x"}]),
+        json!([{"type": "volume", "target": "/x y"}]),
+    ] {
+        let err = match fx.parse(value.clone()) {
+            Ok(mounts) => panic!("{value} was accepted as {mounts:?}"),
+            Err(e) => e.to_string(),
+        };
+        assert!(err.contains("whitespace"), "{value}: {err}");
+    }
+}
+
+#[test]
+fn refuses_undeclared_volumes_other_types_and_unsafe_text() {
+    let fx = Fixture::new();
+    for value in [
+        json!(["cache:/x"]),
+        json!([{"type": "tmpfs", "target": "/tmp"}]),
+        json!([{"type": "volume", "source": "pgdata", "target": "/x", "volume": {"nocopy": true}}]),
+        json!(["pgdata:relative"]),
+        json!(["pgdata:/x:ro,z"]),
+        json!(["pgdata:/x:ro:extra"]),
+        json!([{"type": "bind", "source": "./a,b", "target": "/x"}]),
+        json!([{"type": "bind", "target": "/x"}]),
+        json!(["-v:/x"]),
+    ] {
+        assert!(fx.parse(value.clone()).is_err(), "{value} was accepted");
+    }
+}

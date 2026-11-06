@@ -3,6 +3,21 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+/// Facts about a container process reported by the container engine.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct ContainerFacts {
+    /// Engine id of the container.
+    pub id: String,
+    /// Reference the container was created from.
+    pub image: String,
+    /// Engine state word.
+    pub state: String,
+    /// Some only for an exited container.
+    pub exit_code: Option<i32>,
+    /// Percent of one core from the last stats sample.
+    pub cpu_percent: f64,
+}
+
 /// Statistics for a single process.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ProcessStats {
@@ -21,6 +36,9 @@ pub struct ProcessStats {
     pub memory_bytes: u64,
     pub requests_total: u64,
     pub requests_per_second: f64,
+    /// Facts reported by the container engine (None for Procfile processes).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub container: Option<ContainerFacts>,
 }
 
 impl Default for ProcessStats {
@@ -41,6 +59,7 @@ impl Default for ProcessStats {
             memory_bytes: 0,
             requests_total: 0,
             requests_per_second: 0.0,
+            container: None,
         }
     }
 }

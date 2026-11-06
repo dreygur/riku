@@ -40,17 +40,16 @@ impl ProcessManager {
     /// left untouched and continues serving traffic until the new
     /// generation either passes its probe window (promoted) or fails it
     /// (rolled back).
+    #[allow(clippy::question_mark)]
     pub fn deploy_generation(&mut self, process_id: &str, new_config: WorkerConfig) -> Result<()> {
-        let port: u16 = new_config
-            .env
-            .get("PORT")
-            .and_then(|p| p.parse().ok())
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "cannot probe generation for {}: no PORT env var configured",
-                    process_id
-                )
-            })?;
+        let port: u16 = match new_config.env.get("PORT").and_then(|p| p.parse().ok()) {
+            Some(port) => port,
+            None => {
+                return Err(anyhow::anyhow!(
+                    "cannot probe generation for {process_id}: no PORT env var configured"
+                ))
+            }
+        };
 
         let health_path = new_config
             .options
@@ -70,10 +69,7 @@ impl ProcessManager {
         let mut temp_config = new_config;
         temp_config.worker.ordinal =
             canonical_ordinal.wrapping_add(CANARY_ORDINAL_OFFSET + next_version);
-        let temp_key = format!(
-            "{}-{}-{}",
-            temp_config.worker.app, temp_config.worker.kind, temp_config.worker.ordinal
-        );
+        let temp_key = temp_config.worker.name().to_string();
 
         tracing::info!(
             "Deploying generation v{} for {} (temp key {}, probing {}:{}{})",
@@ -85,7 +81,9 @@ impl ProcessManager {
             health_path
         );
 
-        self.spawn_process(&temp_config)?;
+        if let Err(e) = self.spawn_process(&temp_config) {
+            return Err(e);
+        }
         let pid = self
             .processes
             .get(&temp_key)
@@ -125,7 +123,7 @@ impl ProcessManager {
         let probe_process_id = process_id.to_string();
 
         thread::spawn(move || {
-            let client = reqwest::blocking::Client::builder()
+            let client = riku_http::blocking_client_builder()
                 .timeout(Duration::from_secs(2))
                 .build()
                 .unwrap_or_else(|_| reqwest::blocking::Client::new());
@@ -212,6 +210,7 @@ impl ProcessManager {
 
     /// Promote a probed generation into the canonical process slot,
     /// terminating the previous stable generation it replaces.
+    #[allow(clippy::question_mark)]
     fn promote_generation(&mut self, process_id: &str, version: u32) -> Result<()> {
         let Some(gens) = self.generations.get_mut(process_id) else {
             return Ok(());
@@ -226,17 +225,8 @@ impl ProcessManager {
         let canonical_ordinal = gens[idx].canonical_ordinal;
 
         if let Some(mut old) = self.processes.remove(process_id) {
-            let grace = old.config.options.grace_period;
-            old.terminate()?;
-            let deadline = Duration::from_secs(grace);
-            let poll = Duration::from_millis(100);
-            let mut elapsed = Duration::ZERO;
-            while old.is_running() && elapsed < deadline {
-                thread::sleep(poll);
-                elapsed += poll;
-            }
-            if old.is_running() {
-                old.kill()?;
+            if let Err(e) = old.stop(process_id) {
+                return Err(e);
             }
         }
         self.stats.remove_process(process_id);
@@ -286,10 +276,8 @@ impl ProcessManager {
         gens[idx].pids.clear();
 
         if let Some(mut failed) = self.processes.remove(&temp_key) {
-            let _ = failed.terminate();
-            thread::sleep(Duration::from_millis(100));
-            if failed.is_running() {
-                let _ = failed.kill();
+            if let Err(e) = failed.stop(&temp_key) {
+                tracing::warn!("stopping failed generation {temp_key}: {e:#}");
             }
         }
         self.stats.remove_process(&temp_key);
@@ -303,6 +291,28 @@ impl ProcessManager {
         self.deployment_events.push(format!(
             "[DEPLOYMENT_FAILED - ROLLING_BACK] {process_id} v{version}: {reason}"
         ));
+    }
+
+    /// Stop every canary of `process_id` still probing and forget its
+    /// generations, so a canary does not outlive the config it came from.
+    /// A probe outcome that arrives later finds no generation and is ignored.
+    #[allow(clippy::question_mark)]
+    pub(crate) fn stop_canaries(&mut self, process_id: &str) -> Result<()> {
+        let temp_keys: Vec<String> = match self.generations.remove(process_id) {
+            Some(gens) => gens
+                .into_iter()
+                .filter(|g| g.status == GenerationStatus::Probing)
+                .map(|g| g.temp_key)
+                .collect(),
+            None => return Ok(()),
+        };
+        for temp_key in temp_keys {
+            if let Err(e) = self.stop_process_by_id(&temp_key) {
+                return Err(e);
+            }
+            self.stats.remove_process(&temp_key);
+        }
+        Ok(())
     }
 
     /// Take and clear all pending deployment notifications. Called once per
@@ -320,3 +330,7 @@ pub(super) type ProbeResults = Arc<Mutex<Vec<ProbeOutcome>>>;
 pub(super) fn new_probe_results() -> ProbeResults {
     Arc::new(Mutex::new(Vec::new()))
 }
+
+#[cfg(test)]
+#[path = "orchestration_tests.rs"]
+mod tests;

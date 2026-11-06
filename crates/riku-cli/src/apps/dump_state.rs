@@ -14,193 +14,52 @@
 //!
 //! App `ENV` files routinely hold customer secrets (`DATABASE_URL`,
 //! `SECRET_KEY`, API tokens, ...). Those must never appear in this dump.
-//! [`ROUTING_ENV_ALLOWLIST`] is a strict allowlist, not a blocklist: only
+//! `ROUTING_ENV_ALLOWLIST` is a strict allowlist, not a blocklist: only
 //! the handful of known, non-secret routing/port keys are ever read out of
 //! an app's env map. Everything else is silently omitted, never just
-//! masked: there's no value in printing `SECRET_KEY: "***"` and pretending
-//! that's safe against a future key that looks like a secret but isn't on
-//! some hypothetical blocklist.
+//! masked.
 
 use anyhow::Result;
-use serde::Serialize;
-use std::collections::{BTreeMap, HashMap};
-use std::fs;
 
 use crate::config::RikuPaths;
-use crate::deploy::lock;
-use crate::supervisor::stats::{AppStats, ProcessStatus};
 
+mod builder;
 mod route;
 mod supervisor_files;
+mod types;
 
-use route::{route_state, RouteState};
-use supervisor_files::{load_app_stats, supervisor_uptime_seconds, unix_timestamp_now};
-
-/// Known non-secret routing/port keys an app's `ENV` file may carry.
-/// Strict allowlist: see module docs for why this isn't a blocklist.
-const ROUTING_ENV_ALLOWLIST: &[&str] = &[
-    "PORT",
-    "SOCKET",
-    "UWSGI_SOCKET",
-    "RIKU_UPSTREAM_PORT",
-    "RIKU_NGINX_EXTERNAL_PORT",
-    "RIKU_NGINX_PORTMAP",
-    "RIKU_NGINX_WSGI",
-    "RIKU_HTTPS_ONLY",
-    "RIKU_DOMAINS",
-    "RIKU_RUNTIME",
-];
-
-#[derive(Serialize)]
-struct StateDump {
-    generated_at: u64,
-    riku_version: &'static str,
-    supervisor_uptime_seconds: Option<u64>,
-    apps: Vec<AppStateEntry>,
-}
-
-#[derive(Serialize)]
-struct AppStateEntry {
-    app: String,
-    deploy_lock: LockState,
-    /// Allowlisted routing/port env vars only: see module docs.
-    routing: BTreeMap<String, String>,
-    route: RouteState,
-    workers: Vec<WorkerStateEntry>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "snake_case")]
-enum LockState {
-    Free,
-    Held,
-}
-
-#[derive(Serialize)]
-struct WorkerStateEntry {
-    process_id: String,
-    kind: String,
-    ordinal: u32,
-    pid: Option<u32>,
-    status: ProcessStatus,
-    restart_count: u32,
-    memory_bytes: u64,
-    cpu_time_ms: u64,
-}
+pub use builder::{build_app_entry, build_state_dump, extract_routing_fields};
+pub use route::RouteState;
+pub use types::{AppStateEntry, EngineInfo, LockState, StateDump, UnitKind, WorkerStateEntry};
 
 /// Dump the current supervisor state matrix as pretty-printed JSON to stdout.
+#[allow(clippy::question_mark)]
 pub fn cmd_dump_state(paths: &RikuPaths) -> Result<()> {
-    let dump = build_state_dump(paths)?;
-    println!("{}", serde_json::to_string_pretty(&dump)?);
+    let dump = match build_state_dump(paths) {
+        Ok(dump) => dump,
+        Err(e) => return Err(e),
+    };
+    let json_text = match serde_json::to_string_pretty(&dump) {
+        Ok(text) => text,
+        Err(e) => return Err(e.into()),
+    };
+    println!("{json_text}");
     Ok(())
 }
 
 /// The read-only state matrix as a JSON value, for the dashboard API. Reuses
 /// the same secret-safe builder as `cmd_dump_state` (app env is allowlisted to
 /// routing/port keys, so secrets never appear).
+#[allow(clippy::question_mark)]
 pub fn state_json(paths: &RikuPaths) -> Result<serde_json::Value> {
-    Ok(serde_json::to_value(build_state_dump(paths)?)?)
-}
-
-fn build_state_dump(paths: &RikuPaths) -> Result<StateDump> {
-    let app_stats = load_app_stats(paths);
-
-    let mut apps = Vec::new();
-    if paths.app_root.exists() {
-        for entry in fs::read_dir(&paths.app_root)? {
-            let entry = entry?;
-            if !entry.file_type()?.is_dir() {
-                continue;
-            }
-            let Some(app) = entry.file_name().to_str().map(str::to_string) else {
-                continue;
-            };
-            apps.push(build_app_entry(&app, paths, &app_stats));
-        }
+    let dump = match build_state_dump(paths) {
+        Ok(dump) => dump,
+        Err(e) => return Err(e),
+    };
+    match serde_json::to_value(dump) {
+        Ok(val) => Ok(val),
+        Err(e) => Err(e.into()),
     }
-    apps.sort_by(|a, b| a.app.cmp(&b.app));
-
-    Ok(StateDump {
-        generated_at: unix_timestamp_now(),
-        // Product version, kept in step with the CLI's `--version` (the
-        // riku-cli sub-crate's own CARGO_PKG_VERSION is 0.1.0, not the product
-        // version, since the workspace split).
-        riku_version: "3.0.0",
-        supervisor_uptime_seconds: supervisor_uptime_seconds(paths),
-        apps,
-    })
-}
-
-/// Whether `{app}-{kind}-{ordinal}.toml` is still enabled, i.e. this worker
-/// is part of the app's current scale, not a leftover from a higher one.
-fn worker_config_exists(paths: &RikuPaths, app: &str, kind: &str, ordinal: u32) -> bool {
-    paths
-        .workers_enabled
-        .join(format!("{app}-{kind}-{ordinal}.toml"))
-        .exists()
-}
-
-fn build_app_entry(
-    app: &str,
-    paths: &RikuPaths,
-    app_stats: &HashMap<String, AppStats>,
-) -> AppStateEntry {
-    let env_file = paths.env_root.join(app).join("ENV");
-    let mut env_map = HashMap::new();
-    let _ = crate::util::parse_settings(&env_file, &mut env_map);
-
-    let workers = app_stats
-        .get(app)
-        .map(|stats| {
-            stats
-                .processes
-                .iter()
-                // Stats persist forever (see unload_config's doc comment on why
-                // riku never purges a stopped worker's history) so a scaled-down
-                // ordinal (e.g. web.5 after `scale web=1`) leaves a permanent
-                // "stopped" ghost row with nothing behind it to restart or
-                // inspect. Hide exactly that case: no worker config left AND not
-                // actually running. A *running* entry with no config is kept
-                // visible regardless: that combination shouldn't happen, and
-                // hiding it would bury a real inconsistency instead of surfacing it.
-                .filter(|p| {
-                    p.status == ProcessStatus::Running
-                        || worker_config_exists(paths, app, &p.kind, p.ordinal)
-                })
-                .map(|p| WorkerStateEntry {
-                    process_id: p.process_id.clone(),
-                    kind: p.kind.clone(),
-                    ordinal: p.ordinal,
-                    pid: p.pid,
-                    status: p.status.clone(),
-                    restart_count: p.restart_count,
-                    memory_bytes: p.memory_bytes,
-                    cpu_time_ms: p.cpu_time_ms,
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-
-    AppStateEntry {
-        app: app.to_string(),
-        deploy_lock: if lock::is_locked(app, paths) {
-            LockState::Held
-        } else {
-            LockState::Free
-        },
-        routing: extract_routing_fields(&env_map),
-        route: route_state(app, paths),
-        workers,
-    }
-}
-
-/// Filter `env` down to the allowlisted routing/port keys only. See module
-/// docs for why this is an allowlist, not a mask-and-keep-the-rest.
-fn extract_routing_fields(env: &HashMap<String, String>) -> BTreeMap<String, String> {
-    ROUTING_ENV_ALLOWLIST
-        .iter()
-        .filter_map(|&key| env.get(key).map(|v| (key.to_string(), v.clone())))
-        .collect()
 }
 
 #[cfg(test)]

@@ -103,10 +103,10 @@ sudo systemctl status riku
 sudo journalctl -u riku -n 100
 
 # Verify binary exists
-ls -la /home/riku/.local/bin/riku
+ls -la /usr/local/bin/riku
 
 # Test binary manually
-sudo -u riku /home/riku/.local/bin/riku --help
+sudo -u riku /usr/local/bin/riku --help
 ```
 
 ### Nginx Not Reloading

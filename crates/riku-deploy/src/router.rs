@@ -1,7 +1,7 @@
 //! Router seam orchestrator (service layer).
 //!
-//! Resolves the active router and routes app network exposure to either the
-//! built-in nginx generator or a router *plugin* via the
+//! Resolves the active router and routes app network exposure to nginx or
+//! Caddy through the router helper, or to a router *plugin* via the
 //! [`crate::plugins::router`] seam. Callers (deploy, destroy) go through here
 //! instead of reaching into nginx directly, so swapping the router is a config
 //! change, not a code change. See `PLUGIN_PROTOCOL.md` §6.2.
@@ -19,143 +19,179 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
-use serde::Serialize;
+use riku_container::engine::Engine;
+use riku_route::Request;
 
 use crate::config::router::Router;
 use crate::config::RikuPaths;
-use crate::plugins::{bundles, router};
+use crate::util::backend::Backend;
+use crate::util::domain::parse_domains;
 use crate::util::flag::https_only;
+use crate::util::route_plan::{HttpsPolicy, RoutePlan};
 
+mod backends;
 mod caddy;
+mod check;
+mod fallback;
+mod helper_client;
+mod nginx_site;
+mod plugin;
+mod reload;
+mod remove;
+mod renew;
+mod route_build;
+mod route_env;
 
-use caddy::configure_caddy;
+pub use backends::{copy_socket, current_backends};
+pub(crate) use backends::{parsed_worker, web_copies, worker_backend};
+use caddy::apply_caddy_site;
+pub use check::check;
+use fallback::fallback_backends;
+pub use helper_client::send as send_to_helper;
+use nginx_site::apply_nginx_site;
+use plugin::configure_plugin;
+pub use reload::ERROR_FILE as RELOAD_ERROR_FILE;
+use reload::{record_outcome, reload_router_plugin};
+pub use remove::remove;
+pub use renew::renew;
+pub use route_build::build_route;
 
-/// The request handed to a router plugin's `configure` verb (one JSON line on
-/// stdin). Mirrors `PLUGIN_PROTOCOL.md` §6.2.
-#[derive(Serialize)]
-struct ConfigureRequest {
-    app: String,
-    domains: Vec<String>,
-    upstream_port: u16,
-    https: bool,
+/// Caddy reaches an app over loopback whatever `RIKU_BIND_ADDRESS` says.
+/// nginx and router plugins keep the address each copy listens on, since a
+/// plugin may run elsewhere and must not be told a made up address.
+fn backends_for(router: &Router, backends: Vec<Backend>) -> Vec<Backend> {
+    if !matches!(router, Router::Caddy) {
+        return backends;
+    }
+    backends
+        .into_iter()
+        .map(|backend| match backend {
+            Backend::Tcp { port, .. } => Backend::loopback(port),
+            unix => unix,
+        })
+        .collect()
 }
 
+/// A container app (`engine` given) routes to its running routed copies; a
+/// Procfile app to its web copies, or to its old default backend when it has
+/// none.
 #[allow(clippy::question_mark)]
-fn configure_plugin(
-    name: &str,
+fn routed_backends(
+    active: &Router,
     app: &str,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
-) -> Result<()> {
-    let (bundle, manifest) = match bundles::find_router(&paths.plugin_root, name) {
-        Some(found) => found,
-        None => return Err(anyhow!("router plugin '{name}' not installed")),
-    };
-
-    let request = ConfigureRequest {
-        app: app.to_string(),
-        domains: domains_from_env(env),
-        upstream_port: upstream_port_from_env(env),
-        https: https_only(env),
-    };
-    let request = match serde_json::to_value(&request) {
-        Ok(value) => value,
-        Err(e) => return Err(anyhow!("failed to encode router request: {e}")),
-    };
-
-    if let Err(e) = router::run_verb(
-        paths,
-        &bundle,
-        &manifest,
-        "configure",
-        Some(app),
-        Some(&request),
-    ) {
-        return Err(e);
+    engine: Option<&Engine>,
+) -> Result<Vec<Backend>> {
+    if engine.is_none() {
+        let copies = match web_copies(app, paths) {
+            Ok(copies) => copies,
+            Err(e) => return Err(anyhow!("cannot route '{app}': {e}")),
+        };
+        if copies.is_empty() {
+            tracing::debug!("'{app}' has no web copy, routing it to its default backend");
+            return fallback_backends(active, app, env, paths);
+        }
     }
-    router::run_verb(paths, &bundle, &manifest, "reload", None, None)
+    match current_backends(app, env, paths, engine) {
+        Ok(backends) => Ok(backends_for(active, backends)),
+        Err(e) => Err(anyhow!("cannot route '{app}': {e}")),
+    }
 }
 
-/// Configure the active router so `app` is reachable.
-///
-/// With the default `nginx` router this generates the config and returns; the
-/// supervisor daemon performs the graceful `nginx -s reload` when it observes
-/// the changed config (unchanged legacy behavior). With a plugin router there
-/// is no daemon watcher, so this dispatches `configure` then `reload`.
+/// Configure the active router so `app` is reachable, with a backend for
+/// every web copy it has today, and return once the router confirmed the new
+/// config. `engine` is `Some` for a container app.
 #[allow(clippy::question_mark)]
 pub fn configure(
     app: &str,
     app_path: &Path,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
+    engine: Option<&Engine>,
 ) -> Result<()> {
     let active = match Router::load(paths) {
         Ok(router) => router,
         Err(e) => return Err(e),
     };
-
-    match active {
-        Router::Nginx => crate::nginx::generate_nginx_config(app, app_path, env, paths),
-        Router::Caddy => configure_caddy(app, env, paths),
-        Router::Plugin(name) => configure_plugin(&name, app, env, paths),
-    }
-}
-
-fn remove_plugin(name: &str, app: &str, paths: &RikuPaths) -> Result<()> {
-    let (bundle, manifest) = match bundles::find_router(&paths.plugin_root, name) {
-        Some(found) => found,
-        None => return Ok(()),
+    let backends = match routed_backends(&active, app, env, paths, engine) {
+        Ok(backends) => backends,
+        Err(e) => return Err(e),
     };
-
-    if let Err(e) = router::run_verb(paths, &bundle, &manifest, "unconfigure", Some(app), None) {
-        tracing::warn!(router = %name, "unconfigure failed, relying on reload: {e}");
-    }
-    router::run_verb(paths, &bundle, &manifest, "reload", None, None)
+    apply_to(&active, app, app_path, env, paths, &backends)
 }
 
-/// Remove `app` from the active router.
-///
-/// nginx removal is built-in. For a plugin router this dispatches `unconfigure`
-/// (the app's config is keyed by `RIKU_APP`, which is still available even
-/// though the app's `ENV` is already gone by destroy time) then `reload`.
-///
-/// `unconfigure` is **best-effort**: it was added within API v1, so a plugin
-/// predating it may not implement the verb and will exit non-zero, in that
-/// case the following `reload` lets the plugin reconcile the orphaned upstream
-/// on its own. See `PLUGIN_PROTOCOL.md` §6.2.
+/// Install `app`'s router config for `backends` and wait for the active
+/// router to confirm the reload. nginx and Caddy go through the router
+/// helper.
 #[allow(clippy::question_mark)]
-pub fn remove(app: &str, paths: &RikuPaths) -> Result<()> {
+pub fn apply(
+    app: &str,
+    app_path: &Path,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+    backends: &[Backend],
+) -> Result<()> {
     let active = match Router::load(paths) {
         Ok(router) => router,
         Err(e) => return Err(e),
     };
+    apply_to(&active, app, app_path, env, paths, backends)
+}
 
+#[allow(clippy::question_mark)]
+fn apply_to(
+    active: &Router,
+    app: &str,
+    app_path: &Path,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+    backends: &[Backend],
+) -> Result<()> {
     match active {
-        Router::Nginx => crate::nginx::remove_nginx_config(app, paths),
-        Router::Caddy => crate::caddy::remove_site(app, paths),
-        Router::Plugin(name) => remove_plugin(&name, app, paths),
+        Router::Nginx => {
+            let send = |request: &Request| send_to_helper(paths, request);
+            let outcome = apply_nginx_site(send, app, app_path, env, backends, paths);
+            record_outcome(paths, &outcome);
+            outcome
+        }
+        Router::Caddy => {
+            let send = |request: &Request| send_to_helper(paths, request);
+            let outcome = apply_caddy_site(send, app, env, backends, paths);
+            record_outcome(paths, &outcome);
+            outcome
+        }
+        Router::Plugin(name) => match configure_plugin(name, app, env, backends, paths) {
+            Ok(()) => reload_router_plugin(name, paths),
+            Err(e) => Err(e),
+        },
     }
 }
 
-/// Domains for the app, parsed from `RIKU_DOMAINS` (space/comma separated).
-fn domains_from_env(env: &HashMap<String, String>) -> Vec<String> {
-    env.get("RIKU_DOMAINS")
-        .map(|s| {
-            s.split([',', ' '])
-                .map(str::trim)
-                .filter(|d| !d.is_empty())
-                .map(String::from)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-/// The app's upstream port: `RIKU_UPSTREAM_PORT`, then `PORT`, default 8080.
-fn upstream_port_from_env(env: &HashMap<String, String>) -> u16 {
-    env.get("RIKU_UPSTREAM_PORT")
-        .or_else(|| env.get("PORT"))
-        .and_then(|p| p.trim().parse().ok())
-        .unwrap_or(8080)
+/// The routing plan for an app: its domains and HTTPS policy from ENV, and
+/// the given `backends`.
+///
+/// A malformed `RIKU_DOMAINS` is an error, so nothing unvalidated reaches a
+/// router.
+fn route_plan(env: &HashMap<String, String>, backends: &[Backend]) -> Result<RoutePlan> {
+    let raw = env
+        .get("RIKU_DOMAINS")
+        .map(String::as_str)
+        .unwrap_or_default();
+    let domains = match parse_domains(raw) {
+        Ok(domains) => domains,
+        Err(e) => return Err(anyhow!("invalid RIKU_DOMAINS: {e}")),
+    };
+    let https = if https_only(env) {
+        HttpsPolicy::Only
+    } else {
+        HttpsPolicy::AlsoPlainHttp
+    };
+    Ok(RoutePlan {
+        domains,
+        https,
+        backends: backends.to_vec(),
+    })
 }
 
 #[cfg(test)]

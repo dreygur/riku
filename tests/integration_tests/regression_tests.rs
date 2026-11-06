@@ -361,7 +361,7 @@ max_restarts = 5
 
     // extra: worker config file naming convention
 
-    /// Regression: worker config files must follow the `<app>.<kind>.<ordinal>.toml`
+    /// Regression: worker config files follow the `<app>@<kind>.<ordinal>.toml`
     /// naming convention so the supervisor can glob them reliably.
     #[test]
     fn worker_config_filename_convention() {
@@ -369,11 +369,9 @@ max_restarts = 5
         let workers_enabled = tmp.path().join("workers-enabled");
         fs::create_dir_all(&workers_enabled).unwrap();
 
-        let app = "myapp";
-        let kind = "web";
-        let ordinal: u32 = 1;
-
-        let filename = format!("{}.{}.{}.toml", app, kind, ordinal);
+        let filename =
+            riku::util::file_names::worker::WorkerName::new("myapp", "web", 1).file_name();
+        assert_eq!(filename, "myapp@web.1.toml");
         let config_path = workers_enabled.join(&filename);
 
         fs::write(&config_path, "[worker]\napp = \"myapp\"\n").unwrap();
@@ -444,6 +442,11 @@ mod init_privilege_tests {
         if String::from_utf8_lossy(&uid.stdout).trim() == "0" {
             return;
         }
+        // With the root install present a plain init goes on instead of
+        // naming `sudo riku init`, so there is nothing to observe.
+        if std::path::Path::new("/usr/local/bin/riku").is_file() {
+            return;
+        }
         let home = TempDir::new().unwrap();
         let out = std::process::Command::new(riku_bin())
             .args(["init", "--no-systemd"])
@@ -456,6 +459,10 @@ mod init_privilege_tests {
         assert!(
             !stderr.contains("useradd"),
             "init took the root path for a non-root uid:\n{stderr}"
+        );
+        assert!(
+            stderr.contains("sudo riku init"),
+            "a non-root init must name the root install step:\n{stderr}"
         );
     }
 }
@@ -588,6 +595,8 @@ mod agent_state_tests {
         let log = dir.join("audit.log");
         assert_eq!(mode(&log), 0o600);
         let text = std::fs::read_to_string(&log).unwrap();
-        assert!(text.contains("state-test apps"), "{text}");
+        let entry: serde_json::Value = serde_json::from_str(text.trim_end()).unwrap();
+        assert_eq!(entry["agent"], "state-test", "{text}");
+        assert_eq!(entry["action"], "apps", "{text}");
     }
 }

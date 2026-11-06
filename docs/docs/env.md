@@ -43,7 +43,6 @@ in an app ENV.
 | `NGINX_HTTPS_ONLY` | `RIKU_HTTPS_ONLY` |
 | `NGINX_INTERNAL_PORT` | `RIKU_UPSTREAM_PORT` |
 | `BIND_ADDRESS` | `RIKU_BIND_ADDRESS` |
-| `DISABLE_IPV6` | `RIKU_DISABLE_IPV6` |
 | `ACME_EMAIL` | `RIKU_ACME_EMAIL` |
 | `ACME_ROOT_CA` | `RIKU_ACME_ROOT_CA` |
 | `ACME_ROOT` | `RIKU_ACME_ROOT` |
@@ -53,7 +52,7 @@ in an app ENV.
 | `RUNTIME` | `RIKU_RUNTIME` |
 | `GHCR_USERNAME` | `RIKU_GHCR_USERNAME` |
 | `GHCR_TOKEN` | `RIKU_GHCR_TOKEN` |
-| `NGINX_<NAME>` (cache, static, include, ACL, ...) | `RIKU_NGINX_<NAME>` |
+| `NGINX_<NAME>` (static, ...) | `RIKU_NGINX_<NAME>` |
 
 Unchanged: `PORT`, `PATH`, `HOME`, `COMPOSE_FILE`, the `UWSGI_*` options
 (uWSGI reads them from its own environment), and names that already start
@@ -88,8 +87,8 @@ riku config set myapp PORT=3000
 ```
 
 - **Default:** unset. Each deploy picks a free port, passes it to the `web` process as `PORT` and routes to it.
-- **Description:** pins the port instead, for an app that has to listen on a fixed one, such as a compose file that publishes `127.0.0.1:3000:3000`.
-- **Values:** 1 to 65535. A pinned port runs one `web` process: a deploy with `web` scaled above 1 is refused. So is a port another riku app uses, or one some other process on the host listens on, since the domain would otherwise be routed to that process. Both checks run before the running app is touched.
+- **Description:** pins the port instead, for a Procfile app that has to listen on a fixed one. Container apps are routed to the host port riku picks for each copy, not to `PORT` (see [Runtimes → Container](runtimes.md#container)).
+- **Values:** 1 to 65535. A pinned port runs one `web` process: a deploy with `web` scaled above 1 is refused. So is a port another riku app uses, or one some other process on the host listens on, since the domain would otherwise be routed to that process. Both checks run before the running app is touched. Two copies cannot share the port, so a deploy stops the old `web` process before the new one starts, and the site is down in between.
 
 ### Bind Address
 
@@ -100,16 +99,6 @@ RIKU_BIND_ADDRESS=127.0.0.1
 - **Default:** `127.0.0.1`
 - **Description:** IP address for workers to bind to
 - **Values:** Any valid IP address
-
-### Disable IPv6
-
-```bash
-RIKU_DISABLE_IPV6=true
-```
-
-- **Default:** `false`
-- **Description:** Disable IPv6 in nginx configuration
-- **Values:** `true` | `false`
 
 ### Server Name
 
@@ -203,17 +192,11 @@ RIKU_NGINX_STATIC_PATHS=/static:public
 RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static,/images:img
 ```
 
-### Include Custom Config
+### Removed Keys
 
-```bash
-RIKU_NGINX_INCLUDE_FILE=custom.conf
-```
+A deploy fails, naming the key, when the app's ENV sets any of these. The core route dropped them. See [Nginx](nginx.md#removed-keys).
 
-- **Default:** (none)
-- **Description:** Include custom nginx configuration file
-- **Values:** Path to nginx config snippet
-
-The file should be placed in `~/.riku/nginx/` or your app directory.
+`RIKU_NGINX_CLOUDFLARE_ACL`, `RIKU_NGINX_CACHE_PATH`, `RIKU_NGINX_CACHE_PREFIXES`, `RIKU_NGINX_CACHE_SIZE`, `RIKU_NGINX_CACHE_TIME`, `RIKU_NGINX_CACHE_EXPIRY`, `RIKU_NGINX_CACHE_REDIRECTS`, `RIKU_NGINX_CACHE_ANY`, `RIKU_NGINX_CACHE_CONTROL`, `RIKU_NGINX_CATCH_ALL`, `RIKU_NGINX_CSP`, `RIKU_NGINX_INCLUDE_FILE`, `RIKU_NGINX_IPV4_ADDRESS`, `RIKU_NGINX_IPV6_ADDRESS`, `RIKU_DISABLE_IPV6`, `RIKU_NGINX_SOCKET`
 
 ### Allow Git Folders
 
@@ -226,74 +209,6 @@ RIKU_NGINX_ALLOW_GIT_FOLDERS=false
 - **Values:** `true` | `false`
 
 Setting this to `true` exposes your git history publicly.
-
-### Catch-All for SPA
-
-```bash
-RIKU_NGINX_CATCH_ALL=index.html
-```
-
-- **Default:** (none)
-- **Description:** Serve this file for all unmatched routes (SPA routing)
-- **Values:** Filename
-
-Useful for React, Vue, Angular single-page applications.
-
-### Cloudflare ACL
-
-```bash
-RIKU_NGINX_CLOUDFLARE_ACL=true
-```
-
-- **Default:** `false`
-- **Description:** Restrict access to Cloudflare IP ranges only
-- **Values:** `true` | `false`
-
-Combine with Cloudflare's "Always Use HTTPS" page rule.
-
----
-
-## Nginx Caching
-
-### Cache Prefixes
-
-```bash
-RIKU_NGINX_CACHE_PREFIXES=/api,/images,/static
-```
-
-- **Default:** (none)
-- **Description:** URL prefixes to cache
-- **Format:** Comma-separated URL path prefixes
-
-### Cache Size
-
-```bash
-RIKU_NGINX_CACHE_SIZE=1
-```
-
-- **Default:** `1`
-- **Description:** Cache size in gigabytes
-- **Values:** Positive integer (GB)
-
-### Cache Time
-
-```bash
-RIKU_NGINX_CACHE_TIME=3600
-```
-
-- **Default:** `3600` (1 hour)
-- **Description:** How long to cache responses (seconds)
-- **Values:** Positive integer (seconds)
-
-### Cache Expiry
-
-```bash
-RIKU_NGINX_CACHE_EXPIRY=86400
-```
-
-- **Default:** `86400` (24 hours)
-- **Description:** Maximum cache entry lifetime (seconds)
-- **Values:** Positive integer (seconds)
 
 ---
 
@@ -358,7 +273,7 @@ COMPOSE_FILE=compose.prod.yml
 ```
 
 - **Default:** (none; the first of `compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml` present)
-- **Description:** The compose file a compose app deploys with, passed to every `compose` command as `-f`
+- **Description:** The compose file a compose app deploys with. Riku reads it itself; no `compose` tool runs
 - **Values:** One path relative to the app root, such as `compose.prod.yml` or `deploy/compose.yml`
 
 Setting it selects the container runtime even when the repo also has a `package.json` or other runtime marker. The path must stay inside the app: absolute paths, `..`, and symlinks pointing outside are rejected, as is a docker-style list (`a.yml:b.yml`). An invalid value fails the deploy instead of falling back to another runtime.
@@ -373,7 +288,7 @@ RIKU_GHCR_USERNAME=your-username
 - **Description:** Username for `docker login ghcr.io`, run before pulling a compose app's images
 - **Values:** Any GitHub username
 
-Required together with `RIKU_GHCR_TOKEN` only for private GHCR images; omit both for public images.
+Required together with `RIKU_GHCR_TOKEN` only for private GHCR images; omit both for public images. Setting only one of the two fails the deploy.
 
 ### GHCR Token
 
@@ -397,7 +312,7 @@ RIKU_WATCH_SERVICES=web,worker
 ```
 
 - **Default:** (none, auto-update disabled)
-- **Description:** Compose services to periodically re-pull and recreate on a new registry image, without a `git push`
+- **Description:** Compose services to re-pull periodically and replace, one copy at a time, when their registry tag names a new image, without a `git push`. Services built from source are skipped
 - **Values:** Comma-separated compose service names
 
 Checked every 60 seconds. Only meaningful for compose apps (see
@@ -474,13 +389,6 @@ RIKU_WORKER_GRACE_PERIOD=60
 # Static files
 RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static
 
-# SPA routing
-RIKU_NGINX_CATCH_ALL=index.html
-
-# Caching
-RIKU_NGINX_CACHE_PREFIXES=/api,/static
-RIKU_NGINX_CACHE_TIME=3600
-
 # SSL
 RIKU_ACME_EMAIL=admin@example.com
 ```
@@ -543,9 +451,4 @@ API_URL=${BASE_URL}/api
 
 ### Nginx Config Not Updated
 
-After changing nginx-related variables:
-
-```bash
-riku restart myapp
-sudo nginx -t && sudo systemctl reload nginx
-```
+The router config is rebuilt on deploy. After changing routing variables (`RIKU_DOMAINS`, `RIKU_HTTPS_ONLY`, static paths), deploy again. If the deploy fails, the message comes from the router helper.

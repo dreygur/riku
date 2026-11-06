@@ -85,7 +85,6 @@ shelling out to the `riku` binary. Prefer (a) for anything mutating.
 |---|---|---|---|
 | Doctor (nginx/systemd/perms/disk/cert) | `riku doctor` | yes, `GET /api/doctor` | System health page |
 | Supervisor health + uptime | - | yes, `GET /health` | Header status / host panel |
-| Update binary | `riku update` | no | (system: optional) |
 | Init server | `riku init` | no | (setup: out of scope) |
 
 ## 9. Security model the dashboard must honor

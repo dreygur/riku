@@ -1,5 +1,6 @@
 use anyhow::{bail, Result};
 use colored::Colorize;
+use riku_supervisor::config::app_worker_configs;
 use std::collections::HashMap;
 use std::fs;
 use std::process::Command;
@@ -130,16 +131,7 @@ fn print_scaling(paths: &RikuPaths, app: &str) -> Result<()> {
 
 /// Print process status: running/stopped and active worker count.
 fn print_process_status(paths: &RikuPaths, app: &str) -> Result<()> {
-    let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", app));
-    let ini_pattern = paths.workers_enabled.join(format!("{}-*.ini", app));
-
-    let toml_count = glob::glob(toml_pattern.to_str().unwrap_or(""))
-        .map(|g| g.count())
-        .unwrap_or(0);
-    let ini_count = glob::glob(ini_pattern.to_str().unwrap_or(""))
-        .map(|g| g.count())
-        .unwrap_or(0);
-    let worker_count = toml_count + ini_count;
+    let worker_count = app_worker_configs(&paths.workers_enabled, app).len();
 
     if worker_count > 0 {
         display::kv("Status:", &"running".green().to_string());

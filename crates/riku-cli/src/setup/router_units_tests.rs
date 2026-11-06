@@ -1,43 +1,24 @@
-use std::path::PathBuf;
-
 use super::*;
 
 #[test]
-fn path_unit_watches_caddy() {
-    let tmp = tempfile::tempdir().unwrap();
-    let caddy_dir = PathBuf::from("/home/deploy/.riku/caddy");
-
-    let enabled = write_router_units(tmp.path(), &Router::Caddy, &caddy_dir).unwrap();
-    assert_eq!(enabled.as_deref(), Some("riku-caddy.path"));
-
-    let path_unit = fs::read_to_string(tmp.path().join("riku-caddy.path")).unwrap();
-    assert!(
-        path_unit.contains("PathModified=/home/deploy/.riku/caddy"),
-        "{path_unit}"
-    );
-    assert!(
-        path_unit.contains("Unit=riku-caddy-reload.service"),
-        "{path_unit}"
-    );
-
-    let reload = fs::read_to_string(tmp.path().join("riku-caddy-reload.service")).unwrap();
-    assert!(
-        reload.contains("ExecStart=/usr/bin/systemctl reload caddy"),
-        "{reload}"
+fn plugin_router_orders_after_the_network_only() {
+    assert_eq!(
+        unit_ordering(&Router::Plugin("traefik".to_string())),
+        "After=network.target"
     );
 }
 
 #[test]
-fn plugin_router_gets_no_units() {
+fn old_watcher_units_are_removed_and_a_second_run_finds_none() {
     let tmp = tempfile::tempdir().unwrap();
-    let router = Router::Plugin("traefik".to_string());
+    for name in STALE_UNITS {
+        fs::write(tmp.path().join(name), "[Unit]\n").unwrap();
+    }
+    fs::write(tmp.path().join("riku.service"), "[Unit]\n").unwrap();
 
-    let enabled = write_router_units(tmp.path(), &router, tmp.path()).unwrap();
-    assert_eq!(enabled, None);
-    assert_eq!(
-        fs::read_dir(tmp.path()).unwrap().count(),
-        0,
-        "no unit files expected"
-    );
-    assert_eq!(unit_ordering(&router), "After=network.target");
+    assert!(remove_stale_units(tmp.path()).unwrap());
+    assert!(!remove_stale_units(tmp.path()).unwrap());
+
+    assert!(tmp.path().join("riku.service").exists());
+    assert_eq!(fs::read_dir(tmp.path()).unwrap().count(), 1);
 }

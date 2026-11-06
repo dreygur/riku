@@ -197,7 +197,9 @@ impl<'a> AddonService<'a> {
     }
 
     /// Set `vars` in the app ENV, replacing those keys and preserving all other
-    /// lines verbatim. Returns the keys written (sorted).
+    /// lines verbatim. Returns the keys written (sorted). The ENV file holds
+    /// secrets (addon credentials among them), so it is written `0600`.
+    #[allow(clippy::question_mark)]
     fn set_env_keys(&self, app: &str, vars: &[(String, String)]) -> Result<Vec<String>> {
         let path = self.app_env_file(app);
         let owned: BTreeSet<&str> = vars.iter().map(|(k, _)| k.as_str()).collect();
@@ -214,9 +216,13 @@ impl<'a> AddonService<'a> {
         }
 
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
+            if let Err(e) = crate::util::create_private_dir(parent) {
+                return Err(e);
+            }
         }
-        crate::util::write_atomic(&path, out.as_bytes())?;
+        if let Err(e) = crate::util::write_private(&path, out.as_bytes()) {
+            return Err(e);
+        }
 
         let mut keys: Vec<String> = vars.iter().map(|(k, _)| k.clone()).collect();
         keys.sort();
@@ -230,7 +236,10 @@ impl<'a> AddonService<'a> {
             return Ok(());
         }
         let remove: BTreeSet<&str> = keys.iter().map(String::as_str).collect();
-        let existing = std::fs::read_to_string(&path)?;
+        let existing = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(e) => return Err(anyhow::anyhow!("cannot read {}: {e}", path.display())),
+        };
         let mut out = String::new();
         for line in existing.lines() {
             if !remove.contains(line_key(line)) {
@@ -238,7 +247,7 @@ impl<'a> AddonService<'a> {
                 out.push('\n');
             }
         }
-        crate::util::write_atomic(&path, out.as_bytes())
+        crate::util::write_private(&path, out.as_bytes())
     }
 }
 

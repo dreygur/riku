@@ -1,17 +1,14 @@
+{% include "nginx_upstream.conf.tera" %}
+
 server {
-  listen              {{ RIKU_NGINX_IPV4_ADDRESS }}:{{ RIKU_NGINX_EXTERNAL_PORT }};
-{% if RIKU_NGINX_IPV6_ADDRESS %}
-  listen              {{ RIKU_NGINX_IPV6_ADDRESS }}:{{ RIKU_NGINX_EXTERNAL_PORT }};
-{% endif %}
+  listen              0.0.0.0:{{ RIKU_NGINX_EXTERNAL_PORT }};
+  {% if IPV6 %}listen              [::]:{{ RIKU_NGINX_EXTERNAL_PORT }};{% endif %}
   server_name         {{ RIKU_DOMAINS }};
 
-  location ^~ /.well-known/acme-challenge {
-    allow all;
-    root {{ ACME_WWW }};
-  }
+{% include "nginx_site_locations.conf.tera" %}
 
   location / {
-    proxy_pass http://{{ RIKU_BIND_ADDRESS }}:{{ RIKU_UPSTREAM_PORT }};
+    proxy_pass http://{{ APP_UPSTREAM }};
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
@@ -41,12 +38,4 @@ server {
   add_header Referrer-Policy "strict-origin-when-cross-origin" always;
   add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
   add_header X-Deployed-By "Riku" always;
-
-{% if RIKU_NGINX_INCLUDE_CONTENT %}
-  # Custom nginx configuration from file
-  {{ RIKU_NGINX_INCLUDE_CONTENT }}
-{% elif RIKU_NGINX_INCLUDE_FILE %}
-  # Custom nginx configuration
-  include {{ RIKU_NGINX_INCLUDE_FILE }};
-{% endif %}
 }

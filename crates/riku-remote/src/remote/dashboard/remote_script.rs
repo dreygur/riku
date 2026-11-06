@@ -8,7 +8,10 @@
 //! the token after that, so a password can never be taken as the token. The
 //! token is exported inside `sudo -u`, so sudo's env_reset cannot strip it
 //! and it never shows in an argument list on the server. `--local` keeps
-//! the server side dashboard from resolving a target of its own.
+//! the server side dashboard from resolving a target of its own. The
+//! dashboard runs from the root owned install, never a binary in the home.
+
+use crate::util::ROOT_BINARY;
 
 /// Start of the line `riku dashboard` prints once it has bound its port.
 pub const BOUND_PREFIX: &str = "riku-dashboard-bound ";
@@ -29,8 +32,7 @@ pub(super) fn script() -> String {
   echo {READY_MARKER}
   IFS= read -r t || exit 1
   export RIKU_DASHBOARD_TOKEN=\"$t\"
-  bin=$(command -v riku || echo \"$HOME/.local/bin/riku\")
-  \"$bin\" dashboard --local --bind 127.0.0.1:0 &
+  {ROOT_BINARY} dashboard --local --bind 127.0.0.1:0 &
   p=$!
   cat >/dev/null
   kill \"$p\"

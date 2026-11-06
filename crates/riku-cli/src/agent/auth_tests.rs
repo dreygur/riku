@@ -56,9 +56,21 @@ fn symlinked_rate_file_is_an_error_not_a_pass() {
 }
 
 #[test]
-fn audit_line_is_appended_to_the_private_log() {
+fn concurrent_requests_never_exceed_the_rate_limit() {
     let (_root, dir) = state_dir();
-    log_agent_action(&dir, "cursor", "deploy", "web", true);
-    let log = std::fs::read_to_string(dir.join(AUDIT_FILE)).unwrap();
-    assert!(log.contains("[AI] cursor deploy web success"), "{log}");
+    let limit = AgentScope::Production.rate_limit() as usize;
+    let allowed: usize = (0..8)
+        .map(|_| {
+            let dir = dir.clone();
+            std::thread::spawn(move || {
+                (0..limit)
+                    .filter(|_| check_rate_limit(&dir, "a", &AgentScope::Production, 1000).unwrap())
+                    .count()
+            })
+        })
+        .collect::<Vec<_>>()
+        .into_iter()
+        .map(|t| t.join().unwrap())
+        .sum();
+    assert_eq!(allowed, limit);
 }

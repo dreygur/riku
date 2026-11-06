@@ -1,0 +1,79 @@
+use std::path::Path;
+
+use riku_route::{CaddyRoots, ReloadMethod, Reply, Request, RouterKind, Stage};
+use tempfile::TempDir;
+
+use super::*;
+
+fn roots_in(dir: &Path) -> NginxRoots {
+    NginxRoots {
+        site_root: dir.join("etc/nginx"),
+        cert_root: dir.join("etc/certs"),
+        socket_root: dir.join("sockets"),
+        static_root: dir.join("static"),
+        acme_root: dir.join("acme"),
+        nginx: dir.join("no_nginx"),
+        reload: ReloadMethod::Signal,
+        ipv6: false,
+        owner_uid: 0,
+    }
+}
+
+fn caddy_roots_in(dir: &Path) -> CaddyRoots {
+    CaddyRoots {
+        site_root: dir.join("etc/caddy"),
+        caddy: dir.join("no_caddy"),
+        caddyfile: dir.join("Caddyfile"),
+        admin_address: "unix//none".to_string(),
+        owner_uid: 0,
+    }
+}
+
+fn assert_failed_at(reply: &Reply, expected: Stage) {
+    match reply {
+        Reply::Failed { stage, .. } => assert_eq!(*stage, expected, "{reply:?}"),
+        other => panic!("expected a failure at {expected:?}, got {other:?}"),
+    }
+}
+
+#[test]
+fn non_root_refuses_to_start() {
+    let error = not_root(Uid::from_raw(1000)).expect("uid 1000 was allowed to start");
+
+    assert!(error.to_string().contains("must run as root"), "{error}");
+    assert!(not_root(Uid::from_raw(0)).is_none());
+}
+
+#[test]
+fn bad_app_name_is_a_schema_failure() {
+    let dir = TempDir::new().unwrap();
+
+    let reply = answer(
+        &roots_in(dir.path()),
+        &caddy_roots_in(dir.path()),
+        Request::Remove {
+            app: "../etc".to_string(),
+            router: RouterKind::Nginx,
+        },
+    );
+
+    assert_failed_at(&reply, Stage::Schema);
+}
+
+#[test]
+fn remove_of_an_app_with_no_config_does_not_reload() {
+    let dir = TempDir::new().unwrap();
+
+    for router in [RouterKind::Nginx, RouterKind::Caddy] {
+        let reply = answer(
+            &roots_in(dir.path()),
+            &caddy_roots_in(dir.path()),
+            Request::Remove {
+                app: "myapp".to_string(),
+                router,
+            },
+        );
+
+        assert_eq!(reply, Reply::Ok { reloaded: false }, "{router:?}");
+    }
+}

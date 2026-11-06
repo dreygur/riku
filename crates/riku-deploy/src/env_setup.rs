@@ -1,6 +1,6 @@
 //! Environment variable setup and LIVE_ENV writing for deployed apps.
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::fs;
 use std::os::unix::process::CommandExt;
@@ -130,6 +130,8 @@ pub fn run_release(release_cmd: &str, app_path: &Path) -> Result<()> {
 ///
 /// The file contains core riku variables plus everything from the app's
 /// `ENV` file, so that the supervisor and workers have a stable snapshot.
+/// It holds the same secrets as `ENV`, so it is `0600` too.
+#[allow(clippy::question_mark)]
 pub fn write_live_env(app: &str, paths: &RikuPaths, env: &HashMap<String, String>) -> Result<()> {
     let live_env_path = paths.env_root.join(app).join("LIVE_ENV");
     let mut content = String::new();
@@ -148,7 +150,10 @@ pub fn write_live_env(app: &str, paths: &RikuPaths, env: &HashMap<String, String
 
     let env_file = paths.env_root.join(app).join("ENV");
     if env_file.exists() {
-        let env_content = fs::read_to_string(&env_file)?;
+        let env_content = match fs::read_to_string(&env_file) {
+            Ok(content) => content,
+            Err(e) => return Err(anyhow!("cannot read {}: {e}", env_file.display())),
+        };
         for line in env_content.lines() {
             let line = line.trim();
             if !line.is_empty() && !line.starts_with('#') {
@@ -162,7 +167,12 @@ pub fn write_live_env(app: &str, paths: &RikuPaths, env: &HashMap<String, String
         content.push_str(&format!("{}={}\n", k, v));
     }
 
-    fs::write(&live_env_path, &content)?;
+    if let Err(e) = crate::util::create_private_dir(&paths.env_root.join(app)) {
+        return Err(e);
+    }
+    if let Err(e) = crate::util::write_private(&live_env_path, content.as_bytes()) {
+        return Err(anyhow!("cannot write {}: {e}", live_env_path.display()));
+    }
     Ok(())
 }
 
@@ -170,13 +180,19 @@ pub fn write_live_env(app: &str, paths: &RikuPaths, env: &HashMap<String, String
 ///
 /// This is the service-layer entry point for config changes. CLI commands must
 /// call this instead of wiring `write_config` + `do_deploy` themselves.
+#[allow(clippy::question_mark)]
 pub fn update_env_and_redeploy(
     app: &str,
     paths: &crate::config::RikuPaths,
     env: &HashMap<String, String>,
 ) -> Result<()> {
-    let config_file = paths.env_root.join(app).join("ENV");
-    crate::util::write_config(&config_file, env, "=")?;
+    let env_dir = paths.env_root.join(app);
+    if let Err(e) = crate::util::create_private_dir(&env_dir) {
+        return Err(e);
+    }
+    if let Err(e) = crate::util::write_config(&env_dir.join("ENV"), env, "=") {
+        return Err(e);
+    }
     let deltas = HashMap::new();
     super::do_deploy(app, paths, &deltas, None)
 }

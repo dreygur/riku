@@ -249,47 +249,6 @@ pub fn build_with_limits(
     Ok(())
 }
 
-/// Run `plugin pull-service <service>`, streaming output live. Used by the
-/// supervisor's periodic image-watch check to refresh one compose service
-/// without a full deploy.
-pub fn pull_service(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>, service: &str) -> Result<()> {
-    tracing::info!(
-        plugin = plugin.name.as_str(),
-        service,
-        "running pull-service"
-    );
-
-    let mut cmd = Command::new(&plugin.path);
-    cmd.arg("pull-service")
-        .arg(service)
-        .envs(ctx.build_env())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        // Own process group so a timeout can killpg() the whole tree.
-        .process_group(0);
-    let mut child = super::executor::spawn_retrying_etxtbsy(&mut cmd)
-        .map_err(|e| anyhow!("Failed to spawn '{} pull-service': {}", plugin.name, e))?;
-
-    let (tee_handles, _stderr_tail) = super::executor::tee_output(&mut child);
-    let timed_out = wait_with_timeout(&mut child, plugin_timeout());
-    let status = child.wait()?;
-    for h in tee_handles {
-        let _ = h.join();
-    }
-
-    if timed_out {
-        anyhow::bail!("pull-service timed out for plugin '{}'", plugin.name);
-    }
-    if !status.success() {
-        anyhow::bail!(
-            "pull-service failed: plugin '{}' exited with code {}",
-            plugin.name,
-            status.code().unwrap_or(-1)
-        );
-    }
-    Ok(())
-}
-
 /// Run `plugin destroy` before `riku destroy` deletes the app's files, so
 /// the plugin can remove what it started outside them (compose containers
 /// and networks). A failure carries the plugin's stderr.

@@ -20,7 +20,7 @@ TOKEN="$(dashboard_token)"
 # -t keeps a terminal on the server, so closing this one stops the
 # dashboard there instead of leaving it holding the port.
 remote=$(printf '%q ' sudo -u "$DEPLOY_USER" -H sh -c \
-    'exec "$HOME/.local/bin/riku" dashboard --bind "$1" --token "$2"' \
+    'exec /usr/local/bin/riku dashboard --bind "$1" --token "$2"' \
     sh "127.0.0.1:$PORT" "$TOKEN")
 
 echo "Dashboard API on http://127.0.0.1:$PORT, start the web UI with scripts/dashboard-web.sh"

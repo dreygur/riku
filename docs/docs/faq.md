@@ -82,10 +82,7 @@ Or create an `ENV` file in `~/.riku/envs/myapp/ENV`.
 
 **Q: Can I use custom nginx configuration?**
 
-**A:** Yes. Place `nginx.conf`, `nginx.custom.conf`, or `.nginx.conf` in your app directory, or use:
-```bash
-RIKU_NGINX_INCLUDE_FILE=custom.conf
-```
+**A:** No. An `nginx.conf`, `nginx.custom.conf`, `nginx.custom` or `.nginx.conf` in your app directory is not supported: riku ignores it, prints a warning at deploy, and uses the generated config. There is no snippet file either, and `RIKU_NGINX_INCLUDE_FILE` fails a deploy. The route covers domains, backends, TLS, static files and the HTTP mode. Set headers and caching in the app.
 
 **Q: Can I store my bare git repo in a custom location?**
 
@@ -104,7 +101,7 @@ git push riku main
 
 **Q: Does Riku auto-start the supervisor?**
 
-**A:** Yes. On first deployment, Riku automatically starts the supervisor daemon if not running. Nginx configs are also automatically symlinked to `/etc/nginx/sites-enabled/`.
+**A:** Yes. On first deployment, Riku automatically starts the supervisor daemon if not running. Nginx site files are written by the router helper to `/etc/riku/nginx`, which nginx loads through `/etc/nginx/conf.d/riku.conf` (both set up by `sudo riku init`).
 
 **Q: Do I need to install python3-venv for Python apps?**
 
@@ -162,12 +159,7 @@ Then obtain SSL certificates (ACME support is built-in).
 
 **Q: Can I use Riku with Cloudflare?**
 
-**A:** Yes. Set:
-```bash
-RIKU_NGINX_CLOUDFLARE_ACL=true
-```
-
-And create a Cloudflare Page Rule to "Always Use HTTPS".
+**A:** Yes, as a plain proxy in front of your domain. Riku has no Cloudflare IP allow list: `RIKU_NGINX_CLOUDFLARE_ACL` fails a deploy. If you want to limit direct access to the origin, do it in a firewall.
 
 **Q: How do I add custom cron jobs?**
 

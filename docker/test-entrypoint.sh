@@ -1,9 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# The deploy path reloads nginx after writing a config. With no nginx running
-# that reload fails on an empty /run/nginx.pid and the tests never exercise it.
+# Only the router helper writes nginx config and reloads nginx, so it runs as
+# root before any case deploys. nginx loads what it installs in /etc/riku/nginx.
+mkdir -p /etc/riku /etc/nginx/conf.d
+chmod 755 /etc/riku
+printf 'include /etc/riku/nginx/*.conf;\n' > /etc/nginx/conf.d/riku.conf
 nginx
+riku router-helper &
+for _ in $(seq 1 50); do
+    [ -S /run/riku-router.sock ] && break
+    sleep 0.1
+done
+if [ ! -S /run/riku-router.sock ]; then
+    echo "the router helper did not create /run/riku-router.sock" >&2
+    exit 1
+fi
 
 PASS=0
 FAIL=0
@@ -16,17 +28,15 @@ run_test() {
     test_home=$(mktemp -d /tmp/riku-test-XXXXXX)
     export RIKU_ROOT="$test_home"
 
-    # Riku symlinks each generated config into the nginx sites-enabled
-    # directory, which is system-wide and so outside $test_home. Point it
-    # inside instead: otherwise the rm -rf below leaves a dangling symlink in
-    # /etc/nginx/sites-enabled and every later test's nginx reload fails on it.
+    # Keep the legacy sites-enabled path inside $test_home so nothing a test
+    # does can reach the real /etc/nginx/sites-enabled.
     local sites_enabled="$test_home/nginx-sites-enabled"
     mkdir -p "$sites_enabled"
     export RIKU_NGINX_SITES_ENABLED="$sites_enabled"
 
     echo ""
     echo "━━━ $name ━━━"
-    if RIKU_ROOT="$test_home" RIKU_NGINX_SITES_ENABLED="$sites_enabled" bash "$script" 2>&1; then
+    if bash "$script" 2>&1; then
         echo "✓ PASS: $name"
         PASS=$((PASS + 1))
     else

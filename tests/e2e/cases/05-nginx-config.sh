@@ -22,30 +22,23 @@ EOF
 
 RIKU_SKIP_BUILD=1 push_app "$APP" "$src"
 
-# Riku writes nginx configs to $RIKU_ROOT/nginx/{app}.conf
-assert_file_exists "$RIKU_ROOT/nginx/${APP}.conf"
+# The router helper installs the site as root in /etc/riku/nginx/{app}.conf
+SITE="/etc/riku/nginx/${APP}.conf"
+assert_file_exists "$SITE"
 
 # The config must reference the app name
-assert_file_contains "$RIKU_ROOT/nginx/${APP}.conf" "$APP"
+assert_file_contains "$SITE" "$APP"
 
-# Validate the generated config with nginx -t by creating a minimal wrapper
-# nginx -t only tests the main config; we test our snippet as an included file.
-NGINX_TEST_CONF=$(mktemp /tmp/nginx-test-XXXXXX.conf)
-trap 'rm -f "$NGINX_TEST_CONF"' EXIT
+# The deploy user's tree holds no nginx config of its own
+assert_file_not_exists "$RIKU_ROOT/nginx/${APP}.conf"
 
-cat > "$NGINX_TEST_CONF" << NGINXCONF
-events {}
-http {
-    include $RIKU_ROOT/nginx/${APP}.conf;
-}
-NGINXCONF
-
-if nginx -t -c "$NGINX_TEST_CONF" 2>&1; then
+# The system nginx loads /etc/riku/nginx/*.conf, so its own check covers the site.
+if nginx -t 2>&1; then
     echo "nginx config is syntactically valid"
 else
-    echo "ASSERTION FAILED: nginx -t rejected the generated config"
+    echo "ASSERTION FAILED: nginx -t rejected the config"
     echo "Config contents:"
-    cat "$RIKU_ROOT/nginx/${APP}.conf"
+    cat "$SITE"
     exit 1
 fi
 

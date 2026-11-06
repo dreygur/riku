@@ -179,12 +179,12 @@ mod tests {
         let workers_enabled = riku_root.join("workers-enabled");
 
         // Create a sample worker config
-        let worker_conf = workers_available.join("worker-app.web.1.toml");
+        let worker_conf = workers_available.join("worker-app@web.1.toml");
         fs::write(&worker_conf, "[worker]\napp = \"worker-app\"\n")?;
 
         // Create symlink to enabled
         #[cfg(unix)]
-        std::os::unix::fs::symlink(&worker_conf, workers_enabled.join("worker-app.web.1.toml"))?;
+        std::os::unix::fs::symlink(&worker_conf, workers_enabled.join("worker-app@web.1.toml"))?;
 
         assert!(workers_available.exists());
         assert!(worker_conf.exists());

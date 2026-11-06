@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use riku_supervisor::config::app_worker_configs;
 use serde_json::json;
 
 use crate::config::RikuPaths;
@@ -59,10 +60,7 @@ pub fn cmd_agent_ps(paths: &RikuPaths, app: &str) -> AgentResponse {
         }
     };
 
-    let pattern = paths.workers_enabled.join(format!("{}-*.toml", app));
-    let worker_count = glob::glob(pattern.to_str().unwrap_or(""))
-        .map(|g| g.count())
-        .unwrap_or(0);
+    let worker_count = app_worker_configs(&paths.workers_enabled, &app).len();
 
     AgentResponse::success(json!({
         "app": app,
@@ -71,7 +69,7 @@ pub fn cmd_agent_ps(paths: &RikuPaths, app: &str) -> AgentResponse {
     }))
 }
 
-pub fn cmd_agent_restart(paths: &RikuPaths, app: &str, _process: Option<&str>) -> AgentResponse {
+pub fn cmd_agent_restart(paths: &RikuPaths, app: &str, service: Option<&str>) -> AgentResponse {
     let app = match exit_if_invalid(app, &paths.app_root) {
         Ok(a) => a,
         Err(_) => {
@@ -82,7 +80,7 @@ pub fn cmd_agent_restart(paths: &RikuPaths, app: &str, _process: Option<&str>) -
         }
     };
 
-    match crate::apps::cmd_restart(paths, &app) {
+    match crate::apps::cmd_restart(paths, &app, service) {
         Ok(_) => AgentResponse::success(json!({
             "message": format!("Restart completed for {}", app)
         })),
@@ -114,7 +112,7 @@ pub fn cmd_agent_stop(paths: &RikuPaths, app: &str) -> AgentResponse {
 }
 
 pub fn cmd_agent_stop_confirm(paths: &RikuPaths, app: &str, _token: &str) -> AgentResponse {
-    match crate::apps::cmd_stop(paths, app) {
+    match crate::apps::cmd_stop(paths, app, None) {
         Ok(_) => AgentResponse::success(json!({
             "message": format!("Application '{}' stopped successfully", app)
         })),
@@ -174,3 +172,7 @@ pub fn cmd_agent_stats(paths: &RikuPaths, app: Option<&str>) -> AgentResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "cmd_runtime_tests.rs"]
+mod tests;

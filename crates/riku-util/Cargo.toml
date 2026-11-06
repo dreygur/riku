@@ -20,6 +20,7 @@ regex = "1"
 colored = { workspace = true }
 tracing = { workspace = true }
 subtle = "2"
+serde = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

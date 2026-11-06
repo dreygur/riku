@@ -3,11 +3,13 @@ members = [
     "crates/riku",
     "crates/riku-config",
     "crates/riku-util",
+    "crates/riku-http",
     "crates/riku-args",
     "crates/riku-remote",
     "crates/riku-client",
     "crates/riku-error",
     "crates/riku-nginx",
+    "crates/riku-route",
     "crates/riku-caddy",
     "crates/riku-bundle",
     "crates/riku-plugins",
@@ -17,7 +19,8 @@ members = [
     "crates/riku-dashboard",
     "crates/riku-plugin-java",
     "crates/riku-plugin-clojure",
-    "crates/riku-plugin-container",
+    "crates/riku-container",
+    "crates/riku-sync",
 ]
 resolver = "2"
 
@@ -33,7 +36,10 @@ libc = "0.2"
 nix = { version = "0.31" }
 once_cell = "1"
 rand = "0.10"
-reqwest = { version = "0.13", features = ["blocking", "json"], default-features = false }
+# rustls with ring, no aws-lc. reqwest has no ring feature, so it gets no
+# provider and riku-http installs ring before building any client.
+reqwest = { version = "0.13", features = ["blocking", "json", "rustls-no-provider"], default-features = false }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
@@ -41,7 +47,12 @@ toml = "1"
 tracing = "0.1"
 which = "8"
 
+# opt-level "z": riku is mostly waiting on child processes, the engine and the
+# network, so a smaller binary is worth more than faster code. panic stays
+# "unwind": the supervisor catches panics in its threads and tasks and keeps
+# running, and "abort" would take every managed app down with it.
 [profile.release]
+opt-level = "z"
 lto = true
 strip = true
 codegen-units = 1

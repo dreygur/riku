@@ -1,10 +1,10 @@
 server {
-  listen              {{ RIKU_NGINX_IPV4_ADDRESS }}:80;
-{% if RIKU_NGINX_IPV6_ADDRESS %}
-  listen              {{ RIKU_NGINX_IPV6_ADDRESS }}:80;
-{% endif %}
+  listen              0.0.0.0:80;
+  {% if IPV6 %}listen              [::]:80;{% endif %}
   server_name         {{ RIKU_DOMAINS }};
   root                {{ RIKU_NGINX_DOCUMENT_ROOT }};
+
+{% include "nginx_site_locations.conf.tera" %}
 
   location ~* \.(jpg|jpeg|png|gif|ico|css|js)$ {
     expires 1y;
@@ -21,12 +21,4 @@ server {
   add_header X-XSS-Protection "1; mode=block" always;
   add_header Referrer-Policy "strict-origin-when-cross-origin" always;
   add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
-
-{% if RIKU_NGINX_INCLUDE_CONTENT %}
-  # Custom nginx configuration from file
-  {{ RIKU_NGINX_INCLUDE_CONTENT }}
-{% elif RIKU_NGINX_INCLUDE_FILE %}
-  # Custom nginx configuration
-  include {{ RIKU_NGINX_INCLUDE_FILE }};
-{% endif %}
 }

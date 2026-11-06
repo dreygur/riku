@@ -14,7 +14,7 @@ use anyhow::{anyhow, Result};
 use crate::agent::auth::AgentSession;
 use crate::cli::{require_app, Commands};
 use crate::config::RikuPaths;
-use crate::{agent, apps, backup, container, doctor, git, quickstart, scp, setup};
+use crate::{agent, apps, backup, container, doctor, git, quickstart, router_helper, scp, setup};
 
 /// What `riku agent` was asked to do. The flags are checked in this order.
 enum AgentMode {
@@ -113,7 +113,9 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
         Commands::Deploy { app, from } => {
             require_app(app).and_then(|app| apps::cmd_deploy(paths, &app, from.as_deref()))
         }
-        Commands::Destroy { app } => apps::cmd_destroy(paths, &app),
+        Commands::Destroy { app, force } => {
+            apps::cmd_destroy(paths, &app, apps::DestroyMode::from(force))
+        }
         Commands::Logs {
             app,
             process,
@@ -128,8 +130,10 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
         Commands::Stats(cmd) => app_cmds::run_stats(paths, cmd),
         Commands::Server(cmd) => crate::remote::server_cmd::run(cmd),
         Commands::Run { app, cmd } => apps::cmd_run(paths, &app, &cmd),
-        Commands::Restart { app, hot } => app_cmds::run_restart(paths, app, hot),
-        Commands::Stop { app } => require_app(app).and_then(|app| apps::cmd_stop(paths, &app)),
+        Commands::Restart { app, service, hot } => app_cmds::run_restart(paths, app, service, hot),
+        Commands::Stop { app, service } => {
+            require_app(app).and_then(|app| apps::cmd_stop(paths, &app, service.as_deref()))
+        }
         Commands::Rollback { app, to, list } => {
             require_app(app).and_then(|app| apps::cmd_rollback(paths, &app, to.as_deref(), list))
         }
@@ -156,7 +160,6 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
         Commands::Doctor { fix } => doctor::cmd_doctor(paths, fix),
         Commands::Dashboard { .. } => Err(anyhow!("dashboard is run by the riku binary")),
         Commands::Addon(cmd) => app_cmds::run_addon(paths, cmd),
-        Commands::Update => apps::cmd_update(),
         Commands::InstallPlugins { plugins } => install_plugins(paths, plugins),
         Commands::PluginEmit {
             event_name,
@@ -164,6 +167,8 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
             app,
         } => apps::cmd_plugin_emit(paths, &event_name, &data, app.as_deref()),
         Commands::Supervisor => apps::cmd_supervisor(paths),
+        Commands::RouterHelper => router_helper::cmd_router_helper(),
+        Commands::RouterRenew { app } => crate::deploy::router::renew(&app, paths),
         Commands::Plugin(cmd) => riku_remote::plugin_cmd::run_plugin(cmd),
         Commands::Plugins(cmd) => plugins::run_plugins(paths, cmd),
         Commands::Hook(cmd) => plugins::run_hook(paths, cmd),

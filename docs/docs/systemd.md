@@ -1,171 +1,77 @@
 # Systemd Integration
 
-Riku automatically generates and installs a systemd user service when you run `riku init`. No manual service file copying is required.
+`sudo riku init` installs and starts two system services. No manual service file copying is required.
+
+| Unit | Runs as | Does |
+|------|---------|------|
+| `riku.service` | the deploy user | the process supervisor, `riku supervisor` |
+| `riku-router-helper.service` | root | writes router config and reloads nginx or Caddy |
+
+Both run the root owned `/usr/local/bin/riku`. Both start on boot. Without root, init writes a user unit for the supervisor only (`~/.config/systemd/user/riku.service`), and there is no router helper.
 
 ---
 
-## Quick Start
+## Supervisor Service
 
-### Enable the Service
-
-After running `riku init`, the service file is placed at `~/.config/systemd/user/riku.service`. Enable and start it:
-
-```bash
-systemctl --user daemon-reload
-systemctl --user enable riku
-systemctl --user start riku
-
-# Check status
-systemctl --user status riku
-```
-
----
-
-## Service File
-
-The generated service file (`~/.config/systemd/user/riku.service`) looks like:
+The generated `/etc/systemd/system/riku.service` is hardened and limited. The parts that matter:
 
 ```ini
-[Unit]
-Description=Riku Process Supervisor
-After=network.target
-
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/riku supervisor
+User=riku
+ExecStart=/usr/local/bin/riku supervisor
 Restart=always
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
-
-[Install]
-WantedBy=default.target
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+MemoryMax=512M
+CPUQuota=50%
 ```
 
-The binary is installed at `~/.local/bin/riku` (i.e., `%h/.local/bin/riku` in systemd notation).
-
----
-
-## Nginx Auto-Reload
-
-A root `riku init` installs this watcher system-wide for the active router (see [Caddy](caddy.md) for the Caddy one). The steps below are for a user-level install.
-
-To automatically reload nginx when Riku generates new configurations, enable a path watcher. Create `~/.config/systemd/user/riku-nginx.path`:
-
-```ini
-[Unit]
-Description=Watch for Riku nginx config changes
-
-[Path]
-PathChanged=%h/.riku/nginx
-
-[Install]
-WantedBy=default.target
-```
-
-And `~/.config/systemd/user/riku-nginx-reload.service`:
-
-```ini
-[Unit]
-Description=Reload nginx on Riku config change
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/sudo /bin/systemctl reload nginx
-```
-
-Enable:
+`ReadWritePaths` lists `~/.riku`, `/run/riku-sockets`, `/var/lib/riku/acme` and `/var/lib/riku/static`. Everything else on disk is read only to the supervisor and the apps it starts.
 
 ```bash
-systemctl --user daemon-reload
-systemctl --user enable riku-nginx.path
-systemctl --user start riku-nginx.path
+sudo systemctl status riku
+sudo systemctl restart riku
+sudo journalctl -u riku -f
 ```
 
 ---
 
-## Usage
+## Router Helper Service
 
-### Check Status
-
-```bash
-# Check riku service status
-systemctl --user status riku
-
-# View logs
-journalctl --user -u riku -f
-
-# Check if supervisor is running
-systemctl --user is-active riku
-```
-
-### Restart Service
+`riku-router-helper.service` runs `/usr/local/bin/riku router-helper` as root. It binds `/run/riku-router.sock` itself, which only the deploy user can use, and restarts after a crash. It runs with `ProtectHome=yes` and `NoNewPrivileges=yes`.
 
 ```bash
-systemctl --user restart riku
+sudo systemctl status riku-router-helper
+sudo journalctl -u riku-router-helper -n 50
+sudo systemctl restart riku-router-helper
 ```
 
-### Stop Service
-
-```bash
-systemctl --user stop riku
-```
-
-### View Logs
-
-```bash
-# Recent logs
-journalctl --user -u riku -n 50
-
-# Follow logs in real-time
-journalctl --user -u riku -f
-
-# Logs from today
-journalctl --user -u riku --since today
-```
+A deploy fails with the helper's message when it cannot reach the socket. See [Nginx](nginx.md#the-router-helper) for what the helper writes and where.
 
 ---
 
-## Troubleshooting
+## Upgrading
 
-### Service Won't Start
-
-```bash
-# Check for errors
-systemctl --user status riku
-journalctl --user -u riku -n 100
-
-# Verify binary exists
-ls -la ~/.local/bin/riku
-
-# Test binary manually
-~/.local/bin/riku --help
-```
-
-### Nginx Not Reloading
+A new `riku` binary needs root to install. Install it, then run init again so the units and the helper are rewritten, and restart the services:
 
 ```bash
-# Check path watcher status
-systemctl --user status riku-nginx.path
-
-# Test nginx configuration
-sudo nginx -t
+curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sudo sh
+sudo riku init
+sudo systemctl restart riku riku-router-helper
 ```
+
+Then, as the deploy user, run `riku doctor --fix` to redeploy apps that were routed by an older version.
 
 ---
 
 ## Uninstall
 
 ```bash
-# Stop and disable services
-systemctl --user stop riku
-systemctl --user disable riku
-
-# Remove service files
-rm ~/.config/systemd/user/riku.service
-rm -f ~/.config/systemd/user/riku-nginx.path
-rm -f ~/.config/systemd/user/riku-nginx-reload.service
-
-# Reload systemd
-systemctl --user daemon-reload
+sudo systemctl disable --now riku riku-router-helper
+sudo rm /etc/systemd/system/riku.service /etc/systemd/system/riku-router-helper.service
+sudo systemctl daemon-reload
 ```
 
 ---
@@ -173,3 +79,4 @@ systemctl --user daemon-reload
 ## See Also
 
 - [Nginx Configuration](nginx.md) - How Riku generates nginx configs
+- [Caddy Router](caddy.md) - The Caddy router

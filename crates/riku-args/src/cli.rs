@@ -124,10 +124,14 @@ pub enum Commands {
     },
 
     /// Remove an app (preserves data dir)
-    #[command(after_help = "Examples:\n  riku destroy myapp")]
+    #[command(after_help = "Examples:\n  riku destroy myapp\n  riku destroy myapp --force")]
     Destroy {
         /// App name. Always typed: destroy does not prompt.
         app: String,
+        /// Remove riku's files and route even when the container engine is
+        /// unreachable. Running containers are left behind.
+        #[arg(long)]
+        force: bool,
     },
 
     /// Tail app logs
@@ -192,20 +196,26 @@ pub enum Commands {
     },
 
     /// Restart an app (hot reload for zero downtime)
-    #[command(after_help = "Examples:\n  riku restart myapp\n  riku restart myapp --hot")]
+    #[command(
+        after_help = "Examples:\n  riku restart myapp\n  riku restart myapp --hot\n  riku restart myapp web"
+    )]
     Restart {
         /// App name (default: the app of this repo's riku git remote)
         app: Option<String>,
+        /// Only this service of a container app
+        service: Option<String>,
         /// Use hot reload (zero downtime)
-        #[arg(long)]
+        #[arg(long, conflicts_with = "service")]
         hot: bool,
     },
 
     /// Stop an app
-    #[command(after_help = "Examples:\n  riku stop myapp")]
+    #[command(after_help = "Examples:\n  riku stop myapp\n  riku stop myapp worker")]
     Stop {
         /// App name (default: the app of this repo's riku git remote)
         app: Option<String>,
+        /// Only this service of a container app
+        service: Option<String>,
     },
 
     /// Roll an app back to a previous release
@@ -281,9 +291,9 @@ pub enum Commands {
     },
 
     /// Diagnose the Riku installation (deps, dirs, systemd, nginx, disk, SSH)
-    #[command(after_help = "Examples:\n  riku doctor\n  sudo riku doctor")]
+    #[command(after_help = "Examples:\n  riku doctor\n  sudo riku doctor\n  riku doctor --fix")]
     Doctor {
-        /// Rewrite old style deploy key forced commands in authorized_keys
+        /// Redeploy apps whose nginx config exists only in the old ~/.riku/nginx
         #[arg(long)]
         fix: bool,
     },
@@ -307,10 +317,6 @@ pub enum Commands {
         after_help = "Examples:\n  riku addon list\n  riku addon create postgres db1\n  riku addon bind db1 myapp"
     )]
     Addon(AddonCmd),
-
-    /// Self-update the riku binary
-    #[command(after_help = "Examples:\n  riku update")]
-    Update,
 
     /// Install bundled plugins to ~/.riku/plugins/
     ///
@@ -349,6 +355,23 @@ pub enum Commands {
     /// Start the process supervisor daemon
     #[command(after_help = "Examples:\n  riku supervisor")]
     Supervisor,
+
+    /// Run the root router helper that installs router config for the deploy user
+    #[command(
+        name = "router-helper",
+        after_help = "Examples:\n  sudo riku router-helper"
+    )]
+    RouterHelper,
+
+    /// Send an app's renewed certificate to the router helper
+    #[command(
+        name = "router-renew",
+        after_help = "Examples:\n  riku router-renew myapp"
+    )]
+    RouterRenew {
+        /// App whose certificate was renewed
+        app: String,
+    },
 
     /// Manage client-side plugins (local scripts that extend riku CLI)
     #[command(

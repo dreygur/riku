@@ -18,6 +18,7 @@ use super::ProcessManager;
 
 impl ProcessManager {
     /// Spawn a new process based on the worker configuration.
+    #[allow(clippy::question_mark)]
     pub fn spawn_process(&mut self, config: &WorkerConfig) -> Result<()> {
         use std::os::unix::process::CommandExt;
 
@@ -25,18 +26,20 @@ impl ProcessManager {
         let worker_kind = &config.worker.kind;
         let ordinal = config.worker.ordinal;
 
-        // Create a unique identifier for this process
-        let process_id = format!("{}-{}-{}", app_name, worker_kind, ordinal);
+        let process_id = config.worker.name().to_string();
 
-        // Check if process already exists
         if self.processes.contains_key(&process_id) {
             tracing::info!("Process {} already exists, stopping it first", process_id);
-            self.stop_process_by_id(&process_id)?;
+            if let Err(e) = self.stop_process_by_id(&process_id) {
+                return Err(e);
+            }
         }
 
-        // Open log files for stdout and stderr
         let log_path = &config.options.log_file;
-        let log_handles = Self::open_log_files(log_path)?;
+        let log_handles = match Self::open_log_files(log_path) {
+            Ok(handles) => handles,
+            Err(e) => return Err(e),
+        };
 
         // Resolve optional uid/gid names to numeric IDs before forking.
         // This must happen in the parent so we can use the libc name-lookup functions safely.
@@ -65,15 +68,18 @@ impl ProcessManager {
         // spawning, so the constraints already exist when the worker joins
         // it from within pre_exec.
         let cgroup: Option<WorkerCgroup> = match &config.options.isolation {
-            Some(opts) => Some(WorkerCgroup::provision(
-                &process_id,
-                &CgroupLimits {
+            Some(opts) => {
+                let limits = CgroupLimits {
                     memory_max_bytes: opts.max_memory_bytes,
                     cpu_quota_us: opts.cpu_quota_us,
                     cpu_period_us: opts.cpu_period_us,
                     pids_max: opts.max_pids,
-                },
-            )?),
+                };
+                match WorkerCgroup::provision(&process_id, &limits) {
+                    Ok(cgroup) => Some(cgroup),
+                    Err(e) => return Err(e),
+                }
+            }
             None => None,
         };
         let cgroup_for_child = cgroup.clone();
@@ -93,14 +99,17 @@ impl ProcessManager {
         // this `Command::spawn()` has returned. See isolation.rs for why
         // that fork can't happen inside this process's own `pre_exec`.
         let mut cmd = if namespace_config.enabled {
-            let shim_exe = std::env::current_exe()?;
+            let shim_exe = match std::env::current_exe() {
+                Ok(exe) => exe,
+                Err(e) => return Err(e.into()),
+            };
+            let Some(isolated_root) = namespace_config.isolated_root.as_ref() else {
+                return Err(anyhow::anyhow!(
+                    "isolation enabled but no root_dir configured"
+                ));
+            };
             let mut c = Command::new(shim_exe);
-            c.arg("__ns-shim").env(
-                "RIKU_NS_ROOT",
-                namespace_config.isolated_root.as_ref().ok_or_else(|| {
-                    anyhow::anyhow!("isolation enabled but no root_dir configured")
-                })?,
-            );
+            c.arg("__ns-shim").env("RIKU_NS_ROOT", isolated_root);
             c.env("RIKU_NS_CMD", &config.worker.command);
             c
         } else {
@@ -124,14 +133,20 @@ impl ProcessManager {
                 .pre_exec(move || {
                     // Drop to configured gid/uid if specified (gid must be set before uid).
                     if let Some(gid) = target_gid {
-                        nix::unistd::setgid(gid).map_err(|e| {
-                            std::io::Error::new(std::io::ErrorKind::PermissionDenied, e.to_string())
-                        })?;
+                        if let Err(e) = nix::unistd::setgid(gid) {
+                            return Err(std::io::Error::new(
+                                std::io::ErrorKind::PermissionDenied,
+                                e.to_string(),
+                            ));
+                        }
                     }
                     if let Some(uid) = target_uid {
-                        nix::unistd::setuid(uid).map_err(|e| {
-                            std::io::Error::new(std::io::ErrorKind::PermissionDenied, e.to_string())
-                        })?;
+                        if let Err(e) = nix::unistd::setuid(uid) {
+                            return Err(std::io::Error::new(
+                                std::io::ErrorKind::PermissionDenied,
+                                e.to_string(),
+                            ));
+                        }
                     }
 
                     // Join the cgroup using our own (real, top-level) PID.
@@ -140,13 +155,12 @@ impl ProcessManager {
                     // membership is inherited across both the shim's own
                     // fork and its exec of the real worker.
                     if let Some(cgroup) = &cgroup_for_child {
-                        cgroup.add_self()?;
+                        if let Err(e) = cgroup.add_self() {
+                            return Err(e);
+                        }
                     }
 
-                    // Apply configured resource limits
-                    limits.apply()?;
-
-                    Ok(())
+                    limits.apply()
                 });
         }
 
@@ -155,8 +169,10 @@ impl ProcessManager {
             cmd.env(key, value);
         }
 
-        // Spawn the process
-        let mut child = cmd.spawn()?;
+        let mut child = match cmd.spawn() {
+            Ok(child) => child,
+            Err(e) => return Err(e.into()),
+        };
 
         // Take the pipes now (must happen before `child` is moved into
         // SpawnedProcess below), but don't start the reader threads yet,
@@ -171,7 +187,10 @@ impl ProcessManager {
         // so the original `log_handles` can be dropped right after this.
         let log_handles_for_threads = match &log_handles {
             Some((stdout_log, stderr_log)) => {
-                Some((stdout_log.try_clone()?, stderr_log.try_clone()?))
+                match (stdout_log.try_clone(), stderr_log.try_clone()) {
+                    (Ok(stdout_log), Ok(stderr_log)) => Some((stdout_log, stderr_log)),
+                    (Err(e), _) | (_, Err(e)) => return Err(e.into()),
+                }
             }
             None => None,
         };
@@ -182,21 +201,25 @@ impl ProcessManager {
 
         // Create the SpawnedProcess wrapper.
         // If this fails, kill the child to prevent orphaned processes.
-        let spawned_process: super::SpawnedProcess =
-            match super::SpawnedProcess::new_with_cgroup(child, config.clone(), cgroup) {
-                Ok(sp) => sp,
-                Err(e) => {
-                    // Kill the child process using the saved PID
-                    let pid = Pid::from_raw(child_pid as i32);
-                    let _ = kill(pid, Signal::SIGKILL);
-                    tracing::error!(
-                        "Failed to create SpawnedProcess, killed child PID {}: {}",
-                        child_pid,
-                        e
-                    );
-                    return Err(e);
-                }
-            };
+        let spawned_process: super::SpawnedProcess = match super::SpawnedProcess::new_with_cgroup(
+            child,
+            config.clone(),
+            cgroup,
+            self.pid_dir.as_deref(),
+        ) {
+            Ok(sp) => sp,
+            Err(e) => {
+                // Kill the child process using the saved PID
+                let pid = Pid::from_raw(child_pid as i32);
+                let _ = kill(pid, Signal::SIGKILL);
+                tracing::error!(
+                    "Failed to create SpawnedProcess, killed child PID {}: {}",
+                    child_pid,
+                    e
+                );
+                return Err(e);
+            }
+        };
         let pid = spawned_process.pid_as_u32();
 
         // Now that the wrapper exists, start the log capture threads.

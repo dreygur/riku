@@ -8,16 +8,14 @@
 
 use std::fs;
 use std::io::{ErrorKind, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, Result};
 
-use crate::util::authorized_keys::{authorized_keys_path, migrate_file};
+use crate::util::authorized_keys::authorized_keys_path;
 use crate::util::public_key::{parse_public_keys, PublicKey};
-use crate::util::{echo, setup_authorized_keys};
-
-use super::binary::get_user_install_directory;
+use crate::util::{echo, setup_authorized_keys_in, ROOT_BINARY};
 
 /// The keys in a `.pub` or `authorized_keys` file.
 pub fn read_key_file(path: &Path) -> Result<Vec<PublicKey>> {
@@ -39,19 +37,8 @@ pub fn parse_key_args(lines: &[String]) -> Result<Vec<PublicKey>> {
         .collect()
 }
 
-fn authorized_keys_file() -> Result<PathBuf> {
-    match dirs::home_dir() {
-        Some(home) => Ok(authorized_keys_path(&home)),
-        None => Err(anyhow!("could not determine the home directory")),
-    }
-}
-
-#[allow(clippy::question_mark)]
-fn authorized_keys_text() -> Result<String> {
-    let path = match authorized_keys_file() {
-        Ok(path) => path,
-        Err(e) => return Err(e),
-    };
+fn authorized_keys_text(home: &Path) -> Result<String> {
+    let path = authorized_keys_path(home);
     match fs::read_to_string(&path) {
         Ok(text) => Ok(text),
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(String::new()),
@@ -90,14 +77,20 @@ fn fingerprint(key: &PublicKey) -> Result<String> {
     }
 }
 
+/// Authorize `key` in the `authorized_keys` of the user whose home is
+/// `home`, forced through the root owned riku binary.
+fn authorize_key(home: &Path, fingerprint: &str, key: &PublicKey) -> Result<()> {
+    setup_authorized_keys_in(home, fingerprint, ROOT_BINARY, &key.to_string())
+}
+
 /// Add `keys` to this user's `authorized_keys`, skipping any already there.
 #[allow(clippy::question_mark)]
 pub fn add_deploy_keys(keys: &[PublicKey]) -> Result<()> {
-    let binary = match get_user_install_directory() {
-        Ok(dir) => dir.join("riku"),
-        Err(e) => return Err(e),
+    let home = match dirs::home_dir() {
+        Some(home) => home,
+        None => return Err(anyhow!("could not determine the home directory")),
     };
-    let existing = match authorized_keys_text() {
+    let existing = match authorized_keys_text(&home) {
         Ok(text) => text,
         Err(e) => return Err(e),
     };
@@ -111,32 +104,14 @@ pub fn add_deploy_keys(keys: &[PublicKey]) -> Result<()> {
             Ok(fp) => fp,
             Err(e) => return Err(e),
         };
-        if let Err(e) = setup_authorized_keys(&fp, &binary.to_string_lossy(), &key.to_string()) {
+        if let Err(e) = authorize_key(&home, &fp, key) {
             return Err(e);
         }
         echo(&format!("      ✓ Added deploy key {fp}"), "green");
     }
-
-    let path = match authorized_keys_file() {
-        Ok(path) => path,
-        Err(e) => return Err(e),
-    };
-    if nix::unistd::geteuid().is_root() {
-        echo(
-            "      ! Skipped migrating existing deploy keys as root: run sudo -H -u <deploy user> riku doctor --fix",
-            "yellow",
-        );
-        return Ok(());
-    }
-    match migrate_file(&path) {
-        Ok(0) => Ok(()),
-        Ok(count) => {
-            echo(
-                &format!("      ✓ Migrated {count} existing deploy key(s)"),
-                "green",
-            );
-            Ok(())
-        }
-        Err(e) => Err(anyhow!("failed to migrate existing deploy keys: {e}")),
-    }
+    Ok(())
 }
+
+#[cfg(test)]
+#[path = "deploy_keys_tests.rs"]
+mod tests;

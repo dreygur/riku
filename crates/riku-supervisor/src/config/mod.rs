@@ -2,8 +2,12 @@
 //!
 //! Defines the structure for TOML-based worker configurations.
 
+use riku_util::file_names::worker::WorkerName;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+mod ownership;
+pub use ownership::app_worker_configs;
 
 #[cfg(test)]
 mod tests;
@@ -45,6 +49,13 @@ pub struct WorkerInfo {
     pub kind: String,
     pub command: String,
     pub ordinal: u32,
+}
+
+impl WorkerInfo {
+    /// The process id and config file name this worker runs under.
+    pub fn name(&self) -> WorkerName {
+        WorkerName::new(&self.app, &self.kind, self.ordinal)
+    }
 }
 
 /// Options for the worker process.

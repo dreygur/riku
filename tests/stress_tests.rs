@@ -23,6 +23,10 @@ use std::sync::{Arc, Barrier, RwLock};
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
+#[path = "integration_tests/mock_supervisor.rs"]
+mod mock_supervisor;
+
+use mock_supervisor::MockSupervisor;
 use riku::config::router::{self, Router};
 use riku::config::RikuPaths;
 use riku::error::DeployError;
@@ -46,7 +50,8 @@ static FORK_GATE: RwLock<()> = RwLock::new(());
 /// The host router is Caddy: with no `RIKU_DOMAINS` set, routing is a file
 /// removal, so deploys here need no `nginx` binary for `nginx -t`.
 fn make_paths(tmp: &TempDir) -> RikuPaths {
-    let paths = RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
+    let mut paths = RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
+    paths.caddy_root = tmp.path().join("caddy-sites");
     for dir in &[
         &paths.app_root,
         &paths.env_root,
@@ -62,6 +67,14 @@ fn make_paths(tmp: &TempDir) -> RikuPaths {
         fs::create_dir_all(dir).expect("create riku dir");
     }
     router::save(&paths, &Router::Caddy).expect("write router file");
+    paths.reload_programs.caddy = tmp.path().join("mock_caddy");
+    fs::write(&paths.reload_programs.caddy, "#!/bin/sh\nexit 0\n").expect("write mock caddy");
+    fs::set_permissions(
+        &paths.reload_programs.caddy,
+        fs::Permissions::from_mode(0o755),
+    )
+    .expect("chmod mock caddy");
+    riku_route::serve_caddy_for_tests(&mut paths);
     paths
 }
 
@@ -101,7 +114,7 @@ esac
 /// #2 (the per-app `flock` in `deploy::lock`) doesn't touch.
 ///
 /// Without the lock, all five threads would race on `git_reset` (skipped
-/// here), worker TOML writes, and the ENV file's `RIKU_UPSTREAM_PORT`
+/// here), worker TOML writes, and the ENV file's routing keys
 /// read-modify-write: exactly the corruption fix #2 closes off.
 #[test]
 fn test_concurrent_deploy_lockout() {
@@ -121,6 +134,7 @@ fn test_concurrent_deploy_lockout() {
     fs::write(paths.env_root.join(app).join("ENV"), "PORT=5000\n").unwrap();
     fs::create_dir_all(paths.log_root.join(app)).unwrap();
 
+    let _supervisor = MockSupervisor::start(&paths);
     const N: usize = 5;
     let barrier = Arc::new(Barrier::new(N));
 
@@ -180,7 +194,7 @@ fn test_concurrent_deploy_lockout() {
 
     // The winning deploy must have actually run to completion, not just
     // acquired the lock and stopped.
-    let web_cfg = paths.workers_available.join("lockapp-web-1.toml");
+    let web_cfg = paths.workers_available.join("lockapp@web.1.toml");
     assert!(
         web_cfg.exists(),
         "the winning deploy should have written the worker config"
@@ -205,6 +219,7 @@ fn test_deploy_lock_released_after_completion() {
     fs::create_dir_all(paths.env_root.join(app)).unwrap();
     fs::create_dir_all(paths.log_root.join(app)).unwrap();
 
+    let _supervisor = MockSupervisor::start(&paths);
     let deltas: HashMap<String, i64> = HashMap::new();
     riku::deploy::do_deploy(app, &paths, &deltas, None).expect("first deploy should succeed");
     riku::deploy::do_deploy(app, &paths, &deltas, None)
@@ -230,6 +245,7 @@ fn test_concurrent_deploys_of_different_apps_do_not_contend() {
         fs::create_dir_all(paths.log_root.join(app)).unwrap();
     }
 
+    let _supervisor = MockSupervisor::start(&paths);
     let barrier = Arc::new(Barrier::new(apps.len()));
     let handles: Vec<_> = apps
         .iter()

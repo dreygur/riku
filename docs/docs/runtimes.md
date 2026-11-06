@@ -427,11 +427,22 @@ async fn main() -> std::io::Result<()> {
 
 ### Detection
 
-Riku detects container apps by the presence of a `Dockerfile`, `Containerfile`,
-or a compose file (`compose.yaml`, `compose.yml`, `docker-compose.yaml`,
-`docker-compose.yml`, checked in that order). It auto-detects whether Docker or
-Podman is installed and uses whichever is available (Podman preferred if both
-are present).
+Riku runs an app as containers when it has a compose file (`compose.yaml`,
+`compose.yml`, `docker-compose.yaml`, `docker-compose.yml`, checked in that
+order) or a `Containerfile` or `Dockerfile` at the app root, and
+`RIKU_RUNTIME` is unset or `container`. Set `RIKU_RUNTIME` to another runtime
+to keep deploying such a repo with that runtime instead.
+
+Riku drives the engine named in `~/.riku/CONTAINER_ENGINE`, or else the
+first of `docker`, `podman`, `nerdctl` and `finch` found on `PATH`, in that
+order. Docker must be version 23 or newer (or an engine with a compatible
+CLI), since riku reads engine output with `--format json`. Riku reads the
+compose file itself and talks to the engine directly; no `compose` tool runs.
+
+The compose file, or a folder on its path, may be a symlink as long as its
+real target stays inside the app directory (for example
+`docker-compose.yml -> deploy/prod.yml`). A link that leaves the app is
+refused, naming the path.
 
 To deploy with a compose file under another name, set `COMPOSE_FILE` in the
 app's env. It wins over the default names and claims the app for the container
@@ -456,13 +467,19 @@ RUN npm ci --production
 CMD ["node", "server.js"]
 ```
 
-Riku builds the image (`docker build` / `podman build`) and runs it with
-`docker run --rm -p $PORT:$PORT <image>`.
+Riku builds the image and runs it as one service named `app`. The app must
+listen on port 8000 inside the container; riku also sets `PORT=8000` there,
+so an app that reads `$PORT` works unchanged. Riku publishes that port on a
+free 127.0.0.1 port and routes the app's domains to it. The service's restart
+policy is `unless-stopped`: the supervisor starts it again whenever it exits,
+until `riku stop <app>` stops it. It stays stopped until `riku restart <app>`
+or a new deploy.
 
 ### Compose apps
 
-A compose file describes one or more pre-built images to run, no local
-`Dockerfile` needed:
+A compose file describes one or more services. Each one is either pulled
+from a registry (`image:`) or built on the server from the checked out repo
+(`build:`), so one stack can mix both:
 
 ```yaml
 # compose.yml
@@ -470,25 +487,198 @@ services:
   web:
     image: ghcr.io/your-org/your-app:latest
     ports:
-      - "127.0.0.1:${PORT}:8080"
+      - "8080"
   worker:
-    image: ghcr.io/your-org/your-app-worker:latest
+    build: ./worker
 ```
 
-For a compose app, `riku deploy` logs in to the configured registry (see
-[GHCR authentication](#ghcr-authentication) below), runs `compose pull`, then
-`compose build`, and starts the stack with `compose up`: supervised as a
-single riku process, the same way any other app's `web` process is. No
-Procfile is needed: the plugin supplies that `compose up` command. Publish
-the web service on `${PORT}`, the port riku assigns and routes to. `riku
-destroy` runs `compose down`, which removes the containers and network and
-keeps volumes.
+On deploy riku logs in to the configured registry (see
+[GHCR authentication](#ghcr-authentication) below), pulls the `image`
+services, builds the `build` services, then replaces each service's
+containers in start order (see [Rolling replacement](#rolling-replacement)).
+Every copy is its own container, named `<app>.<service>.<n>`, on the app's
+network `riku-<app>`, where the other services reach it by its service name.
+Service names may not contain `.`, so no two apps can share a container name.
+A top level volume `<key>` is the engine volume `<app>.<key>`, and volume
+names may not contain `.` either, so no two apps can share a volume. The
+compose `name` key and `COMPOSE_PROJECT_NAME` do not affect any name.
+Containers of a service the compose file no longer has are removed.
 
-Services with a `build:` section are built on the server from the checked out
-repo instead of pulled, so one stack can mix registry images and local builds.
-The pull skips them (`--ignore-buildable` on docker compose; podman-compose
-skips them on its own), and `compose build` does nothing for a stack that has
-none.
+A container app's Procfile is read only for its `release` line. That command
+runs once per deploy, after the images are ready and before any copy is
+replaced, in a one-off container from the new image of the routed service
+(or else the first built service), with the app's env, network and mounts. A
+nonzero exit stops the deploy.
+
+App env values are passed to every container, except `RIKU_*` keys, which
+configure riku itself. A service's own `environment` wins over the app env.
+
+`riku destroy` stops and removes every copy and the app network and keeps
+the volumes. When the engine does not answer, destroy refuses and removes
+nothing, since the containers would keep running with no app behind them.
+`riku destroy <app> --force` removes riku's files and route anyway and warns
+that the containers may still run.
+
+### Ports and routing
+
+Published ports listen on 127.0.0.1. A service gets all interfaces only with
+the label `riku.public: "true"`. A port entry that names a host IP, such as
+`"127.0.0.1:8080:8080"`, or a long form entry with `host_ip` or `mode`, is
+refused with "use the riku.public label instead of a host IP".
+
+One service serves the app's domains. With exactly one published TCP port in
+the whole project, that port is routed. With several, label the routed
+service with `riku.http` set to its published host port (`"8080:80"` with
+`riku.http: "8080"`); several published ports without the label, or the
+label on more than one service, fail the deploy. UDP ports are never routed.
+An app with no published TCP port is taken off the router.
+
+Each copy of the routed service gets its own free host port on 127.0.0.1,
+whatever host port the compose file names, and the router lists every copy
+as a backend.
+
+### Labels
+
+Set these on a compose service:
+
+| Label | Meaning |
+|-------|---------|
+| `riku.public` | `"true"` publishes the service's ports on all interfaces. `"false"` or absent keeps them on 127.0.0.1. Any other value fails the deploy |
+| `riku.http` | The published host port that carries the app's HTTP traffic, when the project publishes more than one |
+| `riku.health` | A path, such as `/healthz`, that riku requests on a new copy of the routed service before it gets traffic |
+
+Riku sets these on every container it starts, and a compose file that sets
+one of them is refused:
+
+| Label | Meaning |
+|-------|---------|
+| `riku.app` | The app the container belongs to |
+| `riku.service` | The compose service |
+| `riku.copy` | The copy number, from 1 |
+| `riku.port` | The host port riku published for the routed service |
+| `riku.restart` | The compose `restart` policy, which the supervisor applies. The engine's own restart policy stays off |
+
+### Scaling
+
+Copy counts live in `~/.riku/envs/<app>/SCALING`, one `<service>=<copies>`
+line each. A service without a line runs one copy.
+
+```bash
+riku ps myapp --scale web=3
+```
+
+This grows or shrinks the service without a rebuild and without restarting
+the copies it keeps, then records the count in `SCALING`. New copies take
+the lowest free numbers; shrinking stops the highest numbers first, each
+taken off the router before it stops.
+
+One copy always works. More than one is refused, before anything changes,
+for a service that:
+
+- mounts writable storage: a named or anonymous volume, or a bind mount, that
+  is not read only;
+- publishes any port other than the routed HTTP one, since routers only
+  balance HTTP.
+
+So only the routed HTTP service without writable storage, and workers that
+publish no port and mount no writable storage, can scale. A count of 0 is
+refused; use `riku stop <app> <service>` instead.
+
+### Health checks
+
+A new copy has to be healthy before it counts as started:
+
+- a compose `healthcheck` (not `disable: true`): the engine must report the
+  container healthy within 120 seconds. A copy that exits or turns unhealthy
+  fails at once;
+- otherwise, for the routed service, a `riku.health` path: an HTTP GET on
+  127.0.0.1 must answer 2xx within 60 seconds. Redirects are not followed,
+  so a 3xx counts as unhealthy;
+- otherwise, for the routed service, a TCP connect to its port within 60
+  seconds;
+- a service with neither a healthcheck nor a routed port is healthy once it
+  started.
+
+A service whose `depends_on` entry uses `condition: service_healthy` starts
+only after every copy of that dependency passes its engine health check.
+
+### Rolling replacement
+
+Every deploy, `riku restart` and image watch update replaces copies one at a
+time. How depends on the service:
+
+- The routed service without writable storage overlaps. For each old copy,
+  riku starts a new one, waits for it to be healthy, adds it to the router,
+  takes the old copy off the router, and only then stops the old copy. Every
+  router change waits for a confirmed reload (see
+  [Caddy reloads](caddy.md#reloads)). If the new copy never gets healthy, it
+  is removed, the router is unchanged and the old copies keep serving. If
+  the router cannot confirm a change, no old copy is stopped.
+- Every other service stops first: the old copy stops, then the new one
+  starts and must get healthy. Two copies of a worker or a database never run
+  at once.
+
+Services are replaced in start order. A failure stops the deploy there, and
+the services after it keep their old copies.
+
+Procfile apps get the same overlap for their `web` copies, with
+`RIKU_HEALTH_CHECK_URL` (a path) or an open port as the health check. A
+pinned `PORT` cannot be shared by two copies, so those apps stop the old
+copy first.
+
+### Stopping a copy: the SIGTERM contract
+
+Riku stops a container with its compose `stop_signal` (default `SIGTERM`)
+and kills it once `stop_grace_period` (default 30 seconds, rounded up to a
+whole second) has passed. A Procfile copy gets `SIGTERM` from the supervisor,
+then `SIGKILL` after the worker grace period (30 seconds).
+
+An app should, on `SIGTERM`, finish the requests it is serving and exit
+within the grace period. For an overlapping service the router has already
+stopped sending it new requests by then.
+
+### Storage services
+
+A service that mounts writable storage never scales and always stops first,
+since two copies must not write the same data. It is down on every deploy
+and every `riku restart` that includes it, from the moment the old copy
+stops until the new one is healthy: up to 120 seconds with a compose
+healthcheck. Services that depend on it with `service_healthy` wait for it.
+Use `riku restart <app> <service>` to restart only the services that need
+it.
+
+### Restarting and stopping one service
+
+```bash
+riku restart myapp          # every service, in start order
+riku restart myapp worker   # only worker
+riku stop myapp worker      # stop and remove worker's copies
+riku stop myapp             # every container of the app
+```
+
+`riku restart` replaces the copies from the images they run now, without a
+rebuild, and starts a stopped service again. `riku restart --hot` does the
+same for a container app. `riku stop` takes the app off the router first when
+the routed service is among the stopped ones, stops dependents before the
+services they depend on, and keeps volumes. Naming a service of a Procfile
+app is refused.
+
+The supervisor watches the containers. A copy that exits is started again
+according to its compose `restart` policy (`no` when unset; `unless-stopped`
+for the service riku makes from a Dockerfile), with a delay of 1, 2, 4 and so
+on up to 60 seconds between attempts, and not while a deploy of that app
+holds its lock. A copy that `riku stop` or a scale down removed is never
+started again by the supervisor, whatever its policy. A copy's restart count starts at 0 again when a
+deploy or `riku restart` replaces it. Each copy's output goes to
+`~/.riku/logs/<app>/<service>.<n>.log`, which `riku logs <app> <service>`
+follows.
+
+### Switching an app to containers
+
+An app that ran as a Procfile app and gains a compose file or Dockerfile
+keeps its old Procfile workers until the new containers are healthy and
+routed. Riku then stops them and deletes their configs. If the containers
+fail, the Procfile app keeps running as before.
 
 ### GHCR authentication
 
@@ -498,6 +688,10 @@ If `RIKU_GHCR_USERNAME` and `RIKU_GHCR_TOKEN` are set in the app's env, riku log
 ```bash
 riku config set myapp RIKU_GHCR_USERNAME=your-username RIKU_GHCR_TOKEN=ghp_xxx
 ```
+
+Set both or neither: a deploy with only one of them fails. The engine stores
+the login in its user's shared auth file, so it outlives removing the keys,
+applies to every app on the server, and the last login wins.
 
 Omit these for public images: pulls work without authentication. Docker Hub
 and other registries referenced in the compose file are pulled as configured
@@ -513,11 +707,11 @@ kept in sync with their registry tag:
 riku config set myapp RIKU_WATCH_SERVICES=web,worker
 ```
 
-The supervisor re-checks every 60 seconds: it re-pulls each listed service and
-recreates it if the image actually changed. Both steps are safe to run
-repeatedly: `compose pull` skips unchanged layers, and `compose up -d` only
-recreates a service whose resolved image differs, so an unwatched or
-unchanged app costs nothing extra. This is outbound-only (riku polls the
+The supervisor re-checks every 60 seconds: it pulls each listed service's
+image and, when the running copies run a different image than the tag now
+names, replaces them one at a time as a deploy would. An unchanged image
+changes nothing. Services built from source are skipped, and a service with
+no running copies is not started. This is outbound-only (riku polls the
 registry; nothing needs to reach riku from the internet), so it works
 regardless of what's fronting your apps: nginx, Caddy, or nothing at all.
 
@@ -547,14 +741,6 @@ myapp/
 │   ├── css/
 │   └── js/
 └── Procfile  (optional, can be empty)
-```
-
-### SPA Routing
-
-For single-page applications:
-
-```bash
-riku config set myapp RIKU_NGINX_CATCH_ALL=index.html
 ```
 
 ---

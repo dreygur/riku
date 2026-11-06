@@ -1,16 +1,20 @@
 //! `riku doctor` checks for the host router named in `<riku root>/ROUTER`.
 //!
 //! Read-only like every doctor check: it runs `nginx -t` or
-//! `caddy validate` and reads the system Caddyfile, but changes nothing.
+//! `caddy validate` and reads the nginx include file, riku's nginx site
+//! directory or the system Caddyfile, but changes nothing.
 
 use std::fs;
 use std::io::ErrorKind;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use crate::caddy::{has_import, import_line, SYSTEM_CADDYFILE};
+use crate::config::program::find_program;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
+use crate::deploy::router::RELOAD_ERROR_FILE;
+use crate::nginx::includes_riku_sites;
 
 use super::Check;
 
@@ -45,16 +49,42 @@ fn validator_check(name: &str, command: &str, run: std::io::Result<Output>) -> C
     }
 }
 
-fn nginx() -> Vec<Check> {
-    if which::which("nginx").is_err() {
+/// The installed `name`, searched the way riku spawns it, or `None`.
+fn installed_program(name: &str) -> Option<PathBuf> {
+    let path = find_program(name);
+    path.is_file().then_some(path)
+}
+
+/// Whether the include file that makes nginx load riku's sites is in place.
+fn nginx_include(paths: &RikuPaths) -> Check {
+    let file = &paths.nginx_include_file;
+    if includes_riku_sites(paths) {
+        Check::ok(
+            "nginx include",
+            format!("{} loads riku sites", file.display()),
+        )
+    } else {
+        Check::fail(
+            "nginx include",
+            format!(
+                "{} does not load riku sites, run: sudo riku init",
+                file.display()
+            ),
+        )
+    }
+}
+
+fn nginx(paths: &RikuPaths) -> Vec<Check> {
+    let Some(program) = installed_program("nginx") else {
         return vec![Check::warn(
             "nginx",
             "not found: web serving disabled (apt install nginx)",
         )];
-    }
-    let run = Command::new("nginx").arg("-t").output();
+    };
+    let run = Command::new(&program).arg("-t").output();
     vec![
-        Check::ok("nginx", "found on PATH"),
+        Check::ok("nginx", format!("found at {}", program.display())),
+        nginx_include(paths),
         validator_check("nginx config", "nginx -t", run),
     ]
 }
@@ -83,33 +113,45 @@ fn caddy_import(paths: &RikuPaths, caddyfile: &Path) -> Check {
 }
 
 fn caddy(paths: &RikuPaths, caddyfile: &Path) -> Vec<Check> {
-    if which::which("caddy").is_err() {
+    let Some(program) = installed_program("caddy") else {
         return vec![Check::fail(
             "caddy",
             "not found: the Caddy router needs it (apt install caddy)",
         )];
-    }
-    let run = Command::new("caddy")
+    };
+    let run = Command::new(&program)
         .args(["validate", "--adapter", "caddyfile", "--config"])
         .arg(caddyfile)
         .output();
     vec![
-        Check::ok("caddy", "found on PATH"),
+        Check::ok("caddy", format!("found at {}", program.display())),
         caddy_import(paths, caddyfile),
         validator_check("caddy config", "caddy validate", run),
     ]
 }
 
+/// Fails with the error of the last reload that did not confirm. The file
+/// is removed by the next reload that does.
+fn last_reload(paths: &RikuPaths) -> Option<Check> {
+    match fs::read_to_string(paths.riku_root.join(RELOAD_ERROR_FILE)) {
+        Ok(text) => Some(Check::fail("router reload", text.trim().to_string())),
+        Err(_) => None,
+    }
+}
+
 /// Checks for the active router: nginx keeps its `nginx -t` check, Caddy
 /// gets a binary, import line and `caddy validate` check, and a plugin
-/// router is reported by name. An unreadable `ROUTER` file fails.
+/// router is reported by name. An unreadable `ROUTER` file fails. A failed
+/// last reload is reported for any router.
 pub fn router(paths: &RikuPaths) -> Vec<Check> {
-    match Router::load(paths) {
-        Ok(Router::Nginx) => nginx(),
+    let mut checks = match Router::load(paths) {
+        Ok(Router::Nginx) => nginx(paths),
         Ok(Router::Caddy) => caddy(paths, Path::new(SYSTEM_CADDYFILE)),
         Ok(Router::Plugin(name)) => vec![Check::ok("router", format!("plugin {name}"))],
-        Err(e) => vec![Check::fail("router", e.to_string())],
-    }
+        Err(e) => return vec![Check::fail("router", e.to_string())],
+    };
+    checks.extend(last_reload(paths));
+    checks
 }
 
 #[cfg(test)]

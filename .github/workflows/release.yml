@@ -95,7 +95,6 @@ jobs:
           strip target/${{ matrix.target }}/release/rk
           strip target/${{ matrix.target }}/release/riku-plugin-java
           strip target/${{ matrix.target }}/release/riku-plugin-clojure
-          strip target/${{ matrix.target }}/release/riku-plugin-container
 
       - name: Upload artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -106,7 +105,7 @@ jobs:
             target/${{ matrix.target }}/release/rk
           retention-days: 30
 
-      # Binary runtime plugins (downloaded by `riku install-plugins java|clojure|container`,
+      # Binary runtime plugins (downloaded by `riku install-plugins java|clojure`,
       # see crates/riku-cli/src/apps/install_plugins.rs): uploaded per-target so the CLI can fetch the
       # right one for the host triple from `releases/latest/download/riku-plugin-<name>-<target>`.
       - name: Upload plugin artifacts
@@ -116,7 +115,6 @@ jobs:
           path: |
             target/${{ matrix.target }}/release/riku-plugin-java
             target/${{ matrix.target }}/release/riku-plugin-clojure
-            target/${{ matrix.target }}/release/riku-plugin-container
           retention-days: 30
 
   create-release:
@@ -151,7 +149,7 @@ jobs:
               platform="${name#release-}"
               for bin in riku rk; do
                 chmod +x "$dir$bin"
-                tar -czf "$bin-$platform.tar.gz" -C "$dir" "$bin"
+                tar --owner=0 --group=0 --numeric-owner -czf "$bin-$platform.tar.gz" -C "$dir" "$bin"
                 sha256sum "$bin-$platform.tar.gz" > "$bin-$platform.sha256"
               done
             fi

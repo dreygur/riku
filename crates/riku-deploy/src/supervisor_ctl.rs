@@ -5,9 +5,10 @@
 
 use anyhow::Result;
 use std::collections::HashMap;
+use std::path::Path;
 
 use crate::config::RikuPaths;
-use crate::util::echo;
+use crate::util::{echo, ROOT_BINARY};
 
 /// Read the supervisor PID from the PID file. Returns None if the file is absent,
 /// unreadable, or contains a non-numeric value.
@@ -19,15 +20,33 @@ fn read_supervisor_pid(paths: &RikuPaths) -> Option<i32> {
 }
 
 /// Return true if a process with the given PID exists (sending signal 0).
-fn pid_is_alive(pid: i32) -> bool {
+pub(crate) fn pid_is_alive(pid: i32) -> bool {
     nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None).is_ok()
+}
+
+/// Return true when the supervisor PID file holds a live process id.
+pub(crate) fn supervisor_is_running(paths: &RikuPaths) -> bool {
+    match read_supervisor_pid(paths) {
+        Some(pid) => pid_is_alive(pid),
+        None => false,
+    }
+}
+
+fn resolve_from(installed: &Path) -> String {
+    if installed.exists() {
+        return installed.to_string_lossy().into_owned();
+    }
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.to_str().map(str::to_string))
+        .unwrap_or_else(|| "riku".to_string())
 }
 
 /// Resolve which `riku` binary to exec when (re-)launching the supervisor.
 ///
-/// Order: `$RIKU_BIN` (explicit override) → `~/.local/bin/riku` (the
-/// installed location, if present) → this process's own executable via
-/// `std::env::current_exe()`.
+/// Order: the root owned install at [`ROOT_BINARY`], if present → this
+/// process's own executable via `std::env::current_exe()`. Neither the
+/// environment nor the home directory is consulted.
 ///
 /// Deliberately never falls back to a bare `"riku"` resolved by the loader
 /// off `$PATH`. The supervisor is (re)started from inside a git hook's exec
@@ -38,21 +57,7 @@ fn pid_is_alive(pid: i32) -> bool {
 /// via `/proc/self/exe` (Linux): an absolute path to the binary that is
 /// *actually currently running*, immune to `$PATH` content entirely.
 pub(crate) fn resolve_riku_bin() -> String {
-    std::env::var("RIKU_BIN")
-        .ok()
-        .filter(|b| !b.is_empty())
-        .unwrap_or_else(|| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
-            let local_bin = format!("{}/.local/bin/riku", home);
-            if std::path::Path::new(&local_bin).exists() {
-                local_bin
-            } else {
-                std::env::current_exe()
-                    .ok()
-                    .and_then(|p| p.to_str().map(str::to_string))
-                    .unwrap_or_else(|| "riku".to_string())
-            }
-        })
+    resolve_from(Path::new(ROOT_BINARY))
 }
 
 /// Check if supervisor is running (via PID file) and start it if not.
@@ -71,8 +76,7 @@ pub(crate) fn ensure_supervisor_running(paths: &RikuPaths) -> bool {
 
     let riku_root = paths.riku_root.to_str().unwrap_or("/root/.riku");
 
-    // Exec nohup directly: never interpolate riku_bin into a shell string to
-    // avoid injection if RIKU_BIN contains metacharacters.
+    // Exec nohup directly: never interpolate riku_bin into a shell string.
     if std::process::Command::new("nohup")
         .args([&riku_bin, "supervisor"])
         .env("RIKU_ROOT", riku_root)
@@ -98,6 +102,9 @@ pub(crate) fn ensure_supervisor_running(paths: &RikuPaths) -> bool {
 
 /// Notify the supervisor to reload configurations by sending SIGHUP to the
 /// PID recorded in the PID file. Only signals our own supervisor process.
+///
+/// The same signal makes the supervisor list containers at once, so
+/// container deploys, scales and restarts send it after starting copies.
 pub(crate) fn notify_supervisor_reload(paths: &RikuPaths) {
     if let Some(pid) = read_supervisor_pid(paths) {
         if pid_is_alive(pid) {
@@ -109,13 +116,8 @@ pub(crate) fn notify_supervisor_reload(paths: &RikuPaths) {
     }
 }
 
-/// Notify the supervisor to reload configurations and spawn processes.
-/// This function is called after deployment to start/restart application processes.
-/// The worker configs should already exist from the deploy step.
-pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
-    let app_path = paths.app_root.join(app);
-
-    // Get environment variables for nginx config generation
+/// The settings in an app's ENV file, empty when the app has none.
+pub(crate) fn read_app_env(app: &str, paths: &RikuPaths) -> Result<HashMap<String, String>> {
     let env_file = paths.env_root.join(app).join("ENV");
     let mut env: HashMap<String, String> = HashMap::new();
     if env_file.exists() {
@@ -126,19 +128,38 @@ pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
             ));
         }
     }
+    Ok(env)
+}
 
-    // Configure the active router (built-in nginx, or a router plugin)
-    if let Err(e) = crate::router::configure(app, &app_path, &env, paths) {
-        return Err(anyhow::anyhow!("failed to configure router: {e}"));
-    }
-
-    // Ensure supervisor is running, start if not
+/// Starts the supervisor unless it runs, and tells the user when it could
+/// not be started.
+pub(crate) fn start_supervisor(paths: &RikuPaths) {
     if !ensure_supervisor_running(paths) {
         echo(
             "Warning: Could not start supervisor. Run 'riku supervisor' manually.",
             "yellow",
         );
     }
+}
+
+/// Notify the supervisor to reload configurations and spawn processes.
+/// This function is called after deployment to start/restart application processes.
+/// The worker configs should already exist from the deploy step.
+#[allow(clippy::question_mark)]
+pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
+    let app_path = paths.app_root.join(app);
+
+    let env = match read_app_env(app, paths) {
+        Ok(env) => env,
+        Err(e) => return Err(e),
+    };
+
+    // Configure the active router (built-in nginx, or a router plugin)
+    if let Err(e) = crate::router::configure(app, &app_path, &env, paths, None) {
+        return Err(anyhow::anyhow!("failed to configure router: {e}"));
+    }
+
+    start_supervisor(paths);
 
     // Notify the supervisor to reload configurations
     // The supervisor will detect new/changed configs and spawn processes

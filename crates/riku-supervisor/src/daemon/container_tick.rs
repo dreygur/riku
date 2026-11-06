@@ -1,0 +1,91 @@
+//! Periodic container watch tick driving engine event reconciliation and stats.
+
+use std::time::{Duration, Instant, SystemTime};
+
+use riku_config::RikuPaths;
+
+use super::periodic::is_due;
+use super::Supervisor;
+use crate::containers::{ContainerWatch, CONTAINER_WATCH_INTERVAL};
+
+const ENGINE_RETRY: Duration = Duration::from_secs(60);
+
+impl Supervisor {
+    /// Put the watch's rows into the stats and write `stats.json` at once,
+    /// so `riku ps` does not wait for the next stats write.
+    fn publish_container_rows(&mut self) {
+        let rows = match &self.container_watch {
+            Some(watch) => watch.rows(),
+            None => return,
+        };
+        self.process_manager
+            .stats_mut()
+            .replace_container_rows(rows);
+        if let Err(e) = self.write_stats() {
+            tracing::error!("Failed to write stats: {:?}", e);
+        }
+    }
+
+    fn apply_container_events(&mut self) {
+        let changed = match self.container_watch.as_mut() {
+            Some(watch) => watch.apply_events(),
+            None => false,
+        };
+        if changed {
+            self.publish_container_rows();
+        }
+    }
+
+    /// Make the next maintenance pass run a full watch tick with a listing,
+    /// and retry opening the engine if it was unavailable.
+    pub(super) fn request_container_listing(&mut self) {
+        if let Some(watch) = self.container_watch.as_mut() {
+            watch.request_listing();
+        }
+        self.last_engine_attempt = None;
+        self.last_container_watch = SystemTime::UNIX_EPOCH;
+    }
+
+    /// Runs on every maintenance pass: engine events are applied each pass,
+    /// the full watch tick every [`CONTAINER_WATCH_INTERVAL`].
+    pub(super) fn containers_if_due(&mut self) {
+        if !is_due(self.last_container_watch, CONTAINER_WATCH_INTERVAL) {
+            self.apply_container_events();
+            return;
+        }
+
+        if self.container_watch.is_none() {
+            let retry_due = match self.last_engine_attempt {
+                Some(last) => is_due(last, ENGINE_RETRY),
+                None => true,
+            };
+            if retry_due {
+                let paths = match RikuPaths::from_env() {
+                    Ok(p) => p,
+                    Err(e) => {
+                        tracing::debug!("cannot read riku paths: {e}");
+                        self.last_engine_attempt = Some(SystemTime::now());
+                        self.last_container_watch = SystemTime::now();
+                        return;
+                    }
+                };
+                match ContainerWatch::open(&paths, self.actions.clone(), &self.log_root) {
+                    Ok(watch) => {
+                        self.container_watch = Some(watch);
+                    }
+                    Err(e) => {
+                        tracing::debug!("container watch unavailable: {e}");
+                        self.last_engine_attempt = Some(SystemTime::now());
+                    }
+                }
+            }
+        }
+
+        if let Some(watch) = self.container_watch.as_mut() {
+            watch.tick(Instant::now());
+            self.publish_container_rows();
+        }
+
+        self.last_container_watch = SystemTime::now();
+    }
+}

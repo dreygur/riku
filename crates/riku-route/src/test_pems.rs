@@ -1,0 +1,28 @@
+//! Throwaway test fixtures: self signed certificates and keys made for these
+//! tests only, valid for no real host.
+
+pub(crate) const CERT_A: &str = "-----BEGIN CERTIFICATE-----
+MIIBYzCCAQqgAwIBAgIUEgDLAO9GxEin/GHuNm5MpOnpncowCgYIKoZIzj0EAwIw
+FzEVMBMGA1UEAwwMZWRnZS5leGFtcGxlMCAXDTI2MTEwNTEyMjUxN1oYDzIxMjYx
+MDEyMTIyNTE3WjAXMRUwEwYDVQQDDAxlZGdlLmV4YW1wbGUwWTATBgcqhkjOPQIB
+BggqhkjOPQMBBwNCAAS+7RY71t9E246At3BTwwbr51DrowJ6uHPDnOomjbnNV01b
+04id+KyY90Zw18ywqMaRDMG/+gHhYALZ7hagTw3uozIwMDAdBgNVHQ4EFgQUQSGx
+LwXzOj6kXaDP1/Ixu7rtIDQwDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQDAgNH
+ADBEAiAgdb70wvVqFKb5RNemibpEcrjI/z9B/TbP6bG+SMi+ewIgC/n99Anfg9Qh
+ywPUU8ilQyU1WOhEi9yDC03jdknWmNE=
+-----END CERTIFICATE-----
+";
+
+pub(crate) const KEY_A: &str = "-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgtqsfBaLAqMdhtWe1
+R7eNkLHSrScB6cJOCqtBtRmr6rOhRANCAAS+7RY71t9E246At3BTwwbr51DrowJ6
+uHPDnOomjbnNV01b04id+KyY90Zw18ywqMaRDMG/+gHhYALZ7hagTw3u
+-----END PRIVATE KEY-----
+";
+
+pub(crate) const KEY_B: &str = "-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg2MVgHRvjI8DLLlVl
+ZbQgn25nuMQqNP8jbLEcCu/kMSKhRANCAASnqvVxQIyPedMImoCh4A2hLMdRPKOn
+Wyvp42mSMKha27wy6PdcAGmVwF2y/S/7SjnecNxA9Cv8SK7/XEs5ZI4i
+-----END PRIVATE KEY-----
+";

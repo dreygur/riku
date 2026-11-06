@@ -1,5 +1,10 @@
-use super::*;
+use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
+
+use super::mock_supervisor::{MockRoutes, MockSupervisor};
+use super::*;
+use crate::util::backend::Backend;
 
 fn make_paths(tmp: &TempDir) -> RikuPaths {
     let paths = crate::config::RikuPaths::for_tests(tmp.path());
@@ -7,6 +12,18 @@ fn make_paths(tmp: &TempDir) -> RikuPaths {
     fs::create_dir_all(&paths.workers_enabled).unwrap();
     fs::create_dir_all(&paths.nginx_root).unwrap();
     paths
+}
+
+/// A deploy whose web copies a mock supervisor runs and a mock router routes.
+fn deploy(
+    app_path: &Path,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+    start_cmd: Option<&str>,
+) -> Result<()> {
+    let _supervisor = MockSupervisor::start(paths);
+    let mut routes = MockRoutes::new(paths);
+    create_workers_with("myapp", app_path, env, paths, start_cmd, &mut routes)
 }
 
 // --- read_scaling_count ---
@@ -84,13 +101,13 @@ fn release_and_preflight_run_once_and_never_become_workers() {
     )
     .unwrap();
 
-    create_workers_generic("myapp", &app_path, &HashMap::new(), &paths, None).unwrap();
+    deploy(&app_path, &HashMap::new(), &paths, None).unwrap();
 
     for kind in ["release", "preflight"] {
-        let config = paths.workers_available.join(format!("myapp-{kind}-1.toml"));
+        let config = paths.workers_available.join(format!("myapp@{kind}.1.toml"));
         assert!(!config.exists(), "{kind} got a worker config");
     }
-    assert!(paths.workers_available.join("myapp-web-1.toml").exists());
+    assert!(paths.workers_available.join("myapp@web.1.toml").exists());
 }
 
 #[test]
@@ -103,9 +120,9 @@ fn runs_the_plugin_start_command_as_web_without_a_procfile() {
     fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
 
     let start = "docker compose -f compose.yml up";
-    create_workers_generic("myapp", &app_path, &HashMap::new(), &paths, Some(start)).unwrap();
+    deploy(&app_path, &HashMap::new(), &paths, Some(start)).unwrap();
 
-    let config = fs::read_to_string(paths.workers_available.join("myapp-web-1.toml"))
+    let config = fs::read_to_string(paths.workers_available.join("myapp@web.1.toml"))
         .expect("web worker config should be created");
     assert!(
         config.contains(start),
@@ -127,8 +144,13 @@ fn test_create_workers_generic_worker_kind_creates_config() -> anyhow::Result<()
     let env = HashMap::new();
     create_workers_generic("myapp", &app_path, &env, &paths, None)?;
 
-    let config_path = paths.workers_available.join("myapp-worker-1.toml");
+    let config_path = paths.workers_available.join("myapp@worker.1.toml");
     assert!(config_path.exists(), "worker config should be created");
+    let mode = fs::metadata(&config_path)?.permissions().mode() & 0o777;
+    assert_eq!(
+        mode, 0o600,
+        "a worker config carries the app's secrets but is mode {mode:o}"
+    );
     Ok(())
 }
 
@@ -146,7 +168,7 @@ fn test_create_workers_generic_symlink_created_in_enabled() -> anyhow::Result<()
     let env = HashMap::new();
     create_workers_generic("myapp", &app_path, &env, &paths, None)?;
 
-    let symlink_path = paths.workers_enabled.join("myapp-worker-1.toml");
+    let symlink_path = paths.workers_enabled.join("myapp@worker.1.toml");
     assert!(
         symlink_path.exists(),
         "symlink in workers_enabled should exist"
@@ -185,7 +207,7 @@ fn test_auto_restart_false_skips_removal_of_existing_configs() -> anyhow::Result
     fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
     fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
 
-    let existing = paths.workers_enabled.join("myapp-web-1.toml");
+    let existing = paths.workers_enabled.join("myapp@web.1.toml");
     fs::write(&existing, "[worker]\n")?;
 
     fs::write(app_path.join("Procfile"), "worker: echo hello\n")?;
@@ -201,55 +223,89 @@ fn test_auto_restart_false_skips_removal_of_existing_configs() -> anyhow::Result
     Ok(())
 }
 
-/// Regression test for the stale-RIKU_UPSTREAM_PORT bug: every deploy
-/// allocates a fresh ephemeral port for a `web` worker, so the ENV
-/// file's RIKU_UPSTREAM_PORT (read back by `spawn_app`'s nginx config
-/// generation) must track the latest deploy's port, not just the
-/// first one ever persisted.
 #[test]
-fn test_redeploy_refreshes_persisted_nginx_internal_port() -> anyhow::Result<()> {
+fn scale_down_removes_surplus_copies_with_auto_restart_off() -> anyhow::Result<()> {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
     let app_path = tmp.path().join("app");
     fs::create_dir_all(&app_path).unwrap();
     fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
     fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+    fs::write(app_path.join("Procfile"), "worker: echo hello\n")?;
+    let mut env = HashMap::new();
+    env.insert("RIKU_AUTO_RESTART".to_string(), "false".to_string());
+
+    fs::write(paths.env_root.join("myapp/SCALING"), "worker=3\n")?;
+    create_workers_generic("myapp", &app_path, &env, &paths, None)?;
+    fs::write(paths.env_root.join("myapp/SCALING"), "worker=1\n")?;
+    create_workers_generic("myapp", &app_path, &env, &paths, None)?;
+
+    let mut enabled: Vec<String> = fs::read_dir(&paths.workers_enabled)?
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    enabled.sort();
+    assert_eq!(
+        enabled,
+        ["myapp@worker.1.toml"],
+        "copies 2 and 3 should be gone"
+    );
+    Ok(())
+}
+
+/// Redeploying allocates fresh ports, so what the router is given must be
+/// the ports of the latest deploy's copies, every copy of them.
+#[test]
+fn redeploy_routes_every_copy_of_the_latest_deploy() -> anyhow::Result<()> {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let app_path = tmp.path().join("app");
+    fs::create_dir_all(&app_path).unwrap();
+    fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
+    fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+    fs::write(paths.env_root.join("myapp/SCALING"), "web=3\n")?;
     fs::write(app_path.join("Procfile"), "web: python app.py\n")?;
 
     let env = HashMap::new();
-    create_workers_generic("myapp", &app_path, &env, &paths, None)?;
+    deploy(&app_path, &env, &paths, None)?;
+    deploy(&app_path, &env, &paths, None)?;
 
-    let env_file = paths.env_root.join("myapp").join("ENV");
-    let mut persisted = HashMap::new();
-    crate::util::parse_settings(&env_file, &mut persisted)?;
-    let first_port = persisted
-        .get("RIKU_UPSTREAM_PORT")
-        .expect("first deploy should persist RIKU_UPSTREAM_PORT")
-        .clone();
+    let worker_ports: Vec<u16> = crate::router::web_copies("myapp", &paths)?
+        .iter()
+        .map(|copy| copy.env["PORT"].parse().unwrap())
+        .collect();
+    assert_eq!(worker_ports.len(), 3, "enabled copies: {worker_ports:?}");
+    let routed = crate::router::current_backends("myapp", &env, &paths, None)?;
+    let expected: Vec<_> = worker_ports.into_iter().map(Backend::loopback).collect();
+    assert_eq!(routed, expected);
+    Ok(())
+}
 
-    // Second deploy ("redeploy"): a fresh port gets allocated.
-    create_workers_generic("myapp", &app_path, &env, &paths, None)?;
+/// nginx picks the port map template whenever `RIKU_NGINX_PORTMAP` is set,
+/// so a key left by the old `web:` line would proxy the static site to a
+/// port nothing listens on.
+#[test]
+fn dropping_the_web_line_lets_a_static_app_get_the_static_template() -> anyhow::Result<()> {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let app_path = tmp.path().join("app");
+    fs::create_dir_all(&app_path).unwrap();
+    fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+    let env_file = paths.env_root.join("myapp/ENV");
+    fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
+    fs::write(&env_file, "RIKU_NGINX_STATIC=true\n")?;
 
-    let worker_toml = fs::read_to_string(paths.workers_available.join("myapp-web-1.toml"))?;
-    let actual_port = worker_toml
-        .lines()
-        .find_map(|l| l.strip_prefix("PORT = \""))
-        .and_then(|rest| rest.strip_suffix('"'))
-        .expect("worker config should contain a PORT value")
-        .to_string();
+    fs::write(app_path.join("Procfile"), "web: python app.py\n")?;
+    deploy(&app_path, &HashMap::new(), &paths, None)?;
+    fs::write(app_path.join("Procfile"), "worker: python worker.py\n")?;
+    deploy(&app_path, &HashMap::new(), &paths, None)?;
 
-    let mut persisted_after = HashMap::new();
-    crate::util::parse_settings(&env_file, &mut persisted_after)?;
-    let second_port = persisted_after
-        .get("RIKU_UPSTREAM_PORT")
-        .expect("redeploy should still have RIKU_UPSTREAM_PORT")
-        .clone();
-
-    assert_eq!(
-            second_port, actual_port,
-            "persisted RIKU_UPSTREAM_PORT must match the worker actually spawned by the redeploy, not a stale port from the first deploy"
-        );
-    let _ = first_port; // not asserted equal/different: ports are random, could coincidentally collide
+    let saved = fs::read_to_string(&env_file)?;
+    assert!(
+        !saved.contains("RIKU_NGINX_PORTMAP") && !saved.contains("RIKU_NGINX_EXTERNAL_PORT"),
+        "routing keys of the old web line survived:\n{saved}"
+    );
+    assert!(saved.contains("RIKU_NGINX_STATIC=true"), "{saved}");
     Ok(())
 }
 
@@ -269,7 +325,7 @@ fn refuses_to_scale_web_past_one_on_a_pinned_port() {
     let err = create_workers_generic("myapp", &app_path, &env, &paths, None).unwrap_err();
 
     assert!(err.to_string().contains("3000"), "{err}");
-    assert!(!paths.workers_available.join("myapp-web-1.toml").exists());
+    assert!(!paths.workers_available.join("myapp@web.1.toml").exists());
 }
 
 fn pinned_app(tmp: &TempDir) -> (RikuPaths, std::path::PathBuf) {
@@ -283,15 +339,37 @@ fn pinned_app(tmp: &TempDir) -> (RikuPaths, std::path::PathBuf) {
 }
 
 #[test]
+fn custom_socket_refuses_scale() {
+    let tmp = TempDir::new().unwrap();
+    let (paths, app_path) = pinned_app(&tmp);
+    fs::write(paths.env_root.join("myapp/SCALING"), "wsgi=2\n").unwrap();
+    fs::write(app_path.join("Procfile"), "wsgi: uwsgi app.ini\n").unwrap();
+    let env = HashMap::from([("RIKU_NGINX_SOCKET".to_string(), "/srv/s.sock".to_string())]);
+
+    let err = create_workers_generic("myapp", &app_path, &env, &paths, None).unwrap_err();
+
+    assert!(err.to_string().contains("RIKU_NGINX_SOCKET"), "{err}");
+    assert!(!paths.workers_available.join("myapp@wsgi.1.toml").exists());
+}
+
+#[test]
+fn stale_custom_socket_does_not_stop_a_tcp_web_app_scaling() {
+    let tmp = TempDir::new().unwrap();
+    let (paths, app_path) = pinned_app(&tmp);
+    fs::write(paths.env_root.join("myapp/SCALING"), "web=2\n").unwrap();
+    let env = HashMap::from([("RIKU_NGINX_SOCKET".to_string(), "/srv/s.sock".to_string())]);
+
+    deploy(&app_path, &env, &paths, None).unwrap();
+
+    assert!(paths.workers_available.join("myapp@web.2.toml").exists());
+}
+
+#[test]
 fn refuses_a_pinned_port_another_app_uses() {
     let tmp = TempDir::new().unwrap();
     let (paths, app_path) = pinned_app(&tmp);
     fs::create_dir_all(paths.env_root.join("other")).unwrap();
-    fs::write(
-        paths.env_root.join("other/ENV"),
-        "RIKU_UPSTREAM_PORT=3000\n",
-    )
-    .unwrap();
+    fs::write(paths.env_root.join("other/ENV"), "PORT=3000\n").unwrap();
     let env = HashMap::from([("PORT".to_string(), "3000".to_string())]);
 
     let err = create_workers_generic("myapp", &app_path, &env, &paths, None).unwrap_err();
@@ -300,17 +378,43 @@ fn refuses_a_pinned_port_another_app_uses() {
 }
 
 #[test]
+fn a_stale_upstream_port_in_another_apps_env_is_not_a_claim() {
+    let tmp = TempDir::new().unwrap();
+    let (paths, _) = pinned_app(&tmp);
+    fs::create_dir_all(paths.env_root.join("other")).unwrap();
+    fs::write(
+        paths.env_root.join("other/ENV"),
+        "RIKU_UPSTREAM_PORT=3000\n",
+    )
+    .unwrap();
+    let env = HashMap::from([("PORT".to_string(), "3000".to_string())]);
+
+    pinned::check_pinned_port_with("myapp", &env, &paths, |_| false).unwrap();
+}
+
+#[test]
 fn refuses_a_pinned_port_something_else_listens_on_unless_it_was_ours() {
     let tmp = TempDir::new().unwrap();
     let (paths, app_path) = pinned_app(&tmp);
     let holder = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = holder.local_addr().unwrap().port().to_string();
-    let mut env = HashMap::from([("PORT".to_string(), port.clone())]);
+    let env = HashMap::from([("PORT".to_string(), port.clone())]);
 
     let err = create_workers_generic("myapp", &app_path, &env, &paths, None).unwrap_err();
     assert!(err.to_string().contains("in use"), "{err}");
 
     // On a redeploy the listener is this app's own previous process.
-    env.insert("RIKU_UPSTREAM_PORT".to_string(), port);
-    create_workers_generic("myapp", &app_path, &env, &paths, None).unwrap();
+    let previous = HashMap::from([("PORT".to_string(), port)]);
+    write_worker_config(
+        "myapp",
+        &app_path,
+        "web",
+        "python app.py",
+        1,
+        previous,
+        &paths,
+    )
+    .unwrap();
+    let mut routes = MockRoutes::new(&paths);
+    create_workers_with("myapp", &app_path, &env, &paths, None, &mut routes).unwrap();
 }

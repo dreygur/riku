@@ -2,11 +2,9 @@
 //! (e.g. `ghcr.io/org/app:latest`), so a freshly pushed image is picked up
 //! without a git push or any inbound connection to this host.
 //!
-//! Each check just re-runs the app's existing `pull_service` action (compose
-//! pull + `up -d --no-deps`). Docker/Podman already treat that as a cheap
-//! no-op when nothing changed: pull skips unchanged layers, and `up -d`
-//! only recreates a service whose resolved image actually differs, so no
-//! separate digest-diffing is needed here.
+//! Each check calls the `pull_service` action, which pulls the image and
+//! replaces the service's copies only when the pulled image id differs from
+//! what the running copies run.
 
 use anyhow::Result;
 

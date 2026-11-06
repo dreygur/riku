@@ -1,14 +1,20 @@
-//! Generic worker configuration creation for deployed apps.
+//! Starting a Procfile app's processes on deploy.
 //!
-//! Handles Procfile parsing and worker config generation.
-//! Scaling delta logic lives in `super::scaling`.
+//! Web facing copies are replaced one at a time through `ProcessRuntime`;
+//! other kinds have their worker configs rewritten, stop first. Scaling
+//! delta logic lives in `super::scaling`.
+
+// Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
+#![allow(clippy::question_mark)]
 
 use anyhow::Result;
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
+use riku_container::types::CopyIndex;
+
 use crate::config::RikuPaths;
+use crate::rolling::RouteSink;
 use crate::util::{echo, parse_procfile};
 
 pub(crate) use super::scaling::apply_scaling_deltas;
@@ -19,57 +25,93 @@ const WEB_KIND: &str = "web";
 /// restart them every time they exit.
 const ONE_SHOT_KINDS: [&str; 2] = ["release", "preflight"];
 
+mod files;
+#[cfg(test)]
+mod mock_supervisor;
 mod pinned;
-mod web_env;
+mod ports;
+pub(crate) mod process_runtime;
+mod scaling;
+mod socket;
+mod stop_wait;
+pub(crate) mod web_env;
+mod web_rollout;
 
+pub use scaling::read_scaling_count;
+
+use files::{remove_stale_configs, remove_surplus_configs, write_worker_config};
 use pinned::check_pinned_port;
-use web_env::build_worker_env;
+use socket::check_custom_socket;
+use web_env::{build_worker_env, clear_route_env, is_web_facing};
+use web_rollout::{roll_web_kind, stop_web_kind, WebDeploy, WebRoutes};
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/// Read the scaling count for a given process kind from the SCALING file.
-///
-/// Returns 1 if the file doesn't exist or the kind isn't listed.
-pub fn read_scaling_count(paths: &RikuPaths, app: &str, kind: &str) -> Result<u32> {
-    let scaling_path = paths.env_root.join(app).join("SCALING");
-    if !scaling_path.exists() {
-        return Ok(1);
-    }
-    let content = fs::read_to_string(&scaling_path)?;
-    for line in content.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        if let Some(pos) = line.find('=') {
-            let key = line[..pos].trim();
-            let val = line[pos + 1..].trim();
-            if key == kind {
-                if let Ok(n) = val.parse::<u32>() {
-                    return Ok(n);
-                }
-            }
-        }
-    }
-    Ok(1)
+/// Returns true when `RIKU_AUTO_RESTART` is not explicitly disabled.
+fn should_restart(env: &HashMap<String, String>) -> bool {
+    env.get("RIKU_AUTO_RESTART")
+        .map(|v| v.to_lowercase() != "false" && v != "0" && v != "no")
+        .unwrap_or(true)
 }
 
-/// Create worker configs for every process entry in the app's Procfile.
-///
-/// `start_cmd` is an optional fallback command supplied by the runtime plugin
-/// via its `start` subcommand. It fills a Procfile entry with an empty
-/// command, and runs as the one `web` process when there is no Procfile.
-#[allow(clippy::question_mark)]
-pub fn create_workers_generic(
+/// Writes `count` configs for a kind no router fronts. Its old copies were
+/// removed first (see `remove_stale_configs`), so this is stop first.
+fn write_copies(deploy: &WebDeploy<'_>, kind: &str, command: &str, count: u32) -> Result<()> {
+    for copy in (1..=count).filter_map(CopyIndex::new) {
+        let worker_env =
+            match build_worker_env(deploy.app, kind, copy, deploy.env, &[], deploy.paths) {
+                Ok(worker_env) => worker_env,
+                Err(e) => return Err(e),
+            };
+        let written = write_worker_config(
+            deploy.app,
+            deploy.app_path,
+            kind,
+            command,
+            copy.get(),
+            worker_env,
+            deploy.paths,
+        );
+        if let Err(e) = written {
+            return Err(e);
+        }
+    }
+    Ok(())
+}
+
+/// Stops the web facing kinds that still run but left the Procfile, such as
+/// `wsgi` after the app moved to `web`.
+fn stop_dropped_kinds(deploy: &WebDeploy<'_>, kept: &HashMap<String, String>) -> Result<()> {
+    let running = match crate::router::web_copies(deploy.app, deploy.paths) {
+        Ok(running) => running,
+        Err(e) => return Err(e),
+    };
+    let mut dropped: Vec<&str> = running
+        .iter()
+        .map(|config| config.worker.kind.as_str())
+        .filter(|kind| !kept.contains_key(*kind))
+        .collect();
+    dropped.sort_unstable();
+    dropped.dedup();
+    for kind in dropped {
+        if let Err(e) = stop_web_kind(deploy, kind) {
+            return Err(e);
+        }
+    }
+    Ok(())
+}
+
+/// [`create_workers_generic`] with the route sink web copies publish to.
+pub(crate) fn create_workers_with(
     app: &str,
     app_path: &Path,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
     start_cmd: Option<&str>,
+    routes: &mut impl RouteSink,
 ) -> Result<()> {
     if let Err(e) = check_pinned_port(app, env, paths) {
+        return Err(e);
+    }
+    if let Err(e) = check_custom_socket(app, env, paths) {
         return Err(e);
     }
     if should_restart(env) {
@@ -89,113 +131,75 @@ pub fn create_workers_generic(
         (Err(e), _) => return Err(e),
     };
 
-    let processes = entries
+    if !entries.keys().any(|kind| is_web_facing(kind)) {
+        if let Err(e) = clear_route_env(app, paths) {
+            return Err(e);
+        }
+    }
+
+    let deploy = WebDeploy {
+        app,
+        app_path,
+        env,
+        paths,
+    };
+    let processes: Vec<(&String, &String)> = entries
         .iter()
-        .filter(|(kind, _)| !ONE_SHOT_KINDS.contains(&kind.as_str()));
+        .filter(|(kind, _)| !ONE_SHOT_KINDS.contains(&kind.as_str()))
+        .collect();
+    let mut counts = HashMap::new();
+    for (kind, _) in &processes {
+        match read_scaling_count(paths, app, kind) {
+            Ok(count) => counts.insert(kind.to_string(), count),
+            Err(e) => return Err(e),
+        };
+    }
+    remove_surplus_configs(app, paths, &counts);
+
     for (kind, command) in processes {
         let effective_cmd = if command.is_empty() {
             start_cmd.unwrap_or(command.as_str())
         } else {
             command.as_str()
         };
-        let count = match read_scaling_count(paths, app, kind) {
-            Ok(count) => count,
-            Err(e) => return Err(e),
+        let count = counts[kind.as_str()];
+        let outcome = match (is_web_facing(kind), count) {
+            (true, 0) => stop_web_kind(&deploy, kind),
+            (true, want) => roll_web_kind(&deploy, kind, effective_cmd, want, routes),
+            (false, count) => write_copies(&deploy, kind, effective_cmd, count),
         };
-        for i in 1..=count {
-            let worker_env = match build_worker_env(app, kind, env, paths) {
-                Ok(worker_env) => worker_env,
-                Err(e) => return Err(e),
-            };
-            if let Err(e) =
-                write_worker_config(app, app_path, kind, effective_cmd, i, worker_env, paths)
-            {
-                return Err(e);
-            }
+        if let Err(e) = outcome {
+            return Err(e);
         }
     }
-
-    Ok(())
+    stop_dropped_kinds(&deploy, &entries)
 }
 
-// ---------------------------------------------------------------------------
-// Private helpers
-// ---------------------------------------------------------------------------
-
-/// Returns true when `RIKU_AUTO_RESTART` is not explicitly disabled.
-fn should_restart(env: &HashMap<String, String>) -> bool {
-    env.get("RIKU_AUTO_RESTART")
-        .map(|v| v.to_lowercase() != "false" && v != "0" && v != "no")
-        .unwrap_or(true)
-}
-
-/// Remove existing worker symlinks from `workers_enabled` to trigger a restart.
+/// Create worker configs for every process entry in the app's Procfile.
 ///
-/// Uses `"{app}-*"` not `"{app}*"` to avoid touching configs for apps
-/// whose names share a prefix (e.g. "foo" would otherwise match "foobar").
-fn remove_stale_configs(app: &str, paths: &RikuPaths) {
-    for ext in &["toml", "ini"] {
-        let pattern = paths.workers_enabled.join(format!("{}-*.{}", app, ext));
-        if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
-            for entry in entries.flatten() {
-                if let Err(e) = fs::remove_file(&entry) {
-                    tracing::warn!("Could not remove stale worker config {:?}: {}", entry, e);
-                }
-            }
-        }
-    }
-}
-
-/// Write a single worker TOML config to `workers_available` and symlink it into `workers_enabled`.
-fn write_worker_config(
+/// Web facing kinds are replaced one copy at a time: a new copy starts in a
+/// free slot, must pass its health check, and joins the router before an old
+/// copy is drained and stopped. A pinned `PORT` or shared socket stops the
+/// old copy first instead. Other kinds have their configs rewritten, stop
+/// first, unless `RIKU_AUTO_RESTART` is off. Copies above the scale count are
+/// removed either way. Needs the supervisor running.
+///
+/// `start_cmd` is an optional fallback command supplied by the runtime plugin
+/// via its `start` subcommand. It fills a Procfile entry with an empty
+/// command, and runs as the one `web` process when there is no Procfile.
+pub fn create_workers_generic(
     app: &str,
     app_path: &Path,
-    kind: &str,
-    command: &str,
-    index: u32,
-    env: HashMap<String, String>,
+    env: &HashMap<String, String>,
     paths: &RikuPaths,
+    start_cmd: Option<&str>,
 ) -> Result<()> {
-    use crate::supervisor::config::create_worker_config;
-
-    let log_path = paths
-        .log_root
-        .join(app)
-        .join(format!("{}.{}.log", kind, index));
-
-    let config = create_worker_config(
+    let mut routes = WebRoutes {
         app,
-        kind,
-        command,
-        index,
-        env,
-        &app_path.to_string_lossy(),
-        &log_path.to_string_lossy(),
-    );
-
-    let filename = format!("{}-{}-{}.toml", app, kind, index);
-    let available = paths.workers_available.join(&filename);
-    let enabled = paths.workers_enabled.join(&filename);
-
-    crate::util::write_atomic(&available, toml::to_string(&config)?.as_bytes())?;
-
-    // Atomic symlink swap: create the new symlink under a temp name, then
-    // `rename` it over `enabled`. A crash or concurrent reader between a
-    // `remove_file` and a fresh `symlink` would otherwise see `enabled`
-    // briefly missing entirely; `rename` guarantees the path always
-    // resolves to either the old or the new symlink, never nothing.
-    let tmp_link = paths
-        .workers_enabled
-        .join(format!(".{}.tmp-{}", filename, std::process::id()));
-    let _ = fs::remove_file(&tmp_link);
-    std::os::unix::fs::symlink(&available, &tmp_link)?;
-    fs::rename(&tmp_link, &enabled)?;
-
-    echo(
-        &format!("-----> Created worker config: {}", filename),
-        "green",
-    );
-    Ok(())
+        app_path,
+        paths,
+    };
+    create_workers_with(app, app_path, env, paths, start_cmd, &mut routes)
 }
 
 #[cfg(test)]

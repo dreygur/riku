@@ -195,6 +195,7 @@ mod routing_tests {
     fn destroy_command_maps_to_destroy() {
         let cmd = Commands::Destroy {
             app: "myapp".to_string(),
+            force: false,
         };
         assert_eq!(get_plugin_command(&cmd), Some("destroy".to_string()));
     }
@@ -203,6 +204,7 @@ mod routing_tests {
     fn restart_command_maps_to_restart() {
         let cmd = Commands::Restart {
             app: Some("myapp".to_string()),
+            service: None,
             hot: false,
         };
         assert_eq!(get_plugin_command(&cmd), Some("restart".to_string()));
@@ -212,6 +214,7 @@ mod routing_tests {
     fn stop_command_maps_to_stop() {
         let cmd = Commands::Stop {
             app: Some("myapp".to_string()),
+            service: None,
         };
         assert_eq!(get_plugin_command(&cmd), Some("stop".to_string()));
     }
@@ -244,12 +247,6 @@ mod routing_tests {
     #[test]
     fn supervisor_command_returns_none() {
         let cmd = Commands::Supervisor;
-        assert_eq!(get_plugin_command(&cmd), None);
-    }
-
-    #[test]
-    fn update_command_returns_none() {
-        let cmd = Commands::Update;
         assert_eq!(get_plugin_command(&cmd), None);
     }
 

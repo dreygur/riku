@@ -3,7 +3,8 @@ use anyhow::Result;
 
 use crate::config::RikuPaths;
 
-use super::auth::{check_rate_limit_now, log_agent_action, AgentSession};
+use super::audit::{log_agent_action, open_before_mutation, AuditEntry};
+use super::auth::{check_rate_limit_now, AgentSession};
 use super::commands::{
     cmd_agent_apps, cmd_agent_config_get, cmd_agent_config_set, cmd_agent_config_show,
     cmd_agent_deploy, cmd_agent_destroy_confirm, cmd_agent_destroy_request, cmd_agent_logs,
@@ -23,7 +24,7 @@ fn print_response(response: &AgentResponse) -> Result<()> {
     }
 }
 
-/// Execute agent command
+/// Runs the command and prints the JSON response.
 pub fn cmd_agent_execute(
     paths: &RikuPaths,
     session: &AgentSession,
@@ -31,6 +32,22 @@ pub fn cmd_agent_execute(
     args: &[String],
     confirm_token: Option<&str>,
 ) -> Result<()> {
+    print_response(&run_agent_command(
+        paths,
+        session,
+        command,
+        args,
+        confirm_token,
+    ))
+}
+
+fn run_agent_command(
+    paths: &RikuPaths,
+    session: &AgentSession,
+    command: &str,
+    args: &[String],
+    confirm_token: Option<&str>,
+) -> AgentResponse {
     let AgentSession {
         id: agent_id,
         scope,
@@ -40,31 +57,42 @@ pub fn cmd_agent_execute(
         Ok(dir) => dir,
         Err(e) => {
             let message = format!("Agent state is unavailable: {e}");
-            return print_response(&AgentResponse::error("STATE_UNAVAILABLE", &message));
+            return AgentResponse::error("STATE_UNAVAILABLE", &message);
         }
     };
 
     match check_rate_limit_now(&state, agent_id, scope) {
         Ok(true) => {}
         Ok(false) => {
-            return print_response(&AgentResponse::error(
+            return AgentResponse::error(
                 "RATE_LIMIT_EXCEEDED",
                 "Too many requests. Try again in 30 seconds.",
-            ));
+            );
         }
         Err(e) => {
             let message = format!("Agent state is unavailable: {e}");
-            return print_response(&AgentResponse::error("STATE_UNAVAILABLE", &message));
+            return AgentResponse::error("STATE_UNAVAILABLE", &message);
         }
     }
 
     if !scope.allows(command) {
-        log_agent_action(&state, agent_id, command, "", false);
-        return print_response(&AgentResponse::error(
-            "PERMISSION_DENIED",
-            "Agent lacks required permission",
-        ));
+        let entry = AuditEntry {
+            agent: agent_id,
+            action: command,
+            app: "",
+            success: false,
+        };
+        log_agent_action(&state, None, &entry);
+        return AgentResponse::error("PERMISSION_DENIED", "Agent lacks required permission");
     }
+
+    let audit_log = match open_before_mutation(&state, command) {
+        Ok(file) => file,
+        Err(e) => {
+            let message = format!("Agent audit log is unavailable: {e}");
+            return AgentResponse::error("STATE_UNAVAILABLE", &message);
+        }
+    };
 
     let response = match command {
         "apps" => cmd_agent_apps(paths),
@@ -157,13 +185,17 @@ pub fn cmd_agent_execute(
         _ => AgentResponse::error("INVALID_COMMAND", &format!("Unknown command: {}", command)),
     };
 
-    log_agent_action(
-        &state,
-        agent_id,
-        command,
-        args.first().map(|s| s.as_str()).unwrap_or(""),
-        response.success,
-    );
+    let entry = AuditEntry {
+        agent: agent_id,
+        action: command,
+        app: args.first().map(|s| s.as_str()).unwrap_or(""),
+        success: response.success,
+    };
+    log_agent_action(&state, audit_log, &entry);
 
-    print_response(&response)
+    response
 }
+
+#[cfg(test)]
+#[path = "execute_tests.rs"]
+mod tests;

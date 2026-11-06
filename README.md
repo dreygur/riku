@@ -1,4 +1,9 @@
-# Riku
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/docs/img/brand/riku-logo.svg">
+    <img src="docs/docs/img/brand/riku-logo-dark.svg" alt="riku" width="360">
+  </picture>
+</p>
 
 **Git-push deployments on a single small box: one Rust binary, no Docker required.**
 
@@ -29,7 +34,8 @@ git push riku main      # that's the deploy
 ## What it does
 
 - **`git push` to deploy**: language detected, built, supervised, and routed automatically.
-- **Many languages, no recompile**, Python, Node, Ruby, Go, Rust, Java, Clojure, and containers, each as an installable runtime plugin.
+- **Many languages, no recompile**: Python, Node, Ruby, Go, Rust, Java, and Clojure, each as an installable runtime plugin.
+- **Containers built in**: an app with a compose file or a Dockerfile is built and run by riku itself on Docker or Podman, no plugin needed.
 - **Built-in process supervisor**: health checks, restarts, scaling, and cron, written in Rust (no uWSGI Emperor).
 - **Zero-downtime deploys**: new processes are health-gated before old ones are retired.
 - **Rollback & backups**: `riku rollback`, `riku backup`/`riku restore`.
@@ -42,11 +48,17 @@ git push riku main      # that's the deploy
 ## Requirements
 
 - Linux (Debian/Ubuntu/RHEL/Arch)
-- 1 CPU core, 256 MB RAM, ~50 MB disk for Riku itself
+- 1 CPU core, 256 MB RAM, about 10 MB disk for Riku itself
 
-Base footprint is roughly 30–60 MB before you deploy anything (supervisor + binary +
-nginx). Per-app memory is up to your apps. If you want numbers for your own hardware,
-the scripts in [`benches/`](benches/) measure it rather than guess.
+Measured on a 4 core x86_64 Ubuntu server, idle with no apps: the stripped `riku` binary
+is 9.3 MB (9,285,328 bytes), the supervisor uses about 10 MB of RAM, and the
+supervisor plus nginx (master and 4 workers) about 22 MB. The binary plus `~/.riku`
+take about 9.3 MB of disk. While riku containers exist, the supervisor also keeps one
+`docker events` process of about 32 MB RSS; with no container app it runs none.
+Container logs are copied with one short `docker logs` call per running container
+every 5 s, so they reach `riku logs` up to about 5 s late. Per-app memory is up
+to your apps. For numbers on your own hardware, the scripts in [`benches/`](benches/)
+measure it rather than guess.
 
 ## Install
 
@@ -60,13 +72,38 @@ sudo ./riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
 Running `riku init` as root creates the `riku` deploy user if it is missing, sets
-up its home as that user (binary in `~/.local/bin`, `~/.riku`, the git hook, SSH
-keys), then creates a systemd service that starts on boot, launches the
-supervisor, and enables router auto-reload. `--ssh-key` authorizes the keys in a
+up its home as that user (`~/.riku`, the git hook, SSH keys), installs the binary
+once as a root owned `/usr/local/bin/riku`, then creates a systemd service that starts on boot and launches the
+supervisor. It also starts `riku-router-helper.service`, a small root service that
+writes the nginx or Caddy site for each app (in `/etc/riku/nginx` or `/etc/riku/caddy`,
+certificates in `/etc/riku/certs`) and reloads the router, so the deploy user never
+writes router config. `--ssh-key` authorizes the keys in a
 `.pub` or `authorized_keys` file (here, the ones you used to log in) for
 `git push`; without it, run the command init prints before your first push.
 Deploying as another user? Pass `sudo RIKU_USER=myuser ./riku init`. For Caddy instead of
 nginx, see [`docs/docs/caddy.md`](docs/docs/caddy.md).
+
+The installer script does the download, checksum and install in one step. It needs root
+for `riku`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sudo sh
+sudo riku init --ssh-key ~/.ssh/authorized_keys
+```
+
+Upgrading a host that runs an older riku: install the new binary the same way, run
+`sudo riku init` again, then `riku doctor --fix` as the deploy user to redeploy apps and
+rewrite stale keys and hooks. Restart the supervisor with `sudo systemctl restart riku`.
+Apps that set a removed key (see [`docs/docs/nginx.md`](docs/docs/nginx.md#removed-keys))
+fail to deploy until you unset it.
+
+### The rk laptop client
+
+`rk` is a separate binary for your laptop (Linux or macOS) that runs riku
+commands on your servers over ssh. Install it with
+`curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh -s -- --rk`,
+then `rk server add myserver riku@your-server` and `rk -s myserver apps`. See
+[`docs/docs/installation.md`](docs/docs/installation.md#the-rk-laptop-client).
 
 ### From source
 
@@ -103,7 +140,7 @@ git push riku main
 In a hurry? `riku quickstart` scaffolds a sample app and prints the exact
 `git remote add` line to copy.
 
-> You can keep a bare repo anywhere on the server, `git init --bare ~/projects/myapp.git`,
+> You can keep a bare repo in the deploy user's home, `git init --bare ~/myapp.git`,
 > push to it, and Riku symlinks it into `~/.riku/repos/` for you.
 
 ## Commands
@@ -121,7 +158,7 @@ In a hurry? `riku quickstart` scaffolds a sample app and prints the exact
 | `riku plugins …` | install/search/scaffold/sign plugins (see below) |
 | `riku dashboard [--bind … --token …]` | serve the web dashboard |
 | `riku doctor` | diagnose the host |
-| `riku init` / `riku update` / `riku supervisor` | setup & maintenance |
+| `riku init` / `riku supervisor` | setup & maintenance |
 
 ## Runtime plugins
 
@@ -137,7 +174,9 @@ set with `riku install-plugins` (or pick some: `riku install-plugins --plugins n
 | `rust-lang` | `Cargo.toml` | cargo build |
 | `java` | `pom.xml`, `build.gradle` | Maven / Gradle |
 | `clojure` | `project.clj`, `deps.edn` | Leiningen / Clojure CLI |
-| `container` | `Dockerfile`, `docker-compose.yml` | Docker / Podman |
+
+An app with a compose file, a `Dockerfile` or a `Containerfile` needs no plugin: riku
+builds and runs it as containers itself (see [`docs/docs/runtimes.md`](docs/docs/runtimes.md#container)).
 
 Detection runs in order: set `RIKU_RUNTIME=node` to skip it. To add your own language,
 drop an executable into `~/.riku/plugins/` implementing four subcommands:
@@ -194,7 +233,8 @@ post-receive hook that checks out the code, runs the matching runtime plugin to
 build it, writes worker configs, and signals the supervisor. The supervisor watches
 those configs and starts/stops/restarts processes to match, health-gating new
 generations before cutover. nginx config is generated per app (or handed to a router
-plugin). For the design in depth, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
+plugin). For the design in depth, see [`ARCHITECTURE.md`](ARCHITECTURE.md), and
+[`crates/README.md`](crates/README.md) for a map of the workspace crates.
 
 ## Development
 

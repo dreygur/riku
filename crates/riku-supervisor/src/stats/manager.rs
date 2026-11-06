@@ -27,7 +27,8 @@ impl StatsManager {
         }
     }
 
-    /// Register a new process.
+    /// Register a process. Re-registering an id keeps its restart count and
+    /// last restart time, since a restart respawns under the same id.
     pub fn register_process(
         &mut self,
         process_id: String,
@@ -35,6 +36,7 @@ impl StatsManager {
         kind: String,
         ordinal: u32,
     ) {
+        let previous = self.stats.get(&process_id);
         let stats = ProcessStats {
             process_id: process_id.clone(),
             app,
@@ -42,6 +44,8 @@ impl StatsManager {
             ordinal,
             started_at: Some(Utc::now()),
             status: ProcessStatus::Starting,
+            restart_count: previous.map_or(0, |p| p.restart_count),
+            last_restart_at: previous.and_then(|p| p.last_restart_at),
             ..Default::default()
         };
 
@@ -115,4 +119,47 @@ impl StatsManager {
         let json = serde_json::to_string_pretty(&app_stats)?;
         crate::util::write_atomic(path, json.as_bytes())
     }
+
+    /// Drop the stopped process rows of every app `exists` says is gone.
+    ///
+    /// `riku destroy` removes an app's worker configs before its directory,
+    /// so the unload that purges a destroyed app's rows can run while the
+    /// directory is still there and keep them. Running rows and container
+    /// rows are left alone: the process manager and the container watch own
+    /// those.
+    pub fn forget_stopped_apps(&mut self, exists: impl Fn(&str) -> bool) {
+        let gone: Vec<String> = self
+            .stats
+            .values()
+            .filter(|s| s.container.is_none() && s.status == ProcessStatus::Stopped)
+            .filter(|s| !exists(&s.app))
+            .map(|s| s.process_id.clone())
+            .collect();
+        for process_id in gone {
+            self.remove_process(&process_id);
+        }
+    }
+
+    /// Replace container rows with freshly polled process statistics.
+    pub fn replace_container_rows(&mut self, rows: Vec<ProcessStats>) {
+        self.stats.retain(|_, s| s.container.is_none());
+        for row in rows {
+            self.stats.insert(row.process_id.clone(), row);
+        }
+    }
+
+    /// Reset restart count and timestamp for a process.
+    ///
+    /// Restart counts mean restarts since the last deploy, so a rewritten
+    /// worker TOML starts at 0.
+    pub fn reset_restarts(&mut self, process_id: &str) {
+        if let Some(stats) = self.stats.get_mut(process_id) {
+            stats.restart_count = 0;
+            stats.last_restart_at = None;
+        }
+    }
 }
+
+#[cfg(test)]
+#[path = "manager_tests.rs"]
+mod tests;

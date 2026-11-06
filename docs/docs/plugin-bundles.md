@@ -51,7 +51,18 @@ uninstall   = true               # `riku plugins remove` calls on_uninstall
 
 [ui]                              # optional, any plugin type: dashboard panel
 nav_label   = "My Plugin"        # Next.js dashboard only, not the embedded one
+
+[router]                         # required for type = "router"
+protocol        = 2              # riku refuses a router without protocol = 2
+graceful_reload = false          # true only if reload keeps in-flight
+                                 # connections (default false)
 ```
+
+A router plugin without a `[router]` table, or with a `protocol` other than 2,
+is refused for `configure`: riku fails the route before sending it any verb.
+Removing an app's route still sends `unconfigure` and `reload` to a router
+plugin of any protocol, so an old plugin can drop the app it served. See
+`PLUGIN_PROTOCOL.md` section 6.2 for the `configure` request it receives.
 
 The kernel sets `RIKU_PLUGIN_API`, `RIKU_ROOT`, `RIKU_PLUGIN_NAME` (the
 manifest's own `name`), and `RIKU_PLUGIN_DATA_PATH` (a scratch directory the
@@ -137,17 +148,11 @@ first), each seeing the previous one's output.
 skipped (logged) and the value passes through unchanged, a filter can only
 become a no-op, never break the thing calling it.
 
-**Shipped example: `nginx.include_content`.** The nginx config generator
-already supported a raw file-based passthrough (`RIKU_NGINX_INCLUDE_FILE`); that
-content is now the *seed* value run through this filter before being
-inlined into the generated `.conf`. This is the "augment the default config"
-alternative to writing a full router plugin (below), any number of
-installed plugins can each contribute a snippet, rather than one plugin
-replacing routing entirely.
+No filter point ships in core today. The only one, `nginx.include_content`, fed the per app snippet file (`RIKU_NGINX_INCLUDE_FILE`), which the smaller core route removed.
 
 ```toml
 [filters]
-subscribe = ["nginx.include_content"]
+subscribe = ["example.filter"]
 priority  = 0
 ```
 

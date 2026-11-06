@@ -4,8 +4,10 @@
 
 pub mod generation;
 pub mod health_check;
+mod health_interval;
 pub mod isolation;
 pub mod orchestration;
+pub mod pid_file;
 pub mod spawn;
 pub mod spawned;
 pub mod stop;
@@ -17,6 +19,7 @@ pub use spawned::SpawnedProcess;
 
 use anyhow::Result;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use crate::resource_limits::ResourceLimits;
 use crate::stats::StatsManager;
@@ -35,6 +38,9 @@ pub struct ProcessManager {
     /// Structured rollback/promotion notifications waiting to be pushed
     /// onto the metrics SSE broadcast channel.
     pub(super) deployment_events: Vec<String>,
+    /// Where each spawned process gets a `pid_file` marker. `None` writes
+    /// no markers, which only tests rely on.
+    pub(super) pid_dir: Option<PathBuf>,
 }
 
 impl ProcessManager {
@@ -54,7 +60,23 @@ impl ProcessManager {
             generations: HashMap::new(),
             probe_results: new_probe_results(),
             deployment_events: Vec::new(),
+            pid_dir: None,
         })
+    }
+
+    /// Keep a marker per spawned process in `dir` (see `pid_file`).
+    pub fn with_pid_dir(mut self, dir: PathBuf) -> Self {
+        self.pid_dir = Some(dir);
+        self
+    }
+
+    /// Remove the markers a previous supervisor left behind. Call once,
+    /// before the first spawn.
+    pub fn clear_stale_pid_markers(&self) -> std::io::Result<()> {
+        match &self.pid_dir {
+            Some(dir) => pid_file::clear_markers(dir),
+            None => Ok(()),
+        }
     }
 
     /// Get the number of managed processes.

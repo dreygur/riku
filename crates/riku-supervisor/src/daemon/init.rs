@@ -10,6 +10,7 @@ use threadpool::ThreadPool;
 
 use crate::cron::CronScheduler;
 use crate::log_rotation::{LogRotationConfig, LogRotator};
+use crate::process::pid_file::worker_pid_dir;
 use crate::process::ProcessManager;
 
 use super::Supervisor;
@@ -31,11 +32,15 @@ impl Supervisor {
         let stats_file = riku_root.join("stats.json");
         let pid_file = riku_root.join("supervisor.pid");
         let control_token_file = riku_root.join("control.token");
-        let router_file = riku_root.join(riku_config::router::ROUTER_FILE);
+
+        let process_manager = match ProcessManager::new() {
+            Ok(pm) => pm.with_pid_dir(worker_pid_dir(&riku_root)),
+            Err(e) => return Err(e.context("cannot start the process manager")),
+        };
 
         Ok(Supervisor {
             config_dir,
-            process_manager: ProcessManager::new()?,
+            process_manager,
             watched_configs: HashMap::new(),
             log_rotator: LogRotator::new(LogRotationConfig::default()),
             log_root,
@@ -44,7 +49,6 @@ impl Supervisor {
             stats_file,
             pid_file,
             control_token_file,
-            router_file,
             last_stats_write: std::time::SystemTime::now(),
             stats_write_interval: Duration::from_secs(5),
             cron_scheduler: CronScheduler::new(),
@@ -58,6 +62,9 @@ impl Supervisor {
             pid_file_lock: None,
             metrics_broadcast_tx: None,
             actions: std::sync::Arc::new(crate::health::NoopControlActions),
+            container_watch: None,
+            last_container_watch: std::time::SystemTime::now(),
+            last_engine_attempt: None,
         })
     }
 

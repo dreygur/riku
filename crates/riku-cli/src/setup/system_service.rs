@@ -1,18 +1,17 @@
 /// System-wide (root) systemd service installation for riku.
 use anyhow::{anyhow, Result};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use crate::config::router::Router;
-use crate::config::RikuPaths;
-use crate::util::echo;
+use crate::config::{ACME_WEBROOT, SOCKET_ROOT, STATIC_ROOT};
+use crate::util::{echo, ROOT_BINARY};
 
-use super::binary::INSTALL_DIR;
 use super::deploy_user::{deploy_user_name, passwd_home, running_as_root};
-use super::router_units::{other_path_units, unit_ordering, write_router_units};
+use super::router_units::{remove_stale_units, unit_ordering, STALE_UNITS};
 
-const SYSTEMD_DIR: &str = "/etc/systemd/system";
+pub const SYSTEMD_DIR: &str = "/etc/systemd/system";
 
 fn render_system_unit(
     router: &Router,
@@ -44,8 +43,13 @@ ProtectSystem=strict
 ProtectHome=read-only
 PrivateTmp=true
 
-# Allow writing to riku directories
-ReadWritePaths={deploy_home}/.riku
+# Allow writing to riku directories. ProtectSystem=strict leaves /run read
+# only, and uWSGI copies, which inherit this namespace, bind their sockets in
+# the socket directory. Deploys started from here write
+# ACME challenge files and published static files. Caddy site files are
+# written by the router helper, not by this service.
+# The leading - keeps the unit starting when a directory is missing.
+ReadWritePaths={deploy_home}/.riku -{socket_root} -{acme_webroot} -{static_root}
 
 # Resource limits
 MemoryMax=512M
@@ -55,17 +59,13 @@ CPUQuota=50%
 WantedBy=multi-user.target
 "#,
         ordering = unit_ordering(router),
+        deploy_user = deploy_user,
+        deploy_home = deploy_home,
+        riku_binary_path = riku_binary_path,
+        socket_root = SOCKET_ROOT,
+        acme_webroot = ACME_WEBROOT,
+        static_root = STATIC_ROOT,
     )
-}
-
-/// The directory the router's path unit watches in the deploy user's tree.
-fn router_config_dir(router: &Router, deploy_home: &str) -> PathBuf {
-    let home = PathBuf::from(deploy_home);
-    let paths = RikuPaths::from_dirs(home.join(".riku"), &home);
-    match router {
-        Router::Caddy => paths.caddy_root,
-        Router::Nginx | Router::Plugin(_) => paths.nginx_root,
-    }
 }
 
 fn write_system_unit(systemd_dir: &Path, content: &str) -> Result<()> {
@@ -80,7 +80,7 @@ fn write_system_unit(systemd_dir: &Path, content: &str) -> Result<()> {
     Ok(())
 }
 
-fn systemctl_ok(args: &[&str]) -> bool {
+pub(super) fn systemctl_ok(args: &[&str]) -> bool {
     Command::new("systemctl")
         .args(args)
         .output()
@@ -110,21 +110,22 @@ fn start_riku_service() {
     }
 }
 
-/// Enable the watcher for the active router and stop the other built-in
-/// router's watcher, which a host switching routers would otherwise keep.
-fn enable_router_watch(router: &Router, path_unit: Option<&str>) {
-    for stale in other_path_units(router) {
-        let _ = systemctl_ok(&["disable", "--now", &stale]);
+/// Stop and delete the reload watcher units an earlier init installed.
+/// On a host that never had them the disable calls fail and are ignored.
+fn remove_old_watchers(systemd_dir: &Path) -> Result<()> {
+    for unit in STALE_UNITS {
+        let _ = systemctl_ok(&["disable", "--now", unit]);
     }
-    let Some(path_unit) = path_unit else {
-        return;
+    let removed = match remove_stale_units(systemd_dir) {
+        Ok(removed) => removed,
+        Err(e) => return Err(anyhow!("{e}")),
     };
-    if systemctl_ok(&["enable", "--now", path_unit]) {
-        echo(
-            &format!("✓ Enabled {} auto-reload watcher", router.name()),
-            "green",
-        );
+    if !removed {
+        return Ok(());
     }
+    let _ = systemctl_ok(&["daemon-reload"]);
+    echo("✓ Removed the old nginx reload watcher", "green");
+    Ok(())
 }
 
 /// Install systemd service files for riku daemon (system-wide, requires root).
@@ -136,34 +137,19 @@ pub fn install_systemd_service(router: &Router) -> Result<()> {
 
     let deploy_user = deploy_user_name();
     let deploy_home = passwd_home(&deploy_user).unwrap_or_else(|| format!("/home/{deploy_user}"));
-    // The binary init installed for the deploy user, not root's own copy:
-    // the unit runs as that user, who may not be able to reach root's.
-    let riku_binary = Path::new(&deploy_home).join(INSTALL_DIR).join("riku");
-
     let systemd_dir = Path::new(SYSTEMD_DIR);
     if let Err(e) = fs::create_dir_all(systemd_dir) {
         return Err(anyhow!("failed to create {SYSTEMD_DIR}: {e}"));
     }
 
-    let unit = render_system_unit(
-        router,
-        &deploy_user,
-        &deploy_home,
-        &riku_binary.to_string_lossy(),
-    );
+    let unit = render_system_unit(router, &deploy_user, &deploy_home, ROOT_BINARY);
     if let Err(e) = write_system_unit(systemd_dir, &unit) {
         return Err(e);
     }
-    let config_dir = router_config_dir(router, &deploy_home);
-    let path_unit = match write_router_units(systemd_dir, router, &config_dir) {
-        Ok(path_unit) => path_unit,
-        Err(e) => return Err(e),
-    };
 
     echo("Enabling riku systemd service...", "green");
     start_riku_service();
-    enable_router_watch(router, path_unit.as_deref());
-    Ok(())
+    remove_old_watchers(systemd_dir)
 }
 
 #[cfg(test)]

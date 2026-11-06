@@ -1,38 +1,28 @@
 //! Post-init user-facing output: verification summary and first-app guide.
 
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
 
-use crate::util::echo;
-
-use super::binary::INSTALL_DIR;
+use crate::util::{echo, ROOT_BINARY};
 
 const DOCS_URL: &str = "https://dreygur.github.io/riku/";
 const SYSTEM_SERVICE_CHECK: [&str; 2] = ["is-active", "riku"];
 const USER_SERVICE_CHECK: [&str; 3] = ["--user", "is-active", "riku"];
 
 /// Whose install the summary checks. A root init sets up the deploy
-/// user's tree, so checking root's own home or `--user` service there
-/// reports a working install as broken.
+/// user's tree, so checking root's own `--user` service there reports a
+/// working install as broken.
 pub(super) enum InstallScope {
-    /// A root init: the deploy user's tree and the system `riku.service`.
-    System { user: String, home: PathBuf },
-    /// A per-user init: the caller's tree and their `--user` service.
-    User { user: String, home: PathBuf },
+    /// A root init: the deploy user and the system `riku.service`.
+    System { user: String },
+    /// A per-user init: the caller and their `--user` service.
+    User { user: String },
 }
 
 impl InstallScope {
     fn user(&self) -> &str {
         match self {
-            Self::System { user, .. } | Self::User { user, .. } => user,
-        }
-    }
-
-    fn binary(&self) -> PathBuf {
-        match self {
-            Self::System { home, .. } | Self::User { home, .. } => {
-                home.join(INSTALL_DIR).join("riku")
-            }
+            Self::System { user } | Self::User { user } => user,
         }
     }
 
@@ -61,7 +51,7 @@ fn supervisor_running(scope: &InstallScope) -> bool {
 
 fn print_summary(scope: &InstallScope, no_systemd: bool) {
     echo("[4/4] Verifying installation...", "");
-    let binary = scope.binary();
+    let binary = Path::new(ROOT_BINARY);
     if binary.exists() {
         echo(
             &format!("      ✓ Binary installed: {}", binary.display()),

@@ -77,8 +77,7 @@ impl CronScheduler {
     /// before reloading its Procfile, so that removed or renumbered cron
     /// entries do not keep firing indefinitely after the app is gone.
     pub fn remove_app_jobs(&mut self, app: &str) {
-        let prefix = format!("{}-cron-", app);
-        self.jobs.retain(|job_id, _| !job_id.starts_with(&prefix));
+        self.jobs.retain(|_, job| job.app != app);
     }
 
     /// Get all scheduled jobs.

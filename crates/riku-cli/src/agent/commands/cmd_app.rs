@@ -2,6 +2,7 @@
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use riku_supervisor::config::app_worker_configs;
 use serde_json::json;
 
 use crate::config::RikuPaths;
@@ -33,17 +34,7 @@ pub fn cmd_agent_apps(paths: &RikuPaths) -> AgentResponse {
 }
 
 fn check_app_running(paths: &RikuPaths, app: &str) -> bool {
-    let ini_pattern = paths.workers_enabled.join(format!("{}-*.ini", app));
-    let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", app));
-
-    let ini_matches = glob::glob(ini_pattern.to_str().unwrap_or(""))
-        .map(|g| g.count())
-        .unwrap_or(0);
-    let toml_matches = glob::glob(toml_pattern.to_str().unwrap_or(""))
-        .map(|g| g.count())
-        .unwrap_or(0);
-
-    ini_matches + toml_matches > 0
+    !app_worker_configs(&paths.workers_enabled, app).is_empty()
 }
 
 pub fn cmd_agent_deploy(paths: &RikuPaths, app: &str) -> AgentResponse {
@@ -97,7 +88,7 @@ pub fn cmd_agent_destroy_confirm(paths: &RikuPaths, app: &str, token: &str) -> A
         if content.starts_with(&format!("destroy:{}:", app)) {
             let _ = fs::remove_file(&token_file);
 
-            match crate::apps::cmd_destroy(paths, app) {
+            match crate::apps::cmd_destroy(paths, app, crate::apps::DestroyMode::Safe) {
                 Ok(_) => AgentResponse::success(json!({
                     "message": format!("Application '{}' destroyed successfully", app)
                 })),

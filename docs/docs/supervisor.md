@@ -32,9 +32,9 @@ The supervisor:
          │
     ┌────┴─────────────────────────────┐
     │  ~/.riku/workers-enabled/        │
-     │  ├── myapp-web-1.toml            │
-     │  ├── myapp-worker-1.toml         │
-     │  └── myapp-cron-1.toml           │
+     │  ├── myapp@web.1.toml            │
+     │  ├── myapp@worker.1.toml         │
+     │  └── myapp@cron.1.toml           │
     └──────────────────────────────────┘
          │
     ┌────┴────┐
@@ -74,7 +74,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/riku supervisor
+ExecStart=/usr/local/bin/riku supervisor
 Restart=always
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 
@@ -100,7 +100,67 @@ systemctl --user status riku
 
 ## Worker Configuration
 
-Worker configs are TOML files in `~/.riku/workers-enabled/`.
+Worker configs are TOML files in `~/.riku/workers-enabled/`, one per copy of
+a Procfile kind, named `<app>@<kind>.<n>.toml` (`myapp@web.2.toml` is the
+second `web` copy of `myapp`). The same `<app>@<kind>.<n>` is the process id
+in the supervisor's stats and the `instance` of plugin events. App names and
+kinds cannot contain `@`, so no two apps share a file name. The supervisor only runs a file whose
+name matches the `[worker]` table inside it.
+
+A uWSGI copy listens on `/run/riku-sockets/<app>@<n>.sock`.
+
+Worker configs carry the app's environment, so riku writes them `0600`.
+The app's `ENV` and `LIVE_ENV` files are `0600` too, in a `0700`
+`~/.riku/envs/<app>` directory.
+
+### uWSGI sockets
+
+App sockets live in `/run/riku-sockets`, outside the deploy user's home,
+so nginx needs no access to that home. `sudo riku init`:
+
+- creates the `riku-sockets` group and adds the deploy user and the nginx
+  worker user (`nginx.conf`'s `user`, else `www-data`, else `nginx`) to
+  it. A worker of `root`, `nobody` or gid 0 is refused.
+- creates `/run/riku-sockets` owned by the deploy user, group
+  `riku-sockets`, mode `2750`. The setgid bit gives every socket made in it
+  the `riku-sockets` group.
+- writes `/etc/tmpfiles.d/riku.conf` so systemd recreates the directory at
+  boot. Without systemd-tmpfiles, init warns: the supervisor and deploys
+  recreate the directory only if they can write `/run`, so rerun
+  `sudo riku init` after a reboot.
+
+The riku systemd unit lists the directory in `ReadWritePaths`, since
+`ProtectSystem=strict` would leave it read only for uWSGI. nginx picks up
+its new group on its next reload, which the next deploy does. A plain
+`riku init` (not root) cannot create the directory and says so; wsgi apps
+fail to deploy until root init has run.
+
+### uWSGI Procfile lines
+
+riku runs a `wsgi:`, `jwsgi:`, `rwsgi:` or `php:` line as written and
+passes uWSGI its options through the environment, which uWSGI reads as
+`UWSGI_<OPTION>`:
+
+| Variable | Value | Why |
+|----------|-------|-----|
+| `UWSGI_SOCKET` | `/run/riku-sockets/<app>@<n>.sock` | the copy's own socket |
+| `UWSGI_CHMOD_SOCKET` | `660` | nginx connects through the `riku-sockets` group. The socket is never world writable |
+| `UWSGI_DIE_ON_TERM` | `1` | without it uWSGI reloads on SIGTERM and every copy stop waits for the SIGKILL timeout |
+| `UWSGI_PROCESSES`, `UWSGI_THREADS` | `4`, `4` | |
+
+So the line only names the app:
+
+```
+# Python
+wsgi: uwsgi --plugin python3 --module myproject.wsgi:application
+# PHP
+php: uwsgi --plugin php --php-docroot public --php-index index.php
+```
+
+Leave out `--plugin` with a uWSGI built by pip, which has Python built in.
+A deploy fails when a copy's socket does not give its group read and write,
+or, on a host with the `riku-sockets` group, when the socket is not in that
+group, since nginx could not connect to it.
 
 ### Config Structure
 
@@ -406,7 +466,7 @@ ps aux | grep myapp
 
 1. **Verify cron expression:**
    ```bash
-   cat ~/.riku/workers-enabled/myapp-cron-1.toml
+   cat ~/.riku/workers-enabled/myapp@cron.1.toml
    ```
 
 2. **Check supervisor logs:**

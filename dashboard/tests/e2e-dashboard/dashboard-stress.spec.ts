@@ -161,8 +161,7 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
     const linesBefore = await page.getByTestId("terminal-stream-line").count();
 
     // ── Stress: append STRESS_LINE_COUNT sequenced lines while the SSE
-    // connection is live, same direct-append technique already proven by
-    // dashboard/scripts/audit-dashboard.ts's auditLogTail phase. ──
+    // connection is live. ──
     for (let i = 1; i <= STRESS_LINE_COUNT; i++) {
       appendFileSync(deployLogPath, `STRESS_LINE_${i}\n`);
       if (i % 50 === 0) await new Promise((r) => setTimeout(r, 10));

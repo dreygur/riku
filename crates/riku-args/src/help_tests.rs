@@ -77,14 +77,12 @@ fn client_examples_follow_the_program_name_and_riku_keeps_its_own() {
 }
 
 #[test]
-fn client_describes_dashboard_and_update_for_what_rk_does() {
+fn client_describes_dashboard_for_what_rk_does() {
     let text = client_command(None).render_help().to_string();
     assert!(
         !text.contains("embedded"),
         "riku dashboard text in rk:\n{text}"
     );
-    assert!(!text.contains("Self"), "riku update text in rk:\n{text}");
     let riku = command(FORWARD_HEADING).render_help().to_string();
     assert!(riku.contains("Serve the read-only web dashboard (embedded, single binary)"));
-    assert!(riku.contains("Self-update the riku binary"));
 }

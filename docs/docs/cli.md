@@ -160,36 +160,6 @@ ssh riku@edge.example ps myapp
 ssh riku@edge.example riku ps myapp
 ```
 
-### Upgrading existing servers
-
-Three changes break older setups.
-
-- `ps --scale` lost its `-s` short form, because `-s` now means `--server`.
-  Write `--scale`.
-- Quoted arguments over ssh now arrive intact. A command that relied on the
-  old splitting or glob expansion on the server behaves differently.
-- Keys installed by an older riku force `riku $SSH_ORIGINAL_COMMAND`. They
-  must be rewritten, and the order matters.
-
-Do this on each server:
-
-1. Install the new riku binary on the server, the way you installed the old
-   one. **Do this first.** A migrated key passes no arguments, which an
-   old binary cannot run: with the old binary and migrated keys, no command
-   works over ssh.
-2. As the deploy user, run `sudo -H -u riku riku doctor --fix`. It rewrites the
-   `command=` part of each old riku key in `~/.ssh/authorized_keys`, keeping
-   the key, its options and its name, and replacing the file atomically with
-   mode 600. It refuses to run as root.
-
-Until then `riku doctor` warns: `N deploy keys use the old forced command, run:
-riku doctor --fix`. `riku init` also migrates the keys when it adds a key,
-but never as root: a root `init` prints the `doctor --fix` instruction instead.
-
-Update the server binary before forwarding from a new laptop binary as well.
-Older servers reject the hidden `--app-hint` option that carries the app from
-your git remote, so those commands fail until the server is updated.
-
 ## The `rk` Client
 
 `rk` runs riku commands on your servers from your laptop. Start with:
@@ -291,6 +261,16 @@ This deletes:
 
 `~/.riku/data/<app>/` and `~/.riku/cache/<app>/` are **preserved** by destroy.
 
+For a container app, destroy first stops and removes every container and the
+app network, and keeps the volumes. When the container engine does not
+answer, destroy refuses and removes nothing, so no container is left running
+without an app. `--force` removes riku's files and route anyway and warns
+that containers may still be running:
+
+```bash
+riku destroy myapp --force
+```
+
 ---
 
 ### `riku logs <app> [process]`
@@ -308,29 +288,48 @@ riku logs myapp worker
 
 Logs are stored in `~/.riku/logs/<app>/` and automatically rotated at 10MB.
 
+Without a process, every `*.log` file of the app is followed except
+`deploy.log` (use `--deploy` for that one). With a process or service name,
+its `<name>.<n>.log` files are followed, one per copy. A name with no log
+files is an error that lists the names that have logs. Container services
+log to the same files, written by the supervisor.
+
 ---
 
-### `riku restart <app>`
+### `riku restart <app> [service]`
 
 Restart all processes for an application.
 
 ```bash
 riku restart myapp
+riku restart myapp worker   # one service of a container app
 ```
 
-Gracefully stops workers and restarts them. For zero-downtime rolling restarts, use `riku restart myapp --hot`.
+A Procfile app is stopped and deployed again. For zero-downtime rolling restarts, use `riku restart myapp --hot`.
+
+A container app replaces the copies of the named service, or of every
+service in start order, one at a time from the images they run now, without
+a rebuild. A stopped service starts again. `--hot` does the same for a
+container app and cannot be combined with a service. See
+[Rolling replacement](runtimes.md#rolling-replacement).
 
 ---
 
-### `riku stop <app>`
+### `riku stop <app> [service]`
 
 Stop all processes for an application.
 
 ```bash
 riku stop myapp
+riku stop myapp worker   # one service of a container app
 ```
 
 To restart, use `riku restart <app>` or push a new commit.
+
+For a container app, stop removes the copies of the named service, or every
+container of the app, and keeps the volumes. When the routed service is
+among them, the app is taken off the router first. Dependents stop before
+the services they depend on. Naming a service of a Procfile app is refused.
 
 ---
 
@@ -432,6 +431,9 @@ worker:  1/1 running
 cron:    1/1 running
 ```
 
+For a container app, each copy is a row with the columns SERVICE
+(`<service>.<n>`), STATUS, MEMORY, CPU, RESTARTS, CONTAINER ID and IMAGE.
+
 ---
 
 ### `riku ps <app> --scale web=N worker=N...`
@@ -443,6 +445,13 @@ riku ps myapp --scale web=4 worker=2
 ```
 
 This creates/updates the `SCALING` file and triggers a restart.
+
+For a container app, each named compose service grows or shrinks without a
+rebuild and without restarting the copies it keeps, and the count is
+recorded in `~/.riku/envs/<app>/SCALING`. A service that mounts writable
+storage, or publishes a port other than the routed HTTP one, cannot run more
+than one copy, and a count of 0 is refused. See
+[Scaling](runtimes.md#scaling).
 
 **Alternative:** Create a `SCALING` file directly:
 ```bash
@@ -643,14 +652,14 @@ Creates:
 - `~/.riku/repos/` - Git bare repositories
 - `~/.riku/envs/` - Environment variables
 - `~/.riku/logs/` - Application logs
-- `~/.riku/nginx/` - Nginx configurations
-- `~/.riku/cache/` - Nginx cache files
+- `~/.riku/nginx/` - Certificate files the router helper copies
+- `~/.riku/cache/` - Cache files
 - `~/.riku/workers-available/` - Worker configs
 - `~/.riku/workers-enabled/` - Enabled worker symlinks
 - `~/.riku/plugins/` - Plugin executables
 - `~/.riku/acme/` - SSL certificates
 
-Also installs the riku binary to `~/.local/bin/riku` and generates a systemd user service.
+As root, also installs the riku binary to `/usr/local/bin/riku` (root owned) and generates the systemd service.
 
 ---
 
@@ -679,6 +688,18 @@ systemctl --user start riku
 
 ---
 
+### `riku router-renew`
+
+Send an app's current certificate files to the router helper. acme.sh calls it after each renewal. Run it as the deploy user.
+
+```bash
+riku router-renew myapp
+```
+
+The server side `riku router-helper` command is the root service behind `riku-router-helper.service`. You do not run it by hand. See [Systemd](systemd.md).
+
+---
+
 ### `riku doctor`
 
 Diagnose the installation (deps, dirs, systemd, nginx, disk, SSH). See
@@ -687,12 +708,7 @@ Diagnose the installation (deps, dirs, systemd, nginx, disk, SSH). See
 ```bash
 riku doctor
 sudo riku doctor   # most complete report
-sudo -H -u riku riku doctor --fix   # rewrite old deploy key forced commands
 ```
-
-`--fix` is the only thing doctor writes. It must run as the deploy user, not
-root, and only after the new binary is installed on the server. See
-[Upgrading existing servers](#upgrading-existing-servers).
 
 ---
 
@@ -741,8 +757,7 @@ visible in the arguments of the `open` or `xdg-open` process for the moment it
 starts. Both stay on your machine and the token stops working when the session
 ends. This is accepted.
 
-The `riku` binary must be on the deploy user's `PATH` or at
-`~/.local/bin/riku` on the server.
+The `riku` binary must be at `/usr/local/bin/riku` on the server.
 
 ---
 
@@ -756,18 +771,6 @@ riku container deploy-remote -a myapp -r user@host  # Build, transfer, deploy
 riku container deploy-archive               # Deploy an exported tar archive to remote
 riku container check-remote                 # Check remote for Docker/Podman
 ```
-
----
-
-### `riku update`
-
-Update the Riku binary to the latest version.
-
-```bash
-riku update
-```
-
-Downloads and replaces the current binary from the official release.
 
 ---
 

@@ -16,9 +16,12 @@ mod tests {
     use anyhow::Result;
     use std::collections::HashMap;
     use std::fs;
+    use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
     use std::process::Command;
     use tempfile::TempDir;
+
+    use crate::mock_supervisor::MockSupervisor;
 
     // -------------------------------------------------------------------------
     // Helpers
@@ -29,7 +32,8 @@ mod tests {
     /// The host router is Caddy: with no `RIKU_DOMAINS` set, routing is a
     /// file removal, so deploys here need no `nginx` binary for `nginx -t`.
     fn make_paths(tmp: &TempDir) -> riku::config::RikuPaths {
-        let paths = riku::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
+        let mut paths = riku::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
+        paths.caddy_root = tmp.path().join("caddy-sites");
         for dir in &[
             &paths.app_root,
             &paths.env_root,
@@ -46,6 +50,15 @@ mod tests {
         }
         riku::config::router::save(&paths, &riku::config::router::Router::Caddy)
             .expect("Failed to write router file");
+        paths.reload_programs.caddy = tmp.path().join("mock_caddy");
+        fs::write(&paths.reload_programs.caddy, "#!/bin/sh\nexit 0\n")
+            .expect("Failed to write mock caddy");
+        fs::set_permissions(
+            &paths.reload_programs.caddy,
+            fs::Permissions::from_mode(0o755),
+        )
+        .expect("Failed to chmod mock caddy");
+        riku_route::serve_caddy_for_tests(&mut paths);
         paths
     }
 
@@ -259,11 +272,12 @@ esac
 
         let env = HashMap::new();
 
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         // Both worker configs must exist in workers-available
-        let web_cfg = paths.workers_available.join("nodeapp-web-1.toml");
-        let worker_cfg = paths.workers_available.join("nodeapp-worker-1.toml");
+        let web_cfg = paths.workers_available.join("nodeapp@web.1.toml");
+        let worker_cfg = paths.workers_available.join("nodeapp@worker.1.toml");
         assert!(web_cfg.exists(), "web worker config must be created");
         assert!(worker_cfg.exists(), "worker worker config must be created");
 
@@ -275,8 +289,8 @@ esac
         );
 
         // Symlinks in workers-enabled must exist
-        let web_enabled = paths.workers_enabled.join("nodeapp-web-1.toml");
-        let worker_enabled = paths.workers_enabled.join("nodeapp-worker-1.toml");
+        let web_enabled = paths.workers_enabled.join("nodeapp@web.1.toml");
+        let worker_enabled = paths.workers_enabled.join("nodeapp@worker.1.toml");
         assert!(web_enabled.exists(), "web enabled symlink must exist");
         assert!(worker_enabled.exists(), "worker enabled symlink must exist");
 
@@ -302,9 +316,10 @@ esac
         fs::write(app_dir.join("requirements.txt"), "gunicorn==20.0.0\n")?;
 
         let env = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
-        let web_cfg = paths.workers_available.join("pyapp-web-1.toml");
+        let web_cfg = paths.workers_available.join("pyapp@web.1.toml");
         assert!(web_cfg.exists(), "web worker config must be created");
 
         let content = fs::read_to_string(&web_cfg)?;
@@ -337,7 +352,7 @@ esac
         if let Some(domains) = domains {
             env.insert("RIKU_DOMAINS".to_string(), domains.to_string());
         }
-        riku::deploy::router::configure(app, &paths.app_root.join(app), &env, paths)
+        riku::deploy::router::configure(app, &paths.app_root.join(app), &env, paths, None)
     }
 
     #[test]
@@ -349,15 +364,16 @@ esac
         fs::create_dir_all(&app_dir).unwrap();
         fs::create_dir_all(paths.log_root.join(app)).unwrap();
         fs::write(app_dir.join("Procfile"), "web: node server.js\n").unwrap();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::workers::create_workers_generic(app, &app_dir, &HashMap::new(), &paths, None)
             .unwrap();
         let site_file = paths.caddy_root.join("shop.caddy");
 
         configure_route(&paths, app, Some("shop.example.com")).unwrap();
         let site = fs::read_to_string(&site_file).expect("site file written");
-        let mut env = HashMap::new();
-        riku::util::parse_settings(&paths.env_root.join(app).join("ENV"), &mut env).unwrap();
-        let upstream = format!("reverse_proxy 127.0.0.1:{}", env["RIKU_UPSTREAM_PORT"]);
+        let backends =
+            riku::deploy::router::current_backends(app, &HashMap::new(), &paths, None).unwrap();
+        let upstream = format!("reverse_proxy {}", backends[0]);
         assert!(site.contains("shop.example.com"), "{site}");
         assert!(
             site.contains(&upstream),
@@ -541,10 +557,11 @@ esac
         fs::write(app_dir.join("package.json"), r#"{"name":"scaledapp"}"#)?;
 
         let env = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
-        let cfg1 = paths.workers_available.join("scaledapp-web-1.toml");
-        let cfg2 = paths.workers_available.join("scaledapp-web-2.toml");
+        let cfg1 = paths.workers_available.join("scaledapp@web.1.toml");
+        let cfg2 = paths.workers_available.join("scaledapp@web.2.toml");
         assert!(cfg1.exists(), "web-1 config must exist");
         assert!(cfg2.exists(), "web-2 config must exist");
 
@@ -607,13 +624,16 @@ esac
         let (bare, _work, sha) = make_git_repo_with_files(files);
         let app_dir = setup_app_clone(bare.path(), app, &paths);
         fs::create_dir_all(paths.env_root.join(app))?;
-        fs::write(paths.env_root.join(app).join("ENV"), "PORT=5000\n")?;
+        // No pinned PORT: a pinned port must be free on the host, and macOS
+        // AirPlay listens on 5000.
+        fs::write(paths.env_root.join(app).join("ENV"), "")?;
         fs::create_dir_all(paths.log_root.join(app))?;
 
         let deltas: HashMap<String, i64> = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
-        let web_cfg = paths.workers_available.join("testapp-web-1.toml");
+        let web_cfg = paths.workers_available.join("testapp@web.1.toml");
         assert!(web_cfg.exists(), "web worker config must exist");
         assert!(app_dir.join("Procfile").exists());
         Ok(())
@@ -637,13 +657,16 @@ esac
         let (bare, _work, sha) = make_git_repo_with_files(files);
         let app_dir = setup_app_clone(bare.path(), app, &paths);
         fs::create_dir_all(paths.env_root.join(app))?;
-        fs::write(paths.env_root.join(app).join("ENV"), "PORT=5000\n")?;
+        // No pinned PORT: a pinned port must be free on the host, and macOS
+        // AirPlay listens on 5000.
+        fs::write(paths.env_root.join(app).join("ENV"), "")?;
         fs::create_dir_all(paths.log_root.join(app))?;
 
         let deltas: HashMap<String, i64> = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
-        let web_cfg = paths.workers_available.join("testapp-web-1.toml");
+        let web_cfg = paths.workers_available.join("testapp@web.1.toml");
         assert!(web_cfg.exists(), "web worker config must exist");
         let content = fs::read_to_string(&web_cfg)?;
         assert!(content.contains("gunicorn"), "config must mention gunicorn");
@@ -827,26 +850,27 @@ esac
         )?;
 
         let env = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         assert!(
             paths
                 .workers_available
-                .join("multiproc-web-1.toml")
+                .join("multiproc@web.1.toml")
                 .exists(),
             "web config must exist"
         );
         assert!(
             paths
                 .workers_available
-                .join("multiproc-worker-1.toml")
+                .join("multiproc@worker.1.toml")
                 .exists(),
             "worker config must exist"
         );
         assert!(
             paths
                 .workers_available
-                .join("multiproc-scheduler-1.toml")
+                .join("multiproc@scheduler.1.toml")
                 .exists(),
             "scheduler config must exist"
         );
@@ -877,7 +901,7 @@ esac
             assert!(
                 paths
                     .workers_available
-                    .join(format!("wscaled-worker-{}.toml", i))
+                    .join(format!("wscaled@worker.{}.toml", i))
                     .exists(),
                 "worker-{} config must exist",
                 i
@@ -904,6 +928,7 @@ esac
         )?;
 
         let env = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
         // Only web config should exist
@@ -912,7 +937,7 @@ esac
         assert!(
             paths
                 .workers_available
-                .join("commentapp-web-1.toml")
+                .join("commentapp@web.1.toml")
                 .exists(),
             "web config must exist"
         );
@@ -935,7 +960,7 @@ esac
         let env = HashMap::new();
         riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
 
-        let cfg = paths.workers_available.join("cmdapp-worker-1.toml");
+        let cfg = paths.workers_available.join("cmdapp@worker.1.toml");
         let content = fs::read_to_string(&cfg)?;
         assert!(
             content.contains("celery"),
@@ -1068,6 +1093,7 @@ esac
         fs::create_dir_all(paths.log_root.join(app))?;
 
         let deltas: HashMap<String, i64> = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
         let deploy_log = paths.deploy_log_file(app);
@@ -1103,6 +1129,7 @@ esac
         fs::create_dir_all(paths.log_root.join(app))?;
 
         let deltas: HashMap<String, i64> = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
         // LIVE_ENV must be written
@@ -1143,20 +1170,21 @@ esac
         fs::create_dir_all(paths.log_root.join(app))?;
 
         let deltas: HashMap<String, i64> = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
         assert!(
-            paths.workers_available.join("scaleapp-web-1.toml").exists(),
+            paths.workers_available.join("scaleapp@web.1.toml").exists(),
             "web-1 must exist"
         );
         assert!(
-            paths.workers_available.join("scaleapp-web-2.toml").exists(),
+            paths.workers_available.join("scaleapp@web.2.toml").exists(),
             "web-2 must exist (scaling=2)"
         );
         assert!(
             paths
                 .workers_available
-                .join("scaleapp-worker-1.toml")
+                .join("scaleapp@worker.1.toml")
                 .exists(),
             "worker-1 must exist"
         );
@@ -1184,6 +1212,7 @@ esac
         fs::create_dir_all(paths.log_root.join(app))?;
 
         let deltas: HashMap<String, i64> = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         let result = riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha));
         assert!(result.is_ok(), "deploy without ENV file must succeed");
 
@@ -1213,19 +1242,20 @@ esac
         fs::create_dir_all(paths.log_root.join(app))?;
 
         let deltas: HashMap<String, i64> = HashMap::new();
+        let _supervisor = MockSupervisor::start(&paths);
         riku::deploy::do_deploy(app, &paths, &deltas, Some(&sha))?;
 
         assert!(
             paths
                 .workers_available
-                .join("pyworkers-web-1.toml")
+                .join("pyworkers@web.1.toml")
                 .exists(),
             "web worker config must exist"
         );
         assert!(
             paths
                 .workers_available
-                .join("pyworkers-worker-1.toml")
+                .join("pyworkers@worker.1.toml")
                 .exists(),
             "celery worker config must exist"
         );

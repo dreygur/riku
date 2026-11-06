@@ -11,7 +11,9 @@ pub(super) fn run_apps(paths: &RikuPaths, cmd: Option<AppsCmd>) -> Result<()> {
     match cmd {
         Some(AppsCmd::Create { name }) => apps::cmd_apps_create(paths, &name),
         Some(AppsCmd::Info { name }) => apps::cmd_apps_info(paths, &name),
-        Some(AppsCmd::Destroy { name }) => apps::cmd_destroy(paths, &name),
+        Some(AppsCmd::Destroy { name, force }) => {
+            apps::cmd_destroy(paths, &name, apps::DestroyMode::from(force))
+        }
         None => apps::cmd_apps(paths),
     }
 }
@@ -66,10 +68,15 @@ pub(super) fn run_stats(paths: &RikuPaths, cmd: StatsCmd) -> Result<()> {
     }
 }
 
-pub(super) fn run_restart(paths: &RikuPaths, app: Option<String>, hot: bool) -> Result<()> {
+pub(super) fn run_restart(
+    paths: &RikuPaths,
+    app: Option<String>,
+    service: Option<String>,
+    hot: bool,
+) -> Result<()> {
     match require_app(app) {
         Ok(app) if hot => apps::cmd_hot_reload(paths, &app),
-        Ok(app) => apps::cmd_restart(paths, &app),
+        Ok(app) => apps::cmd_restart(paths, &app, service.as_deref()),
         Err(e) => Err(e),
     }
 }

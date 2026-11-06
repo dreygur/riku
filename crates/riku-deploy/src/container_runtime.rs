@@ -2,30 +2,28 @@
 //!
 //! Handles building container images (Docker/Podman) locally and deploying them to remote servers.
 
-use anyhow::Result;
+use std::ffi::OsString;
 use std::path::Path;
 use std::process::Command;
+
+use anyhow::Result;
+use riku_config::settings::EngineSettings;
+use riku_container::engine::{answers_version, exits_zero_within};
 
 use crate::util::echo;
 
 /// Get the container runtime command (docker or podman).
+///
+/// Uses default engine settings because this caller has no RikuPaths.
 pub fn get_container_runtime() -> Result<String> {
-    // Check for Docker first
-    let docker_check = Command::new("docker").arg("--version").output();
+    let limit = EngineSettings::default().call_timeout;
 
-    if let Ok(output) = docker_check {
-        if output.status.success() {
-            return Ok("docker".to_string());
-        }
+    if answers_version(Path::new("docker"), limit) {
+        return Ok("docker".to_string());
     }
 
-    // Check for Podman
-    let podman_check = Command::new("podman").arg("--version").output();
-
-    if let Ok(output) = podman_check {
-        if output.status.success() {
-            return Ok("podman".to_string());
-        }
+    if answers_version(Path::new("podman"), limit) {
+        return Ok("podman".to_string());
     }
 
     Err(anyhow::anyhow!(
@@ -168,51 +166,37 @@ pub fn cleanup_archive(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// The ssh argv that runs `<engine> --version` on `remote_host`. `--` keeps a
+/// host starting with `-` from being read as an ssh option.
+fn remote_version_args(remote_host: &str, engine: &str) -> Vec<OsString> {
+    [
+        "-o",
+        "ConnectTimeout=10",
+        "--",
+        remote_host,
+        &format!("{engine} --version"),
+    ]
+    .into_iter()
+    .map(OsString::from)
+    .collect()
+}
+
 /// Check if the remote server has Docker or Podman installed.
+///
+/// Each ssh call is bounded by the engine call timeout, so an unreachable or
+/// hung host fails the check instead of blocking the caller.
 pub fn check_remote_runtime(remote_host: &str) -> Result<Option<String>> {
-    // Check for Docker
-    let docker_check = Command::new("ssh")
-        .args([remote_host, "docker --version"])
-        .output();
-
-    if let Ok(output) = docker_check {
-        if output.status.success() {
-            return Ok(Some("docker".to_string()));
-        }
-    }
-
-    // Check for Podman
-    let podman_check = Command::new("ssh")
-        .args([remote_host, "podman --version"])
-        .output();
-
-    if let Ok(output) = podman_check {
-        if output.status.success() {
-            return Ok(Some("podman".to_string()));
-        }
-    }
-
-    Ok(None)
+    let limit = EngineSettings::default().call_timeout;
+    let found = ["docker", "podman"].into_iter().find(|engine| {
+        exits_zero_within(
+            Path::new("ssh"),
+            &remote_version_args(remote_host, engine),
+            limit,
+        )
+    });
+    Ok(found.map(str::to_string))
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_get_container_runtime() {
-        // This test will depend on what's available on the system
-        let result = get_container_runtime();
-        // The result depends on what's installed
-        assert!(result.is_ok() || result.is_err());
-    }
-
-    #[test]
-    fn test_check_remote_runtime_format() {
-        // Just verify the function exists and compiles
-        // Actual testing would require a real remote host
-        let result = check_remote_runtime("localhost");
-        // Result depends on what's installed on localhost
-        assert!(result.is_ok());
-    }
-}
+#[path = "container_runtime_tests.rs"]
+mod tests;

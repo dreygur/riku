@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::PoisonError;
 
-use crate::config::WorkerConfig;
+use super::config_file::{loadable_config, named_worker};
 use crate::daemon::Supervisor;
 use crate::CONFIG_RELOAD_LOCK;
 
@@ -108,7 +108,17 @@ impl Supervisor {
         Ok(())
     }
 
+    fn reset_process_restarts(&mut self, filename: &str) {
+        if let Some(name) = named_worker(filename) {
+            self.process_manager
+                .stats_mut()
+                .reset_restarts(&name.to_string());
+        }
+    }
+
     /// Handle file system events (create, modify, remove config files).
+    // Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
+    #[allow(clippy::question_mark)]
     pub(super) fn handle_file_event(&mut self, event: Event) -> Result<()> {
         // Acquire lock to prevent race with manual reload (SIGHUP). See
         // `reload_all_configs` for why a poisoned lock is recovered here.
@@ -122,7 +132,10 @@ impl Supervisor {
                     match event.kind {
                         notify::EventKind::Create(_) => {
                             tracing::info!("New config file detected: {}", filename);
-                            self.load_config_file(&path, filename)?;
+                            self.reset_process_restarts(filename);
+                            if let Err(e) = self.load_config_file(&path, filename) {
+                                return Err(e);
+                            }
                             if let Ok(metadata) = fs::metadata(&path) {
                                 if let Ok(modified) = metadata.modified() {
                                     self.watched_configs.insert(filename.to_string(), modified);
@@ -135,7 +148,12 @@ impl Supervisor {
                                     if let Some(old_modified) = self.watched_configs.get(filename) {
                                         if new_modified > *old_modified {
                                             tracing::info!("Config file modified: {}", filename);
-                                            self.handle_modified_config(&path, filename)?;
+                                            self.reset_process_restarts(filename);
+                                            if let Err(e) =
+                                                self.handle_modified_config(&path, filename)
+                                            {
+                                                return Err(e);
+                                            }
                                             self.watched_configs
                                                 .insert(filename.to_string(), new_modified);
                                         }
@@ -146,7 +164,10 @@ impl Supervisor {
                                             "New config file detected via Modify: {}",
                                             filename
                                         );
-                                        self.load_config_file(&path, filename)?;
+                                        self.reset_process_restarts(filename);
+                                        if let Err(e) = self.load_config_file(&path, filename) {
+                                            return Err(e);
+                                        }
                                         self.watched_configs
                                             .insert(filename.to_string(), new_modified);
                                     }
@@ -155,7 +176,9 @@ impl Supervisor {
                         }
                         notify::EventKind::Remove(_) => {
                             tracing::info!("Config file removed: {}", filename);
-                            self.unload_config(filename)?;
+                            if let Err(e) = self.unload_config(filename) {
+                                return Err(e);
+                            }
                             self.watched_configs.remove(filename);
                         }
                         _ => {}
@@ -164,18 +187,6 @@ impl Supervisor {
             }
         }
         Ok(())
-    }
-
-    /// Parse a worker config TOML file without spawning anything.
-    fn parse_worker_config(path: &Path) -> Result<WorkerConfig> {
-        let config_content = fs::read_to_string(path).map_err(|e| {
-            tracing::error!("Error reading config file {}: {}", path.display(), e);
-            e
-        })?;
-        toml::from_str(&config_content).map_err(|e| {
-            tracing::error!("Error parsing config file {}: {}", path.display(), e);
-            e.into()
-        })
     }
 
     /// Handle a modified worker config.
@@ -187,17 +198,19 @@ impl Supervisor {
     /// its probe window, with the rollback circuit breaker handling
     /// failures. Otherwise (no health check, or not currently running)
     /// fall back to the original unload-then-respawn behavior.
+    #[allow(clippy::question_mark)]
     pub(super) fn handle_modified_config(&mut self, path: &Path, filename: &str) -> Result<()> {
-        let worker_config = Self::parse_worker_config(path)?;
+        let worker_config = match loadable_config(path, filename) {
+            Ok(Some(config)) => config,
+            Ok(None) => return Ok(()),
+            Err(e) => return Err(e),
+        };
 
         if worker_config.worker.kind.starts_with("cron") {
             return self.load_config_file(path, filename);
         }
 
-        let process_id = format!(
-            "{}-{}-{}",
-            worker_config.worker.app, worker_config.worker.kind, worker_config.worker.ordinal
-        );
+        let process_id = worker_config.worker.name().to_string();
 
         if worker_config.options.health_check.is_some()
             && self.process_manager.is_managed(&process_id)
@@ -207,13 +220,20 @@ impl Supervisor {
                 .deploy_generation(&process_id, worker_config);
         }
 
-        self.unload_config(filename)?;
+        if let Err(e) = self.unload_config(filename) {
+            return Err(e);
+        }
         self.load_config_file(path, filename)
     }
 
-    /// Load and start a configuration from a TOML file.
-    pub(super) fn load_config_file(&mut self, path: &Path, _filename: &str) -> Result<()> {
-        let worker_config = Self::parse_worker_config(path)?;
+    /// Load and start a configuration from a TOML file. A file not named
+    /// after its worker is logged and skipped.
+    pub(super) fn load_config_file(&mut self, path: &Path, filename: &str) -> Result<()> {
+        let worker_config = match loadable_config(path, filename) {
+            Ok(Some(config)) => config,
+            Ok(None) => return Ok(()),
+            Err(e) => return Err(e),
+        };
 
         // If this is a cron worker, load cron jobs from the app's Procfile instead of
         // spawning a persistent process (cron entries are driven by the scheduler).
@@ -252,21 +272,15 @@ impl Supervisor {
     // Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
     #[allow(clippy::question_mark)]
     pub(super) fn unload_config(&mut self, filename: &str) -> Result<()> {
-        // Worker config filenames are <app>-<kind>-<ordinal>.toml, which is
-        // exactly the process_id format `stop_process_by_id` expects.
-        let process_id = filename.strip_suffix(".toml").unwrap_or(filename);
-        // Strip "-<ordinal>" (last component)
-        let without_ordinal = process_id
-            .rsplit_once('-')
-            .map(|x| x.0)
-            .unwrap_or(process_id);
-        // Strip "-<kind>" (now last component): the app name itself may
-        // contain hyphens (e.g. "my-app"), hence stripping from the right.
-        let (app_name, kind) = without_ordinal
-            .rsplit_once('-')
-            .unwrap_or((without_ordinal, ""));
+        // `load_config_file` only runs a file named after its worker, so a
+        // name that does not parse never started anything.
+        let Some(name) = named_worker(filename) else {
+            tracing::debug!("{filename} ran no worker, nothing to stop");
+            return Ok(());
+        };
+        let app_name = name.app.as_str();
 
-        if kind.starts_with("cron") {
+        if name.kind.starts_with("cron") {
             // Cron jobs live in the in-memory scheduler, not the process
             // manager. There's no scaling concept for cron workers (always
             // ordinal 1), so removing a cron config always means "this
@@ -275,7 +289,15 @@ impl Supervisor {
             // process case would be.
             self.cron_scheduler.remove_app_jobs(app_name);
         } else {
-            self.process_manager.stop_process_by_id(process_id)?;
+            // The canary goes first, so the canonical marker deploy waits on
+            // is the last one to disappear.
+            let process_id = name.to_string();
+            if let Err(e) = self.process_manager.stop_canaries(&process_id) {
+                return Err(e);
+            }
+            if let Err(e) = self.process_manager.stop_process_by_id(&process_id) {
+                return Err(e);
+            }
         }
 
         // `riku stop` removes worker configs but leaves the app's source

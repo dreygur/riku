@@ -8,22 +8,29 @@ repository = "https://github.com/dreygur/riku"
 license = "MIT"
 
 [dependencies]
+riku-bundle = { path = "../riku-bundle" }
 riku-config = { path = "../riku-config" }
 riku-util = { path = "../riku-util" }
+riku-http = { path = "../riku-http" }
 riku-error = { path = "../riku-error" }
 riku-nginx = { path = "../riku-nginx" }
-riku-caddy = { path = "../riku-caddy" }
+riku-route = { path = "../riku-route" }
 riku-plugins = { path = "../riku-plugins" }
 riku-supervisor = { path = "../riku-supervisor" }
+riku-container = { path = "../riku-container" }
+sha2 = "0.11"
+hex = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 libc = { workspace = true }
-nix = { workspace = true, features = ["signal", "process", "user", "fs"] }
+nix = { workspace = true, features = ["signal", "process", "user", "fs", "time"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
 tracing = { workspace = true }
 glob = { workspace = true }
+reqwest = { workspace = true }
 
 [dev-dependencies]
+riku-route = { path = "../riku-route", features = ["test-server"] }
 tempfile = { workspace = true }

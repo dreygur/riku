@@ -1,13 +1,12 @@
 use super::*;
 
-/// A push over SSH runs the hook with a bare PATH that has no
-/// `~/.local/bin`, where root init installs riku.
+/// The hook hands the app name and repository to the riku binary with a
+/// bare PATH and without reading the pushed refs itself. The test swaps the
+/// installed path in the hook text for a mock.
 #[test]
-fn hook_finds_riku_in_local_bin_when_not_on_path() {
+fn hook_passes_app_and_repo_to_the_binary() {
     let home = tempfile::tempdir().unwrap();
-    let bin = home.path().join(".local/bin");
-    fs::create_dir_all(&bin).unwrap();
-    let mock_riku = bin.join("riku");
+    let mock_riku = home.path().join("mock-riku");
     fs::write(
         &mock_riku,
         "#!/bin/sh\ncat >/dev/null\necho \"$@\" > \"$HOME/called\"\n",
@@ -17,7 +16,10 @@ fn hook_finds_riku_in_local_bin_when_not_on_path() {
     let repo = home.path().join("myapp");
     fs::create_dir_all(&repo).unwrap();
     let hook = home.path().join("post-receive");
-    fs::write(&hook, POST_RECEIVE_HOOK).unwrap();
+    let original = post_receive_hook();
+    let script = original.replace(crate::util::ROOT_BINARY, mock_riku.to_str().unwrap());
+    assert_ne!(script, original, "hook does not name the root binary");
+    fs::write(&hook, script).unwrap();
 
     let status = Command::new("bash")
         .arg(&hook)

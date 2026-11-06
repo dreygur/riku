@@ -43,6 +43,16 @@ chmod +x benchmark.sh
 - Architecture
 - Available resources
 
+## Footprint
+
+`footprint.sh` prints the binary size in bytes and the idle RSS in KiB of the supervisor, alone and with nginx. It runs as root and refuses to start beside a running nginx, so use a throwaway container with `nginx` and `procps` installed:
+
+```bash
+docker run --rm -v "$PWD:/src" debian:12 bash -c \
+  "apt-get update && apt-get install -y nginx procps && \
+   /src/benches/footprint.sh /src/target/release/riku"
+```
+
 ## Contributing Benchmarks
 
 I encourage users to share their benchmark results. Please submit:

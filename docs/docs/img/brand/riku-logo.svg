@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 160" role="img" aria-labelledby="title desc">
+  <title id="title">Riku logo</title>
+  <desc id="desc">Geometric infrastructure-kernel symbol followed by a custom lowercase Riku wordmark and green terminal cursor.</desc>
+  <style>
+    .cursor { animation: blink 1.06s steps(1, end) infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .cursor { animation: none; } }
+  </style>
+  <g fill="#F0F1F3">
+    <!-- Geometric kernel: open, three-part isometric structure -->
+    <path d="M76 12 132 44 76 76 20 44 76 12Zm0 17L49 44l27 15 27-15-27-15Z"/>
+    <path d="M20 57 68 84v58L20 114V57Zm16 28v20l16 9V94L36 85Z"/>
+    <path d="M132 57 84 84v58l48-28V57Zm-16 28-16 9v20l16-9V85Z"/>
+    <!-- Custom geometric lowercase r -->
+    <path d="M174 112V53h15v10c7-9 17-13 31-12v15c-17-2-31 5-31 20v26h-15Z"/>
+    <!-- i -->
+    <path d="M239 53h15v59h-15zM239 27h15v15h-15z"/>
+    <!-- k -->
+    <path d="M278 27h15v51l27-25h20l-30 28 32 31h-21l-28-28v28h-15V27Z"/>
+    <!-- u -->
+    <path d="M357 53h15v34c0 9 5 14 14 14s15-6 15-16V53h15v59h-14v-9c-6 7-14 11-25 11-17 0-20-12-20-25V53Z"/>
+  </g>
+  <path class="cursor" fill="#39D98A" d="M431 27h14v85h-14z"/>
+</svg>

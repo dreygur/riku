@@ -43,7 +43,7 @@ Each runtime plugin is an executable that implements four subcommands, plus an o
 | `<plugin> build` | install dependencies; stdout/stderr streamed to deploy log |
 | `<plugin> env` | print `KEY=VALUE` lines to stdout; merged into worker environment |
 | `<plugin> start` | print default start command; fills a Procfile entry with no command, and runs as `web` when the app has no Procfile |
-| `<plugin> destroy` | optional: remove what the plugin started outside the app directory (the container plugin runs `compose down`); called by `riku destroy` before the app's files go, and a non-zero exit is shown as a warning |
+| `<plugin> destroy` | optional: remove what the plugin started outside the app directory (for example containers or networks it started); called by `riku destroy` before the app's files go, and a non-zero exit is shown as a warning |
 
 Context is passed as environment variables:
 
@@ -292,10 +292,11 @@ ssh "$server" run "$app" "python manage.py migrate"
 
 # SCP works (bypasses shell)
 scp "$server:.riku/apps/$app/file" .
-
-# SSH with -N works (no command)
-ssh -N -L 8000:localhost:8000 "$server"
 ```
+
+Port forwarding does not work through the deploy key: it is installed with
+`no-port-forwarding`, so `ssh -N -L ...` to it is refused. Forward ports
+through an admin login on the server instead (see the tunnel plugin below).
 
 ### What Doesn't Work
 
@@ -313,7 +314,7 @@ ssh "$server" "ls -la"  # Fails
 | `ssh "$server" config:get "$app" VAR` | Yes | `config:get` is a Riku command |
 | `ssh "$server" "cat file"` | No | `cat` is not a Riku command |
 | `scp "$server:file" .` | Yes | SCP bypasses the Riku shell |
-| `ssh -N -L port:localhost:port "$server"` | Yes | `-N` means no command executed |
+| `ssh -N -L port:localhost:port "$server"` | No | The deploy key has `no-port-forwarding`; use an admin login |
 
 ---
 
@@ -399,7 +400,9 @@ esac
 
 ### Tunnel Plugin (Client-Side)
 
-Creates SSH port tunnels to access services on the server.
+Creates SSH port tunnels to access services on the server. The deploy key
+cannot forward ports, so the tunnel goes through an admin login named in
+`ADMIN_LOGIN` (for example `admin@edge.example`), not through `$server`.
 
 ```bash
 #!/bin/sh
@@ -412,6 +415,8 @@ local_port="$4"
 remote_port="$5"
 shift 5
 
+login="${ADMIN_LOGIN:?set ADMIN_LOGIN to an ssh login that may forward ports}"
+
 case "$cmd" in
     tunnel)
         if [ -z "$local_port" ] || [ -z "$remote_port" ]; then
@@ -419,7 +424,7 @@ case "$cmd" in
             exit 1
         fi
         echo "Creating tunnel: localhost:$local_port -> server:$remote_port"
-        ssh -N -L "$local_port:localhost:$remote_port" "$server"
+        ssh -N -L "$local_port:localhost:$remote_port" "$login"
         ;;
     tunnel:db)
         case "$local_port" in
@@ -438,7 +443,7 @@ case "$cmd" in
                 ;;
         esac
         echo "Creating tunnel for $local_port (port $remote_port)..."
-        ssh -N -L "$remote_port:localhost:$remote_port" "$server"
+        ssh -N -L "$remote_port:localhost:$remote_port" "$login"
         ;;
     *)
         echo "Usage: riku tunnel <local_port> <remote_port>"

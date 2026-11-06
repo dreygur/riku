@@ -24,17 +24,23 @@ Root init creates the deploy user when it does not exist: `riku`, or the name in
 Under Caddy, a root `riku init`:
 
 - writes `caddy` to `/home/riku/.riku/ROUTER`
+- creates `/etc/riku` (root owned, `0755`) and `/etc/riku/caddy`, owned by root, group set to the `caddy` user's primary group, mode `2750`
 - appends one line to `/etc/caddy/Caddyfile`, once:
   ```
-  import /home/riku/.riku/caddy/*.caddy
+  import /etc/riku/caddy/*.caddy
   ```
-- adds the `caddy` user to the deploy user's primary group
-- gives that group traverse access (`g+x`, not listing) to the deploy home and `~/.riku`
-- creates `~/.riku/caddy` with mode `0750`, owned by the deploy user
-- installs `riku-caddy.path` and `riku-caddy-reload.service`: the path unit watches `~/.riku/caddy` and runs `systemctl reload caddy` when a site file changes
-- disables `riku-nginx.path` if an earlier init enabled it
+- moves Caddy's admin API to a unix socket, `admin unix//run/caddy/admin.sock`, so only `caddy` and root can reach it
+- installs and starts the router helper (below)
 
-Everything inside the deploy user's home is created and changed as the deploy user, never as root.
+The site files are the only thing Caddy reads from riku. It proxies to TCP ports, keeps its certificates in its own storage, and serves no files from disk, so the `caddy` user is put in no extra group and gets no access to the deploy user's home.
+
+### The router helper
+
+The deploy user does not write Caddy config or run `caddy`. A small root service does. It is the root owned `/usr/local/bin/riku` running as `riku-router-helper.service`, listening on `/run/riku-router.sock`. A deploy sends it the app's route, the helper checks the route again, writes `/etc/riku/caddy/<app>.caddy` and reloads Caddy. The nginx router uses the same helper, with sites in `/etc/riku/nginx` and certificates in `/etc/riku/certs`. See [Nginx](nginx.md#the-router-helper).
+
+### Reloads
+
+The helper reloads Caddy through the admin socket after it writes or removes a site, and waits for Caddy to accept the config. If the reload fails, the helper puts the previous site file back, the deploy fails and shows Caddy's message, and `riku doctor` reports the last failure. Caddy keeps serving its old config when it refuses a reload.
 
 ### Set the ACME email
 
@@ -52,7 +58,7 @@ Then `sudo systemctl reload caddy`. The `RIKU_ACME_*` keys only apply to nginx.
 
 ## Site Files
 
-Each app with a domain gets one file, `~/.riku/caddy/<app>.caddy`:
+Each app with a domain gets one file, `/etc/riku/caddy/<app>.caddy`:
 
 ```
 # riku app: shop
@@ -77,6 +83,8 @@ Do not edit these files by hand: every deploy rewrites them.
 | `true`, `1`, `yes` or `on` | Bare domains only. Caddy serves HTTPS and redirects plain HTTP to it. |
 | anything else, or unset | Bare domains plus `http://` addresses. Caddy serves HTTPS and also answers plain HTTP without a redirect. |
 
+A bare domain makes Caddy ask Let's Encrypt and ZeroSSL for a certificate. A domain no public CA will sign, such as `shop.test`, is refused (`rejectedIdentifier`) and Caddy keeps retrying until the app is destroyed, so a test host makes outbound ACME requests for every such app. Riku does not change this.
+
 ---
 
 ## Limits
@@ -86,7 +94,7 @@ Caddy only proxies HTTP over TCP. Under Caddy, a deploy fails with `Caddy proxie
 - runs a uWSGI socket process (`wsgi:`, `jwsgi:`, `rwsgi:` or `php:` in the `Procfile`), or
 - is a static site (`RIKU_NGINX_STATIC`).
 
-Run a `web:` process that listens on `$PORT` instead. nginx specific keys (`RIKU_NGINX_CACHE_*`, `RIKU_NGINX_ALLOW_GIT_FOLDERS`, custom `nginx.conf` files) have no effect under Caddy.
+Run a `web:` process that listens on `$PORT` instead. nginx specific keys (`RIKU_NGINX_ALLOW_GIT_FOLDERS`, custom `nginx.conf` files) have no effect under Caddy. The keys the core route dropped (see [Removed keys](nginx.md#removed-keys)) fail a deploy under either router.
 
 ---
 

@@ -2,9 +2,8 @@
 //!
 //! # Security Model
 //!
-//! Cache configuration values come from user-supplied environment variables.
-//! All numeric fields are parsed and range-checked before use in templates
-//! to prevent injection of unexpected values into nginx config files.
+//! The values come from user-supplied environment variables, so this only
+//! warns; the route gate decides what reaches an nginx config file.
 
 use std::collections::HashMap;
 
@@ -45,8 +44,6 @@ pub fn validate_env_vars(env: &HashMap<String, String>) -> Vec<String> {
         }
     }
 
-    check_nginx_cache_warnings(env, &mut warnings);
-
     if let Some(warning) = super::flag::https_only_warning(env) {
         warnings.push(warning);
     }
@@ -58,42 +55,6 @@ pub fn validate_env_vars(env: &HashMap<String, String>) -> Vec<String> {
 pub fn print_env_warnings(warnings: &[String]) {
     for warning in warnings {
         echo(warning, "yellow");
-    }
-}
-
-/// Append warnings for any invalid nginx cache env vars.
-fn check_nginx_cache_warnings(env: &HashMap<String, String>, warnings: &mut Vec<String>) {
-    if let Some(size_str) = env.get("RIKU_NGINX_CACHE_SIZE") {
-        if let Ok(size) = size_str.parse::<u32>() {
-            if !(1..=100).contains(&size) {
-                warnings.push(format!(
-                    "Invalid RIKU_NGINX_CACHE_SIZE: {} - must be between 1 and 100 GB",
-                    size
-                ));
-            }
-        } else {
-            warnings.push(format!(
-                "Invalid RIKU_NGINX_CACHE_SIZE: '{}' - must be a number between 1 and 100",
-                size_str
-            ));
-        }
-    }
-
-    for (key, label) in &[
-        ("RIKU_NGINX_CACHE_TIME", "RIKU_NGINX_CACHE_TIME"),
-        ("RIKU_NGINX_CACHE_EXPIRY", "RIKU_NGINX_CACHE_EXPIRY"),
-        ("RIKU_NGINX_CACHE_REDIRECTS", "RIKU_NGINX_CACHE_REDIRECTS"),
-        ("RIKU_NGINX_CACHE_ANY", "RIKU_NGINX_CACHE_ANY"),
-        ("RIKU_NGINX_CACHE_CONTROL", "RIKU_NGINX_CACHE_CONTROL"),
-    ] {
-        if let Some(val) = env.get(*key) {
-            if val.parse::<u32>().is_err() {
-                warnings.push(format!(
-                    "Invalid {}: '{}' - must be a positive integer (seconds)",
-                    label, val
-                ));
-            }
-        }
     }
 }
 

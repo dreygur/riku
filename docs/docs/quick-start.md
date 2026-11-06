@@ -52,7 +52,7 @@ riku init
 # ~/.riku/repos/    - Git repositories
 # ~/.riku/envs/     - Environment variables
 # ~/.riku/logs/     - Application logs
-# ~/.riku/nginx/    - Nginx configurations
+# ~/.riku/nginx/    - Certificate files for the router helper
 # ~/.riku/workers/  - Worker configurations
 ```
 
@@ -192,12 +192,12 @@ When you push to Riku:
 1. **Git hook triggers** - Post-receive hook extracts code to `~/.riku/apps/`
 2. **Runtime detection** - Riku detects Python, Node.js, Go, etc.
 3. **Dependencies install** - nub install (Node), pip install (Python), etc.
-4. **Nginx config** - Automatically created and symlinked to `/etc/nginx/sites-enabled/`
+4. **Nginx config** - The router helper writes `/etc/riku/nginx/<app>.conf`, which nginx loads through `/etc/nginx/conf.d/riku.conf`
 5. **Supervisor starts** - If not running, supervisor auto-starts and spawns workers
 6. **App running**: your app is live.
 
 > Riku automatically handles:
-> - Nginx config symlinks (`/etc/nginx/sites-enabled/`)
+> - Nginx config validation and reload
 > - Supervisor auto-start on first deployment
 > - Custom bare repo locations (symlinked to `~/.riku/repos/`)
 
@@ -240,9 +240,7 @@ rk -s edge ps myapp
 exits with `no server selected; add one with rk server add <name> <user@host>,
 or pass -s <name>`. See [The rk Client](cli.md#the-rk-client).
 
-Servers set up with an older riku need their deploy keys migrated first. See
-[Upgrading existing servers](cli.md#upgrading-existing-servers). The full
-rules are in [Remote Servers](cli.md#remote-servers).
+The full rules are in [Remote Servers](cli.md#remote-servers).
 
 ---
 

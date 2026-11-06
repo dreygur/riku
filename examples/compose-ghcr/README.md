@@ -26,6 +26,21 @@ docker push ghcr.io/$RIKU_GHCR_USERNAME/riku-compose-demo:latest
 Edit `compose.yml` (one directory up from `app/`) and replace `RIKU_GHCR_USERNAME`
 with the same username you used above.
 
+The web service publishes its container port, `"8080"`. Riku picks a free
+host port on 127.0.0.1 for each copy and routes to it, so the compose file
+names no host port. Riku refuses a port entry that names a host IP (such as
+`"127.0.0.1:8080:8080"`) with "use the riku.public label instead of a host
+IP". Published ports bind loopback by default; set the service label
+`riku.public: "true"` only if the port must listen on all interfaces.
+
+```yaml
+services:
+  web:
+    image: ghcr.io/<your-github-username>/riku-compose-demo:latest
+    ports:
+      - "8080"
+```
+
 ## 3. Deploy it to riku
 
 ```bash
@@ -43,10 +58,11 @@ build can log in and pull:
 riku config set compose-demo RIKU_GHCR_USERNAME=$RIKU_GHCR_USERNAME RIKU_GHCR_TOKEN=$RIKU_GHCR_TOKEN
 ```
 
-Confirm it's up:
+Confirm it's up by requesting the app through the router, at the domain you set
+with `riku config set compose-demo RIKU_DOMAINS=<your-domain>`:
 
 ```bash
-curl http://<your-riku-server>:8080
+curl http://<your-domain>
 # version=v1 time=2026-07-07T...
 ```
 
@@ -69,7 +85,7 @@ docker push ghcr.io/$RIKU_GHCR_USERNAME/riku-compose-demo:latest
 Wait up to 60 seconds, no `git push` needed:
 
 ```bash
-curl http://<your-riku-server>:8080
+curl http://<your-domain>
 # version=v2 time=2026-07-07T...
 ```
 
@@ -85,4 +101,5 @@ riku destroy compose-demo
 
 See [docs/docs/runtimes.md](../../docs/docs/runtimes.md#container) and
 [docs/docs/env.md](../../docs/docs/env.md#container-compose-settings) for
-the full reference.
+the full reference. The app image itself is described in
+[app/README.md](app/README.md).

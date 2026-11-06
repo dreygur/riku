@@ -8,7 +8,7 @@ use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::echo;
 
-use super::binary::{install_riku_binary, PathNote};
+use super::binary::require_root_binary;
 use super::default_branch::{set_default_branch, BRANCH_ENV};
 use super::deploy_keys::{add_deploy_keys, parse_key_args, read_key_file};
 use super::deploy_user::running_as_root;
@@ -18,15 +18,12 @@ use super::init_router::persist_router;
 use super::prerequisites::{check_prerequisites, warn_not_root};
 use super::root_init::root_init;
 use super::ssh::setup_ssh_key_interactive;
+use super::stale_binary::remove_stale_binary;
 use super::systemd::setup_systemd_service;
 
 #[allow(clippy::question_mark)]
 fn create_directory_structure(paths: &RikuPaths, router: &Router) -> Result<()> {
-    let router_dir = match router {
-        Router::Caddy => ("caddy", &paths.caddy_root),
-        Router::Nginx | Router::Plugin(_) => ("nginx", &paths.nginx_root),
-    };
-    let dirs: Vec<(&str, &PathBuf)> = vec![
+    let mut dirs: Vec<(&str, &PathBuf)> = vec![
         ("apps", &paths.app_root),
         ("cache", &paths.cache_root),
         ("data", &paths.data_root),
@@ -36,10 +33,13 @@ fn create_directory_structure(paths: &RikuPaths, router: &Router) -> Result<()> 
         ("workers-available", &paths.workers_available),
         ("workers-enabled", &paths.workers_enabled),
         ("logs", &paths.log_root),
-        router_dir,
-        ("acme", &paths.acme_www),
+        ("acme", &paths.acme_cert_links),
         ("plugins", &paths.plugin_root),
     ];
+    // Caddy's site directory sits outside the home; root init creates it.
+    if *router != Router::Caddy {
+        dirs.push(("nginx", &paths.nginx_root));
+    }
 
     for (name, dir) in &dirs {
         if dir.exists() {
@@ -55,17 +55,6 @@ fn create_directory_structure(paths: &RikuPaths, router: &Router) -> Result<()> 
     Ok(())
 }
 
-fn generate_acme_config(paths: &RikuPaths) {
-    if let Err(e) = crate::nginx::generate_acme_nginx_config(paths) {
-        echo(
-            &format!(
-                "  ⚠ Could not generate ACME nginx config (nginx may not be installed): {}",
-                e
-            ),
-            "yellow",
-        );
-    }
-}
 #[allow(clippy::question_mark)]
 fn default_branch_step() -> Result<()> {
     let home = match env::var("HOME") {
@@ -75,19 +64,19 @@ fn default_branch_step() -> Result<()> {
     set_default_branch(&home, env::var(BRANCH_ENV).ok())
 }
 
-/// Directories, binary, ACME config, git hook and default branch in
-/// `paths`' tree.
+fn remove_old_user_binary() -> Result<()> {
+    match env::var("HOME") {
+        Ok(home) => remove_stale_binary(&PathBuf::from(home)),
+        Err(_) => Err(anyhow!("HOME is not set")),
+    }
+}
+
+/// Directories, git hook and default branch in `paths`' tree.
 #[allow(clippy::question_mark)]
-fn prepare_tree(paths: &RikuPaths, router: &Router, note: PathNote) -> Result<()> {
+fn prepare_tree(paths: &RikuPaths, router: &Router) -> Result<()> {
     echo("[1/4] Creating directory structure...", "");
     if let Err(e) = create_directory_structure(paths, router) {
         return Err(e);
-    }
-    if let Err(e) = install_riku_binary(note) {
-        return Err(e);
-    }
-    if *router != Router::Caddy {
-        generate_acme_config(paths);
     }
 
     echo("", "");
@@ -111,6 +100,23 @@ fn setup_user_service(paths: &RikuPaths, router: &Router, no_systemd: bool) -> R
     let installed = setup_systemd_service(paths, router);
     echo("", "");
     installed
+}
+
+/// Only root can create the uWSGI socket directory, so a plain init says
+/// when it is missing instead of letting the first wsgi deploy fail.
+fn warn_no_socket_root(paths: &RikuPaths) {
+    if paths.socket_root.is_dir() {
+        return;
+    }
+    echo(
+        &format!(
+            "      warning: {} does not exist, so wsgi, jwsgi, rwsgi and php apps cannot \
+             deploy. Create it with: sudo riku init",
+            paths.socket_root.display()
+        ),
+        "yellow",
+    );
+    echo("", "");
 }
 
 /// What `riku init` was asked to do.
@@ -157,6 +163,11 @@ fn ssh_key_step(options: &InitOptions) -> Result<()> {
 #[allow(clippy::question_mark)]
 fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
     let user_steps = options.user_steps;
+    if !user_steps {
+        if let Err(e) = require_root_binary() {
+            return Err(e);
+        }
+    }
     let router = match persist_router(paths) {
         Ok(router) => router,
         Err(e) => return Err(e),
@@ -168,18 +179,18 @@ fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
         echo("", "");
     }
 
-    let note = if user_steps {
-        PathNote::Skip
-    } else {
-        PathNote::Show
-    };
-    if let Err(e) = prepare_tree(paths, &router, note) {
+    if let Err(e) = prepare_tree(paths, &router) {
         return Err(e);
     }
-    if !user_steps {
+    if user_steps {
+        if let Err(e) = remove_old_user_binary() {
+            return Err(e);
+        }
+    } else {
         if let Err(e) = setup_user_service(paths, &router, options.no_systemd) {
             return Err(e);
         }
+        warn_no_socket_root(paths);
     }
 
     ssh_key_step(options)
@@ -188,7 +199,6 @@ fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
 fn own_scope() -> InstallScope {
     InstallScope::User {
         user: env::var("USER").unwrap_or_default(),
-        home: PathBuf::from(env::var("HOME").unwrap_or_default()),
     }
 }
 
@@ -205,10 +215,7 @@ pub fn cmd_init(options: InitOptions) -> Result<()> {
             Ok(user) => user,
             Err(e) => return Err(e),
         };
-        let scope = InstallScope::System {
-            user: user.name,
-            home: user.home,
-        };
+        let scope = InstallScope::System { user: user.name };
         print_finish(&scope, options.no_systemd);
         return Ok(());
     }

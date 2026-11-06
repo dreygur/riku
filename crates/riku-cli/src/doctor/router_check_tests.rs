@@ -21,6 +21,19 @@ fn missing_import_warns() {
 }
 
 #[test]
+fn nginx_include_fails_until_installed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+
+    let check = nginx_include(&paths);
+    assert_eq!(check.status, Status::Fail, "{}", check.detail);
+    assert!(check.detail.contains("sudo riku init"), "{}", check.detail);
+
+    crate::nginx::write_include_file(&paths, false).unwrap();
+    assert_eq!(nginx_include(&paths).status, Status::Ok);
+}
+
+#[test]
 fn unreadable_router_file_fails() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());
@@ -29,4 +42,23 @@ fn unreadable_router_file_fails() {
     let checks = router(&paths);
     assert_eq!(checks.len(), 1);
     assert_eq!(checks[0].status, Status::Fail, "{}", checks[0].detail);
+}
+
+#[test]
+fn failed_reload_is_reported() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    assert!(last_reload(&paths).is_none());
+
+    fs::create_dir_all(&paths.riku_root).unwrap();
+    let error_file = paths.riku_root.join(RELOAD_ERROR_FILE);
+    fs::write(
+        &error_file,
+        "caddy reload failed: admin endpoint disabled\n",
+    )
+    .unwrap();
+
+    let check = last_reload(&paths).expect("a recorded failure should be reported");
+    assert_eq!(check.status, Status::Fail);
+    assert_eq!(check.detail, "caddy reload failed: admin endpoint disabled");
 }

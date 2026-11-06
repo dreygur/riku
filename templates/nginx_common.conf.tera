@@ -1,15 +1,7 @@
 client_max_body_size 100M;
 large_client_header_buffers 4 16k;
 
-location ^~ /.well-known/acme-challenge {
-  allow all;
-  root {{ ACME_WWW }};
-}
-
-{% if RIKU_NGINX_CLOUDFLARE_ACL == "true" %}
-# Cloudflare IP ACL
-include /etc/nginx/cloudflare.conf;
-{% endif %}
+{% include "nginx_site_locations.conf.tera" %}
 
 {% if RIKU_NGINX_ALLOW_GIT_FOLDERS != "true" %}
 # Block access to .git folders
@@ -19,48 +11,14 @@ location ~ /\.git {
 }
 {% endif %}
 
-{% if RIKU_NGINX_STATIC_PATHS %}
-# Static path mappings
-{% for mapping in RIKU_NGINX_STATIC_PATHS | split(pat=",") %}
-{% set parts = mapping | split(pat=":") %}
-{% if parts | length == 2 %}
-location {{ parts | first | trim }} {
-  alias {{ parts | last | trim }};
-  expires 30d;
-  add_header Cache-Control "public, immutable";
-}
-{% endif %}
-{% endfor %}
-{% endif %}
-
-{% if RIKU_NGINX_CACHE_PREFIXES %}
-# Proxy cache configuration
-proxy_cache_path {{ RIKU_NGINX_CACHE_PATH }} levels=1:2 keys_zone={{ APP }}:{{ RIKU_NGINX_CACHE_SIZE }}g inactive={{ RIKU_NGINX_CACHE_EXPIRY }}s;
-proxy_cache_key "$scheme$request_method$host$request_uri";
-
-{% for prefix in RIKU_NGINX_CACHE_PREFIXES | split(pat=",") %}
-location {{ prefix | trim }} {
-  proxy_pass http://unix:{{ RIKU_NGINX_SOCKET }};
-  proxy_set_header Host $host;
-  proxy_set_header X-Real-IP $remote_addr;
-  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-  proxy_set_header X-Forwarded-Proto $scheme;
-
-  proxy_cache {{ APP }};
-  proxy_cache_valid 200 304 {{ RIKU_NGINX_CACHE_TIME }}s;
-  proxy_cache_valid 301 307 {{ RIKU_NGINX_CACHE_REDIRECTS }}s;
-  proxy_cache_valid any {{ RIKU_NGINX_CACHE_ANY }}s;
-  proxy_cache_lock on;
-
-  add_header X-Cache-Status $upstream_cache_status;
-  {% if RIKU_NGINX_CACHE_CONTROL %}
-  add_header Cache-Control "public, max-age={{ RIKU_NGINX_CACHE_CONTROL }}";
-  {% endif %}
-}
-{% endfor %}
+{% if RIKU_NGINX_WSGI %}
+{% include "nginx_uwsgi.conf.tera" %}
 {% else %}
 location / {
-  proxy_pass http://unix:{{ RIKU_NGINX_SOCKET }};
+  proxy_pass http://{{ APP_UPSTREAM }};
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
   proxy_set_header Host $host;
   proxy_set_header X-Real-IP $remote_addr;
   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -71,29 +29,9 @@ location / {
 }
 {% endif %}
 
-{% if RIKU_NGINX_CATCH_ALL %}
-# Catch-all for client-side routing
-location / {
-  try_files $uri /{{ RIKU_NGINX_CATCH_ALL }};
-}
-{% endif %}
-
 # Security headers
 add_header X-Frame-Options "SAMEORIGIN" always;
 add_header X-Content-Type-Options "nosniff" always;
 add_header X-XSS-Protection "1; mode=block" always;
 add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
-
-{% if RIKU_NGINX_CSP %}
-# Content Security Policy (customizable via RIKU_NGINX_CSP env var)
-add_header Content-Security-Policy "{{ RIKU_NGINX_CSP }}" always;
-{% endif %}
-
-{% if RIKU_NGINX_INCLUDE_CONTENT %}
-# Custom nginx configuration from file
-{{ RIKU_NGINX_INCLUDE_CONTENT }}
-{% elif RIKU_NGINX_INCLUDE_FILE %}
-# Custom nginx configuration
-include {{ RIKU_NGINX_INCLUDE_FILE }};
-{% endif %}

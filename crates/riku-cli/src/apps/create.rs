@@ -1,72 +1,82 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::process::Command;
 
 use crate::config::RikuPaths;
+use crate::git::repo::post_receive_hook;
 use crate::util::echo;
 
-/// Create a new application (directory and git repository).
-pub fn cmd_apps_create(paths: &RikuPaths, name: &str) -> Result<()> {
-    use std::os::unix::fs::PermissionsExt;
+fn create_dir(dir: &Path) -> Result<()> {
+    match fs::create_dir_all(dir) {
+        Ok(()) => Ok(()),
+        Err(e) => Err(anyhow!("failed to create {}: {e}", dir.display())),
+    }
+}
 
-    let app = crate::util::validate_app_name(name)?;
+fn init_bare_repo(repo_dir: &Path) -> Result<()> {
+    match Command::new("git")
+        .args(["init", "--bare"])
+        .current_dir(repo_dir)
+        .output()
+    {
+        Ok(_) => Ok(()),
+        Err(e) => Err(anyhow!("failed to run git init: {e}")),
+    }
+}
+
+fn write_hook(hook: &Path) -> Result<()> {
+    if let Err(e) = fs::write(hook, post_receive_hook()) {
+        return Err(anyhow!("failed to write {}: {e}", hook.display()));
+    }
+    match fs::set_permissions(hook, fs::Permissions::from_mode(0o755)) {
+        Ok(()) => Ok(()),
+        Err(e) => Err(anyhow!("failed to chmod {}: {e}", hook.display())),
+    }
+}
+
+/// Create a new application (directory and git repository).
+#[allow(clippy::question_mark)]
+pub fn cmd_apps_create(paths: &RikuPaths, name: &str) -> Result<()> {
+    let app = match crate::util::validate_app_name(name) {
+        Ok(app) => app,
+        Err(e) => return Err(anyhow!("invalid app name: {e}")),
+    };
 
     if paths.app_root.join(&app).exists() {
         anyhow::bail!("app '{}' already exists", app);
     }
 
-    // Create app directory
     let app_dir = paths.app_root.join(&app);
-    fs::create_dir_all(&app_dir)?;
+    if let Err(e) = create_dir(&app_dir) {
+        return Err(e);
+    }
     echo(
         &format!("✓ Created app directory: {}", app_dir.display()),
         "green",
     );
 
-    // Create git repository
     let repo_dir = paths.git_root.join(format!("{}.git", app));
-    fs::create_dir_all(&repo_dir)?;
-
-    Command::new("git")
-        .args(["init", "--bare"])
-        .current_dir(&repo_dir)
-        .output()?;
-
+    if let Err(e) = create_dir(&repo_dir) {
+        return Err(e);
+    }
+    if let Err(e) = init_bare_repo(&repo_dir) {
+        return Err(e);
+    }
     echo(
         &format!("✓ Created git repository: {}", repo_dir.display()),
         "green",
     );
 
-    // Create post-receive hook
     let hooks_dir = repo_dir.join("hooks");
-    fs::create_dir_all(&hooks_dir)?;
-
+    if let Err(e) = create_dir(&hooks_dir) {
+        return Err(e);
+    }
     let post_receive = hooks_dir.join("post-receive");
-    // `riku git-hook` reads the "oldrev newrev refname" lines git feeds this
-    // hook directly from its OWN stdin (one iteration per updated ref, see
-    // cmd_git_hook). Do not `read` them first: a `while read ...; do ... ;
-    // done` wrapper here would consume that input itself, leaving `riku
-    // git-hook` nothing to read (immediate EOF, zero iterations, silent
-    // no-op deploy) for the common case of a single-ref push. Stdin must
-    // reach the child completely unconsumed.
-    let hook_script = format!(
-        r#"#!/bin/bash
-# Riku post-receive hook for app: {}
-RIKU_BIN="$HOME/.local/bin/riku"
-if [ -x "$RIKU_BIN" ]; then
-    REPO_PATH="$(pwd)"
-    exec "$RIKU_BIN" git-hook "{}" "$REPO_PATH"
-else
-    echo " !     Riku binary not found at $RIKU_BIN" >&2
-    exit 1
-fi
-"#,
-        app, app
-    );
-
-    fs::write(&post_receive, hook_script)?;
-    fs::set_permissions(&post_receive, PermissionsExt::from_mode(0o755))?;
-
+    if let Err(e) = write_hook(&post_receive) {
+        return Err(e);
+    }
     echo(
         &format!("✓ Created git hook: {}", post_receive.display()),
         "green",

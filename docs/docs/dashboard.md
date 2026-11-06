@@ -24,12 +24,20 @@ riku dashboard
 ```
 
 By default it listens on loopback, so it is only reachable from the server
-itself. Use SSH port-forwarding to view it from your laptop:
+itself. From a laptop with `rk` installed, `rk dashboard` opens it for the
+chosen server (see [`rk`](cli.md)).
+
+Without `rk`, forward the port through an admin login, not the deploy key.
+The deploy key is installed with `no-port-forwarding`, so a tunnel through
+`riku@your-server` is refused:
 
 ```bash
-ssh -L 8088:127.0.0.1:8088 riku@your-server
+ssh -t -L 8088:127.0.0.1:8088 admin@edge.example sudo -u riku -H riku dashboard
 # then open http://localhost:8088 in your browser
 ```
+
+`admin` is any account on the server that may forward ports and run `sudo -u
+riku`. The dashboard stops when the ssh session ends.
 
 ### Options
 

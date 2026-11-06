@@ -10,9 +10,10 @@ license = "MIT"
 [dependencies]
 riku-config = { path = "../riku-config" }
 riku-util = { path = "../riku-util" }
+riku-http = { path = "../riku-http" }
 riku-error = { path = "../riku-error" }
-riku-nginx = { path = "../riku-nginx" }
 riku-plugins = { path = "../riku-plugins" }
+riku-container = { path = "../riku-container" }
 anyhow = { workspace = true }
 once_cell = { workspace = true }
 serde = { workspace = true }
@@ -33,3 +34,4 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }

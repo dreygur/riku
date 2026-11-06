@@ -1,5 +1,6 @@
 use anyhow::Result;
 use colored::Colorize;
+use riku_supervisor::config::app_worker_configs;
 use std::fs;
 
 use crate::config::RikuPaths;
@@ -50,10 +51,7 @@ pub fn cmd_stats_all(paths: &RikuPaths) -> Result<()> {
         let app_name = entry.file_name().to_string_lossy().to_string();
 
         // Count workers
-        let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", app_name));
-        let worker_count = glob::glob(toml_pattern.to_str().unwrap_or(""))
-            .map(|g| g.count())
-            .unwrap_or(0);
+        let worker_count = app_worker_configs(&paths.workers_enabled, &app_name).len();
 
         display::note(&format!("{}: {} workers", app_name.green(), worker_count));
     }
@@ -110,10 +108,7 @@ pub fn cmd_stats_app(paths: &RikuPaths, app: &str) -> Result<()> {
     // Fallback: show basic info
     display::section(&format!("Processes for '{}'", app));
 
-    let toml_pattern = paths.workers_enabled.join(format!("{}-*.toml", app));
-    let worker_configs: Vec<_> = glob::glob(toml_pattern.to_str().unwrap_or(""))
-        .map(|g| g.filter_map(|r| r.ok()).collect())
-        .unwrap_or_else(|_| Vec::new());
+    let worker_configs = app_worker_configs(&paths.workers_enabled, &app);
 
     if worker_configs.is_empty() {
         display::warn("No running processes found.");
@@ -133,10 +128,7 @@ pub fn cmd_stats_app(paths: &RikuPaths, app: &str) -> Result<()> {
             Err(_) => continue,
         };
 
-        let process_name = format!(
-            "{}-{}-{}",
-            worker_config.worker.app, worker_config.worker.kind, worker_config.worker.ordinal
-        );
+        let process_name = worker_config.worker.name().to_string();
         println!(
             "{:<30} {:<10} {:<10}",
             process_name, worker_config.worker.kind, "running"

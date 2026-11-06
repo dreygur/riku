@@ -32,7 +32,9 @@ fn all_subdirectory_paths_are_relative_to_riku_root() {
         Path::new("/srv/riku/workers-available")
     );
     assert_eq!(p.workers_enabled, Path::new("/srv/riku/workers-enabled"));
-    assert_eq!(p.acme_www, Path::new("/srv/riku/acme"));
+    assert_eq!(p.acme_cert_links, Path::new("/srv/riku/acme"));
+    assert_eq!(p.acme_root, Path::new("/var/lib/riku/acme"));
+    assert_eq!(p.static_root, Path::new("/var/lib/riku/static"));
     assert_eq!(p.plugin_root, Path::new("/srv/riku/plugins"));
 }
 
@@ -45,7 +47,7 @@ fn custom_root_parameter_works() {
 }
 
 #[test]
-fn acme_root_defaults_to_home_acme_sh() {
+fn acme_sh_root_defaults_to_home_acme_sh() {
     // Test that RIKU_ACME_ROOT defaults to ~/.acme.sh when not set
     // We test the logic directly rather than through from_dirs to avoid parallel test issues
     let home = PathBuf::from("/home/bob");
@@ -59,25 +61,19 @@ fn acme_root_defaults_to_home_acme_sh() {
 }
 
 #[test]
-fn acme_root_respects_env_var() {
+fn acme_sh_root_respects_env_var() {
     // Save the original value
     let orig_value = env::var("RIKU_ACME_ROOT").ok();
 
     env::set_var("RIKU_ACME_ROOT", "/custom/acme");
     let p = paths_with_root("/x", "/home/bob");
-    assert_eq!(p.acme_root, Path::new("/custom/acme"));
+    assert_eq!(p.acme_sh_root, Path::new("/custom/acme"));
 
     // Restore original value or remove if it wasn't set
     match orig_value {
         Some(v) => env::set_var("RIKU_ACME_ROOT", v),
         None => env::remove_var("RIKU_ACME_ROOT"),
     }
-}
-
-#[test]
-fn riku_raw_source_url_constant() {
-    assert!(RIKU_RAW_SOURCE_URL.starts_with("https://"));
-    assert!(RIKU_RAW_SOURCE_URL.contains("riku")); // Refers to the riku repo
 }
 
 #[test]
@@ -111,21 +107,24 @@ fn root_dirs_reject_relative_or_climbing_paths() {
 }
 
 #[test]
-fn sites_enabled_defaults_to_the_system_nginx_directory() {
-    let p = paths_with_root("/srv/riku", "/home/riku");
+fn nginx_host_paths_default_to_the_system_nginx_directories() {
+    let p = NginxHostPaths::resolve(None, None);
+    assert_eq!(p.sites_enabled, Path::new(DEFAULT_NGINX_SITES_ENABLED));
     assert_eq!(
-        p.nginx_sites_enabled,
-        Path::new(DEFAULT_NGINX_SITES_ENABLED),
-        "without an override riku must enable sites where nginx reads them"
+        p.include_file,
+        Path::new("/etc/nginx/conf.d/riku.conf"),
+        "the include must land in a directory nginx loads inside http"
     );
+    assert_eq!(NginxHostPaths::system(), p);
 }
 
 #[test]
-fn for_tests_keeps_sites_enabled_inside_the_test_root() {
+fn for_tests_keeps_nginx_host_paths_inside_the_test_root() {
     let p = RikuPaths::for_tests(Path::new("/tmp/riku-case"));
-    assert_eq!(
-        p.nginx_sites_enabled,
-        Path::new("/tmp/riku-case/nginx-sites-enabled"),
-        "a test must never symlink into the machine's real nginx"
-    );
+    for path in [&p.nginx_sites_enabled, &p.nginx_include_file] {
+        assert!(
+            path.starts_with("/tmp/riku-case"),
+            "a test must never touch the machine's real nginx: {path:?}"
+        );
+    }
 }

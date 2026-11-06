@@ -68,7 +68,7 @@ GOOS=linux GOARCH=amd64 go build -o server
 ## Deployment Notes
 
 Riku will automatically:
-1. Detect the Go runtime (via `go.mod` or `Godeps/`)
+1. Detect the Go runtime (via `go.mod` or a top-level `.go` file)
 2. Build the Go binary
 3. Deploy with the configured workers
 
@@ -96,4 +96,4 @@ riku restart my-go-app
 
 - [Riku Documentation](../../docs/docs/)
 - [Environment Variables](../../docs/docs/env.md)
-- [Go Deployment Guide](../../docs/docs/faq.md)
+- [FAQ](../../docs/docs/faq.md)

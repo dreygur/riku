@@ -11,7 +11,7 @@ pub mod types;
 pub use manager::StatsManager;
 pub use repository::read_stats_file;
 pub use resources::get_process_resources;
-pub use types::{AppStats, HealthStatus, ProcessStatus};
+pub use types::{AppStats, ContainerFacts, HealthStatus, ProcessStats, ProcessStatus};
 
 #[cfg(test)]
 mod tests {
@@ -74,6 +74,27 @@ mod tests {
         let stats = process_stats(&manager, "app-web-1");
         assert_eq!(stats.status, ProcessStatus::Running);
         assert_eq!(stats.pid, Some(12345));
+    }
+
+    #[test]
+    fn restart_count_survives_respawn() {
+        let mut manager = StatsManager::new();
+        let register = |m: &mut StatsManager| {
+            m.register_process(
+                "app-web-1".to_string(),
+                "app".to_string(),
+                "web".to_string(),
+                1,
+            )
+        };
+        register(&mut manager);
+        manager.mark_restarting("app-web-1");
+        register(&mut manager);
+
+        let stats = process_stats(&manager, "app-web-1");
+        assert_eq!(stats.restart_count, 1, "respawn must not reset the count");
+        assert!(stats.last_restart_at.is_some());
+        assert_eq!(stats.status, ProcessStatus::Starting);
     }
 
     #[test]

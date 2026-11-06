@@ -4,8 +4,10 @@
 /// organized by module for better maintainability.
 mod cli_tests;
 mod e2e_tests;
+mod mock_supervisor;
 mod nginx_tests;
 mod plugin_tests;
+mod push_tests;
 mod regression_tests;
 mod remote_tests;
 mod resilience_tests;

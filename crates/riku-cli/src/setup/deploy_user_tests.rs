@@ -1,5 +1,3 @@
-use std::os::unix::fs::PermissionsExt;
-
 use super::*;
 
 /// The current user stands in for the deploy user: switching to your own
@@ -10,23 +8,16 @@ fn current_user(home: &Path) -> DeployUser {
     DeployUser {
         name: entry.name,
         home: home.to_path_buf(),
-        group: group_name(entry.gid).unwrap(),
         uid: entry.uid,
         gid: entry.gid,
     }
 }
 
 #[test]
-fn file_and_dir_changes_run_through_the_user() {
+fn file_reads_run_through_the_user() {
     let tmp = tempfile::tempdir().unwrap();
     let user = current_user(tmp.path());
-    let dir = tmp.path().join(".riku/caddy");
-    let router = tmp.path().join(".riku/ROUTER");
-
-    user.create_dir(&dir).unwrap();
-    user.chmod("750", &dir).unwrap();
-    let mode = std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777;
-    assert_eq!(mode, 0o750, "site dir mode is {mode:o}");
+    let router = tmp.path().join("ROUTER");
 
     std::fs::write(&router, "caddy\n").unwrap();
     assert_eq!(user.read_file(&router).unwrap(), "caddy\n");

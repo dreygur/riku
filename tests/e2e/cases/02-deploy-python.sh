@@ -30,9 +30,9 @@ EOF
 # Skip pip install: only care about config generation
 RIKU_SKIP_BUILD=1 push_app "$APP" "$src"
 
-assert_file_exists "$RIKU_ROOT/workers-available/${APP}-web-1.toml"
-assert_file_exists "$RIKU_ROOT/workers-enabled/${APP}-web-1.toml"
+assert_file_exists "$RIKU_ROOT/workers-available/${APP}@web.1.toml"
+assert_file_exists "$RIKU_ROOT/workers-enabled/${APP}@web.1.toml"
 
-assert_file_contains "$RIKU_ROOT/workers-available/${APP}-web-1.toml" "gunicorn"
+assert_file_contains "$RIKU_ROOT/workers-available/${APP}@web.1.toml" "gunicorn"
 
 echo "Python app deployed successfully"

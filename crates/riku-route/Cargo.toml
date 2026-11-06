@@ -1,0 +1,29 @@
+[package]
+name = "riku-route"
+version = "0.1.0"
+edition = "2021"
+description = "The route the router helper accepts, and the checks it runs on one"
+authors = ["Rakibul Yeasin"]
+repository = "https://github.com/dreygur/riku"
+license = "MIT"
+
+[features]
+test-server = []
+
+[dependencies]
+riku-caddy = { path = "../riku-caddy" }
+riku-config = { path = "../riku-config" }
+riku-container = { path = "../riku-container" }
+riku-nginx = { path = "../riku-nginx" }
+riku-util = { path = "../riku-util" }
+base64 = "0.23"
+anyhow ={ workspace = true }
+rustls = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+nix ={ workspace = true, features = ["socket", "poll", "user", "fs", "process"] }
+
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

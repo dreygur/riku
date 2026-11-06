@@ -18,3 +18,15 @@ fn units_follow_router() {
         "{nginx}"
     );
 }
+
+#[test]
+fn directories_outside_the_home_stay_writable() {
+    let unit = render_system_unit(&Router::Nginx, "deploy", "/home/deploy", "/usr/bin/riku");
+    assert!(
+        unit.contains(
+            "ReadWritePaths=/home/deploy/.riku -/run/riku-sockets \
+             -/var/lib/riku/acme -/var/lib/riku/static\n"
+        ),
+        "ProtectSystem=strict would leave a directory riku writes outside the home read only: {unit}"
+    );
+}
