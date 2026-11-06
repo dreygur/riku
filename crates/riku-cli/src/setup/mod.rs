@@ -20,6 +20,7 @@ mod root_init;
 mod router_units;
 mod socket_group;
 pub mod ssh;
+mod stale_binary;
 pub mod system_service;
 pub mod systemd;
 pub mod user_service;

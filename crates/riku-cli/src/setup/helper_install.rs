@@ -11,6 +11,8 @@
 
 use std::fs;
 use std::path::Path;
+use std::thread;
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 
@@ -21,6 +23,8 @@ use super::socket_group::is_account_name;
 use super::system_service::{systemctl_ok, SYSTEMD_DIR};
 
 const UNIT_NAME: &str = "riku-router-helper.service";
+/// Time for a helper that dies on start to be seen as not active.
+const SETTLE: Duration = Duration::from_secs(1);
 
 fn render_unit(deploy_user: &str) -> Result<String> {
     if !is_account_name(deploy_user) {
@@ -77,6 +81,12 @@ fn enable_and_restart(systemd_dir: &Path, deploy_user: &str) -> Result<()> {
     }
     if !systemctl_ok(&["enable", UNIT_NAME]) || !systemctl_ok(&["restart", UNIT_NAME]) {
         return Err(anyhow!("could not enable and start {UNIT_NAME}"));
+    }
+    thread::sleep(SETTLE);
+    if !systemctl_ok(&["is-active", "--quiet", UNIT_NAME]) {
+        return Err(anyhow!(
+            "{UNIT_NAME} is not running. See: journalctl -u {UNIT_NAME} -n 20"
+        ));
     }
     echo("✓ Started the router helper", "green");
     Ok(())

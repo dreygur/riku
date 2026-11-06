@@ -1,4 +1,4 @@
-//! Moves a running Caddy to its admin unix socket during init.
+//! Moves a running Caddy to its admin unix socket during init, by restarting it.
 //!
 //! The admin socket lives in `/run/caddy`. Caddy's packaged `caddy.service`
 //! does not declare a runtime directory (I found no copy of it in this
@@ -13,14 +13,15 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::thread;
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use nix::unistd::User;
 
-use crate::caddy::SYSTEM_CADDYFILE;
 use crate::util::{echo, socket_dir, write_atomic};
 
-use super::caddy_host::{run, CADDY_USER};
+use super::caddy_host::CADDY_USER;
 use super::system_service::{systemctl_ok, SYSTEMD_DIR};
 
 const RUN_DIR: &str = "/run/caddy";
@@ -28,6 +29,9 @@ const DROP_IN_DIR: &str = "caddy.service.d";
 const DROP_IN_FILE: &str = "riku-runtime-dir.conf";
 const DROP_IN_TEXT: &str = "[Service]\nRuntimeDirectory=caddy\nRuntimeDirectoryMode=0750\n";
 const RUN_DIR_MODE: u32 = 0o750;
+const ADMIN_SOCKET: &str = "/run/caddy/admin.sock";
+const SOCKET_POLLS: u32 = 20;
+const SOCKET_POLL: Duration = Duration::from_millis(250);
 
 fn write_drop_in(systemd_dir: &Path) -> Result<()> {
     let dir = systemd_dir.join(DROP_IN_DIR);
@@ -60,8 +64,9 @@ fn create_run_dir(group: &str) -> Result<()> {
 }
 
 /// Make `/run/caddy` exist for the admin socket, now and after every
-/// restart, then reload Caddy at its current admin address so it moves to the
-/// socket without waiting for the next restart.
+/// restart, then restart Caddy so it listens on the socket. A reload cannot do
+/// this: it targets the new Caddyfile's socket, while the running Caddy still
+/// listens on `localhost:2019`.
 pub(super) fn move_admin_to_socket(group: &str) -> Result<()> {
     if let Err(e) = write_drop_in(Path::new(SYSTEMD_DIR)) {
         return Err(anyhow!("{e}"));
@@ -72,21 +77,26 @@ pub(super) fn move_admin_to_socket(group: &str) -> Result<()> {
     if let Err(e) = create_run_dir(group) {
         return Err(anyhow!("{e}"));
     }
-    let reloaded = run(
-        "caddy",
-        &[
-            "reload",
-            "--config",
-            SYSTEM_CADDYFILE,
-            "--adapter",
-            "caddyfile",
-        ],
-    );
-    if let Err(e) = reloaded {
-        return Err(anyhow!("could not move Caddy to the admin socket: {e}"));
+    if !systemctl_ok(&["restart", "caddy"]) {
+        return Err(anyhow!("could not restart caddy onto the admin socket"));
     }
-    echo("      ✓ Caddy reloaded on the admin socket", "green");
+    if !wait_for_socket(Path::new(ADMIN_SOCKET), SOCKET_POLLS) {
+        return Err(anyhow!(
+            "caddy did not create {ADMIN_SOCKET}. See: journalctl -u caddy -n 20"
+        ));
+    }
+    echo("      ✓ Caddy restarted on the admin socket", "green");
     Ok(())
+}
+
+fn wait_for_socket(socket: &Path, polls: u32) -> bool {
+    for _ in 0..polls {
+        if socket.exists() {
+            return true;
+        }
+        thread::sleep(SOCKET_POLL);
+    }
+    socket.exists()
 }
 
 #[cfg(test)]

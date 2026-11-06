@@ -69,14 +69,17 @@ fn main() -> Result<()> {
         Ok(target) => target,
         Err(e) => return Err(e),
     };
-    let paths = match RikuPaths::from_env() {
-        Ok(paths) => paths,
-        Err(e) => return Err(e),
-    };
-
     let command = match run_or_forward(&argv, &matches, args, &target, PROGRAM) {
         Ok(Outcome::Done) => return Ok(()),
         Ok(Outcome::Local(command)) => command,
+        Err(e) => return Err(e),
+    };
+    // The helper runs as a systemd system service, which sets no HOME.
+    if matches!(command, Commands::RouterHelper) {
+        return cli::router_helper::cmd_router_helper();
+    }
+    let paths = match RikuPaths::from_env() {
+        Ok(paths) => paths,
         Err(e) => return Err(e),
     };
     match command {

@@ -18,11 +18,19 @@ fn installed(path: &Path) -> Check {
 /// Whether a shell finds riku and whether [`ROOT_BINARY`] is safely
 /// installed.
 ///
-/// PATH is informational only: hooks, units and forced commands run the
-/// binary by its full path.
+/// Hooks, units and forced commands run the binary by its full path, so a
+/// PATH without riku is fine. A different riku first on PATH is a failure:
+/// it is what `riku doctor --fix` would run.
 pub fn binary() -> Vec<Check> {
     let on_path = match which::which("riku") {
-        Ok(p) => Check::ok("riku on PATH", p.display().to_string()),
+        Ok(p) if p == Path::new(ROOT_BINARY) => Check::ok("riku on PATH", p.display().to_string()),
+        Ok(p) => Check::fail(
+            "riku on PATH",
+            format!(
+                "{} shadows {ROOT_BINARY}. Remove it or run sudo riku init",
+                p.display()
+            ),
+        ),
         Err(_) => Check::ok(
             "riku on PATH",
             "not on this PATH; hooks and services use the full path",

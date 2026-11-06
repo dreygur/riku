@@ -341,6 +341,8 @@ cp target/release/riku /usr/local/bin/
 systemctl --user restart riku
 ```
 
+On a server set up with `sudo riku init`, run `sudo riku init` again after replacing the binary. It removes the deploy user's old `~/.local/bin/riku`, which would otherwise shadow `/usr/local/bin/riku`.
+
 ## Uninstalling
 
 To remove Riku:

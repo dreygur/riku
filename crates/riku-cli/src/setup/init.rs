@@ -18,6 +18,7 @@ use super::init_router::persist_router;
 use super::prerequisites::{check_prerequisites, warn_not_root};
 use super::root_init::root_init;
 use super::ssh::setup_ssh_key_interactive;
+use super::stale_binary::remove_stale_binary;
 use super::systemd::setup_systemd_service;
 
 #[allow(clippy::question_mark)]
@@ -61,6 +62,13 @@ fn default_branch_step() -> Result<()> {
         Err(_) => return Err(anyhow!("HOME is not set")),
     };
     set_default_branch(&home, env::var(BRANCH_ENV).ok())
+}
+
+fn remove_old_user_binary() -> Result<()> {
+    match env::var("HOME") {
+        Ok(home) => remove_stale_binary(&PathBuf::from(home)),
+        Err(_) => Err(anyhow!("HOME is not set")),
+    }
 }
 
 /// Directories, git hook and default branch in `paths`' tree.
@@ -174,7 +182,11 @@ fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
     if let Err(e) = prepare_tree(paths, &router) {
         return Err(e);
     }
-    if !user_steps {
+    if user_steps {
+        if let Err(e) = remove_old_user_binary() {
+            return Err(e);
+        }
+    } else {
         if let Err(e) = setup_user_service(paths, &router, options.no_systemd) {
             return Err(e);
         }
