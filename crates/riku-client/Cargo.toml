@@ -1,6 +1,6 @@
 [package]
 name = "riku-client"
-version = "3.0.0"
+version = "0.1.2"
 edition = "2021"
 description = "rk, the laptop only client for riku servers"
 authors = ["Rakibul Yeasin"]

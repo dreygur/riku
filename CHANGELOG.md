@@ -5,7 +5,11 @@ All notable changes to Riku will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-07-08
+## [Unreleased]
+
+## [0.1.2] - 2026-11-07
+
+Version numbers restart here; the older 2.x and 3.0.0 entries below are kept as history.
 
 - Removed `riku container` (build, export, deploy-remote, deploy-archive, check-remote), its supervisor route `POST /control/apps/:app/container/export` and the unused `riku-sync` crate. Build images off the server by pushing them to a registry and naming them with `image:` in compose; see [Build images off the server](docs/docs/container-images.md).
 

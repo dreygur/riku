@@ -10,7 +10,7 @@ use crate::cmds::{
 #[derive(Parser, Debug)]
 #[command(
     name = "riku",
-    version = "3.0.0",
+    version = "0.1.2",
     about = "riku: the smallest PaaS you've ever seen (Rust edition)",
     long_about = "riku is a single-binary micro-PaaS that provides Heroku-like git push deployments.\nManage apps, config, processes, and plugins, all from one tool."
 )]

@@ -1,6 +1,6 @@
 [package]
 name = "riku"
-version = "3.0.0"
+version = "0.1.2"
 edition = "2021"
 description = "Production-ready PaaS for multi-tenant deployments, in Rust"
 authors = ["Rakibul Yeasin"]
