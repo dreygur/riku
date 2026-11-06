@@ -1,7 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Grep(*)",
       "Bash(cargo:*)",
       "Bash(git status:*)"
     ]
