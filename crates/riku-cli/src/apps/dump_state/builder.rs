@@ -170,7 +170,7 @@ pub fn build_state_dump(paths: &RikuPaths) -> Result<StateDump> {
 
     Ok(StateDump {
         generated_at: unix_timestamp_now(),
-        riku_version: "3.0.0",
+        riku_version: "0.1.2",
         supervisor_uptime_seconds: supervisor_uptime_seconds(paths),
         engine: detect_engine(paths),
         apps,

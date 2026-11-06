@@ -1718,7 +1718,7 @@ dependencies = [
 
 [[package]]
 name = "riku"
-version = "3.0.0"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -1807,7 +1807,7 @@ dependencies = [
 
 [[package]]
 name = "riku-client"
-version = "3.0.0"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "clap",
