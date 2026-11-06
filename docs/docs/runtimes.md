@@ -623,8 +623,8 @@ the services after it keep their old copies.
 
 Procfile apps get the same overlap for their `web` copies, with
 `RIKU_HEALTH_CHECK_URL` (a path) or an open port as the health check. A
-pinned `PORT`, or a `RIKU_NGINX_SOCKET` for a wsgi app, cannot be shared by
-two copies, so those apps stop the old copy first.
+pinned `PORT` cannot be shared by two copies, so those apps stop the old
+copy first.
 
 ### Stopping a copy: the SIGTERM contract
 
@@ -741,14 +741,6 @@ myapp/
 │   ├── css/
 │   └── js/
 └── Procfile  (optional, can be empty)
-```
-
-### SPA Routing
-
-For single-page applications:
-
-```bash
-riku config set myapp RIKU_NGINX_CATCH_ALL=index.html
 ```
 
 ---

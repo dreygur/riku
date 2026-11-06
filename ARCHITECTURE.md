@@ -96,8 +96,8 @@ code:
 - **Environment Merging**: calls `env` on the plugin; merges `KEY=VALUE`
   output into worker env
 - **Worker Configuration**: writes TOML worker configs for the supervisor
-- **Router Configuration**: `router.rs` dispatches to nginx (default) or an
-  installed router plugin
+- **Router Configuration**: `router/` sends the route to the router helper
+  for nginx (default) or Caddy, or calls an installed router plugin
 - **Start Command Fallback**: uses the plugin's `start` output if the
   `Procfile` has no command for a process type
 
@@ -150,20 +150,25 @@ Manages application processes and provides process lifecycle management:
 - `cgroups/`: cgroup v2 isolation limits
 - `log_rotation/`: log file rotation and cleanup
 
-### 5. Nginx Integration (`riku-nginx`)
+### 5. Routing (`riku-nginx`, `riku-caddy`, `riku-route`)
 
-Generates nginx configurations for applications:
+The core route is domains, backends, TLS, static files and the HTTP mode
+(plain HTTP, HTTPS, or HTTPS with a redirect). Caching, Cloudflare allow
+lists, CSP, SPA catch-all, snippet include files and extra listen addresses
+are not part of it; a deploy that finds their ENV keys fails.
 
-- **Template System**: Tera templates, one of 5 selected per-app by env
-  flags (`select_template()`)
-- **Multiple Config Types**: plain HTTP, HTTPS-only, static file serving,
-  WSGI socket, external port mapping
-- **Plugin Augmentation**: `RIKU_NGINX_INCLUDE_FILE` content is run through the
-  `nginx.include_content` filter chain (§ Plugin System) before being
-  inlined: any number of installed filter plugins can each contribute a
-  snippet to the generated config, without replacing it wholesale
-- **ACME Integration**: Let's Encrypt certificate challenges
-- **Validation**: generated configs are checked with `nginx -t` before use
+- **Router helper** (`riku-route`): a root service, `riku-router-helper.service`,
+  running the root owned `/usr/local/bin/riku router-helper`. It listens on
+  `/run/riku-router.sock`. The deploy user builds a route and sends it; the
+  helper checks it again, renders the site into `/etc/riku/nginx` or
+  `/etc/riku/caddy`, validates it (`nginx -t`, or Caddy's reload refusing a
+  bad config) and reloads the router. Certificates live in `/etc/riku/certs`.
+- **Rendering**: `riku-nginx` renders nginx sites from Tera templates;
+  `riku-caddy` renders Caddy sites. Sites listen on IPv6 when the host has
+  it, and WebSocket upgrades are proxied by default.
+- **ACME**: acme.sh runs as the deploy user and calls
+  `riku router-renew <app>` after each renewal to hand the new files to the
+  helper.
 
 ### 6. Plugin System (`riku-plugins`)
 
@@ -279,8 +284,10 @@ Shared, dependency-free helpers used across the workspace:
 12. **`release`** command runs if present
 13. **`LIVE_ENV` written**, worker TOML configs generated
     (`Procfile` + plugin `start` command as fallback)
-14. **Router configured**: nginx (default) regenerates and reloads its
-    config, or a router plugin's `configure`/`reload` runs instead
+14. **Router configured**: for nginx (default) or Caddy, the deploy builds
+    the route and sends it to the router helper, which writes the site and
+    reloads the router; or a router plugin's `configure`/`reload` runs
+    instead
 15. **Process Start**: supervisor spawns the new worker configs
 16. **post-deploy hook**: non-fatal, a failure is a warning, not an abort
 17. **Release recorded** for `riku rollback`
@@ -351,22 +358,19 @@ KEY2=VALUE2
 - The `riku supervisor` daemon and all spawned application workers run
   entirely as the unprivileged deploy user (e.g. `riku`), the daemon is
   never started as root in a correctly configured deployment.
-- Nginx's master process runs as root by OS package default, which the
-  deploy user cannot signal directly. Riku does not solve this by running
-  itself as root; instead, the deploy user is granted a narrowly-scoped
-  passwordless sudo rule limited to the `nginx` binary itself (config test
-  and reload only: no shell, no other commands), reached through a
-  `nginx` wrapper placed ahead of `/usr/sbin/nginx` in `PATH`. This keeps
-  the supervisor and every application process fully unprivileged while
-  still allowing config reloads to take effect.
-- The deploy user writes vhost configs only into its own `~/.riku/nginx/`.
-  A root `riku init` installs one root-owned file,
-  `/etc/nginx/conf.d/riku.conf`, that includes `~/.riku/nginx/*.conf`; no
-  directory under `/etc/nginx` is made writable by the deploy user.
-- See `tests/stress/container/sudoers-riku-nginx` and
-  `tests/stress/container/nginx-wrapper.sh` for the reference
-  implementation, verified end-to-end in the containerized integration
-  suite (see Testing Strategy below).
+- Nginx's master process runs as root, which the deploy user cannot signal.
+  Riku does not give the deploy user sudo for it. The router helper, a small
+  root service reached over `/run/riku-router.sock`, writes the site files
+  and reloads the router. It accepts a route (domains, backends, TLS,
+  static directories, HTTP mode), never a path or config text, and checks
+  every field again before it renders anything.
+- The deploy user writes no router config. Sites live in `/etc/riku/nginx`
+  and `/etc/riku/caddy`, root owned. A root `riku init` installs one
+  root-owned file, `/etc/nginx/conf.d/riku.conf`, that includes
+  `/etc/riku/nginx/*.conf`; no directory under `/etc/nginx` is made
+  writable by the deploy user.
+- The binary at `/usr/local/bin/riku` is root owned, because root runs it.
+  Updating riku needs root.
 
 ### Plugin Sandboxing
 
@@ -479,8 +483,8 @@ manual/browser-driven verification of dashboard and plugin changes.
 ├── envs/               # Environment variables (<app>/ENV, <app>/LIVE_ENV)
 ├── repos/              # Git bare repositories
 ├── logs/               # App logs (<app>/deploy.log, <app>/web.1.log, …)
-├── nginx/              # Nginx configurations
-├── cache/              # Nginx cache files
+├── nginx/              # Per app certificate files for the router helper to copy
+├── cache/              # Cache files
 ├── workers/            # Worker process configurations
 ├── workers-available/  # Available worker TOML configs
 ├── workers-enabled/    # Enabled worker configs (symlinks)

@@ -43,7 +43,6 @@ in an app ENV.
 | `NGINX_HTTPS_ONLY` | `RIKU_HTTPS_ONLY` |
 | `NGINX_INTERNAL_PORT` | `RIKU_UPSTREAM_PORT` |
 | `BIND_ADDRESS` | `RIKU_BIND_ADDRESS` |
-| `DISABLE_IPV6` | `RIKU_DISABLE_IPV6` |
 | `ACME_EMAIL` | `RIKU_ACME_EMAIL` |
 | `ACME_ROOT_CA` | `RIKU_ACME_ROOT_CA` |
 | `ACME_ROOT` | `RIKU_ACME_ROOT` |
@@ -53,7 +52,7 @@ in an app ENV.
 | `RUNTIME` | `RIKU_RUNTIME` |
 | `GHCR_USERNAME` | `RIKU_GHCR_USERNAME` |
 | `GHCR_TOKEN` | `RIKU_GHCR_TOKEN` |
-| `NGINX_<NAME>` (cache, static, include, ACL, ...) | `RIKU_NGINX_<NAME>` |
+| `NGINX_<NAME>` (static, ...) | `RIKU_NGINX_<NAME>` |
 
 Unchanged: `PORT`, `PATH`, `HOME`, `COMPOSE_FILE`, the `UWSGI_*` options
 (uWSGI reads them from its own environment), and names that already start
@@ -100,16 +99,6 @@ RIKU_BIND_ADDRESS=127.0.0.1
 - **Default:** `127.0.0.1`
 - **Description:** IP address for workers to bind to
 - **Values:** Any valid IP address
-
-### Disable IPv6
-
-```bash
-RIKU_DISABLE_IPV6=true
-```
-
-- **Default:** `false`
-- **Description:** Disable IPv6 in nginx configuration
-- **Values:** `true` | `false`
 
 ### Server Name
 
@@ -203,32 +192,11 @@ RIKU_NGINX_STATIC_PATHS=/static:public
 RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static,/images:img
 ```
 
-### Include Custom Config
+### Removed Keys
 
-```bash
-RIKU_NGINX_INCLUDE_FILE=nginx.include
-```
+A deploy fails, naming the key, when the app's ENV sets any of these. The core route dropped them. See [Nginx](nginx.md#removed-keys).
 
-- **Default:** (none)
-- **Description:** Snippet copied into the app's generated `server` block
-- **Values:** Path relative to the app directory
-
-The file must resolve inside the app directory (symlinks are followed first). Every statement in it must use one of these directives, spelled exactly:
-
-`add_header`, `expires`, `client_max_body_size`, `client_body_timeout`, `keepalive_timeout`, `proxy_connect_timeout`, `proxy_read_timeout`, `proxy_send_timeout`, `proxy_buffering`, `proxy_buffer_size`, `proxy_buffers`, `proxy_busy_buffers_size`, `gzip`, `gzip_types`, `gzip_min_length`, `gzip_comp_level`, `gzip_vary`
-
-`#` comments are allowed. The deploy is refused, naming the file and the reason, when the file is missing or resolves outside the app directory, or when it has:
-
-- any other directive (for example `proxy_pass`, `root`, `return`, `include`, `access_log`, `ssl_certificate`, `limit_req`, `proxy_set_header`)
-- `{` or `}` anywhere, including in a comment or a quoted string
-- a backslash anywhere
-- a character other than printable ASCII, space, tab or newline (so no CR line endings and no non-ASCII text)
-- a quote or `#` straight after a non-space character (write `a #` or `"a#b"`, not `a#`)
-- anything but a space or `;` right after a closing quote
-- a quoted string that spans lines, or one that is never closed
-- a statement not ended by `;`, or an empty one (`;;` or a leading `;`)
-
-Do not put extra `.conf` files in `~/.riku/nginx/`: nginx loads every `*.conf` there.
+`RIKU_NGINX_CLOUDFLARE_ACL`, `RIKU_NGINX_CACHE_PATH`, `RIKU_NGINX_CACHE_PREFIXES`, `RIKU_NGINX_CACHE_SIZE`, `RIKU_NGINX_CACHE_TIME`, `RIKU_NGINX_CACHE_EXPIRY`, `RIKU_NGINX_CACHE_REDIRECTS`, `RIKU_NGINX_CACHE_ANY`, `RIKU_NGINX_CACHE_CONTROL`, `RIKU_NGINX_CATCH_ALL`, `RIKU_NGINX_CSP`, `RIKU_NGINX_INCLUDE_FILE`, `RIKU_NGINX_IPV4_ADDRESS`, `RIKU_NGINX_IPV6_ADDRESS`, `RIKU_DISABLE_IPV6`, `RIKU_NGINX_SOCKET`
 
 ### Allow Git Folders
 
@@ -241,74 +209,6 @@ RIKU_NGINX_ALLOW_GIT_FOLDERS=false
 - **Values:** `true` | `false`
 
 Setting this to `true` exposes your git history publicly.
-
-### Catch-All for SPA
-
-```bash
-RIKU_NGINX_CATCH_ALL=index.html
-```
-
-- **Default:** (none)
-- **Description:** Serve this file for all unmatched routes (SPA routing)
-- **Values:** Filename
-
-Useful for React, Vue, Angular single-page applications.
-
-### Cloudflare ACL
-
-```bash
-RIKU_NGINX_CLOUDFLARE_ACL=true
-```
-
-- **Default:** `false`
-- **Description:** Restrict access to Cloudflare IP ranges only
-- **Values:** `true` | `false`
-
-Combine with Cloudflare's "Always Use HTTPS" page rule.
-
----
-
-## Nginx Caching
-
-### Cache Prefixes
-
-```bash
-RIKU_NGINX_CACHE_PREFIXES=/api,/images,/static
-```
-
-- **Default:** (none)
-- **Description:** URL prefixes to cache
-- **Format:** Comma-separated URL path prefixes
-
-### Cache Size
-
-```bash
-RIKU_NGINX_CACHE_SIZE=1
-```
-
-- **Default:** `1`
-- **Description:** Cache size in gigabytes
-- **Values:** Positive integer (GB)
-
-### Cache Time
-
-```bash
-RIKU_NGINX_CACHE_TIME=3600
-```
-
-- **Default:** `3600` (1 hour)
-- **Description:** How long to cache responses (seconds)
-- **Values:** Positive integer (seconds)
-
-### Cache Expiry
-
-```bash
-RIKU_NGINX_CACHE_EXPIRY=86400
-```
-
-- **Default:** `86400` (24 hours)
-- **Description:** Maximum cache entry lifetime (seconds)
-- **Values:** Positive integer (seconds)
 
 ---
 
@@ -489,13 +389,6 @@ RIKU_WORKER_GRACE_PERIOD=60
 # Static files
 RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static
 
-# SPA routing
-RIKU_NGINX_CATCH_ALL=index.html
-
-# Caching
-RIKU_NGINX_CACHE_PREFIXES=/api,/static
-RIKU_NGINX_CACHE_TIME=3600
-
 # SSL
 RIKU_ACME_EMAIL=admin@example.com
 ```
@@ -558,9 +451,4 @@ API_URL=${BASE_URL}/api
 
 ### Nginx Config Not Updated
 
-After changing nginx-related variables:
-
-```bash
-riku restart myapp
-sudo nginx -t && sudo systemctl reload nginx
-```
+The router config is rebuilt on deploy. After changing routing variables (`RIKU_DOMAINS`, `RIKU_HTTPS_ONLY`, static paths), deploy again. If the deploy fails, the message comes from the router helper.

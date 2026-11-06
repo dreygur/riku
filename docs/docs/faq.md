@@ -82,10 +82,7 @@ Or create an `ENV` file in `~/.riku/envs/myapp/ENV`.
 
 **Q: Can I use custom nginx configuration?**
 
-**A:** Not as a full replacement. An `nginx.conf`, `nginx.custom.conf`, `nginx.custom` or `.nginx.conf` in your app directory is not supported: riku ignores it, prints a warning at deploy, and uses the generated config. To add directives from a short allowlist (headers, expiry, body size, timeouts, proxy buffering, gzip; see the environment reference) to the generated `server` block, put a snippet in your app directory and point to it:
-```bash
-RIKU_NGINX_INCLUDE_FILE=nginx.include
-```
+**A:** No. An `nginx.conf`, `nginx.custom.conf`, `nginx.custom` or `.nginx.conf` in your app directory is not supported: riku ignores it, prints a warning at deploy, and uses the generated config. There is no snippet file either, and `RIKU_NGINX_INCLUDE_FILE` fails a deploy. The route covers domains, backends, TLS, static files and the HTTP mode. Set headers and caching in the app.
 
 **Q: Can I store my bare git repo in a custom location?**
 
@@ -104,7 +101,7 @@ git push riku main
 
 **Q: Does Riku auto-start the supervisor?**
 
-**A:** Yes. On first deployment, Riku automatically starts the supervisor daemon if not running. Nginx configs are written to `~/.riku/nginx/`, which nginx loads through `/etc/nginx/conf.d/riku.conf` (installed by `sudo riku init`).
+**A:** Yes. On first deployment, Riku automatically starts the supervisor daemon if not running. Nginx site files are written by the router helper to `/etc/riku/nginx`, which nginx loads through `/etc/nginx/conf.d/riku.conf` (both set up by `sudo riku init`).
 
 **Q: Do I need to install python3-venv for Python apps?**
 
@@ -162,12 +159,7 @@ Then obtain SSL certificates (ACME support is built-in).
 
 **Q: Can I use Riku with Cloudflare?**
 
-**A:** Yes. Set:
-```bash
-RIKU_NGINX_CLOUDFLARE_ACL=true
-```
-
-And create a Cloudflare Page Rule to "Always Use HTTPS".
+**A:** Yes, as a plain proxy in front of your domain. Riku has no Cloudflare IP allow list: `RIKU_NGINX_CLOUDFLARE_ACL` fails a deploy. If you want to limit direct access to the origin, do it in a firewall.
 
 **Q: How do I add custom cron jobs?**
 

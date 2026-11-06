@@ -54,10 +54,6 @@ RIKU_BIND_ADDRESS=127.0.0.1
 
 # Node.js specific
 RIKU_NODE_VERSION=18.17.0
-
-# Nginx caching
-RIKU_NGINX_CACHE_PREFIXES=/api/cache
-RIKU_NGINX_CACHE_TIME=3600
 ```
 
 See `../docs/docs/env.md` for the complete list of environment variables.
