@@ -110,7 +110,12 @@ fn assert_nginx_accepts_every_site(ipv6: bool) {
         fs::create_dir_all(&cert_dir).unwrap();
         fs::write(cert_dir.join("fullchain.pem"), CERT_A).unwrap();
         fs::write(cert_dir.join("key.pem"), KEY_A).unwrap();
-        let text = render(&roots, &app, &route).unwrap();
+        // `nginx -t` binds every listen address, and a user that is not root
+        // cannot bind 80 or 443, so the test moves them to high ports.
+        let text = render(&roots, &app, &route)
+            .unwrap()
+            .replace(":80;", ":18080;")
+            .replace(":443 ", ":18443 ");
         fs::write(roots.site_file(&app), text).unwrap();
     }
     fs::write(root.join("nginx.conf"), wrapper(root)).unwrap();
