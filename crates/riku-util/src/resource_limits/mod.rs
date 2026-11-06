@@ -18,6 +18,13 @@ fn env_u64(key: &str) -> Option<u64> {
     env::var(key).ok().and_then(|v| v.parse::<u64>().ok())
 }
 
+// rlim_t is 32 bits on 32-bit Linux (armv7); a value too large for it means
+// no limit, which is what RLIM_INFINITY (all bits set) says.
+#[allow(clippy::useless_conversion, clippy::unnecessary_fallible_conversions)]
+fn rlim(value: u64) -> nix::libc::rlim_t {
+    nix::libc::rlim_t::try_from(value).unwrap_or(nix::libc::rlim_t::MAX)
+}
+
 /// Applies `RLIMIT_NPROC`, which is UID-wide rather than per-process.
 ///
 /// Apple targets do not expose this limit through nix, so a development build
@@ -25,7 +32,7 @@ fn env_u64(key: &str) -> Option<u64> {
 /// is applied as configured.
 #[cfg(target_os = "linux")]
 fn set_max_processes(count: u64) -> std::io::Result<()> {
-    match setrlimit(Resource::RLIMIT_NPROC, count, count) {
+    match setrlimit(Resource::RLIMIT_NPROC, rlim(count), rlim(count)) {
         Ok(()) => Ok(()),
         Err(e) => Err(std::io::Error::other(format!(
             "Failed to set process limit: {}",
@@ -191,19 +198,19 @@ impl ResourceLimits {
     pub fn apply(&self) -> std::io::Result<()> {
         // Memory limit (address space)
         if let Some(bytes) = self.max_memory_bytes {
-            setrlimit(Resource::RLIMIT_AS, bytes, bytes)
+            setrlimit(Resource::RLIMIT_AS, rlim(bytes), rlim(bytes))
                 .map_err(|e| std::io::Error::other(format!("Failed to set memory limit: {}", e)))?;
         }
 
         // CPU time limit
         if let Some(seconds) = self.max_cpu_seconds {
-            setrlimit(Resource::RLIMIT_CPU, seconds, seconds)
+            setrlimit(Resource::RLIMIT_CPU, rlim(seconds), rlim(seconds))
                 .map_err(|e| std::io::Error::other(format!("Failed to set CPU limit: {}", e)))?;
         }
 
         // Open files limit
         if let Some(count) = self.max_open_files {
-            setrlimit(Resource::RLIMIT_NOFILE, count, count).map_err(|e| {
+            setrlimit(Resource::RLIMIT_NOFILE, rlim(count), rlim(count)).map_err(|e| {
                 std::io::Error::other(format!("Failed to set open files limit: {}", e))
             })?;
         }
@@ -218,14 +225,14 @@ impl ResourceLimits {
 
         // Core file limit
         if let Some(bytes) = self.max_core_file_bytes {
-            setrlimit(Resource::RLIMIT_CORE, bytes, bytes).map_err(|e| {
+            setrlimit(Resource::RLIMIT_CORE, rlim(bytes), rlim(bytes)).map_err(|e| {
                 std::io::Error::other(format!("Failed to set core file limit: {}", e))
             })?;
         }
 
         // File size limit
         if let Some(bytes) = self.max_file_size_bytes {
-            setrlimit(Resource::RLIMIT_FSIZE, bytes, bytes).map_err(|e| {
+            setrlimit(Resource::RLIMIT_FSIZE, rlim(bytes), rlim(bytes)).map_err(|e| {
                 std::io::Error::other(format!("Failed to set file size limit: {}", e))
             })?;
         }
