@@ -2,7 +2,7 @@
 
 server {
   listen              0.0.0.0:{{ RIKU_NGINX_EXTERNAL_PORT }};
-  listen              [::]:{{ RIKU_NGINX_EXTERNAL_PORT }};
+  {% if IPV6 %}listen              [::]:{{ RIKU_NGINX_EXTERNAL_PORT }};{% endif %}
   server_name         {{ RIKU_DOMAINS }};
 
 {% include "nginx_site_locations.conf.tera" %}

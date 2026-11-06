@@ -39,6 +39,7 @@ impl Host {
             acme_root: paths.acme_root.clone(),
             nginx,
             reload: ReloadMethod::Signal,
+            ipv6: true,
             owner_uid: fs::metadata(root).unwrap().uid(),
         };
         Host { dir, roots }

@@ -24,11 +24,10 @@ use std::path::Path;
 
 pub use backends::{bind_address, default_backends, upstream_port_number};
 pub use default_server::needs_catch_all;
-pub use host::{
-    breaks_directive, include_file_contents, include_line, includes_riku_sites, write_include_file,
-};
+pub use host::{include_file_contents, include_line, includes_riku_sites, write_include_file};
 pub use remove::remove_deploy_files;
 pub use route_site::{render_route_site, RouteSite, SiteFiles, SiteShape};
+pub use sanitize::breaks_directive;
 pub use ssl::ensure_ssl_certificates;
 pub use static_site::{publish_static, remove_static, static_locations};
 

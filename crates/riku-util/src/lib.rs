@@ -8,7 +8,7 @@
 //! - [`domain`]: validated hostnames for router config
 //! - [`validation`]: app-name sanitization, path-traversal checks
 //! - [`file_names`]: worker config and copy socket names built from an app name
-//! - [`nginx_validation`]: nginx cache config and env-var validation
+//! - [`nginx_validation`]: warnings for nginx related env vars
 //! - [`procfile`]: Procfile parsing and cron validation
 //! - [`env`]: KEY=VALUE file parsing, variable expansion
 //! - [`legacy_env`]: env keys renamed to the `RIKU_` prefix
@@ -31,7 +31,6 @@ pub mod nginx_validation;
 pub mod process_util;
 pub mod procfile;
 pub mod public_key;
-pub mod quoted_text;
 pub mod resource_limits;
 pub mod root_binary;
 pub mod route_plan;

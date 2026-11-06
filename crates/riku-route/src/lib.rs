@@ -29,6 +29,7 @@
 //! helper and [`apply_caddy`] and [`remove_caddy`] the Caddy half: they call
 //! the gate themselves, then render, check and reload as root.
 
+mod answer;
 mod bounded;
 mod caddy_apply;
 #[cfg(feature = "test-server")]
@@ -50,6 +51,7 @@ mod site_files;
 #[cfg(test)]
 mod test_pems;
 
+pub use answer::answer;
 pub use bounded::{is_closed, read_bounded, MAX_MESSAGE_BYTES};
 pub use caddy_apply::{apply_caddy, remove_caddy, CaddyRoots};
 #[cfg(feature = "test-server")]
@@ -63,4 +65,4 @@ pub use protocol::{
     PROTOCOL_VERSION,
 };
 pub use schema::{Listen, Route, RouteBackend, SiteKind, Tls};
-pub use server::{peer_allowed, serve_one, REQUEST_BUDGET};
+pub use server::{serve_one, REQUEST_BUDGET};

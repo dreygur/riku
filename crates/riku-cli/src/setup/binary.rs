@@ -54,7 +54,7 @@ fn replace_binary(source: &Path, target: &Path) -> Result<()> {
 
 /// Refuse `binary` unless it is a regular file owned by `owner`, closed to
 /// group and other writers.
-fn check_installed(binary: &Path, owner: u32) -> Result<()> {
+pub(crate) fn check_installed(binary: &Path, owner: u32) -> Result<()> {
     let meta = match binary.symlink_metadata() {
         Ok(meta) => meta,
         Err(e) => return Err(anyhow!("cannot inspect {}: {e}", binary.display())),

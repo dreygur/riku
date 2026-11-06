@@ -16,7 +16,7 @@ use crate::util::echo;
 use crate::util::validation::{validate_app_name, REPO_SUFFIX};
 
 use super::push_status::{deploy_failure, STATUS_ENV};
-use super::repo::{ensure_repo_symlink, POST_RECEIVE_HOOK};
+use super::repo::{ensure_repo_symlink, post_receive_hook};
 
 /// The directory under `repos/` a pushed path names. `riku@host:shop` and
 /// `riku@host:shop.git` both deploy app `shop`, and their repositories stay
@@ -41,7 +41,7 @@ fn install_post_receive_hook(hook_path: &std::path::Path) -> Result<()> {
             return Err(anyhow!("cannot create {}: {e}", parent.display()));
         }
     }
-    if let Err(e) = fs::write(hook_path, POST_RECEIVE_HOOK) {
+    if let Err(e) = fs::write(hook_path, post_receive_hook()) {
         return Err(anyhow!("cannot write {}: {e}", hook_path.display()));
     }
     let mode = match fs::metadata(hook_path) {

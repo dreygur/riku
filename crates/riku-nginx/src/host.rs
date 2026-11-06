@@ -16,12 +16,6 @@ use anyhow::{anyhow, Result};
 use crate::config::{RikuPaths, NGINX_SITE_ROOT};
 use crate::default_server::CATCH_ALL_SERVER;
 
-/// Whether `c` could end an nginx directive or start another inside a value
-/// written unquoted into a config file.
-pub fn breaks_directive(c: char) -> bool {
-    c.is_whitespace() || c.is_control() || matches!(c, ';' | '{' | '}' | '#' | '"' | '\'' | '$')
-}
-
 /// The single `include` line that loads every site config the router helper
 /// rendered into [`NGINX_SITE_ROOT`].
 pub fn include_line() -> String {

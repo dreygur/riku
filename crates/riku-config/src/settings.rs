@@ -9,9 +9,9 @@
 //! ```
 //!
 //! Every key is optional. The file is operator owned input, so an unknown
-//! section or key, a value that is not a string, or a duration that is not
-//! a positive integer followed by `s`, `m` or `h` is refused with an error
-//! naming the key and the file.
+//! section or key, a value that is not a string, and a duration that is not
+//! a positive integer followed by `s`, `m` or `h` are all refused with an
+//! error naming the key and the file. Nothing here reaches a shell or a path.
 
 use std::fs;
 use std::io::ErrorKind;
@@ -26,7 +26,7 @@ use crate::RikuPaths;
 pub const SETTINGS_FILE: &str = "settings.toml";
 
 /// Time limits for container engine calls.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EngineSettings {
     /// Limit for a single quick engine call such as `ps`, `inspect` or `rm`.
     pub call_timeout: Duration,
@@ -50,7 +50,7 @@ impl Default for EngineSettings {
 }
 
 /// Everything in `settings.toml`.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ServerSettings {
     pub engine: EngineSettings,
 }
@@ -114,7 +114,7 @@ fn parse_settings(raw: &str, file: &Path) -> Result<ServerSettings> {
         }
         let table = match value.as_table() {
             Some(table) => table,
-            None => return Err(anyhow!("{}: {section} must be a table", file.display())),
+            None => return Err(anyhow!("{}: engine must be a table", file.display())),
         };
         settings.engine = match engine_settings(table, file) {
             Ok(engine) => engine,

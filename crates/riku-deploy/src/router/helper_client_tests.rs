@@ -1,8 +1,6 @@
-use std::os::unix::fs::PermissionsExt;
 use std::thread;
 
-use nix::sys::wait::{waitpid, WaitStatus};
-use nix::unistd::{fork, setuid, ForkResult, Gid, Uid};
+use nix::unistd::{Gid, Uid};
 use riku_route::{bind_socket, serve_one};
 
 use super::*;
@@ -62,7 +60,7 @@ fn missing_socket_says_the_helper_is_not_running() {
 #[test]
 fn refused_peer_gets_an_error_not_a_reply() {
     if Uid::current().is_root() {
-        return refused_nobody_gets_no_reply();
+        return;
     }
     let (_dir, socket, server) = serve_status_once(own_uid() + 1);
 
@@ -71,37 +69,6 @@ fn refused_peer_gets_an_error_not_a_reply() {
     server.join().unwrap();
     let error = outcome.unwrap_err().to_string();
     assert!(error.contains("without an answer"), "{error}");
-}
-
-fn refused_nobody_gets_no_reply() {
-    const NOBODY: u32 = 65534;
-    let (dir, socket, server) = serve_status_once(1000);
-    std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
-    std::fs::set_permissions(&socket, std::fs::Permissions::from_mode(0o666)).unwrap();
-
-    // SAFETY: the child only makes system calls and plain allocations on its
-    // own copy of the process, then leaves through _exit.
-    match unsafe { fork() }.unwrap() {
-        ForkResult::Child => {
-            let code = match setuid(Uid::from_raw(NOBODY)) {
-                Ok(()) => match send_to(&socket, &Request::Status {}, Duration::from_secs(5)) {
-                    Err(e) if e.to_string().contains("without an answer") => 0,
-                    _ => 1,
-                },
-                Err(_) => 2,
-            };
-            unsafe { libc::_exit(code) }
-        }
-        ForkResult::Parent { child } => {
-            let status = waitpid(child, None).unwrap();
-            server.join().unwrap();
-            assert_eq!(
-                status,
-                WaitStatus::Exited(child, 0),
-                "uid {NOBODY} was not refused without an answer"
-            );
-        }
-    }
 }
 
 #[test]

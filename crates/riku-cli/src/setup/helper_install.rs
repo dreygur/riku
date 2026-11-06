@@ -14,19 +14,13 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 
+use crate::config::SYSTEMD_RUNTIME_DIR;
 use crate::util::{echo, ROOT_BINARY};
 
+use super::socket_group::is_account_name;
 use super::system_service::{systemctl_ok, SYSTEMD_DIR};
 
-const SYSTEMD_RUN_DIR: &str = "/run/systemd/system";
 const UNIT_NAME: &str = "riku-router-helper.service";
-
-fn is_account_name(name: &str) -> bool {
-    !name.is_empty()
-        && name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
-}
 
 fn render_unit(deploy_user: &str) -> Result<String> {
     if !is_account_name(deploy_user) {
@@ -87,7 +81,7 @@ fn enable_and_restart(systemd_dir: &Path, deploy_user: &str) -> Result<()> {
 
 /// Install the helper when systemd is running, or say how to run it by hand.
 pub fn install_router_helper(deploy_user: &str) -> Result<()> {
-    if Path::new(SYSTEMD_RUN_DIR).is_dir() {
+    if Path::new(SYSTEMD_RUNTIME_DIR).is_dir() {
         return enable_and_restart(Path::new(SYSTEMD_DIR), deploy_user);
     }
     echo(

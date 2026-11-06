@@ -2,7 +2,7 @@
 
 server {
   listen              0.0.0.0:80;
-  listen              [::]:80;
+  {% if IPV6 %}listen              [::]:80;{% endif %}
   server_name         {{ RIKU_DOMAINS }};
 
 {% include "nginx_acme.conf.tera" %}
@@ -14,7 +14,7 @@ server {
 
 server {
   listen              0.0.0.0:443 ssl http2;
-  listen              [::]:443 ssl http2;
+  {% if IPV6 %}listen              [::]:443 ssl http2;{% endif %}
   server_name         {{ RIKU_DOMAINS }};
 
   ssl_certificate     {{ SSL_CERTIFICATE }};

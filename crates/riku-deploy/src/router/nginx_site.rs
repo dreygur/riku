@@ -3,7 +3,7 @@
 //! the router helper to install it.
 //!
 //! Security: nothing here writes a router config or runs nginx. The route
-//! goes through the `riku_route` gate in [`build_route`] for an early error
+//! goes through the `riku_route` gate in `build_route` for an early error
 //! and again in the helper, and the helper's answer is data: a refusal is
 //! reported with its stage and message, never acted on. Domains reach
 //! acme.sh and openssl only after the same validation the route uses.

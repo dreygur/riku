@@ -32,8 +32,9 @@ pub fn ensure_ssl_certificates(
     domains: &[String],
     paths: &crate::config::RikuPaths,
 ) -> Result<bool> {
-    if !is_plain_name(app) {
-        return Err(anyhow!("'{app}' is not a valid app name for a certificate"));
+    match crate::util::validate_app_name(app) {
+        Ok(checked) if checked == app => {}
+        _ => return Err(anyhow!("'{app}' is not a valid app name for a certificate")),
     }
     let key_path = paths.nginx_root.join(format!("{}.key", app));
     let crt_path = paths.nginx_root.join(format!("{}.crt", app));
@@ -93,13 +94,6 @@ fn acme_sh_command(acme_sh: &std::path::Path) -> std::process::Command {
         });
     }
     command
-}
-
-fn is_plain_name(app: &str) -> bool {
-    !app.is_empty()
-        && app
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
 }
 
 /// The acme.sh argv that issues `domain` for `app`. `--reloadcmd` makes

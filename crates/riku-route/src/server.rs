@@ -24,11 +24,6 @@ use crate::protocol::{encode_reply, parse_request, Reply, Request, Stage};
 /// The total time a peer gets to send its request, and to take the reply.
 pub const REQUEST_BUDGET: Duration = Duration::from_secs(10);
 
-/// Whether a process with uid `peer` may use the helper.
-pub fn peer_allowed(peer: u32, deploy_uid: u32) -> bool {
-    peer == 0 || peer == deploy_uid
-}
-
 #[cfg(target_os = "linux")]
 fn peer_uid(stream: &UnixStream) -> Result<u32> {
     use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
@@ -98,7 +93,7 @@ pub fn serve_one(
         Ok(peer) => peer,
         Err(e) => return Err(anyhow!("cannot identify the peer: {e}")),
     };
-    if !peer_allowed(peer, deploy_uid) {
+    if peer != 0 && peer != deploy_uid {
         return Err(anyhow!("refused a connection from uid {peer}"));
     }
     match read_request(&stream) {

@@ -5,28 +5,8 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::config::RikuPaths;
-use crate::util::{echo, ROOT_BINARY};
-
-/// The per-app post-receive hook. `riku git-hook` reads the "oldrev newrev
-/// refname" lines git feeds the hook directly from its own stdin (one
-/// iteration per updated ref), so the hook must not `read` them first: that
-/// would leave `riku git-hook` an empty stdin and a silent no-op deploy for
-/// a single-ref push.
-pub(crate) fn app_hook_script(app: &str) -> String {
-    format!(
-        r#"#!/bin/bash
-# Riku post-receive hook for app: {app}
-BINARY="{ROOT_BINARY}"
-if [ -x "$BINARY" ]; then
-    REPO_PATH="$(pwd)"
-    exec "$BINARY" git-hook "{app}" "$REPO_PATH"
-else
-    echo " !     Riku binary not found at $BINARY" >&2
-    exit 1
-fi
-"#
-    )
-}
+use crate::git::repo::post_receive_hook;
+use crate::util::echo;
 
 fn create_dir(dir: &Path) -> Result<()> {
     match fs::create_dir_all(dir) {
@@ -46,8 +26,8 @@ fn init_bare_repo(repo_dir: &Path) -> Result<()> {
     }
 }
 
-fn write_hook(hook: &Path, app: &str) -> Result<()> {
-    if let Err(e) = fs::write(hook, app_hook_script(app)) {
+fn write_hook(hook: &Path) -> Result<()> {
+    if let Err(e) = fs::write(hook, post_receive_hook()) {
         return Err(anyhow!("failed to write {}: {e}", hook.display()));
     }
     match fs::set_permissions(hook, fs::Permissions::from_mode(0o755)) {
@@ -94,7 +74,7 @@ pub fn cmd_apps_create(paths: &RikuPaths, name: &str) -> Result<()> {
         return Err(e);
     }
     let post_receive = hooks_dir.join("post-receive");
-    if let Err(e) = write_hook(&post_receive, &app) {
+    if let Err(e) = write_hook(&post_receive) {
         return Err(e);
     }
     echo(

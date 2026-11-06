@@ -52,6 +52,8 @@ pub struct RouteSite<'a> {
     pub backends: &'a [Backend],
     pub static_locations: &'a [String],
     pub allow_git_folders: bool,
+    /// Whether the host has IPv6, so the site also listens on `[::]`.
+    pub ipv6: bool,
     pub files: &'a SiteFiles,
 }
 
@@ -104,6 +106,7 @@ fn build_context(site: &RouteSite) -> Result<tera::Context> {
         Err(e) => return Err(anyhow!("refusing backend: {e}")),
     };
 
+    context.insert("IPV6", &site.ipv6);
     context.insert("APP", site.app);
     context.insert("APP_UPSTREAM", &upstream_name(site.app));
     context.insert("RIKU_DOMAINS", &domains);

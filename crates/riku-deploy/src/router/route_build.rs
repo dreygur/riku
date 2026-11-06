@@ -2,15 +2,14 @@
 //! running copies and the certificates it already has.
 //!
 //! Security: the route is built from the app's own ENV, which an app repo
-//! can set, so this module only parses; the `riku_route` gate runs on the
-//! result for an early error and again in the helper. No ENV value becomes a
-//! path: a key that names one is refused by name, and a unix backend is only
-//! accepted as one of the app's own sockets, then sent as a copy number or
-//! as the default socket.
+//! can set, so this module only parses; the `riku_route` gate for the active
+//! router runs on the result for an early error and again in the helper. No
+//! ENV value becomes a path: a key that names one is refused by name, and a
+//! unix backend is only accepted as one of the app's own sockets, then sent
+//! as a copy number or as the default socket.
 //!
 //! A Caddy route carries only what Caddy uses (domains, https policy, TCP
-//! backends); the nginx only fields stay unset, so an app that deploys on
-//! Caddy today keeps deploying.
+//! backends); the nginx only fields stay unset.
 
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};

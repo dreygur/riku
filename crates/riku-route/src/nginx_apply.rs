@@ -20,6 +20,7 @@ use anyhow::Error;
 use riku_container::types::AppName;
 use riku_util::route_plan::HttpsPolicy;
 
+use crate::answer::failed;
 use crate::check::check_nginx_route;
 use crate::nginx_render::{render, CERTIFICATE_FILE, KEY_FILE};
 use crate::nginx_roots::NginxRoots;
@@ -29,13 +30,6 @@ use crate::schema::{Route, Tls};
 use crate::site_files::{
     ensure_dir, install, Planned, Snapshot, PRIVATE_DIR, PRIVATE_FILE, PUBLIC_DIR, PUBLIC_FILE,
 };
-
-pub(crate) fn failed(stage: Stage, error: impl ToString) -> Reply {
-    Reply::Failed {
-        stage,
-        error: error.to_string(),
-    }
-}
 
 fn plan(
     roots: &NginxRoots,

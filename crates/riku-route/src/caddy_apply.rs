@@ -23,8 +23,9 @@ use riku_util::domain::Domain;
 use riku_util::route_plan::RoutePlan;
 use riku_util::write_dir::{check_write_dir, ROOT_UID};
 
+use crate::answer::failed;
 use crate::check::check_caddy_route;
-use crate::nginx_apply::{failed, rolled_back};
+use crate::nginx_apply::rolled_back;
 use crate::nginx_run::run;
 use crate::protocol::{Reply, Stage};
 use crate::schema::{Route, RouteBackend};

@@ -1,8 +1,8 @@
 location / {
   uwsgi_pass {{ APP_UPSTREAM }};
   # The params nginx ships in uwsgi_params, written out: a relative include
-  # resolves against the directory of the main config, which is riku's
-  # validation wrapper during `nginx -t`, not /etc/nginx.
+  # resolves against the directory of the main config, which differs by
+  # distribution.
   uwsgi_param REQUEST_SCHEME $scheme;
   uwsgi_param HTTPS $https if_not_empty;
   uwsgi_param REMOTE_ADDR $remote_addr;

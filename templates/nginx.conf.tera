@@ -2,7 +2,7 @@
 
 server {
   listen              0.0.0.0:80;
-  listen              [::]:80;
+  {% if IPV6 %}listen              [::]:80;{% endif %}
   server_name         {{ RIKU_DOMAINS }};
 
 {% include "nginx_common.conf.tera" %}

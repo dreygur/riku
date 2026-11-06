@@ -59,13 +59,6 @@ fn status_body() -> Vec<u8> {
 }
 
 #[test]
-fn other_uid_is_refused() {
-    assert!(peer_allowed(0, 1000), "root must be allowed");
-    assert!(peer_allowed(1000, 1000), "the deploy user must be allowed");
-    assert!(!peer_allowed(1001, 1000), "another user was allowed");
-}
-
-#[test]
 fn status_round_trips() {
     let outcome = exchange(own_uid(), &status_body());
 

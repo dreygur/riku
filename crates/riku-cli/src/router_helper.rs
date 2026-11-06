@@ -1,4 +1,4 @@
-//! `riku router-helper`: the root process that will install router config on
+//! `riku router-helper`: the root process that installs router config on
 //! behalf of the deploy user.
 //!
 //! Security model: runs as root and refuses to start as anyone else. It
@@ -10,11 +10,8 @@
 //! an app name before use; nothing a request carries is a path.
 //!
 //! `apply` and `remove` install and remove the config of the router the
-//! request names, through `riku_route::apply_nginx` and `remove_nginx` or
-//! `apply_caddy` and `remove_caddy`. Each runs its route gate again and
-//! writes only under `/etc/riku` and `/var/cache/riku`. The request, not the
-//! host, names the router until the root owned router setting of the install
-//! task exists; each router's files stay in that router's own directory.
+//! request names, through `riku_route::answer`. Each router runs its route
+//! gate again and writes only under its own directory.
 //!
 //! The helper reads no file the deploy user can write.
 
@@ -22,11 +19,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 use nix::unistd::Uid;
-use riku_container::types::AppName;
-use riku_route::{
-    apply_caddy, apply_nginx, bind_socket, remove_caddy, remove_nginx, restrict_umask, run,
-    CaddyRoots, NginxRoots, Reply, Request, RouterKind, Stage,
-};
+use riku_route::{answer, bind_socket, restrict_umask, run, CaddyRoots, NginxRoots};
 
 use crate::config::ROUTER_SOCKET;
 use crate::setup::deploy_user::DeployUser;
@@ -38,42 +31,6 @@ fn not_root(euid: Uid) -> Option<anyhow::Error> {
     Some(anyhow!(
         "riku router-helper must run as root; it installs router config the deploy user cannot write"
     ))
-}
-
-fn failed(stage: Stage, error: impl ToString) -> Reply {
-    Reply::Failed {
-        stage,
-        error: error.to_string(),
-    }
-}
-
-fn app_checked(app: &str) -> std::result::Result<AppName, Reply> {
-    match AppName::try_from(app) {
-        Ok(app) => Ok(app),
-        Err(e) => Err(failed(Stage::Schema, e)),
-    }
-}
-
-fn handle(nginx: &NginxRoots, caddy: &CaddyRoots, request: Request) -> Reply {
-    match request {
-        Request::Apply { app, router, route } => match app_checked(&app) {
-            Ok(app) => match router {
-                RouterKind::Nginx => apply_nginx(nginx, &app, &route),
-                RouterKind::Caddy => apply_caddy(caddy, &app, &route),
-            },
-            Err(reply) => reply,
-        },
-        Request::Remove { app, router } => match app_checked(&app) {
-            Ok(app) => match router {
-                RouterKind::Nginx => remove_nginx(nginx, &app),
-                RouterKind::Caddy => remove_caddy(caddy, &app),
-            },
-            Err(reply) => reply,
-        },
-        Request::Status {} => Reply::Status {
-            version: env!("CARGO_PKG_VERSION").to_string(),
-        },
-    }
 }
 
 /// Serve the router helper socket until the process is stopped.
@@ -93,7 +50,7 @@ pub fn cmd_router_helper() -> Result<()> {
     let nginx = NginxRoots::production();
     let caddy = CaddyRoots::production();
     run(&listener, deploy.uid(), &mut |request| {
-        handle(&nginx, &caddy, request)
+        answer(&nginx, &caddy, request)
     })
 }
 

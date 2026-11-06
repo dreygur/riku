@@ -19,7 +19,7 @@ fn nginx_available() -> bool {
     Command::new("nginx").arg("-v").output().is_ok()
 }
 
-fn roots_in(root: &Path) -> NginxRoots {
+fn roots_in(root: &Path, ipv6: bool) -> NginxRoots {
     NginxRoots {
         site_root: root.join("sites"),
         cert_root: root.join("certs"),
@@ -28,6 +28,7 @@ fn roots_in(root: &Path) -> NginxRoots {
         acme_root: root.join("acme"),
         nginx: "nginx".into(),
         reload: ReloadMethod::Signal,
+        ipv6,
         owner_uid: 0,
     }
 }
@@ -97,15 +98,10 @@ fn wrapper(root: &Path) -> String {
     )
 }
 
-#[test]
-fn every_site_kind_passes_nginx_t() {
-    if !nginx_available() {
-        eprintln!("SKIPPED every_site_kind_passes_nginx_t: nginx is not on PATH");
-        return;
-    }
+fn assert_nginx_accepts_every_site(ipv6: bool) {
     let dir = TempDir::new().unwrap();
     let root = dir.path();
-    let roots = roots_in(root);
+    let roots = roots_in(root, ipv6);
     fs::create_dir_all(&roots.site_root).unwrap();
     fs::create_dir_all(root.join("tmp")).unwrap();
     for (name, route) in sites() {
@@ -131,6 +127,18 @@ fn every_site_kind_passes_nginx_t() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         output.status.success(),
-        "nginx -t refused the sites:\n{stderr}"
+        "nginx -t refused the sites with ipv6 {ipv6}:\n{stderr}"
     );
+}
+
+#[test]
+fn every_site_kind_passes_nginx_t_with_and_without_ipv6() {
+    if !nginx_available() {
+        eprintln!(
+            "SKIPPED every_site_kind_passes_nginx_t_with_and_without_ipv6: nginx is not on PATH"
+        );
+        return;
+    }
+    assert_nginx_accepts_every_site(false);
+    assert_nginx_accepts_every_site(true);
 }

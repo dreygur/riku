@@ -126,7 +126,7 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     let mut checks = Vec::new();
     checks.extend(checks::dependencies());
     checks.push(checks::directories(paths));
-    checks.extend(binary_check::binary(paths));
+    checks.extend(binary_check::binary());
     checks.push(checks::systemd_service());
     checks.extend(router_check::router(paths));
     checks.push(settings_check::settings_file(paths));

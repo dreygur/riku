@@ -10,38 +10,31 @@
 
 use std::fs;
 use std::os::unix::net::UnixListener;
+use std::path::PathBuf;
 use std::thread;
 
 use nix::unistd::Uid;
 use riku_config::RikuPaths;
-use riku_container::types::AppName;
 
-use crate::caddy_apply::{apply_caddy, remove_caddy, CaddyRoots};
-use crate::protocol::{Reply, Request, Stage};
+use crate::answer::answer;
+use crate::caddy_apply::CaddyRoots;
+use crate::nginx_roots::{NginxRoots, ReloadMethod};
 use crate::server::serve_one;
 
-fn answer(roots: &CaddyRoots, request: Request) -> Reply {
-    let (app, route) = match &request {
-        Request::Apply { app, route, .. } => (app, Some(route)),
-        Request::Remove { app, .. } => (app, None),
-        Request::Status {} => {
-            return Reply::Status {
-                version: "test".to_string(),
-            }
-        }
-    };
-    let app = match AppName::try_from(app.as_str()) {
-        Ok(app) => app,
-        Err(e) => {
-            return Reply::Failed {
-                stage: Stage::Schema,
-                error: e.to_string(),
-            }
-        }
-    };
-    match route {
-        Some(route) => apply_caddy(roots, &app, route),
-        None => remove_caddy(roots, &app),
+/// Nginx roots that exist nowhere, so a stray nginx request fails instead of
+/// touching the host.
+fn unused_nginx_roots(owner_uid: u32) -> NginxRoots {
+    let none = |name: &str| PathBuf::from("/nonexistent/riku-test").join(name);
+    NginxRoots {
+        site_root: none("sites"),
+        cert_root: none("certs"),
+        socket_root: none("sockets"),
+        static_root: none("static"),
+        acme_root: none("acme"),
+        nginx: none("nginx"),
+        reload: ReloadMethod::Signal,
+        ipv6: false,
+        owner_uid,
     }
 }
 
@@ -57,12 +50,15 @@ pub fn serve_caddy_for_tests(paths: &mut RikuPaths) {
         admin_address: "unix//test/admin.sock".to_string(),
         owner_uid: owner,
     };
+    let nginx = unused_nginx_roots(owner);
     paths.router_socket = paths.caddy_root.with_file_name("router.sock");
     fs::create_dir_all(&roots.site_root).expect("create the test Caddy site directory");
     let listener = UnixListener::bind(&paths.router_socket).expect("bind the test router socket");
     thread::spawn(move || {
         for stream in listener.incoming().flatten() {
-            let _ = serve_one(stream, owner, &mut |request| answer(&roots, request));
+            let _ = serve_one(stream, owner, &mut |request| {
+                answer(&nginx, &roots, request)
+            });
         }
     });
 }

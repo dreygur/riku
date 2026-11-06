@@ -130,10 +130,14 @@ fn caddy_cannot_take(route: &Route) -> Option<&'static str> {
         (route.allow_git_folders, "allow_git_folders"),
         (route.listen != Listen::default(), "a custom listen"),
         (
-            route.kind != SiteKind::Plain || unix_backend,
+            route.kind == SiteKind::Wsgi || unix_backend,
             "unix socket backends",
         ),
-        (!route.static_paths.is_empty(), "static sites"),
+        (route.kind == SiteKind::Portmap, "port mappings"),
+        (
+            route.kind == SiteKind::Static || !route.static_paths.is_empty(),
+            "static sites",
+        ),
         (
             route.domains.iter().any(|d| d == CATCH_ALL_NAME),
             "the _ name",

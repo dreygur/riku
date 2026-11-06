@@ -1,7 +1,7 @@
 //! The parts of an app's route that come from ENV keys and cert files: where
 //! the router listens and the TLS pair. Values are parsed into the route's
 //! types here; whether they are safe is the gate's call in
-//! `riku_route::check_route`, not this module's.
+//! `riku_route::check_nginx_route`, not this module's.
 
 use std::collections::HashMap;
 use std::fs;

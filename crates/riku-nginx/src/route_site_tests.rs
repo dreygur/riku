@@ -8,6 +8,7 @@ struct Fixture {
     app: &'static str,
     shape: SiteShape,
     https_only: bool,
+    ipv6: bool,
     backends: Vec<Backend>,
 }
 
@@ -17,6 +18,7 @@ impl Fixture {
             app: "myapp",
             shape: SiteShape::Plain,
             https_only: false,
+            ipv6: true,
             backends: vec![Backend::Unix(SOCKET.into())],
         }
     }
@@ -38,6 +40,7 @@ impl Fixture {
             backends: &self.backends,
             static_locations: &[],
             allow_git_folders: false,
+            ipv6: self.ipv6,
             files: &files,
         })
     }
@@ -108,6 +111,53 @@ fn https_only_answers_acme_on_plain_http_and_once_on_tls() {
         1,
         "nginx refuses a duplicate location:\n{tls}"
     );
+}
+
+#[test]
+fn ipv6_listen_lines_follow_the_host() {
+    for (shape, https_only) in [
+        (SiteShape::Plain, false),
+        (SiteShape::Plain, true),
+        (SiteShape::Portmap, false),
+        (SiteShape::Wsgi, false),
+        (SiteShape::Static, false),
+    ] {
+        for ipv6 in [false, true] {
+            let site = Fixture {
+                shape,
+                https_only,
+                ipv6,
+                ..Fixture::new()
+            };
+
+            let config = site.render().unwrap();
+
+            assert_eq!(
+                config.contains("[::]"),
+                ipv6,
+                "{shape:?} {https_only}:\n{config}"
+            );
+        }
+    }
+}
+
+#[test]
+fn plain_and_https_proxies_pass_websocket_upgrades() {
+    for https_only in [false, true] {
+        let site = Fixture {
+            https_only,
+            backends: vec![Backend::loopback(5001)],
+            ..Fixture::new()
+        };
+
+        let config = site.render().unwrap();
+
+        assert!(
+            config.contains("proxy_set_header Upgrade $http_upgrade;")
+                && config.contains("proxy_set_header Connection \"upgrade\";"),
+            "https_only {https_only}:\n{config}"
+        );
+    }
 }
 
 #[test]

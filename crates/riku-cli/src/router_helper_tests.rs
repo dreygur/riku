@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use riku_route::{CaddyRoots, ReloadMethod};
+use riku_route::{CaddyRoots, ReloadMethod, Reply, Request, RouterKind, Stage};
 use tempfile::TempDir;
 
 use super::*;
@@ -14,6 +14,7 @@ fn roots_in(dir: &Path) -> NginxRoots {
         acme_root: dir.join("acme"),
         nginx: dir.join("no_nginx"),
         reload: ReloadMethod::Signal,
+        ipv6: false,
         owner_uid: 0,
     }
 }
@@ -47,7 +48,7 @@ fn non_root_refuses_to_start() {
 fn bad_app_name_is_a_schema_failure() {
     let dir = TempDir::new().unwrap();
 
-    let reply = handle(
+    let reply = answer(
         &roots_in(dir.path()),
         &caddy_roots_in(dir.path()),
         Request::Remove {
@@ -64,7 +65,7 @@ fn remove_of_an_app_with_no_config_does_not_reload() {
     let dir = TempDir::new().unwrap();
 
     for router in [RouterKind::Nginx, RouterKind::Caddy] {
-        let reply = handle(
+        let reply = answer(
             &roots_in(dir.path()),
             &caddy_roots_in(dir.path()),
             Request::Remove {

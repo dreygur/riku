@@ -16,11 +16,9 @@ fn hook_passes_app_and_repo_to_the_binary() {
     let repo = home.path().join("myapp");
     fs::create_dir_all(&repo).unwrap();
     let hook = home.path().join("post-receive");
-    let script = POST_RECEIVE_HOOK.replace(crate::util::ROOT_BINARY, mock_riku.to_str().unwrap());
-    assert_ne!(
-        script, POST_RECEIVE_HOOK,
-        "hook does not name the root binary"
-    );
+    let original = post_receive_hook();
+    let script = original.replace(crate::util::ROOT_BINARY, mock_riku.to_str().unwrap());
+    assert_ne!(script, original, "hook does not name the root binary");
     fs::write(&hook, script).unwrap();
 
     let status = Command::new("bash")

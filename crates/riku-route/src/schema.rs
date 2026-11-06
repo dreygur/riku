@@ -2,7 +2,8 @@
 //!
 //! Every struct refuses unknown fields. Text fields are plain strings here
 //! on purpose: a value of these types has been parsed, not checked, and only
-//! [`crate::check_route`] says it is safe to render.
+//! [`crate::check_nginx_route`] or [`crate::check_caddy_route`] says it is safe
+//! to render.
 
 use std::fmt;
 use std::net::IpAddr;

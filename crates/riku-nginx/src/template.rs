@@ -50,10 +50,6 @@ pub(super) fn register_templates(tera: &mut tera::Tera) -> Result<()> {
             include_str!("../../../templates/nginx_static.conf.tera"),
         ),
         (
-            "nginx_proxy.conf.tera",
-            include_str!("../../../templates/nginx_proxy.conf.tera"),
-        ),
-        (
             "nginx_upstream.conf.tera",
             include_str!("../../../templates/nginx_upstream.conf.tera"),
         ),

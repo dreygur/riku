@@ -5,7 +5,7 @@ use anyhow::{anyhow, Result};
 use riku_nginx::breaks_directive;
 
 fn plain(c: char) -> bool {
-    !breaks_directive(c) && !matches!(c, '\\' | '`')
+    !c.is_whitespace() && !breaks_directive(c)
 }
 
 /// A URL location prefix such as `/static/`: it starts with `/` and holds

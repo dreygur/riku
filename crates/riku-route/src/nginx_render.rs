@@ -70,6 +70,7 @@ pub(crate) fn render(roots: &NginxRoots, app: &AppName, route: &Route) -> Result
         backends: &backends,
         static_locations: &route.static_paths,
         allow_git_folders: route.allow_git_folders,
+        ipv6: roots.ipv6,
         files: &files,
     };
     render_route_site(&site)

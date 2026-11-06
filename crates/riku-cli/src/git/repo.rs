@@ -7,23 +7,30 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::config::RikuPaths;
-use crate::util::echo;
+use crate::util::{echo, ROOT_BINARY};
 
-/// The post-receive hook script content. It runs `/usr/local/bin/riku` and
-/// never searches `PATH` or the home directory.
-pub(crate) const POST_RECEIVE_HOOK: &str = r#"#!/usr/bin/env bash
-set -e; set -o pipefail;
-BINARY="/usr/local/bin/riku"
-if [ ! -x "$BINARY" ]; then
-    echo "Error: riku binary not found at $BINARY" >&2
+/// The post-receive hook every repo gets. It runs [`ROOT_BINARY`] and never
+/// searches `PATH` or the home directory. The app is the repo directory
+/// name without `.git`.
+///
+/// `riku git-hook` reads the "oldrev newrev refname" lines directly from its
+/// own stdin, so the hook must not `read` them first: that would starve the
+/// child of input and silently deploy nothing on a single-ref push.
+pub(crate) fn post_receive_hook() -> String {
+    format!(
+        r#"#!/bin/bash
+APP=$(basename "$(pwd)" .git)
+REPO_PATH="$(pwd)"
+BINARY="{ROOT_BINARY}"
+if [ -x "$BINARY" ]; then
+    exec "$BINARY" git-hook "$APP" "$REPO_PATH"
+else
+    echo " !     Riku binary not found at $BINARY" >&2
     exit 1
 fi
-# Derive app name from the repo directory name (strip .git suffix).
-# $2 in post-receive is NOT an argument - all data comes from stdin.
-APP="$(basename "$(pwd)" .git)"
-REPO_PATH="$(pwd)"
-cat | RIKU_ROOT="${RIKU_ROOT:-$HOME/.riku}" "$BINARY" git-hook "$APP" "$REPO_PATH"
-"#;
+"#
+    )
+}
 
 /// Create symlink from user's bare repo to riku's repos directory.
 /// If bare repo exists at ~/app.git, symlink ~/.riku/repos/app.git → ~/app.git
@@ -79,7 +86,7 @@ pub fn setup_post_receive_hook(repo_path: &Path, _app: &str) -> Result<()> {
     fs::create_dir_all(&hooks_dir)?;
 
     let hook_path = hooks_dir.join("post-receive");
-    fs::write(&hook_path, POST_RECEIVE_HOOK)?;
+    fs::write(&hook_path, post_receive_hook())?;
     fs::set_permissions(&hook_path, PermissionsExt::from_mode(0o755))?;
 
     echo(

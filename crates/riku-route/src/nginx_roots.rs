@@ -10,11 +10,12 @@ use std::path::{Path, PathBuf};
 
 use riku_config::{
     ReloadPrograms, ACME_WEBROOT, CERT_ROOT, NGINX_SITE_ROOT, SOCKET_ROOT, STATIC_ROOT,
+    SYSTEMD_RUNTIME_DIR,
 };
 use riku_container::types::AppName;
 use riku_util::write_dir::ROOT_UID;
 
-const SYSTEMD_RUNTIME_DIR: &str = "/run/systemd/system";
+const IPV6_PROC_FILE: &str = "/proc/net/if_inet6";
 
 /// How the helper asks nginx to load a new config.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,6 +36,9 @@ pub struct NginxRoots {
     pub acme_root: PathBuf,
     pub nginx: PathBuf,
     pub reload: ReloadMethod,
+    /// Whether sites also listen on `[::]`. A host without IPv6 refuses such
+    /// a listen line.
+    pub ipv6: bool,
     /// The uid every directory the helper writes into must belong to: root in
     /// production, the test's own uid in tests.
     pub owner_uid: u32,
@@ -57,6 +61,7 @@ impl NginxRoots {
             acme_root: PathBuf::from(ACME_WEBROOT),
             nginx: programs.nginx,
             reload,
+            ipv6: Path::new(IPV6_PROC_FILE).exists(),
             owner_uid: ROOT_UID,
         }
     }
