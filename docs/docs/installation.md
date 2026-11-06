@@ -304,22 +304,29 @@ A record: *.your-domain.com → your.server.ip
 
 ## Testing Your Installation
 
-Create a test app:
+On the server, as the deploy user, install the runtime plugins your apps need (riku detects the runtime with them):
 
 ```bash
-# Create test directory
+riku install-plugins
+```
+
+Then, on your machine, create a test app:
+
+```bash
 mkdir ~/test-app && cd ~/test-app
 git init
-
-# Create a simple app
 echo 'web: python3 -m http.server $PORT' > Procfile
-echo 'RIKU_DOMAINS=test.example.com' > ENV
-
-# Commit and deploy
 git add .
 git commit -m "test"
 git remote add riku riku@your-server:test-app
 git push riku main
+```
+
+Give it a domain and push again:
+
+```bash
+ssh riku@your-server config set test-app RIKU_DOMAINS=test.example.com
+git commit --allow-empty -m "domain" && git push riku main
 ```
 
 ## Upgrading Riku
