@@ -4,29 +4,20 @@ use super::*;
 use crate::doctor::Status;
 
 #[test]
-fn redeploys_only_apps_missing_from_the_site_root_and_reports_them() {
+fn redeploys_only_apps_without_a_site_file_and_reports_them() {
     let tmp = tempfile::tempdir().unwrap();
     let riku_root = tmp.path().join("riku");
-    let site_root = tmp.path().join("etc/nginx");
-    fs::create_dir_all(riku_root.join("nginx")).unwrap();
+    let site_root = tmp.path().join("etc/caddy");
     fs::create_dir_all(&site_root).unwrap();
-    for file in [
-        "old.conf",
-        "moved.conf",
-        "broken.conf",
-        "old.key",
-        "gone.conf",
-        "-x.conf",
-    ] {
-        fs::write(riku_root.join("nginx").join(file), "").unwrap();
-    }
     for app in ["old", "moved", "broken", "-x"] {
         fs::create_dir_all(riku_root.join("apps").join(app)).unwrap();
     }
-    fs::write(site_root.join("moved.conf"), "").unwrap();
+    fs::write(riku_root.join("apps").join("stray-file"), "").unwrap();
+    fs::write(site_root.join("moved.caddy"), "").unwrap();
+    fs::write(site_root.join("old.conf"), "").unwrap();
     let mut seen = Vec::new();
 
-    let checks = redeploy_orphaned_sites(&riku_root, &site_root, |app| {
+    let checks = redeploy_unrouted_sites(&riku_root, &site_root, "caddy", |app| {
         seen.push(app.to_string());
         match app {
             "broken" => Err(anyhow::anyhow!("no such app")),
@@ -37,7 +28,7 @@ fn redeploys_only_apps_missing_from_the_site_root_and_reports_them() {
     assert_eq!(
         seen,
         ["broken", "old"],
-        "each orphan once; no app without a checkout or with a bad name"
+        "each unrouted app once; no routed app, plain file or bad name"
     );
     assert_eq!(checks.len(), 2);
     assert_eq!(checks[0].status, Status::Fail);

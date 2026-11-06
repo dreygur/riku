@@ -106,6 +106,10 @@ fn request_at_the_size_limit_is_read() {
 
 #[test]
 fn connection_from_another_uid_gets_no_answer() {
+    if own_uid() == 0 {
+        println!("SKIPPED: peer uid 0 is always allowed, so root cannot play a foreign uid");
+        return;
+    }
     let outcome = exchange(own_uid() + 1, &status_body());
 
     assert!(outcome.served.is_err(), "a foreign uid was served");

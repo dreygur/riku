@@ -26,7 +26,8 @@ use std::path::Path;
 use anyhow::Result;
 use colored::Colorize;
 
-use crate::config::{RikuPaths, NGINX_SITE_ROOT};
+use crate::config::router::Router;
+use crate::config::{RikuPaths, CADDY_SITE_ROOT, NGINX_SITE_ROOT};
 use crate::setup::deploy_user::{running_as_root, DeployUser};
 use crate::util::display;
 
@@ -81,19 +82,29 @@ fn diagnosed_target(paths: &RikuPaths) -> Result<RikuPaths> {
     }
 }
 
-/// Redeploy the apps that exist only in the old per-user nginx directory.
-/// A deploy runs the app's build, which is the deploy user's code, so it is
-/// refused as root.
+/// Redeploy the apps that have no site file in the active router's site
+/// root. A deploy runs the app's build, which is the deploy user's code, so it
+/// is refused as root. A plugin router keeps its own sites, so nothing is
+/// redeployed for it.
 fn redeploy_old_sites(paths: &RikuPaths) -> Vec<Check> {
     if nix::unistd::Uid::effective().is_root() {
         return vec![Check::warn(
-            "nginx sites",
+            "router sites",
             "redeploy skipped as root: run `riku doctor --fix` as the deploy user",
         )];
     }
-    redeploy_sites::redeploy_orphaned_sites(&paths.riku_root, Path::new(NGINX_SITE_ROOT), |app| {
-        crate::deploy::do_deploy(app, paths, &HashMap::new(), None)
-    })
+    let (site_root, extension) = match Router::load(paths) {
+        Ok(Router::Nginx) => (NGINX_SITE_ROOT, "conf"),
+        Ok(Router::Caddy) => (CADDY_SITE_ROOT, "caddy"),
+        Ok(Router::Plugin(_)) => return Vec::new(),
+        Err(e) => return vec![Check::fail("router sites", e.to_string())],
+    };
+    redeploy_sites::redeploy_unrouted_sites(
+        &paths.riku_root,
+        Path::new(site_root),
+        extension,
+        |app| crate::deploy::do_deploy(app, paths, &HashMap::new(), None),
+    )
 }
 
 /// Rewrite stale forced commands and post-receive hooks. They are the deploy
@@ -119,7 +130,7 @@ fn fix_launch_paths(paths: &RikuPaths) -> Vec<Check> {
 }
 
 /// Run every diagnostic, render the report, and exit non-zero on any failure.
-/// With `fix`, apps still routed from the old nginx directory are redeployed
+/// With `fix`, apps missing from the router's site root are redeployed
 /// and stale launch paths rewritten first, so the checks see the result.
 #[allow(clippy::question_mark)]
 pub fn cmd_doctor(paths: &RikuPaths, fix: bool) -> Result<()> {

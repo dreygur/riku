@@ -68,17 +68,3 @@ fn empty_backend_list_is_refused() {
 
     assert!(err.to_string().contains("no backend"), "{err}");
 }
-
-#[test]
-fn write_then_remove_site() {
-    let tmp = tempfile::tempdir().unwrap();
-    let paths = RikuPaths::for_tests(tmp.path());
-    let site_file = paths.caddy_root.join("shop.caddy");
-
-    write_site("shop", &request(HttpsPolicy::Only), &paths).unwrap();
-    assert!(site_file.exists(), "site file missing at {site_file:?}");
-
-    remove_site("shop", &paths).unwrap();
-    assert!(!site_file.exists(), "site file left at {site_file:?}");
-    remove_site("shop", &paths).unwrap();
-}

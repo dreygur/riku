@@ -43,6 +43,9 @@ pub fn ensure_ssl_certificates(
     let acme_sh = paths.acme_sh_root.join("acme.sh");
 
     if have_pair && (chain_path.exists() || !acme_sh.exists()) {
+        if acme_sh.exists() {
+            install_renew_hook(app, domains, paths, &acme_sh);
+        }
         if let Err(e) = restrict_key(&key_path) {
             return Err(e);
         }
@@ -96,11 +99,11 @@ fn acme_sh_command(acme_sh: &std::path::Path) -> std::process::Command {
     command
 }
 
-/// The acme.sh argv that issues `domain` for `app`. `--reloadcmd` makes
-/// acme.sh run `riku router-renew` after each renewal, which sends the new
-/// files to the router helper. `app` reaches a shell there, which is why
+/// The acme.sh arguments that say where `app`'s files go and what to run
+/// after each renewal: `riku router-renew`, which sends the new files to the
+/// router helper. `app` reaches a shell there, which is why
 /// [`ensure_ssl_certificates`] accepts only plain names.
-fn acme_issue_args(app: &str, domain: &str, paths: &crate::config::RikuPaths) -> Vec<String> {
+fn acme_output_args(app: &str, paths: &crate::config::RikuPaths) -> Vec<String> {
     let nginx_file = |suffix: &str| {
         paths
             .nginx_root
@@ -109,13 +112,6 @@ fn acme_issue_args(app: &str, domain: &str, paths: &crate::config::RikuPaths) ->
             .into_owned()
     };
     vec![
-        "--issue".to_string(),
-        "-d".to_string(),
-        domain.to_string(),
-        "-w".to_string(),
-        paths.acme_root.to_string_lossy().into_owned(),
-        "--server".to_string(),
-        "letsencrypt.org".to_string(),
         "--key-file".to_string(),
         nginx_file("key"),
         "--cert-file".to_string(),
@@ -125,6 +121,72 @@ fn acme_issue_args(app: &str, domain: &str, paths: &crate::config::RikuPaths) ->
         "--reloadcmd".to_string(),
         format!("{} router-renew {app}", crate::util::ROOT_BINARY),
     ]
+}
+
+fn acme_issue_args(app: &str, domain: &str, paths: &crate::config::RikuPaths) -> Vec<String> {
+    let mut args = vec![
+        "--issue".to_string(),
+        "-d".to_string(),
+        domain.to_string(),
+        "-w".to_string(),
+        paths.acme_root.to_string_lossy().into_owned(),
+        "--server".to_string(),
+        "letsencrypt.org".to_string(),
+    ];
+    args.extend(acme_output_args(app, paths));
+    args
+}
+
+fn acme_install_args(app: &str, domain: &str, paths: &crate::config::RikuPaths) -> Vec<String> {
+    let mut args = vec![
+        "--install-cert".to_string(),
+        "-d".to_string(),
+        domain.to_string(),
+    ];
+    args.extend(acme_output_args(app, paths));
+    args
+}
+
+/// Store the renew hook for a certificate acme.sh issued before the hook
+/// existed, so its renewals reach the router helper. A marker file next to
+/// the certificate records that every domain took it, so deploys do not
+/// repeat it. A failure is reported and retried on the next deploy.
+fn install_renew_hook(
+    app: &str,
+    domains: &[String],
+    paths: &crate::config::RikuPaths,
+    acme_sh: &std::path::Path,
+) {
+    let marker = paths.nginx_root.join(format!("{app}.renew-hook"));
+    if marker.exists() {
+        return;
+    }
+    for domain in domains {
+        let outcome = acme_sh_command(acme_sh)
+            .args(acme_install_args(app, domain, paths))
+            .output();
+        match outcome {
+            Ok(output) if output.status.success() => {}
+            Ok(output) => {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                crate::util::echo(
+                    &format!("-----> Could not set the renew hook for '{domain}': {stderr}"),
+                    "yellow",
+                );
+                return;
+            }
+            Err(e) => {
+                crate::util::echo(&format!("-----> acme.sh execution failed: {e}"), "yellow");
+                return;
+            }
+        }
+    }
+    if let Err(e) = fs::write(&marker, "") {
+        crate::util::echo(
+            &format!("-----> Could not record the renew hook: {e}"),
+            "yellow",
+        );
+    }
 }
 
 /// Attempt to issue certificates via acme.sh. Returns `Some(true)` on success,
@@ -276,6 +338,39 @@ mod tests {
             "acme.sh argv was: {argv}"
         );
         assert_eq!(std::fs::read_to_string(&key).unwrap(), "self-signed-key");
+    }
+
+    #[test]
+    fn an_issued_certificate_gets_the_renew_hook_once() {
+        let tmp = TempDir::new().unwrap();
+        let paths = make_paths(&tmp);
+        std::fs::create_dir_all(&paths.acme_sh_root).unwrap();
+        let argv_log = tmp.path().join("argv.log");
+        let acme_sh = paths.acme_sh_root.join("acme.sh");
+        std::fs::write(
+            &acme_sh,
+            format!("#!/bin/sh\necho \"$@\" >> {}\n", argv_log.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(&acme_sh, fs::Permissions::from_mode(0o755)).unwrap();
+        for suffix in ["key", "crt", "fullchain.crt"] {
+            std::fs::write(paths.nginx_root.join(format!("myapp.{suffix}")), "x").unwrap();
+        }
+        let domains = vec!["example.com".to_string()];
+
+        assert!(ensure_ssl_certificates("myapp", &domains, &paths).unwrap());
+        assert!(ensure_ssl_certificates("myapp", &domains, &paths).unwrap());
+
+        let argv = std::fs::read_to_string(&argv_log).expect("acme.sh was not run");
+        assert_eq!(argv.lines().count(), 1, "acme.sh ran again: {argv}");
+        assert!(
+            argv.starts_with("--install-cert -d example.com --key-file "),
+            "acme.sh argv was: {argv}"
+        );
+        assert!(
+            argv.contains("--reloadcmd /usr/local/bin/riku router-renew myapp"),
+            "acme.sh argv was: {argv}"
+        );
     }
 
     #[test]

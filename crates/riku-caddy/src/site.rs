@@ -4,15 +4,12 @@
 //! `Domain`s, backends are typed [`Backend`]s, and the app name was validated
 //! before deploy reached this point. No raw ENV string is written.
 
-use std::fs;
-use std::io::ErrorKind;
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Result};
 use riku_config::RikuPaths;
 use riku_util::backend::Backend;
 use riku_util::route_plan::{HttpsPolicy, RoutePlan};
-use riku_util::write_atomic;
 
 const SITE_EXTENSION: &str = "caddy";
 const PLAIN_HTTP_SCHEME: &str = "http://";
@@ -60,32 +57,6 @@ pub fn render_site(app: &str, plan: &RoutePlan) -> Result<String> {
         app = app,
         addresses = site_addresses(plan).join(", "),
     ))
-}
-
-/// Write `app`'s site file atomically, so Caddy never reads half of one.
-#[allow(clippy::question_mark)]
-pub fn write_site(app: &str, plan: &RoutePlan, paths: &RikuPaths) -> Result<()> {
-    let text = match render_site(app, plan) {
-        Ok(text) => text,
-        Err(e) => return Err(e),
-    };
-    if let Err(e) = fs::create_dir_all(&paths.caddy_root) {
-        return Err(anyhow!(
-            "failed to create {}: {e}",
-            paths.caddy_root.display()
-        ));
-    }
-    write_atomic(&site_path(app, paths), text.as_bytes())
-}
-
-/// Delete `app`'s site file. A missing file is not an error.
-pub fn remove_site(app: &str, paths: &RikuPaths) -> Result<()> {
-    let path = site_path(app, paths);
-    match fs::remove_file(&path) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(anyhow!("failed to remove {}: {e}", path.display())),
-    }
 }
 
 #[cfg(test)]

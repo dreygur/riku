@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-To install Riku on your server, `ssh` in as `root` and run:
+To install Riku on your server, `ssh` in with a user that has `sudo` and run:
 
 ```bash
 # Download the latest release binary
@@ -10,22 +10,16 @@ curl -LO https://github.com/dreygur/riku/releases/latest/download/riku-linux-amd
 tar -xzf riku-linux-amd64.tar.gz
 chmod +x riku
 
-# Run init as root (installs riku to /usr/local/bin/riku)
-sudo ./riku init
-
-# Create deploy user
-sudo adduser --disabled-password --gecos '' riku
-sudo su - riku
-
-# Add your SSH public key
-cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+# Run init as root. It installs riku to /usr/local/bin/riku, creates the
+# deploy user and authorizes your SSH keys for git push
+sudo ./riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
 The installer script does the same download and checksum in one step. It installs `riku` to `/usr/local/bin`, so it needs root:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sudo sh
-sudo riku init
+sudo riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
 After running `sudo riku init`, the binary is installed to `/usr/local/bin/riku`, owned by root so the deploy user cannot change it. Units, git hooks and deploy keys all name that path. A plain `riku init` as the deploy user needs it to exist already.
@@ -34,10 +28,12 @@ After running `sudo riku init`, the binary is installed to `/usr/local/bin/riku`
 
 ### Upgrading an existing host
 
-1. Install the new binary: the installer above, or the release tarball with `sudo ./riku init`.
-2. Run `sudo riku init` again. It installs the router helper and rewrites the units.
-3. As the deploy user, run `riku doctor --fix`. It redeploys apps still routed from the old `~/.riku/nginx` and rewrites stale keys and hooks.
+1. Install the new binary: the installer above, or `sudo cp riku /usr/local/bin/riku` from the release tarball.
+2. Run `sudo riku init`. It installs the router helper and rewrites the units.
+3. As the deploy user, run `riku doctor --fix`. It redeploys every app that has no site file in the router's site root (`/etc/riku/nginx` or `/etc/riku/caddy`) and rewrites stale keys and hooks.
 4. Restart the supervisor: `sudo systemctl restart riku`.
+
+`sudo riku init` does not delete what an older version left in `/etc/nginx/sites-enabled` and `/etc/nginx/conf.d` that the deploy user could write. It moves those files and links to `/etc/riku/removed/<unix time>/` (root only, mode `0700`), as links, and prints where each one went. Put one back if you wanted it. It does delete the old deploy owned `*.caddy` files in `/etc/riku/caddy`, which `riku doctor --fix` renders again.
 
 An app that sets a key the core route dropped (see [Removed keys](nginx.md#removed-keys)) fails its deploy and names the key. Unset it with `riku config unset`.
 
@@ -112,79 +108,50 @@ cd riku
 cargo build --release
 ```
 
-### Step 3: Install the Binary
+### Step 3: Deploy User
+
+Riku runs as a separate user account, `riku` by default. `sudo riku init` creates it when it is missing, so there is no account to create by hand. For another name, set `RIKU_USER` on the init command in step 4:
 
 ```bash
-sudo cp target/release/riku /usr/local/bin/
-sudo chmod +x /usr/local/bin/riku
+sudo RIKU_USER=deployer ./target/release/riku init --ssh-key ~/.ssh/authorized_keys
 ```
-
-### Step 4: Create Deploy User
-
-Riku runs as a separate user account, `riku` by default. A root `sudo riku init` creates it when it is missing. To set up as that user yourself instead:
-
-```bash
-sudo adduser --disabled-password --gecos '' riku
-sudo su - riku
-
-# Or a custom username
-sudo adduser --disabled-password --gecos '' deployer
-sudo su - deployer
-export RIKU_USER=deployer  # Tell riku to use this username
-```
-
-If using a custom username, set `RIKU_USER` before running `riku init` so systemd services are configured correctly.
 
 App repos start on `main`. Init writes that as `init.defaultBranch` in the deploy user's `~/.gitconfig`, so push the branch with that name. For another branch, run init with `RIKU_DEFAULT_BRANCH`:
 
 ```bash
-sudo RIKU_DEFAULT_BRANCH=master riku init
+sudo RIKU_DEFAULT_BRANCH=master ./target/release/riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
 Without `RIKU_DEFAULT_BRANCH`, init keeps a default branch the deploy user already set. Repos created before the change keep the branch they started with.
 
-### Step 5: Initialize Riku
+### Step 4: Install and Initialize Riku
 
 ```bash
-riku init
+sudo ./target/release/riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
-This creates the directory structure:
+This copies the binary to `/usr/local/bin/riku`, creates the deploy user, installs the units and the router helper, and creates the directory structure in the deploy user's home:
 ```
 ~/.riku/
 ├── apps/              # Application code
 ├── envs/              # Environment variables
 ├── repos/             # Git repositories
 ├── logs/              # Application logs
-├── nginx/             # Nginx configurations
-├── cache/             # Nginx cache
 ├── workers/           # Worker configurations
 ├── workers-available/ # Available worker configs
 ├── workers-enabled/   # Enabled worker configs
 └── plugins/           # Plugins
 ```
 
-### Step 6: Set Up SSH Access
+### Step 5: Set Up SSH Access
 
-**On your local machine**, generate an SSH key if you don't have one:
+`--ssh-key` in step 4 authorized the keys in the file you gave it for `git push`. If you have no key yet, generate one **on your local machine**, add its public key to `~/.ssh/authorized_keys` on the server, and run step 4 again:
 
 ```bash
 ssh-keygen -t ed25519 -C "riku@your-email.com"
 ```
 
-Copy your public key to the server:
-
-```bash
-ssh-copy-id riku@your-server
-```
-
-Or manually add it on the server:
-
-```bash
-cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
-```
-
-### Step 7: Verify Installation
+### Step 6: Verify Installation
 
 ```bash
 riku --help
@@ -210,14 +177,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 git clone https://github.com/dreygur/riku.git
 cd riku
 cargo build --release
-sudo cp target/release/riku /usr/local/bin/
 
-# Create user
-sudo adduser --disabled-password --gecos '' riku
-sudo su - riku
-
-# Initialize
-riku init
+# Install, create the deploy user and authorize your SSH keys
+sudo ./target/release/riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
 ### CentOS/RHEL
@@ -236,14 +198,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 git clone https://github.com/dreygur/riku.git
 cd riku
 cargo build --release
-sudo cp target/release/riku /usr/local/bin/
 
-# Create user
-sudo adduser -m riku
-sudo su - riku
-
-# Initialize
-riku init
+# Install, create the deploy user and authorize your SSH keys
+sudo ./target/release/riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
 ### Arch Linux
@@ -256,14 +213,9 @@ sudo pacman -S git nginx curl rust
 git clone https://github.com/dreygur/riku.git
 cd riku
 cargo build --release
-sudo cp target/release/riku /usr/local/bin/
 
-# Create user
-sudo useradd -m riku
-sudo su - riku
-
-# Initialize
-riku init
+# Install, create the deploy user and authorize your SSH keys
+sudo ./target/release/riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
 ## Post-Installation
@@ -334,36 +286,40 @@ git commit --allow-empty -m "domain" && git push riku main
 To upgrade to the latest version:
 
 ```bash
-# Pull latest changes
+# Pull latest changes and rebuild
 cd ~/riku
 git pull
-
-# Rebuild
 cargo build --release
 
-# Install new binary
-cp target/release/riku /usr/local/bin/
+# Install the new binary and rewrite units and the router helper
+sudo cp target/release/riku /usr/local/bin/riku
+sudo riku init
 
-# Restart supervisor (if running as user service)
-systemctl --user restart riku
+# As the deploy user, redeploy apps without a site file and rewrite stale hooks
+riku doctor --fix
+
+# Restart the supervisor
+sudo systemctl restart riku
 ```
 
-On a server set up with `sudo riku init`, run `sudo riku init` again after replacing the binary. It removes the deploy user's old `~/.local/bin/riku`, which would otherwise shadow `/usr/local/bin/riku`.
+`sudo riku init` also removes the deploy user's old `~/.local/bin/riku`, which would otherwise shadow `/usr/local/bin/riku`.
 
 ## Uninstalling
 
 To remove Riku:
 
 ```bash
-# Stop services
-systemctl --user stop riku
-systemctl --user disable riku
+# Stop and disable the system units
+sudo systemctl disable --now riku.service riku-router-helper.service
+sudo rm -f /etc/systemd/system/riku.service /etc/systemd/system/riku-router-helper.service
+sudo systemctl daemon-reload
 
-# Remove binary
+# Remove the binary and riku's root owned configuration
 sudo rm /usr/local/bin/riku
+sudo rm -rf /etc/riku
 
 # Remove Riku data (WARNING: deletes all apps!)
-rm -rf ~/.riku
+sudo rm -rf ~riku/.riku
 
 # Remove user (optional)
 sudo userdel -r riku

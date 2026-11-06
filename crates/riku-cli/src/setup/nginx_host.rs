@@ -28,7 +28,9 @@ use crate::nginx::{include_file_contents, needs_catch_all, write_include_file};
 use crate::util::echo;
 
 use super::deploy_user::DeployUser;
-use super::host_cleanup::{clear_deploy_owned_router_files, is_trusted_file};
+use super::host_cleanup::{
+    check_removed_base, clear_deploy_owned_router_files, is_trusted_file, removed_dir_now,
+};
 use super::nginx_worker::grant_nginx_sockets;
 
 const SITES_ENABLED: &str = "/etc/nginx/sites-enabled";
@@ -154,7 +156,11 @@ pub fn setup_nginx_host(user: &DeployUser) -> Result<()> {
         ));
     };
     let swept = [Path::new(SITES_ENABLED), dir];
-    if let Err(e) = clear_deploy_owned_router_files(&swept, ROOT_UID) {
+    let removed = removed_dir_now();
+    if let Err(e) = check_removed_base(&removed, ROOT_UID) {
+        return Err(e);
+    }
+    if let Err(e) = clear_deploy_owned_router_files(&swept, ROOT_UID, &removed) {
         return Err(e);
     }
     if !dir.is_dir() {

@@ -50,7 +50,8 @@ pub const SYSTEMD_RUNTIME_DIR: &str = "/run/systemd/system";
 
 /// Where Caddy site files live on a real host. It sits outside the deploy
 /// user's home so the `caddy` user needs no access to that home. Root init
-/// creates it owned by the deploy user, group `caddy`, mode `2750`.
+/// creates it owned by root, group `caddy`, mode `2750`; only the router
+/// helper writes site files here.
 pub const CADDY_SITE_ROOT: &str = "/etc/riku/caddy";
 
 /// Root-owned `0755` directory of the nginx site configs the router helper

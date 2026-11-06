@@ -1,62 +1,57 @@
-//! The `riku doctor --fix` step for apps still routed from the old nginx
-//! directory. Before the router helper, an app's config was
-//! `<riku root>/nginx/<app>.conf`; the helper now writes it to the site root
-//! (`/etc/riku/nginx`). An app that has the old file and no new one is
-//! redeployed once so the helper renders its site.
+//! The `riku doctor --fix` step for apps with no site file in the active
+//! router's site root. An upgrade removes the site files an older version
+//! left behind (`~/.riku/nginx/<app>.conf`, deploy owned `/etc/riku/caddy`
+//! files), so every app that has a checkout and no file in the site root is
+//! redeployed once and the router helper renders its site.
 
 use std::fs;
-use std::io::ErrorKind;
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
 
 use super::Check;
 
-const NAME: &str = "nginx sites";
+const NAME: &str = "router sites";
 
-fn orphaned_apps(riku_root: &Path, site_root: &Path) -> Result<Vec<String>> {
-    let old_root = riku_root.join("nginx");
-    let entries = match fs::read_dir(&old_root) {
+fn unrouted_apps(riku_root: &Path, site_root: &Path, extension: &str) -> Result<Vec<String>> {
+    let apps_root = riku_root.join("apps");
+    let entries = match fs::read_dir(&apps_root) {
         Ok(entries) => entries,
-        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(anyhow!("cannot read {}: {e}", old_root.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(anyhow!("cannot read {}: {e}", apps_root.display())),
     };
     let mut apps = Vec::new();
     for entry in entries {
-        let path = match entry {
-            Ok(entry) => entry.path(),
-            Err(e) => {
-                return Err(anyhow!(
-                    "cannot read an entry of the old nginx directory: {e}"
-                ))
-            }
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(e) => return Err(anyhow!("cannot read an entry of the apps directory: {e}")),
         };
-        let app = match (path.extension(), path.file_stem().and_then(|s| s.to_str())) {
-            (Some(ext), Some(stem)) if ext == "conf" => stem,
-            _ => continue,
+        let app = match entry.file_name().to_str() {
+            Some(app) => app.to_string(),
+            None => continue,
         };
-        if riku_container::types::AppName::try_from(app).is_err()
-            || !riku_root.join("apps").join(app).is_dir()
+        if riku_container::types::AppName::try_from(app.as_str()).is_err() || !entry.path().is_dir()
         {
             continue;
         }
-        if !site_root.join(format!("{app}.conf")).exists() {
-            apps.push(app.to_string());
+        if !site_root.join(format!("{app}.{extension}")).exists() {
+            apps.push(app);
         }
     }
     apps.sort();
     Ok(apps)
 }
 
-/// Redeploy every app that has `<riku_root>/nginx/<app>.conf` but no
-/// `<site_root>/<app>.conf`, through `redeploy`, and report one check per
-/// app. Nothing is reported when no app is in that state.
-pub fn redeploy_orphaned_sites(
+/// Redeploy every app that has a checkout under `<riku_root>/apps` and no
+/// `<site_root>/<app>.<extension>`, through `redeploy`, and report one check
+/// per app. Nothing is reported when every app has its site file.
+pub fn redeploy_unrouted_sites(
     riku_root: &Path,
     site_root: &Path,
+    extension: &str,
     mut redeploy: impl FnMut(&str) -> Result<()>,
 ) -> Vec<Check> {
-    let apps = match orphaned_apps(riku_root, site_root) {
+    let apps = match unrouted_apps(riku_root, site_root, extension) {
         Ok(apps) => apps,
         Err(e) => return vec![Check::fail(NAME, e.to_string())],
     };

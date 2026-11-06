@@ -9,15 +9,21 @@
 //! else, and a link is kept only when its written target is such a file and
 //! every directory on the way is a real, root owned directory nobody else
 //! can write. Nothing is resolved by following links. Only files and links
-//! are removed from the nginx directories.
+//! are taken from the nginx directories, and they are moved into a root only
+//! `/etc/riku/removed/<time>` directory rather than deleted. The Caddy
+//! directory sweep deletes.
 
 use std::fs;
-use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, Result};
+use riku_util::write_dir::check_write_dir;
 
 use crate::util::echo;
+
+const REMOVED_ROOT: &str = "/etc/riku/removed";
 
 fn entries(dir: &Path) -> Result<Vec<PathBuf>> {
     let listing = match fs::read_dir(dir) {
@@ -71,14 +77,86 @@ fn is_trusted_entry(path: &Path, meta: &fs::Metadata, root_uid: u32) -> bool {
             })
 }
 
-/// Delete from each of `dirs` every file or link that [`is_trusted_entry`]
-/// rejects. Subdirectories are left in place and reported. Returns what was
-/// removed.
+/// Where untrusted nginx entries are moved: `/etc/riku/removed/<unix time>`.
+pub(super) fn removed_dir_now() -> PathBuf {
+    let seconds = match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(since) => since.as_secs(),
+        Err(_) => 0,
+    };
+    Path::new(REMOVED_ROOT).join(seconds.to_string())
+}
+
+/// Create the directory above `removed`'s parent (`/etc/riku`) and refuse it
+/// unless only `root_uid` can write it, so no one else can swap the
+/// `removed` directory for a link. Call before [`clear_deploy_owned_router_files`].
+pub(super) fn check_removed_base(removed: &Path, root_uid: u32) -> Result<()> {
+    let Some(base) = removed.parent().and_then(Path::parent) else {
+        return Err(anyhow!("{} has no parent directories", removed.display()));
+    };
+    if let Err(e) = fs::create_dir_all(base) {
+        return Err(anyhow!("failed to create {}: {e}", base.display()));
+    }
+    match check_write_dir(base, root_uid) {
+        Ok(()) => Ok(()),
+        Err(e) => Err(anyhow!("{e}")),
+    }
+}
+
+/// Create `removed` (`/etc/riku/removed/<time>`) as a `0700` directory under a
+/// `0700` parent.
+fn create_removed_dir(removed: &Path) -> Result<()> {
+    let Some(parent) = removed.parent() else {
+        return Err(anyhow!("{} has no parent directory", removed.display()));
+    };
+    for dir in [parent, removed] {
+        match fs::create_dir(dir) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(anyhow!("failed to create {}: {e}", dir.display())),
+        }
+        if let Err(e) = fs::set_permissions(dir, fs::Permissions::from_mode(0o700)) {
+            return Err(anyhow!("failed to chmod {}: {e}", dir.display()));
+        }
+    }
+    Ok(())
+}
+
+/// Move `path` to `<removed>/<dir name>/<file name>`. A rename moves a
+/// symlink as a link and never follows it.
+fn move_aside(path: &Path, removed: &Path) -> Result<PathBuf> {
+    let (Some(dir_name), Some(file_name)) =
+        (path.parent().and_then(Path::file_name), path.file_name())
+    else {
+        return Err(anyhow!("{} has no directory or file name", path.display()));
+    };
+    if let Err(e) = create_removed_dir(removed) {
+        return Err(anyhow!("cannot prepare {}: {e}", removed.display()));
+    }
+    let dest_dir = removed.join(dir_name);
+    if let Err(e) = fs::create_dir_all(&dest_dir) {
+        return Err(anyhow!("failed to create {}: {e}", dest_dir.display()));
+    }
+    let dest = dest_dir.join(file_name);
+    match fs::rename(path, &dest) {
+        Ok(()) => Ok(dest),
+        Err(e) => Err(anyhow!(
+            "failed to move {} to {}: {e}",
+            path.display(),
+            dest.display()
+        )),
+    }
+}
+
+/// Move out of each of `dirs`, into `removed`, every file or link that
+/// [`is_trusted_entry`] rejects. Nothing is deleted, so an entry that was in
+/// fact wanted can be put back. Subdirectories are left in place and
+/// reported. Returns the original paths of what was moved.
 pub(super) fn clear_deploy_owned_router_files(
     dirs: &[&Path],
     root_uid: u32,
+    removed: &Path,
 ) -> Result<Vec<PathBuf>> {
-    let mut removed = Vec::new();
+    let mut moved = Vec::new();
     for dir in dirs {
         let found = match entries(dir) {
             Ok(found) => found,
@@ -104,20 +182,22 @@ pub(super) fn clear_deploy_owned_router_files(
             if is_trusted_entry(&path, &meta, root_uid) {
                 continue;
             }
-            if let Err(e) = fs::remove_file(&path) {
-                return Err(anyhow!("failed to remove {}: {e}", path.display()));
-            }
+            let dest = match move_aside(&path, removed) {
+                Ok(dest) => dest,
+                Err(e) => return Err(anyhow!("{} not cleared: {e}", path.display())),
+            };
             echo(
                 &format!(
-                    "      removed {}: root nginx must not load it",
-                    path.display()
+                    "      moved {} to {}: root nginx must not load it",
+                    path.display(),
+                    dest.display()
                 ),
                 "yellow",
             );
-            removed.push(path);
+            moved.push(path);
         }
     }
-    Ok(removed)
+    Ok(moved)
 }
 
 /// Delete everything in `dir` that is not a regular file owned by

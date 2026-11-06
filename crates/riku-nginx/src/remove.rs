@@ -13,7 +13,7 @@ use crate::config::RikuPaths;
 
 /// Suffixes of the certificate files acme.sh and the self signed fallback
 /// leave next to each other in `nginx_root`.
-const CERTIFICATE_SUFFIXES: [&str; 3] = ["key", "crt", "fullchain.crt"];
+const CERTIFICATE_SUFFIXES: [&str; 4] = ["key", "crt", "fullchain.crt", "renew-hook"];
 
 /// `symlink_metadata`, not `exists`: a dangling link is still an entry.
 fn is_present(file: &Path) -> bool {

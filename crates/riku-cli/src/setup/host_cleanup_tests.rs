@@ -55,7 +55,9 @@ fn nginx_dirs_keep_only_root_owned_files_and_links_to_them() {
         meta.is_dir() && (meta.uid() == me || meta.uid() == 0) && meta.mode() & 0o022 == 0
     });
 
-    let removed = clear_deploy_owned_router_files(&[&sites, &conf_d], me).unwrap();
+    let first_removed = tmp.join("removed").join("1");
+    check_removed_base(&first_removed, me).unwrap();
+    let removed = clear_deploy_owned_router_files(&[&sites, &conf_d], me, &first_removed).unwrap();
     let mut names: Vec<_> = removed
         .iter()
         .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
@@ -82,8 +84,20 @@ fn nginx_dirs_keep_only_root_owned_files_and_links_to_them() {
     }
     assert!(conf_d.join("gzip.conf").exists(), "root owned file went");
     assert!(conf_d.join("nested").is_dir(), "directory was removed");
+    let kept_link = first_removed.join("sites-enabled").join("dangling");
+    assert!(
+        fs::symlink_metadata(&kept_link).unwrap().is_symlink(),
+        "{} was not moved as a link",
+        kept_link.display()
+    );
+    for dir in [&first_removed, first_removed.parent().unwrap()] {
+        let mode = fs::metadata(dir).unwrap().mode() & 0o777;
+        assert_eq!(mode, 0o700, "{} is mode {mode:o}", dir.display());
+    }
 
-    let removed = clear_deploy_owned_router_files(&[&sites, &conf_d], not_root).unwrap();
+    let second_removed = tmp.join("removed").join("2");
+    let removed =
+        clear_deploy_owned_router_files(&[&sites, &conf_d], not_root, &second_removed).unwrap();
     let mut names: Vec<_> = removed
         .iter()
         .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
