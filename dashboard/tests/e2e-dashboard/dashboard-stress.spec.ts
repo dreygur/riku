@@ -1,19 +1,12 @@
 // Verification Module 1: End-to-End Live Dashboard & Runtime Stream Stress Test
 //
 // Drives a REAL riku supervisor binary + REAL Next.js/Hono dashboard + REAL
-// headless Chromium + REAL podman, against a throwaway sandboxed RIKU_ROOT.
+// headless Chromium, against a throwaway sandboxed RIKU_ROOT.
 // No mocked HTTP, no stubbed SSE, no fake process states.
 //
-// Two corrections versus the original spec, grounded in the actual source
-// (not asserted on faith: see the inline citations below):
-//   1. There is no "building" worker-grid state. `ProcessStats.status` only
-//      ever resolves to running|stopped|crashed (dashboard/lib/types.ts
-//      STATUS_MAP). A deploy either produces a RUNNING row or no row.
-//   2. Podman is not part of `riku deploy`: Procfile workers are spawned
-//      directly by the supervisor. Podman only exists via the separate
-//      container-export feature, which builds+tars an image and never runs
-//      it as a worker. Phase 2 is split into a deploy sub-phase (no podman)
-//      and an export sub-phase (real podman, no running container).
+// There is no "building" worker-grid state. `ProcessStats.status` only
+// ever resolves to running|stopped|crashed (dashboard/lib/types.ts
+// STATUS_MAP). A deploy either produces a RUNNING row or no row.
 //
 // Two real defects were discovered while grounding Phase 3 against the
 // actual SSE route (app/api/logs/stream/route.ts) and DeployLogger
@@ -32,8 +25,7 @@
 //     and only shows lines written after the new connection opens.
 
 import { test, expect, chromium, type Browser, type Page } from "@playwright/test";
-import { existsSync, appendFileSync, mkdirSync, readFileSync, statSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { existsSync, appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   startSandbox,
@@ -62,7 +54,7 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
 
   test.afterAll(async () => {
     await browser?.close();
-    await stopSandbox(env, [APP_NAME]);
+    await stopSandbox(env);
   });
 
   // Phase 1: Bootstrap & Connection Hardening
@@ -125,31 +117,6 @@ test.describe.serial("Riku Dashboard E2E Stress Suite", () => {
     await expect(
       page.getByTestId("terminal-stream-line").filter({ hasText: `Deploying app '${APP_NAME}'` }),
     ).toBeVisible({ timeout: 15_000 });
-  });
-
-  // Phase 2b: Real Podman Build + Export
-
-  test("Phase 2b: real podman build+export produces a valid, loadable tar", async () => {
-    await page.getByTestId("export-image-btn").click();
-    await expect(page.getByTestId("action-status")).toHaveText(/\[CONTAINER_EXPORT\] .* ok/, {
-      timeout: 120_000, // real podman pull+build, no shortcuts
-    });
-
-    const tarPath = join(env.rikuRoot, "data", "exports", `${APP_NAME}.tar`);
-    expect(existsSync(tarPath)).toBe(true);
-    expect(statSync(tarPath).size).toBeGreaterThan(0);
-
-    // Real tar validity check, not just "file exists".
-    const tarListing = execFileSync("tar", ["-tf", tarPath], { encoding: "utf-8" });
-    expect(tarListing.trim().length).toBeGreaterThan(0);
-
-    // Real podman round-trip: load the exported archive back and confirm
-    // the image is actually reconstitutable, not just a byte blob.
-    execFileSync("podman", ["load", "-i", tarPath]);
-    const images = execFileSync("podman", ["images", "--format", "{{.Repository}}"], {
-      encoding: "utf-8",
-    });
-    expect(images).toContain(`riku-${APP_NAME}`);
   });
 
   // Phase 3: Hostile Stream Stress, Disconnection, and Truncation

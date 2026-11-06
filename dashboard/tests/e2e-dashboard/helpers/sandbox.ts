@@ -239,20 +239,8 @@ async function killProcessGroup(proc: ChildProcess, graceMs = 5_000): Promise<vo
   }
 }
 
-/** Best-effort removal of any podman images this run produced. Image
- * names always follow `riku-<app>` (see container_runtime::build_and_export),
- * so we can target them precisely instead of pruning everything. */
-function cleanupPodmanImage(appName: string): void {
-  try {
-    spawn("podman", ["rmi", "-f", `riku-${appName}`], { stdio: "ignore" });
-  } catch {
-    // podman not present or image never built: nothing to clean up
-  }
-}
-
-export async function stopSandbox(handle: SandboxHandle, appNames: string[]): Promise<void> {
+export async function stopSandbox(handle: SandboxHandle): Promise<void> {
   await Promise.all([killProcessGroup(handle.rikuProc), killProcessGroup(handle.dashboardProc)]);
-  for (const app of appNames) cleanupPodmanImage(app);
   rmSync(handle.rikuRoot, { recursive: true, force: true });
 }
 

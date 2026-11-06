@@ -5,7 +5,6 @@ use clap::{Parser, Subcommand};
 use crate::cmds::{
     AddonCmd, AppsCmd, ConfigCmd, HookCmd, PluginCmd, PluginsCmd, ServerCmd, StatsCmd,
 };
-use crate::container_args::ContainerSubCmd;
 
 /// riku: the smallest PaaS you've ever seen (Rust edition)
 #[derive(Parser, Debug)]
@@ -103,12 +102,6 @@ pub enum Commands {
         after_help = "Examples:\n  riku config show myapp\n  riku config set myapp KEY=val\n  riku config get myapp KEY\n  riku config unset myapp KEY\n  riku config live myapp"
     )]
     Config(ConfigCmd),
-
-    /// Container export and remote deployment commands
-    Container {
-        #[command(subcommand)]
-        cmd: ContainerSubCmd,
-    },
 
     /// Force redeploy of an app
     #[command(

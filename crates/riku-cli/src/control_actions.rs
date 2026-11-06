@@ -5,8 +5,6 @@
 //! delegating to the existing CLI command functions and deploy services, and
 //! the binary injects it into the daemon at startup.
 
-use std::path::Path;
-
 use anyhow::Result;
 
 use crate::config::RikuPaths;
@@ -35,9 +33,6 @@ impl ControlActions for CliControlActions {
     }
     fn install_plugins(&self, paths: &RikuPaths, only: Option<Vec<String>>) -> Result<()> {
         crate::apps::cmd_install_plugins(paths, only)
-    }
-    fn container_export(&self, app: &str, context: &Path, output: &Path) -> Result<()> {
-        crate::deploy::container_runtime::build_and_export(app, context, output)
     }
     fn list_client_plugins(&self) -> Result<Vec<String>> {
         crate::client_plugins::list_client_plugins()

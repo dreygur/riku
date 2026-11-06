@@ -61,7 +61,7 @@ around it quiet.
   worker health, mem/cpu at a glance, deploy-lock ("deploying…"). Host header:
   riku version, supervisor uptime, app count, live indicator.
 - **App detail**: workers table (kind.ordinal, status, pid, mem, cpu, restarts),
-  actions (redeploy / restart / stop / destroy / scale / rollback / export image),
+  actions (redeploy / restart / stop / destroy / scale / rollback),
   routing panel (domain, https, static, cache, cloudflare), env editor,
   release timeline (roll back to any SHA), backups.
 - **Live logs**: per-app and per-worker, streamed over SSE; pause, follow,
@@ -88,7 +88,7 @@ the backend can fill in behind it.
 - **Mutating (token + same-origin/CSRF, via the Next proxy):**
   `POST /control/apps` (create), `/control/apps/:app/{deploy,restart,stop}`,
   `DELETE /control/apps/:app`, `/control/plugins/install`,
-  `/control/apps/:app/container/export`, plus `scale` and `rollback`.
+  plus `scale` and `rollback`.
 - **Wire details:** process status is **snake_case** (`running`, `starting`,
   `stopped`, `crashed`, `restarting`, `oom_killed`); health is snake_case too.
   Worker entries carry `memory_bytes`, `cpu_time_ms`, `restart_count`, `pid`.

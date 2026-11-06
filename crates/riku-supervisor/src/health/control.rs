@@ -40,10 +40,6 @@ pub fn control_router(token: String) -> Router {
         .route("/control/apps/{app}/stop", post(stop_handler))
         .route("/control/apps/{app}", delete(destroy_handler))
         .route("/control/plugins/install", post(install_plugins_handler))
-        .route(
-            "/control/apps/{app}/container/export",
-            post(container_export_handler),
-        )
         .route_layer(middleware::from_fn_with_state(state.clone(), require_token))
         .with_state(state)
 }
@@ -215,77 +211,6 @@ async fn install_plugins_handler(
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({"ok": false, "action": "install-plugins", "error": e.to_string()})),
-            )),
-        }
-    });
-    join_blocking(handle).await.into_response()
-}
-
-/// POST /control/apps/:app/container/export, builds the app's deployed
-/// source directory as a container image (auto-detects Docker/Podman) and
-/// exports it to a tar archive under `{data_root}/exports/{app}.tar`.
-///
-/// The build context and output path are always server-derived from the
-/// validated app name: never taken from the request, so this can't be
-/// used to build an arbitrary host directory or write outside riku's data
-/// root.
-async fn container_export_handler(
-    Extension(actions): Extension<SharedActions>,
-    Path(app): Path<String>,
-) -> impl IntoResponse {
-    let handle = std::thread::spawn(move || -> HandlerResult {
-        let paths = match RikuPaths::from_env() {
-            Ok(paths) => paths,
-            Err(e) => {
-                return Err((
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"ok": false, "error": e.to_string()})),
-                ))
-            }
-        };
-
-        let app = match crate::util::validate_app_name(&app) {
-            Ok(a) => a,
-            Err(e) => {
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    Json(json!({"ok": false, "error": e.to_string()})),
-                ))
-            }
-        };
-
-        let context = paths.app_root.join(&app);
-        if !context.exists() {
-            return Err((
-                StatusCode::NOT_FOUND,
-                Json(json!({"ok": false, "app": app, "error": format!("app '{}' not found", app)})),
-            ));
-        }
-
-        let export_dir = paths.data_root.join("exports");
-        if let Err(e) = std::fs::create_dir_all(&export_dir) {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "app": app, "error": e.to_string()})),
-            ));
-        }
-
-        let output = export_dir.join(format!("{}.tar", app));
-        match actions.container_export(&app, &context, &output) {
-            Ok(()) => Ok(Json(json!({
-                "ok": true,
-                "app": app,
-                "action": "container-export",
-                "output": output.display().to_string(),
-            }))),
-            Err(e) => Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "ok": false,
-                    "app": app,
-                    "action": "container-export",
-                    "error": e.to_string(),
-                })),
             )),
         }
     });

@@ -1,6 +1,5 @@
 //! Mock control actions for supervisor container tests.
 
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Result};
@@ -57,10 +56,6 @@ impl ControlActions for MockActions {
     }
 
     fn install_plugins(&self, _: &RikuPaths, _: Option<Vec<String>>) -> Result<()> {
-        Err(unexpected_call())
-    }
-
-    fn container_export(&self, _: &str, _: &Path, _: &Path) -> Result<()> {
         Err(unexpected_call())
     }
 

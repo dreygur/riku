@@ -2,8 +2,6 @@
 //! only, or on the selected server when one is configured. `client_rule` is
 //! the same question for the laptop only `rk` binary.
 
-const CONTAINER: &str = "container";
-
 /// The one server only command that can target a server: its remote form
 /// opens the server's dashboard on this machine.
 pub const DASHBOARD: &str = "dashboard";
@@ -24,7 +22,7 @@ pub enum Placement {
 /// `None` for names that are not riku commands, including clap's own `help`.
 pub fn placement_of(name: &str) -> Option<Placement> {
     match name {
-        "server" | "quickstart" | "container" | "plugin" => Some(Placement::Local),
+        "server" | "quickstart" | "plugin" => Some(Placement::Local),
         "init" | "supervisor" | "router-helper" | "router-renew" | "dashboard" | "git-hook"
         | "git-receive-pack" | "git-upload-pack" | "scp" | "plugin-emit" | "__ns-shim"
         | "__dump-state" => Some(Placement::Server),
@@ -40,8 +38,6 @@ pub fn placement_of(name: &str) -> Option<Placement> {
 pub enum Elsewhere {
     /// Only the riku on the server can run it.
     OnServer,
-    /// Only the full riku binary can run it.
-    FullBinary,
 }
 
 /// How `rk` treats a top-level command.
@@ -57,13 +53,9 @@ pub enum ClientRule {
 
 /// The one rule for what `rk` runs, forwards and refuses, by clap name.
 ///
-/// `dashboard` is server only for riku but runs here in its remote form, and
-/// `container` is local for riku but needs the full binary. Names that are
-/// not riku commands forward, as the server reports them.
+/// `dashboard` is server only for riku but runs here in its remote form.
+/// Names that are not riku commands forward, as the server reports them.
 pub fn client_rule(name: &str) -> ClientRule {
-    if name == CONTAINER {
-        return ClientRule::Refused(Elsewhere::FullBinary);
-    }
     if name == DASHBOARD {
         return ClientRule::RunsHere;
     }

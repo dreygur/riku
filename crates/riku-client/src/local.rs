@@ -24,7 +24,6 @@ const NO_SERVER: &str =
 fn not_part_of_rk(command: &str, elsewhere: Elsewhere) -> Error {
     let runner = match elsewhere {
         Elsewhere::OnServer => "riku on the server",
-        Elsewhere::FullBinary => "the full riku binary",
     };
     anyhow!("'{command}' is not part of rk; run it with {runner}")
 }

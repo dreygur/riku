@@ -761,19 +761,6 @@ The `riku` binary must be at `/usr/local/bin/riku` on the server.
 
 ---
 
-### `riku container <command>`
-
-Container export and remote deployment (auto-detects Docker/Podman).
-
-```bash
-riku container export                       # Build + export image to a tar archive
-riku container deploy-remote -a myapp -r user@host  # Build, transfer, deploy
-riku container deploy-archive               # Deploy an exported tar archive to remote
-riku container check-remote                 # Check remote for Docker/Podman
-```
-
----
-
 ### `riku --help`
 
 Show help information.

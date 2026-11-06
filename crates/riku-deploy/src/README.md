@@ -8,10 +8,6 @@ Component package located at `crates/riku-deploy/src`.
 - `new` [backup.rs:new] (fn)
 - `backup` [backup.rs:backup] (fn)
 - `backup.rs` [backup.rs] (and 1 additional symbols)
-- `get_container_runtime` [container_runtime.rs:get_container_runtime] (fn)
-- `build_and_export` [container_runtime.rs:build_and_export] (fn)
-- `transfer_to_remote` [container_runtime.rs:transfer_to_remote] (fn)
-- `container_runtime.rs` [container_runtime.rs] (and 3 additional symbols)
 - `load_deploy_env` [deploy_env.rs:load_deploy_env] (fn)
 - `finish_deploy` [deploy_finish.rs:finish_deploy] (fn)
 - `run_preflight` [env_setup.rs:run_preflight] (fn)
@@ -73,8 +69,6 @@ Component package located at `crates/riku-deploy/src`.
 - [deploy_env.rs] Sets the app's env dir to `0700` and its ENV file to `0600`
 - [backup.rs] Spawns external child processes via `std::process::Command`
 - [backup.rs] Mutates local filesystem (creates/modifies/removes files)
-- [container_runtime.rs] Spawns external child processes via `std::process::Command`
-- [container_runtime.rs] Mutates local filesystem (creates/modifies/removes files)
 - [env_setup.rs] Spawns external child processes via `std::process::Command`
 - [env_setup.rs] Mutates local filesystem (creates/modifies/removes files)
 - [env_setup.rs] Reads or updates process environment variables
