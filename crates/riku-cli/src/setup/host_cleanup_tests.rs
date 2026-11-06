@@ -6,10 +6,13 @@ use super::*;
 fn nginx_dirs_keep_only_root_owned_files_and_links_to_them() {
     use std::os::unix::fs::PermissionsExt;
 
-    let tmp = tempfile::tempdir().unwrap();
-    let sites = tmp.path().join("sites-enabled");
-    let conf_d = tmp.path().join("conf.d");
-    let outside = tmp.path().join("outside");
+    // The rule refuses any link on the way, and macOS keeps temp dirs under
+    // the /var link, so work from the real path.
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let tmp = fs::canonicalize(tmp_dir.path()).unwrap();
+    let sites = tmp.join("sites-enabled");
+    let conf_d = tmp.join("conf.d");
+    let outside = tmp.join("outside");
     for dir in [&sites, &conf_d, &outside] {
         fs::create_dir(dir).unwrap();
     }
@@ -26,13 +29,19 @@ fn nginx_dirs_keep_only_root_owned_files_and_links_to_them() {
     symlink(outside.join("shared.conf"), sites.join("good-link")).unwrap();
     symlink(outside.join("writable.conf"), sites.join("writable-link")).unwrap();
     symlink(outside.join("gone.conf"), sites.join("dangling")).unwrap();
-    let loose = tmp.path().join("loose");
+    let loose = tmp.join("loose");
     fs::create_dir(&loose).unwrap();
     fs::write(loose.join("site.conf"), "x").unwrap();
     fs::set_permissions(&loose, fs::Permissions::from_mode(0o777)).unwrap();
     symlink(loose.join("site.conf"), sites.join("loose-link")).unwrap();
     symlink(outside.join("shared.conf"), outside.join("hop")).unwrap();
     symlink(outside.join("hop"), sites.join("chained")).unwrap();
+    symlink(&outside, tmp.join("alias")).unwrap();
+    symlink(
+        tmp.join("alias").join("shared.conf"),
+        sites.join("through-linked-dir"),
+    )
+    .unwrap();
     fs::write(conf_d.join("gzip.conf"), "x").unwrap();
     fs::create_dir(conf_d.join("nested")).unwrap();
 
@@ -44,7 +53,13 @@ fn nginx_dirs_keep_only_root_owned_files_and_links_to_them() {
     names.sort();
     assert_eq!(
         names,
-        ["chained", "dangling", "loose-link", "writable-link"]
+        [
+            "chained",
+            "dangling",
+            "loose-link",
+            "through-linked-dir",
+            "writable-link"
+        ]
     );
     assert!(sites.join("good-link").exists(), "link to a root file went");
     assert!(conf_d.join("gzip.conf").exists(), "root owned file went");
