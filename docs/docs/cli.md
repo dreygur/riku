@@ -652,8 +652,8 @@ Creates:
 - `~/.riku/repos/` - Git bare repositories
 - `~/.riku/envs/` - Environment variables
 - `~/.riku/logs/` - Application logs
-- `~/.riku/nginx/` - Nginx configurations
-- `~/.riku/cache/` - Nginx cache files
+- `~/.riku/nginx/` - Certificate files the router helper copies
+- `~/.riku/cache/` - Cache files
 - `~/.riku/workers-available/` - Worker configs
 - `~/.riku/workers-enabled/` - Enabled worker symlinks
 - `~/.riku/plugins/` - Plugin executables
@@ -685,6 +685,18 @@ The supervisor:
 systemctl --user enable riku
 systemctl --user start riku
 ```
+
+---
+
+### `riku router-renew`
+
+Send an app's current certificate files to the router helper. acme.sh calls it after each renewal. Run it as the deploy user.
+
+```bash
+riku router-renew myapp
+```
+
+The server side `riku router-helper` command is the root service behind `riku-router-helper.service`. You do not run it by hand. See [Systemd](systemd.md).
 
 ---
 

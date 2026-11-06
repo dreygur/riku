@@ -21,7 +21,25 @@ sudo su - riku
 cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
 ```
 
+The installer script does the same download and checksum in one step. It installs `riku` to `/usr/local/bin`, so it needs root:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sudo sh
+sudo riku init
+```
+
 After running `sudo riku init`, the binary is installed to `/usr/local/bin/riku`, owned by root so the deploy user cannot change it. Units, git hooks and deploy keys all name that path. A plain `riku init` as the deploy user needs it to exist already.
+
+`sudo riku init` also installs and starts `riku-router-helper.service`, a small root service on `/run/riku-router.sock`. It writes the nginx or Caddy site of each app (`/etc/riku/nginx`, `/etc/riku/caddy`, certificates in `/etc/riku/certs`) and reloads the router. See [Nginx](nginx.md#the-router-helper).
+
+### Upgrading an existing host
+
+1. Install the new binary: the installer above, or the release tarball with `sudo ./riku init`.
+2. Run `sudo riku init` again. It installs the router helper and rewrites the units.
+3. As the deploy user, run `riku doctor --fix`. It redeploys apps still routed from the old `~/.riku/nginx` and rewrites stale keys and hooks.
+4. Restart the supervisor: `sudo systemctl restart riku`.
+
+An app that sets a key the core route dropped (see [Removed keys](nginx.md#removed-keys)) fails its deploy and names the key. Unset it with `riku config unset`.
 
 ## The rk laptop client
 

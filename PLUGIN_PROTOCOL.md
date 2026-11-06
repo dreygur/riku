@@ -81,7 +81,7 @@ install     = true               # both default false, so no existing plugin
 uninstall   = true               # is affected
 
 [filters]                        # present iff the plugin registers filters (§7.3)
-subscribe   = ["nginx.include_content"]
+subscribe   = ["example.filter"]
 priority    = 0                  # chain order, lower first (default 0)
 
 [ui]                              # present iff the plugin has a dashboard panel (§7.5)
@@ -289,7 +289,7 @@ a plugin receives a value and hands back a (possibly modified) one. Declared
 in the manifest `[filters]` block (§3), invoked with verb `on_filter`:
 
 ```json
-{"filter": "nginx.include_content", "data": "proxy_read_timeout 60;"}
+{"filter": "example.filter", "data": "some value"}
 ```
 
 expecting `{"data": "<transformed value>"}` back on stdout. Multiple plugins
@@ -303,22 +303,7 @@ next filter in the chain. A broken filter can only become a no-op, never a
 hard failure: this is also why filters have no `gate`-equivalent mode: a
 filter can decline to transform, but never veto.
 
-**Shipped example: `nginx.include_content`.** An app can add a checked
-snippet to its generated nginx `server` block with `RIKU_NGINX_INCLUDE_FILE`
-(path confined to the app directory, narrow grammar, directive allowlist).
-That file's content (or an empty string if unset) is the *seed* value run
-through this filter before being inlined into the config
-(`crates/riku-nginx/src/app_snippet.rs::insert_include_file`). This is the
-"augment, don't replace" alternative to the router seam's full-replace
-singleton (§6.2): any number of plugins can each contribute a snippet to
-the *default* nginx output, rather than one plugin taking over routing
-entirely.
-
-The chain's final output must pass the same grammar and directive
-allowlist as a `RIKU_NGINX_INCLUDE_FILE` snippet. This is the one place a
-filter result can fail its caller: if the output is not a string or uses a
-refused directive, riku refuses the deploy and names the filter stage and
-the reason, rather than inlining it or falling back to the seed.
+**No filter point ships in core today.** The only one, `nginx.include_content`, fed the per app snippet file (`RIKU_NGINX_INCLUDE_FILE`) into the nginx config. That file is gone with the smaller core route, and a deploy that sets the key fails. The filter mechanism stays for future filter points.
 
 ### 7.4 Plugin-emitted custom events _(new)_
 
