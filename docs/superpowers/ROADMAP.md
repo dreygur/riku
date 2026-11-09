@@ -203,7 +203,7 @@ work they describe.
 - Each copy's host port is stored (as a label) so backends can be rebuilt
   after a supervisor restart.
 
-### Phase 3b: build off the server through a registry (done, pending push)
+### Phase 3b: build off the server through a registry (done, merged as #74)
 
 - Owner cut 2026-11-06 after an EGM review: spec
   `specs/2026-11-06-phase-3b-design.md`. Images built off the server go
