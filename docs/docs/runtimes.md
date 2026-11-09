@@ -8,12 +8,31 @@ Riku supports multiple programming languages and frameworks. This guide covers d
 
 ### Detection
 
-Riku detects Python apps by the presence of:
-- `requirements.txt` - Standard pip
-- `pyproject.toml` + `poetry` binary on PATH - Poetry
-- `pyproject.toml` + `uv` binary on PATH - uv
+Riku detects Python apps by the presence of `requirements.txt`,
+`pyproject.toml` or `setup.py`.
 
-### Standard Pip
+### Package Manager
+
+Riku builds Python apps with [uv](https://docs.astral.sh/uv/) and recommends
+installing it on the server:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+With uv, a deploy installs into the app's `.venv`:
+
+- `uv.lock` present → `uv sync --locked --no-dev` (fails when the lock is out
+  of date with `pyproject.toml`, so commit the lock after changing
+  dependencies).
+- Otherwise `requirements.txt` → `uv pip install -r requirements.txt`, or
+  `pyproject.toml` → `uv pip install -e .`, or `setup.py` → `uv pip install .`.
+
+Without uv, Riku falls back to `pip` in a `python3 -m venv` virtualenv and
+prints how to install uv. `riku doctor` warns while uv is missing. Either way
+a failed install stops the deploy and shows the installer's output.
+
+### requirements.txt
 
 **requirements.txt:**
 ```txt
@@ -31,29 +50,7 @@ web: gunicorn app:app
 git push riku main
 ```
 
-### Poetry
-
-**pyproject.toml:**
-```toml
-[tool.poetry]
-name = "myapp"
-version = "0.1.0"
-
-[tool.poetry.dependencies]
-python = "^3.9"
-flask = "^2.0.0"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-```
-
-**Procfile:**
-```
-web: poetry run gunicorn app:app
-```
-
-### uv
+### pyproject.toml
 
 **pyproject.toml:**
 ```toml
@@ -67,17 +64,17 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 ```
 
+Run `uv lock` and commit `uv.lock` for exact, repeatable installs. A Poetry
+project (`poetry-core` build backend) installs the same way; Riku does not
+run Poetry itself.
+
 **Procfile:**
 ```
-web: uv run gunicorn app:app
+web: gunicorn app:app
 ```
 
-### Environment Variables
-
-```bash
-RIKU_PYTHON_VERSION=3.11.4
-RIKU_PYTHON_PACKAGE_MANAGER=pip  # or poetry, uv
-```
+The app's `.venv/bin` is on `PATH` for its processes, so commands need no
+`uv run` or `poetry run` prefix.
 
 ---
 
@@ -123,9 +120,15 @@ manager to choose. Commit a lockfile and Riku installs from it:
   `bun.lock`) → `nub install --frozen-lockfile --prod` (fails on lockfile drift).
 - No lockfile → `nub install --prod`.
 
-If the server doesn't have nub, Riku falls back to `npm` (`npm ci` /
-`npm install`) so existing deployments keep working. Install the faster path
-with `npm install -g @nubjs/nub`.
+Riku recommends installing nub on the server:
+
+```bash
+npm install -g @nubjs/nub
+```
+
+Without nub, Riku falls back to `npm` (`npm ci` / `npm install`) so existing
+deployments keep working, and prints how to install nub. `riku doctor` warns
+while nub is missing.
 
 ### Environment Variables
 

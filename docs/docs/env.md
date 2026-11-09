@@ -251,13 +251,8 @@ RIKU_PYTHON_VERSION=3.11.4
 
 ### Package Manager
 
-```bash
-RIKU_PYTHON_PACKAGE_MANAGER=poetry
-```
-
-- **Default:** `pip`
-- **Description:** Package manager for Python dependencies
-- **Values:** `pip` | `poetry` | `uv`
+There is no setting: Python apps build with uv when it is installed on the
+server, else with pip. See [Runtimes](runtimes.md#package-manager).
 
 ---
 
