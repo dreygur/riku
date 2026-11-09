@@ -30,9 +30,10 @@ work they describe.
   reading or editing files; no AI attribution in commits; follow
   `.claude/CLAUDE.md`.
 - Agents run on Claude, not through agy, which was too slow here.
-- Order agreed 2026-11-07: small boards and binary size, then the nginx
-  bugs (cache path, duplicate `location /`), then the framework design,
-  then phase 4.
+- Order agreed 2026-11-09: developer experience (two small fixes, then the
+  config model, then the first run), then small boards and binary size,
+  then the nginx bugs (cache path, duplicate `location /`), then the
+  framework design, then phase 4.
 - The owner's real servers, organisation and projects are confidential. The
   repository is public. Never write their names in code, tests, docs, commit
   messages or PR text; use neutral names (`edge`, `prod`, `edge.example`,
@@ -214,14 +215,22 @@ work they describe.
   Procfile builds in a container, riku-sync wiring and its carried duties) is
   dropped.
 
-### After 3a: small boards and binary size
+### Developer experience: config files and the first run (next)
+
+- Spec `specs/2026-11-09-developer-experience-design.md` (owner approved
+  2026-11-09). Branch `feat/dev-experience`.
+- Step 1 small fixes: not started.
+- Project 1 config model: not started.
+- Project 2 first run: not started.
+
+### After developer experience: small boards and binary size
 
 - One task: build targets for Pi Zero / Zero W (armv6), Pi Zero 2 W and Pi
   3/4/5 (arm64, armv7), shipped as both glibc and static musl builds; a size
   profile trial (`opt-level = "z"`, `panic = "abort"`); sizes of riku and rk
   measured per target before and after. The owner sets a size budget from
-  the measurements. Move ROUTER and CONTAINER_ENGINE into settings.toml with
-  a `riku doctor --fix` migration.
+  the measurements. (Moving ROUTER and CONTAINER_ENGINE into settings.toml
+  is now part of the developer experience config model.)
 
 ### Phase 4: one rk managing many servers
 
