@@ -28,6 +28,7 @@ use crate::RikuPaths;
 
 const ENV_FILE: &str = "ENV";
 const PROCFILE: &str = "Procfile";
+const CRON_KIND: &str = "cron";
 
 /// An app's merged env.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -70,8 +71,14 @@ pub fn load_env(paths: &RikuPaths, app: &str) -> Result<AppEnv> {
     legacy_keys.sort();
     env.extend(env_file);
 
-    match settings_env(&paths.app_settings_override(app), Source::Server) {
-        Ok(server) => env.extend(server),
+    match AppSettings::load(&paths.app_settings_override(app), Source::Server) {
+        Ok(Some(server)) => {
+            for key in server.cleared_env() {
+                env.remove(&key);
+            }
+            env.extend(server.env());
+        }
+        Ok(None) => {}
         Err(e) => return Err(e),
     }
     Ok(AppEnv { env, legacy_keys })
@@ -101,6 +108,43 @@ pub fn load_processes(paths: &RikuPaths, app: &str) -> Result<Option<HashMap<Str
         )),
         (Some(declared), _) => Ok(Some(declared)),
         (None, found) => Ok(found),
+    }
+}
+
+/// `(kind, command)` for every `cron*` line of a Procfile, in file order.
+/// Unlike [`load_processes`] it keeps repeated kinds: a Procfile may list
+/// several `cron:` lines and each one is a job.
+fn procfile_cron_lines(text: &str) -> Vec<(String, String)> {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .filter_map(|line| line.split_once(':'))
+        .map(|(kind, command)| (kind.trim().to_string(), command.trim().to_string()))
+        .filter(|(kind, _)| kind.starts_with(CRON_KIND))
+        .collect()
+}
+
+/// The cron jobs of `app` as `(kind, command)`: the repo `riku.toml` `[cron]`
+/// entries sorted by kind, else every `cron*` line of the Procfile in order.
+#[allow(clippy::question_mark)]
+pub fn load_cron_entries(paths: &RikuPaths, app: &str) -> Result<Vec<(String, String)>> {
+    let repo = match AppSettings::load(&paths.app_settings_repo(app), Source::Repo) {
+        Ok(repo) => repo,
+        Err(e) => return Err(e),
+    };
+    if let Some(declared) = repo.and_then(|settings| settings.processes()) {
+        let mut entries: Vec<(String, String)> = declared
+            .into_iter()
+            .filter(|(kind, _)| kind.starts_with(CRON_KIND))
+            .collect();
+        entries.sort();
+        return Ok(entries);
+    }
+    let procfile = procfile_path(paths, app);
+    match std::fs::read_to_string(&procfile) {
+        Ok(text) => Ok(procfile_cron_lines(&text)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(anyhow!("failed to read {}: {e}", procfile.display())),
     }
 }
 

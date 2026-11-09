@@ -113,6 +113,50 @@ fn second_run_changes_nothing() {
 }
 
 #[test]
+fn leaves_env_alone_when_another_line_expands_a_moved_key() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = paths(&tmp);
+    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+    let text = "RIKU_DOMAINS=shop.example\nAPP_URL=https://$RIKU_DOMAINS\n";
+    write_env(&paths, text);
+
+    let checks = migrate(&paths);
+
+    assert_eq!(fs::read_to_string(env_file(&paths)).unwrap(), text);
+    assert!(!paths.app_settings_override("shop").exists());
+    assert!(
+        checks
+            .iter()
+            .any(|c| c.status == Status::Warn && c.detail.contains("APP_URL")),
+        "checks: {checks:?}"
+    );
+}
+
+#[test]
+fn leaves_env_alone_when_the_override_names_another_runtime() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = paths(&tmp);
+    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+    fs::write(
+        paths.app_settings_override("shop"),
+        "[runtime]\nname = \"python\"\n",
+    )
+    .unwrap();
+    let text = "RIKU_RUNTIME=node\nRIKU_NODE_VERSION=20\n";
+    write_env(&paths, text);
+    let before = crate::config::app_config::load_env(&paths, "shop")
+        .unwrap()
+        .env;
+
+    migrate(&paths);
+
+    let after = crate::config::app_config::load_env(&paths, "shop")
+        .unwrap()
+        .env;
+    assert_eq!(after, before);
+}
+
+#[test]
 fn app_env_unchanged_after_migration() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = paths(&tmp);

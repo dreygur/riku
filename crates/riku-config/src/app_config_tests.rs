@@ -76,6 +76,40 @@ fn server_override_beats_env_file() {
 }
 
 #[test]
+fn server_override_false_turns_a_flag_off() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = app(tmp.path());
+    write(
+        paths.app_settings_repo("shop"),
+        "[routing]\nhttps_only = true\nstatic = true\n",
+    );
+    write(
+        paths.app_settings_override("shop"),
+        "[routing]\nhttps_only = false\nstatic = false\n",
+    );
+
+    let env = load_env(&paths, "shop").unwrap().env;
+
+    assert!(!env.contains_key("RIKU_HTTPS_ONLY"), "env: {env:?}");
+    assert!(!env.contains_key("RIKU_NGINX_STATIC"), "env: {env:?}");
+}
+
+#[test]
+fn repeated_procfile_cron_lines_are_all_jobs() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = app(tmp.path());
+    write(
+        paths.app_root.join("shop").join("Procfile"),
+        "web: node server.js\ncron: 0 1 * * * ./a\ncron: 0 2 * * * ./b\n",
+    );
+
+    let entries = load_cron_entries(&paths, "shop").unwrap();
+
+    let commands: Vec<&str> = entries.iter().map(|(_, cmd)| cmd.as_str()).collect();
+    assert_eq!(commands, vec!["0 1 * * * ./a", "0 2 * * * ./b"]);
+}
+
+#[test]
 fn invalid_repo_settings_is_error() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = app(tmp.path());

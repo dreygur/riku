@@ -226,8 +226,7 @@ impl Supervisor {
         self.load_config_file(path, filename)
     }
 
-    /// Schedule `app`'s cron entries from its process list (riku.toml or
-    /// Procfile). Paths come from the environment, as the image watch does,
+    /// Schedule `app`'s cron entries (riku.toml `[cron]` or Procfile). Paths come from the environment, as the image watch does,
     /// because the supervisor only knows its worker config directory.
     #[allow(clippy::question_mark)]
     fn load_app_cron_jobs(&mut self, app: &str) -> Result<()> {
@@ -235,11 +234,11 @@ impl Supervisor {
             Ok(paths) => paths,
             Err(e) => return Err(e),
         };
-        let processes = match riku_config::app_config::load_processes(&paths, app) {
-            Ok(processes) => processes.unwrap_or_default(),
+        let entries = match riku_config::app_config::load_cron_entries(&paths, app) {
+            Ok(entries) => entries,
             Err(e) => return Err(e),
         };
-        self.load_cron_jobs(app, &processes)
+        self.load_cron_jobs(app, &entries)
     }
 
     /// Load and start a configuration from a TOML file. A file not named

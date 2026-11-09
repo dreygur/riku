@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use tempfile::TempDir;
 
 use crate::daemon::Supervisor;
@@ -10,44 +8,50 @@ fn supervisor(tmp: &TempDir) -> Supervisor {
     Supervisor::new(config_dir).unwrap()
 }
 
-#[test]
-fn riku_toml_cron_job_is_scheduled() {
-    let tmp = TempDir::new().unwrap();
-    let mut supervisor = supervisor(&tmp);
-    let processes = HashMap::from([
-        ("web".to_string(), "node server.js".to_string()),
-        (
-            "cron-backup".to_string(),
-            "0 2 * * * ./backup.sh".to_string(),
-        ),
-    ]);
+fn entries(lines: &[(&str, &str)]) -> Vec<(String, String)> {
+    lines
+        .iter()
+        .map(|(kind, cmd)| (kind.to_string(), cmd.to_string()))
+        .collect()
+}
 
-    supervisor.load_cron_jobs("shop", &processes).unwrap();
-
-    let commands: Vec<&str> = supervisor
+fn commands(supervisor: &Supervisor) -> Vec<String> {
+    let mut commands: Vec<String> = supervisor
         .cron_scheduler
         .get_jobs()
         .values()
-        .map(|job| job.command.as_str())
+        .map(|job| job.command.clone())
         .collect();
-    assert_eq!(commands, vec!["./backup.sh"], "jobs: {commands:?}");
+    commands.sort();
+    commands
+}
+
+#[test]
+fn every_entry_is_scheduled_including_repeated_kinds() {
+    let tmp = TempDir::new().unwrap();
+    let mut supervisor = supervisor(&tmp);
+
+    supervisor
+        .load_cron_jobs(
+            "shop",
+            &entries(&[("cron", "0 1 * * * ./a"), ("cron", "0 2 * * * ./b")]),
+        )
+        .unwrap();
+
+    assert_eq!(commands(&supervisor), vec!["./a", "./b"]);
 }
 
 #[test]
 fn reload_replaces_the_apps_old_jobs() {
     let tmp = TempDir::new().unwrap();
     let mut supervisor = supervisor(&tmp);
-    let first = HashMap::from([("cron-a".to_string(), "0 1 * * * ./a".to_string())]);
-    let second = HashMap::from([("cron-b".to_string(), "0 3 * * * ./b".to_string())]);
 
-    supervisor.load_cron_jobs("shop", &first).unwrap();
-    supervisor.load_cron_jobs("shop", &second).unwrap();
+    supervisor
+        .load_cron_jobs("shop", &entries(&[("cron-a", "0 1 * * * ./a")]))
+        .unwrap();
+    supervisor
+        .load_cron_jobs("shop", &entries(&[("cron-b", "0 3 * * * ./b")]))
+        .unwrap();
 
-    let commands: Vec<&str> = supervisor
-        .cron_scheduler
-        .get_jobs()
-        .values()
-        .map(|job| job.command.as_str())
-        .collect();
-    assert_eq!(commands, vec!["./b"]);
+    assert_eq!(commands(&supervisor), vec!["./b"]);
 }

@@ -14,6 +14,7 @@ pub mod binary_check;
 pub mod checks;
 pub mod container_check;
 pub mod helper_check;
+mod migrate_check;
 mod migrate_env;
 pub mod migrate_settings;
 mod mode_write;

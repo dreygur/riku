@@ -127,6 +127,20 @@ impl AppSettings {
         env
     }
 
+    /// Env keys this file turns off: flags set to `false`, which render as
+    /// no key. A later layer removes them, so a `false` in the server
+    /// override beats a `true` from the repo file or ENV.
+    pub fn cleared_env(&self) -> Vec<String> {
+        self.values
+            .iter()
+            .filter(|(key, value)| key.kind == keys::Kind::Flag && *value == Value::Bool(false))
+            .filter_map(|(key, _)| match key.env {
+                EnvName::Fixed(name) => Some(name.to_string()),
+                EnvName::RuntimeVersion => None,
+            })
+            .collect()
+    }
+
     /// `[processes]` plus `[cron]` in the shape `parse_procfile` returns;
     /// `None` when neither section is present.
     pub fn processes(&self) -> Option<HashMap<String, String>> {

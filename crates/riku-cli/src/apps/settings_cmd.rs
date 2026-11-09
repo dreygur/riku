@@ -77,7 +77,8 @@ fn apply_set(paths: &RikuPaths, app: &str, pairs: &[String]) -> Result<()> {
     };
     for pair in shell_split(&pairs.join(" ")) {
         let Some((key, value)) = pair.split_once('=') else {
-            bail!("malformed setting '{pair}': expected key=value");
+            // The argument is not echoed: a mistyped secret would be printed.
+            bail!("malformed setting: expected key=value");
         };
         if let Err(e) = settings.set(key.trim(), value.trim()) {
             return Err(e);

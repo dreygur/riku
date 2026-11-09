@@ -120,6 +120,9 @@ pub(crate) fn deploy_procfile_app(
     if let Err(e) = workers::apply_scaling_deltas(app, paths, deltas, &workers) {
         return Err(e);
     }
+    // Worker creation gets the full list: a list holding only one shot
+    // kinds still counts as declared, so no start command is added as web.
+    let declared = workers.clone();
     if let Some(preflight_cmd) = workers.remove("preflight") {
         dlog.log("Running preflight command");
         env_setup::run_preflight(&preflight_cmd, &app_path);
@@ -156,7 +159,7 @@ pub(crate) fn deploy_procfile_app(
     }
     env.extend(output.env);
     let start_cmd = output.start_cmd.as_deref();
-    match release_and_start(app, paths, &plugin.name, &workers, start_cmd, env, dlog) {
+    match release_and_start(app, paths, &plugin.name, &declared, start_cmd, env, dlog) {
         Ok(()) => Ok(plugin.name),
         Err(e) => Err(e),
     }

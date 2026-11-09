@@ -179,7 +179,6 @@ pub const KEYS: &[Key] = &[
     ),
     secret("ghcr_username", "RIKU_GHCR_USERNAME"),
     secret("ghcr_token", "RIKU_GHCR_TOKEN"),
-    secret("notify_webhook_url", "RIKU_NOTIFY_WEBHOOK_URL"),
 ];
 
 impl Key {

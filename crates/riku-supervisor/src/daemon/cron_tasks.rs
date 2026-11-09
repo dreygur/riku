@@ -115,26 +115,19 @@ impl Supervisor {
         (None, HashMap::new())
     }
 
-    /// Schedule the cron kinds of an app's process list (riku.toml `[cron]`
-    /// or Procfile `cron*` entries, from `app_config::load_processes`).
+    /// Schedule an app's cron jobs, given as `(kind, command)` in a stable
+    /// order (`app_config::load_cron_entries`: riku.toml `[cron]` sorted, or
+    /// every Procfile `cron*` line in file order, repeated kinds included).
     ///
     /// Earlier jobs of the app are dropped first, so an edit that removes or
     /// renumbers cron entries leaves no stale job firing on the old schedule.
-    /// Kinds are taken in sorted order so a job keeps its index across
-    /// reloads.
     #[allow(clippy::question_mark)]
-    pub fn load_cron_jobs(&mut self, app: &str, processes: &HashMap<String, String>) -> Result<()> {
+    pub fn load_cron_jobs(&mut self, app: &str, entries: &[(String, String)]) -> Result<()> {
         self.cron_scheduler.remove_app_jobs(app);
 
-        let mut kinds: Vec<&String> = processes
-            .keys()
-            .filter(|kind| kind.starts_with("cron"))
-            .collect();
-        kinds.sort();
-
         let mut cron_index = 0;
-        for kind in kinds {
-            let parts: Vec<&str> = processes[kind].split_whitespace().collect();
+        for (_, line) in entries {
+            let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() < 5 {
                 continue;
             }

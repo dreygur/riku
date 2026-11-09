@@ -22,6 +22,7 @@ use anyhow::{anyhow, Result};
 use crate::config::app_settings::{keys, AppSettings, Source};
 use crate::config::RikuPaths;
 
+use super::migrate_check;
 use super::mode_write::{back_up_once, replace_keeping_mode};
 use super::Check;
 
@@ -91,16 +92,12 @@ fn without_keys(text: &str, moved: &BTreeSet<String>) -> String {
         .collect()
 }
 
-fn write_override(paths: &RikuPaths, app: &str, settings: &AppSettings) -> Result<()> {
+fn write_override(paths: &RikuPaths, app: &str, text: &str) -> Result<()> {
     let file = paths.app_settings_override(app);
-    let text = match settings.to_toml() {
-        Ok(text) => text,
-        Err(e) => return Err(e),
-    };
-    if let Err(e) = AppSettings::parse(&text, &file, Source::Server) {
+    if let Err(e) = AppSettings::parse(text, &file, Source::Server) {
         return Err(e);
     }
-    replace_keeping_mode(&file, &text)
+    replace_keeping_mode(&file, text)
 }
 
 fn migrate_app_or_err(paths: &RikuPaths, app: &str) -> Result<Vec<Check>> {
@@ -156,13 +153,32 @@ fn migrate_app_or_err(paths: &RikuPaths, app: &str) -> Result<Vec<Check>> {
         Ok(settings) => settings,
         Err(e) => return Err(e),
     };
+    let override_text = match settings.to_toml() {
+        Ok(text) => text,
+        Err(e) => return Err(e),
+    };
+    let env_text = without_keys(&raw, &to_move);
+    let changed = match migrate_check::changed_keys(paths, app, &env_text, &override_text) {
+        Ok(changed) => changed,
+        Err(e) => return Err(e),
+    };
+    if !changed.is_empty() {
+        checks.push(Check::warn(
+            NAME,
+            format!(
+                "{app}: nothing moved, it would change {}; move those keys by hand",
+                changed.join(", ")
+            ),
+        ));
+        return Ok(checks);
+    }
     if let Err(e) = back_up_once(&env_path, &raw) {
         return Err(e);
     }
-    if let Err(e) = write_override(paths, app, &settings) {
+    if let Err(e) = write_override(paths, app, &override_text) {
         return Err(e);
     }
-    if let Err(e) = replace_keeping_mode(&env_path, &without_keys(&raw, &to_move)) {
+    if let Err(e) = replace_keeping_mode(&env_path, &env_text) {
         return Err(e);
     }
     let list: Vec<&str> = to_move.iter().map(String::as_str).collect();
@@ -173,8 +189,13 @@ fn migrate_app_or_err(paths: &RikuPaths, app: &str) -> Result<Vec<Check>> {
     Ok(checks)
 }
 
-/// Checks for one app: what moved, what stayed and why, or the error.
+/// Checks for one app: what moved, what stayed and why, or the error. Holds
+/// the app's deploy lock, so a push cannot rewrite ENV at the same time.
 pub fn migrate_app(paths: &RikuPaths, app: &str) -> Vec<Check> {
+    let _lock = match crate::deploy::lock::acquire_for_deploy(app, paths) {
+        Ok(lock) => lock,
+        Err(e) => return vec![Check::fail(NAME, format!("{app}: {e:#}"))],
+    };
     match migrate_app_or_err(paths, app) {
         Ok(checks) => checks,
         Err(e) => vec![Check::fail(NAME, format!("{app}: {e:#}"))],

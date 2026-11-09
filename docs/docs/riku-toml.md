@@ -69,7 +69,6 @@ from the app's ENV file.
 | `containers.watch_services` | list of strings | `RIKU_WATCH_SERVICES` |
 | `secrets.ghcr_username` | string, server only | `RIKU_GHCR_USERNAME` |
 | `secrets.ghcr_token` | string, server only | `RIKU_GHCR_TOKEN` |
-| `secrets.notify_webhook_url` | string, server only | `RIKU_NOTIFY_WEBHOOK_URL` |
 
 An unknown key, a value of the wrong type, or a malformed file stops the
 deploy with an error naming the file, the line and the key. The error never
