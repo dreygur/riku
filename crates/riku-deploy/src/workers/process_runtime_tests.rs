@@ -10,6 +10,10 @@ use crate::config::RikuPaths;
 use crate::workers::create_workers_with;
 use crate::workers::mock_supervisor::{MockRoutes, MockSupervisor};
 
+fn procfile(app_path: &Path) -> Option<HashMap<String, String>> {
+    crate::util::parse_procfile(&app_path.join("Procfile")).unwrap()
+}
+
 fn web_app(tmp: &TempDir) -> (RikuPaths, PathBuf) {
     let paths = RikuPaths::for_tests(tmp.path());
     let app_path = tmp.path().join("app");
@@ -46,7 +50,16 @@ fn deploy_twice(
     let supervisor = MockSupervisor::start(paths);
     let mut routes = MockRoutes::new(paths);
     for _ in 0..2 {
-        create_workers_with("myapp", app_path, env, paths, None, &mut routes).unwrap();
+        create_workers_with(
+            "myapp",
+            app_path,
+            procfile(app_path).as_ref(),
+            env,
+            paths,
+            None,
+            &mut routes,
+        )
+        .unwrap();
     }
     (supervisor.max_enabled_web(), routes)
 }

@@ -36,13 +36,12 @@ fn scratch_dir(paths: &RikuPaths) -> Result<PathBuf> {
     }
 }
 
-/// The app's saved `ENV`, empty when it has none.
+/// The app's merged env (repo riku.toml, ENV, server override), empty when
+/// it has none.
 pub(crate) fn saved_env(app: &str, paths: &RikuPaths) -> Result<HashMap<String, String>> {
-    let file = paths.env_root.join(app).join("ENV");
-    let mut env = HashMap::new();
-    match crate::util::parse_settings(&file, &mut env) {
-        Ok(_) => Ok(env),
-        Err(e) => Err(anyhow!("cannot read {}: {e}", file.display())),
+    match crate::config::app_config::load_env(paths, app) {
+        Ok(loaded) => Ok(loaded.env),
+        Err(e) => Err(anyhow!("cannot read the config of '{app}': {e:#}")),
     }
 }
 

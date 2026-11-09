@@ -1,13 +1,12 @@
 use anyhow::{bail, Result};
 use colored::Colorize;
 use riku_supervisor::config::app_worker_configs;
-use std::collections::HashMap;
 use std::fs;
 use std::process::Command;
 
 use crate::config::router::Router;
 use crate::config::RikuPaths;
-use crate::util::{display, parse_settings};
+use crate::util::display;
 
 /// Print where the host router keeps this app's config.
 fn print_route(paths: &RikuPaths, app: &str) {
@@ -92,19 +91,21 @@ fn print_disk_usage(app_dir: &std::path::Path) {
     }
 }
 
-/// Print a summary of the app's ENV file: variable count and key highlights.
+/// Print a summary of the app's merged config (riku.toml, ENV, server
+/// override): variable count and key highlights.
+#[allow(clippy::question_mark)]
 fn print_env_summary(paths: &RikuPaths, app: &str) -> Result<()> {
-    let env_file = paths.env_root.join(app).join("ENV");
-    if env_file.exists() {
-        let mut env = HashMap::new();
-        parse_settings(&env_file, &mut env)?;
-        let var_count = env.len();
-        display::kv("Env Variables:", &format!("{} configured", var_count));
-
-        for key in ["RIKU_DOMAINS", "RIKU_NODE_VERSION", "PORT"] {
-            if let Some(val) = env.get(key) {
-                display::kv(&format!("  {}:", key), val);
-            }
+    let env = match crate::config::app_config::load_env(paths, app) {
+        Ok(loaded) => loaded.env,
+        Err(e) => return Err(e),
+    };
+    if env.is_empty() {
+        return Ok(());
+    }
+    display::kv("Env Variables:", &format!("{} configured", env.len()));
+    for key in ["RIKU_DOMAINS", "RIKU_NODE_VERSION", "PORT"] {
+        if let Some(val) = env.get(key) {
+            display::kv(&format!("  {}:", key), val);
         }
     }
     Ok(())

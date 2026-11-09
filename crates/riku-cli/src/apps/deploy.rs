@@ -3,6 +3,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
+use crate::config::app_settings::{AppSettings, Source};
 use crate::config::RikuPaths;
 use crate::util::{copy_dir_recursive, count_files, display, exit_if_invalid};
 
@@ -52,7 +53,23 @@ fn deploy_from_bare_repo(paths: &RikuPaths, app: &str) -> Result<()> {
     Ok(())
 }
 
+/// Whether `source` has a Procfile or a valid riku.toml with `[processes]`
+/// or `[cron]`. An invalid riku.toml is an error.
+#[allow(clippy::question_mark)]
+fn declares_processes(source: &Path) -> Result<bool> {
+    if source.join("Procfile").exists() {
+        return Ok(true);
+    }
+    let file = source.join(crate::config::app_settings::FILE_NAME);
+    match AppSettings::load(&file, Source::Repo) {
+        Ok(Some(settings)) => Ok(settings.processes().is_some()),
+        Ok(None) => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
 /// Deploy from a local path (copies files to app directory).
+#[allow(clippy::question_mark)]
 fn deploy_from_path(paths: &RikuPaths, app: &str, source: &str) -> Result<()> {
     let source_path = Path::new(source);
 
@@ -66,12 +83,15 @@ fn deploy_from_path(paths: &RikuPaths, app: &str, source: &str) -> Result<()> {
         bail!("Source is not a directory");
     }
 
-    let procfile = source_path.join("Procfile");
-    if !procfile.exists() {
-        display::error("Error: Procfile not found in source directory.");
-        display::warn("A Procfile is required for deployment.");
+    let declared = match declares_processes(source_path) {
+        Ok(declared) => declared,
+        Err(e) => return Err(e),
+    };
+    if !declared {
+        display::error("Error: no Procfile or riku.toml [processes] in source directory.");
+        display::warn("Declare the processes to run in either one.");
         display::warn("Example: echo 'web: npm start' > Procfile");
-        bail!("Procfile not found");
+        bail!("no processes declared");
     }
 
     let git_dir = source_path.join(".git");

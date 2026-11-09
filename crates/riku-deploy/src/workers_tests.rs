@@ -6,6 +6,10 @@ use super::mock_supervisor::{MockRoutes, MockSupervisor};
 use super::*;
 use crate::util::backend::Backend;
 
+fn procfile(app_path: &Path) -> Option<HashMap<String, String>> {
+    crate::util::parse_procfile(&app_path.join("Procfile")).unwrap()
+}
+
 fn make_paths(tmp: &TempDir) -> RikuPaths {
     let paths = crate::config::RikuPaths::for_tests(tmp.path());
     fs::create_dir_all(&paths.workers_available).unwrap();
@@ -23,7 +27,15 @@ fn deploy(
 ) -> Result<()> {
     let _supervisor = MockSupervisor::start(paths);
     let mut routes = MockRoutes::new(paths);
-    create_workers_with("myapp", app_path, env, paths, start_cmd, &mut routes)
+    create_workers_with(
+        "myapp",
+        app_path,
+        procfile(app_path).as_ref(),
+        env,
+        paths,
+        start_cmd,
+        &mut routes,
+    )
 }
 
 // --- read_scaling_count ---
@@ -84,7 +96,14 @@ fn test_create_workers_generic_no_procfile_returns_ok() -> anyhow::Result<()> {
     fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
 
     let env = HashMap::new();
-    create_workers_generic("myapp", &app_path, &env, &paths, None)
+    create_workers_generic(
+        "myapp",
+        &app_path,
+        procfile(&app_path).as_ref(),
+        &env,
+        &paths,
+        None,
+    )
 }
 
 #[test]
@@ -142,7 +161,14 @@ fn test_create_workers_generic_worker_kind_creates_config() -> anyhow::Result<()
     fs::write(app_path.join("Procfile"), "worker: python worker.py\n")?;
 
     let env = HashMap::new();
-    create_workers_generic("myapp", &app_path, &env, &paths, None)?;
+    create_workers_generic(
+        "myapp",
+        &app_path,
+        procfile(&app_path).as_ref(),
+        &env,
+        &paths,
+        None,
+    )?;
 
     let config_path = paths.workers_available.join("myapp@worker.1.toml");
     assert!(config_path.exists(), "worker config should be created");
@@ -166,7 +192,14 @@ fn test_create_workers_generic_symlink_created_in_enabled() -> anyhow::Result<()
     fs::write(app_path.join("Procfile"), "worker: python worker.py\n")?;
 
     let env = HashMap::new();
-    create_workers_generic("myapp", &app_path, &env, &paths, None)?;
+    create_workers_generic(
+        "myapp",
+        &app_path,
+        procfile(&app_path).as_ref(),
+        &env,
+        &paths,
+        None,
+    )?;
 
     let symlink_path = paths.workers_enabled.join("myapp@worker.1.toml");
     assert!(
@@ -188,7 +221,14 @@ fn test_create_workers_generic_skips_comment_lines() -> anyhow::Result<()> {
     fs::write(app_path.join("Procfile"), "# comment\nworker: echo hello\n")?;
 
     let env = HashMap::new();
-    create_workers_generic("myapp", &app_path, &env, &paths, None)?;
+    create_workers_generic(
+        "myapp",
+        &app_path,
+        procfile(&app_path).as_ref(),
+        &env,
+        &paths,
+        None,
+    )?;
 
     let entries: Vec<_> = fs::read_dir(&paths.workers_available)
         .unwrap()
@@ -214,7 +254,14 @@ fn test_auto_restart_false_skips_removal_of_existing_configs() -> anyhow::Result
 
     let mut env = HashMap::new();
     env.insert("RIKU_AUTO_RESTART".to_string(), "false".to_string());
-    create_workers_generic("myapp", &app_path, &env, &paths, None)?;
+    create_workers_generic(
+        "myapp",
+        &app_path,
+        procfile(&app_path).as_ref(),
+        &env,
+        &paths,
+        None,
+    )?;
 
     assert!(
         existing.exists(),
@@ -236,9 +283,23 @@ fn scale_down_removes_surplus_copies_with_auto_restart_off() -> anyhow::Result<(
     env.insert("RIKU_AUTO_RESTART".to_string(), "false".to_string());
 
     fs::write(paths.env_root.join("myapp/SCALING"), "worker=3\n")?;
-    create_workers_generic("myapp", &app_path, &env, &paths, None)?;
+    create_workers_generic(
+        "myapp",
+        &app_path,
+        procfile(&app_path).as_ref(),
+        &env,
+        &paths,
+        None,
+    )?;
     fs::write(paths.env_root.join("myapp/SCALING"), "worker=1\n")?;
-    create_workers_generic("myapp", &app_path, &env, &paths, None)?;
+    create_workers_generic(
+        "myapp",
+        &app_path,
+        procfile(&app_path).as_ref(),
+        &env,
+        &paths,
+        None,
+    )?;
 
     let mut enabled: Vec<String> = fs::read_dir(&paths.workers_enabled)?
         .flatten()
@@ -322,7 +383,15 @@ fn refuses_to_scale_web_past_one_on_a_pinned_port() {
     fs::write(app_path.join("Procfile"), "web: python app.py\n").unwrap();
     let env = HashMap::from([("PORT".to_string(), "3000".to_string())]);
 
-    let err = create_workers_generic("myapp", &app_path, &env, &paths, None).unwrap_err();
+    let err = create_workers_generic(
+        "myapp",
+        &app_path,
+        procfile(&app_path).as_ref(),
+        &env,
+        &paths,
+        None,
+    )
+    .unwrap_err();
 
     assert!(err.to_string().contains("3000"), "{err}");
     assert!(!paths.workers_available.join("myapp@web.1.toml").exists());
@@ -346,7 +415,15 @@ fn custom_socket_refuses_scale() {
     fs::write(app_path.join("Procfile"), "wsgi: uwsgi app.ini\n").unwrap();
     let env = HashMap::from([("RIKU_NGINX_SOCKET".to_string(), "/srv/s.sock".to_string())]);
 
-    let err = create_workers_generic("myapp", &app_path, &env, &paths, None).unwrap_err();
+    let err = create_workers_generic(
+        "myapp",
+        &app_path,
+        procfile(&app_path).as_ref(),
+        &env,
+        &paths,
+        None,
+    )
+    .unwrap_err();
 
     assert!(err.to_string().contains("RIKU_NGINX_SOCKET"), "{err}");
     assert!(!paths.workers_available.join("myapp@wsgi.1.toml").exists());
@@ -372,7 +449,15 @@ fn refuses_a_pinned_port_another_app_uses() {
     fs::write(paths.env_root.join("other/ENV"), "PORT=3000\n").unwrap();
     let env = HashMap::from([("PORT".to_string(), "3000".to_string())]);
 
-    let err = create_workers_generic("myapp", &app_path, &env, &paths, None).unwrap_err();
+    let err = create_workers_generic(
+        "myapp",
+        &app_path,
+        procfile(&app_path).as_ref(),
+        &env,
+        &paths,
+        None,
+    )
+    .unwrap_err();
 
     assert!(err.to_string().contains("other"), "{err}");
 }
@@ -400,7 +485,15 @@ fn refuses_a_pinned_port_something_else_listens_on_unless_it_was_ours() {
     let port = holder.local_addr().unwrap().port().to_string();
     let env = HashMap::from([("PORT".to_string(), port.clone())]);
 
-    let err = create_workers_generic("myapp", &app_path, &env, &paths, None).unwrap_err();
+    let err = create_workers_generic(
+        "myapp",
+        &app_path,
+        procfile(&app_path).as_ref(),
+        &env,
+        &paths,
+        None,
+    )
+    .unwrap_err();
     assert!(err.to_string().contains("in use"), "{err}");
 
     // On a redeploy the listener is this app's own previous process.
@@ -416,5 +509,14 @@ fn refuses_a_pinned_port_something_else_listens_on_unless_it_was_ours() {
     )
     .unwrap();
     let mut routes = MockRoutes::new(&paths);
-    create_workers_with("myapp", &app_path, &env, &paths, None, &mut routes).unwrap();
+    create_workers_with(
+        "myapp",
+        &app_path,
+        procfile(&app_path).as_ref(),
+        &env,
+        &paths,
+        None,
+        &mut routes,
+    )
+    .unwrap();
 }

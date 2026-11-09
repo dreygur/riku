@@ -48,6 +48,10 @@ pub struct AppStateEntry {
     pub routing: BTreeMap<String, String>,
     pub route: RouteState,
     pub workers: Vec<WorkerStateEntry>,
+    /// Why the app's config (riku.toml or ENV) could not be read; `routing`
+    /// is then empty. Left out of the JSON when the config is fine.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config_error: Option<String>,
 }
 
 /// State snapshot for an individual worker or container copy.

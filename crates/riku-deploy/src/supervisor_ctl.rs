@@ -116,19 +116,15 @@ pub(crate) fn notify_supervisor_reload(paths: &RikuPaths) {
     }
 }
 
-/// The settings in an app's ENV file, empty when the app has none.
+/// The app's merged env (repo riku.toml, ENV, server override), empty when
+/// it has none.
 pub(crate) fn read_app_env(app: &str, paths: &RikuPaths) -> Result<HashMap<String, String>> {
-    let env_file = paths.env_root.join(app).join("ENV");
-    let mut env: HashMap<String, String> = HashMap::new();
-    if env_file.exists() {
-        if let Err(e) = crate::util::parse_settings(&env_file, &mut env) {
-            return Err(anyhow::anyhow!(
-                "failed to read {}: {e}",
-                env_file.display()
-            ));
-        }
+    match crate::config::app_config::load_env(paths, app) {
+        Ok(loaded) => Ok(loaded.env),
+        Err(e) => Err(anyhow::anyhow!(
+            "failed to read the config of '{app}': {e:#}"
+        )),
     }
-    Ok(env)
 }
 
 /// Starts the supervisor unless it runs, and tells the user when it could

@@ -1,4 +1,4 @@
-//! Loading an app's saved `ENV` for a deploy, with the warnings a deploy
+//! Loading an app's merged config for a deploy, with the warnings a deploy
 //! prints about it.
 
 // Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
@@ -6,31 +6,49 @@
 
 use std::collections::HashMap;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
+use crate::config::app_config::{self, AppEnv};
+use crate::config::app_settings::{AppSettings, Source};
 use crate::config::RikuPaths;
 use crate::util::{deploy_logger::DeployLogger, echo};
 
-fn warn_about(env: &HashMap<String, String>, dlog: &mut DeployLogger) {
-    let warnings = crate::util::validate_env_vars(env);
+fn warn(hint: &str, dlog: &mut DeployLogger) {
+    echo(hint, "yellow");
+    dlog.log_raw(&format!("[WARN] {hint}"));
+}
+
+fn warn_about(loaded: &AppEnv, dlog: &mut DeployLogger) {
+    let warnings = crate::util::validate_env_vars(&loaded.env);
     crate::util::print_env_warnings(&warnings);
     for w in &warnings {
         dlog.log_warn(w);
     }
-    for (old, new) in crate::util::legacy_env::legacy_keys(env) {
-        let hint = format!("ENV key {old} is no longer read, rename it to {new}");
-        echo(&hint, "yellow");
-        dlog.log_raw(&format!("[WARN] {hint}"));
+    for (old, new) in crate::util::legacy_env::legacy_keys(&loaded.env) {
+        warn(
+            &format!("ENV key {old} is no longer read, rename it to {new}"),
+            dlog,
+        );
+    }
+    if !loaded.legacy_keys.is_empty() {
+        warn(
+            &format!(
+                "ENV holds riku settings ({}); run riku doctor --fix to move them into riku settings",
+                loaded.legacy_keys.join(", ")
+            ),
+            dlog,
+        );
     }
 }
 
-/// The app's `ENV` file as a map, empty when the file does not exist.
-/// Invalid and renamed keys are reported on the terminal and in the deploy
-/// log, but do not stop the deploy.
+/// The app's merged env from `app_config::load_env` (repo riku.toml, ENV,
+/// server override). Invalid, renamed and legacy keys are reported on the
+/// terminal and in the deploy log, but do not stop the deploy; an invalid
+/// riku.toml or ENV file does.
 ///
 /// Every deploy, container apps included, tightens the env dir to `0700`
-/// and the file to `0600`, since a hand written ENV keeps whatever mode it
-/// was created with until riku rewrites it.
+/// and the ENV file to `0600`, since a hand written ENV keeps whatever mode
+/// it was created with until riku rewrites it.
 pub(crate) fn load_deploy_env(
     app: &str,
     paths: &RikuPaths,
@@ -41,17 +59,48 @@ pub(crate) fn load_deploy_env(
         return Err(e);
     }
     let env_file = env_dir.join("ENV");
-    let mut env = HashMap::new();
     if env_file.exists() {
         if let Err(e) = crate::util::restrict_to_owner(&env_file) {
             return Err(e);
         }
-        if let Err(e) = crate::util::parse_settings(&env_file, &mut env) {
+    }
+    let loaded = match app_config::load_env(paths, app) {
+        Ok(loaded) => loaded,
+        Err(e) => {
+            dlog.log_error(&format!("{e:#}"));
             return Err(e);
         }
+    };
+    warn_about(&loaded, dlog);
+    Ok(loaded.env)
+}
+
+/// The app's process list for a Procfile deploy, logging why it is refused.
+pub(crate) fn load_deploy_processes(
+    app: &str,
+    paths: &RikuPaths,
+    dlog: &mut DeployLogger,
+) -> Result<Option<HashMap<String, String>>> {
+    match app_config::load_processes(paths, app) {
+        Ok(processes) => Ok(processes),
+        Err(e) => {
+            let reason = format!("Invalid process list for app '{app}': {e:#}. Deploy aborted.");
+            dlog.log_error(&reason);
+            Err(anyhow!(reason))
+        }
     }
-    warn_about(&env, dlog);
-    Ok(env)
+}
+
+/// Container apps run what their compose file or Dockerfile says, so a repo
+/// riku.toml that declares processes is refused rather than ignored.
+pub(crate) fn refuse_container_processes(app: &str, paths: &RikuPaths) -> Result<()> {
+    match AppSettings::load(&paths.app_settings_repo(app), Source::Repo) {
+        Ok(Some(settings)) if settings.processes().is_some() => Err(anyhow!(
+            "riku.toml [processes] and [cron] are not supported for container apps"
+        )),
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
+    }
 }
 
 #[cfg(test)]

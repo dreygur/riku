@@ -15,7 +15,7 @@ use riku_container::types::CopyIndex;
 
 use crate::config::RikuPaths;
 use crate::rolling::RouteSink;
-use crate::util::{echo, parse_procfile};
+use crate::util::echo;
 
 pub(crate) use super::scaling::apply_scaling_deltas;
 
@@ -103,6 +103,7 @@ fn stop_dropped_kinds(deploy: &WebDeploy<'_>, kept: &HashMap<String, String>) ->
 pub(crate) fn create_workers_with(
     app: &str,
     app_path: &Path,
+    processes: Option<&HashMap<String, String>>,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
     start_cmd: Option<&str>,
@@ -118,17 +119,16 @@ pub(crate) fn create_workers_with(
         remove_stale_configs(app, paths);
     }
 
-    let entries = match (parse_procfile(&app_path.join("Procfile")), start_cmd) {
-        (Ok(Some(e)), _) if !e.is_empty() => e,
-        (Ok(_), Some(cmd)) => HashMap::from([(WEB_KIND.to_string(), cmd.to_string())]),
-        (Ok(_), None) => {
+    let entries = match (processes, start_cmd) {
+        (Some(declared), _) if !declared.is_empty() => declared.clone(),
+        (_, Some(cmd)) => HashMap::from([(WEB_KIND.to_string(), cmd.to_string())]),
+        (_, None) => {
             echo(
-                "-----> No Procfile found, skipping process creation",
+                "-----> No processes declared, skipping process creation",
                 "yellow",
             );
             return Ok(());
         }
-        (Err(e), _) => return Err(e),
     };
 
     if !entries.keys().any(|kind| is_web_facing(kind)) {
@@ -175,7 +175,8 @@ pub(crate) fn create_workers_with(
     stop_dropped_kinds(&deploy, &entries)
 }
 
-/// Create worker configs for every process entry in the app's Procfile.
+/// Create worker configs for every entry of `processes`, the app's process
+/// list from `riku_config::app_config::load_processes` (riku.toml or Procfile).
 ///
 /// Web facing kinds are replaced one copy at a time: a new copy starts in a
 /// free slot, must pass its health check, and joins the router before an old
@@ -185,11 +186,12 @@ pub(crate) fn create_workers_with(
 /// removed either way. Needs the supervisor running.
 ///
 /// `start_cmd` is an optional fallback command supplied by the runtime plugin
-/// via its `start` subcommand. It fills a Procfile entry with an empty
-/// command, and runs as the one `web` process when there is no Procfile.
+/// via its `start` subcommand. It fills an entry with an empty command, and
+/// runs as the one `web` process when no processes are declared.
 pub fn create_workers_generic(
     app: &str,
     app_path: &Path,
+    processes: Option<&HashMap<String, String>>,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
     start_cmd: Option<&str>,
@@ -199,7 +201,7 @@ pub fn create_workers_generic(
         app_path,
         paths,
     };
-    create_workers_with(app, app_path, env, paths, start_cmd, &mut routes)
+    create_workers_with(app, app_path, processes, env, paths, start_cmd, &mut routes)
 }
 
 #[cfg(test)]

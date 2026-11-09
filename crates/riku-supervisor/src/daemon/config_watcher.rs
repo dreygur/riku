@@ -226,6 +226,22 @@ impl Supervisor {
         self.load_config_file(path, filename)
     }
 
+    /// Schedule `app`'s cron entries from its process list (riku.toml or
+    /// Procfile). Paths come from the environment, as the image watch does,
+    /// because the supervisor only knows its worker config directory.
+    #[allow(clippy::question_mark)]
+    fn load_app_cron_jobs(&mut self, app: &str) -> Result<()> {
+        let paths = match riku_config::RikuPaths::from_env() {
+            Ok(paths) => paths,
+            Err(e) => return Err(e),
+        };
+        let processes = match riku_config::app_config::load_processes(&paths, app) {
+            Ok(processes) => processes.unwrap_or_default(),
+            Err(e) => return Err(e),
+        };
+        self.load_cron_jobs(app, &processes)
+    }
+
     /// Load and start a configuration from a TOML file. A file not named
     /// after its worker is logged and skipped.
     pub(super) fn load_config_file(&mut self, path: &Path, filename: &str) -> Result<()> {
@@ -235,14 +251,12 @@ impl Supervisor {
             Err(e) => return Err(e),
         };
 
-        // If this is a cron worker, load cron jobs from the app's Procfile instead of
-        // spawning a persistent process (cron entries are driven by the scheduler).
+        // A cron worker schedules the app's cron entries instead of spawning
+        // a persistent process (cron entries are driven by the scheduler).
         if worker_config.worker.kind.starts_with("cron") {
-            let procfile_path =
-                std::path::Path::new(&worker_config.options.working_dir).join("Procfile");
-            let app = &worker_config.worker.app.clone();
-            if let Err(e) = self.load_cron_jobs(app, &procfile_path) {
-                tracing::error!("Error loading cron jobs for {}: {}", app, e);
+            let app = worker_config.worker.app.clone();
+            if let Err(e) = self.load_app_cron_jobs(&app) {
+                tracing::error!("Error loading cron jobs for {}: {:#}", app, e);
             }
             return Ok(());
         }
