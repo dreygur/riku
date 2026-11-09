@@ -101,9 +101,9 @@ Entry: `RikuPaths::from_env`, `RikuPaths::from_dirs`, `Router::load` (`src/lib.r
 
 - `src/lib.rs`: `RikuPaths` (all dirs under `$RIKU_ROOT`, default `$HOME/.riku`), host path constants (`SOCKET_ROOT`, `ROUTER_SOCKET`, `CADDY_SITE_ROOT`, `NGINX_SITE_ROOT`, `CERT_ROOT`, `ACME_WEBROOT`, `STATIC_ROOT`), defaults (`RIKU_WORKER_TIMEOUT`, `RIKU_WORKER_GRACE_PERIOD`, `RIKU_MAX_RESTARTS`). `RikuPaths::for_tests(root)` is public (not cfg(test)) so other crates' tests can use it; it keeps nginx, socket, caddy and acme paths inside `root`.
 - `src/root_dirs.rs`: validates `HOME` and `RIKU_ROOT`: absolute, no `..`. Only path inputs taken from env.
-- `src/router.rs`: `Router` (Nginx default, Caddy, Plugin(name)), `load`, `load_file`, `save`; file `<root>/ROUTER`. Missing file is nginx, any other read error is an error.
-- `src/container_engine.rs`: `load` reads `<root>/CONTAINER_ENGINE` (name or absolute path); validated where used, not here.
-- `src/settings.rs`: `ServerSettings`, `EngineSettings`, `load`; `<root>/settings.toml`, strict: unknown key/section, non-string value, bad duration (`30s|m|h`) all fail with key and file in the message.
+- `src/router.rs`: `Router` (Nginx default, Caddy, Plugin(name)), `load`, `save`. `load`: settings.toml `[router] name`, else legacy `<root>/ROUTER`, else nginx; an invalid settings.toml is an error. `save` writes settings.toml only.
+- `src/container_engine.rs`: `load`, `from_settings` (for callers that already loaded settings): `[engine] program`, else legacy `<root>/CONTAINER_ENGINE` (name or absolute path); validated where used, not here.
+- `src/settings/`: `<root>/settings.toml`. `mod.rs` `ServerSettings { router, engine }`, `parse`, `load`, strict: unknown key/section, wrong type, bad duration (`30s|m|h`) fail with key and file in the message; `engine.rs` `EngineSettings` (program plus time limits); `save.rs` `save_key` patches one key, re-parses before replacing the file (comments are lost).
 - `src/nginx_host.rs`: `NginxHostPaths` (`from_env` honors `RIKU_NGINX_SITES_ENABLED`, `RIKU_NGINX_HOST_INCLUDE`; `system()` ignores them).
 - `src/program.rs`: `find_program` over `$PATH` plus fixed system dirs. `src/reload_programs.rs`: `ReloadPrograms` (systemctl, caddy, nginx), replaced by mock scripts in tests.
 
@@ -321,7 +321,7 @@ Gotchas:
 - `start_copy` re-walks bind sources for symlinks right before `run` (check then use, accepted).
 - `RIKU_*` app env keys are not passed to containers (`containers/spec.rs`); the compose project label is dropped.
 - Health and probe code only hits 127.0.0.1, forces paths to start with `/`, follows no redirects, ignores proxy env.
-- Router is a host singleton from `<riku_root>/ROUTER` (default nginx). nginx and Caddy go through the root helper socket; Caddy backends are rewritten to loopback. A plugin must declare router protocol 2.
+- Router is a host singleton from `config::router::Router::load` (settings.toml, then legacy `ROUTER`, default nginx). nginx and Caddy go through the root helper socket; Caddy backends are rewritten to loopback. A plugin must declare router protocol 2.
 - `src/README.md` lists `ensure_host_ready` / `router/host_guard.rs`; neither exists in the source.
 - Crate comments say `?` is avoided; `#[allow(clippy::question_mark)]` marks that. Unit tests live in sibling `*_tests.rs` files.
 

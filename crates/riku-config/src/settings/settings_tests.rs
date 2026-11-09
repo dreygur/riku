@@ -39,6 +39,61 @@ fn listed_keys_override_and_the_rest_keep_defaults() {
 }
 
 #[test]
+fn router_and_engine_program_are_read() {
+    let (_tmp, paths) = paths();
+    std::fs::write(
+        &paths.settings_file,
+        "[router]\nname = \"caddy\"\n[engine]\nprogram = \"/usr/bin/podman\"\n",
+    )
+    .unwrap();
+
+    let settings = load(&paths).unwrap();
+
+    assert_eq!(settings.router.as_deref(), Some("caddy"));
+    assert_eq!(settings.engine.program.as_deref(), Some("/usr/bin/podman"));
+}
+
+#[test]
+fn unknown_router_key_is_refused() {
+    let (_tmp, paths) = paths();
+    std::fs::write(&paths.settings_file, "[router]\nnmae = \"caddy\"\n").unwrap();
+
+    let message = load(&paths).unwrap_err().to_string();
+
+    assert!(
+        message.contains("router.nmae") && message.contains("settings.toml"),
+        "error should name the key and the file: {message}"
+    );
+}
+
+#[test]
+fn save_key_keeps_other_sections_and_removes_a_key() {
+    let (_tmp, paths) = paths();
+    std::fs::write(&paths.settings_file, "[engine]\nstop_extra = \"1m\"\n").unwrap();
+
+    save_key(&paths, "router", "name", Some("caddy")).unwrap();
+    let settings = load(&paths).unwrap();
+    assert_eq!(settings.router.as_deref(), Some("caddy"));
+    assert_eq!(settings.engine.stop_extra, Duration::from_secs(60));
+
+    save_key(&paths, "router", "name", None).unwrap();
+    assert_eq!(load(&paths).unwrap().router, None);
+}
+
+#[test]
+fn save_key_refuses_a_value_the_file_would_reject() {
+    let (_tmp, paths) = paths();
+
+    let result = save_key(&paths, "router", "nmae", Some("caddy"));
+
+    assert!(result.is_err());
+    assert!(
+        !paths.settings_file.exists(),
+        "a refused save must not write the file"
+    );
+}
+
+#[test]
 fn unknown_engine_key_is_refused() {
     let (_tmp, paths) = paths();
     std::fs::write(&paths.settings_file, "[engine]\ncall_timout = \"30s\"\n").unwrap();

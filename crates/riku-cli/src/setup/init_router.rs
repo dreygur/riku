@@ -1,28 +1,30 @@
-//! Router choice during `riku init`: writing `RIKU_ROUTER` into the `ROUTER`
-//! file, reading it back, and the router specific host setup.
+//! Router choice during `riku init`: writing `RIKU_ROUTER` into
+//! `settings.toml` as `[router] name`, reading it back, and the router
+//! specific host setup.
 //!
 //! The file is always written by the user whose tree it lives in: a plain
 //! init writes its own, and a root init hands that step to the deploy user.
 //!
-//! Security: root reads the deploy user's `ROUTER` file only through
-//! [`DeployUser`], as that user. Root opening a path in that tree would
-//! follow any symlink the deploy user planted there.
+//! Security: root reads the deploy user's `settings.toml` and legacy `ROUTER`
+//! file only through [`DeployUser`], as that user. Root opening a path in
+//! that tree would follow any symlink the deploy user planted there.
 
 use std::env;
 use std::fs;
 use std::io::ErrorKind;
+use std::path::Path;
 
 use anyhow::{anyhow, Result};
 
 use crate::config::router::{self, Router};
-use crate::config::RikuPaths;
+use crate::config::{settings, RikuPaths};
 use crate::util::echo;
 
 use super::caddy_host::setup_caddy_host;
 use super::deploy_user::DeployUser;
 use super::nginx_host::setup_nginx_host;
 
-/// Write `RIKU_ROUTER` to `paths`' `ROUTER` file and return the router now in
+/// Write `RIKU_ROUTER` to `paths`' settings.toml and return the router now in
 /// effect. Init is the only reader of the env var; unset leaves an existing
 /// choice alone.
 #[allow(clippy::question_mark)]
@@ -46,23 +48,43 @@ pub fn persist_router(paths: &RikuPaths) -> Result<Router> {
     Ok(router)
 }
 
-/// The deploy user's router, read as that user. A missing file is nginx,
-/// matching [`Router::load`]. `symlink_metadata` does not follow links, so
-/// the existence check is safe to make as root.
-pub fn deploy_router(user: &DeployUser) -> Result<Router> {
-    let paths = user.riku_paths();
-    match fs::symlink_metadata(&paths.router_file) {
-        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(Router::Nginx),
-        Err(e) => {
-            return Err(anyhow!(
-                "failed to stat {}: {e}",
-                paths.router_file.display()
-            ))
-        }
+/// `file` in the deploy user's tree, read as that user; `None` when missing.
+/// `symlink_metadata` does not follow links, so the existence check is safe
+/// to make as root.
+fn read_as_deploy_user(user: &DeployUser, file: &Path) -> Result<Option<String>> {
+    match fs::symlink_metadata(file) {
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(anyhow!("failed to stat {}: {e}", file.display())),
         Ok(_) => {}
     }
-    match user.read_file(&paths.router_file) {
-        Ok(name) => Ok(Router::from(name.as_str())),
+    match user.read_file(file) {
+        Ok(text) => Ok(Some(text)),
+        Err(e) => Err(e),
+    }
+}
+
+/// The deploy user's router, read as that user, in the order
+/// [`Router::load`] uses: settings.toml, then the legacy `ROUTER` file, else
+/// nginx.
+#[allow(clippy::question_mark)]
+pub fn deploy_router(user: &DeployUser) -> Result<Router> {
+    let paths = user.riku_paths();
+    let raw_settings = match read_as_deploy_user(user, &paths.settings_file) {
+        Ok(raw) => raw,
+        Err(e) => return Err(e),
+    };
+    if let Some(raw) = raw_settings {
+        let parsed = match settings::parse(&raw, &paths.settings_file) {
+            Ok(parsed) => parsed,
+            Err(e) => return Err(e),
+        };
+        if let Some(name) = parsed.router {
+            return Ok(Router::from(name.as_str()));
+        }
+    }
+    match read_as_deploy_user(user, &paths.router_file) {
+        Ok(Some(name)) => Ok(Router::from(name.as_str())),
+        Ok(None) => Ok(Router::Nginx),
         Err(e) => Err(e),
     }
 }

@@ -41,6 +41,54 @@ fn unreadable_file_errors() {
 }
 
 #[test]
+fn router_from_settings_wins_over_legacy_file() {
+    let (_tmp, paths) = paths();
+    std::fs::write(&paths.router_file, "nginx\n").unwrap();
+    std::fs::write(&paths.settings_file, "[router]\nname = \"caddy\"\n").unwrap();
+
+    assert_eq!(Router::load(&paths).unwrap(), Router::Caddy);
+}
+
+#[test]
+fn legacy_router_file_read_without_settings_key() {
+    let (_tmp, paths) = paths();
+    std::fs::write(&paths.router_file, "caddy\n").unwrap();
+    std::fs::write(&paths.settings_file, "[engine]\ncall_timeout = \"30s\"\n").unwrap();
+
+    assert_eq!(Router::load(&paths).unwrap(), Router::Caddy);
+}
+
+#[test]
+fn invalid_settings_fails_router_load() {
+    let (_tmp, paths) = paths();
+    std::fs::write(&paths.router_file, "caddy\n").unwrap();
+    std::fs::write(&paths.settings_file, "[router]\nnmae = \"caddy\"\n").unwrap();
+
+    let err = Router::load(&paths).unwrap_err().to_string();
+
+    assert!(
+        err.contains("settings.toml"),
+        "error should name the file: {err}"
+    );
+}
+
+#[test]
+fn save_writes_settings_and_keeps_engine_section() {
+    let (_tmp, paths) = paths();
+    std::fs::write(&paths.settings_file, "[engine]\ncall_timeout = \"45s\"\n").unwrap();
+
+    save(&paths, &Router::Caddy).unwrap();
+
+    let settings = crate::settings::load(&paths).unwrap();
+    assert_eq!(settings.router.as_deref(), Some("caddy"));
+    assert_eq!(settings.engine.call_timeout.as_secs(), 45);
+    assert!(
+        !paths.router_file.exists(),
+        "save must not write the legacy file"
+    );
+}
+
+#[test]
 fn save_then_load_round_trips() {
     let (_tmp, paths) = paths();
 

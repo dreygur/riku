@@ -26,6 +26,15 @@ fn engine_file_is_trimmed_and_blank_means_detect() {
 }
 
 #[test]
+fn engine_program_from_settings_wins_over_legacy_file() {
+    let (_tmp, paths) = paths();
+    std::fs::write(&paths.container_engine_file, "docker\n").unwrap();
+    std::fs::write(&paths.settings_file, "[engine]\nprogram = \"podman\"\n").unwrap();
+
+    assert_eq!(load(&paths).unwrap().as_deref(), Some("podman"));
+}
+
+#[test]
 fn unreadable_engine_file_is_an_error() {
     let (_tmp, paths) = paths();
     std::fs::create_dir(&paths.container_engine_file).unwrap();

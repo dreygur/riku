@@ -1,9 +1,10 @@
-//! Host router choice, stored in `<riku root>/ROUTER`.
+//! Host router choice: `[router] name` in `settings.toml`, else the legacy
+//! `<riku root>/ROUTER` file that older versions wrote.
 //!
 //! The router is a host singleton. It lives in a file instead of the
 //! `RIKU_ROUTER` env var because git push deploys run through the ssh
 //! `command=` key and the post-receive hook, which carry no riku env.
-//! `riku init` writes the file; every other riku process only reads it.
+//! `riku init` writes it; every other riku process only reads it.
 
 use std::fs;
 use std::io::ErrorKind;
@@ -11,7 +12,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 
-use crate::RikuPaths;
+use crate::{settings, RikuPaths};
 
 /// File name of the host router choice, directly under the riku root.
 pub const ROUTER_FILE: &str = "ROUTER";
@@ -30,23 +31,30 @@ pub enum Router {
     Plugin(String),
 }
 
-impl Router {
-    /// Read the host router. A missing file means nginx; any other read
-    /// failure is an error, so a broken file never silently becomes nginx.
-    pub fn load(paths: &RikuPaths) -> Result<Router> {
-        Router::load_file(&paths.router_file)
+fn legacy_router(file: &Path) -> Result<Router> {
+    match fs::read_to_string(file) {
+        Ok(name) => Ok(Router::from(name.as_str())),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(Router::Nginx),
+        Err(e) => Err(anyhow!(
+            "failed to read router file {}: {e}",
+            file.display()
+        )),
     }
+}
 
-    /// [`Router::load`] for a process that knows only the file path, such as
-    /// the supervisor, which is built from its worker config directory.
-    pub fn load_file(file: &Path) -> Result<Router> {
-        match fs::read_to_string(file) {
-            Ok(name) => Ok(Router::from(name.as_str())),
-            Err(e) if e.kind() == ErrorKind::NotFound => Ok(Router::Nginx),
-            Err(e) => Err(anyhow!(
-                "failed to read router file {}: {e}",
-                file.display()
-            )),
+impl Router {
+    /// Read the host router: settings.toml first, then the legacy `ROUTER`
+    /// file, else nginx. An invalid settings file or an unreadable `ROUTER`
+    /// file is an error, so a broken file never silently becomes nginx.
+    #[allow(clippy::question_mark)]
+    pub fn load(paths: &RikuPaths) -> Result<Router> {
+        let settings = match settings::load(paths) {
+            Ok(settings) => settings,
+            Err(e) => return Err(e),
+        };
+        match settings.router {
+            Some(name) => Ok(Router::from(name.as_str())),
+            None => legacy_router(&paths.router_file),
         }
     }
 
@@ -71,15 +79,9 @@ impl From<&str> for Router {
     }
 }
 
-/// Persist the host router choice.
+/// Persist the host router choice as `[router] name` in settings.toml.
 pub fn save(paths: &RikuPaths, router: &Router) -> Result<()> {
-    match fs::write(&paths.router_file, format!("{}\n", router.name())) {
-        Ok(()) => Ok(()),
-        Err(e) => Err(anyhow!(
-            "failed to write router file {}: {e}",
-            paths.router_file.display()
-        )),
-    }
+    settings::save_key(paths, "router", "name", Some(router.name()))
 }
 
 #[cfg(test)]

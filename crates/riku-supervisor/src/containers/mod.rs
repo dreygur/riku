@@ -108,7 +108,11 @@ impl ContainerWatch {
         actions: SharedActions,
         log_root: &Path,
     ) -> Result<ContainerWatch> {
-        let setting = match riku_config::container_engine::load(paths) {
+        let server_settings = match riku_config::settings::load(paths) {
+            Ok(settings) => settings,
+            Err(e) => return Err(e.context("cannot read the server settings")),
+        };
+        let setting = match riku_config::container_engine::from_settings(paths, &server_settings) {
             Ok(setting) => setting,
             Err(e) => return Err(e.context("cannot read the engine setting")),
         };
@@ -116,10 +120,6 @@ impl ContainerWatch {
         let binary = match riku_container::engine::detect(setting.as_deref(), &path_var) {
             Ok(binary) => binary,
             Err(e) => return Err(e.context("no container engine to watch")),
-        };
-        let server_settings = match riku_config::settings::load(paths) {
-            Ok(settings) => settings,
-            Err(e) => return Err(e.context("cannot read the server settings")),
         };
         let engine = match Engine::open(binary) {
             Ok(engine) => engine.with_settings(server_settings.engine),
