@@ -73,6 +73,7 @@ nav:
       - CLI: cli.md
       - Environment Variables: env.md
       - Server Settings: settings.md
+      - riku.toml: riku-toml.md
       - Runtimes: runtimes.md
       - Container Images: container-images.md
       - Nginx: nginx.md

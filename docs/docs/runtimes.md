@@ -682,11 +682,11 @@ fail, the Procfile app keeps running as before.
 
 ### GHCR authentication
 
-If `RIKU_GHCR_USERNAME` and `RIKU_GHCR_TOKEN` are set in the app's env, riku logs in to
-`ghcr.io` before pulling:
+If `secrets.ghcr_username` and `secrets.ghcr_token` are set in the app's
+server settings, riku logs in to `ghcr.io` before pulling:
 
 ```bash
-riku config set myapp RIKU_GHCR_USERNAME=your-username RIKU_GHCR_TOKEN=ghp_xxx
+riku settings set myapp secrets.ghcr_username=your-username secrets.ghcr_token=ghp_xxx
 ```
 
 Set both or neither: a deploy with only one of them fails. The engine stores
@@ -700,11 +700,13 @@ in the compose file itself; riku does not manage credentials for them.
 ### Auto-updating on a new image push
 
 Riku doesn't require a `git push` to notice a new image. Set
-`RIKU_WATCH_SERVICES` to the comma-separated list of compose services you want
-kept in sync with their registry tag:
+`containers.watch_services` to the compose services you want kept in sync
+with their registry tag:
 
-```bash
-riku config set myapp RIKU_WATCH_SERVICES=web,worker
+```toml
+# riku.toml
+[containers]
+watch_services = ["web", "worker"]
 ```
 
 The supervisor re-checks every 60 seconds: it pulls each listed service's
@@ -728,8 +730,10 @@ Riku detects static sites when no runtime is detected but nginx can serve files 
 
 ### Configuration
 
-```bash
-riku config set myapp RIKU_NGINX_STATIC_PATHS=/:public
+```toml
+# riku.toml
+[routing]
+static_paths = ["/:public"]
 ```
 
 ### Directory Structure

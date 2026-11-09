@@ -66,9 +66,9 @@ git add SCALING && git commit -m "scale"
 git push riku main
 ```
 
-Or use environment variables:
+Or use the CLI:
 ```bash
-riku config set myapp RIKU_WORKER_PROCESSES="web=4,worker=2"
+riku ps myapp --scale web=4 worker=2
 ```
 
 **Q: How do I set environment variables?**
@@ -152,7 +152,7 @@ tar -czf backup.tar.gz ~/.riku/apps/myapp
 
 **A:** Set the domain and enable HTTPS redirect:
 ```bash
-riku config set myapp RIKU_DOMAINS=example.com RIKU_HTTPS_ONLY=true
+riku settings set myapp routing.domains=example.com routing.https_only=true
 ```
 
 Then obtain SSL certificates (ACME support is built-in).
@@ -191,7 +191,7 @@ cron: 0 2 * * * /path/to/script.sh
 **Q: What about uWSGI configuration?**
 
 **A:** Riku doesn't use uWSGI. Replace uWSGI-specific env vars with Riku equivalents:
-- `UWSGI_PROCESSES` → Use `SCALING` file or `RIKU_WORKER_PROCESSES`
+- `UWSGI_PROCESSES` → Use the `SCALING` file or `riku ps myapp --scale web=2`
 - `UWSGI_MAX_REQUESTS` → Not needed (handled by supervisor)
 - `UWSGI_*` → See [docs/docs/env.md](env.md) for the full variable reference
 

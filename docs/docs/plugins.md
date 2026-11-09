@@ -114,7 +114,7 @@ chmod +x ~/.riku/plugins/my-runtime
 To skip auto-detection:
 
 ```bash
-riku config set myapp RIKU_RUNTIME=my-runtime
+riku settings set myapp runtime.name=my-runtime
 ```
 
 ---

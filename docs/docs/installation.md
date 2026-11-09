@@ -277,7 +277,7 @@ git push riku main
 Give it a domain and push again:
 
 ```bash
-ssh riku@your-server config set test-app RIKU_DOMAINS=test.example.com
+ssh riku@your-server settings set test-app routing.domains=test.example.com
 git commit --allow-empty -m "domain" && git push riku main
 ```
 

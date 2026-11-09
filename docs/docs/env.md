@@ -112,7 +112,7 @@ RIKU_DOMAINS=example.com
 
 **Example:**
 ```bash
-riku config set myapp RIKU_DOMAINS=myapp.example.com
+riku settings set myapp routing.domains=myapp.example.com
 ```
 
 ### Force HTTPS
@@ -302,7 +302,7 @@ RIKU_GHCR_TOKEN=ghp_xxxxxxxxxxxx
 
 **Example:**
 ```bash
-riku config set myapp RIKU_GHCR_USERNAME=octocat RIKU_GHCR_TOKEN=ghp_xxx
+riku settings set myapp secrets.ghcr_username=octocat secrets.ghcr_token=ghp_xxx
 ```
 
 ### Watched Services
