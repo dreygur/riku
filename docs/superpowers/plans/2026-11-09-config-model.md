@@ -6,7 +6,7 @@
 
 **Goal:** First the two fixes from the spec section "Before both projects: two small fixes" (runtime plugins installed as bundles are detected; the plugin docs match the code). Then riku settings move into `settings.toml` (server) and an optional `riku.toml` (per app), with a `riku doctor --fix` migration.
 
-**Architecture:** One loader, `riku_config::app_config::load`, returns an app's merged config: an env map and a process list. Every place that today reads `envs/<app>/ENV` or the Procfile for riku keys calls the loader instead. The env map is built from three layers, later wins: the repo `riku.toml` (in the checkout at `<app_root>/<app>/riku.toml`), then legacy `RIKU_*` table keys still in `ENV`, then the server override at `<env_root>/<app>/riku.toml`. App keys in ENV that are not riku keys are included as today. A static key table maps each `riku.toml` key to the `RIKU_*` env key consumers read today. This table is a transitional adapter: Project 2 adds typed fields to `AppConfig` instead of new env keys. Router and container engine program move into `settings.toml`; the old files are still read until doctor migrates them.
+**Architecture:** One loader module, `riku_config::app_config`, returns an app's merged env (`load_env`) and process list (`load_processes`). Every place that today reads `envs/<app>/ENV` or the Procfile for riku keys calls the loader instead. The env map is built from three layers, later wins: the repo `riku.toml` (in the checkout at `<app_root>/<app>/riku.toml`), then legacy `RIKU_*` table keys still in `ENV`, then the server override at `<env_root>/<app>/riku.toml`. App keys in ENV that are not riku keys are included as today. A static key table maps each `riku.toml` key to the `RIKU_*` env key consumers read today. This table is a transitional adapter: Project 2 adds typed fields to `AppConfig` instead of new env keys. Router and container engine program move into `settings.toml`; the old files are still read until doctor migrates them.
 
 **Tech Stack:** Rust workspace, `toml = "1"` (riku-config already depends on it). No serde; tables are walked by hand as `settings.rs` does. New crate edge: riku-config depends on riku-util (riku-util has no riku dependencies, so no cycle).
 
@@ -157,12 +157,15 @@ The spec moves all server wide `RIKU_*` values into settings.toml. This plan mov
 - Test: `crates/riku-config/src/app_config_tests.rs`
 
 **Interfaces:**
-- Consumes: Task 4 `AppSettings::load`, `env`, `processes`, `keys::is_table_env_key`; `riku_util::procfile::parse_procfile`.
+- Consumes: Task 4 `AppSettings::load`, `env`, `processes`, `keys::is_table_env_key`; `riku_util::procfile::parse_procfile`; `riku_util::env::parse_settings`.
 - Produces:
-  - `pub struct AppConfig { pub env: HashMap<String, String>, pub processes: Option<HashMap<String, String>>, pub legacy_keys: Vec<String> }`. `legacy_keys` lists table keys found in ENV (callers that log warn once: run `riku doctor --fix`).
-  - `app_config::load(paths: &RikuPaths, app: &str) -> Result<AppConfig>`: env from repo riku.toml, then ENV table keys, then server override; non table ENV keys copied as today. Processes: repo riku.toml `[processes]`/`[cron]` when present, else the Procfile in `app_root/<app>`, else `None`. Both present is an error: `both riku.toml [processes] and Procfile define processes for 'myapp'; keep one`. Any riku.toml error is returned with its message.
+  - `pub struct AppEnv { pub env: HashMap<String, String>, pub legacy_keys: Vec<String> }`. `legacy_keys` lists table keys found in ENV (callers that log warn once: run `riku doctor --fix`).
+  - `app_config::load_env(paths: &RikuPaths, app: &str) -> Result<AppEnv>`: repo riku.toml env, then ENV table keys, then server override; non table ENV keys copied as today. ENV is parsed into a fresh map; a malformed ENV line is an error naming file and line (fixes the existing partial ENV bug below).
+  - `app_config::load_processes(paths: &RikuPaths, app: &str) -> Result<Option<HashMap<String, String>>>`: repo riku.toml `[processes]`/`[cron]` when present, else `parse_procfile` on `app_root/<app>/Procfile`, else `None`. Both present is an error: `both riku.toml [processes] and Procfile define processes for 'myapp'; keep one`. Procfile's "wsgi replaces web" rule (`procfile.rs:113-124`) is not copied: a riku.toml with both `web` and `wsgi` is refused.
+  - Env only readers call `load_env` only, so a broken Procfile still fails only the deploy, as today.
+- Existing bug fixed here: `riku_util::env::parse_settings` (`env.rs:63-68`) says "ignoring file" on a malformed line but has already inserted the earlier lines into the caller's map, so callers act on a partial ENV. Step 1 starts with the failing test for it.
 
-- [ ] **Step 1: Failing tests:** `repo_settings_reach_env`, `env_file_value_beats_repo_settings` (records `legacy_keys`), `server_override_beats_env_file`, `invalid_repo_settings_is_error`, `riku_toml_processes_replace_procfile`, `both_process_sources_refused`, `no_riku_toml_matches_env_and_procfile` (map equals today's ENV parse; processes equal `parse_procfile`).
+- [ ] **Step 1: Failing tests:** `malformed_env_line_is_error_not_partial_map`, `repo_settings_reach_env`, `env_file_value_beats_repo_settings` (records `legacy_keys`), `server_override_beats_env_file`, `invalid_repo_settings_is_error`, `riku_toml_processes_replace_procfile`, `both_process_sources_refused`, `refuses_web_and_wsgi_in_riku_toml`, `no_riku_toml_matches_env_and_procfile` (env equals today's ENV parse; processes equal `parse_procfile`).
 - [ ] **Step 2:** `cargo test -p riku-config app_config` fails.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** `cargo test -p riku-config` passes.
@@ -171,35 +174,40 @@ The spec moves all server wide `RIKU_*` values into settings.toml. This plan mov
 ### Task 6: Move every reader onto the loader
 
 **Files:**
-- Modify, env readers: `crates/riku-deploy/src/deploy_env.rs:34-55` (`load_deploy_env` builds on `app_config::load`), `crates/riku-deploy/src/supervisor_ctl.rs:120` (`read_app_env`, which also feeds `router/renew.rs:57` and `workers/web_rollout.rs:53,61`), `crates/riku-deploy/src/workers/pinned.rs`, `crates/riku-deploy/src/containers/context.rs`, `crates/riku-supervisor/src/daemon/image_watch.rs:62`, `crates/riku-cli/src/apps/info.rs`, `crates/riku-cli/src/apps/dump_state/builder.rs`, `crates/riku-dashboard/src/appcfg.rs`, `crates/riku-plugins/src/addon/service.rs`
-- Modify, process readers: `crates/riku-deploy/src/procfile_deploy.rs:26-39` (`read_workers`), `crates/riku-deploy/src/workers.rs:121`, `crates/riku-supervisor/src/daemon/config_watcher.rs:242`, `crates/riku-supervisor/src/daemon/cron_tasks.rs:120`, `crates/riku-cli/src/apps/logs/services.rs:24`, `crates/riku-cli/src/apps/deploy.rs:69` (accept a dir with a riku.toml and no Procfile)
-- Modify, container apps: `crates/riku-deploy/src/lib.rs:146-160` path refuses a riku.toml with `[processes]` or `[cron]` (`riku.toml [processes] is not supported for container apps`); `containers/release.rs:125` stays Procfile only.
-- Leave as is (writers or ENV editors): `apps/config.rs`, `agent/commands/cmd_config.rs`, `workers/web_env.rs`, `teardown.rs`, `env_setup.rs`, `doctor/app_env.rs`, `containers/mock_state.rs`.
-- Test: `crates/riku-deploy/src/deploy_env_tests.rs`, `crates/riku-deploy/src/procfile_deploy_tests.rs` (create), supervisor cron test next to `cron_tasks.rs`
+- Modify, deploy path (load once): `crates/riku-deploy/src/lib.rs:140-160` (`do_deploy` calls `load_env` and `load_processes` once; container branch refuses a riku.toml with `[processes]` or `[cron]`: `riku.toml [processes] is not supported for container apps`), `crates/riku-deploy/src/deploy_env.rs:34-55`, `crates/riku-deploy/src/procfile_deploy.rs:26-39`, `crates/riku-deploy/src/workers.rs:121` (and `create_workers_generic`, re-exported at `lib.rs:57`)
+- Modify, env readers (`load_env`): `crates/riku-deploy/src/supervisor_ctl.rs:120` (`read_app_env`, which feeds `router/renew.rs:57` and `workers/web_rollout.rs:53,61`), `crates/riku-deploy/src/teardown.rs:22-27` (destroy must see `runtime.name`), `crates/riku-deploy/src/containers/context.rs`, `crates/riku-supervisor/src/daemon/image_watch.rs:62`, `crates/riku-cli/src/apps/info.rs`, `crates/riku-cli/src/apps/dump_state/builder.rs`
+- Modify, process readers: `crates/riku-supervisor/src/daemon/config_watcher.rs:240-246` and `cron_tasks.rs:120`, `crates/riku-cli/src/apps/logs/services.rs:24` (`load_processes`), `crates/riku-cli/src/apps/deploy.rs:69` (a dir with a riku.toml `[processes]` section and no Procfile is accepted)
+- Leave as is: ENV writers and editors `apps/config.rs`, `agent/commands/cmd_config.rs`, `workers/web_env.rs`, `env_setup.rs`, `doctor/app_env.rs`, `containers/mock_state.rs`, `riku-plugins/src/addon/service.rs` (writes only), `riku-dashboard/src/appcfg.rs` (the ENV editor; it keeps showing raw ENV); `workers/pinned.rs` (reads only `PORT`); `containers/release.rs:125` (Procfile only); `riku-remote/src/quickstart/` (laptop side scaffold).
+- Test: `crates/riku-deploy/src/deploy_env_tests.rs`, `crates/riku-deploy/src/procfile_deploy_tests.rs` (create, add `#[path]` module to `procfile_deploy.rs`), supervisor cron test next to `cron_tasks.rs`
 
 **Interfaces:**
-- Consumes: Task 5 `app_config::load`, `AppConfig`.
-- Produces: `load_deploy_env(app, paths, dlog)` keeps its signature; it logs the legacy warning once. `read_workers(app, paths, dlog)` takes processes from `AppConfig`.
+- Consumes: Task 5 `app_config::load_env`, `load_processes`, `AppEnv`.
+- Produces:
+  - `load_deploy_env(app, paths, app_env: &AppEnv, dlog) -> Result<HashMap<String, String>>`: deploy env built from the loaded env; logs the legacy warning once.
+  - `read_workers(app, processes: Option<&HashMap<String, String>>, dlog)` (was `(app, app_path, dlog)`).
+  - `create_workers_generic` and `create_workers_with` take `processes: Option<&HashMap<String, String>>` instead of parsing the Procfile at `workers.rs:121`; `release_and_start` passes it through.
+  - Supervisor: `load_cron_jobs(&mut self, app: &str, processes: &HashMap<String, String>)`; `load_config_file` builds paths once with `RikuPaths::from_env()` (as `image_watch.rs:22` does) and calls `load_processes`. Cron kinds are iterated sorted so `cron_index` stays stable.
+- Error policy: deploy, router renew and web rollout propagate loader errors. `info` and `dump_state` show the error instead of dropping it. `image_watch` logs a warning naming the app and skips it for that tick.
 
-- [ ] **Step 1: Failing tests:** `riku_toml_domains_reach_router_config` (Review Focus 5, through `read_app_env`), `riku_toml_cron_job_is_scheduled` (Review Focus 5, supervisor cron loader), `riku_toml_worker_gets_worker_config`, `container_app_refuses_riku_toml_processes`, `legacy_env_deploys_as_before`.
+- [ ] **Step 1: Failing tests:** `riku_toml_domains_reach_router_config` (Review Focus 5, through `read_app_env`), `riku_toml_cron_job_is_scheduled` (Review Focus 5, calls `load_cron_jobs` with a map; no process env changed), `riku_toml_worker_gets_worker_config`, `container_app_refuses_riku_toml_processes`, `destroy_uses_riku_toml_runtime`, `broken_procfile_does_not_fail_read_app_env`, `legacy_env_deploys_as_before`.
 - [ ] **Step 2:** Run the touched crates' tests; they fail.
-- [ ] **Step 3:** Implement. Then grep `crates/` for `"ENV"` and `"Procfile"` again and confirm every remaining hit is in the leave as is list or a test.
+- [ ] **Step 3:** Implement. Then `git grep -n '"ENV"\|"Procfile"' crates` and confirm every remaining hit is in the leave as is list or a test.
 - [ ] **Step 4:** `cargo check --workspace`; `cargo test -p riku-deploy -p riku-supervisor -p riku-cli -p riku-dashboard -p riku-plugins` passes.
 - [ ] **Step 5:** Commit `Read app config through one loader`.
 
 ### Task 7: riku settings command, and config set refuses table keys
 
 **Files:**
-- Modify: `crates/riku-args/src/cmds.rs:38` (next to `ConfigCmd`), `crates/riku-args/src/cli.rs:100` area (`Settings` variant), `crates/riku-args/src/placement.rs:29` (`Forwarded` arm), `crates/riku-remote/src/routing.rs:12-53` (`get_plugin_command`: `Settings` is not client replaceable), `crates/riku-cli/src/dispatch/mod.rs:109` (route `Commands::Settings`), `crates/riku-cli/src/apps/config.rs:43` (`cmd_config_set` refuses table keys)
-- Create: `crates/riku-cli/src/apps/settings_cmd.rs`, `crates/riku-cli/src/apps/settings_cmd_tests.rs`
-- Test: `crates/riku-args/src/placement_tests.rs`, `crates/riku-cli/src/apps/config_tests.rs` (or the existing config test file)
+- Modify: `crates/riku-args/src/cmds.rs:38` (next to `ConfigCmd`), `crates/riku-args/src/cli.rs:104` area (`Settings` variant), `crates/riku-args/src/placement.rs:29` (`Forwarded` arm), `crates/riku-remote/src/routing.rs:12-53` (`get_plugin_command`: `Settings` is not client replaceable), `crates/riku-cli/src/dispatch/mod.rs:109` and `dispatch/app_cmds.rs` (`run_settings`), `crates/riku-cli/src/apps/mod.rs` (declare `settings_cmd`), `crates/riku-cli/src/apps/config.rs:43` (`cmd_config_set` refuses table keys; add a `#[path]` test module), `tests/demo/entrypoint.sh:105` and `crates/riku-deploy/src/deploy_finish.rs:34` (switch `config set RIKU_DOMAINS` to `riku settings set <app> routing.domains=...`)
+- Create: `crates/riku-cli/src/apps/settings_cmd.rs`, `settings_cmd_tests.rs`, `crates/riku-cli/src/apps/config_tests.rs`
+- Test: `crates/riku-args/src/placement_tests.rs`
 
 **Interfaces:**
-- Consumes: Task 4 `AppSettings::{load, parse, set, unset, get, to_toml}`, `keys`; Task 5 `app_settings_override`; `riku_util::validation::validate_app_name` (`validation.rs:70`).
-- Produces: `riku settings show APP`, `riku settings get APP KEY`, `riku settings set APP KEY=VALUE...`, `riku settings unset APP KEY...`. APP is validated and must exist. `KEY` is `section.name`. List values are comma separated. Arguments split like `cmd_config_set` (`config.rs:51-52`). The result is validated with `Source::Server` before writing, mode 0600, dir 0700. `set` and `unset` redeploy like `cmd_config_set`. `show` prints secret keys as `***`; `get` of a secret prints it. `riku config set myapp RIKU_DOMAINS=x` fails: `RIKU_DOMAINS is a riku setting; use riku settings set myapp routing.domains=x`.
+- Consumes: Task 4 `AppSettings::{load, parse, set, unset, get, to_toml}`, `keys`; Task 5 `app_settings_override`; `exit_if_invalid(app, &paths.app_root)` as `config.rs:44` uses it.
+- Produces: `riku settings show APP`, `riku settings get APP KEY`, `riku settings set APP KEY=VALUE...`, `riku settings unset APP KEY...`. All four act on the server override file only (not the effective merge). `KEY` is `section.name`. List values are comma separated. Arguments split like `cmd_config_set` (`config.rs:51-52`). The result is validated with `Source::Server` before writing, mode 0600, dir 0700. `set` and `unset` redeploy with `do_deploy` (not `update_env_and_redeploy`, which rewrites ENV). `show` prints secret keys as `***`; `get` of a secret prints it. `riku config set myapp RIKU_DOMAINS=x` fails: `RIKU_DOMAINS is a riku setting; use riku settings set myapp routing.domains=x`.
 
 - [ ] **Step 1: Failing tests:** `set_then_get_round_trips`, `set_refuses_unknown_key`, `unset_removes_key`, `show_masks_secrets`, `refuses_invalid_app_name` (`../x`), `settings_is_forwarded_by_rk`, `config_set_refuses_table_key`.
-- [ ] **Step 2:** `cargo test -p riku-cli settings_cmd config` and `cargo test -p riku-args placement` fail.
+- [ ] **Step 2:** `cargo test -p riku-cli settings_cmd`, `cargo test -p riku-cli config_tests` and `cargo test -p riku-args placement` fail.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** `cargo check --workspace`; both pass.
 - [ ] **Step 5:** Commit `Add riku settings for per app overrides`.
@@ -211,14 +219,16 @@ The spec moves all server wide `RIKU_*` values into settings.toml. This plan mov
 - Modify: `crates/riku-cli/src/doctor/mod.rs:147-152` (run under `fix` as the deploy user, after `redeploy_old_sites` and before `fix_launch_paths`; declare the module), `crates/riku-cli/src/doctor/app_env.rs` (warn on table keys still in ENV), `crates/riku-cli/src/doctor/settings_check.rs` (warn while `ROUTER` or `CONTAINER_ENGINE` exist; fail once when settings.toml is invalid), `crates/riku-deploy/src/containers/mock_state.rs:122-127` if its legacy files break the new tests
 
 **Interfaces:**
-- Consumes: Task 3 `settings::load`, `save_key`; Task 4 `AppSettings::{from_env, load, to_toml}`; Task 5 `app_settings_override`; `riku_util::legacy_env` RENAMED_KEYS (renames run first, so old names migrate in the same pass).
+- Consumes: Task 3 `settings::load`, `save_key`; Task 4 `AppSettings::{from_env, parse, load, to_toml, env}`; Task 5 `app_settings_override`, `load_env`.
 - Produces: `migrate_settings(paths: &RikuPaths) -> Vec<Check>` (`Check` is doctor's ok/warn/fail result):
+  - As root: returns `Check::warn("settings migration", "skipped as root: run riku doctor --fix as the deploy user")` and changes nothing, like `redeploy_old_sites` and `fix_launch_paths`.
   - `ROUTER` and `CONTAINER_ENGINE` values move into settings.toml (an existing settings key wins), then the file is removed.
-  - Per app: copy `ENV` to `ENV.bak` once, move table keys into the server override (existing override keys win), remove them from `ENV`. Other ENV lines kept byte for byte, comments included.
+  - Per app: only `RIKU_*` table keys move; legacy renamed keys are not touched (doctor keeps only warning about them, `doctor/app_env.rs:23-26`). A key moves only when its value survives the round trip byte for byte: `AppSettings::parse(to_toml(), Server).env()[k] == env[k]`. Keys that do not (whitespace separated `RIKU_DOMAINS`, `RIKU_NGINX_STATIC=false`, `RIKU_AUTO_RESTART=false`, a non integer Int, a `document_root` with `..`) stay in ENV with a warn `Check` naming the key. Existing override keys win.
+  - Order per app: copy `ENV` to `ENV.bak` once, validate the whole new override, write the override, then rewrite ENV without the moved keys. Other ENV lines kept byte for byte, comments included.
   - Writes go to a temp file in the same dir created with the original file's mode (0600 when new), then rename.
   - One `Check` per change; one ok `Check` when nothing changed.
 
-- [ ] **Step 1: Failing tests:** `moves_router_file_into_settings`, `moves_table_keys_out_of_env_keeping_other_lines`, `keeps_env_file_mode`, `second_run_changes_nothing` (Review Focus 6), `app_config_unchanged_after_migration` (`app_config::load` env before equals after).
+- [ ] **Step 1: Failing tests:** `moves_router_file_into_settings`, `moves_table_keys_out_of_env_keeping_other_lines`, `keeps_lossy_keys_in_env_with_warning` (`RIKU_NGINX_STATIC=false`, `RIKU_DOMAINS="a.example b.example"`), `keeps_env_file_mode`, `skips_as_root` (where root can be mocked the way `fix_launch_paths` tests do), `second_run_changes_nothing` (Review Focus 6), `app_env_unchanged_after_migration` (`load_env` env before equals after).
 - [ ] **Step 2:** `cargo test -p riku-cli migrate_settings` fails.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** `cargo test -p riku-cli` passes.
