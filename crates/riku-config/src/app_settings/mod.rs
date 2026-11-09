@@ -30,6 +30,9 @@ mod values;
 use keys::{EnvName, Key};
 use values::Value;
 
+/// File name of both the repo file and the server override.
+pub const FILE_NAME: &str = "riku.toml";
+
 /// Which file is being read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Source {

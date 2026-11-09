@@ -73,7 +73,7 @@ Entry: re-exports in `src/lib.rs`: `validate_app_name`, `ensure_path_within`, `p
 - `src/fs.rs`: `write_atomic` (tmp + fsync + rename, mode 0666 less umask), `write_private` (0600 from creation), `create_private_dir`, `restrict_to_owner`, `replace_symlink`, `copy_dir_recursive`, `count_files`.
 - `src/write_dir.rs`: `check_write_dir`: root writes only into a real dir owned by `owner` with no group/other write.
 - `src/socket_dir.rs`: uWSGI socket dir, mode 2750 with shared group; `prepare`, `ensure_exists`, `group_id`. Refuses a non-directory (symlink) before chown/chmod.
-- `src/env.rs`: `parse_settings` (KEY=VALUE with `$VAR` expansion, strips control chars; a malformed line prints an error and returns an EMPTY map), `write_config` (atomic, 0600), `expandvars`.
+- `src/env.rs`: `parse_settings` (KEY=VALUE with `$VAR` expansion, strips control chars; a line without `=` is an error naming file and line, and the caller's map is left untouched), `write_config` (atomic, 0600), `expandvars`.
 - `src/legacy_env.rs`: `RENAMED_KEYS`, `legacy_keys`: old env names no longer read; deploy and doctor report them.
 - `src/flag.rs`: `is_on`, `https_only`, `https_only_warning`: only explicit yes values are on, typos are off.
 - `src/nginx_validation.rs`: `validate_env_vars`, `print_env_warnings`: warns only, the route gate decides what reaches config.
@@ -91,7 +91,7 @@ Entry: re-exports in `src/lib.rs`: `validate_app_name`, `ensure_path_within`, `p
 - `src/root_binary.rs`: `ROOT_BINARY` = `/usr/local/bin/riku`, the one server install path.
 
 Gotchas:
-- `echo(msg, "red")` and `exit_if_invalid` call `process::exit`/print; fine in CLI, avoid in services.
+- `echo` only prints (red goes to stderr). `exit_if_invalid` calls `process::exit(1)` on a bad or unknown app name; fine in CLI, avoid in services and JSON interfaces.
 - `lib.rs` module list in the doc comment is incomplete; the `pub mod` lines are authoritative.
 - Doc comments in `procfile.rs` still name `crate::supervisor::cron`; the cron engine now lives in `riku-util/src/cron/`.
 
@@ -103,6 +103,7 @@ Entry: `RikuPaths::from_env`, `RikuPaths::from_dirs`, `Router::load` (`src/lib.r
 - `src/root_dirs.rs`: validates `HOME` and `RIKU_ROOT`: absolute, no `..`. Only path inputs taken from env.
 - `src/router.rs`: `Router` (Nginx default, Caddy, Plugin(name)), `load`, `save`. `load`: settings.toml `[router] name`, else legacy `<root>/ROUTER`, else nginx; an invalid settings.toml is an error. `save` writes settings.toml only.
 - `src/container_engine.rs`: `load`, `from_settings` (for callers that already loaded settings): `[engine] program`, else legacy `<root>/CONTAINER_ENGINE` (name or absolute path); validated where used, not here.
+- `src/app_config.rs`: the one app config loader. `load_env` merges repo `riku.toml`, ENV, server override (later wins) into `AppEnv { env, legacy_keys }`; `load_processes` gives repo `[processes]`/`[cron]` or the Procfile, never both. `RikuPaths::app_settings_repo`/`app_settings_override` (lib.rs) name the two files.
 - `src/app_settings/`: `riku.toml` (repo file or server override). `mod.rs` `AppSettings::{parse, load, env, processes}`, `Source` (Repo, Server); `keys.rs` `KEYS` table `section.name` to `RIKU_*` env key with `Kind` and `Scope`; `values.rs` type checks, repo charset, rendering (false `Flag` omitted, `Bool` renders "false"); `processes.rs` `[processes]`/`[cron]` (cron kinds `cron-<name>`); `parse.rs` section walk; `location.rs` file:line errors that never echo a value; `edit.rs` `set`, `unset`, `get`, `entries`, `to_toml`, `from_env`.
 - `src/settings/`: `<root>/settings.toml`. `mod.rs` `ServerSettings { router, engine }`, `parse`, `load`, strict: unknown key/section, wrong type, bad duration (`30s|m|h`) fail with key and file in the message; `engine.rs` `EngineSettings` (program plus time limits); `save.rs` `save_key` patches one key, re-parses before replacing the file (comments are lost).
 - `src/nginx_host.rs`: `NginxHostPaths` (`from_env` honors `RIKU_NGINX_SITES_ENABLED`, `RIKU_NGINX_HOST_INCLUDE`; `system()` ignores them).
