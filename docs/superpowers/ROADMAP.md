@@ -221,8 +221,7 @@ work they describe.
   2026-11-09). Branch `feat/dev-experience`.
 - Plan `plans/2026-11-09-config-model.md` (EGM reviewed, stages 5 to 9 plus
   one re-audit). Execution: native, one final review.
-- Step 1 small fixes: Task 1 (runtime bundles) done; Task 2 (plugin docs)
-  not started.
+- Step 1 small fixes: done (Task 1 runtime bundles, Task 2 plugin docs).
 - Project 1 config model: not started.
 - Project 2 first run: not started.
 

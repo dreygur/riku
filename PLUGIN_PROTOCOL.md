@@ -277,6 +277,8 @@ remain reserved names only; nothing emits them yet.
   (§3, and the trust model in `ROADMAP.md` E2.5). Gated events block until all
   gaters return or time out; a timeout is a veto (fail-closed), surfaced as an
   install-time/config error rather than a silent stall.
+  **Not enforced yet:** today a gate subscription runs as observe and cannot
+  veto; riku logs a warning (`crates/riku-plugins/src/events/bus.rs`).
 
 This is the core security idea: **observers are open and safe; only behavior
 that can change or block an action requires explicit trust.** The security model
