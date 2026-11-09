@@ -14,6 +14,7 @@ pub mod binary_check;
 pub mod checks;
 pub mod container_check;
 pub mod helper_check;
+pub mod package_tools;
 pub mod redeploy_sites;
 pub mod router_check;
 pub mod settings_check;
@@ -161,6 +162,8 @@ pub fn cmd_doctor(paths: &RikuPaths, fix: bool) -> Result<()> {
 pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     let mut checks = Vec::new();
     checks.extend(checks::dependencies());
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    checks.extend(package_tools::package_tools(home.as_deref()));
     checks.push(checks::directories(paths));
     checks.extend(binary_check::binary());
     checks.push(checks::systemd_service());

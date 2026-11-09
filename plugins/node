@@ -30,10 +30,14 @@ case "$CMD" in
       else
         nub install --prod
       fi
-    elif [ -f "package-lock.json" ]; then
-      npm ci --production
     else
-      npm install --production
+      echo "-----> nub not found, building with npm. Install nub for faster, lockfile exact builds:" >&2
+      echo "       npm install -g @nubjs/nub" >&2
+      if [ -f "package-lock.json" ]; then
+        npm ci --production
+      else
+        npm install --production
+      fi
     fi
     ;;
 
@@ -45,8 +49,10 @@ case "$CMD" in
   start)
     APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
     if [ -f "$APP_PATH/package.json" ]; then
-      # Try to read "main" field from package.json
-      main=$(node -e "try{console.log(require('$APP_PATH/package.json').main||'')}catch(e){}" 2>/dev/null || true)
+      # The path goes through the environment, never into the script text,
+      # so a quote in it cannot break or change the JavaScript.
+      main=$(RIKU_PACKAGE_JSON="$APP_PATH/package.json" \
+        node -e "try{console.log(require(process.env.RIKU_PACKAGE_JSON).main||'')}catch(e){}" 2>/dev/null || true)
       if [ -n "$main" ]; then
         echo "node $main"
       else
