@@ -62,18 +62,16 @@ pub fn cmd_config_set(paths: &RikuPaths, app: &str, settings: &[String]) -> Resu
             }
 
             if k.contains(['\n', '\r']) || v.contains(['\n', '\r']) {
-                display::error(&format!(
-                    "Error: setting '{}' contains a newline, which would corrupt the ENV file",
-                    s
-                ));
-                return Ok(());
+                anyhow::bail!(
+                    "setting '{}' contains a newline, which would corrupt the ENV file",
+                    k.trim()
+                );
             }
 
             display::note(&format!("Setting {}={} for '{}'", k, v, app));
             env.insert(k, v);
         } else {
-            display::error(&format!("Error: malformed setting '{}'", s));
-            return Ok(());
+            anyhow::bail!("malformed setting '{}': expected KEY=VALUE", s);
         }
     }
     crate::deploy::env_setup::update_env_and_redeploy(&app, paths, &env)?;
@@ -154,3 +152,7 @@ pub(super) fn shell_split(input: &str) -> Vec<String> {
     }
     result
 }
+
+#[cfg(test)]
+#[path = "config_tests.rs"]
+mod tests;

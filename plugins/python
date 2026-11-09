@@ -1,11 +1,48 @@
 #!/usr/bin/env bash
 # Riku runtime plugin: Python
 # Handles apps with requirements.txt, pyproject.toml, or setup.py.
+# Builds with uv when it is installed (recommended), else with pip.
 set -euo pipefail
 
 CMD="${1:-}"
 APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
 VENV_PATH="$APP_PATH/.venv"
+
+# uv's installer puts it in ~/.local/bin (older versions: ~/.cargo/bin),
+# which a git push deploy does not have on PATH.
+PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
+# Install with uv: from uv.lock when the app has one (fails when the lock is
+# out of date, like a frozen install), else from requirements.txt or the
+# project itself. Any failure stops the build.
+build_with_uv() {
+  if [ -f uv.lock ]; then
+    UV_PROJECT_ENVIRONMENT="$VENV_PATH" uv sync --locked --no-dev
+    return
+  fi
+  [ -d "$VENV_PATH" ] || uv venv "$VENV_PATH"
+  export VIRTUAL_ENV="$VENV_PATH"
+  if [ -f requirements.txt ]; then
+    uv pip install -r requirements.txt
+  elif [ -f pyproject.toml ]; then
+    uv pip install -e .
+  elif [ -f setup.py ]; then
+    uv pip install .
+  fi
+}
+
+build_with_pip() {
+  [ -d "$VENV_PATH" ] || python3 -m venv "$VENV_PATH"
+  # shellcheck disable=SC1091
+  source "$VENV_PATH/bin/activate"
+  if [ -f requirements.txt ]; then
+    pip install -r requirements.txt
+  elif [ -f pyproject.toml ]; then
+    pip install -e .
+  elif [ -f setup.py ]; then
+    pip install .
+  fi
+}
 
 case "$CMD" in
   detect)
@@ -18,23 +55,12 @@ case "$CMD" in
 
   build)
     cd "$APP_PATH"
-    # Create virtualenv if it doesn't exist
-    if [ ! -d "$VENV_PATH" ]; then
-      python3 -m venv "$VENV_PATH"
-    fi
-    source "$VENV_PATH/bin/activate"
-
-    if [ -f "pyproject.toml" ] && command -v uv >/dev/null 2>&1; then
-      uv pip install -e ".[prod]" 2>/dev/null \
-        || uv pip install -r requirements.txt 2>/dev/null \
-        || uv pip install . 2>/dev/null \
-        || true
-    elif [ -f "requirements.txt" ]; then
-      pip install -r requirements.txt
-    elif [ -f "pyproject.toml" ]; then
-      pip install -e .
-    elif [ -f "setup.py" ]; then
-      pip install .
+    if command -v uv >/dev/null 2>&1; then
+      build_with_uv
+    else
+      echo "-----> uv not found, building with pip. Install uv for faster, locked builds:" >&2
+      echo "       curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
+      build_with_pip
     fi
     ;;
 
