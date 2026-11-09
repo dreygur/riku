@@ -31,7 +31,7 @@ fn announce(app: &str, env: &HashMap<String, String>) {
         }
         None => echo(
             &format!(
-                "       Add a domain: riku config set {} RIKU_DOMAINS=example.com",
+                "       Add a domain: riku settings set {} routing.domains=example.com",
                 app
             ),
             "",

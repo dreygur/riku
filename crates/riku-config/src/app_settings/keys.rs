@@ -214,6 +214,13 @@ pub fn runtime_version_env(name: &str) -> String {
     )
 }
 
+/// The `section.name` whose fixed env key is `env`.
+pub fn path_for_env(env: &str) -> Option<String> {
+    KEYS.iter()
+        .find(|k| matches!(k.env, EnvName::Fixed(name) if name == env))
+        .map(Key::path)
+}
+
 /// Whether `env` is a fixed env key of the table (runtime version keys are
 /// derived, so they are not included).
 pub fn is_table_env_key(env: &str) -> bool {

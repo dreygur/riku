@@ -30,6 +30,7 @@ pub mod logs;
 pub mod plugin_emit;
 pub mod process;
 pub mod rollback;
+pub mod settings_cmd;
 pub mod stats;
 
 // Re-export all public functions so callers can use `cli::apps::cmd_*`
@@ -49,4 +50,5 @@ pub use logs::{cmd_deploy_logs, cmd_logs};
 pub use plugin_emit::cmd_plugin_emit;
 pub use process::{cmd_ps_all, cmd_ps_scale, cmd_ps_show};
 pub use rollback::cmd_rollback;
+pub use settings_cmd::{cmd_settings_get, cmd_settings_set, cmd_settings_show, cmd_settings_unset};
 pub use stats::{cmd_stats_all, cmd_stats_app};

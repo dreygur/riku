@@ -23,6 +23,12 @@ fn rk_runs_local_forwards_and_refuses_the_rest() {
 }
 
 #[test]
+fn settings_is_forwarded_by_rk() {
+    assert_eq!(placement_of("settings"), Some(Placement::Forwarded));
+    assert_eq!(client_rule("settings"), ClientRule::Forwards);
+}
+
+#[test]
 fn unknown_name_has_no_placement() {
     assert_eq!(placement_of("frobnicate"), None);
 }
