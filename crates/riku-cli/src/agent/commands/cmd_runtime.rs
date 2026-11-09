@@ -1,7 +1,7 @@
 /// Agent commands for runtime operations: logs, ps, restart, stop, run, stats.
 use std::collections::HashMap;
 use std::fs;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::path::Path;
 
 use riku_supervisor::config::app_worker_configs;
 use serde_json::json;
@@ -9,6 +9,7 @@ use serde_json::json;
 use crate::config::RikuPaths;
 use crate::util::exit_if_invalid;
 
+use crate::agent::confirm;
 use crate::agent::types::AgentResponse;
 
 pub fn cmd_agent_logs(paths: &RikuPaths, app: &str, process: &str) -> AgentResponse {
@@ -88,8 +89,8 @@ pub fn cmd_agent_restart(paths: &RikuPaths, app: &str, service: Option<&str>) ->
     }
 }
 
-pub fn cmd_agent_stop(paths: &RikuPaths, app: &str) -> AgentResponse {
-    let _app = match exit_if_invalid(app, &paths.app_root) {
+pub fn cmd_agent_stop(paths: &RikuPaths, state: &Path, app: &str) -> AgentResponse {
+    let app = match exit_if_invalid(app, &paths.app_root) {
         Ok(a) => a,
         Err(_) => {
             return AgentResponse::error(
@@ -98,21 +99,29 @@ pub fn cmd_agent_stop(paths: &RikuPaths, app: &str) -> AgentResponse {
             )
         }
     };
-
-    let token = format!(
-        "stop-{}-{}",
-        app,
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-    );
-
-    AgentResponse::confirmation_required("stop", app, &token)
+    confirm::request(state, "stop", &app)
 }
 
-pub fn cmd_agent_stop_confirm(paths: &RikuPaths, app: &str, _token: &str) -> AgentResponse {
-    match crate::apps::cmd_stop(paths, app, None) {
+pub fn cmd_agent_stop_confirm(
+    paths: &RikuPaths,
+    state: &Path,
+    app: &str,
+    token: &str,
+) -> AgentResponse {
+    let app = match exit_if_invalid(app, &paths.app_root) {
+        Ok(a) => a,
+        Err(_) => {
+            return AgentResponse::error(
+                "APP_NOT_FOUND",
+                &format!("Application '{}' not found", app),
+            )
+        }
+    };
+    if let Some(refusal) = confirm::refused(state, "stop", &app, token) {
+        return refusal;
+    }
+
+    match crate::apps::cmd_stop(paths, &app, None) {
         Ok(_) => AgentResponse::success(json!({
             "message": format!("Application '{}' stopped successfully", app)
         })),

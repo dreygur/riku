@@ -33,7 +33,13 @@ pub fn cmd_run(paths: &RikuPaths, app: &str, cmd: &[String]) -> Result<()> {
         .stderr(Stdio::inherit())
         .spawn()?;
 
-    child.wait()?;
+    let status = match child.wait() {
+        Ok(status) => status,
+        Err(e) => return Err(anyhow::anyhow!("waiting for '{}' failed: {e}", cmd[0])),
+    };
+    if !status.success() {
+        anyhow::bail!("'{}' exited with {status}", cmd[0]);
+    }
     Ok(())
 }
 
@@ -100,3 +106,7 @@ fn do_stop(paths: &RikuPaths, app: &str) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "control_tests.rs"]
+mod tests;

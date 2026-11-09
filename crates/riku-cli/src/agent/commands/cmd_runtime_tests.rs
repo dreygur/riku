@@ -3,6 +3,40 @@ use std::fs;
 use super::*;
 
 #[test]
+fn stop_confirm_refuses_a_token_that_was_never_issued() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+
+    let resp = cmd_agent_stop_confirm(&paths, tmp.path(), "shop", "made-up");
+    let code = resp.error.map(|e| e.code);
+    assert_eq!(
+        code.as_deref(),
+        Some("INVALID_TOKEN"),
+        "stop ran without a valid token"
+    );
+}
+
+#[test]
+fn stop_request_then_confirm_with_its_token_reaches_stop() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+
+    let token = match cmd_agent_stop(&paths, tmp.path(), "shop").confirm_token {
+        Some(token) => token,
+        None => panic!("stop request returned no token"),
+    };
+    let resp = cmd_agent_stop_confirm(&paths, tmp.path(), "shop", &token);
+    let code = resp.error.map(|e| e.code);
+    assert_ne!(
+        code.as_deref(),
+        Some("INVALID_TOKEN"),
+        "the issued token was refused"
+    );
+}
+
+#[test]
 fn agent_restart_with_service_on_procfile_app_fails_not_container_app() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());

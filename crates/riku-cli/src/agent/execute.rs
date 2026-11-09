@@ -109,9 +109,9 @@ fn run_agent_command(
             } else {
                 let app = &args[0];
                 if let Some(token) = confirm_token {
-                    cmd_agent_destroy_confirm(paths, app, token)
+                    cmd_agent_destroy_confirm(paths, &state, app, token)
                 } else {
-                    cmd_agent_destroy_request(paths, app)
+                    cmd_agent_destroy_request(paths, &state, app)
                 }
             }
         }
@@ -165,9 +165,9 @@ fn run_agent_command(
             } else {
                 let app = &args[0];
                 if let Some(token) = confirm_token {
-                    cmd_agent_stop_confirm(paths, app, token)
+                    cmd_agent_stop_confirm(paths, &state, app, token)
                 } else {
-                    cmd_agent_stop(paths, app)
+                    cmd_agent_stop(paths, &state, app)
                 }
             }
         }
