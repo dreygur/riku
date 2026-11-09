@@ -223,8 +223,8 @@ work they describe.
   one re-audit). Execution: native, one final review.
 - Step 1 small fixes: done (Task 1 runtime bundles, Task 2 plugin docs).
 - Project 1 config model: Tasks 3 (server settings), 4 (riku.toml schema),
-  5 (app config loader), 6 (readers on the loader) and 7 (riku settings)
-  done.
+  5 (app config loader), 6 (readers on the loader), 7 (riku settings) and
+  8 (doctor migration) done.
 - Project 2 first run: not started.
 
 ### After developer experience: small boards and binary size

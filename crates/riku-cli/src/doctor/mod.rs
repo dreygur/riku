@@ -14,6 +14,9 @@ pub mod binary_check;
 pub mod checks;
 pub mod container_check;
 pub mod helper_check;
+mod migrate_env;
+pub mod migrate_settings;
+mod mode_write;
 pub mod redeploy_sites;
 pub mod router_check;
 pub mod settings_check;
@@ -41,6 +44,7 @@ pub enum Status {
 
 /// A single diagnostic result: what was inspected, the outcome, and a
 /// human-readable detail (a remediation hint on `Warn`/`Fail`).
+#[derive(Debug)]
 pub struct Check {
     pub name: String,
     pub status: Status,
@@ -147,6 +151,7 @@ pub fn cmd_doctor(paths: &RikuPaths, fix: bool) -> Result<()> {
     let mut checks = Vec::new();
     if fix {
         checks.extend(redeploy_old_sites(&paths));
+        checks.extend(migrate_settings::migrate_settings(&paths));
         checks.extend(fix_launch_paths(&paths));
     }
     checks.extend(collect(&paths));
@@ -171,6 +176,7 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     checks.push(helper_check::router_helper(paths));
     checks.extend(router_check::router(paths));
     checks.push(settings_check::settings_file(paths));
+    checks.extend(settings_check::legacy_files(paths));
     checks.push(container_check::container_engine(paths));
     checks.push(checks::plugins(paths));
     checks.push(checks::disk(paths));

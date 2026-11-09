@@ -22,6 +22,24 @@ pub fn settings_file(paths: &RikuPaths) -> Check {
     }
 }
 
+/// One warning per legacy single value file still present (`ROUTER`,
+/// `CONTAINER_ENGINE`); they are still read, but settings.toml replaces them.
+pub fn legacy_files(paths: &RikuPaths) -> Vec<Check> {
+    [&paths.router_file, &paths.container_engine_file]
+        .into_iter()
+        .filter(|file| file.exists())
+        .map(|file| {
+            Check::warn(
+                NAME,
+                format!(
+                    "{} is a legacy file; `riku doctor --fix` moves it into settings.toml",
+                    file.display()
+                ),
+            )
+        })
+        .collect()
+}
+
 #[cfg(test)]
 #[path = "settings_check_tests.rs"]
 mod tests;
