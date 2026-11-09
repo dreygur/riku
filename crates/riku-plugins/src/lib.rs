@@ -58,6 +58,7 @@ pub mod marketplace;
 pub mod plugin_data;
 pub mod router;
 pub mod runtime;
+mod runtime_bundles;
 pub mod sandbox;
 pub mod signing;
 pub mod ui;

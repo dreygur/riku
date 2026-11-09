@@ -219,7 +219,10 @@ work they describe.
 
 - Spec `specs/2026-11-09-developer-experience-design.md` (owner approved
   2026-11-09). Branch `feat/dev-experience`.
-- Step 1 small fixes: not started.
+- Plan `plans/2026-11-09-config-model.md` (EGM reviewed, stages 5 to 9 plus
+  one re-audit). Execution: native, one final review.
+- Step 1 small fixes: Task 1 (runtime bundles) done; Task 2 (plugin docs)
+  not started.
 - Project 1 config model: not started.
 - Project 2 first run: not started.
 

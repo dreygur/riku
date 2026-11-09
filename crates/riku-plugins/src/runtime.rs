@@ -1,7 +1,8 @@
 //! Runtime plugin discovery and dispatch.
 //!
 //! A runtime plugin is any executable in `~/.riku/plugins/` whose name does NOT
-//! start with `riku-`. It implements four subcommands:
+//! start with `riku-`, or a bundle directory whose `riku-plugin.toml` says
+//! `type = "runtime"` (see `runtime_bundles`). It implements four subcommands:
 //!
 //! | Subcommand | Purpose |
 //! |------------|---------|
@@ -60,7 +61,8 @@ impl<'a> RuntimeContext<'a> {
 }
 
 /// Scan `plugin_root` for runtime plugins: executable files whose names do NOT
-/// start with `riku-`. Returns them sorted alphabetically for deterministic detection.
+/// start with `riku-`, plus bundle directories whose manifest says
+/// `type = "runtime"`. Returns them sorted alphabetically for deterministic detection.
 pub fn discover(plugin_root: &Path) -> Vec<RuntimePlugin> {
     if !plugin_root.exists() {
         return Vec::new();
@@ -103,6 +105,7 @@ pub fn discover(plugin_root: &Path) -> Vec<RuntimePlugin> {
         })
         .collect();
 
+    super::runtime_bundles::add_runtime_bundles(&mut plugins, plugin_root);
     plugins.sort_by(|a, b| a.name.cmp(&b.name));
     plugins
 }
