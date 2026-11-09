@@ -222,7 +222,8 @@ work they describe.
 - Plan `plans/2026-11-09-config-model.md` (EGM reviewed, stages 5 to 9 plus
   one re-audit). Execution: native, one final review.
 - Step 1 small fixes: done (Task 1 runtime bundles, Task 2 plugin docs).
-- Project 1 config model: Task 3 (server settings in settings.toml) done.
+- Project 1 config model: Tasks 3 (server settings) and 4 (riku.toml
+  schema) done.
 - Project 2 first run: not started.
 
 ### After developer experience: small boards and binary size

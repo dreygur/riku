@@ -96,13 +96,14 @@ Gotchas:
 - Doc comments in `procfile.rs` still name `crate::supervisor::cron`; the cron engine now lives in `riku-util/src/cron/`.
 
 ## riku-config
-Job: repository layer: resolves every riku path and reads host settings files. Depends on: none. Used by: riku-caddy, riku-cli, riku-container, riku-dashboard, riku-deploy, riku-nginx, riku-plugins, riku-route, riku-supervisor, riku. Not linked by `rk` or riku-args.
+Job: repository layer: resolves every riku path, reads host settings files and per app `riku.toml`. Depends on: riku-util. Used by: riku-caddy, riku-cli, riku-container, riku-dashboard, riku-deploy, riku-nginx, riku-plugins, riku-route, riku-supervisor, riku. Not linked by `rk` or riku-args.
 Entry: `RikuPaths::from_env`, `RikuPaths::from_dirs`, `Router::load` (`src/lib.rs`, `src/router.rs`).
 
 - `src/lib.rs`: `RikuPaths` (all dirs under `$RIKU_ROOT`, default `$HOME/.riku`), host path constants (`SOCKET_ROOT`, `ROUTER_SOCKET`, `CADDY_SITE_ROOT`, `NGINX_SITE_ROOT`, `CERT_ROOT`, `ACME_WEBROOT`, `STATIC_ROOT`), defaults (`RIKU_WORKER_TIMEOUT`, `RIKU_WORKER_GRACE_PERIOD`, `RIKU_MAX_RESTARTS`). `RikuPaths::for_tests(root)` is public (not cfg(test)) so other crates' tests can use it; it keeps nginx, socket, caddy and acme paths inside `root`.
 - `src/root_dirs.rs`: validates `HOME` and `RIKU_ROOT`: absolute, no `..`. Only path inputs taken from env.
 - `src/router.rs`: `Router` (Nginx default, Caddy, Plugin(name)), `load`, `save`. `load`: settings.toml `[router] name`, else legacy `<root>/ROUTER`, else nginx; an invalid settings.toml is an error. `save` writes settings.toml only.
 - `src/container_engine.rs`: `load`, `from_settings` (for callers that already loaded settings): `[engine] program`, else legacy `<root>/CONTAINER_ENGINE` (name or absolute path); validated where used, not here.
+- `src/app_settings/`: `riku.toml` (repo file or server override). `mod.rs` `AppSettings::{parse, load, env, processes}`, `Source` (Repo, Server); `keys.rs` `KEYS` table `section.name` to `RIKU_*` env key with `Kind` and `Scope`; `values.rs` type checks, repo charset, rendering (false `Flag` omitted, `Bool` renders "false"); `processes.rs` `[processes]`/`[cron]` (cron kinds `cron-<name>`); `parse.rs` section walk; `location.rs` file:line errors that never echo a value; `edit.rs` `set`, `unset`, `get`, `entries`, `to_toml`, `from_env`.
 - `src/settings/`: `<root>/settings.toml`. `mod.rs` `ServerSettings { router, engine }`, `parse`, `load`, strict: unknown key/section, wrong type, bad duration (`30s|m|h`) fail with key and file in the message; `engine.rs` `EngineSettings` (program plus time limits); `save.rs` `save_key` patches one key, re-parses before replacing the file (comments are lost).
 - `src/nginx_host.rs`: `NginxHostPaths` (`from_env` honors `RIKU_NGINX_SITES_ENABLED`, `RIKU_NGINX_HOST_INCLUDE`; `system()` ignores them).
 - `src/program.rs`: `find_program` over `$PATH` plus fixed system dirs. `src/reload_programs.rs`: `ReloadPrograms` (systemctl, caddy, nginx), replaced by mock scripts in tests.

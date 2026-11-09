@@ -10,6 +10,7 @@ use anyhow::Result;
 use std::env;
 use std::path::{Path, PathBuf};
 
+pub mod app_settings;
 pub mod container_engine;
 pub mod nginx_host;
 pub mod program;
