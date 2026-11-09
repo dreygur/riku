@@ -7,6 +7,7 @@
 pub mod audit;
 pub mod auth;
 pub mod commands;
+pub mod confirm;
 pub mod execute;
 pub mod help;
 pub mod schema;

@@ -1,12 +1,15 @@
 /// Agent commands for app lifecycle: apps, deploy, destroy.
 use std::fs;
+use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use riku_supervisor::config::app_worker_configs;
 use serde_json::json;
 
 use crate::config::RikuPaths;
+use crate::util::exit_if_invalid;
 
+use crate::agent::confirm;
 use crate::agent::types::AgentResponse;
 
 pub fn cmd_agent_apps(paths: &RikuPaths) -> AgentResponse {
@@ -61,43 +64,35 @@ pub fn cmd_agent_deploy(paths: &RikuPaths, app: &str) -> AgentResponse {
     }
 }
 
-pub fn cmd_agent_destroy_request(paths: &RikuPaths, app: &str) -> AgentResponse {
-    let app_path = paths.app_root.join(app);
-    if !app_path.exists() {
-        return AgentResponse::error("APP_NOT_FOUND", &format!("Application '{}' not found", app));
-    }
-
-    let token = format!(
-        "destroy-{}-{}",
-        app,
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-    );
-
-    let token_file = format!("/tmp/riku-confirm-{}", token);
-    let _ = fs::write(&token_file, format!("destroy:{}:{}", app, token));
-
-    AgentResponse::confirmation_required("destroy", app, &token)
+fn not_found(app: &str) -> AgentResponse {
+    AgentResponse::error("APP_NOT_FOUND", &format!("Application '{}' not found", app))
 }
 
-pub fn cmd_agent_destroy_confirm(paths: &RikuPaths, app: &str, token: &str) -> AgentResponse {
-    let token_file = format!("/tmp/riku-confirm-{}", token);
-    if let Ok(content) = fs::read_to_string(&token_file) {
-        if content.starts_with(&format!("destroy:{}:", app)) {
-            let _ = fs::remove_file(&token_file);
+pub fn cmd_agent_destroy_request(paths: &RikuPaths, state: &Path, app: &str) -> AgentResponse {
+    match exit_if_invalid(app, &paths.app_root) {
+        Ok(app) => confirm::request(state, "destroy", &app),
+        Err(_) => not_found(app),
+    }
+}
 
-            match crate::apps::cmd_destroy(paths, app, crate::apps::DestroyMode::Safe) {
-                Ok(_) => AgentResponse::success(json!({
-                    "message": format!("Application '{}' destroyed successfully", app)
-                })),
-                Err(e) => AgentResponse::error("DESTROY_FAILED", &format!("Destroy failed: {}", e)),
-            }
-        } else {
-            AgentResponse::error("INVALID_TOKEN", "Token does not match app")
-        }
-    } else {
-        AgentResponse::error("INVALID_TOKEN", "Invalid or expired confirmation token")
+pub fn cmd_agent_destroy_confirm(
+    paths: &RikuPaths,
+    state: &Path,
+    app: &str,
+    token: &str,
+) -> AgentResponse {
+    let app = match exit_if_invalid(app, &paths.app_root) {
+        Ok(app) => app,
+        Err(_) => return not_found(app),
+    };
+    if let Some(refusal) = confirm::refused(state, "destroy", &app, token) {
+        return refusal;
+    }
+
+    match crate::apps::cmd_destroy(paths, &app, crate::apps::DestroyMode::Safe) {
+        Ok(_) => AgentResponse::success(json!({
+            "message": format!("Application '{}' destroyed successfully", app)
+        })),
+        Err(e) => AgentResponse::error("DESTROY_FAILED", &format!("Destroy failed: {}", e)),
     }
 }
