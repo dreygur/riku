@@ -1,7 +1,7 @@
-//! The services `riku logs` knows for an app: its Procfile kinds, its
-//! compose services and whatever has a log file already. A service that
-//! runs but has printed nothing yet has no log file, so the files alone
-//! would call it unknown.
+//! The services `riku logs` knows for an app: its declared process kinds
+//! (riku.toml or Procfile), its compose services and whatever has a log file
+//! already. A service that runs but has printed nothing yet has no log file,
+//! so the files alone would call it unknown.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -9,26 +9,18 @@ use std::path::Path;
 
 use crate::config::RikuPaths;
 
-/// Procfile entries the deploy runs once, never as a logging service.
+/// Process entries the deploy runs once, never as a logging service.
 const ONE_SHOT_KINDS: [&str; 2] = ["release", "preflight"];
 
-/// Every service name of `app`, sorted.
-pub(super) fn app_services(paths: &RikuPaths, app: &str) -> BTreeSet<String> {
-    let mut services = log_file_services(&paths.log_root.join(app));
-    services.extend(procfile_kinds(&paths.app_root.join(app)));
-    services.extend(compose_services(paths, app));
-    services
-}
-
-fn procfile_kinds(app_path: &Path) -> Vec<String> {
-    match crate::util::parse_procfile(&app_path.join("Procfile")) {
+fn process_kinds(paths: &RikuPaths, app: &str) -> Vec<String> {
+    match crate::config::app_config::load_processes(paths, app) {
         Ok(Some(entries)) => entries
             .into_keys()
             .filter(|kind| !ONE_SHOT_KINDS.contains(&kind.as_str()))
             .collect(),
         Ok(None) => Vec::new(),
         Err(e) => {
-            tracing::warn!("cannot read the Procfile of {}: {e}", app_path.display());
+            tracing::warn!("cannot read the process list of '{app}': {e:#}");
             Vec::new()
         }
     }
@@ -66,5 +58,13 @@ fn log_file_services(app_log_dir: &Path) -> BTreeSet<String> {
             }
         }
     }
+    services
+}
+
+/// Every service name of `app`, sorted.
+pub(super) fn app_services(paths: &RikuPaths, app: &str) -> BTreeSet<String> {
+    let mut services = log_file_services(&paths.log_root.join(app));
+    services.extend(process_kinds(paths, app));
+    services.extend(compose_services(paths, app));
     services
 }

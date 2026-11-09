@@ -147,6 +147,9 @@ pub fn do_deploy(
         Err(e) => return Err(e),
     };
     let runtime = if is_container {
+        if let Err(e) = deploy_env::refuse_container_processes(app, paths) {
+            return Err(e);
+        }
         // Keys a former Procfile web kind left would pick the port map or
         // uWSGI template for the containers.
         workers::web_env::drop_route_keys(&mut env);
@@ -158,7 +161,19 @@ pub fn do_deploy(
             Err(e) => return Err(e),
         }
     } else {
-        match procfile_deploy::deploy_procfile_app(app, paths, deltas, &mut env, &mut dlog) {
+        let processes = match deploy_env::load_deploy_processes(app, paths, &mut dlog) {
+            Ok(processes) => processes,
+            Err(e) => return Err(e),
+        };
+        let deploy = procfile_deploy::deploy_procfile_app(
+            app,
+            paths,
+            deltas,
+            processes.unwrap_or_default(),
+            &mut env,
+            &mut dlog,
+        );
+        match deploy {
             Ok(runtime) => runtime,
             Err(e) => return Err(e),
         }

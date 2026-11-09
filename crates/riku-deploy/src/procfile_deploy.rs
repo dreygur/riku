@@ -11,31 +11,13 @@ use anyhow::{anyhow, Result};
 
 use crate::config::RikuPaths;
 use crate::plugins::runtime::{RuntimeContext, RuntimePlugin};
-use crate::util::{deploy_logger::DeployLogger, echo, parse_procfile};
+use crate::util::{deploy_logger::DeployLogger, echo};
 use crate::{env_setup, hooks, workers};
 
 /// What the runtime plugin's build left for the start step.
 struct PluginOutput {
     env: HashMap<String, String>,
     start_cmd: Option<String>,
-}
-
-/// The app's Procfile entries. An app with no Procfile runs its runtime
-/// plugin's start command as `web`; whether it has one is checked once the
-/// plugin is known.
-fn read_workers(
-    app: &str,
-    app_path: &Path,
-    dlog: &mut DeployLogger,
-) -> Result<HashMap<String, String>> {
-    match parse_procfile(&app_path.join("Procfile")) {
-        Ok(workers) => Ok(workers.unwrap_or_default()),
-        Err(e) => {
-            let reason = format!("Invalid Procfile for app '{app}': {e}. Deploy aborted.");
-            dlog.log_error(&reason);
-            Err(anyhow!(reason))
-        }
-    }
 }
 
 fn detect_runtime(
@@ -111,31 +93,36 @@ fn release_and_start(
         return Err(e);
     }
     crate::supervisor_ctl::start_supervisor(paths);
-    if let Err(e) = workers::create_workers_generic(app, &app_path, env, paths, start_cmd) {
+    if let Err(e) =
+        workers::create_workers_generic(app, &app_path, Some(workers), env, paths, start_cmd)
+    {
         return Err(e);
     }
     dlog.log("Starting application processes");
     crate::spawn_app(app, paths)
 }
 
-/// Build and start a Procfile app, after applying `deltas` to its copy
-/// counts. Plugin provided env is merged into `env`, so the post deploy hook
-/// sees what the processes run with. Returns the runtime plugin's name.
+/// Build and start a Procfile app from its process list (riku.toml or
+/// Procfile, empty when it declares none), after applying `deltas` to its
+/// copy counts. An app with no processes runs its runtime plugin's start
+/// command as `web`. Plugin provided env is merged into `env`, so the post
+/// deploy hook sees what the processes run with. Returns the runtime
+/// plugin's name.
 pub(crate) fn deploy_procfile_app(
     app: &str,
     paths: &RikuPaths,
     deltas: &HashMap<String, i64>,
+    mut workers: HashMap<String, String>,
     env: &mut HashMap<String, String>,
     dlog: &mut DeployLogger,
 ) -> Result<String> {
     let app_path = paths.app_root.join(app);
-    let mut workers = match read_workers(app, &app_path, dlog) {
-        Ok(workers) => workers,
-        Err(e) => return Err(e),
-    };
     if let Err(e) = workers::apply_scaling_deltas(app, paths, deltas, &workers) {
         return Err(e);
     }
+    // Worker creation gets the full list: a list holding only one shot
+    // kinds still counts as declared, so no start command is added as web.
+    let declared = workers.clone();
     if let Some(preflight_cmd) = workers.remove("preflight") {
         dlog.log("Running preflight command");
         env_setup::run_preflight(&preflight_cmd, &app_path);
@@ -164,7 +151,7 @@ pub(crate) fn deploy_procfile_app(
     };
     if workers.is_empty() && output.start_cmd.is_none() {
         let reason = format!(
-            "No Procfile for app '{app}' and runtime '{}' gave no start command. Deploy aborted.",
+            "No processes declared for app '{app}' (riku.toml or Procfile) and runtime '{}' gave no start command. Deploy aborted.",
             plugin.name
         );
         dlog.log_error(&reason);
@@ -172,7 +159,7 @@ pub(crate) fn deploy_procfile_app(
     }
     env.extend(output.env);
     let start_cmd = output.start_cmd.as_deref();
-    match release_and_start(app, paths, &plugin.name, &workers, start_cmd, env, dlog) {
+    match release_and_start(app, paths, &plugin.name, &declared, start_cmd, env, dlog) {
         Ok(()) => Ok(plugin.name),
         Err(e) => Err(e),
     }

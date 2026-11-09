@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::fs;
 
+use crate::config::app_settings::keys;
 use crate::config::RikuPaths;
 use crate::util::{display, exit_if_invalid, parse_settings};
 
@@ -55,6 +56,10 @@ pub fn cmd_config_set(paths: &RikuPaths, app: &str, settings: &[String]) -> Resu
         if let Some(eq_pos) = s.find('=') {
             let k = s[..eq_pos].trim().to_string();
             let v = s[eq_pos + 1..].trim().to_string();
+
+            if let Some(path) = keys::path_for_env(&k) {
+                anyhow::bail!("{k} is a riku setting; use riku settings set {app} {path}=...");
+            }
 
             if k.contains(['\n', '\r']) || v.contains(['\n', '\r']) {
                 anyhow::bail!(

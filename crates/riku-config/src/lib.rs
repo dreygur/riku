@@ -10,6 +10,8 @@ use anyhow::Result;
 use std::env;
 use std::path::{Path, PathBuf};
 
+pub mod app_config;
+pub mod app_settings;
 pub mod container_engine;
 pub mod nginx_host;
 pub mod program;
@@ -134,6 +136,18 @@ impl RikuPaths {
     /// Returns the deploy log file path for a given app: `{log_root}/{app}/deploy.log`.
     pub fn deploy_log_file(&self, app: &str) -> PathBuf {
         self.log_root.join(app).join("deploy.log")
+    }
+
+    /// The server override of an app's riku settings: `{env_root}/{app}/riku.toml`.
+    /// `app` must already be a validated app name.
+    pub fn app_settings_override(&self, app: &str) -> PathBuf {
+        self.env_root.join(app).join(app_settings::FILE_NAME)
+    }
+
+    /// The `riku.toml` in an app's checkout: `{app_root}/{app}/riku.toml`.
+    /// `app` must already be a validated app name.
+    pub fn app_settings_repo(&self, app: &str) -> PathBuf {
+        self.app_root.join(app).join(app_settings::FILE_NAME)
     }
 
     /// Build paths using the given root directory and home directory, with

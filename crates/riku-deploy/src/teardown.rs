@@ -1,7 +1,5 @@
 //! What an app's runtime plugin cleans up when the app is destroyed.
 
-use std::collections::HashMap;
-
 use anyhow::Result;
 
 use crate::config::RikuPaths;
@@ -18,10 +16,10 @@ pub fn plugin_destroy(app: &str, paths: &RikuPaths) -> Result<()> {
         return Ok(());
     }
     let env_path = paths.env_root.join(app);
-    let mut env = HashMap::new();
-    if let Err(e) = crate::util::parse_settings(&env_path.join("ENV"), &mut env) {
-        return Err(e);
-    }
+    let env = match crate::config::app_config::load_env(paths, app) {
+        Ok(loaded) => loaded.env,
+        Err(e) => return Err(e),
+    };
 
     let plugins = discover(&paths.plugin_root);
     let plugin = match detect(&plugins, &app_path, &env) {

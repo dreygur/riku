@@ -191,8 +191,7 @@ riku router-renew myapp
 To turn HTTPS on:
 
 ```bash
-riku config set myapp RIKU_DOMAINS=example.com
-riku config set myapp RIKU_HTTPS_ONLY=true
+riku settings set myapp routing.domains=example.com routing.https_only=true
 ```
 
 then deploy again.

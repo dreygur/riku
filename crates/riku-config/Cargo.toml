@@ -9,6 +9,7 @@ license = "MIT"
 
 [dependencies]
 anyhow = { workspace = true }
+riku-util = { path = "../riku-util" }
 toml = { workspace = true }
 
 [dev-dependencies]

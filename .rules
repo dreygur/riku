@@ -198,6 +198,10 @@
 
 Read `docs/superpowers/ROADMAP.md` at the start of a session. It lists what is done, the next phase, its spec and plan, and per task status. Update its status lines in the same commit as the work.
 
+Read `docs/CODEMAP.md` before searching code. It maps every crate and module to its job, entry points and contracts. Any commit that adds, moves, renames or changes the contract of a module updates the map in the same commit. Every implementer brief repeats this rule.
+
+Every design and every plan is reviewed with EGM (the `egm-review` skill) before it is handed over or executed. Report every bug found, in the same message, even outside the task. Never leave one unmentioned.
+
 ## Project Overview
 
 Riku is a complete Rust port of the Piku micro-PaaS, providing Heroku-like git push deployments. It's a single binary written in Rust with no runtime dependencies.

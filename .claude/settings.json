@@ -4,5 +4,15 @@
       "Bash(cargo:*)",
       "Bash(git status:*)"
     ]
+  },
+  "enabledPlugins": {
+    "claude-seo@agricidaniel-claude-seo": false,
+    "impeccable@impeccable": false,
+    "frontend-design@claude-plugins-official": false,
+    "swift-lsp@claude-plugins-official": false,
+    "agy-delegate@agy-delegate": false,
+    "cc-plugin-you-should-know@builtin": false,
+    "skill-creator@claude-plugins-official": false,
+    "claude-code-setup@claude-plugins-official": false
   }
 }

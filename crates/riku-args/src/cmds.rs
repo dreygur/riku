@@ -86,6 +86,53 @@ pub enum ConfigCmd {
     },
 }
 
+/// Server side riku settings of an app (`<env_root>/<app>/riku.toml`).
+/// Keys are `section.name`, as in riku.toml.
+#[derive(Subcommand, Debug)]
+pub enum SettingsCmd {
+    /// Show the server settings of an app (secrets masked)
+    #[command(after_help = "Examples:\n  riku settings show myapp")]
+    Show {
+        /// App name
+        app: String,
+    },
+
+    /// Get one server setting
+    #[command(after_help = "Examples:\n  riku settings get myapp routing.domains")]
+    Get {
+        /// App name
+        app: String,
+        /// Setting key, section.name
+        key: String,
+    },
+
+    /// Set server settings (triggers redeploy)
+    #[command(
+        trailing_var_arg = true,
+        after_help = "Examples:\n  riku settings set myapp routing.domains=shop.example,www.shop.example\n  riku settings set myapp limits.max_memory_mb=1024"
+    )]
+    Set {
+        /// App name
+        app: String,
+        /// key=value pairs; list values are comma separated
+        #[arg(required = true)]
+        settings: Vec<String>,
+    },
+
+    /// Remove server settings (triggers redeploy)
+    #[command(
+        trailing_var_arg = true,
+        after_help = "Examples:\n  riku settings unset myapp routing.domains"
+    )]
+    Unset {
+        /// App name
+        app: String,
+        /// Keys to remove
+        #[arg(required = true)]
+        keys: Vec<String>,
+    },
+}
+
 /// Stats subcommands
 #[derive(Subcommand, Debug)]
 pub enum StatsCmd {

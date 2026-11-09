@@ -83,7 +83,7 @@ neither verb is ever invoked.
 
 | Type | Verbs | Status |
 | ---- | ----- | ------ |
-| **runtime** | `detect` / `build` / `env` / `start` | shipped (buildpacks) |
+| **runtime** | `detect` / `build` / `env` / `start` | shipped (buildpacks): a plain executable or a bundle with `type = "runtime"`; a plain file wins a name clash |
 | **addon** | `provision` / `bind` / `unbind` / `deprovision` / `backup` | shipped |
 | **notifier / hook** | `on_event` (subscribes to lifecycle events) | shipped |
 | **router** | `configure` / `reload` | shipped: singleton named in `<riku root>/ROUTER`, for third party routers (nginx and Caddy are built in) |

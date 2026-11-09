@@ -3,7 +3,6 @@
 use anyhow::Result;
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
 
 use crate::config::{app_worker_configs, WorkerConfig};
 use crate::daemon::Supervisor;
@@ -116,61 +115,46 @@ impl Supervisor {
         (None, HashMap::new())
     }
 
-    /// Load cron jobs from an app's Procfile.
-    pub fn load_cron_jobs(&mut self, app: &str, procfile_path: &Path) -> Result<()> {
-        // Drop any previously-loaded cron jobs for this app first, so that a
-        // Procfile edit that removes or renumbers cron entries does not leave
-        // stale jobs firing on the old schedule.
+    /// Schedule an app's cron jobs, given as `(kind, command)` in a stable
+    /// order (`app_config::load_cron_entries`: riku.toml `[cron]` sorted, or
+    /// every Procfile `cron*` line in file order, repeated kinds included).
+    ///
+    /// Earlier jobs of the app are dropped first, so an edit that removes or
+    /// renumbers cron entries leaves no stale job firing on the old schedule.
+    #[allow(clippy::question_mark)]
+    pub fn load_cron_jobs(&mut self, app: &str, entries: &[(String, String)]) -> Result<()> {
         self.cron_scheduler.remove_app_jobs(app);
 
-        if !procfile_path.exists() {
-            return Ok(());
-        }
-
-        let content = fs::read_to_string(procfile_path)?;
         let mut cron_index = 0;
-
-        for line in content.lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
+        for (_, line) in entries {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() < 5 {
                 continue;
             }
-
-            if let Some(pos) = line.find(':') {
-                let kind = line[..pos].trim();
-                let command = line[pos + 1..].trim();
-
-                if kind.starts_with("cron") {
-                    // The kind is like "cron0", "cron1", etc.
-                    // We don't need the number, just that it starts with "cron"
-
-                    // Parse the command as a cron expression followed by the command
-                    let parts: Vec<&str> = command.split_whitespace().collect();
-                    if parts.len() >= 5 {
-                        // This is a valid cron expression + command
-                        let schedule = parts[..5].join(" ");
-                        let actual_command = parts[5..].join(" ");
-
-                        if crate::cron::validate_cron_expression(&schedule) {
-                            self.cron_scheduler.add_job(
-                                app,
-                                cron_index,
-                                &schedule,
-                                &actual_command,
-                            )?;
-                            tracing::info!(
-                                "Loaded cron job for app '{}': {} {}",
-                                app,
-                                schedule,
-                                actual_command
-                            );
-                            cron_index += 1;
-                        }
-                    }
-                }
+            let schedule = parts[..5].join(" ");
+            let command = parts[5..].join(" ");
+            if !crate::cron::validate_cron_expression(&schedule) {
+                continue;
             }
+            if let Err(e) = self
+                .cron_scheduler
+                .add_job(app, cron_index, &schedule, &command)
+            {
+                return Err(e);
+            }
+            tracing::info!(
+                "Loaded cron job for app '{}': {} {}",
+                app,
+                schedule,
+                command
+            );
+            cron_index += 1;
         }
 
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "cron_tasks_tests.rs"]
+mod tests;

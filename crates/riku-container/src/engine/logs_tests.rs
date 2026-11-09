@@ -7,6 +7,7 @@ use crate::engine::{ContainerId, LogRange};
 
 fn short_limits() -> EngineSettings {
     EngineSettings {
+        program: None,
         call_timeout: Duration::from_millis(300),
         stop_extra: Duration::from_millis(300),
         pull_timeout: Duration::from_millis(300),

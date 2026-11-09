@@ -23,6 +23,10 @@ mod tests {
 
     use crate::mock_supervisor::MockSupervisor;
 
+    fn procfile(app_dir: &std::path::Path) -> Option<HashMap<String, String>> {
+        riku::util::parse_procfile(&app_dir.join("Procfile")).unwrap()
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
@@ -273,7 +277,14 @@ esac
         let env = HashMap::new();
 
         let _supervisor = MockSupervisor::start(&paths);
-        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
+        riku::deploy::workers::create_workers_generic(
+            app,
+            &app_dir,
+            procfile(&app_dir).as_ref(),
+            &env,
+            &paths,
+            None,
+        )?;
 
         // Both worker configs must exist in workers-available
         let web_cfg = paths.workers_available.join("nodeapp@web.1.toml");
@@ -317,7 +328,14 @@ esac
 
         let env = HashMap::new();
         let _supervisor = MockSupervisor::start(&paths);
-        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
+        riku::deploy::workers::create_workers_generic(
+            app,
+            &app_dir,
+            procfile(&app_dir).as_ref(),
+            &env,
+            &paths,
+            None,
+        )?;
 
         let web_cfg = paths.workers_available.join("pyapp@web.1.toml");
         assert!(web_cfg.exists(), "web worker config must be created");
@@ -365,8 +383,15 @@ esac
         fs::create_dir_all(paths.log_root.join(app)).unwrap();
         fs::write(app_dir.join("Procfile"), "web: node server.js\n").unwrap();
         let _supervisor = MockSupervisor::start(&paths);
-        riku::deploy::workers::create_workers_generic(app, &app_dir, &HashMap::new(), &paths, None)
-            .unwrap();
+        riku::deploy::workers::create_workers_generic(
+            app,
+            &app_dir,
+            procfile(&app_dir).as_ref(),
+            &HashMap::new(),
+            &paths,
+            None,
+        )
+        .unwrap();
         let site_file = paths.caddy_root.join("shop.caddy");
 
         configure_route(&paths, app, Some("shop.example.com")).unwrap();
@@ -558,7 +583,14 @@ esac
 
         let env = HashMap::new();
         let _supervisor = MockSupervisor::start(&paths);
-        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
+        riku::deploy::workers::create_workers_generic(
+            app,
+            &app_dir,
+            procfile(&app_dir).as_ref(),
+            &env,
+            &paths,
+            None,
+        )?;
 
         let cfg1 = paths.workers_available.join("scaledapp@web.1.toml");
         let cfg2 = paths.workers_available.join("scaledapp@web.2.toml");
@@ -851,7 +883,14 @@ esac
 
         let env = HashMap::new();
         let _supervisor = MockSupervisor::start(&paths);
-        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
+        riku::deploy::workers::create_workers_generic(
+            app,
+            &app_dir,
+            procfile(&app_dir).as_ref(),
+            &env,
+            &paths,
+            None,
+        )?;
 
         assert!(
             paths
@@ -895,7 +934,14 @@ esac
         fs::write(app_dir.join("Procfile"), "worker: python worker.py\n")?;
 
         let env = HashMap::new();
-        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
+        riku::deploy::workers::create_workers_generic(
+            app,
+            &app_dir,
+            procfile(&app_dir).as_ref(),
+            &env,
+            &paths,
+            None,
+        )?;
 
         for i in 1..=3 {
             assert!(
@@ -929,7 +975,14 @@ esac
 
         let env = HashMap::new();
         let _supervisor = MockSupervisor::start(&paths);
-        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
+        riku::deploy::workers::create_workers_generic(
+            app,
+            &app_dir,
+            procfile(&app_dir).as_ref(),
+            &env,
+            &paths,
+            None,
+        )?;
 
         // Only web config should exist
         let configs: Vec<_> = fs::read_dir(&paths.workers_available)?.flatten().collect();
@@ -958,7 +1011,14 @@ esac
         fs::write(app_dir.join("Procfile"), "worker: celery -A tasks worker\n")?;
 
         let env = HashMap::new();
-        riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None)?;
+        riku::deploy::workers::create_workers_generic(
+            app,
+            &app_dir,
+            procfile(&app_dir).as_ref(),
+            &env,
+            &paths,
+            None,
+        )?;
 
         let cfg = paths.workers_available.join("cmdapp@worker.1.toml");
         let content = fs::read_to_string(&cfg)?;
@@ -982,8 +1042,14 @@ esac
         // Deliberately no Procfile written
 
         let env = HashMap::new();
-        let result =
-            riku::deploy::workers::create_workers_generic(app, &app_dir, &env, &paths, None);
+        let result = riku::deploy::workers::create_workers_generic(
+            app,
+            &app_dir,
+            procfile(&app_dir).as_ref(),
+            &env,
+            &paths,
+            None,
+        );
         assert!(result.is_ok(), "missing Procfile must not return an error");
 
         // No configs should have been created

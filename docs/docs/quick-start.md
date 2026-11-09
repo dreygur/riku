@@ -269,12 +269,18 @@ A record: *.example.com → your-server-ip
 
 ### Configure Riku
 
-```bash
-# Set domain name
-riku config set myapp RIKU_DOMAINS=example.com
+Commit a `riku.toml` next to your code (see [riku.toml](riku-toml.md)):
 
-# Enable HTTPS (after getting SSL cert)
-riku config set myapp RIKU_HTTPS_ONLY=true
+```toml
+[routing]
+domains = ["example.com"]
+https_only = true   # after getting an SSL cert
+```
+
+Or set them on the server without a commit:
+
+```bash
+riku settings set myapp routing.domains=example.com routing.https_only=true
 ```
 
 ---

@@ -108,9 +108,10 @@ pub fn build_app_entry(
     paths: &RikuPaths,
     app_stats: &HashMap<String, AppStats>,
 ) -> AppStateEntry {
-    let env_file = paths.env_root.join(app).join("ENV");
-    let mut env_map = HashMap::new();
-    let _ = crate::util::parse_settings(&env_file, &mut env_map);
+    let (env_map, config_error) = match crate::config::app_config::load_env(paths, app) {
+        Ok(loaded) => (loaded.env, None),
+        Err(e) => (HashMap::new(), Some(format!("{e:#}"))),
+    };
 
     let workers = match app_stats.get(app) {
         Some(stats) => stats
@@ -136,6 +137,7 @@ pub fn build_app_entry(
         routing: extract_routing_fields(&env_map),
         route: route_state(app, paths),
         workers,
+        config_error,
     }
 }
 

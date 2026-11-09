@@ -37,7 +37,7 @@ pub fn open_engine(paths: &RikuPaths) -> Result<Engine> {
         Ok(settings) => settings,
         Err(e) => return Err(anyhow!("invalid server settings: {e}")),
     };
-    let setting = match riku_config::container_engine::load(paths) {
+    let setting = match riku_config::container_engine::from_settings(paths, &settings) {
         Ok(setting) => setting,
         Err(e) => return Err(e),
     };

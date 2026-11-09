@@ -1,11 +1,10 @@
 //! Environment variable parsing, expansion, and configuration file utilities.
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use super::display::echo;
 use super::procfile::ENVVAR_RE;
 
 /// Expand shell-style environment variables ($VAR and ${VAR}) in a buffer.
@@ -31,8 +30,13 @@ pub fn expandvars(buffer: &str, env: &HashMap<String, String>, default: Option<&
         .to_string()
 }
 
-/// Parse KEY=VALUE file with variable interpolation. Skip comments/blanks.
-/// On malformat, print error and return empty map.
+/// Parse KEY=VALUE file with variable interpolation into `env`, skipping
+/// comments and blank lines, and return the merged map.
+///
+/// A line without `=` fails the whole file: `env` is left as it was and the
+/// error names the file and line but not the line itself, which may hold a
+/// secret. Acting on part of an ENV file would run the app with settings its
+/// owner did not write. A missing file adds nothing.
 pub fn parse_settings(
     filename: &Path,
     env: &mut HashMap<String, String>,
@@ -41,35 +45,35 @@ pub fn parse_settings(
         return Ok(HashMap::new());
     }
 
-    let content = fs::read_to_string(filename)?;
-    for line in content.lines() {
-        if line.is_empty() || line.starts_with('#') {
+    let content = match fs::read_to_string(filename) {
+        Ok(content) => content,
+        Err(e) => return Err(anyhow!("failed to read {}: {e}", filename.display())),
+    };
+    let mut merged = env.clone();
+    for (index, line) in content.lines().enumerate() {
+        if line.trim().is_empty() || line.starts_with('#') {
             continue;
         }
-        // Also skip lines that are only whitespace
-        if line.trim().is_empty() {
-            continue;
-        }
-        if let Some(eq_pos) = line.find('=') {
-            let k = line[..eq_pos].trim().to_string();
-            let v = line[eq_pos + 1..].trim().to_string();
-            // Strip null bytes and control characters (except common whitespace)
-            let cleaned: String = v
-                .chars()
-                .filter(|c| !c.is_control() || *c == '\t')
-                .collect();
-            let expanded = expandvars(&cleaned, env, None);
-            env.insert(k, expanded);
-        } else {
-            echo(
-                &format!("Error: malformed setting '{}', ignoring file.", line),
-                "red",
-            );
-            return Ok(HashMap::new());
-        }
+        let Some(eq_pos) = line.find('=') else {
+            return Err(anyhow!(
+                "{}:{}: malformed setting, expected KEY=VALUE",
+                filename.display(),
+                index + 1
+            ));
+        };
+        let k = line[..eq_pos].trim().to_string();
+        let v = line[eq_pos + 1..].trim();
+        // Strip null bytes and control characters (except common whitespace)
+        let cleaned: String = v
+            .chars()
+            .filter(|c| !c.is_control() || *c == '\t')
+            .collect();
+        let expanded = expandvars(&cleaned, &merged, None);
+        merged.insert(k, expanded);
     }
 
-    Ok(env.clone())
+    *env = merged.clone();
+    Ok(merged)
 }
 
 /// Write key=value config file atomically (temp file + fsync + rename), so a
@@ -161,13 +165,28 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_settings_malformed() {
+    fn malformed_line_is_an_error_and_leaves_the_map_untouched() {
         let mut f = NamedTempFile::new().unwrap();
         writeln!(f, "KEY=value").unwrap();
-        writeln!(f, "BADLINE").unwrap();
+        writeln!(f, "SECRETBADLINE").unwrap();
         let mut env = HashMap::new();
-        let result = parse_settings(f.path(), &mut env).unwrap();
-        assert!(result.is_empty());
+        env.insert("BEFORE".to_string(), "kept".to_string());
+
+        let message = match parse_settings(f.path(), &mut env) {
+            Ok(map) => panic!("malformed file parsed as {map:?}"),
+            Err(e) => e.to_string(),
+        };
+
+        assert!(message.contains(":2:"), "names the line: {message}");
+        assert!(
+            !message.contains("SECRETBADLINE"),
+            "must not echo the line: {message}"
+        );
+        assert_eq!(
+            env.len(),
+            1,
+            "caller map must not hold part of the file: {env:?}"
+        );
     }
 
     #[test]

@@ -44,7 +44,7 @@ A public image needs nothing. For a private one, give riku a username and a
 token with the `read:packages` scope. Set both or neither:
 
 ```bash
-riku config set myapp RIKU_GHCR_USERNAME=me RIKU_GHCR_TOKEN=ghp_xxx
+riku settings set myapp secrets.ghcr_username=me secrets.ghcr_token=ghp_xxx
 ```
 
 Riku runs `docker login ghcr.io` with these before it pulls. See

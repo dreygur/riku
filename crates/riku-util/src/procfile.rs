@@ -29,7 +29,8 @@ pub(crate) static ENVVAR_RE: Lazy<Regex> =
 /// The command is `<5 schedule fields> <command…>`; only the leading schedule
 /// is validated, using the shared supervisor cron engine. Returns `false` when
 /// there are fewer than five fields or the schedule is malformed/unsatisfiable.
-fn is_valid_cron_command(command: &str) -> bool {
+/// Public so `riku.toml` `[cron]` entries get the same check.
+pub fn is_valid_cron_command(command: &str) -> bool {
     let fields: Vec<&str> = command.split_whitespace().collect();
     if fields.len() < 5 {
         return false;

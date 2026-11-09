@@ -10,6 +10,52 @@ fn make_plugin(dir: &Path, name: &str, script: &str) -> PathBuf {
     path
 }
 
+fn make_bundle(root: &Path, name: &str, ptype: &str) {
+    let dir = root.join(name);
+    fs::create_dir_all(dir.join("bin")).unwrap();
+    fs::write(
+        dir.join("riku-plugin.toml"),
+        format!(
+            "name=\"{name}\"\nversion=\"0.1.0\"\ntype=\"{ptype}\"\napi={}\nentry=\"bin/{name}\"\n",
+            crate::RIKU_PLUGIN_API
+        ),
+    )
+    .unwrap();
+    make_plugin(&dir.join("bin"), name, "#!/bin/sh\n");
+}
+
+#[test]
+fn discovers_runtime_bundle_from_scaffold() {
+    let tmp = TempDir::new().unwrap();
+    make_bundle(tmp.path(), "mynode", "runtime");
+    let plugins = discover(tmp.path());
+    assert_eq!(plugins.len(), 1, "plugins: {plugins:?}");
+    assert_eq!(plugins[0].name, "mynode");
+    assert!(
+        plugins[0].path.ends_with("mynode/bin/mynode"),
+        "path: {:?}",
+        plugins[0].path
+    );
+}
+
+#[test]
+fn skips_non_runtime_bundle() {
+    let tmp = TempDir::new().unwrap();
+    make_bundle(tmp.path(), "postgres", "addon");
+    assert!(discover(tmp.path()).is_empty());
+}
+
+#[test]
+fn plain_file_wins_name_clash() {
+    let tmp = TempDir::new().unwrap();
+    make_bundle(tmp.path(), "mynode", "runtime");
+    fs::rename(tmp.path().join("mynode"), tmp.path().join("bundle-dir")).unwrap();
+    let file = make_plugin(tmp.path(), "mynode", "#!/bin/sh\n");
+    let plugins = discover(tmp.path());
+    assert_eq!(plugins.len(), 1, "plugins: {plugins:?}");
+    assert_eq!(plugins[0].path, file);
+}
+
 #[test]
 fn discover_skips_lifecycle_hooks() {
     let tmp = TempDir::new().unwrap();

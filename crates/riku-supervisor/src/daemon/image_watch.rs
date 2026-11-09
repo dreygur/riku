@@ -57,27 +57,26 @@ impl Supervisor {
     }
 }
 
-/// Parse `RIKU_WATCH_SERVICES` (comma-separated compose service names) from
-/// an app's ENV file. Empty if unset, absent, or the app opts out.
+/// `RIKU_WATCH_SERVICES` (comma separated compose service names) from the
+/// app's merged config. Empty if unset. An app whose config cannot be read
+/// is skipped for this tick with a warning naming it.
 fn watched_services(paths: &RikuPaths, app: &str) -> Vec<String> {
-    let env_file = paths.env_root.join(app).join("ENV");
-    let Ok(content) = std::fs::read_to_string(&env_file) else {
-        return Vec::new();
+    let env = match riku_config::app_config::load_env(paths, app) {
+        Ok(loaded) => loaded.env,
+        Err(e) => {
+            tracing::warn!("skipping image watch for '{}': {:#}", app, e);
+            return Vec::new();
+        }
     };
-    content
-        .lines()
-        .find_map(|line| {
-            let (k, v) = line.trim().split_once('=')?;
-            (k.trim() == "RIKU_WATCH_SERVICES").then(|| v.to_string())
-        })
-        .map(|v| {
-            v.split(',')
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(String::from)
-                .collect()
-        })
-        .unwrap_or_default()
+    match env.get("RIKU_WATCH_SERVICES") {
+        Some(value) => value
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .collect(),
+        None => Vec::new(),
+    }
 }
 
 #[cfg(test)]

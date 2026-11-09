@@ -8,17 +8,32 @@ work they describe.
 
 - Each project has a design in `docs/superpowers/specs/` (owner approved) and
   a plan in `docs/superpowers/plans/`, written just before it runs.
-- Plans run with superpowers:subagent-driven-development: one implementer
-  subagent per task, a review after each, a final whole branch review.
+- Plans run with superpowers:subagent-driven-development, cut for tokens
+  (owner, 2026-11-07):
+  - No review after each task. One whole branch review at the end, then
+    one fix round. The owner reviews everything last.
+  - Group small or related tasks into one implementer dispatch. Do work
+    that takes a handful of tool calls inline, without a subagent.
+  - Implementers run on Sonnet; mechanical work (deletions, renames,
+    moving code) on Haiku. Opus only for the final review.
+  - Briefs point at spec and plan sections and `file:line`; they do not
+    paste code or retype the spec.
+  - Per task, run only the touched crate's tests (`cargo test -p <crate>`).
+    The full suite, clippy, the Linux run and Docker e2e run once, before
+    the final review.
+  - Plans stay short: task goal, files, acceptance check. No full code in
+    the plan unless the change is subtle.
 - The run ledger lives in `.superpowers/sdd/<plan>/progress.md` (git ignored,
   this machine only). The committed record is git history plus the status
   lines below: a task is done when its commit is listed here.
 - Owner rules for agents: no python, perl or other script interpreters for
   reading or editing files; no AI attribution in commits; follow
   `.claude/CLAUDE.md`.
-- Implementers and reviewers run on Claude (Sonnet by default, Opus for
-  reviews of trust boundaries and the final review), not through agy, which
-  was too slow here.
+- Agents run on Claude, not through agy, which was too slow here.
+- Order agreed 2026-11-09: developer experience (two small fixes, then the
+  config model, then the first run), then small boards and binary size,
+  then the nginx bugs (cache path, duplicate `location /`), then the
+  framework design, then phase 4.
 - The owner's real servers, organisation and projects are confidential. The
   repository is public. Never write their names in code, tests, docs, commit
   messages or PR text; use neutral names (`edge`, `prod`, `edge.example`,
@@ -189,7 +204,7 @@ work they describe.
 - Each copy's host port is stored (as a label) so backends can be rebuilt
   after a supervisor restart.
 
-### Phase 3b: build off the server through a registry (done, pending push)
+### Phase 3b: build off the server through a registry (done, merged as #74)
 
 - Owner cut 2026-11-06 after an EGM review: spec
   `specs/2026-11-06-phase-3b-design.md`. Images built off the server go
@@ -200,14 +215,26 @@ work they describe.
   Procfile builds in a container, riku-sync wiring and its carried duties) is
   dropped.
 
-### After 3a: small boards and binary size
+### Developer experience: config files and the first run (next)
+
+- Spec `specs/2026-11-09-developer-experience-design.md` (owner approved
+  2026-11-09). Branch `feat/dev-experience`.
+- Plan `plans/2026-11-09-config-model.md` (EGM reviewed, stages 5 to 9 plus
+  one re-audit). Execution: native, one final review.
+- Step 1 small fixes: done (Task 1 runtime bundles, Task 2 plugin docs).
+- Project 1 config model: Tasks 3 (server settings), 4 (riku.toml schema),
+  5 (app config loader), 6 (readers on the loader), 7 (riku settings),
+  8 (doctor migration) and 9 (docs) done. Final gate and review next.
+- Project 2 first run: not started.
+
+### After developer experience: small boards and binary size
 
 - One task: build targets for Pi Zero / Zero W (armv6), Pi Zero 2 W and Pi
   3/4/5 (arm64, armv7), shipped as both glibc and static musl builds; a size
   profile trial (`opt-level = "z"`, `panic = "abort"`); sizes of riku and rk
   measured per target before and after. The owner sets a size budget from
-  the measurements. Move ROUTER and CONTAINER_ENGINE into settings.toml with
-  a `riku doctor --fix` migration.
+  the measurements. (Moving ROUTER and CONTAINER_ENGINE into settings.toml
+  is now part of the developer experience config model.)
 
 ### Phase 4: one rk managing many servers
 

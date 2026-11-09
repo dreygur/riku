@@ -27,8 +27,10 @@ riku install-plugins                          # all bundled runtime plugins
 riku install-plugins --plugins node,python   # specific plugins only
 ```
 
-Bundled runtime plugins available: `node`, `python`, `ruby`, `go`, `rust-lang`,
-`java`, `clojure`, `container`. The same command also installs the
+Bundled runtime plugins installed by default: `node`, `python`, `ruby`, `go`,
+`rust-lang`. The `java` and `clojure` plugins are prebuilt binaries and are
+installed only when named (`--plugins java,clojure`). Container apps need no
+runtime plugin. The same command also installs the
 first-party **event-subscriber** bundle `riku-notify` (`riku install-plugins
 --plugins riku-notify`, not installed by default), see
 [Plugin Bundles](plugin-bundles.md#event-subscribers-notifiers).
@@ -112,7 +114,7 @@ chmod +x ~/.riku/plugins/my-runtime
 To skip auto-detection:
 
 ```bash
-riku config set myapp RIKU_RUNTIME=my-runtime
+riku settings set myapp runtime.name=my-runtime
 ```
 
 ---
@@ -125,7 +127,7 @@ Lifecycle hooks are named with a `riku-` prefix and run automatically at deploy 
 |------|---------|-------------------|
 | `riku-pre-deploy` | Before runtime detection | Aborts deploy |
 | `riku-pre-build` | After detection, before build | Aborts deploy |
-| `riku-post-build` | After build, before workers | Non-fatal (logs warning) |
+| `riku-post-build` | After build, before workers | Aborts deploy |
 | `riku-post-deploy` | After workers are up | Non-fatal |
 
 Hooks receive: `RIKU_APP`, `RIKU_APP_PATH`, `RIKU_ENV_PATH`, `RIKU_ROOT`,
@@ -142,83 +144,26 @@ curl -s -X POST "$SLACK_WEBHOOK_URL" \
 
 ---
 
-## Server-Side Utility Plugins
-
-Server-side plugins are executable scripts or binaries placed in `~/.riku/plugins/`. They can be invoked as subcommands to extend Riku's functionality.
-
-### Plugin Location
-
-```
-~/.riku/plugins/
-├── backup
-├── tunnel
-├── code
-└── custom-plugin
-```
-
-### Plugin Interface
-
-Plugins receive these arguments:
-
-| Argument | Description | Example |
-|----------|-------------|---------|
-| `$1` | App name | `myapp` |
-| `$2+` | Additional arguments | (varies) |
-
-### Example Plugin
-
-```bash
-#!/bin/sh
-# ~/.riku/plugins/hello
-
-app="$1"
-shift
-
-echo "Hello from plugin! App: $app"
-echo "Arguments: $@"
-
-# Access app environment
-ENV_FILE="$HOME/.riku/envs/$app/ENV"
-if [ -f "$ENV_FILE" ]; then
-    echo "Environment file exists"
-fi
-```
-
-Make it executable:
-
-```bash
-chmod +x ~/.riku/plugins/hello
-```
-
-Invoke:
-
-```bash
-riku hello myapp --verbose
-```
-
-### Use Cases
-
-- **Custom deployments** - Add custom build steps
-- **Database migrations** - Run migrations after deploy
-- **Asset compilation** - Compile assets post-deploy
-- **Notifications** - Send Slack/email notifications
-- **Backups** - Create automated backups
-- **Health checks** - Custom health verification
+Riku does not run unknown subcommands as plugins: `riku hello` is an error.
+To run your own code on the server, use a lifecycle hook above, an event
+subscriber (see [Plugin Bundles](plugin-bundles.md)), or `riku run`.
 
 ---
 
 ## Client-Side Plugins
 
-Client-side plugins extend the `riku` command with local functionality. They enable commands that require coordination between your local machine and the Riku server.
+A client plugin replaces one riku command on your laptop. Riku looks for
+`~/.riku/client-plugins/<command>` and, when it exists and is executable,
+runs it instead of the built in command. Only these ten commands can be
+replaced: `apps`, `config`, `deploy`, `destroy`, `logs`, `ps`, `stats`,
+`run`, `restart`, `stop`. A file with any other name is never run.
 
 ### Plugin Location
 
 ```
 ~/.riku/client-plugins/
-├── open
-├── backup
-├── tunnel
-└── custom-plugin
+├── logs
+└── deploy
 ```
 
 ### Plugin Interface
@@ -227,53 +172,30 @@ Client plugins receive these arguments:
 
 | Argument | Description | Example |
 |----------|-------------|---------|
-| `$1` | Server | `riku@myserver.com` |
-| `$2` | App name | `myapp` |
-| `$3` | Full command | `backup:data` |
+| `$1` | Server address, empty when the command runs locally | `riku@edge.example` |
+| `$2` | App name, empty when left out | `myapp` |
+| `$3` | Command | `logs`, `config:get:PORT`, `config:set` |
 | `$4+` | Additional arguments | (varies) |
 
 ### Example Client Plugin
 
+Keeps a local copy of every log you read:
+
 ```bash
 #!/bin/sh
-# ~/.riku/client-plugins/open
+# ~/.riku/client-plugins/logs
 
 server="$1"
 app="$2"
-cmd="$3"
 shift 3
 
-case "$cmd" in
-    open)
-        # Fetch the domain from server config
-        domain=$(ssh "$server" config:get "$app" RIKU_DOMAINS)
-        if [ -n "$domain" ]; then
-            # Open in browser
-            xdg-open "https://$domain" 2>/dev/null || \
-            open "https://$domain" 2>/dev/null || \
-            echo "Open https://$domain in your browser"
-        else
-            echo "No domain configured for $app"
-            exit 1
-        fi
-        ;;
-    *)
-        echo "Unknown command: $cmd"
-        exit 1
-        ;;
-esac
+ssh "$server" logs "$app" "$@" | tee -a "./$app.log"
 ```
 
-Make it executable:
+Make it executable, then `riku logs myapp` runs it:
 
 ```bash
-chmod +x ~/.riku/client-plugins/open
-```
-
-Invoke:
-
-```bash
-riku open
+chmod +x ~/.riku/client-plugins/logs
 ```
 
 ---
@@ -296,7 +218,7 @@ scp "$server:.riku/apps/$app/file" .
 
 Port forwarding does not work through the deploy key: it is installed with
 `no-port-forwarding`, so `ssh -N -L ...` to it is refused. Forward ports
-through an admin login on the server instead (see the tunnel plugin below).
+through an admin login on the server instead.
 
 ### What Doesn't Work
 
@@ -323,14 +245,12 @@ ssh "$server" "ls -la"  # Fails
 ### List Installed Plugins
 
 ```bash
-# Server-side plugins
-riku plugin list
-
-# Client-side plugins
-ls -la ~/.riku/client-plugins/
+riku plugin list     # client plugins in ~/.riku/client-plugins/
+riku hook list       # lifecycle hooks in ~/.riku/plugins/
+riku plugins list    # installed plugin bundles
 ```
 
-### Check if a Plugin Exists
+### Check if a Client Plugin Exists
 
 ```bash
 riku plugin exists <name>
@@ -357,233 +277,6 @@ chmod +x ~/.riku/plugins/plugin-name
 ```bash
 rm ~/.riku/plugins/plugin-name
 rm ~/.riku/client-plugins/plugin-name
-```
-
----
-
-## Example Plugins
-
-### Backup Plugin (Client-Side)
-
-Downloads app files to a local directory.
-
-```bash
-#!/bin/sh
-# ~/.riku/client-plugins/backup
-
-server="$1"
-app="$2"
-cmd="$3"
-shift 3
-
-backup_dir="./${app}-$(date +%Y%m%d-%H%M%S)"
-
-case "$cmd" in
-    backup)
-        mkdir -p "$backup_dir"
-        echo "Backing up $app to $backup_dir..."
-        scp -r "$server:.riku/apps/$app/" "$backup_dir/"
-        echo "Backup complete!"
-        ;;
-    backup:data)
-        mkdir -p "$backup_dir"
-        echo "Backing up data only..."
-        scp -r "$server:.riku/data/$app/" "$backup_dir/data/"
-        echo "Data backup complete!"
-        ;;
-    *)
-        echo "Usage: riku backup [data]"
-        exit 1
-        ;;
-esac
-```
-
-### Tunnel Plugin (Client-Side)
-
-Creates SSH port tunnels to access services on the server. The deploy key
-cannot forward ports, so the tunnel goes through an admin login named in
-`ADMIN_LOGIN` (for example `admin@edge.example`), not through `$server`.
-
-```bash
-#!/bin/sh
-# ~/.riku/client-plugins/tunnel
-
-server="$1"
-app="$2"
-cmd="$3"
-local_port="$4"
-remote_port="$5"
-shift 5
-
-login="${ADMIN_LOGIN:?set ADMIN_LOGIN to an ssh login that may forward ports}"
-
-case "$cmd" in
-    tunnel)
-        if [ -z "$local_port" ] || [ -z "$remote_port" ]; then
-            echo "Usage: riku tunnel <local_port> <remote_port>"
-            exit 1
-        fi
-        echo "Creating tunnel: localhost:$local_port -> server:$remote_port"
-        ssh -N -L "$local_port:localhost:$remote_port" "$login"
-        ;;
-    tunnel:db)
-        case "$local_port" in
-            postgres|pg)
-                remote_port=5432
-                ;;
-            redis)
-                remote_port=6379
-                ;;
-            mysql)
-                remote_port=3306
-                ;;
-            *)
-                echo "Unknown database: $local_port"
-                exit 1
-                ;;
-        esac
-        echo "Creating tunnel for $local_port (port $remote_port)..."
-        ssh -N -L "$remote_port:localhost:$remote_port" "$login"
-        ;;
-    *)
-        echo "Usage: riku tunnel <local_port> <remote_port>"
-        echo "       riku tunnel:db <postgres|redis|mysql>"
-        exit 1
-        ;;
-esac
-```
-
-### Migration Plugin (Server-Side)
-
-Runs database migrations after deployment.
-
-```bash
-#!/bin/sh
-# ~/.riku/plugins/migrate
-
-app="$1"
-shift
-
-ENV_FILE="$HOME/.riku/envs/$app/ENV"
-
-# Load environment
-if [ -f "$ENV_FILE" ]; then
-    set -a
-    . "$ENV_FILE"
-    set +a
-fi
-
-echo "Running migrations for $app..."
-
-# Detect runtime and run appropriate migrations
-if [ -f "$HOME/.riku/apps/$app/manage.py" ]; then
-    # Django
-    cd "$HOME/.riku/apps/$app"
-    python manage.py migrate
-elif [ -f "$HOME/.riku/apps/$app/package.json" ]; then
-    # Node.js
-    cd "$HOME/.riku/apps/$app"
-    npm run migrate
-else
-    echo "No migrations found for $app"
-fi
-```
-
----
-
-## Combining Client and Server Plugins
-
-Client plugins can coordinate with server-side plugins for complex workflows.
-
-### Example: VS Code Remote
-
-**Server plugin** (`~/.riku/plugins/code-tunnel`):
-```bash
-#!/bin/sh
-app="$1"
-tunnel_name="riku-$app"
-
-case "$2" in
-    ensure)
-        # Start tunnel if not running
-        if ! pgrep -f "code-tunnel.*$tunnel_name" > /dev/null; then
-            code tunnel --name "$tunnel_name" &
-        fi
-        echo "$tunnel_name"
-        ;;
-    stop)
-        pkill -f "code-tunnel.*$tunnel_name"
-        ;;
-esac
-```
-
-**Client plugin** (`~/.riku/client-plugins/code`):
-```bash
-#!/bin/sh
-server="$1"
-app="$2"
-cmd="$3"
-shift 3
-
-case "$cmd" in
-    code)
-        # Ensure tunnel is running on server
-        tunnel_name=$(ssh "$server" code-tunnel:ensure "$app")
-        # Launch local VS Code
-        code --remote "tunnel+$tunnel_name" "/home/riku/.riku/apps/$app"
-        ;;
-    code:stop)
-        ssh "$server" code-tunnel:stop "$app"
-        ;;
-esac
-```
-
----
-
-## Plugin Development Tips
-
-1. **Keep it simple** - Plugins should do one thing well
-2. **Handle errors** - Check for missing files, invalid args
-3. **Provide help** - Show usage when called without args
-4. **Use exit codes** - `0` for success, non-zero for errors
-5. **Document** - Add comments and a README
-6. **Test locally** - Test plugins before deploying
-
-### Plugin Template
-
-```bash
-#!/bin/sh
-# ~/.riku/plugins/my-plugin
-
-# Parse arguments
-app="$1"
-shift
-
-# Validate
-if [ -z "$app" ]; then
-    echo "Usage: riku my-plugin <app> [options]"
-    exit 1
-fi
-
-# Check app exists
-if [ ! -d "$HOME/.riku/apps/$app" ]; then
-    echo "App '$app' not found"
-    exit 1
-fi
-
-# Load environment
-ENV_FILE="$HOME/.riku/envs/$app/ENV"
-if [ -f "$ENV_FILE" ]; then
-    set -a
-    . "$ENV_FILE"
-    set +a
-fi
-
-# Main logic
-echo "Running my-plugin for $app..."
-# Your code here
-
-echo "Done!"
 ```
 
 ---

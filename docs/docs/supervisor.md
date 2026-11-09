@@ -232,12 +232,6 @@ git push riku main
 riku ps myapp --scale web=4 worker=2
 ```
 
-### Using Environment Variable
-
-```bash
-riku config set myapp RIKU_WORKER_PROCESSES="web=4,worker=2"
-```
-
 ---
 
 ## Health Checks
@@ -264,10 +258,14 @@ When a process fails:
 
 Configure restart behavior:
 
-```bash
-riku config set myapp RIKU_WORKER_TIMEOUT=3600
-riku config set myapp RIKU_MAX_RESTARTS=10
+```toml
+# riku.toml
+[workers]
+timeout = 3600
+max_restarts = 10
 ```
+
+Or on the server: `riku settings set myapp workers.timeout=3600 workers.max_restarts=10`.
 
 ---
 
@@ -453,7 +451,7 @@ ps aux | grep myapp
 
 2. **Increase timeout:**
    ```bash
-   riku config set myapp RIKU_WORKER_TIMEOUT=7200
+   riku settings set myapp workers.timeout=7200
    ```
 
 3. **Check resource limits:**

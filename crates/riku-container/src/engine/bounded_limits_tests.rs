@@ -7,6 +7,7 @@ use crate::engine::{BuildSpec, ContainerId};
 
 fn short_limits() -> EngineSettings {
     EngineSettings {
+        program: None,
         call_timeout: Duration::from_millis(300),
         stop_extra: Duration::from_millis(300),
         pull_timeout: Duration::from_millis(300),
@@ -113,6 +114,7 @@ fn wait_uses_the_build_limit_not_the_call_limit() {
     let dir = tempfile::tempdir().unwrap();
     let (engine, _log) = logging_engine(dir.path(), "case \"$1\" in wait) sleep 1; echo 7;; esac");
     let engine = engine.with_settings(EngineSettings {
+        program: None,
         call_timeout: Duration::from_millis(200),
         stop_extra: Duration::from_millis(300),
         pull_timeout: Duration::from_millis(300),
