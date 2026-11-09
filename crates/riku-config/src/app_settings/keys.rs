@@ -105,8 +105,6 @@ pub const KEYS: &[Key] = &[
         Kind::Flag,
     ),
     server("routing", "bind_address", "RIKU_BIND_ADDRESS", Kind::Text),
-    key("tls", "acme_email", "RIKU_ACME_EMAIL", Kind::Text),
-    server("tls", "acme_root_ca", "RIKU_ACME_ROOT_CA", Kind::Text),
     key("runtime", "name", "RIKU_RUNTIME", Kind::Text),
     Key {
         section: "runtime",
@@ -116,13 +114,6 @@ pub const KEYS: &[Key] = &[
         scope: Scope::Any,
         secret: false,
     },
-    key(
-        "runtime",
-        "python_package_manager",
-        "RIKU_PYTHON_PACKAGE_MANAGER",
-        Kind::Text,
-    ),
-    key("workers", "processes", "RIKU_WORKER_PROCESSES", Kind::Int),
     key("workers", "timeout", "RIKU_WORKER_TIMEOUT", Kind::Int),
     key(
         "workers",
