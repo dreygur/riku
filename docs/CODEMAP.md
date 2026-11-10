@@ -374,7 +374,7 @@ Entry: `Cli`, `Commands`, `require_app` (src/cli.rs); `placement_of`, `client_ru
 
 Gotchas:
 - `help.rs` hardcodes the client program name `"rk"` because riku-remote depends on this crate.
-- `cli.rs` hardcodes `version = "0.1.2"` in the clap attribute, separate from Cargo.toml's crate version (0.1.0 here); bump both on release.
+- `cli.rs` takes the clap version from `CARGO_PKG_VERSION`, the one workspace version in the root Cargo.toml; the release workflow checks the tag matches it.
 - `placement_of` lists the hidden internal commands (`__ns-shim`, `__dump-state`) as Server; adding a `Commands` variant also needs `dispatch::run_local` in riku-cli (exhaustive match).
 
 ## riku-cli
