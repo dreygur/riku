@@ -23,14 +23,24 @@ comes from plugins.
 ### Installing Bundled Plugins
 
 ```bash
-riku install-plugins                          # all bundled runtime plugins
+riku plugins install node                     # one runtime, by name
+rk plugins install node                       # the same, from your laptop
+riku install-plugins                          # all default runtime plugins
 riku install-plugins --plugins node,python   # specific plugins only
 ```
 
-Bundled runtime plugins installed by default: `node`, `python`, `ruby`, `go`,
-`rust-lang`. The `java` and `clojure` plugins are prebuilt binaries and are
-installed only when named (`--plugins java,clojure`). Container apps need no
-runtime plugin. The same command also installs the
+`riku plugins install <name>` with a shipped runtime name installs that
+runtime; anything with a `/`, a `:` or ending in `.git` is a plugin bundle
+source instead. To install a local directory that shares a runtime's name,
+write it as `./node`.
+
+The shell runtimes `node`, `python`, `ruby`, `go` and `rust-lang` are built
+into the riku binary and written out on demand, so they install offline and
+always match the riku version. They are the default set. The `java` and
+`clojure` plugins are prebuilt binaries downloaded from the GitHub release of
+the running riku version and checked against the published `.sha256` file; a
+mismatch is an error and nothing is written. They are installed only when
+named. Container apps need no runtime plugin. The same command also installs the
 first-party **event-subscriber** bundle `riku-notify` (`riku install-plugins
 --plugins riku-notify`, not installed by default), see
 [Plugin Bundles](plugin-bundles.md#event-subscribers-notifiers).
@@ -67,7 +77,13 @@ RIKU_ROOT         riku root (~/.riku)
 
 1. If `RIKU_RUNTIME=<name>` is set in the app ENV → use that plugin, skip detection
 2. Otherwise → run `detect` on all non-`riku-*` plugins sorted alphabetically; first exit 0 wins
-3. If no plugin matches → deploy fails with: `"No runtime plugin matched. Run 'riku install-plugins' or set RIKU_RUNTIME=<name>."`
+3. If no plugin matches, the deploy fails. When the app's files call for a
+   shipped runtime that is not installed (`package.json` for node,
+   `requirements.txt` for python, and so on), or `RIKU_RUNTIME` names one, the
+   error names it: `app 'myapp' needs the node plugin. Install it with: rk
+   plugins install node (on the server: riku plugins install node), then push
+   again.` Otherwise it says `No runtime plugin matched` and suggests
+   `RIKU_RUNTIME=<name>`.
 
 ### Writing a Custom Runtime Plugin
 

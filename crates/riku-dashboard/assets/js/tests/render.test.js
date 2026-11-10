@@ -42,6 +42,6 @@ test("service controls escape the service name everywhere it appears", () => {
 
 test("the empty panel escapes the host in the copy commands, and hides loopback names", () => {
   assertNoRawMarkup(emptyHtml(EVIL));
-  assert.equal(pushHost("127.0.0.1"), "your-server");
+  assert.equal(pushHost("127.0.0.1"), "<host>");
   assert.equal(pushHost("deploy.example.com"), "deploy.example.com");
 });

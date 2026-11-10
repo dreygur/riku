@@ -35,13 +35,13 @@ export function skeletonHtml() {
  * @param {string} host the page's location.hostname
  */
 export function pushHost(host) {
-  return !host || LOOPBACK_HOSTS.includes(host) ? "your-server" : host;
+  return !host || LOOPBACK_HOSTS.includes(host) ? "<host>" : host;
 }
 
 /** @param {string} hostname the page's location.hostname */
 export function emptyHtml(hostname) {
   const host = pushHost(hostname);
-  const cmds = [`git remote add riku riku@${host}:your-app`, "git push riku main"];
+  const cmds = [`rk server add <name> riku@${host} --admin <login>@${host}`, "git push riku main"];
   return `<div class="panel">
       <div><h2>Nothing deployed yet</h2><p>riku picks up an app as soon as you push it.</p></div>
       <div class="cmds">${cmds.map((c, i) => `<div class="cmd"><span class="n">${i + 1}</span><code${i ? ' class="c-ok"' : ""}>${esc(c)}</code><button type="button" data-copy="${esc(c)}">Copy</button></div>`).join("")}</div>

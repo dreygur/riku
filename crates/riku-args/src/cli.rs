@@ -3,14 +3,15 @@
 use clap::{Parser, Subcommand};
 
 use crate::cmds::{
-    AddonCmd, AppsCmd, ConfigCmd, HookCmd, PluginCmd, PluginsCmd, ServerCmd, SettingsCmd, StatsCmd,
+    AddonCmd, AppsCmd, ConfigCmd, DeployKeyCmd, HookCmd, PluginCmd, PluginsCmd, ServerCmd,
+    SettingsCmd, StatsCmd,
 };
 
 /// riku: the smallest PaaS you've ever seen (Rust edition)
 #[derive(Parser, Debug)]
 #[command(
     name = "riku",
-    version = "0.1.2",
+    version = env!("CARGO_PKG_VERSION"),
     about = "riku: the smallest PaaS you've ever seen (Rust edition)",
     long_about = "riku is a single-binary micro-PaaS that provides Heroku-like git push deployments.\nManage apps, config, processes, and plugins, all from one tool."
 )]
@@ -251,7 +252,18 @@ pub enum Commands {
         /// re-runs init as the deploy user.
         #[arg(long, hide = true)]
         user_steps: bool,
+        /// With --user-steps, only authorize the --add-key keys. Passed by
+        /// `riku deploy-key add`.
+        #[arg(long, hide = true, requires = "user_steps")]
+        keys_only: bool,
     },
+
+    /// Authorize a deploy key on this server (needs sudo)
+    #[command(
+        subcommand,
+        after_help = "Examples:\n  sudo riku deploy-key add 'ssh-ed25519 AAAA... me@laptop'"
+    )]
+    DeployKey(DeployKeyCmd),
 
     /// Scaffold a sample app and print deploy instructions (runs locally)
     #[command(

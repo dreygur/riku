@@ -6,14 +6,20 @@ use std::fs;
 use crate::config::RikuPaths;
 use crate::util::display;
 
+/// How to push an app from the laptop. The server cannot know the name the
+/// laptop reaches it by, so `<host>` stays for the developer to fill in.
+pub(super) fn print_first_deploy_hint() {
+    display::warn("From your app's git repo on your laptop:");
+    display::warn("  rk server add <name> riku@<host> --admin <login>@<host>");
+    display::warn("  git push riku main");
+}
+
 /// List apps, marking running ones with '*'.
 pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
     let app_root = &paths.app_root;
     if !app_root.exists() {
         display::note("There are no applications deployed.");
-        display::warn("Deploy your first app:");
-        display::warn("  git remote add riku riku@your-server:myapp");
-        display::warn("  git push riku main");
+        print_first_deploy_hint();
         return Ok(());
     }
 
@@ -25,9 +31,7 @@ pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
 
     if apps.is_empty() {
         display::note("There are no applications deployed.");
-        display::warn("Deploy your first app:");
-        display::warn("  git remote add riku riku@your-server:myapp");
-        display::warn("  git push riku main");
+        print_first_deploy_hint();
         return Ok(());
     }
 

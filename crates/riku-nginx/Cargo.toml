@@ -1,6 +1,6 @@
 [package]
 name = "riku-nginx"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 description = "Riku nginx configuration generation (service layer)"
 authors = ["Rakibul Yeasin"]

@@ -17,6 +17,7 @@ use super::guidance::{print_finish, InstallScope};
 use super::init_router::persist_router;
 use super::prerequisites::{check_prerequisites, warn_not_root};
 use super::root_init::root_init;
+use super::router_choice;
 use super::ssh::setup_ssh_key_interactive;
 use super::stale_binary::remove_stale_binary;
 use super::systemd::setup_systemd_service;
@@ -124,6 +125,9 @@ pub struct InitOptions {
     pub no_systemd: bool,
     /// Set by a root init when it runs the per-user steps as the deploy user.
     pub user_steps: bool,
+    /// With `user_steps`, only authorize `add_keys`: set by
+    /// `riku deploy-key add`, which must not touch the tree or the router.
+    pub keys_only: bool,
     /// `--ssh-key`: a `.pub` or `authorized_keys` file whose keys to authorize.
     pub ssh_key: Option<PathBuf>,
     /// Keys a root init already read and validated, for the per-user run.
@@ -157,24 +161,59 @@ fn ssh_key_step(options: &InitOptions) -> Result<()> {
     added
 }
 
+/// The router this init sets up. In the user steps of a root init, root has
+/// already chosen and passed it as `RIKU_ROUTER`. A plain init chooses
+/// itself; `fresh` is read before anything is created.
+#[allow(clippy::question_mark)]
+fn init_router_choice(paths: &RikuPaths, user_steps: bool) -> Result<Router> {
+    let requested = router_choice::requested_router();
+    if user_steps {
+        return match requested {
+            Some(router) => Ok(router),
+            None => Router::load(paths),
+        };
+    }
+    let fresh = matches!(
+        std::fs::symlink_metadata(&paths.riku_root),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound
+    );
+    let stored = match crate::config::router::stored(paths) {
+        Ok(stored) => stored,
+        Err(e) => return Err(e),
+    };
+    router_choice::resolve(router_choice::choose_router(
+        &router_choice::installed_routers(),
+        requested,
+        stored,
+        fresh,
+        router_choice::interactive(),
+    ))
+}
+
 /// Init for the user running it, in that user's own tree. With
 /// `user_steps`, a root init is driving: the warning, prerequisites and
 /// systemd step are root's to do, and root prints the summary.
 #[allow(clippy::question_mark)]
 fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
     let user_steps = options.user_steps;
+    if user_steps && options.keys_only {
+        return ssh_key_step(options);
+    }
     if !user_steps {
         if let Err(e) = require_root_binary() {
             return Err(e);
         }
     }
-    let router = match persist_router(paths) {
+    let router = match init_router_choice(paths, user_steps) {
         Ok(router) => router,
         Err(e) => return Err(e),
     };
+    if let Err(e) = persist_router(paths, &router) {
+        return Err(e);
+    }
     if !user_steps {
         warn_not_root(&router);
-        check_prerequisites(false, &router);
+        check_prerequisites();
         echo("-----> Initializing Riku server...", "");
         echo("", "");
     }

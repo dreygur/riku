@@ -85,12 +85,11 @@ pub fn cmd_apps_create(paths: &RikuPaths, name: &str) -> Result<()> {
 
     echo(&format!("App '{}' created successfully!", app), "green");
     echo("", "");
-    echo("Deploy your code:", "yellow");
+    super::list::print_first_deploy_hint();
     echo(
-        &format!("  git remote add riku riku@your-server:{}", app),
+        &format!("  The repo directory name is the app name, so name it '{app}'."),
         "yellow",
     );
-    echo("  git push riku main", "yellow");
     echo("", "");
 
     Ok(())

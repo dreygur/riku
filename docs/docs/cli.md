@@ -48,13 +48,22 @@ riku server remove edge
 
 | Subcommand | Description |
 |------------|-------------|
-| `add <name> <user@host> [--admin <user@host>]` | Register a server. A name that already exists is an error |
+| `add <name> <user@host> [--admin <user@host>] [--key PATH]` | Register a server, authorize your public key on it and add the repo's `riku` remote (see below). A name that already exists is an error |
 | `list` | Show name, address and admin login. The default is marked with `*` |
 | `remove <name>` | Forget a server. Removing the default leaves no default |
 | `default <name>` | Make a registered server the default |
 
 The first server you add is not made the default. Run `riku server default
 <name>` to pick one.
+
+After saving the entry, `add` authorizes your public key for pushes: `--key
+PATH`, else `~/.ssh/id_ed25519.pub`, else `~/.ssh/id_rsa.pub`. With `--admin`
+it runs `ssh -t <admin> sudo riku deploy-key add --user <user> '<key>'` (the user from `<user@host>`), so sudo can ask for
+the password; without one it prints that command to run on the server. Only
+the key type and data are sent. Run inside a git repo, `add` also adds a
+`riku` remote pointing at `<user@host>:<repo directory name>`, unless the repo
+already has a `riku` remote or one pointing at that server. A failed key step
+keeps the entry and prints the command to run by hand.
 
 A name is 1 to 32 characters of `a-z`, `0-9`, `_` or `-`, starting with a
 letter or digit. An address is `user@host`: the host is a hostname, an IPv4
@@ -105,7 +114,7 @@ There is no confirmation prompt.
 | Where | Commands |
 |-------|----------|
 | Local, always | `server`, `quickstart`, `container`, `plugin` |
-| Server only | `init`, `supervisor`, `plugin-emit`, and the hidden git and internal commands |
+| Server only | `init`, `deploy-key`, `supervisor`, `plugin-emit`, and the hidden git and internal commands |
 | Forwarded | `apps`, `ps`, `logs`, `stats`, `config`, `deploy`, `restart`, `stop`, `destroy`, `rollback`, `run`, `backup`, `restore`, `addon`, `doctor`, `update`, `agent`, `install-plugins`, `plugins`, `hook` |
 
 Giving `-s` to a server only command is refused: `use --local to run it here`.
@@ -571,7 +580,8 @@ Install/list/remove manifest-based plugin bundles and manage marketplaces. See
 ```bash
 riku plugins search <query>        # Search registered marketplaces
 riku plugins add <name[@market]>   # Install a plugin by name
-riku plugins install <path|url>    # Install from a local path or git URL
+riku plugins install <name>        # Install a shipped runtime (node, python, ruby, go, rust-lang, java, clojure)
+riku plugins install <path|url>    # Install from a local path (./name) or git URL
 riku plugins list                  # List installed bundles
 riku plugins remove <name>         # Remove an installed bundle
 riku plugins doctor                # Validate API compatibility + integrity
@@ -635,7 +645,7 @@ riku quickstart myapp --remote riku@example.com
 | Option | Description |
 |--------|-------------|
 | `--runtime <RUNTIME>` | Runtime to scaffold: `python` or `node` (default: `python`) |
-| `--remote <REMOTE>` | Deploy target for the git remote line, e.g. `riku@your-server` |
+| `--remote <REMOTE>` | Deploy target for the git remote line, e.g. `riku@edge.example`. Default: the default registered server; with none, the steps say `rk server add` |
 
 ---
 
@@ -660,6 +670,26 @@ Creates:
 - `~/.riku/acme/` - SSL certificates
 
 As root, also installs the riku binary to `/usr/local/bin/riku` (root owned) and generates the systemd service.
+
+The router comes from `RIKU_ROUTER` when set, else the one already stored.
+A fresh install uses the only router installed (nginx or Caddy), asks when
+both are and init has a terminal, and otherwise stops with what to do. An
+existing install without a stored router keeps nginx when nginx is installed.
+
+---
+
+### `riku deploy-key add [--user NAME] '<key>'`
+
+Authorize one public key for `git push`. Root only, on the server.
+
+```bash
+sudo riku deploy-key add 'ssh-ed25519 AAAA... me@laptop'
+```
+
+`--user` names the deploy account (default: `RIKU_USER`, else `riku`; sudo drops `RIKU_USER`, so pass `--user` for a custom account). The account must have a `~/.riku` directory. Takes exactly one key line; a second line is refused. Options before the key
+type and the comment after it are dropped. The deploy user writes the key to
+its own `authorized_keys`, forced through riku, and a key already there is
+skipped. `rk server add --admin` runs this for you.
 
 ---
 

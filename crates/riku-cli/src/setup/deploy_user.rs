@@ -72,7 +72,11 @@ impl DeployUser {
     /// does not guess a home: acting on a guessed path is worse than failing.
     #[allow(clippy::question_mark)]
     pub fn lookup() -> Result<Self> {
-        let name = deploy_user_name();
+        Self::lookup_named(deploy_user_name())
+    }
+
+    /// The account `name` from the passwd database.
+    pub fn lookup_named(name: String) -> Result<Self> {
         let entry = match User::from_name(&name) {
             Ok(Some(entry)) => entry,
             Ok(None) => {

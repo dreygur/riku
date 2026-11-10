@@ -15,6 +15,15 @@ fn missing_file_means_nginx() {
 }
 
 #[test]
+fn stored_is_none_without_settings_or_file() {
+    let (_tmp, paths) = paths();
+    assert_eq!(stored(&paths).unwrap(), None);
+
+    std::fs::write(&paths.router_file, "caddy\n").unwrap();
+    assert_eq!(stored(&paths).unwrap(), Some(Router::Caddy));
+}
+
+#[test]
 fn trims_and_folds_case() {
     let (_tmp, paths) = paths();
 

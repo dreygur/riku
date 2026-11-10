@@ -10,7 +10,8 @@ use std::path::Path;
 use anyhow::{anyhow, Result};
 
 use crate::config::RikuPaths;
-use crate::plugins::runtime::{RuntimeContext, RuntimePlugin};
+use crate::plugins::runtime::{MissingRuntime, RuntimeContext, RuntimePlugin};
+use crate::util::runtime_markers::{is_bundled_runtime, needed_runtime};
 use crate::util::{deploy_logger::DeployLogger, echo};
 use crate::{env_setup, hooks, workers};
 
@@ -20,6 +21,15 @@ struct PluginOutput {
     start_cmd: Option<String>,
 }
 
+fn install_hint(app: &str, runtime: &str) -> anyhow::Error {
+    anyhow!(
+        "app '{app}' needs the {runtime} plugin. Install it with: rk plugins install {runtime} \
+         (on the server: riku plugins install {runtime}), then push again."
+    )
+}
+
+/// The installed plugin that builds `app`. When none does and the app needs
+/// a runtime riku ships, the error names the command that installs it.
 fn detect_runtime(
     app: &str,
     app_path: &Path,
@@ -29,10 +39,20 @@ fn detect_runtime(
     let plugins = crate::plugins::runtime::discover(&paths.plugin_root);
     match crate::plugins::runtime::detect(&plugins, app_path, env) {
         Ok(Some(plugin)) => Ok(plugin),
-        Ok(None) => Err(anyhow!(
-            "No runtime plugin matched '{app}'. Run 'riku install-plugins' or set RIKU_RUNTIME=<name> in the app env."
-        )),
-        Err(e) => Err(e),
+        Ok(None) => match needed_runtime(app_path) {
+            Some(name) if !plugins.iter().any(|p| p.name == name) => {
+                Err(install_hint(app, name))
+            }
+            _ => Err(anyhow!(
+                "No runtime plugin matched '{app}'. Run 'riku install-plugins' or set RIKU_RUNTIME=<name> in the app env."
+            )),
+        },
+        Err(e) => match e.downcast_ref::<MissingRuntime>() {
+            Some(missing) if is_bundled_runtime(&missing.name) => {
+                Err(install_hint(app, &missing.name))
+            }
+            _ => Err(e),
+        },
     }
 }
 
@@ -164,3 +184,7 @@ pub(crate) fn deploy_procfile_app(
         Err(e) => Err(e),
     }
 }
+
+#[cfg(test)]
+#[path = "procfile_deploy_tests.rs"]
+mod tests;

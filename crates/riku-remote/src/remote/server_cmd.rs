@@ -8,6 +8,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 
+use super::server_add::{chosen_key, finish_add};
 use super::store;
 use super::types::{Server, ServerList, ServerName, SshAddress};
 use crate::cmds::ServerCmd;
@@ -69,20 +70,30 @@ fn mutate(path: &Path, change: impl FnOnce(&mut ServerList) -> Result<()>) -> Re
     store::save(path, &list)
 }
 
-/// Runs a server subcommand against the list stored at `path`.
+/// Runs a server subcommand against the list stored at `path`. `add` also
+/// sets up the git remote of the repo at `repo_dir`.
 #[allow(clippy::question_mark)]
-pub fn run_at(path: &Path, cmd: ServerCmd) -> Result<()> {
+pub fn run_at(path: &Path, repo_dir: &Path, cmd: ServerCmd) -> Result<()> {
     match cmd {
         ServerCmd::Add {
             name,
             address,
             admin,
+            key,
         } => {
             let server = match build_server(&name, &address, admin.as_deref()) {
                 Ok(server) => server,
                 Err(e) => return Err(e),
             };
-            mutate(path, |list| list.add(server))
+            let key = match chosen_key(key.as_deref()) {
+                Ok(key) => key,
+                Err(e) => return Err(e),
+            };
+            let saved = server.clone();
+            if let Err(e) = mutate(path, |list| list.add(saved)) {
+                return Err(e);
+            }
+            finish_add(repo_dir, &server, key.as_ref())
         }
         ServerCmd::List => match store::load(path) {
             Ok(list) => {
@@ -111,7 +122,7 @@ pub fn run_at(path: &Path, cmd: ServerCmd) -> Result<()> {
 /// Runs a server subcommand against the current user's server list.
 pub fn run(cmd: ServerCmd) -> Result<()> {
     match store::servers_path() {
-        Ok(path) => run_at(&path, cmd),
+        Ok(path) => run_at(&path, Path::new("."), cmd),
         Err(e) => Err(anyhow!("cannot locate the server list: {e}")),
     }
 }

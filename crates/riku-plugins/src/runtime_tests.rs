@@ -78,6 +78,17 @@ fn discover_sorts_alphabetically() {
 }
 
 #[test]
+fn discover_skips_hidden_files_such_as_a_half_written_plugin() {
+    let tmp = TempDir::new().unwrap();
+    make_plugin(tmp.path(), ".node.123.0.new", "#!/bin/sh\n");
+    make_plugin(tmp.path(), "node", "#!/bin/sh\n");
+
+    let names: Vec<String> = discover(tmp.path()).into_iter().map(|p| p.name).collect();
+
+    assert_eq!(names, vec!["node".to_string()]);
+}
+
+#[test]
 fn discover_skips_non_executable() {
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join("notexec");
@@ -88,12 +99,16 @@ fn discover_skips_non_executable() {
 }
 
 #[test]
-fn detect_runtime_override_missing_plugin_errors() {
+fn missing_riku_runtime_is_a_typed_error() {
     let tmp = TempDir::new().unwrap();
     let plugins = discover(tmp.path());
     let mut env = HashMap::new();
     env.insert("RIKU_RUNTIME".into(), "ghost".into());
-    assert!(detect(&plugins, tmp.path(), &env).is_err());
+    let err = detect(&plugins, tmp.path(), &env).unwrap_err();
+    let missing = err
+        .downcast_ref::<MissingRuntime>()
+        .expect("RIKU_RUNTIME naming no plugin should be MissingRuntime");
+    assert_eq!(missing.name, "ghost");
 }
 
 #[test]

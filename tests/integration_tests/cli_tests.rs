@@ -435,9 +435,11 @@ mod server_cmd {
     use std::path::Path;
     use std::process::{Command, Output, Stdio};
 
+    // HOME has no ~/.ssh key, so `server add --admin` never opens ssh.
     fn riku(config: &Path, args: &[&str]) -> Output {
         Command::new(env!("CARGO_BIN_EXE_riku"))
             .args(args)
+            .env("HOME", config)
             .env("XDG_CONFIG_HOME", config)
             .env_remove("SSH_ORIGINAL_COMMAND")
             .current_dir(config)

@@ -362,6 +362,19 @@ pub enum MarketplaceCmd {
     },
 }
 
+/// Deploy key commands, run as root on the server.
+#[derive(Subcommand, Debug)]
+pub enum DeployKeyCmd {
+    /// Authorize one public key line for git pushes
+    Add {
+        /// Deploy account to authorize the key for (default: RIKU_USER, else riku)
+        #[arg(long)]
+        user: Option<String>,
+        /// The key line, quoted: type, key data and an optional comment
+        key: String,
+    },
+}
+
 /// Commands that manage the list of remote riku servers on this machine.
 #[derive(Subcommand, Debug)]
 pub enum ServerCmd {
@@ -377,6 +390,10 @@ pub enum ServerCmd {
         /// ssh target of an admin account, as user@host
         #[arg(long)]
         admin: Option<String>,
+        /// Public key to authorize for pushes (default: ~/.ssh/id_ed25519.pub,
+        /// else ~/.ssh/id_rsa.pub)
+        #[arg(long, value_name = "PATH")]
+        key: Option<std::path::PathBuf>,
     },
 
     /// List the servers, marking the default with *

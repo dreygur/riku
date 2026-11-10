@@ -14,6 +14,7 @@ use anyhow::{anyhow, Result};
 use crate::agent::auth::AgentSession;
 use crate::cli::{require_app, Commands};
 use crate::config::RikuPaths;
+use crate::DeployKeyCmd;
 use crate::{agent, apps, backup, doctor, git, quickstart, router_helper, scp, setup};
 
 /// What `riku agent` was asked to do. The flags are checked in this order.
@@ -140,12 +141,17 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
             ssh_key,
             add_key,
             user_steps,
+            keys_only,
         } => setup::cmd_init(setup::InitOptions {
             no_systemd,
             user_steps,
+            keys_only,
             ssh_key,
             add_keys: add_key,
         }),
+        Commands::DeployKey(DeployKeyCmd::Add { user, key }) => {
+            setup::cmd_deploy_key_add(user.as_deref(), &key)
+        }
         Commands::Quickstart {
             name,
             runtime,

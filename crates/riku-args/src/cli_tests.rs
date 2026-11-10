@@ -1,6 +1,16 @@
 use super::*;
 
 #[test]
+fn cli_version_is_the_crate_version() {
+    use clap::CommandFactory;
+
+    assert_eq!(
+        Cli::command().get_version(),
+        Some(env!("CARGO_PKG_VERSION"))
+    );
+}
+
+#[test]
 fn agent_accepts_the_scope_of_a_forced_command() {
     let cli = Cli::try_parse_from(["riku", "agent", "--scope", "staging", "apps"])
         .expect("`riku agent --scope staging` must parse");

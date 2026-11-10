@@ -52,9 +52,16 @@ The script downloads the release asset `rk-<os>-<arch>.tar.gz`, checks it agains
 First use:
 
 ```bash
-rk server add myserver riku@your-server-ip
+rk server add myserver riku@edge.example --admin you@edge.example
 rk -s myserver apps
 ```
+
+`rk server add` saves the server, then authorizes your public key
+(`--key PATH`, else `~/.ssh/id_ed25519.pub` or `~/.ssh/id_rsa.pub`) by running
+`sudo riku deploy-key add --user riku '<key>'` over the admin login (the user comes from the server address); sudo may ask for your
+password. Without `--admin` it prints that command for you to run on the
+server. Run inside your app's git repo, it also adds a `riku` git remote named
+after the repo directory.
 
 See [The rk client](cli.md#the-rk-client) for the full description.
 
@@ -130,7 +137,14 @@ Without `RIKU_DEFAULT_BRANCH`, init keeps a default branch the deploy user alrea
 sudo ./target/release/riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
-This copies the binary to `/usr/local/bin/riku`, creates the deploy user, installs the units and the router helper, and creates the directory structure in the deploy user's home:
+On a fresh install, init first picks the router from what is installed: the
+only one of nginx and Caddy it finds, or a prompt when both are and init has a
+terminal. Without a terminal and with both installed, it stops and asks for
+`RIKU_ROUTER=nginx` or `RIKU_ROUTER=caddy`; with neither, it stops and says to
+install one. `RIKU_ROUTER` always wins, and a rerun keeps the router already
+stored (nginx for older installs that have nginx).
+
+It then copies the binary to `/usr/local/bin/riku`, creates the deploy user, installs the units and the router helper, and creates the directory structure in the deploy user's home:
 ```
 ~/.riku/
 ├── apps/              # Application code
@@ -145,7 +159,13 @@ This copies the binary to `/usr/local/bin/riku`, creates the deploy user, instal
 
 ### Step 5: Set Up SSH Access
 
-`--ssh-key` in step 4 authorized the keys in the file you gave it for `git push`. If you have no key yet, generate one **on your local machine**, add its public key to `~/.ssh/authorized_keys` on the server, and run step 4 again:
+`--ssh-key` in step 4 authorized the keys in the file you gave it for `git push`. To add one key later, run on the server:
+
+```bash
+sudo riku deploy-key add 'ssh-ed25519 AAAA... me@laptop'
+```
+
+It accepts exactly one key line and keeps only the key type and data. From a laptop, `rk server add ... --admin <login>@<host>` runs it for you. If you have no key yet, generate one **on your local machine** first:
 
 ```bash
 ssh-keygen -t ed25519 -C "riku@your-email.com"
