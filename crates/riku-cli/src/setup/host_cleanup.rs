@@ -255,6 +255,7 @@ fn remove_entry(path: &Path) -> Result<()> {
 /// `certs` dir: the router helper keeps apps' own certificates there
 /// (riku-route `caddy_certs.rs`), and it is cleared one level down instead.
 /// Returns what was removed.
+#[allow(clippy::question_mark)]
 pub(super) fn clear_foreign_entries(dir: &Path, root_uid: u32) -> Result<Vec<PathBuf>> {
     let found = match entries(dir) {
         Ok(found) => found,
