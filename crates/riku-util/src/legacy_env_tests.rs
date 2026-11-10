@@ -34,6 +34,18 @@ fn old_key_of_a_dropped_feature_says_remove_it() {
 }
 
 #[test]
+fn riku_names_of_never_read_keys_say_remove_them_too() {
+    let env = env_with(&["RIKU_ACME_EMAIL", "RIKU_PYTHON_PACKAGE_MANAGER"]);
+
+    let found: Vec<&str> = legacy_keys(&env).into_iter().map(|(key, _)| key).collect();
+
+    assert_eq!(found, ["RIKU_ACME_EMAIL", "RIKU_PYTHON_PACKAGE_MANAGER"]);
+    assert!(legacy_keys(&env)
+        .iter()
+        .all(|(_, r)| *r == Replacement::Removed));
+}
+
+#[test]
 fn ignores_lookalike_keys() {
     let env = env_with(&["RIKU_DOMAINS", "NGINX_SERVER_NAME_EXTRA"]);
 

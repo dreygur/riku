@@ -30,7 +30,8 @@ impl Replacement {
     }
 }
 
-/// Every old key and what replaces it. Keys riku sets itself (such as the
+/// Every old key and what replaces it, including the `RIKU_` names of keys
+/// riku documented but never read. Keys riku sets itself (such as the
 /// generated nginx socket path) are left out, since no user ENV carries them.
 pub const RENAMED_KEYS: &[(&str, Replacement)] = &[
     ("NGINX_SERVER_NAME", Key("RIKU_DOMAINS")),
@@ -39,11 +40,14 @@ pub const RENAMED_KEYS: &[(&str, Replacement)] = &[
     ("BIND_ADDRESS", Key("RIKU_BIND_ADDRESS")),
     ("DISABLE_IPV6", Removed),
     ("ACME_EMAIL", Removed),
+    ("RIKU_ACME_EMAIL", Removed),
     ("ACME_ROOT_CA", Removed),
+    ("RIKU_ACME_ROOT_CA", Removed),
     ("ACME_ROOT", Key("RIKU_ACME_ROOT")),
     ("NODE_VERSION", Key("RIKU_NODE_VERSION")),
     ("PYTHON_VERSION", Key("RIKU_PYTHON_VERSION")),
     ("PYTHON_PACKAGE_MANAGER", Removed),
+    ("RIKU_PYTHON_PACKAGE_MANAGER", Removed),
     ("RUNTIME", Key("RIKU_RUNTIME")),
     ("GHCR_USERNAME", Key("RIKU_GHCR_USERNAME")),
     ("GHCR_TOKEN", Key("RIKU_GHCR_TOKEN")),
