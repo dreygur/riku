@@ -13,6 +13,7 @@
 //! `/etc/riku/removed/<time>` directory rather than deleted. The Caddy
 //! directory sweep deletes.
 
+use std::ffi::OsStr;
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
@@ -24,6 +25,9 @@ use riku_util::write_dir::check_write_dir;
 use crate::util::echo;
 
 const REMOVED_ROOT: &str = "/etc/riku/removed";
+/// The Caddy site root's own certificate dir; riku-route `caddy_certs.rs`
+/// `CERT_DIR` names the same one.
+const CERTS_DIR: &str = "certs";
 
 fn entries(dir: &Path) -> Result<Vec<PathBuf>> {
     let listing = match fs::read_dir(dir) {
@@ -200,8 +204,57 @@ pub(super) fn clear_deploy_owned_router_files(
     Ok(moved)
 }
 
+/// Clear `certs/` the way [`clear_foreign_entries`] clears the site root,
+/// one level down: each trusted `certs/<app>` dir keeps its trusted files.
+#[allow(clippy::question_mark)]
+fn clear_cert_dirs(certs: &Path, root_uid: u32) -> Result<Vec<PathBuf>> {
+    let found = match entries(certs) {
+        Ok(found) => found,
+        Err(e) => return Err(anyhow!("{e}")),
+    };
+    let mut removed = Vec::new();
+    for path in found {
+        let trusted = match fs::symlink_metadata(&path) {
+            Ok(meta) => is_trusted_dir(&meta, root_uid),
+            Err(e) => return Err(anyhow!("failed to inspect {}: {e}", path.display())),
+        };
+        let cleared = if trusted {
+            clear_foreign_entries(&path, root_uid)
+        } else {
+            remove_entry(&path).map(|()| vec![path.clone()])
+        };
+        match cleared {
+            Ok(paths) => removed.extend(paths),
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(removed)
+}
+
+fn remove_entry(path: &Path) -> Result<()> {
+    let is_dir = fs::symlink_metadata(path)
+        .map(|meta| meta.is_dir())
+        .unwrap_or(false);
+    let gone = if is_dir {
+        fs::remove_dir_all(path)
+    } else {
+        fs::remove_file(path)
+    };
+    if let Err(e) = gone {
+        return Err(anyhow!("failed to remove {}: {e}", path.display()));
+    }
+    echo(
+        &format!("      removed {}: not a root owned file", path.display()),
+        "yellow",
+    );
+    Ok(())
+}
+
 /// Delete everything in `dir` that is not a regular file owned by
-/// `root_uid`, symlinks and subdirectories included. Returns what was removed.
+/// `root_uid`, symlinks and subdirectories included, except a trusted
+/// `certs` dir: the router helper keeps apps' own certificates there
+/// (riku-route `caddy_certs.rs`), and it is cleared one level down instead.
+/// Returns what was removed.
 pub(super) fn clear_foreign_entries(dir: &Path, root_uid: u32) -> Result<Vec<PathBuf>> {
     let found = match entries(dir) {
         Ok(found) => found,
@@ -216,18 +269,16 @@ pub(super) fn clear_foreign_entries(dir: &Path, root_uid: u32) -> Result<Vec<Pat
         if is_trusted_file(&meta, root_uid) {
             continue;
         }
-        let gone = if meta.is_dir() {
-            fs::remove_dir_all(&path)
-        } else {
-            fs::remove_file(&path)
-        };
-        if let Err(e) = gone {
-            return Err(anyhow!("failed to remove {}: {e}", path.display()));
+        if path.file_name() == Some(OsStr::new(CERTS_DIR)) && is_trusted_dir(&meta, root_uid) {
+            match clear_cert_dirs(&path, root_uid) {
+                Ok(paths) => removed.extend(paths),
+                Err(e) => return Err(e),
+            }
+            continue;
         }
-        echo(
-            &format!("      removed {}: not a root owned file", path.display()),
-            "yellow",
-        );
+        if let Err(e) = remove_entry(&path) {
+            return Err(e);
+        }
         removed.push(path);
     }
     Ok(removed)

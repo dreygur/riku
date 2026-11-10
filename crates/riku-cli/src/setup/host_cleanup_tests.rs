@@ -144,3 +144,28 @@ fn caddy_dir_keeps_only_root_owned_regular_files() {
         .unwrap()
         .is_empty());
 }
+
+#[test]
+fn caddy_dir_keeps_the_own_certificate_dirs_and_clears_inside_them() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("caddy");
+    let shop = dir.join("certs").join("shop");
+    fs::create_dir_all(&shop).unwrap();
+    let me = fs::metadata(&dir).unwrap().uid();
+    fs::write(shop.join("fullchain.pem"), "chain").unwrap();
+    fs::write(shop.join("key.pem"), "key").unwrap();
+    fs::write(tmp.path().join("target"), "x").unwrap();
+    symlink(tmp.path().join("target"), shop.join("planted.pem")).unwrap();
+    fs::write(dir.join("certs").join("stray"), "x").unwrap();
+
+    let removed = clear_foreign_entries(&dir, me).unwrap();
+
+    assert!(
+        shop.join("fullchain.pem").is_file(),
+        "an own certificate was deleted"
+    );
+    assert!(shop.join("key.pem").is_file(), "an own key was deleted");
+    assert!(fs::symlink_metadata(shop.join("planted.pem")).is_err());
+    assert!(!dir.join("certs").join("stray").exists());
+    assert_eq!(removed.len(), 2, "removed {removed:?}");
+}
