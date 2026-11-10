@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4-rc.1] - 2026-11-11
+
+Release candidate, published as a GitHub prerelease, so the installer's
+default (`latest`) does not pick it. It proves the new release workflow
+(eight Linux targets, glibc 2.31 floor). Install it with
+`curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sudo RIKU_VERSION=v0.1.4-rc.1 sh`.
+
 ### Breaking
 
 - The node plugin now honours `RIKU_NODE_VERSION` (riku.toml `[runtime]
