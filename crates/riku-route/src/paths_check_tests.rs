@@ -40,6 +40,7 @@ fn duplicate_app_is_refused() {
 #[test]
 fn privileged_shared_port_is_refused() {
     assert!(check_paths(&Listen { port: 80 }, &[app("shop")]).is_err());
+    assert!(check_paths(&Listen { port: 2019 }, &[app("shop")]).is_err());
 }
 
 #[test]

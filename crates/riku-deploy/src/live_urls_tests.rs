@@ -34,6 +34,13 @@ fn announce_lists_each_domain() {
 }
 
 #[test]
+fn catch_all_name_is_not_a_url() {
+    let lines = live_lines("myapp", &routing(&["_", "a.example"], false), None, false);
+
+    assert_eq!(texts(lines), ["Live at http://a.example"]);
+}
+
+#[test]
 fn issued_fallback_lists_https() {
     let lines = live_lines(
         "myapp",

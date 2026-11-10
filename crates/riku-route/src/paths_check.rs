@@ -9,6 +9,7 @@ use crate::check::backend;
 use crate::schema::{Listen, PathApp, RouteBackend};
 
 const FIRST_UNPRIVILEGED_PORT: u16 = 1024;
+const CADDY_ADMIN_PORT: u16 = 2019;
 
 fn checked_name(raw: &str) -> Result<AppName> {
     match AppName::try_from(raw) {
@@ -38,9 +39,9 @@ fn checked_app(entry: &PathApp) -> Result<(AppName, Vec<RouteBackend>)> {
 /// file name), an app listed twice, or a backend the route gate refuses.
 #[allow(clippy::question_mark)]
 pub fn check_paths(listen: &Listen, apps: &[PathApp]) -> Result<Vec<(AppName, Vec<RouteBackend>)>> {
-    if listen.port < FIRST_UNPRIVILEGED_PORT {
+    if listen.port < FIRST_UNPRIVILEGED_PORT || listen.port == CADDY_ADMIN_PORT {
         return Err(anyhow!(
-            "shared port {} is privileged; use {FIRST_UNPRIVILEGED_PORT} and above",
+            "shared port {} is refused; use {FIRST_UNPRIVILEGED_PORT} and above, not {CADDY_ADMIN_PORT}",
             listen.port
         ));
     }

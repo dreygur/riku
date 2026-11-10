@@ -5,12 +5,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::json;
 
 use crate::config::RikuPaths;
-use crate::util::exit_if_invalid;
+use crate::util::existing_app;
 
 use crate::agent::types::AgentResponse;
 
 pub fn cmd_agent_config_get(paths: &RikuPaths, app: &str, key: &str) -> AgentResponse {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match existing_app(app, &paths.app_root) {
         Ok(a) => a,
         Err(_) => {
             return AgentResponse::error(
@@ -66,7 +66,7 @@ pub fn cmd_agent_config_set(_paths: &RikuPaths, app: &str, settings: &[String]) 
 }
 
 pub fn cmd_agent_config_show(paths: &RikuPaths, app: &str) -> AgentResponse {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match existing_app(app, &paths.app_root) {
         Ok(a) => a,
         Err(_) => {
             return AgentResponse::error(

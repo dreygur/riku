@@ -7,7 +7,7 @@
 //! reject path-traversal sequences so that validated values are safe to use in
 //! file-system operations and environment variable assignments.
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::fs;
 use std::path::Path;
 use std::process;
@@ -81,6 +81,20 @@ pub fn validate_app_name(app: &str) -> Result<String> {
         ));
     }
     Ok(sanitized)
+}
+
+/// The sanitized name of an app that exists under `app_root`, or an error.
+/// It prints nothing and never exits, so a caller that answers in JSON (the
+/// agent commands) keeps control of its output.
+pub fn existing_app(app: &str, app_root: &Path) -> Result<String> {
+    let name = sanitize_app_name(app);
+    if name.is_empty() {
+        return Err(anyhow!("invalid app name '{app}'"));
+    }
+    if !app_root.join(&name).exists() {
+        return Err(anyhow!("app '{name}' not found"));
+    }
+    Ok(name)
 }
 
 /// Sanitize name, check app dir exists, exit(1) if not.

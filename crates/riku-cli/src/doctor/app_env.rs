@@ -26,7 +26,7 @@ fn app_warnings(app_dir: &Path) -> Vec<Check> {
     riku_keys.sort();
     legacy_keys(&env)
         .into_iter()
-        .map(|(old, new)| Check::warn(NAME, format!("{app}: {old} is no longer read, use {new}")))
+        .map(|(old, replacement)| Check::warn(NAME, format!("{app}: {}", replacement.hint(old))))
         .chain(riku_keys.into_iter().map(|key| {
             Check::warn(
                 NAME,

@@ -6,6 +6,9 @@ use std::net::Ipv4Addr;
 use crate::router::app_routing::{AppRouting, RoutingMode};
 pub(crate) use crate::router::routing_state::TlsState;
 
+/// nginx's "any host" name, which is not a URL.
+const CATCH_ALL_NAME: &str = "_";
+
 /// One line of the push output and its colour.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Line {
@@ -83,6 +86,7 @@ pub(crate) fn live_lines(
     routing
         .domains
         .iter()
+        .filter(|domain| domain.as_str() != CATCH_ALL_NAME)
         .map(|domain| line(format!("Live at {scheme}://{domain}"), "green"))
         .collect()
 }

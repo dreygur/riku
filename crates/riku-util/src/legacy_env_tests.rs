@@ -14,7 +14,22 @@ fn reports_old_with_new_name() {
 
     assert_eq!(
         legacy_keys(&env),
-        vec![("NGINX_SERVER_NAME", "RIKU_DOMAINS")]
+        vec![("NGINX_SERVER_NAME", Replacement::Key("RIKU_DOMAINS"))]
+    );
+}
+
+#[test]
+fn old_key_of_a_dropped_feature_says_remove_it() {
+    let env = env_with(&["NGINX_CACHE_PATH", "DISABLE_IPV6", "ACME_EMAIL"]);
+
+    assert_eq!(
+        legacy_keys(&env),
+        vec![
+            ("DISABLE_IPV6", Replacement::Removed),
+            ("ACME_EMAIL", Replacement::Removed),
+            ("NGINX_CACHE_PATH", Replacement::Removed),
+        ],
+        "riku refuses or ignores the new names, so renaming would not help"
     );
 }
 
@@ -28,7 +43,11 @@ fn ignores_lookalike_keys() {
 #[test]
 fn table_is_unique_and_prefixed() {
     let mut seen = HashSet::new();
-    for (old, new) in RENAMED_KEYS {
+    for (old, replacement) in RENAMED_KEYS {
+        let Replacement::Key(new) = replacement else {
+            assert!(seen.insert(*old), "{old} appears twice in RENAMED_KEYS");
+            continue;
+        };
         assert!(new.starts_with("RIKU_"), "{old} maps to unprefixed {new}");
         assert!(seen.insert(*old), "{old} appears twice in RENAMED_KEYS");
     }

@@ -3,6 +3,18 @@ use std::fs;
 use super::*;
 
 #[test]
+fn missing_app_answers_json_instead_of_exiting() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    fs::create_dir_all(&paths.app_root).unwrap();
+
+    let resp = cmd_agent_stop(&paths, tmp.path(), "ghost");
+
+    let code = resp.error.map(|e| e.code);
+    assert_eq!(code.as_deref(), Some("APP_NOT_FOUND"));
+}
+
+#[test]
 fn stop_confirm_refuses_a_token_that_was_never_issued() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());

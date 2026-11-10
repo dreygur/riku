@@ -25,6 +25,18 @@ fn warns_on_renamed_key() {
 }
 
 #[test]
+fn dropped_key_is_reported_as_one_to_remove() {
+    let (_tmp, paths) = paths_with_env("shop", "NGINX_CACHE_PATH=/var/cache\n");
+
+    let checks = renamed_keys(&paths);
+
+    assert_eq!(
+        checks[0].detail,
+        "shop: NGINX_CACHE_PATH is no longer supported; remove it from ENV"
+    );
+}
+
+#[test]
 fn ok_with_only_app_keys() {
     let (_tmp, paths) = paths_with_env("shop", "PORT=5000\nDATABASE_URL=postgres://db\n");
 

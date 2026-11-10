@@ -68,14 +68,14 @@ Gotchas:
 Job: shared leaf helpers: validation, fs, env/Procfile parsing, cron, display, keys, naming. Depends on: none. Used by: riku-caddy, riku-cli, riku-container, riku-dashboard, riku-deploy, riku-nginx, riku-plugins, riku-remote, riku-route, riku-supervisor, riku. Also linked by `rk`, so no heavy deps.
 Entry: re-exports in `src/lib.rs`: `validate_app_name`, `ensure_path_within`, `parse_procfile`, `parse_settings`, `write_config`, `write_atomic`, `write_private`, `create_private_dir`, `get_free_port`, `echo`, `print_table`, `setup_authorized_keys`.
 
-- `src/validation.rs`: `sanitize_app_name`, `validate_app_name`, `exit_if_invalid`, `ensure_path_within`, `REPO_SUFFIX`. Contract: app name keeps only alnum `.` `_` `-`, rejects `..`, dot-only, trailing `.git`; `ensure_path_within` canonicalizes both paths and errors if either does not exist.
+- `src/validation.rs`: `sanitize_app_name`, `validate_app_name`, `existing_app` (error, no output), `exit_if_invalid`, `ensure_path_within`, `REPO_SUFFIX`. Contract: app name keeps only alnum `.` `_` `-`, rejects `..`, dot-only, trailing `.git`; `ensure_path_within` canonicalizes both paths and errors if either does not exist.
 - `src/file_names/`: names derived from an app: `worker.rs` (`WorkerName` `<app>@<kind>.<n>`, config file `<id>.toml`), `copy_socket.rs` (`<app>@<n>.sock`). `@` is the separator because neither app names nor kinds may contain it; do not build these names by hand.
 - `src/fs.rs`: `write_atomic` (tmp + fsync + rename, mode 0666 less umask), `write_private` (0600 from creation), `create_private_dir`, `restrict_to_owner`, `replace_symlink`, `copy_dir_recursive`, `count_files`.
 - `src/write_dir.rs`: `check_write_dir`: root writes only into a real dir owned by `owner` with no group/other write.
 - `src/socket_dir.rs`: uWSGI socket dir, mode 2750 with shared group; `prepare`, `ensure_exists`, `group_id`. Refuses a non-directory (symlink) before chown/chmod.
 - `src/env.rs`: `parse_settings` (KEY=VALUE with `$VAR` expansion, strips control chars; a line without `=` is an error naming file and line, and the caller's map is left untouched), `write_config` (atomic, 0600), `expandvars`.
 - `src/runtime_markers.rs`: `BUNDLED_RUNTIMES`, the runtime plugins riku can install by name, and `needed_runtime`, the shell runtime an app's marker files call for (shared by server and laptop code).
-- `src/legacy_env.rs`: `RENAMED_KEYS`, `legacy_keys`: old env names no longer read; deploy and doctor report them.
+- `src/legacy_env.rs`: `RENAMED_KEYS` (old name to `Replacement::Key(new)` or `Replacement::Removed` when the new name is refused or unread), `legacy_keys`, `Replacement::hint`: deploy and doctor report each old key with the same message.
 - `src/flag.rs`: `is_on`, `https_only`, `https_only_warning`: only explicit yes values are on, typos are off.
 - `src/nginx_validation.rs`: `validate_env_vars`, `print_env_warnings`: warns only, the route gate decides what reaches config.
 - `src/procfile.rs`: `parse_procfile` (None if file missing; any bad line fails the whole parse), `is_valid_kind`. Cron kinds start with `cron` and are checked with `cron::validate_cron_expression`; wsgi supersedes web.
@@ -93,7 +93,7 @@ Entry: re-exports in `src/lib.rs`: `validate_app_name`, `ensure_path_within`, `p
 - `src/root_binary.rs`: `ROOT_BINARY` = `/usr/local/bin/riku`, the one server install path.
 
 Gotchas:
-- `echo` only prints (red goes to stderr). `exit_if_invalid` calls `process::exit(1)` on a bad or unknown app name; fine in CLI, avoid in services and JSON interfaces.
+- `echo` only prints (red goes to stderr). `exit_if_invalid` calls `process::exit(1)` on a bad or unknown app name; fine in CLI. Services and JSON interfaces (the agent commands) use `existing_app`.
 - `lib.rs` module list in the doc comment is incomplete; the `pub mod` lines are authoritative.
 - Doc comments in `procfile.rs` still name `crate::supervisor::cron`; the cron engine now lives in `riku-util/src/cron/`.
 
@@ -159,7 +159,7 @@ Gotchas:
 - deps.edn `start` assumes the main namespace is `core`; apps with another name must override via Procfile.
 
 ## plugins/ (bundled runtime and event plugins)
-Single-file bash runtime plugins, no extension: `node`, `python`, `ruby`, `go`, `rust-lang`. Each takes argv[1] in `detect|build|env|start|destroy`, reads `RIKU_APP_PATH` (fallback cwd). `detect` exit 0 means "mine". `env` prints KEY=VALUE lines, `start` prints the default start command. Triggers: node `package.json`; python `requirements.txt`/`pyproject.toml`/`setup.py`; ruby `Gemfile`; go `go.mod` or `*.go`; rust-lang `Cargo.toml`. node builds with nub (npm fallback, prints the install hint); python builds with uv (`uv sync --locked` with a `uv.lock`, else `uv pip install`; pip fallback with a hint) and a failed install stops the build.
+Single-file bash runtime plugins, no extension: `node`, `python`, `ruby`, `go`, `rust-lang`. Each takes argv[1] in `detect|build|env|start|destroy`, reads `RIKU_APP_PATH` (fallback cwd). `detect` exit 0 means "mine". `env` prints KEY=VALUE lines, `start` prints the default start command. Triggers: node `package.json`; python `requirements.txt`/`pyproject.toml`/`setup.py`; ruby `Gemfile`; go `go.mod` or `*.go`; rust-lang `Cargo.toml`. node builds with nub (npm fallback, prints the install hint; `RIKU_NODE_VERSION` is not used yet); python builds with uv for `RIKU_PYTHON_VERSION` when set (`--python`; pip needs `python<version>` and fails naming the key; a venv made for another version is made again) (`uv sync --locked` with a `uv.lock`, else `uv pip install`; pip fallback with a hint) and a failed install stops the build.
 - `plugins/riku-notify/`: event bundle (not a runtime). `riku-plugin.toml` (type notifier, subscribes `app.restarted`, `app.failed`, mode observe, network capability) and `bin/on-event` (argv `on_event`, JSON envelope on stdin, posts to webhook/Discord/Slack/Telegram per `RIKU_NOTIFY_*` env vars).
 - Built into riku: the five runtimes and `riku-notify` are embedded with `include_bytes!` in `crates/riku-cli/src/apps/embedded_plugins.rs` and written out by `riku install-plugins`; java and clojure are downloaded from this riku's release tag and checked against their `.sha256` (`plugin_download.rs`). A new plugin here must be added to `EMBEDDED` and to `riku_util::runtime_markers::BUNDLED_RUNTIMES` (a test checks they agree).
 - Runtime selection: `RIKU_RUNTIME` override, else first alphabetical `detect` exit 0 (see riku-plugins).
