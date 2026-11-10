@@ -241,7 +241,7 @@ work they describe.
     state, port rules) and 3 (fallback domain, certificate order,
     push URLs) and 4 (port mode, bind check, external port key
     removed), 5 (path mode) and 6 (docs: docs/docs/routing.md) done.
-    Final gate next. Fixed on the way: the first deploy of an https_only
+    Final gate and review done (fixes f46fedd); ready for PR. Fixed on the way: the first deploy of an https_only
     domain issued before any site served the ACME challenge (always self
     signed); the push printed the raw comma list of domains; quick start
     claimed apps answer on the bare IP.
