@@ -232,8 +232,11 @@ work they describe.
     plugins, verified downloads), 3 (plugins install by runtime name),
     4 (router choice at init), 5 (name the missing runtime plugin), 6
     (deploy key and remote from rk server add) and 7 (first run guidance
-    and docs) done. Final gate next.
-  - 2b URLs on first push: not planned yet.
+    and docs) done. Merged in PR #89.
+  - 2b URLs on first push: plan `plans/2026-11-10-url-on-first-push.md`,
+    EGM reviewed (design and implementation readiness, both applied),
+    branch `feat/url-first-push`, native execution. Owner confirmed
+    refusing ports 80 and 443 in port mode. Tasks 1 to 6 not started.
 
 ### After developer experience: small boards and binary size
 
