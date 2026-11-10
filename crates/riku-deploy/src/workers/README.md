@@ -6,7 +6,7 @@ Component package located at `crates/riku-deploy/src/workers`.
 ## Interface
 - `remove_stale_configs` [files.rs:remove_stale_configs] (fn)
 - `write_worker_config` [files.rs:write_worker_config] (fn)
-- `check_pinned_port` [pinned.rs:check_pinned_port] (fn)
+
 - `check_pinned_port_with` [pinned.rs:check_pinned_port_with] (fn)
 - `pinned_port` [ports.rs:pinned_port] (fn)
 - `free_loopback_port` [ports.rs:free_loopback_port] (fn)

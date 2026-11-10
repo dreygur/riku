@@ -63,7 +63,7 @@ fn app_on_port(port: u16, app: &str, paths: &RikuPaths) -> Result<Option<String>
 
 /// Whether some process listens on `port`. Only `AddrInUse` counts: binding
 /// a port below 1024 as a normal user fails for another reason.
-fn port_in_use(port: u16) -> bool {
+pub(super) fn port_in_use(port: u16) -> bool {
     match TcpListener::bind(("127.0.0.1", port)) {
         Ok(_) => false,
         Err(e) => e.kind() == ErrorKind::AddrInUse,
@@ -72,16 +72,9 @@ fn port_in_use(port: u16) -> bool {
 
 /// Refuse a pinned port that is scaled past one process, used by another
 /// app, or held by a process that is not this app's previous deploy.
-pub(super) fn check_pinned_port(
-    app: &str,
-    env: &HashMap<String, String>,
-    paths: &RikuPaths,
-) -> Result<()> {
-    check_pinned_port_with(app, env, paths, port_in_use)
-}
-
-/// [`check_pinned_port`] with the probe for a busy port injected, so a test
-/// of the claim logic does not depend on which ports the host has free.
+/// `in_use` is the probe for a port some process holds ([`port_in_use`] in
+/// a deploy), given so a test does not depend on which ports the host has
+/// free.
 #[allow(clippy::question_mark)]
 pub(super) fn check_pinned_port_with(
     app: &str,

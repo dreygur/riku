@@ -40,7 +40,7 @@ mod web_rollout;
 pub use scaling::read_scaling_count;
 
 use files::{remove_stale_configs, remove_surplus_configs, write_worker_config};
-use pinned::check_pinned_port;
+use pinned::{check_pinned_port_with, port_in_use};
 use socket::check_custom_socket;
 use web_env::{build_worker_env, clear_route_env, is_web_facing};
 use web_rollout::{roll_web_kind, stop_web_kind, WebDeploy, WebRoutes};
@@ -109,7 +109,33 @@ pub(crate) fn create_workers_with(
     start_cmd: Option<&str>,
     routes: &mut impl RouteSink,
 ) -> Result<()> {
-    if let Err(e) = check_pinned_port(app, env, paths) {
+    create_workers_probed(
+        app,
+        app_path,
+        processes,
+        env,
+        paths,
+        start_cmd,
+        routes,
+        port_in_use,
+    )
+}
+
+/// [`create_workers_with`] with the probe for a pinned port held by some
+/// other process given, so a test of the deploy flow does not depend on
+/// which ports the host has free.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn create_workers_probed(
+    app: &str,
+    app_path: &Path,
+    processes: Option<&HashMap<String, String>>,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+    start_cmd: Option<&str>,
+    routes: &mut impl RouteSink,
+    in_use: impl Fn(u16) -> bool,
+) -> Result<()> {
+    if let Err(e) = check_pinned_port_with(app, env, paths, in_use) {
         return Err(e);
     }
     if let Err(e) = check_custom_socket(app, env, paths) {
