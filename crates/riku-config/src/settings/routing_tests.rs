@@ -95,6 +95,26 @@ fn expand_refuses_app_that_is_not_a_dns_label() {
 }
 
 #[test]
+fn dotted_app_name_is_not_one_label_of_the_fallback() {
+    let pattern = FallbackPattern::try_from("{app}.apps.example").unwrap();
+
+    let reason = pattern
+        .expand("api.v2", Ipv4Addr::new(203, 0, 113, 10))
+        .unwrap_err();
+
+    assert!(reason.contains("api.v2"), "{reason}");
+}
+
+#[test]
+fn caddy_admin_port_as_shared_port_is_refused() {
+    let message = parse("[routing]\nshared_port = 2019\n", file())
+        .unwrap_err()
+        .to_string();
+
+    assert!(message.contains("routing.shared_port"), "{message}");
+}
+
+#[test]
 fn ipv6_server_ip_is_refused_naming_the_key() {
     let message = parse("[routing]\nserver_ip = \"2001:db8::1\"\n", file())
         .unwrap_err()

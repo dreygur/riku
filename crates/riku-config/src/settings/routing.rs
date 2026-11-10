@@ -30,6 +30,7 @@ const DEFAULT_RANGE: PortRange = PortRange {
     last: 8199,
 };
 const FIRST_UNPRIVILEGED_PORT: u16 = 1024;
+const CADDY_ADMIN_PORT: u16 = 2019;
 /// The section text lives in a template so no naming service appears in the
 /// code; riku only fills in the server IP line.
 const SECTION_TEMPLATE: &str = include_str!("../../../../templates/settings_routing.toml.txt");
@@ -101,6 +102,11 @@ impl FallbackPattern {
 
     /// The domain for `app`, or the reason there is none, for the push output.
     pub fn expand(&self, app: &str, ip: Ipv4Addr) -> Result<Domain, String> {
+        if app.contains('.') {
+            return Err(format!(
+                "the app name '{app}' has a dot, so it would not be one label of the fallback name"
+            ));
+        }
         let host = self
             .0
             .replace(APP_PLACEHOLDER, app)
@@ -153,11 +159,11 @@ fn server_ip(value: &toml::Value, file: &Path) -> Result<Ipv4Addr> {
 
 fn port(value: &toml::Value, file: &Path) -> Result<u16> {
     match value.as_integer().map(u16::try_from) {
-        Some(Ok(port)) if port >= FIRST_UNPRIVILEGED_PORT => Ok(port),
+        Some(Ok(port)) if port >= FIRST_UNPRIVILEGED_PORT && port != CADDY_ADMIN_PORT => Ok(port),
         _ => Err(refused(
             file,
             "shared_port",
-            format!("must be a whole number from {FIRST_UNPRIVILEGED_PORT} to 65535"),
+            format!("must be a whole number from {FIRST_UNPRIVILEGED_PORT} to 65535, not the Caddy admin port {CADDY_ADMIN_PORT}"),
         )),
     }
 }

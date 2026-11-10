@@ -24,30 +24,38 @@ fn record_release(app: &str, app_path: &Path, paths: &RikuPaths) {
 }
 
 /// The app's routing as the router saw it, with its certificate outcome.
-/// `None` when it cannot be read, which only drops the URL lines.
+/// An error is shown to the pusher and drops only the URL lines.
+#[allow(clippy::question_mark)]
 fn routed(
     app: &str,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
-) -> Option<(AppRouting, Option<TlsState>)> {
+) -> anyhow::Result<(AppRouting, Option<TlsState>)> {
     let active = match Router::load(paths) {
         Ok(active) => active,
-        Err(_) => return None,
+        Err(e) => return Err(e),
     };
     let routing = match routing_env(app, env, paths, &active, Record::Peek) {
         Ok((_, routing)) => routing,
-        Err(_) => return None,
+        Err(e) => return Err(e),
     };
     let tls = RoutingState::load(paths)
         .ok()
         .and_then(|state| state.entry(app).and_then(|entry| entry.tls));
-    Some((routing, tls))
+    Ok((routing, tls))
 }
 
 fn announce(app: &str, env: &HashMap<String, String>, paths: &RikuPaths) {
     echo(&format!("-----> {} deployed!", app), "green");
-    let Some((routing, tls)) = routed(app, env, paths) else {
-        return;
+    let (routing, tls) = match routed(app, env, paths) {
+        Ok(found) => found,
+        Err(e) => {
+            echo(
+                &format!("       Cannot tell where the app is live: {e:#}"),
+                "yellow",
+            );
+            return;
+        }
     };
     let mut lines = live_lines(app, &routing, tls, crate::util::flag::https_only(env));
     let server = settings::load(paths).ok().map(|loaded| loaded.routing);
