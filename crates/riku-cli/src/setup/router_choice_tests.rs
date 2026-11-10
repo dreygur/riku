@@ -28,6 +28,16 @@ fn existing_tree_keeps_nginx_without_a_stored_choice() {
     );
 }
 
+// A tree made before the first init (say by install-plugins) has no stored
+// router; on a Caddy only host the old nginx default would be wrong.
+#[test]
+fn existing_tree_without_nginx_uses_the_installed_router() {
+    assert_eq!(
+        choose_router(&[Router::Caddy], None, None, false, false),
+        RouterChoice::Use(Router::Caddy)
+    );
+}
+
 #[test]
 fn single_installed_router_is_used_on_a_fresh_install() {
     assert_eq!(

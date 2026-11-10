@@ -674,7 +674,7 @@ As root, also installs the riku binary to `/usr/local/bin/riku` (root owned) and
 The router comes from `RIKU_ROUTER` when set, else the one already stored.
 A fresh install uses the only router installed (nginx or Caddy), asks when
 both are and init has a terminal, and otherwise stops with what to do. An
-existing install without a stored router keeps nginx.
+existing install without a stored router keeps nginx when nginx is installed.
 
 ---
 

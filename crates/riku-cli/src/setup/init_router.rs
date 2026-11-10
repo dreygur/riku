@@ -54,11 +54,11 @@ fn read_as_deploy_user(user: &DeployUser, file: &Path) -> Result<Option<String>>
     }
 }
 
-/// The deploy user's router, read as that user, in the order
-/// [`Router::load`] uses: settings.toml, then the legacy `ROUTER` file, else
-/// nginx.
+/// The deploy user's stored router, read as that user, in the order
+/// [`router::stored`] uses: settings.toml, then the legacy `ROUTER` file,
+/// else `None`.
 #[allow(clippy::question_mark)]
-pub fn deploy_router(user: &DeployUser) -> Result<Router> {
+pub fn deploy_router(user: &DeployUser) -> Result<Option<Router>> {
     let paths = user.riku_paths();
     let raw_settings = match read_as_deploy_user(user, &paths.settings_file) {
         Ok(raw) => raw,
@@ -70,12 +70,11 @@ pub fn deploy_router(user: &DeployUser) -> Result<Router> {
             Err(e) => return Err(e),
         };
         if let Some(name) = parsed.router {
-            return Ok(Router::from(name.as_str()));
+            return Ok(Some(Router::from(name.as_str())));
         }
     }
     match read_as_deploy_user(user, &paths.router_file) {
-        Ok(Some(name)) => Ok(Router::from(name.as_str())),
-        Ok(None) => Ok(Router::Nginx),
+        Ok(name) => Ok(name.map(|name| Router::from(name.as_str()))),
         Err(e) => Err(e),
     }
 }

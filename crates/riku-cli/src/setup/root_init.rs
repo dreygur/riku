@@ -82,7 +82,8 @@ fn deploy_tree_missing() -> bool {
 }
 
 /// The router for an existing install: what the deploy user has stored,
-/// read as that user, else nginx, unless `RIKU_ROUTER` asks for another.
+/// read as that user, else nginx when installed, else the installed router,
+/// unless `RIKU_ROUTER` asks for another.
 #[allow(clippy::question_mark)]
 fn existing_router(user: &DeployUser) -> Result<Router> {
     let stored = match deploy_router(user) {
@@ -92,7 +93,7 @@ fn existing_router(user: &DeployUser) -> Result<Router> {
     router_choice::resolve(router_choice::choose_router(
         &router_choice::installed_routers(),
         router_choice::requested_router(),
-        Some(stored),
+        stored,
         false,
         router_choice::interactive(),
     ))
