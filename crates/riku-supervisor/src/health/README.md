@@ -16,7 +16,6 @@ Component package located at `crates/riku-supervisor/src/health`.
 - `start_health_server` [mod.rs:start_health_server] (fn)
 - `actions` [mod.rs:actions] (module)
 - `mod.rs` [mod.rs] (and 1 additional symbols)
-- `plugins_handler` [plugins.rs:plugins_handler] (fn)
 - `hooks_handler` [plugins.rs:hooks_handler] (fn)
 - `build_health_json` [responses.rs:build_health_json] (fn)
 - `build_metrics_json` [responses.rs:build_metrics_json] (fn)
