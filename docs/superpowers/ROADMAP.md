@@ -255,6 +255,17 @@ work they describe.
   measured per target before and after. The owner sets a size budget from
   the measurements. (Moving ROUTER and CONTAINER_ENGINE into settings.toml
   is now part of the developer experience config model.)
+- Plan `plans/2026-11-10-small-boards.md`, EGM reviewed, branch
+  `feat/small-boards`. Found on the way: every Linux release binary up to
+  0.1.3 needs glibc 2.39 (built on ubuntu 24.04), so it does not start on
+  Debian 12 or Raspberry Pi OS bookworm; ci.yml had a second release job
+  with the same problem; plugin downloads mapped every 32 bit ARM to armv7.
+  - Task 1 (release.yml on cargo-zigbuild, eight Linux targets, glibc 2.31
+    floor, rc tags as prereleases, ci.yml release job removed): built and
+    smoke run locally; the workflow itself is proven only by the next tag.
+  - Task 2 (plugins fetched for riku's own triple): done (aaf1912).
+  - Task 3 (installer: armv6, 32 bit userland, musl, old glibc): done.
+  - Task 4 (sizes): see the table below.
 
 ### Phase 4: one rk managing many servers
 

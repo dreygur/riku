@@ -75,6 +75,19 @@ There are several ways to install Riku:
 4. **Ansible** - Use the Ansible playbook (coming soon)
 5. **Docker** - Run Riku in a container (experimental)
 
+## Release builds
+
+Every release has these Linux builds of `riku` and `rk`. The glibc builds need glibc 2.31 or newer (Debian 11, Ubuntu 20.04, Raspberry Pi OS bullseye, or later). The musl builds are static and run on any Linux, Alpine included.
+
+| CPU | glibc build | musl build | Boards |
+| --- | --- | --- | --- |
+| x86_64 | `linux-amd64` | `linux-amd64-musl` | PCs, VPS |
+| arm64 | `linux-arm64` | `linux-arm64-musl` | Pi 3, 4, 5, Zero 2 W on a 64 bit OS |
+| armv7 | `linux-armv7` | `linux-armv7-musl` | Pi 2, 3, 4, 5 on a 32 bit OS |
+| armv6 | `linux-armv6` | `linux-armv6-musl` | Pi 1, Zero, Zero W |
+
+Asset names are `<bin>-<build>.tar.gz`, for example `riku-linux-armv6.tar.gz`. `scripts/install.sh` picks the build itself: a 64 bit kernel with a 32 bit userland gets armv7, and a host without glibc 2.31 gets musl. Set `RIKU_LIBC=musl` or `RIKU_LIBC=gnu` to choose.
+
 ## System Requirements
 
 ### Minimum Requirements

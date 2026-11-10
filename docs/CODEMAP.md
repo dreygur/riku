@@ -161,7 +161,7 @@ Gotchas:
 ## plugins/ (bundled runtime and event plugins)
 Single-file bash runtime plugins, no extension: `node`, `python`, `ruby`, `go`, `rust-lang`. Each takes argv[1] in `detect|build|env|start|destroy`, reads `RIKU_APP_PATH` (fallback cwd). `detect` exit 0 means "mine". `env` prints KEY=VALUE lines, `start` prints the default start command. Triggers: node `package.json`; python `requirements.txt`/`pyproject.toml`/`setup.py`; ruby `Gemfile`; go `go.mod` or `*.go`; rust-lang `Cargo.toml`. node builds with nub (npm fallback, prints the install hint; `RIKU_NODE_VERSION` is not used yet); python builds with uv for `RIKU_PYTHON_VERSION` when set (`--python`; pip needs `python<version>` and fails naming the key; a venv made for another version is made again) (`uv sync --locked` with a `uv.lock`, else `uv pip install`; pip fallback with a hint) and a failed install stops the build.
 - `plugins/riku-notify/`: event bundle (not a runtime). `riku-plugin.toml` (type notifier, subscribes `app.restarted`, `app.failed`, mode observe, network capability) and `bin/on-event` (argv `on_event`, JSON envelope on stdin, posts to webhook/Discord/Slack/Telegram per `RIKU_NOTIFY_*` env vars).
-- Built into riku: the five runtimes and `riku-notify` are embedded with `include_bytes!` in `crates/riku-cli/src/apps/embedded_plugins.rs` and written out by `riku install-plugins`; java and clojure are downloaded from this riku's release tag and checked against their `.sha256` (`plugin_download.rs`). A new plugin here must be added to `EMBEDDED` and to `riku_util::runtime_markers::BUNDLED_RUNTIMES` (a test checks they agree).
+- Built into riku: the five runtimes and `riku-notify` are embedded with `include_bytes!` in `crates/riku-cli/src/apps/embedded_plugins.rs` and written out by `riku install-plugins`; java and clojure are downloaded from this riku's release tag and checked against their `.sha256` (`plugin_download.rs`), for the triple riku itself was built for (`RIKU_TARGET` from `crates/riku-cli/build.rs`, checked against `RELEASE_TRIPLES`; a test keeps that list equal to the `release.yml` matrix). A new plugin here must be added to `EMBEDDED` and to `riku_util::runtime_markers::BUNDLED_RUNTIMES` (a test checks they agree).
 - Runtime selection: `RIKU_RUNTIME` override, else first alphabetical `detect` exit 0 (see riku-plugins).
 
 ## templates/ (nginx Tera templates)
@@ -180,6 +180,11 @@ Rendered only by riku-nginx. Embedded at compile time with `include_str!` and re
 - `tests/stress/`: shell audit suite for the supervisor (`run_all.sh`, lifecycle, leak, chaos, resource limit scripts, `container/`, `dashboard/`, `bad_tenant_app/`); not part of `cargo test`.
 - `tests/demo/`: long-running sandbox container with 5 demo apps (`run_demo.sh`, `stop_demo.sh`, `compose.yml`); for humans, not CI.
 - Run: `cargo test` (all), `cargo test --test integration_tests`, `cargo test --test stress_tests`, `cargo test -p <crate>`.
+
+## Release and CI
+- `.github/workflows/ci.yml`: tests, clippy, dashboard checks, integration and Docker e2e on push and PR. It publishes nothing.
+- `.github/workflows/release.yml`: on a `v*` tag. Checks the tag matches the workspace version, builds every target, publishes `<bin>-<platform>.tar.gz` plus `.sha256` and the raw `riku-plugin-<name>-<triple>` plugins. Linux builds use cargo-zigbuild: gnu triples link against glibc 2.31 (the `glibc` matrix field), musl ones are static; platforms are `linux-{amd64,arm64,armv7,armv6}` with a `-musl` variant. A tag with a `-` (rc) is published as a prerelease, so `latest` never points at it.
+- `scripts/install.sh`: one-line installer. `pick_platform` picks the release build (see `scripts/README.md`); `main` downloads and checks it. Sourcing it with `RIKU_INSTALL_LIB=1` defines the functions only; `tests/install/pick_platform.sh` tests the choice with mocked `uname` and `getconf`, run in the `ci` job with shellcheck.
 
 ## riku-bundle
 Job: plugin bundle manifest (`riku-plugin.toml`) parsing/validation and Ed25519 signing. No server knowledge, usable by `rk`. Depends on: none. Used by: riku-plugins, riku-deploy, riku-remote, riku-client.

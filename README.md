@@ -71,6 +71,8 @@ chmod +x riku
 sudo ./riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
+Builds exist for `amd64`, `arm64`, `armv7` and `armv6` (every Raspberry Pi), each for glibc 2.31 or newer and as a static musl build (`riku-linux-arm64-musl.tar.gz`). `scripts/install.sh` picks the right one; see [installation](docs/docs/installation.md#release-builds).
+
 Running `riku init` as root creates the `riku` deploy user if it is missing, sets
 up its home as that user (`~/.riku`, the git hook, SSH keys), installs the binary
 once as a root owned `/usr/local/bin/riku`, then creates a systemd service that starts on boot and launches the

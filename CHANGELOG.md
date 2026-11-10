@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Linux release binaries needed glibc 2.39, because they were built on
+  Ubuntu 24.04, and did not start on Debian 12, Raspberry Pi OS bookworm or
+  Ubuntu 22.04. They now need glibc 2.31 or newer.
+- `riku install-plugins java|clojure` fetches the plugin built for riku's
+  own target. Before, every 32 bit ARM riku fetched the armv7 build.
+
+### Added
+
+- Release builds for armv6 (Pi 1, Zero, Zero W) and static musl builds for
+  every Linux CPU (`riku-linux-arm64-musl.tar.gz` and so on).
+- The installer handles `armv6l`, a 64 bit kernel with a 32 bit userland
+  (installs armv7), and hosts without glibc 2.31 (installs musl).
+  `RIKU_LIBC=gnu|musl` overrides the choice.
+
+### Removed
+
+- The `riku-<tag>.tar.gz` asset, published by a second release job in
+  ci.yml. Use `riku-linux-amd64.tar.gz`.
+
 ## [0.1.3] - 2026-11-10
 
 ### Upgrade steps
