@@ -103,7 +103,7 @@ pub fn cmd_agent_schema() -> Result<()> {
             },
             {
                 "name": "config:set",
-                "description": "Set configuration values (KEY=VALUE pairs)",
+                "description": "Not implemented yet: returns NOT_IMPLEMENTED. Use riku config set.",
                 "parameters": {
                     "app": {
                         "type": "string",
@@ -204,7 +204,7 @@ pub fn cmd_agent_schema() -> Result<()> {
             },
             {
                 "name": "run",
-                "description": "Run a command in the application context",
+                "description": "Not implemented yet: returns NOT_IMPLEMENTED. Use riku run.",
                 "parameters": {
                     "app": {
                         "type": "string",
