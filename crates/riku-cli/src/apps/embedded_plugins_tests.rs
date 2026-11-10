@@ -15,6 +15,108 @@ fn embedded_runtimes_plus_binaries_are_the_bundled_list() {
     }
 }
 
+/// Run the shipped python plugin's `build` in an app with `files`, with a
+/// mock `uv` (when `with_uv`) that logs its arguments. Returns the exit
+/// status, the uv log and stderr.
+fn python_build(
+    files: &[&str],
+    version: Option<&str>,
+    with_uv: bool,
+    old_venv_version: Option<&str>,
+) -> (bool, String, String) {
+    let tmp = tempfile::tempdir().unwrap();
+    let plugins = tmp.path().join("plugins");
+    let bin = tmp.path().join("bin");
+    let app = tmp.path().join("app");
+    for dir in [&plugins, &bin, &app] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    write_out(find("python").unwrap(), &plugins).unwrap();
+    if let Some(old) = old_venv_version {
+        std::fs::create_dir_all(app.join(".venv")).unwrap();
+        std::fs::write(app.join(".venv/.riku-python-version"), old).unwrap();
+    }
+    for file in files {
+        std::fs::write(app.join(file), "").unwrap();
+    }
+    let log = tmp.path().join("uv.log");
+    if with_uv {
+        let uv = bin.join("uv");
+        std::fs::write(
+            &uv,
+            format!("#!/bin/sh\necho \"$@\" >> {}\n", log.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(&uv, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let mut command = std::process::Command::new(plugins.join("python"));
+    command
+        .arg("build")
+        .env_clear()
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+        .env("HOME", tmp.path())
+        .env("RIKU_APP_PATH", &app);
+    if let Some(version) = version {
+        command.env("RIKU_PYTHON_VERSION", version);
+    }
+    let output = command.output().unwrap();
+    (
+        output.status.success(),
+        std::fs::read_to_string(&log).unwrap_or_default(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn python_version_reaches_uv_for_a_new_venv_and_a_locked_sync() {
+    let (ok, venv_log, _) = python_build(&["requirements.txt"], Some("3.12"), true, None);
+    let (locked_ok, sync_log, _) =
+        python_build(&["pyproject.toml", "uv.lock"], Some("3.12"), true, None);
+
+    assert!(ok && locked_ok);
+    assert!(venv_log.contains("venv --python 3.12"), "{venv_log}");
+    assert!(
+        sync_log.contains("sync --python 3.12 --locked"),
+        "{sync_log}"
+    );
+}
+
+#[test]
+fn no_python_version_leaves_uv_to_choose() {
+    let (ok, log, _) = python_build(&["requirements.txt"], None, true, None);
+
+    assert!(ok);
+    assert!(!log.contains("--python"), "{log}");
+}
+
+#[test]
+fn missing_python_version_without_uv_fails_naming_the_key() {
+    let (ok, _, stderr) = python_build(&["requirements.txt"], Some("2.1"), false, None);
+
+    assert!(!ok, "a build that cannot honour the version must fail");
+    assert!(
+        stderr.contains("RIKU_PYTHON_VERSION") && stderr.contains("python2.1"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn changing_python_version_makes_the_venv_again() {
+    let (ok, log, _) = python_build(&["requirements.txt"], Some("3.12"), true, Some("3.11"));
+    let (kept_ok, kept_log, _) =
+        python_build(&["requirements.txt"], Some("3.12"), true, Some("3.12"));
+
+    assert!(ok && kept_ok);
+    assert!(
+        log.contains("venv --python 3.12"),
+        "the 3.11 venv was kept: {log}"
+    );
+    assert!(
+        !kept_log.contains("venv"),
+        "a matching venv was made again: {kept_log}"
+    );
+}
+
 #[test]
 fn writing_node_needs_no_network() {
     let tmp = tempfile::tempdir().unwrap();
