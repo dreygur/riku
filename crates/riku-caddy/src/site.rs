@@ -21,7 +21,7 @@ pub fn site_path(app: &str, paths: &RikuPaths) -> PathBuf {
 
 fn site_addresses(plan: &RoutePlan) -> Vec<String> {
     let bare = plan.domains.iter().map(|d| d.to_string());
-    match plan.https {
+    let mut addresses: Vec<String> = match plan.https {
         HttpsPolicy::Only => bare.collect(),
         HttpsPolicy::AlsoPlainHttp => {
             let plain = plan
@@ -30,7 +30,11 @@ fn site_addresses(plan: &RoutePlan) -> Vec<String> {
                 .map(|d| format!("{PLAIN_HTTP_SCHEME}{d}"));
             bare.chain(plain).collect()
         }
+    };
+    if let Some(port) = plan.open_port {
+        addresses.push(format!("{PLAIN_HTTP_SCHEME}:{port}"));
     }
+    addresses
 }
 
 fn upstreams(plan: &RoutePlan) -> Result<String> {

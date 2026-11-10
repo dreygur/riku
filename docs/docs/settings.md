@@ -30,6 +30,30 @@ riku root. Those files are still read when the key is not set here. An
 invalid settings.toml makes every router lookup fail with the file's error,
 rather than quietly falling back to nginx.
 
+## Routing
+
+How an app without a domain of its own gets a URL. `riku init` writes this
+section on a new server; `riku doctor --fix` adds it to an older one. See
+[App URLs](routing.md) for what each mode does.
+
+```toml
+[routing]
+fallback_domain = "{app}.{ip}.sslip.io"
+server_ip = "203.0.113.10"
+shared_port = 8080
+port_range = "8100-8199"
+```
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `routing.fallback_domain` | off | Name pattern for an app with no domain. Must contain `{app}`; `{ip}` is `server_ip`. Remove it to turn the fallback off. |
+| `routing.server_ip` | detected at init | The server's public IPv4 address. Left out when only a private address is found. |
+| `routing.shared_port` | `8080` | The port path mode apps share. |
+| `routing.port_range` | `"8100-8199"` | Where riku picks a port for a port mode app that sets none. |
+
+Without the section the server routes as older versions did, and the
+riku.toml keys `routing.mode` and `routing.port` are refused.
+
 ## Engine time limits
 
 Every call riku makes to the container engine is bounded. When the engine is

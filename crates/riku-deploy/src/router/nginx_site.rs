@@ -15,14 +15,20 @@ use anyhow::{anyhow, Result};
 use riku_container::types::AppName;
 use riku_route::{Reply, Request, RouterKind};
 
+use super::app_routing::AppRouting;
+use super::fallback_tls::{drop_stale_pair, fallback_certificate};
 use super::route_build::{build_route, nginx_domains, CATCH_ALL_NAME};
+use super::route_env::tls;
+use super::routing_state::TlsState;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::backend::Backend;
+use crate::util::echo;
 use crate::util::flag::https_only;
 
 /// The backend a check renders with: the route gate never connects to it.
 const STAND_IN_PORT: u16 = 1;
+const HTTPS_ONLY_KEY: &str = "RIKU_HTTPS_ONLY";
 
 pub(super) fn app_name(app: &str) -> Result<AppName> {
     match AppName::try_from(app) {
@@ -93,14 +99,56 @@ fn nginx_route(
     }
 }
 
+/// Build `app`'s route from `env` and have the helper install it. A
+/// fallback domain carries the pair in `nginx_root` when there is one, so
+/// nginx serves it on 443 as well as plain HTTP.
+#[allow(clippy::question_mark)]
+fn install(
+    send: &impl Fn(&Request) -> Result<Reply>,
+    name: &AppName,
+    env: &HashMap<String, String>,
+    fallback: bool,
+    backends: &[Backend],
+    paths: &RikuPaths,
+) -> Result<()> {
+    let mut route = match nginx_route(name, env, backends, paths) {
+        Ok(route) => route,
+        Err(e) => return Err(e),
+    };
+    if fallback && route.tls.is_none() {
+        route.tls = match tls(name, paths) {
+            Ok(found) => found,
+            Err(e) => return Err(anyhow!("tls: {e}")),
+        };
+    }
+    let request = Request::Apply {
+        app: name.to_string(),
+        router: RouterKind::Nginx,
+        route: Box::new(route),
+    };
+    match send(&request) {
+        Ok(reply) => helper_outcome(reply, "install the site").map(|_| ()),
+        Err(e) => Err(e),
+    }
+}
+
+fn has_pair(name: &AppName, paths: &RikuPaths) -> bool {
+    matches!(tls(name, paths), Ok(Some(_)))
+}
+
 /// Publish `app`'s static files and certificates, then have the helper
 /// install its site and reload nginx. Returns once nginx accepted the reload.
+///
+/// A site that wants a certificate it does not have yet is first installed
+/// over plain HTTP, so the ACME challenge reaches it, then the certificate
+/// is issued and the site installed again with it.
 #[allow(clippy::question_mark)]
 pub(super) fn apply_nginx_site(
     send: impl Fn(&Request) -> Result<Reply>,
     app: &str,
     app_path: &Path,
     env: &HashMap<String, String>,
+    routing: &AppRouting,
     backends: &[Backend],
     paths: &RikuPaths,
 ) -> Result<()> {
@@ -115,22 +163,38 @@ pub(super) fn apply_nginx_site(
     if let Err(e) = riku_nginx::publish_static(app, app_path, env, paths) {
         return Err(anyhow!("cannot publish static files for '{app}': {e}"));
     }
-    if let Err(e) = ensure_certificates(&name, env, paths) {
-        return Err(e);
+    let own_tls = https_only(env) && env.contains_key("RIKU_DOMAINS");
+    let fallback_domain = routing.domains.first().filter(|_| routing.fallback);
+    drop_stale_pair(app, fallback_domain.map(String::as_str), paths);
+    if (own_tls || fallback_domain.is_some()) && !has_pair(&name, paths) {
+        let mut plain = env.clone();
+        plain.remove(HTTPS_ONLY_KEY);
+        if let Err(e) = install(&send, &name, &plain, false, backends, paths) {
+            return Err(e);
+        }
+        if let Some(domain) = fallback_domain {
+            if fallback_certificate(app, domain, paths) != TlsState::Issued {
+                echo(
+                    &format!("-----> HTTPS for {domain} is not available yet; the app answers on plain HTTP"),
+                    "yellow",
+                );
+                return Ok(());
+            }
+        }
     }
-    let route = match nginx_route(&name, env, backends, paths) {
-        Ok(route) => route,
-        Err(e) => return Err(e),
-    };
-    let request = Request::Apply {
-        app: name.to_string(),
-        router: RouterKind::Nginx,
-        route: Box::new(route),
-    };
-    match send(&request) {
-        Ok(reply) => helper_outcome(reply, "install the site").map(|_| ()),
-        Err(e) => Err(e),
+    if own_tls {
+        if let Err(e) = ensure_certificates(&name, env, paths) {
+            return Err(e);
+        }
     }
+    install(
+        &send,
+        &name,
+        env,
+        fallback_domain.is_some(),
+        backends,
+        paths,
+    )
 }
 
 /// Refuse a deploy before it starts a copy when `app`'s route would fail the

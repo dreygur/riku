@@ -14,6 +14,7 @@ use super::keys::{Key, Kind};
 use super::Source;
 
 const REPO_EXTRA_CHARS: &[u8] = b".-_/:@+*";
+const ROUTING_MODES: &[&str] = &["domain", "port", "path"];
 
 /// One checked value.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,6 +41,9 @@ fn check_text(key: &Key, text: &str, source: Source) -> Result<(), String> {
         return Err(format!(
             "{path} may only contain letters, digits and . - _ / : @ + *"
         ));
+    }
+    if path == "routing.mode" && !ROUTING_MODES.contains(&text) {
+        return Err(format!("{path} must be \"domain\", \"port\" or \"path\""));
     }
     if path == "routing.document_root"
         && (text.starts_with('/') || text.split('/').any(|part| part == ".."))
@@ -84,6 +88,10 @@ pub fn check(key: &Key, value: &toml::Value, source: Source) -> Result<Value, St
                 Err(e) => Err(e),
             },
             None => Err(wrong_type(key, "a string")),
+        },
+        Kind::Int if key.path() == "routing.port" => match value.as_integer() {
+            Some(n) if (1..=i64::from(u16::MAX)).contains(&n) => Ok(Value::Int(n as u64)),
+            _ => Err(wrong_type(key, "a port number from 1 to 65535")),
         },
         Kind::Int => match value.as_integer() {
             Some(n) if n >= 0 => Ok(Value::Int(n as u64)),

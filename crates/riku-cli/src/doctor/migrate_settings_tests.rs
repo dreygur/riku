@@ -113,6 +113,32 @@ fn second_run_changes_nothing() {
 }
 
 #[test]
+fn adds_routing_section_once() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = paths(&tmp);
+    fs::write(&paths.settings_file, "[router]\nname = \"nginx\"\n").unwrap();
+
+    let first = migrate(&paths);
+    let after_first = fs::read_to_string(&paths.settings_file).unwrap();
+    migrate(&paths);
+
+    assert!(
+        first.iter().any(|check| check.detail.contains("[routing]")),
+        "first run should report the added section: {first:?}"
+    );
+    assert!(
+        crate::config::settings::load(&paths)
+            .unwrap()
+            .routing
+            .present
+    );
+    assert_eq!(
+        fs::read_to_string(&paths.settings_file).unwrap(),
+        after_first
+    );
+}
+
+#[test]
 fn leaves_env_alone_when_another_line_expands_a_moved_key() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = paths(&tmp);

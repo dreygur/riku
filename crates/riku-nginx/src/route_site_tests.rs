@@ -8,6 +8,9 @@ struct Fixture {
     app: &'static str,
     shape: SiteShape,
     https_only: bool,
+    also_tls: bool,
+    open_port: Option<u16>,
+    domains: Vec<String>,
     ipv6: bool,
     backends: Vec<Backend>,
 }
@@ -18,6 +21,9 @@ impl Fixture {
             app: "myapp",
             shape: SiteShape::Plain,
             https_only: false,
+            also_tls: false,
+            open_port: None,
+            domains: vec!["myapp.example.com".to_string()],
             ipv6: true,
             backends: vec![Backend::Unix(SOCKET.into())],
         }
@@ -30,12 +36,14 @@ impl Fixture {
             acme_root: PathBuf::from("/var/lib/riku/acme"),
             static_root: PathBuf::from("/var/lib/riku/static"),
         };
-        let domains = vec!["myapp.example.com".to_string()];
+
         render_route_site(&RouteSite {
             app: self.app,
-            domains: &domains,
+            domains: &self.domains,
             shape: self.shape,
             https_only: self.https_only,
+            also_tls: self.also_tls,
+            open_port: self.open_port,
             port: 80,
             backends: &self.backends,
             static_locations: &[],
@@ -89,6 +97,93 @@ fn socket_upstreams_always_carry_the_unix_prefix() {
         "{config}"
     );
     assert!(config.contains("uwsgi_pass riku_6d79617070;"), "{config}");
+}
+
+#[test]
+fn issued_fallback_serves_both_without_redirect() {
+    for shape in [SiteShape::Portmap, SiteShape::Plain] {
+        let site = Fixture {
+            shape,
+            also_tls: true,
+            backends: vec![Backend::loopback(5001)],
+            ..Fixture::new()
+        };
+
+        let config = site.render().unwrap();
+
+        assert!(
+            config.contains("listen              0.0.0.0:443 ssl;"),
+            "{config}"
+        );
+        assert!(
+            config.contains("listen              0.0.0.0:80;"),
+            "{config}"
+        );
+        assert!(
+            config.contains("ssl_certificate     /etc/riku/certs/myapp/fullchain.pem;"),
+            "{config}"
+        );
+        assert!(!config.contains("return 301"), "no redirect: {config}");
+    }
+}
+
+#[test]
+fn nginx_renders_catch_all_server_on_open_port() {
+    let site = Fixture {
+        shape: SiteShape::Portmap,
+        domains: Vec::new(),
+        open_port: Some(8100),
+        ipv6: false,
+        backends: vec![Backend::loopback(5001)],
+        ..Fixture::new()
+    };
+
+    let config = site.render().unwrap();
+
+    assert!(
+        config.contains("listen              0.0.0.0:8100;"),
+        "{config}"
+    );
+    assert!(
+        !config.contains("0.0.0.0:80;"),
+        "a port only app must not claim 80: {config}"
+    );
+    assert!(config.contains("server_name         _;"), "{config}");
+}
+
+#[test]
+fn domain_and_port_render_both() {
+    for (shape, https_only) in [
+        (SiteShape::Portmap, false),
+        (SiteShape::Plain, false),
+        (SiteShape::Plain, true),
+    ] {
+        let site = Fixture {
+            shape,
+            https_only,
+            open_port: Some(8100),
+            backends: vec![Backend::loopback(5001)],
+            ..Fixture::new()
+        };
+
+        let config = site.render().unwrap();
+
+        assert!(
+            config.contains("listen              0.0.0.0:8100;"),
+            "{config}"
+        );
+        assert!(
+            config.contains("server_name         myapp.example.com;"),
+            "{config}"
+        );
+    }
+}
+
+#[test]
+fn plain_site_without_tls_has_no_443() {
+    let config = Fixture::new().render().unwrap();
+
+    assert!(!config.contains("443"), "{config}");
 }
 
 #[test]

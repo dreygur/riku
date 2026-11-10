@@ -10,8 +10,10 @@ use riku_route::Request;
 
 use super::caddy::remove_caddy_site;
 use super::nginx_site::remove_nginx_site;
+use super::paths::{previous_mode, publish_paths};
 use super::plugin::remove_plugin;
 use super::reload::record_outcome;
+use super::routing_state::{forget, RoutingMode};
 use super::send_to_helper;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
@@ -38,11 +40,22 @@ pub fn remove(app: &str, paths: &RikuPaths) -> Result<()> {
 
     let send = |request: &Request| send_to_helper(paths, request);
     let outcome = match &active {
-        Router::Nginx => return record_removal(remove_nginx_site(send, app, paths), paths),
-        Router::Caddy => return record_removal(remove_caddy_site(send, app), paths),
-        Router::Plugin(name) => remove_plugin(name, app, paths),
+        Router::Nginx => record_removal(remove_nginx_site(send, app, paths), paths),
+        Router::Caddy => record_removal(remove_caddy_site(send, app), paths),
+        Router::Plugin(name) => {
+            let outcome = remove_plugin(name, app, paths);
+            record_outcome(paths, &outcome);
+            outcome
+        }
     };
-    record_outcome(paths, &outcome);
+    if outcome.is_err() {
+        return outcome;
+    }
+    let was_path = previous_mode(app, paths) == Some(RoutingMode::Path);
+    forget(paths, app);
+    if was_path {
+        return publish_paths(paths, &active, (app, Vec::new()), true);
+    }
     outcome
 }
 

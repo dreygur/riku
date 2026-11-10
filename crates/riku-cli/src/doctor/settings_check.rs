@@ -22,6 +22,19 @@ pub fn settings_file(paths: &RikuPaths) -> Check {
     }
 }
 
+/// A warning when settings.toml has no `[routing]` section, so apps without
+/// a domain get no URL. `None` when it is there or the file does not parse
+/// (which [`settings_file`] reports).
+pub fn routing_section(paths: &RikuPaths) -> Option<Check> {
+    match settings::load(paths) {
+        Ok(loaded) if !loaded.routing.present => Some(Check::warn(
+            NAME,
+            "no [routing] section, so apps without a domain get no URL; `riku doctor --fix` adds it",
+        )),
+        _ => None,
+    }
+}
+
 /// One warning per legacy single value file still present (`ROUTER`,
 /// `CONTAINER_ENGINE`); they are still read, but settings.toml replaces them.
 pub fn legacy_files(paths: &RikuPaths) -> Vec<Check> {

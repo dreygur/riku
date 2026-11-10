@@ -1,9 +1,11 @@
 {% include "nginx_upstream.conf.tera" %}
 
 server {
-  listen              0.0.0.0:{{ RIKU_NGINX_EXTERNAL_PORT }};
-  {% if IPV6 %}listen              [::]:{{ RIKU_NGINX_EXTERNAL_PORT }};{% endif %}
+  {% if DOMAIN_LISTEN %}listen              0.0.0.0:{{ RIKU_NGINX_EXTERNAL_PORT }};{% endif %}
+  {% if IPV6 and DOMAIN_LISTEN %}listen              [::]:{{ RIKU_NGINX_EXTERNAL_PORT }};{% endif %}
+{% include "nginx_open_port.conf.tera" %}
   server_name         {{ RIKU_DOMAINS }};
+{% include "nginx_also_tls.conf.tera" %}
 
 {% include "nginx_site_locations.conf.tera" %}
 

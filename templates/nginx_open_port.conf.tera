@@ -1,0 +1,4 @@
+{% if OPEN_PORT %}
+  listen              0.0.0.0:{{ OPEN_PORT }};
+  {% if IPV6 %}listen              [::]:{{ OPEN_PORT }};{% endif %}
+{% endif %}

@@ -20,6 +20,7 @@ mod prerequisites;
 mod root_init;
 mod router_choice;
 mod router_units;
+pub(crate) mod server_ip;
 mod socket_group;
 pub mod ssh;
 mod stale_binary;

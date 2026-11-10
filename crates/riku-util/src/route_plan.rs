@@ -23,4 +23,6 @@ pub struct RoutePlan {
     pub https: HttpsPolicy,
     /// Every copy of the routed service. Routers balance across all of them.
     pub backends: Vec<Backend>,
+    /// A plain HTTP port that answers any host name (port mode).
+    pub open_port: Option<u16>,
 }

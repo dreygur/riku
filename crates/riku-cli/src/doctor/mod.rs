@@ -181,6 +181,7 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     checks.extend(router_check::router(paths));
     checks.push(settings_check::settings_file(paths));
     checks.extend(settings_check::legacy_files(paths));
+    checks.extend(settings_check::routing_section(paths));
     checks.push(container_check::container_engine(paths));
     checks.push(checks::plugins(paths));
     checks.push(checks::disk(paths));

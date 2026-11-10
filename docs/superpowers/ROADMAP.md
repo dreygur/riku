@@ -232,8 +232,19 @@ work they describe.
     plugins, verified downloads), 3 (plugins install by runtime name),
     4 (router choice at init), 5 (name the missing runtime plugin), 6
     (deploy key and remote from rk server add) and 7 (first run guidance
-    and docs) done. Final gate next.
-  - 2b URLs on first push: not planned yet.
+    and docs) done. Merged in PR #89.
+  - 2b URLs on first push: plan `plans/2026-11-10-url-on-first-push.md`,
+    EGM reviewed (design and implementation readiness, both applied),
+    branch `feat/url-first-push`, native execution. Owner confirmed
+    refusing ports 80 and 443 in port mode. Task 1 (server routing
+    settings, IP detection) and 2 (riku.toml mode and port, routing
+    state, port rules) and 3 (fallback domain, certificate order,
+    push URLs) and 4 (port mode, bind check, external port key
+    removed), 5 (path mode) and 6 (docs: docs/docs/routing.md) done.
+    Final gate and review done (fixes f46fedd); ready for PR. Fixed on the way: the first deploy of an https_only
+    domain issued before any site served the ACME challenge (always self
+    signed); the push printed the raw comma list of domains; quick start
+    claimed apps answer on the bare IP.
 
 ### After developer experience: small boards and binary size
 

@@ -104,6 +104,8 @@ pub const KEYS: &[Key] = &[
         "RIKU_NGINX_ALLOW_GIT_FOLDERS",
         Kind::Flag,
     ),
+    key("routing", "mode", "RIKU_ROUTING_MODE", Kind::Text),
+    key("routing", "port", "RIKU_ROUTING_PORT", Kind::Int),
     server("routing", "bind_address", "RIKU_BIND_ADDRESS", Kind::Text),
     key("runtime", "name", "RIKU_RUNTIME", Kind::Text),
     Key {

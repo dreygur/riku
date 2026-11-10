@@ -5,6 +5,8 @@ use std::process::{Command, Stdio};
 use riku_route::Stage;
 
 use super::*;
+use crate::router::app_routing::RoutingMode;
+use crate::util::route_plan::HttpsPolicy;
 
 fn mock_helper(
     reply: Reply,
@@ -38,14 +40,43 @@ fn apply(
     tmp: &tempfile::TempDir,
     paths: &RikuPaths,
 ) -> Result<()> {
+    apply_routed(send, env, &own_domains(), tmp, paths)
+}
+
+fn own_domains() -> AppRouting {
+    AppRouting {
+        domains: Vec::new(),
+        fallback: false,
+        port: None,
+        mode: RoutingMode::Domain,
+        legacy: true,
+        fallback_skipped: None,
+    }
+}
+
+fn apply_routed(
+    send: impl Fn(&Request) -> Result<Reply>,
+    env: &HashMap<String, String>,
+    routing: &AppRouting,
+    tmp: &tempfile::TempDir,
+    paths: &RikuPaths,
+) -> Result<()> {
     apply_nginx_site(
         send,
         "myapp",
         tmp.path(),
         env,
+        routing,
         &[Backend::loopback(5000)],
         paths,
     )
+}
+
+fn applied(request: &Request) -> &riku_route::Route {
+    match request {
+        Request::Apply { route, .. } => route,
+        other => panic!("expected an apply, got {other:?}"),
+    }
 }
 
 #[test]
@@ -113,7 +144,7 @@ fn openssl_available() -> bool {
 }
 
 #[test]
-fn first_https_only_deploy_sends_a_certificate() {
+fn nginx_applies_http_before_issuing() {
     if !openssl_available() {
         eprintln!("skipped: openssl is not installed");
         return;
@@ -133,11 +164,96 @@ fn first_https_only_deploy_sends_a_certificate() {
     )
     .unwrap();
 
-    let sent = seen.borrow()[0].clone();
-    match sent {
-        Request::Apply { route, .. } => assert!(route.tls.is_some(), "no certificate was sent"),
-        other => panic!("expected an apply, got {other:?}"),
-    }
+    let seen = seen.borrow();
+    assert_eq!(seen.len(), 2, "an HTTP apply, then the HTTPS one: {seen:?}");
+    let (first, second) = (applied(&seen[0]), applied(&seen[1]));
+    assert_eq!(first.https, HttpsPolicy::AlsoPlainHttp);
+    assert!(
+        first.tls.is_none(),
+        "the first apply serves the challenge over HTTP"
+    );
+    assert_eq!(second.https, HttpsPolicy::Only);
+    assert!(second.tls.is_some(), "no certificate was sent");
+}
+
+#[test]
+fn failed_fallback_certificate_serves_http_and_says_so() {
+    let (tmp, paths) = setup();
+    let seen = RefCell::new(Vec::new());
+    let env = env(&[("RIKU_DOMAINS", "myapp.203.0.113.10.example")]);
+    let routing = AppRouting {
+        domains: vec!["myapp.203.0.113.10.example".to_string()],
+        fallback: true,
+        legacy: false,
+        ..own_domains()
+    };
+
+    apply_routed(
+        mock_helper(Reply::Ok { reloaded: true }, &seen),
+        &env,
+        &routing,
+        &tmp,
+        &paths,
+    )
+    .unwrap();
+
+    let seen = seen.borrow();
+    assert_eq!(
+        seen.len(),
+        1,
+        "no second apply without a certificate: {seen:?}"
+    );
+    let route = applied(&seen[0]);
+    assert_eq!(route.https, HttpsPolicy::AlsoPlainHttp);
+    assert!(route.tls.is_none());
+}
+
+#[test]
+fn fallback_with_a_pair_carries_the_fullchain() {
+    let (tmp, paths) = setup();
+    let seen = RefCell::new(Vec::new());
+
+    fs::write(paths.nginx_root.join("myapp.key"), "KEY PEM").unwrap();
+    fs::write(paths.nginx_root.join("myapp.crt"), "leaf only").unwrap();
+    fs::write(paths.nginx_root.join("myapp.fullchain.crt"), "CHAIN PEM").unwrap();
+    crate::router::routing_state::with_routing_lock(&paths, |state| {
+        state.set_entry(
+            "myapp",
+            crate::router::routing_state::Entry {
+                mode: RoutingMode::Domain,
+                port: None,
+                picked: false,
+                tls: Some(crate::router::routing_state::TlsState::Issued),
+                cert_for: Some("myapp.203.0.113.10.example".to_string()),
+            },
+        );
+        Ok(())
+    })
+    .unwrap();
+    let env = env(&[("RIKU_DOMAINS", "myapp.203.0.113.10.example")]);
+    let routing = AppRouting {
+        domains: vec!["myapp.203.0.113.10.example".to_string()],
+        fallback: true,
+        legacy: false,
+        ..own_domains()
+    };
+
+    apply_routed(
+        mock_helper(Reply::Ok { reloaded: true }, &seen),
+        &env,
+        &routing,
+        &tmp,
+        &paths,
+    )
+    .unwrap();
+
+    let seen = seen.borrow();
+    let route = applied(&seen[seen.len() - 1]);
+    assert_eq!(route.https, HttpsPolicy::AlsoPlainHttp);
+    assert_eq!(
+        route.tls.as_ref().map(|tls| tls.cert_pem.as_str()),
+        Some("CHAIN PEM")
+    );
 }
 
 #[test]

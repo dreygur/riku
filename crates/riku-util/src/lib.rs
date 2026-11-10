@@ -27,6 +27,7 @@ pub mod file_names;
 pub mod flag;
 pub mod fs;
 pub mod legacy_env;
+pub mod listening;
 pub mod nginx_validation;
 pub mod process_util;
 pub mod procfile;

@@ -1,4 +1,5 @@
 use super::*;
+use crate::schema::RouteBackend;
 
 const ROUTE: &str =
     r#"{"domains":["myapp.example"],"https":"also_plain_http","backends":[{"unix_copy":1}]}"#;
@@ -28,6 +29,35 @@ fn unknown_field_is_refused_at_every_level() {
     );
 
     for body in [top.as_str(), variant, status, route.as_str()] {
+        assert!(
+            parse_request(body.as_bytes()).is_err(),
+            "accepted a request with an unknown field: {body}"
+        );
+    }
+}
+
+#[test]
+fn apply_paths_survives_encode_and_parse() {
+    let request = Request::ApplyPaths {
+        router: RouterKind::Nginx,
+        listen: Listen { port: 8080 },
+        apps: vec![PathApp {
+            app: "shop".to_string(),
+            backends: vec![RouteBackend::UnixCopy(1)],
+        }],
+    };
+
+    let bytes = encode_request(&request).unwrap();
+
+    assert_eq!(parse_request(&bytes).unwrap(), request);
+}
+
+#[test]
+fn path_request_with_unknown_field_is_refused() {
+    let top = r#"{"v":1,"op":"apply_paths","listen":{"port":8080},"apps":[],"path":"/etc/x"}"#;
+    let app = r#"{"v":1,"op":"apply_paths","listen":{"port":8080},"apps":[{"app":"shop","backends":[],"root":"/"}]}"#;
+
+    for body in [top, app] {
         assert!(
             parse_request(body.as_bytes()).is_err(),
             "accepted a request with an unknown field: {body}"

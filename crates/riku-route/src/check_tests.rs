@@ -23,6 +23,7 @@ fn route() -> Route {
         static_paths: Vec::new(),
         kind: SiteKind::Plain,
         allow_git_folders: false,
+        open_port: None,
     }
 }
 
@@ -184,4 +185,47 @@ fn caddy_refuses_what_only_nginx_does() {
         assert!(e.to_string().contains("Caddy does not take"), "{r:?}: {e}");
     }
     check_caddy_route(&app(), &route()).unwrap();
+}
+
+fn port_only(port: u16) -> Route {
+    Route {
+        domains: Vec::new(),
+        open_port: Some(port),
+        ..route()
+    }
+}
+
+#[test]
+fn open_port_below_1024_or_caddy_admin_is_refused_by_gate() {
+    for port in [80, 443, 22, 2019] {
+        let message = refusal(&port_only(port));
+        assert!(message.contains("open_port"), "{port}: {message}");
+    }
+}
+
+#[test]
+fn open_port_on_wsgi_or_static_site_is_refused() {
+    for kind in [SiteKind::Wsgi, SiteKind::Static] {
+        let route = Route {
+            kind,
+            ..port_only(8100)
+        };
+        assert!(refusal(&route).contains("open_port"), "{kind:?}");
+    }
+}
+
+#[test]
+fn port_only_route_passes_both_gates() {
+    check_nginx_route(&app(), &port_only(8100)).unwrap();
+    check_caddy_route(&app(), &port_only(8100)).unwrap();
+}
+
+#[test]
+fn no_domains_and_no_open_port_is_refused() {
+    let route = Route {
+        domains: Vec::new(),
+        ..route()
+    };
+
+    assert!(refusal(&route).contains("domain"));
 }

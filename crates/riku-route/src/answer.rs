@@ -9,6 +9,7 @@ use riku_container::types::AppName;
 use crate::caddy_apply::{apply_caddy, remove_caddy, CaddyRoots};
 use crate::nginx_apply::{apply_nginx, remove_nginx};
 use crate::nginx_roots::NginxRoots;
+use crate::paths_apply::{apply_paths_caddy, apply_paths_nginx};
 use crate::protocol::{Reply, Request, RouterKind, Stage};
 
 pub(crate) fn failed(stage: Stage, error: impl ToString) -> Reply {
@@ -42,6 +43,14 @@ pub fn answer(nginx: &NginxRoots, caddy: &CaddyRoots, request: Request) -> Reply
                 RouterKind::Caddy => remove_caddy(caddy, &app),
             },
             Err(reply) => reply,
+        },
+        Request::ApplyPaths {
+            router,
+            listen,
+            apps,
+        } => match router {
+            RouterKind::Nginx => apply_paths_nginx(nginx, &listen, &apps),
+            RouterKind::Caddy => apply_paths_caddy(caddy, &listen, &apps),
         },
         Request::Status {} => Reply::Status {
             version: env!("CARGO_PKG_VERSION").to_string(),

@@ -28,7 +28,7 @@ fn shape(kind: SiteKind) -> SiteShape {
     }
 }
 
-fn backend(roots: &NginxRoots, app: &AppName, backend: &RouteBackend) -> Backend {
+pub(crate) fn backend(roots: &NginxRoots, app: &AppName, backend: &RouteBackend) -> Backend {
     match backend {
         RouteBackend::Tcp { host, port } => Backend::Tcp {
             host: *host,
@@ -66,6 +66,8 @@ pub(crate) fn render(roots: &NginxRoots, app: &AppName, route: &Route) -> Result
         domains: &route.domains,
         shape: shape(route.kind),
         https_only: route.https == HttpsPolicy::Only,
+        also_tls: route.https == HttpsPolicy::AlsoPlainHttp && route.tls.is_some(),
+        open_port: route.open_port,
         port: route.listen.port,
         backends: &backends,
         static_locations: &route.static_paths,

@@ -29,32 +29,42 @@ use crate::util::domain::parse_domains;
 use crate::util::flag::https_only;
 use crate::util::route_plan::{HttpsPolicy, RoutePlan};
 
+pub(crate) mod app_routing;
 mod backends;
 mod caddy;
 mod check;
 mod fallback;
+mod fallback_tls;
 mod helper_client;
 mod nginx_site;
+mod paths;
 mod plugin;
+mod port_rules;
 mod reload;
 mod remove;
 mod renew;
 mod route_build;
 mod route_env;
+pub(crate) mod routing_env;
+pub(crate) mod routing_state;
 
 pub use backends::{copy_socket, current_backends};
 pub(crate) use backends::{parsed_worker, web_copies, worker_backend};
 use caddy::apply_caddy_site;
 pub use check::check;
 use fallback::fallback_backends;
+use fallback_tls::mark_caddy_tls;
 pub use helper_client::send as send_to_helper;
 use nginx_site::apply_nginx_site;
+use paths::{previous_entry, publish_paths, route_by_path};
 use plugin::configure_plugin;
 pub use reload::ERROR_FILE as RELOAD_ERROR_FILE;
 use reload::{record_outcome, reload_router_plugin};
 pub use remove::remove;
 pub use renew::renew;
 pub use route_build::build_route;
+use routing_env::{routing_env, Record};
+use routing_state::{restore, RoutingMode};
 
 /// Caddy reaches an app over loopback whatever `RIKU_BIND_ADDRESS` says.
 /// nginx and router plugins keep the address each copy listens on, since a
@@ -148,16 +158,34 @@ fn apply_to(
     paths: &RikuPaths,
     backends: &[Backend],
 ) -> Result<()> {
-    match active {
+    let previous = previous_entry(app, paths);
+    let was_path = previous.as_ref().map(|entry| entry.mode) == Some(RoutingMode::Path);
+    let (env, routing) = match routing_env(app, env, paths, active, Record::Save) {
+        Ok(routed) => routed,
+        Err(e) => return Err(anyhow!("cannot route '{app}': {e}")),
+    };
+    let env = &env;
+    if routing.mode == RoutingMode::Path {
+        let outcome = route_by_path(active, app, env, paths, backends, was_path);
+        if outcome.is_err() {
+            restore(paths, app, previous);
+        }
+        record_outcome(paths, &outcome);
+        return outcome;
+    }
+    let outcome = match active {
         Router::Nginx => {
             let send = |request: &Request| send_to_helper(paths, request);
-            let outcome = apply_nginx_site(send, app, app_path, env, backends, paths);
+            let outcome = apply_nginx_site(send, app, app_path, env, &routing, backends, paths);
             record_outcome(paths, &outcome);
             outcome
         }
         Router::Caddy => {
             let send = |request: &Request| send_to_helper(paths, request);
             let outcome = apply_caddy_site(send, app, env, backends, paths);
+            if outcome.is_ok() && routing.fallback {
+                mark_caddy_tls(app, paths);
+            }
             record_outcome(paths, &outcome);
             outcome
         }
@@ -165,7 +193,15 @@ fn apply_to(
             Ok(()) => reload_router_plugin(name, paths),
             Err(e) => Err(e),
         },
+    };
+    if outcome.is_err() {
+        restore(paths, app, previous);
+        return outcome;
     }
+    if was_path {
+        return publish_paths(paths, active, (app, backends.to_vec()), true);
+    }
+    outcome
 }
 
 /// The routing plan for an app: its domains and HTTPS policy from ENV, and
@@ -191,6 +227,7 @@ fn route_plan(env: &HashMap<String, String>, backends: &[Backend]) -> Result<Rou
         domains,
         https,
         backends: backends.to_vec(),
+        open_port: None,
     })
 }
 

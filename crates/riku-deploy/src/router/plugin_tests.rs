@@ -31,6 +31,7 @@ fn configure_request_lists_every_backend() {
             Backend::loopback(5001),
             Backend::Unix(PathBuf::from("/srv/riku/nginx/shop.sock")),
         ],
+        open_port: None,
     };
 
     assert_eq!(

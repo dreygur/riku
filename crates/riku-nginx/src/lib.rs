@@ -12,10 +12,12 @@ pub(crate) use riku_util as util;
 mod backends;
 mod default_server;
 mod host;
+mod paths_site;
 mod remove;
 mod route_site;
 mod sanitize;
 mod ssl;
+mod ssl_single;
 mod static_copy;
 mod static_site;
 mod template;
@@ -25,10 +27,12 @@ use std::path::Path;
 pub use backends::{bind_address, default_backends, upstream_port_number};
 pub use default_server::needs_catch_all;
 pub use host::{include_file_contents, include_line, includes_riku_sites, write_include_file};
+pub use paths_site::{render_paths_site, PathApp, PathsSite};
 pub use remove::remove_deploy_files;
 pub use route_site::{render_route_site, RouteSite, SiteFiles, SiteShape};
 pub use sanitize::breaks_directive;
 pub use ssl::ensure_ssl_certificates;
+pub use ssl_single::issue_single;
 pub use static_site::{publish_static, remove_static, static_locations};
 
 /// Files an app might ship hoping to replace its generated nginx config.

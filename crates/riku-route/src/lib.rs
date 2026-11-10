@@ -44,6 +44,9 @@ mod nginx_roots;
 mod nginx_run;
 #[cfg(test)]
 mod nginx_syntax_tests;
+mod paths_apply;
+mod paths_check;
+mod port_wait;
 mod protocol;
 mod schema;
 mod server;
@@ -64,5 +67,5 @@ pub use protocol::{
     encode_reply, encode_request, parse_reply, parse_request, Reply, Request, RouterKind, Stage,
     PROTOCOL_VERSION,
 };
-pub use schema::{Listen, Route, RouteBackend, SiteKind, Tls};
+pub use schema::{Listen, PathApp, Route, RouteBackend, SiteKind, Tls};
 pub use server::{serve_one, REQUEST_BUDGET};

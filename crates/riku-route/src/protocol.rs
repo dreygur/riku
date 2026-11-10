@@ -10,7 +10,7 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::schema::Route;
+use crate::schema::{Listen, PathApp, Route};
 
 /// The only protocol version this build speaks.
 pub const PROTOCOL_VERSION: u8 = 1;
@@ -40,6 +40,15 @@ pub enum Request {
         app: String,
         #[serde(default)]
         router: RouterKind,
+    },
+    /// Replace the shared path mode site with one location per app in
+    /// `apps`, listening on `listen`, and reload the router. An empty list
+    /// removes the site.
+    ApplyPaths {
+        #[serde(default)]
+        router: RouterKind,
+        listen: Listen,
+        apps: Vec<PathApp>,
     },
     /// Ask whether the helper is alive and which build it is.
     Status {},

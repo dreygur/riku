@@ -8,11 +8,40 @@ fn plan(https: HttpsPolicy, backends: Vec<Backend>) -> RoutePlan {
         domains: parse_domains("shop.example.com www.shop.example.com").unwrap(),
         https,
         backends,
+        open_port: None,
     }
 }
 
 fn request(https: HttpsPolicy) -> RoutePlan {
     plan(https, vec![Backend::loopback(5000)])
+}
+
+#[test]
+fn caddy_takes_open_port() {
+    let port_only = RoutePlan {
+        domains: Vec::new(),
+        open_port: Some(8100),
+        ..request(HttpsPolicy::AlsoPlainHttp)
+    };
+    let both = RoutePlan {
+        open_port: Some(8100),
+        ..request(HttpsPolicy::Only)
+    };
+
+    assert!(
+        render_site("shop", &port_only)
+            .unwrap()
+            .contains("\nhttp://:8100 {\n"),
+        "{}",
+        render_site("shop", &port_only).unwrap()
+    );
+    assert!(
+        render_site("shop", &both)
+            .unwrap()
+            .contains("shop.example.com, www.shop.example.com, http://:8100 {"),
+        "{}",
+        render_site("shop", &both).unwrap()
+    );
 }
 
 #[test]

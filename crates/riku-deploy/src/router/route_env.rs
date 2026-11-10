@@ -1,5 +1,5 @@
 //! The parts of an app's route that come from ENV keys and cert files: where
-//! the router listens and the TLS pair. Values are parsed into the route's
+//! the router listens for port mode and the TLS pair. Values are parsed into the route's
 //! types here; whether they are safe is the gate's call in
 //! `riku_route::check_nginx_route`, not this module's.
 
@@ -10,32 +10,21 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 use riku_container::types::AppName;
-use riku_route::{Listen, SiteKind, Tls};
+use riku_route::Tls;
 
 use crate::config::RikuPaths;
 
-const EXTERNAL_PORT_KEY: &str = "RIKU_NGINX_EXTERNAL_PORT";
-const DEFAULT_HTTP_PORT: u16 = 80;
+const ROUTING_PORT_KEY: &str = "RIKU_ROUTING_PORT";
 
-/// The plain HTTP port. Only a port mapped or uWSGI site uses
-/// `RIKU_NGINX_EXTERNAL_PORT`, and never under `https_only`, as in the
-/// templates.
-pub(super) fn listen(
-    env: &HashMap<String, String>,
-    kind: SiteKind,
-    https_only: bool,
-) -> Result<Listen> {
-    let maps_port = matches!(kind, SiteKind::Wsgi | SiteKind::Portmap);
-    let (Some(value), true) = (env.get(EXTERNAL_PORT_KEY), maps_port && !https_only) else {
-        return Ok(Listen {
-            port: DEFAULT_HTTP_PORT,
-        });
-    };
-    match value.trim().parse() {
-        Ok(port) => Ok(Listen { port }),
-        Err(_) => Err(anyhow!(
-            "cannot read the listen port: {EXTERNAL_PORT_KEY} is not valid: '{value}'"
-        )),
+/// The port mode port: the one the app set, or the one riku picked, which
+/// `routing_env` writes into the env the router sees.
+pub(super) fn open_port(env: &HashMap<String, String>) -> Result<Option<u16>> {
+    match env.get(ROUTING_PORT_KEY) {
+        None => Ok(None),
+        Some(value) => match value.trim().parse() {
+            Ok(port) => Ok(Some(port)),
+            Err(_) => Err(anyhow!("{ROUTING_PORT_KEY} is not a port: '{value}'")),
+        },
     }
 }
 

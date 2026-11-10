@@ -14,17 +14,19 @@
 //! first write fails, the previous files are put back before the reply, so a
 //! refused config is never left for the next reload to pick up.
 
+use std::collections::BTreeSet;
 use std::fs;
 
 use anyhow::Error;
 use riku_container::types::AppName;
-use riku_util::route_plan::HttpsPolicy;
+use riku_util::listening::listening_ports;
 
 use crate::answer::failed;
 use crate::check::check_nginx_route;
 use crate::nginx_render::{render, CERTIFICATE_FILE, KEY_FILE};
 use crate::nginx_roots::NginxRoots;
 use crate::nginx_run::{check_config, reload};
+use crate::port_wait::wait_for_port;
 use crate::protocol::{Reply, Stage};
 use crate::schema::{Route, Tls};
 use crate::site_files::{
@@ -91,9 +93,15 @@ pub(crate) fn rolled_back(snapshot: &Snapshot, stage: Stage, cause: Error) -> Re
     }
 }
 
-/// Write `planned`, check, reload; restore on any failure after the first
-/// write.
-fn commit(roots: &NginxRoots, planned: &[Planned]) -> Reply {
+/// Write `planned`, check, reload, and wait for `open_port` to be listened
+/// on (`probe` lists the ports in LISTEN); restore on any failure after the
+/// first write.
+pub(crate) fn commit(
+    roots: &NginxRoots,
+    planned: &[Planned],
+    open_port: Option<u16>,
+    probe: impl Fn() -> BTreeSet<u16>,
+) -> Reply {
     let snapshot = match Snapshot::take(planned) {
         Ok(snapshot) => snapshot,
         Err(e) => return failed(Stage::Render, e),
@@ -101,9 +109,12 @@ fn commit(roots: &NginxRoots, planned: &[Planned]) -> Reply {
     if let Err(e) = install(planned) {
         return rolled_back(&snapshot, Stage::Render, e);
     }
-    match check_and_reload(roots) {
-        Ok(()) => Reply::Ok { reloaded: true },
-        Err((stage, cause)) => rolled_back(&snapshot, stage, cause),
+    if let Err((stage, cause)) = check_and_reload(roots) {
+        return rolled_back(&snapshot, stage, cause);
+    }
+    match open_port.map(|port| wait_for_port(port, probe)) {
+        Some(Err(cause)) => rolled_back(&snapshot, Stage::Reload, Error::msg(cause)),
+        _ => Reply::Ok { reloaded: true },
     }
 }
 
@@ -119,14 +130,16 @@ pub fn apply_nginx(roots: &NginxRoots, app: &AppName, route: &Route) -> Reply {
         Ok(config) => config,
         Err(e) => return failed(Stage::Render, e),
     };
-    let tls = route
-        .tls
-        .as_ref()
-        .filter(|_| route.https == HttpsPolicy::Only);
+    let tls = route.tls.as_ref();
     if let Err(e) = prepare_dirs(roots, app, tls.is_some()) {
         return failed(Stage::Render, e);
     }
-    commit(roots, &plan(roots, app, Some(config), tls))
+    commit(
+        roots,
+        &plan(roots, app, Some(config), tls),
+        route.open_port,
+        listening_ports,
+    )
 }
 
 /// Take `app` out of nginx. An app with no config is not an error and does
@@ -138,7 +151,7 @@ pub fn remove_nginx(roots: &NginxRoots, app: &AppName) -> Reply {
         Ok(_) => {}
         Err(e) => return failed(Stage::Render, e),
     }
-    let reply = commit(roots, &planned);
+    let reply = commit(roots, &planned, None, BTreeSet::new);
     if matches!(reply, Reply::Ok { .. }) {
         let _ = fs::remove_dir(roots.cert_dir(app));
     }

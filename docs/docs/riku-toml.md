@@ -46,6 +46,8 @@ from the app's ENV file.
 | `routing.static` | bool | `RIKU_NGINX_STATIC` |
 | `routing.static_paths` | list of strings | `RIKU_NGINX_STATIC_PATHS` |
 | `routing.allow_git_folders` | bool | `RIKU_NGINX_ALLOW_GIT_FOLDERS` |
+| `routing.mode` | `"domain"`, `"port"` or `"path"`, see [App URLs](routing.md) | `RIKU_ROUTING_MODE` |
+| `routing.port` | port number, 1024 and above | `RIKU_ROUTING_PORT` |
 | `routing.bind_address` | string, server only | `RIKU_BIND_ADDRESS` |
 | `runtime.name` | string | `RIKU_RUNTIME` |
 | `runtime.version` | string, needs `runtime.name` | `RIKU_<NAME>_VERSION`, such as `RIKU_NODE_VERSION` |

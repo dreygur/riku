@@ -67,6 +67,38 @@ fn refuses_unknown_key_with_line_and_without_value() {
 }
 
 #[test]
+fn maps_routing_mode_and_port_to_env() {
+    let env = repo("[routing]\nmode = \"port\"\nport = 8181\n")
+        .unwrap()
+        .env();
+
+    assert_eq!(
+        env.get("RIKU_ROUTING_MODE").map(String::as_str),
+        Some("port")
+    );
+    assert_eq!(
+        env.get("RIKU_ROUTING_PORT").map(String::as_str),
+        Some("8181")
+    );
+}
+
+#[test]
+fn mode_outside_three_words_is_refused_with_line() {
+    let message = err(repo("[routing]\n\nmode = \"tunnel\"\n"));
+
+    assert!(message.contains("routing.mode"), "{message}");
+    assert!(message.contains(":3:"), "names the line: {message}");
+}
+
+#[test]
+fn port_above_65535_is_refused_with_line() {
+    let message = err(repo("[routing]\nport = 70000\n"));
+
+    assert!(message.contains("routing.port"), "{message}");
+    assert!(message.contains(":2:"), "names the line: {message}");
+}
+
+#[test]
 fn refuses_wrong_type() {
     let message = err(repo("[routing]\nhttps_only = \"yes\"\n"));
 

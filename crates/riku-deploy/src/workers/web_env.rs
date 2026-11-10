@@ -14,16 +14,14 @@ use crate::config::RikuPaths;
 
 const UWSGI_PROCESSES: &str = "4";
 const UWSGI_THREADS: &str = "4";
-const RIKU_NGINX_EXTERNAL_PORT: &str = "80";
+/// The nginx only listen port, replaced by riku.toml `routing.port`; dropped
+/// wherever it is found.
+const REMOVED_LISTEN_KEY: &str = "RIKU_NGINX_EXTERNAL_PORT";
 
 /// Keys older riku versions persisted for the one address of the last copy.
-const LEGACY_ADDRESS_KEYS: [&str; 2] = ["RIKU_UPSTREAM_PORT", "UWSGI_SOCKET"];
+const LEGACY_ADDRESS_KEYS: [&str; 3] = ["RIKU_UPSTREAM_PORT", "UWSGI_SOCKET", REMOVED_LISTEN_KEY];
 /// The keys a web facing kind persists to pick the router's template.
-const ROUTE_KEYS: [&str; 3] = [
-    "RIKU_NGINX_PORTMAP",
-    "RIKU_NGINX_EXTERNAL_PORT",
-    "RIKU_NGINX_WSGI",
-];
+const ROUTE_KEYS: [&str; 2] = ["RIKU_NGINX_PORTMAP", "RIKU_NGINX_WSGI"];
 
 /// Returns true when `kind` uses a WSGI unix socket (wsgi, jwsgi, rwsgi, php).
 pub(crate) fn is_wsgi_kind(kind: &str) -> bool {
@@ -104,10 +102,7 @@ fn configure_web_env(
     env.insert("PORT".to_string(), port.to_string());
     env.insert("RIKU_NGINX_PORTMAP".to_string(), "true".to_string());
     env.insert("RIKU_UPSTREAM_PORT".to_string(), port.to_string());
-    env.insert(
-        "RIKU_NGINX_EXTERNAL_PORT".to_string(),
-        RIKU_NGINX_EXTERNAL_PORT.to_string(),
-    );
+    env.remove(REMOVED_LISTEN_KEY);
     env.insert(
         "SOCKET".to_string(),
         socket_path.to_string_lossy().to_string(),
@@ -130,17 +125,12 @@ fn apply_route_keys(kind: &str, persisted: &mut HashMap<String, String>) {
     }
     if is_wsgi_kind(kind) {
         persisted.remove("RIKU_NGINX_PORTMAP");
-        persisted.remove("RIKU_NGINX_EXTERNAL_PORT");
         persisted.insert("RIKU_NGINX_WSGI".to_string(), "true".to_string());
         return;
     }
 
     persisted.remove("RIKU_NGINX_WSGI");
     persisted.insert("RIKU_NGINX_PORTMAP".to_string(), "true".to_string());
-    persisted.insert(
-        "RIKU_NGINX_EXTERNAL_PORT".to_string(),
-        RIKU_NGINX_EXTERNAL_PORT.to_string(),
-    );
 }
 
 /// Drop every routing key, for an app with no web facing kind left.

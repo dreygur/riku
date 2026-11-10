@@ -27,10 +27,12 @@ use anyhow::{anyhow, Result};
 use crate::RikuPaths;
 
 mod engine;
+mod routing;
 mod save;
 
 pub use engine::EngineSettings;
-pub use save::save_key;
+pub use routing::{routing_section, FallbackPattern, PortRange, RoutingSettings};
+pub use save::{add_routing_section, save_key};
 
 /// File name of the server settings, directly under the riku root.
 pub const SETTINGS_FILE: &str = "settings.toml";
@@ -41,6 +43,7 @@ pub struct ServerSettings {
     /// `[router] name`. `None` means the legacy `ROUTER` file decides.
     pub router: Option<String>,
     pub engine: EngineSettings,
+    pub routing: RoutingSettings,
 }
 
 #[allow(clippy::question_mark)]
@@ -81,6 +84,12 @@ pub fn parse(raw: &str, file: &Path) -> Result<ServerSettings> {
             "router" => {
                 settings.router = match router_name(table, file) {
                     Ok(name) => name,
+                    Err(e) => return Err(e),
+                };
+            }
+            "routing" => {
+                settings.routing = match routing::routing_settings(table, file) {
+                    Ok(routing) => routing,
                     Err(e) => return Err(e),
                 };
             }

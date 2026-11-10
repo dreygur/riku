@@ -7,10 +7,11 @@
 
 use std::fs;
 use std::io::ErrorKind;
+use std::net::Ipv4Addr;
 
 use anyhow::{anyhow, Result};
 
-use super::parse;
+use super::{parse, routing_section};
 use crate::RikuPaths;
 
 #[allow(clippy::question_mark)]
@@ -71,6 +72,35 @@ fn replace_file(paths: &RikuPaths, text: &str) -> Result<()> {
             paths.settings_file.display()
         )),
     }
+}
+
+/// Append the `[routing]` section (comments included) when the file has
+/// none. Returns whether it was added. The result is parsed before it
+/// replaces the file.
+#[allow(clippy::question_mark)]
+pub fn add_routing_section(paths: &RikuPaths, ip: Option<Ipv4Addr>) -> Result<bool> {
+    let raw = match fs::read_to_string(&paths.settings_file) {
+        Ok(raw) => raw,
+        Err(e) if e.kind() == ErrorKind::NotFound => String::new(),
+        Err(e) => {
+            return Err(anyhow!(
+                "failed to read {}: {e}",
+                paths.settings_file.display()
+            ))
+        }
+    };
+    let current = match parse(&raw, &paths.settings_file) {
+        Ok(current) => current,
+        Err(e) => return Err(e),
+    };
+    if current.routing.present {
+        return Ok(false);
+    }
+    let text = format!("{raw}{}", routing_section(ip));
+    if let Err(e) = parse(&text, &paths.settings_file) {
+        return Err(e);
+    }
+    replace_file(paths, &text).map(|()| true)
 }
 
 /// Set `section.key` to `value`, or remove it when `value` is `None`.

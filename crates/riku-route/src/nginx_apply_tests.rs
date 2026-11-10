@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -68,6 +69,7 @@ fn route(domain: &str) -> Route {
         static_paths: Vec::new(),
         kind: SiteKind::Plain,
         allow_git_folders: false,
+        open_port: None,
     }
 }
 
@@ -120,6 +122,43 @@ fn every_route_field_reaches_the_rendered_site() {
             "{fragment:?} missing from:\n{rendered}"
         );
     }
+}
+
+#[test]
+fn fallback_pair_is_written_for_a_plain_and_tls_site() {
+    let host = Host::new();
+    let myapp = app("myapp");
+    let route = Route {
+        https: HttpsPolicy::AlsoPlainHttp,
+        ..https_route("myapp.example")
+    };
+
+    let reply = apply_nginx(&host.roots, &myapp, &route);
+
+    assert_eq!(reply, Reply::Ok { reloaded: true }, "apply failed");
+    let cert_dir = host.roots.cert_dir(&myapp);
+    assert!(
+        cert_dir.join("fullchain.pem").exists(),
+        "the site names a certificate that was never written"
+    );
+    assert!(host.conf(&myapp).contains("443 ssl"));
+}
+
+#[test]
+fn failed_bind_restores_old_site() {
+    let host = Host::new();
+    let myapp = app("myapp");
+    apply_nginx(&host.roots, &myapp, &route("myapp.example"));
+    let before = host.conf(&myapp);
+    let config = render(&host.roots, &myapp, &route("other.example")).unwrap();
+    let planned = plan(&host.roots, &myapp, Some(config), None);
+
+    let reply = commit(&host.roots, &planned, Some(8100), BTreeSet::new);
+
+    let (stage, error) = failure(reply);
+    assert_eq!(stage, Stage::Reload);
+    assert!(error.contains("8100"), "{error}");
+    assert_eq!(host.conf(&myapp), before, "the old site must be back");
 }
 
 #[test]

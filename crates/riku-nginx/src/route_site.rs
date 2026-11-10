@@ -18,6 +18,9 @@ use crate::static_site::{document_root_in, static_path_dir_in};
 use crate::template::{backend_address, register_templates};
 use crate::util::backend::Backend;
 
+/// nginx's name for "any host", used by a port only site.
+const CATCH_ALL_NAME: &str = "_";
+
 /// Which template a site takes after `https_only`, which wins over all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SiteShape {
@@ -48,6 +51,12 @@ pub struct RouteSite<'a> {
     pub domains: &'a [String],
     pub shape: SiteShape,
     pub https_only: bool,
+    /// Also serve HTTPS on 443 with the site's pair, with no redirect from
+    /// HTTP. Used for a fallback domain, whose certificate may lapse.
+    pub also_tls: bool,
+    /// Port mode: a plain HTTP port answering any host name. With no domains
+    /// the site listens only there, as `server_name _`.
+    pub open_port: Option<u16>,
     pub port: u16,
     pub backends: &'a [Backend],
     pub static_locations: &'a [String],
@@ -96,7 +105,12 @@ fn insert_static(context: &mut tera::Context, site: &RouteSite) -> Result<()> {
 
 fn build_context(site: &RouteSite) -> Result<tera::Context> {
     let mut context = tera::Context::new();
-    let domains = match sanitize_nginx_value("domains", &site.domains.join(" ")) {
+    let names = if site.domains.is_empty() {
+        CATCH_ALL_NAME.to_string()
+    } else {
+        site.domains.join(" ")
+    };
+    let domains = match sanitize_nginx_value("domains", &names) {
         Ok(domains) => domains,
         Err(e) => return Err(anyhow!("domains: {e}")),
     };
@@ -107,6 +121,9 @@ fn build_context(site: &RouteSite) -> Result<tera::Context> {
     };
 
     context.insert("IPV6", &site.ipv6);
+    context.insert("ALSO_TLS", &(site.also_tls && !site.https_only));
+    context.insert("OPEN_PORT", &site.open_port);
+    context.insert("DOMAIN_LISTEN", &!site.domains.is_empty());
     context.insert("APP", site.app);
     context.insert("APP_UPSTREAM", &upstream_name(site.app));
     context.insert("RIKU_DOMAINS", &domains);

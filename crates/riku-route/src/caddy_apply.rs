@@ -11,15 +11,17 @@
 //! A failed reload puts the previous site file back. Caddy keeps serving its
 //! old config when a reload is refused, so nothing else needs undoing.
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::process::Command;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Error, Result};
 use riku_caddy::{render_site, ADMIN_ADDRESS, SYSTEM_CADDYFILE};
 use riku_config::{ReloadPrograms, CADDY_SITE_ROOT};
 use riku_container::types::AppName;
 use riku_util::backend::Backend;
 use riku_util::domain::Domain;
+use riku_util::listening::listening_ports;
 use riku_util::route_plan::RoutePlan;
 use riku_util::write_dir::{check_write_dir, ROOT_UID};
 
@@ -27,13 +29,14 @@ use crate::answer::failed;
 use crate::check::check_caddy_route;
 use crate::nginx_apply::rolled_back;
 use crate::nginx_run::run;
+use crate::port_wait::wait_for_port;
 use crate::protocol::{Reply, Stage};
 use crate::schema::{Route, RouteBackend};
 use crate::site_files::{install, Planned, Snapshot};
 
 /// Readable by the `caddy` group through the site directory's group, which
 /// root init sets on the directory with the setgid bit.
-const SITE_FILE: u32 = 0o640;
+pub(crate) const SITE_FILE: u32 = 0o640;
 
 /// Where the helper keeps Caddy's site files and which program it runs.
 #[derive(Debug, Clone)]
@@ -66,7 +69,7 @@ impl CaddyRoots {
     }
 }
 
-fn backend(backend: &RouteBackend) -> Result<Backend> {
+pub(crate) fn backend(backend: &RouteBackend) -> Result<Backend> {
     match backend {
         RouteBackend::Tcp { host, port } => Ok(Backend::Tcp {
             host: *host,
@@ -90,6 +93,7 @@ fn plan_of(route: &Route) -> Result<RoutePlan> {
             domains,
             https: route.https,
             backends,
+            open_port: route.open_port,
         }),
         (Err(e), _) | (_, Err(e)) => Err(e),
     }
@@ -107,9 +111,14 @@ fn reload(roots: &CaddyRoots) -> Result<()> {
     )
 }
 
-/// Write `planned`, reload Caddy, and restore the previous files when the
-/// reload is refused.
-fn commit(roots: &CaddyRoots, planned: &[Planned]) -> Reply {
+/// Write `planned`, reload Caddy, wait for `open_port` to be listened on,
+/// and restore the previous files when either fails.
+pub(crate) fn commit(
+    roots: &CaddyRoots,
+    planned: &[Planned],
+    open_port: Option<u16>,
+    probe: impl Fn() -> BTreeSet<u16>,
+) -> Reply {
     let snapshot = match Snapshot::take(planned) {
         Ok(snapshot) => snapshot,
         Err(e) => return failed(Stage::Render, e),
@@ -117,9 +126,12 @@ fn commit(roots: &CaddyRoots, planned: &[Planned]) -> Reply {
     if let Err(e) = install(planned) {
         return rolled_back(&snapshot, Stage::Render, e);
     }
-    match reload(roots) {
-        Ok(()) => Reply::Ok { reloaded: true },
-        Err(e) => rolled_back(&snapshot, Stage::Reload, e),
+    if let Err(e) = reload(roots) {
+        return rolled_back(&snapshot, Stage::Reload, e);
+    }
+    match open_port.map(|port| wait_for_port(port, probe)) {
+        Some(Err(cause)) => rolled_back(&snapshot, Stage::Reload, Error::msg(cause)),
+        _ => Reply::Ok { reloaded: true },
     }
 }
 
@@ -145,7 +157,13 @@ pub fn apply_caddy(roots: &CaddyRoots, app: &AppName, route: &Route) -> Reply {
     if let Err(e) = check_write_dir(&roots.site_root, roots.owner_uid) {
         return failed(Stage::Render, e);
     }
-    commit(roots, &plan(roots, app, Some(site)))
+    let open_port = checked.route().open_port;
+    commit(
+        roots,
+        &plan(roots, app, Some(site)),
+        open_port,
+        listening_ports,
+    )
 }
 
 /// Take `app` out of Caddy. An app with no site is not an error and does not
@@ -160,7 +178,7 @@ pub fn remove_caddy(roots: &CaddyRoots, app: &AppName) -> Reply {
     if let Err(e) = check_write_dir(&roots.site_root, roots.owner_uid) {
         return failed(Stage::Render, e);
     }
-    commit(roots, &planned)
+    commit(roots, &planned, None, BTreeSet::new)
 }
 
 #[cfg(test)]
