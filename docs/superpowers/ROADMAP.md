@@ -6,6 +6,18 @@ work they describe.
 
 ## How work runs here
 
+Pace rules from 2026-11-11 override the older bullets below where they
+differ: bug fixes go failing test, fix, commit with no plan; features get a
+half page design in chat that the owner approves, EGM only on request; the
+full suite and one review run once per batch; one PR per batch.
+
+Goal for 0.1.4 ("somewhat complete"): merge `feat/small-boards` and
+`fix/nginx-cache-catch-all`; custom certificates (`riku certs`); node
+plugin honours `RIKU_NODE_VERSION` by failing on a mismatch; no
+`your-server` placeholders in docs; `v0.1.4-rc.1` tag to prove the release
+workflow, then `v0.1.4`. The Next.js dashboard, the framework design and
+phase 4 come after.
+
 - Each project has a design in `docs/superpowers/specs/` (owner approved) and
   a plan in `docs/superpowers/plans/`, written just before it runs.
 - Plans run with superpowers:subagent-driven-development, cut for tokens
