@@ -7,7 +7,7 @@ use riku_supervisor::config::app_worker_configs;
 use serde_json::json;
 
 use crate::config::RikuPaths;
-use crate::util::exit_if_invalid;
+use crate::util::existing_app;
 
 use crate::agent::confirm;
 use crate::agent::types::AgentResponse;
@@ -69,7 +69,7 @@ fn not_found(app: &str) -> AgentResponse {
 }
 
 pub fn cmd_agent_destroy_request(paths: &RikuPaths, state: &Path, app: &str) -> AgentResponse {
-    match exit_if_invalid(app, &paths.app_root) {
+    match existing_app(app, &paths.app_root) {
         Ok(app) => confirm::request(state, "destroy", &app),
         Err(_) => not_found(app),
     }
@@ -81,7 +81,7 @@ pub fn cmd_agent_destroy_confirm(
     app: &str,
     token: &str,
 ) -> AgentResponse {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match existing_app(app, &paths.app_root) {
         Ok(app) => app,
         Err(_) => return not_found(app),
     };

@@ -7,13 +7,13 @@ use riku_supervisor::config::app_worker_configs;
 use serde_json::json;
 
 use crate::config::RikuPaths;
-use crate::util::exit_if_invalid;
+use crate::util::existing_app;
 
 use crate::agent::confirm;
 use crate::agent::types::AgentResponse;
 
 pub fn cmd_agent_logs(paths: &RikuPaths, app: &str, process: &str) -> AgentResponse {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match existing_app(app, &paths.app_root) {
         Ok(a) => a,
         Err(_) => {
             return AgentResponse::error(
@@ -51,7 +51,7 @@ pub fn cmd_agent_logs(paths: &RikuPaths, app: &str, process: &str) -> AgentRespo
 }
 
 pub fn cmd_agent_ps(paths: &RikuPaths, app: &str) -> AgentResponse {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match existing_app(app, &paths.app_root) {
         Ok(a) => a,
         Err(_) => {
             return AgentResponse::error(
@@ -71,7 +71,7 @@ pub fn cmd_agent_ps(paths: &RikuPaths, app: &str) -> AgentResponse {
 }
 
 pub fn cmd_agent_restart(paths: &RikuPaths, app: &str, service: Option<&str>) -> AgentResponse {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match existing_app(app, &paths.app_root) {
         Ok(a) => a,
         Err(_) => {
             return AgentResponse::error(
@@ -90,7 +90,7 @@ pub fn cmd_agent_restart(paths: &RikuPaths, app: &str, service: Option<&str>) ->
 }
 
 pub fn cmd_agent_stop(paths: &RikuPaths, state: &Path, app: &str) -> AgentResponse {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match existing_app(app, &paths.app_root) {
         Ok(a) => a,
         Err(_) => {
             return AgentResponse::error(
@@ -108,7 +108,7 @@ pub fn cmd_agent_stop_confirm(
     app: &str,
     token: &str,
 ) -> AgentResponse {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match existing_app(app, &paths.app_root) {
         Ok(a) => a,
         Err(_) => {
             return AgentResponse::error(
@@ -130,7 +130,7 @@ pub fn cmd_agent_stop_confirm(
 }
 
 pub fn cmd_agent_run(paths: &RikuPaths, app: &str, cmd: &[String]) -> AgentResponse {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match existing_app(app, &paths.app_root) {
         Ok(a) => a,
         Err(_) => {
             return AgentResponse::error(
@@ -151,7 +151,7 @@ pub fn cmd_agent_run(paths: &RikuPaths, app: &str, cmd: &[String]) -> AgentRespo
 pub fn cmd_agent_stats(paths: &RikuPaths, app: Option<&str>) -> AgentResponse {
     match app {
         Some(app_name) => {
-            let app = match exit_if_invalid(app_name, &paths.app_root) {
+            let app = match existing_app(app_name, &paths.app_root) {
                 Ok(a) => a,
                 Err(_) => {
                     return AgentResponse::error(
