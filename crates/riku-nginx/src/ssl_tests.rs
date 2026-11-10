@@ -206,6 +206,59 @@ fn rejects_an_app_name_that_could_reach_the_reload_shell() {
 }
 
 #[test]
+fn forgetting_acme_stops_renewals_writing_over_the_app_files() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let argv_log = mock_acme_sh(&tmp, &paths, "");
+    std::fs::create_dir_all(paths.acme_sh_root.join("a.example_ecc")).unwrap();
+    let hook = paths.nginx_root.join("myapp.renew-hook");
+    std::fs::write(&hook, "").unwrap();
+    std::fs::create_dir_all(&paths.acme_cert_links).unwrap();
+    let link = paths.acme_cert_links.join("myapp");
+    std::os::unix::fs::symlink(paths.acme_sh_root.join("a.example_ecc"), &link).unwrap();
+
+    crate::forget_acme("myapp", &domains(&["b.example"]), &paths);
+
+    let argv = std::fs::read_to_string(&argv_log).expect("acme.sh was not run");
+    assert_eq!(argv.trim(), "--remove -d a.example --ecc", "{argv}");
+    assert!(!hook.exists(), "the renew hook marker is left");
+    assert!(
+        std::fs::symlink_metadata(&link).is_err(),
+        "the acme link is left"
+    );
+}
+
+#[test]
+fn a_skipped_issue_installs_the_certificate_acme_sh_already_has() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let key = paths.nginx_root.join("myapp.key");
+    let argv_log = mock_acme_sh(
+        &tmp,
+        &paths,
+        &format!(
+            "case \"$1\" in --issue) exit 2 ;; esac\n: > {}",
+            key.display()
+        ),
+    );
+
+    let names = domains(&["a.example"]);
+    assert!(ensure_ssl_certificates("myapp", &names, &paths).unwrap());
+
+    let argv = std::fs::read_to_string(&argv_log).expect("acme.sh was not run");
+    let calls: Vec<&str> = argv.lines().collect();
+    assert_eq!(calls.len(), 2, "{argv}");
+    assert!(
+        calls[1].starts_with("--install-cert -d a.example "),
+        "{argv}"
+    );
+    assert!(
+        !paths.nginx_root.join("myapp.crt").exists() || key.exists(),
+        "a self-signed pair was made"
+    );
+}
+
+#[test]
 #[ignore = "requires openssl binary on PATH"]
 fn test_generate_self_signed_cert_produces_files() {
     let tmp = TempDir::new().unwrap();

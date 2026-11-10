@@ -85,10 +85,14 @@ fn install_bundle(
     if info::classify(found.expires_at, info::now()) == Expiry::Expired {
         bail!("the certificate has expired");
     }
+    let domains = app_domains(paths, app);
+    // acme.sh renews into the same files; without this a renewal would put
+    // a Let's Encrypt certificate back over the user's pair.
+    crate::nginx::forget_acme(app, &domains, paths);
     if let Err(e) = store::install(paths, app, &bundle) {
         return Err(e);
     }
-    let uncovered = app_domains(paths, app)
+    let uncovered = domains
         .into_iter()
         .filter(|domain| !info::covers(&found.names, domain))
         .collect();

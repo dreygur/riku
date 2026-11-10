@@ -293,6 +293,11 @@ phase 4 come after.
 - The dashboard Playwright suite targets the UI from before #71: none of
   its selectors exist. It needs a rewrite; the owner deferred the Next.js
   dashboard.
+- Deferred from the 0.1.4 batch review (2026-11-11): after the single
+  domain fallback, nothing re-issues for all domains once DNS is fixed, and
+  each failing deploy makes one Let's Encrypt attempt per domain (rate
+  limit risk); a failed first Caddy apply leaves an empty `certs/<app>` dir.
+- Superseded below: own certificates shipped as `riku certs` (0.1.4).
 - No supported way to serve your own certificate. With nginx, placing
   `<app>.key` and `<app>.fullchain.crt` in `nginx_root` works because an
   existing pair is kept, but it is undocumented, riku may replace a pair

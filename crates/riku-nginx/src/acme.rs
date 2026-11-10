@@ -12,6 +12,11 @@ use std::fs;
 use anyhow::Result;
 
 const ACME_UMASK: libc::mode_t = 0o027;
+/// acme.sh's exit code when it already holds a certificate that is not due
+/// for renewal and so skips the issue.
+const ACME_SKIPPED: i32 = 2;
+/// acme.sh keeps an ECC certificate in `<domain>_ecc`, an RSA one in `<domain>`.
+const ECC_DIR_SUFFIX: &str = "_ecc";
 
 /// acme.sh run with umask `027`, so the challenge files it writes in the
 /// webroot are readable by the webroot's group (the nginx worker's) and by
@@ -125,6 +130,87 @@ pub(crate) fn install_renew_hook(
     }
 }
 
+/// Copy a certificate acme.sh already holds for `domain` into `app`'s files,
+/// with the renew hook. Used when acme.sh skips an issue because its
+/// certificate is not due, which would otherwise read as a failure and end
+/// in a self-signed pair.
+fn install_existing(
+    app: &str,
+    domain: &str,
+    paths: &crate::config::RikuPaths,
+    acme_sh: &std::path::Path,
+) -> bool {
+    let installed = acme_sh_command(acme_sh)
+        .args(acme_install_args(app, domain, paths))
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false);
+    if installed {
+        crate::util::echo(
+            &format!("-----> Installed the Let's Encrypt certificate acme.sh holds for '{domain}'"),
+            "green",
+        );
+    }
+    installed
+}
+
+fn remove_if_present(path: &std::path::Path) {
+    if let Err(e) = fs::remove_file(path) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            crate::util::echo(
+                &format!("-----> Could not remove {}: {e}", path.display()),
+                "yellow",
+            );
+        }
+    }
+}
+
+/// Stop acme.sh from renewing `app`'s certificate into its files: removes
+/// the acme.sh registration of every domain it holds one for, the renew
+/// hook marker and the destroy link. Used when the app gets its own
+/// certificate, which a renewal would otherwise overwrite. A failure is
+/// reported, never fatal.
+pub fn forget_acme(app: &str, domains: &[String], paths: &crate::config::RikuPaths) {
+    let acme_sh = paths.acme_sh_root.join("acme.sh");
+    let link = paths.acme_cert_links.join(app);
+    let mut held_for: Vec<String> = domains.to_vec();
+    // The link names the domain acme.sh filed the certificate under, which
+    // for a fallback domain is not in the app's own domains.
+    if let Some(name) = fs::read_link(&link)
+        .ok()
+        .and_then(|target| target.file_name().map(|n| n.to_string_lossy().into_owned()))
+    {
+        let domain = name.trim_end_matches(ECC_DIR_SUFFIX).to_string();
+        if !held_for.contains(&domain) {
+            held_for.push(domain);
+        }
+    }
+    if acme_sh.exists() {
+        for domain in &held_for {
+            let held = [
+                (domain.clone(), None),
+                (format!("{domain}{ECC_DIR_SUFFIX}"), Some("--ecc")),
+            ];
+            for (dir, ecc) in held {
+                if !paths.acme_sh_root.join(&dir).exists() {
+                    continue;
+                }
+                let mut command = acme_sh_command(&acme_sh);
+                command.args(["--remove", "-d", domain.as_str()]);
+                command.args(ecc);
+                if !matches!(command.output(), Ok(output) if output.status.success()) {
+                    crate::util::echo(
+                        &format!("-----> acme.sh could not drop its certificate for '{domain}'"),
+                        "yellow",
+                    );
+                }
+            }
+        }
+    }
+    remove_if_present(&paths.nginx_root.join(format!("{app}.renew-hook")));
+    remove_if_present(&link);
+}
+
 /// One acme.sh issue for `domains`; reports a failure and returns false.
 fn issue(
     app: &str,
@@ -151,6 +237,9 @@ fn issue(
             "green",
         );
         return true;
+    }
+    if output.status.code() == Some(ACME_SKIPPED) {
+        return install_existing(app, &domains[0], paths, acme_sh);
     }
     let stderr = String::from_utf8_lossy(&output.stderr);
     crate::util::echo(

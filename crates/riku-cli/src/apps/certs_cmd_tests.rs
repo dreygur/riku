@@ -141,6 +141,31 @@ fn unset_removes_an_own_pair_and_refuses_one_riku_issued() {
 }
 
 #[test]
+fn set_drops_the_acme_registration_so_a_renewal_cannot_overwrite_the_pair() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = paths_with_app(&tmp);
+    set_domains(&paths, "shop.example");
+    fs::create_dir_all(paths.acme_sh_root.join("shop.example_ecc")).unwrap();
+    let log = tmp.path().join("acme.log");
+    let acme_sh = paths.acme_sh_root.join("acme.sh");
+    fs::write(
+        &acme_sh,
+        format!("#!/bin/sh\necho \"$@\" >> {}\n", log.display()),
+    )
+    .unwrap();
+    fs::set_permissions(&acme_sh, fs::Permissions::from_mode(0o755)).unwrap();
+    fs::write(paths.nginx_root.join("myapp.renew-hook"), "").unwrap();
+
+    install_bundle(&paths, "myapp", &bundle(VALID_CERT, VALID_KEY), |_| Ok(())).unwrap();
+
+    let calls = fs::read_to_string(&log).unwrap_or_default();
+    assert!(calls.contains("--remove -d shop.example --ecc"), "{calls}");
+    assert!(!paths.nginx_root.join("myapp.renew-hook").exists());
+}
+
+#[test]
 fn unset_puts_the_route_back_on_riku_certificates_at_once() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = paths_with_app(&tmp);

@@ -208,9 +208,16 @@ fn nginx_route(
     base: Route,
     paths: &RikuPaths,
 ) -> Result<Route> {
-    let wanted = base.https == HttpsPolicy::Only || has_own_cert(paths, app.as_str());
+    let own = has_own_cert(paths, app.as_str());
+    let wanted = base.https == HttpsPolicy::Only || own;
     let tls = if wanted {
         match tls(app, paths) {
+            Ok(None) if own => {
+                return Err(anyhow!(
+                    "tls: '{app}' is marked as having its own certificate but its pair is missing from {}",
+                    paths.nginx_root.display()
+                ))
+            }
             Ok(found) => found,
             Err(e) => return Err(anyhow!("tls: {e}")),
         }

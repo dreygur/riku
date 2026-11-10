@@ -72,13 +72,15 @@ fn write(paths: &RikuPaths, app: &str, suffix: &str, text: &str) -> Result<()> {
     }
 }
 
-/// Save the pair, then the marker.
+/// Save the pair, then the marker. The marker goes first so a failure part
+/// way never leaves a pair riku would treat as its own to replace; the key
+/// goes last of the pair.
 pub(crate) fn install(paths: &RikuPaths, app: &str, bundle: &Bundle) -> Result<()> {
     let files = [
-        ("key", bundle.key_pem.as_str()),
+        (OWN_CERT_SUFFIX, ""),
         ("crt", first_certificate(&bundle.cert_pem)),
         ("fullchain.crt", bundle.cert_pem.as_str()),
-        (OWN_CERT_SUFFIX, ""),
+        ("key", bundle.key_pem.as_str()),
     ];
     for (suffix, text) in files {
         if let Err(e) = write(paths, app, suffix, text) {

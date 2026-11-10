@@ -330,6 +330,20 @@ fn own_certificate_rides_along_whatever_the_https_policy() {
 }
 
 #[test]
+fn a_marker_without_its_pair_fails_on_nginx_as_on_caddy() {
+    let tmp = TempDir::new().unwrap();
+    fs::write(paths_in(&tmp).nginx_root.join("myapp.own-cert"), "").unwrap();
+    let backends = [Backend::loopback(5001)];
+    let env = [("RIKU_DOMAINS", "myapp.example")];
+
+    let nginx = build(&tmp, &env, &backends);
+    let caddy = build_for(&tmp, &Router::Caddy, &env, &backends);
+
+    assert!(nginx.is_err(), "nginx served no tls for a marked app");
+    assert!(caddy.is_err());
+}
+
+#[test]
 fn a_pair_without_the_marker_stays_off_the_route_unless_https_is_only() {
     let tmp = TempDir::new().unwrap();
     let paths = paths_in(&tmp);
