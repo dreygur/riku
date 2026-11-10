@@ -1,6 +1,6 @@
 [package]
 name = "riku-error"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 description = "Riku error types"
 authors = ["Rakibul Yeasin"]

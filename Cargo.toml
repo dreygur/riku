@@ -23,6 +23,11 @@ members = [
 ]
 resolver = "2"
 
+# One version for every crate: riku picks the release tag of its plugin
+# downloads from it, and the agent, health and router helper report it.
+[workspace.package]
+version = "0.1.2"
+
 [workspace.dependencies]
 anyhow = "1"
 chrono = { version = "0.4", features = ["serde"] }

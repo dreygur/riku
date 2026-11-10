@@ -1,6 +1,6 @@
 [package]
 name = "riku-plugin-java"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 description = "Riku runtime plugin: Java (Maven and Gradle)"
 authors = ["Rakibul Yeasin"]

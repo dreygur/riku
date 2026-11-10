@@ -1,6 +1,6 @@
 [package]
 name = "riku-supervisor"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 description = "Riku process supervisor: lifecycle, health, metrics, cron, log rotation"
 authors = ["Rakibul Yeasin"]

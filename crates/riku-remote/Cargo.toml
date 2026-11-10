@@ -1,6 +1,6 @@
 [package]
 name = "riku-remote"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 description = "Riku laptop side code: server list, forwarding, dashboard client and client plugins"
 authors = ["Rakibul Yeasin"]

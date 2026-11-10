@@ -1,6 +1,6 @@
 [package]
 name = "riku-deploy"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 description = "Riku deployment orchestration (service layer)"
 authors = ["Rakibul Yeasin"]

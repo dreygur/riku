@@ -1,6 +1,6 @@
 [package]
 name = "riku-plugins"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 description = "Riku plugin system: discovery, manifest, marketplace, sandbox, signing"
 authors = ["Rakibul Yeasin"]

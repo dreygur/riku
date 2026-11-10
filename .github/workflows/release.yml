@@ -14,8 +14,26 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # riku downloads java and clojure from the release tag of its own version,
+  # so a tag that does not match the workspace version would point every
+  # install at the wrong release.
+  verify-version:
+    name: Tag matches the workspace version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Compare tag and version
+        run: |
+          version=$(awk '/^\[workspace.package\]/{found=1; next} found && /^version/{gsub(/"/, "", $3); print $3; exit}' Cargo.toml)
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "tag $GITHUB_REF_NAME does not match workspace version $version" >&2
+            exit 1
+          fi
+
   build:
     name: Build ${{ matrix.target }}
+    needs: verify-version
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
