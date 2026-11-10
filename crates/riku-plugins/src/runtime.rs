@@ -61,7 +61,7 @@ impl<'a> RuntimeContext<'a> {
 }
 
 /// Scan `plugin_root` for runtime plugins: executable files whose names do NOT
-/// start with `riku-`, plus bundle directories whose manifest says
+/// start with `riku-` or `.`, plus bundle directories whose manifest says
 /// `type = "runtime"`. Returns them sorted alphabetically for deterministic detection.
 pub fn discover(plugin_root: &Path) -> Vec<RuntimePlugin> {
     if !plugin_root.exists() {
@@ -83,8 +83,9 @@ pub fn discover(plugin_root: &Path) -> Vec<RuntimePlugin> {
             let name = entry.file_name();
             let name = name.to_str()?;
 
-            // Lifecycle hooks keep the riku- prefix: skip them
-            if name.starts_with("riku-") {
+            // Lifecycle hooks keep the riku- prefix. Hidden files are never
+            // plugins: an interrupted install leaves `.<name>.new` behind.
+            if name.starts_with("riku-") || name.starts_with('.') {
                 return None;
             }
 

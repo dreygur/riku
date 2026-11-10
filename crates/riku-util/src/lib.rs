@@ -34,6 +34,7 @@ pub mod public_key;
 pub mod resource_limits;
 pub mod root_binary;
 pub mod route_plan;
+pub mod runtime_markers;
 pub mod secure;
 pub mod socket_dir;
 pub mod spawn;

@@ -33,7 +33,9 @@ dirs = "7"
 glob = { workspace = true }
 shlex = { workspace = true }
 reqwest = { workspace = true }
-nix = { workspace = true, features = ["signal", "process", "user", "fs", "term"] }
+sha2 = "0.11"
+hex = { workspace = true }
+nix ={ workspace = true, features = ["signal", "process", "user", "fs", "term"] }
 which = { workspace = true }
 
 [dev-dependencies]

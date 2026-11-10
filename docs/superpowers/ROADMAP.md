@@ -228,7 +228,8 @@ work they describe.
 - Project 2 first run, split in two plans (Claude's call):
   - 2a setup: plan `plans/2026-11-10-first-run-setup.md`, EGM reviewed
     (stages 5 to 9 and one re-audit), branch `feat/first-run`, native
-    execution. Task 1 (one workspace version) done.
+    execution. Tasks 1 (one workspace version) and 2 (embedded runtime
+    plugins, verified downloads) done.
   - 2b URLs on first push: not planned yet.
 
 ### After developer experience: small boards and binary size
