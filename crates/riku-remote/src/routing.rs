@@ -34,6 +34,7 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
 
         // Core commands that shouldn't be overridden
         Commands::Init { .. } => None,
+        Commands::DeployKey(_) => None,
         Commands::Quickstart { .. } => None,
         Commands::Backup { .. } => None,
         Commands::Restore { .. } => None,

@@ -28,6 +28,6 @@ pub mod ssh_command;
 
 pub use riku_args::cli::{require_app, Cli, Commands};
 pub use riku_args::cmds::{
-    AddonCmd, AppsCmd, ConfigCmd, HookCmd, MarketplaceCmd, PluginCmd, PluginsCmd, ServerCmd,
-    StatsCmd, TrustCmd,
+    AddonCmd, AppsCmd, ConfigCmd, DeployKeyCmd, HookCmd, MarketplaceCmd, PluginCmd, PluginsCmd,
+    ServerCmd, StatsCmd, TrustCmd,
 };

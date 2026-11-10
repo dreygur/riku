@@ -240,6 +240,7 @@ mod routing_tests {
             ssh_key: None,
             add_key: Vec::new(),
             user_steps: false,
+            keys_only: false,
         };
         assert_eq!(get_plugin_command(&cmd), None);
     }

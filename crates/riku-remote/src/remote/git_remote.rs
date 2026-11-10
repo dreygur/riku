@@ -9,6 +9,7 @@
 //! dropped so the name can always be shell quoted. `git` runs with stdin
 //! closed and stderr discarded, and any failure counts as no remotes.
 
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 /// One scp style remote, `user@host:path`.
@@ -82,7 +83,14 @@ pub fn parse_remotes(output: &str) -> Vec<RemoteRef> {
 /// Runs `git remote -v` in the current directory. Not a repo, no `git`, or
 /// any other failure is an empty list.
 pub fn read_remotes() -> Vec<RemoteRef> {
+    read_remotes_in(Path::new("."))
+}
+
+/// [`read_remotes`] for the repo at `dir`.
+pub fn read_remotes_in(dir: &Path) -> Vec<RemoteRef> {
     let output = Command::new("git")
+        .arg("-C")
+        .arg(dir)
         .args(["remote", "-v"])
         .stdin(Stdio::null())
         .stderr(Stdio::null())

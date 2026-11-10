@@ -125,6 +125,9 @@ pub struct InitOptions {
     pub no_systemd: bool,
     /// Set by a root init when it runs the per-user steps as the deploy user.
     pub user_steps: bool,
+    /// With `user_steps`, only authorize `add_keys`: set by
+    /// `riku deploy-key add`, which must not touch the tree or the router.
+    pub keys_only: bool,
     /// `--ssh-key`: a `.pub` or `authorized_keys` file whose keys to authorize.
     pub ssh_key: Option<PathBuf>,
     /// Keys a root init already read and validated, for the per-user run.
@@ -193,6 +196,9 @@ fn init_router_choice(paths: &RikuPaths, user_steps: bool) -> Result<Router> {
 #[allow(clippy::question_mark)]
 fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
     let user_steps = options.user_steps;
+    if user_steps && options.keys_only {
+        return ssh_key_step(options);
+    }
     if !user_steps {
         if let Err(e) = require_root_binary() {
             return Err(e);
