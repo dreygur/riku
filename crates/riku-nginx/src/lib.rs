@@ -9,6 +9,7 @@
 pub(crate) use riku_config as config;
 pub(crate) use riku_util as util;
 
+mod acme;
 mod backends;
 mod default_server;
 mod host;

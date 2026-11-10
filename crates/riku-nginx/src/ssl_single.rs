@@ -8,8 +8,9 @@
 
 use anyhow::{anyhow, Result};
 
+use crate::acme::try_acme_certificates;
 use crate::config::RikuPaths;
-use crate::ssl::{restrict_key, try_acme_certificates};
+use crate::ssl::restrict_key;
 
 /// Make sure `app` has a certificate for `domain`. Returns whether a pair is
 /// now in `nginx_root`; `false` means plain HTTP only.

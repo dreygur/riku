@@ -266,16 +266,20 @@ work they describe.
 
 ## Known open problems, outside the plans
 
-- nginx: `RIKU_NGINX_CACHE_PREFIXES` puts `proxy_cache_path` inside the
-  `server` block; nginx allows it only at `http` level, so `nginx -t` fails
-  for any app that sets it.
-- nginx: `RIKU_NGINX_CATCH_ALL` adds a second `location /`, a duplicate
-  wherever the template's default location or the uwsgi include is active.
-  Read from the templates, not run against nginx.
-- Certificates (`crates/riku-nginx/src/ssl.rs`): ACME issues per domain and
-  stops at the first success, so other domains are uncovered; nginx serves
-  the leaf `<app>.crt`, not `<app>.fullchain.crt`; `nginx_acme_firstrun`
-  is registered but never selected. Needs a design.
+- Checked 2026-11-11: the two nginx bugs once listed here
+  (`RIKU_NGINX_CACHE_PREFIXES`, `RIKU_NGINX_CATCH_ALL`) are gone; #73
+  removed both features and a deploy that sets either key is refused
+  (`route_build.rs` `REMOVED_KEYS`). nginx already serves the full chain
+  (`route_env.rs` `tls`) and `nginx_acme_firstrun` no longer exists.
+- Certificates: fixed on `fix/nginx-cache-catch-all`. acme.sh now issues
+  one certificate for all of an app's domains (`riku-nginx/src/acme.rs`).
+  Left: when that fails and riku falls back to one domain, nothing retries
+  the others later; a pair that exists is kept until it is removed.
+- No supported way to serve your own certificate. With nginx, placing
+  `<app>.key` and `<app>.fullchain.crt` in `nginx_root` works because an
+  existing pair is kept, but it is undocumented, riku may replace a pair
+  without the chain file, and Caddy has no equivalent. A `riku certs`
+  command is a candidate.
 
 - `riku install-plugins` failed to download inside a Docker test container.
   Cause: reqwest was built without a TLS backend, so every https request

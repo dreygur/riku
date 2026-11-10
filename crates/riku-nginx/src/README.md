@@ -9,7 +9,8 @@ Component package located at `crates/riku-nginx/src`. It renders a site config f
 - `host.rs`: the one root-owned include file, `nginx_include_file`, holding `include /etc/riku/nginx/*.conf;` (`NGINX_SITE_ROOT`) and, when `default_server.rs` says so, the catch-all
 - `remove.rs`: removes an app's certificate files and sockets from the deploy user's tree
 - `route_site.rs`: renders a site config from a route, with every path passed in by the caller
-- `ssl.rs`: issues a certificate with acme.sh or a self signed fallback into `nginx_root`
+- `ssl.rs`: keeps an existing pair, else issues a certificate with acme.sh or a self signed fallback into `nginx_root`
+- `acme.rs`: acme.sh calls: one certificate for all of an app's domains (one domain alone when that fails) and the renew hook
 - `static_site.rs`, `static_copy.rs`: publishes an app's static files into the static root
 
 ## Invariants
