@@ -131,6 +131,8 @@ sudo RIKU_DEFAULT_BRANCH=master ./target/release/riku init --ssh-key ~/.ssh/auth
 
 Without `RIKU_DEFAULT_BRANCH`, init keeps a default branch the deploy user already set. Repos created before the change keep the branch they started with.
 
+Only a push to the app repo's default branch deploys. Pushes to other branches and tags are stored in the repo and skipped with a message, and deleting a branch never deploys. If the repo's default branch does not exist yet (a repo created on `master` that only ever got `main`), the first branch pushed becomes its default.
+
 ### Step 4: Install and Initialize Riku
 
 ```bash
