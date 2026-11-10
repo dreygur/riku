@@ -1,10 +1,13 @@
 //! `riku plugins` provider layer: install/list/remove manifest-based plugin
 //! bundles via [`PluginInstaller`]. Handles user-facing output only.
 
+mod install_route;
+
 use anyhow::Result;
 
 use crate::config::RikuPaths;
 use crate::util::display;
+use install_route::InstallTarget;
 use riku_plugins::install::HealthStatus;
 use riku_plugins::{MarketplaceService, PluginInstaller, PluginManifest};
 
@@ -29,10 +32,23 @@ fn print_capabilities(manifest: &PluginManifest) {
     }
 }
 
-/// `riku plugins install <source>`
+/// `riku plugins install <source>`: a plugin riku ships by name, or a bundle
+/// from a path or git source (see [`install_route`]).
+#[allow(clippy::question_mark)]
 pub fn cmd_plugins_install(paths: &RikuPaths, source: &str) -> Result<()> {
+    let source = match install_route::install_target(source) {
+        Ok(InstallTarget::Bundle(source)) => source,
+        Ok(InstallTarget::Runtime(name)) => {
+            let names = Some(vec![name.to_string()]);
+            return crate::apps::install_plugins::cmd_install_plugins(paths, names);
+        }
+        Err(e) => return Err(e),
+    };
     display::info(&format!("Installing plugin from {source}..."));
-    let manifest = PluginInstaller::new(paths).install(source)?;
+    let manifest = match PluginInstaller::new(paths).install(&source) {
+        Ok(manifest) => manifest,
+        Err(e) => return Err(e),
+    };
     display::success(&format!(
         "Installed {} v{} ({:?})",
         manifest.name, manifest.version, manifest.plugin_type
