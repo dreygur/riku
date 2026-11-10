@@ -12,6 +12,11 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # Linux builds go through cargo-zigbuild so one ubuntu runner can target
+  # every Pi and pin the glibc floor (see the `glibc` matrix field).
+  ZIG_VERSION: 0.17.1
+  ZIG_SHA256: 3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a
+  CARGO_ZIGBUILD_VERSION: 0.24.1
 
 jobs:
   # riku downloads java and clojure from the release tag of its own version,
@@ -37,27 +42,49 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        # `glibc` is appended to the zigbuild target only. The ubuntu runner
+        # has a newer glibc than Debian 12 or Raspberry Pi OS, so gnu builds
+        # link against 2.31 (Debian 11, Ubuntu 20.04) to start everywhere.
+        # Output still lands in target/<plain triple>.
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             platform: linux-amd64
-            deps: ''
+            glibc: '.2.31'
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            platform: linux-amd64-musl
+            glibc: ''
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             platform: linux-arm64
-            deps: gcc-aarch64-linux-gnu
+            glibc: '.2.31'
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            platform: linux-arm64-musl
+            glibc: ''
           - os: ubuntu-latest
             target: armv7-unknown-linux-gnueabihf
             platform: linux-armv7
-            deps: gcc-arm-linux-gnueabihf
+            glibc: '.2.31'
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-musleabihf
+            platform: linux-armv7-musl
+            glibc: ''
+          - os: ubuntu-latest
+            target: arm-unknown-linux-gnueabihf
+            platform: linux-armv6
+            glibc: '.2.31'
+          - os: ubuntu-latest
+            target: arm-unknown-linux-musleabihf
+            platform: linux-armv6-musl
+            glibc: ''
           - os: macos-latest
             target: x86_64-apple-darwin
             platform: macos-amd64
-            deps: ''
           - os: macos-latest
             target: aarch64-apple-darwin
             platform: macos-arm64
-            deps: ''
 
     steps:
       - name: Checkout
@@ -68,29 +95,16 @@ jobs:
         with:
           target: ${{ matrix.target }}
 
-      - name: Install cross-compilation dependencies
-        if: matrix.deps != ''
+      - name: Install zig and cargo-zigbuild
+        if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ${{ matrix.deps }}
-
-      - name: Configure cross-compilation (ARM64)
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          mkdir -p .cargo
-          cat > .cargo/config.toml << 'EOF'
-          [target.aarch64-unknown-linux-gnu]
-          linker = "aarch64-linux-gnu-gcc"
-          EOF
-
-      - name: Configure cross-compilation (ARMv7)
-        if: matrix.target == 'armv7-unknown-linux-gnueabihf'
-        run: |
-          mkdir -p .cargo
-          cat > .cargo/config.toml << 'EOF'
-          [target.armv7-unknown-linux-gnueabihf]
-          linker = "arm-linux-gnueabihf-gcc"
-          EOF
+          curl -fsSLo zig.tar.xz "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
+          echo "${ZIG_SHA256}  zig.tar.xz" | sha256sum -c -
+          mkdir -p "$HOME/zig"
+          tar -xJf zig.tar.xz -C "$HOME/zig" --strip-components=1
+          rm zig.tar.xz
+          echo "$HOME/zig" >> "$GITHUB_PATH"
+          cargo install cargo-zigbuild --locked --version "${CARGO_ZIGBUILD_VERSION}"
 
       - name: Cache cargo registry
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -103,16 +117,14 @@ jobs:
           restore-keys: |
             ${{ matrix.target }}-cargo-
 
-      - name: Build release
-        run: cargo build --release --target ${{ matrix.target }}
+      # The release profile sets strip = true, so no separate strip step.
+      - name: Build release (Linux)
+        if: runner.os == 'Linux'
+        run: cargo zigbuild --release --target ${{ matrix.target }}${{ matrix.glibc }}
 
-      - name: Strip binaries (native only)
-        if: matrix.target == 'x86_64-unknown-linux-gnu' || matrix.target == 'aarch64-apple-darwin' || matrix.target == 'x86_64-apple-darwin'
-        run: |
-          strip target/${{ matrix.target }}/release/riku
-          strip target/${{ matrix.target }}/release/rk
-          strip target/${{ matrix.target }}/release/riku-plugin-java
-          strip target/${{ matrix.target }}/release/riku-plugin-clojure
+      - name: Build release (macOS)
+        if: runner.os == 'macOS'
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -179,5 +191,8 @@ jobs:
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           files: artifacts/*
+          # An rc tag such as v0.1.4-rc.1 must never become "latest", which
+          # is what the installer downloads by default.
+          prerelease: ${{ contains(github.ref_name, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

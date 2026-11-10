@@ -47,7 +47,7 @@ Install it with the install script and the `--rk` flag:
 curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh -s -- --rk
 ```
 
-The script downloads the release asset `rk-<os>-<arch>.tar.gz`, checks it against the release `.sha256` when one is published, and installs to `~/.local/bin` (or `/usr/local/bin` as root). `RIKU_INSTALL_DIR` and `RIKU_VERSION` override the directory and release tag. Without `--rk` the same script installs `riku`, which it only does as root, into `/usr/local/bin`.
+The script downloads the matching release build (see [Release builds](#release-builds)), checks it against the release `.sha256` when one is published, and installs to `~/.local/bin` (or `/usr/local/bin` as root). `RIKU_INSTALL_DIR` and `RIKU_VERSION` override the directory and release tag. Set them on the `sh` side of the pipe, after `sudo` when there is one, or they never reach the script: `curl -fsSL .../install.sh | sudo RIKU_VERSION=v0.1.3 sh`. Without `--rk` the same script installs `riku`, which it only does as root, into `/usr/local/bin`.
 
 First use:
 
@@ -74,6 +74,23 @@ There are several ways to install Riku:
 3. **Cloud-init** - Automatic VPS setup (see `cloud-init` repository)
 4. **Ansible** - Use the Ansible playbook (coming soon)
 5. **Docker** - Run Riku in a container (experimental)
+
+## Release builds
+
+Every release has these Linux builds of `riku` and `rk`. The glibc builds need glibc 2.31 or newer (Debian 11, Ubuntu 20.04, Raspberry Pi OS bullseye, or later). The musl builds are static and run on any Linux, Alpine included.
+
+| CPU | glibc build | musl build | Boards |
+| --- | --- | --- | --- |
+| x86_64 | `linux-amd64` | `linux-amd64-musl` | PCs, VPS |
+| arm64 | `linux-arm64` | `linux-arm64-musl` | Pi 3, 4, 5, Zero 2 W on a 64 bit OS |
+| armv7 | `linux-armv7` | `linux-armv7-musl` | Pi 2, 3, 4, 5 on a 32 bit OS |
+| armv6 | `linux-armv6` | `linux-armv6-musl` | Pi 1, Zero, Zero W |
+
+Asset names are `<bin>-<build>.tar.gz`, for example `riku-linux-armv6.tar.gz`. `scripts/install.sh` picks the build itself: a 64 bit kernel with a 32 bit userland gets armv7, and a host without glibc 2.31 gets musl. A 64 bit x86 kernel with a 32 bit userland has no build and is refused. To choose the C library yourself, pass `RIKU_LIBC` to `sh`, after `sudo`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sudo RIKU_LIBC=musl sh
+```
 
 ## System Requirements
 

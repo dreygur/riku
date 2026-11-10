@@ -22,6 +22,22 @@ const SHA256_HEX_LEN: usize = 64;
 /// Far above any plugin binary riku publishes.
 const MAX_BINARY_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_SUMS_BYTES: u64 = 4096;
+/// The triple this riku was built for, set by build.rs.
+const BUILD_TARGET: &str = env!("RIKU_TARGET");
+/// Every triple release.yml publishes plugins for. Keep in step with its
+/// build matrix.
+const RELEASE_TRIPLES: &[&str] = &[
+    "x86_64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
+    "aarch64-unknown-linux-gnu",
+    "aarch64-unknown-linux-musl",
+    "armv7-unknown-linux-gnueabihf",
+    "armv7-unknown-linux-musleabihf",
+    "arm-unknown-linux-gnueabihf",
+    "arm-unknown-linux-musleabihf",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+];
 
 /// Why a download failed.
 enum FetchError {
@@ -69,16 +85,14 @@ fn read_capped(body: impl Read, limit: u64, url: &str) -> Result<Vec<u8>, FetchE
     Ok(bytes)
 }
 
-/// The release target triple riku builds plugins for on `os`/`arch`.
-fn target_triple_for(name: &str, os: &str, arch: &str) -> Result<&'static str> {
-    match (os, arch) {
-        ("linux", "x86_64") => Ok("x86_64-unknown-linux-gnu"),
-        ("linux", "aarch64") => Ok("aarch64-unknown-linux-gnu"),
-        ("linux", "arm") => Ok("armv7-unknown-linux-gnueabihf"),
-        ("macos", "x86_64") => Ok("x86_64-apple-darwin"),
-        ("macos", "aarch64") => Ok("aarch64-apple-darwin"),
-        (os, arch) => bail!(
-            "no pre-built '{name}' binary plugin for {os}/{arch}: see .github/workflows/release.yml for supported targets"
+/// The release triple to fetch plugin `name` for, when riku was built for
+/// `target`. Matching the build triple, not the host's os and arch, keeps an
+/// armv6 or musl riku from fetching an armv7 or glibc plugin it cannot run.
+fn release_triple(name: &str, target: &str) -> Result<&'static str> {
+    match RELEASE_TRIPLES.iter().find(|triple| **triple == target) {
+        Some(triple) => Ok(triple),
+        None => bail!(
+            "no pre-built '{name}' binary plugin for {target}: see .github/workflows/release.yml for supported targets"
         ),
     }
 }
@@ -128,7 +142,7 @@ fn fetch_or_explain(
 #[allow(clippy::question_mark)]
 pub(crate) fn install_binary_plugin(paths: &RikuPaths, name: &str) -> Result<()> {
     let version = env!("CARGO_PKG_VERSION");
-    let triple = match target_triple_for(name, std::env::consts::OS, std::env::consts::ARCH) {
+    let triple = match release_triple(name, BUILD_TARGET) {
         Ok(triple) => triple,
         Err(e) => return Err(e),
     };

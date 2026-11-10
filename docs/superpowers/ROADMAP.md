@@ -255,6 +255,41 @@ work they describe.
   measured per target before and after. The owner sets a size budget from
   the measurements. (Moving ROUTER and CONTAINER_ENGINE into settings.toml
   is now part of the developer experience config model.)
+- Plan `plans/2026-11-10-small-boards.md`, EGM reviewed, branch
+  `feat/small-boards`. Found on the way: every Linux release binary up to
+  0.1.3 needs glibc 2.39 (built on ubuntu 24.04), so it does not start on
+  Debian 12 or Raspberry Pi OS bookworm; ci.yml had a second release job
+  with the same problem; plugin downloads mapped every 32 bit ARM to armv7.
+  - Task 1 (release.yml on cargo-zigbuild, eight Linux targets, glibc 2.31
+    floor, rc tags as prereleases, ci.yml release job removed): done
+    (d039cfa). All eight targets built locally with zig 0.17.1 and
+    cargo-zigbuild 0.24.1 (gnu builds need at most GLIBC_2.30) and smoke run
+    under Docker: Debian bullseye, Alpine 3.20, and Raspbian bullseye with
+    `QEMU_CPU=arm1176` (an armv7 binary dies there with an illegal
+    instruction, so the armv6 run is real). The workflow itself is proven
+    only by the next tag.
+  - Task 2 (plugins fetched for riku's own triple): done (aaf1912).
+  - Task 3 (installer: armv6, 32 bit userland, musl, old glibc): done
+    (d039cfa).
+  - Task 4 (sizes): done. Measured 2026-11-10 from local builds of 0.1.3
+    plus this branch, stripped bytes (gzip -9 in brackets):
+
+    | target | riku | rk |
+    | --- | --- | --- |
+    | x86_64 gnu | 9,643,896 (4,290,274) | 1,375,312 (648,297) |
+    | x86_64 musl | 9,267,984 (4,295,451) | 1,411,112 (687,201) |
+    | aarch64 gnu | 8,177,056 (4,145,956) | 1,204,304 (643,663) |
+    | aarch64 musl | 7,807,776 (4,155,596) | 1,240,464 (684,250) |
+    | armv7 gnu | 7,806,140 (3,838,585) | 1,240,432 (639,791) |
+    | armv7 musl | 7,720,336 (3,853,669) | 1,292,248 (673,779) |
+    | armv6 gnu | 7,868,832 (3,872,858) | 1,251,276 (646,202) |
+    | armv6 musl | 7,792,224 (3,894,011) | 1,306,224 (681,906) |
+
+    The 0.1.3 release builds were within 1 percent of these. `panic =
+    "abort"` on rk saves 120 to 130 KB, 9 to 10 percent on every target,
+    under the 10 percent bar the plan set, so rk stays on unwind and the
+    trial profile was removed. riku stays on unwind for the supervisor
+    (Cargo.toml). The owner sets the size budget from this table.
 
 ### Phase 4: one rk managing many servers
 
