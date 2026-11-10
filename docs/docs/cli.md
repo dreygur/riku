@@ -58,7 +58,7 @@ The first server you add is not made the default. Run `riku server default
 
 After saving the entry, `add` authorizes your public key for pushes: `--key
 PATH`, else `~/.ssh/id_ed25519.pub`, else `~/.ssh/id_rsa.pub`. With `--admin`
-it runs `ssh -t <admin> sudo riku deploy-key add '<key>'`, so sudo can ask for
+it runs `ssh -t <admin> sudo riku deploy-key add --user <user> '<key>'` (the user from `<user@host>`), so sudo can ask for
 the password; without one it prints that command to run on the server. Only
 the key type and data are sent. Run inside a git repo, `add` also adds a
 `riku` remote pointing at `<user@host>:<repo directory name>`, unless the repo
@@ -678,7 +678,7 @@ existing install without a stored router keeps nginx.
 
 ---
 
-### `riku deploy-key add '<key>'`
+### `riku deploy-key add [--user NAME] '<key>'`
 
 Authorize one public key for `git push`. Root only, on the server.
 
@@ -686,7 +686,7 @@ Authorize one public key for `git push`. Root only, on the server.
 sudo riku deploy-key add 'ssh-ed25519 AAAA... me@laptop'
 ```
 
-Takes exactly one key line; a second line is refused. Options before the key
+`--user` names the deploy account (default: `RIKU_USER`, else `riku`; sudo drops `RIKU_USER`, so pass `--user` for a custom account). The account must have a `~/.riku` directory. Takes exactly one key line; a second line is refused. Options before the key
 type and the comment after it are dropped. The deploy user writes the key to
 its own `authorized_keys`, forced through riku, and a key already there is
 skipped. `rk server add --admin` runs this for you.

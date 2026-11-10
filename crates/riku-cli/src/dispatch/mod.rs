@@ -149,7 +149,9 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
             ssh_key,
             add_keys: add_key,
         }),
-        Commands::DeployKey(DeployKeyCmd::Add { key }) => setup::cmd_deploy_key_add(&key),
+        Commands::DeployKey(DeployKeyCmd::Add { user, key }) => {
+            setup::cmd_deploy_key_add(user.as_deref(), &key)
+        }
         Commands::Quickstart {
             name,
             runtime,

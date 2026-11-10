@@ -58,7 +58,7 @@ rk -s myserver apps
 
 `rk server add` saves the server, then authorizes your public key
 (`--key PATH`, else `~/.ssh/id_ed25519.pub` or `~/.ssh/id_rsa.pub`) by running
-`sudo riku deploy-key add '<key>'` over the admin login; sudo may ask for your
+`sudo riku deploy-key add --user riku '<key>'` over the admin login (the user comes from the server address); sudo may ask for your
 password. Without `--admin` it prints that command for you to run on the
 server. Run inside your app's git repo, it also adds a `riku` git remote named
 after the repo directory.

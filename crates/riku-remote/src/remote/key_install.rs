@@ -1,7 +1,7 @@
 //! `rk server add`: authorize this machine's public key on the new server.
 //!
 //! Only root on the server can add a deploy key, so the key goes through the
-//! server's admin login: `ssh -t <admin> sudo riku deploy-key add '<key>'`.
+//! server's admin login: `ssh -t <admin> sudo riku deploy-key add --user <deploy user> '<key>'`.
 //! Without an admin login the command is printed for the operator to run.
 //!
 //! Security model: the key file is read here and checked with
@@ -54,8 +54,19 @@ pub fn read_public_key(path: &Path) -> Result<PublicKey> {
     Ok(keys.remove(0))
 }
 
-fn remote_command(key_line: &str) -> Result<String> {
-    match shlex::try_join(["sudo", "riku", "deploy-key", "add", key_line]) {
+/// The server command. sudo drops `RIKU_USER`, so the deploy user is named
+/// from the push address. `SshAddress` limits it to a safe label.
+fn remote_command(address: &SshAddress, key_line: &str) -> Result<String> {
+    let words = [
+        "sudo",
+        "riku",
+        "deploy-key",
+        "add",
+        "--user",
+        address.user(),
+        key_line,
+    ];
+    match shlex::try_join(words) {
         Ok(command) => Ok(command),
         Err(e) => Err(anyhow!("cannot quote the key for ssh: {e}")),
     }
@@ -71,7 +82,10 @@ fn host_of(address: &SshAddress) -> &str {
 /// What to tell the operator when the key was not sent. `key_line` is type
 /// and base64 data only, so the single quotes are enough.
 fn manual_hint(key_line: &str, server: &Server) -> String {
-    let command = format!("Add the key on the server: sudo riku deploy-key add '{key_line}'");
+    let command = format!(
+        "Add the key on the server: sudo riku deploy-key add --user {} '{key_line}'",
+        server.address.user()
+    );
     match server.admin {
         Some(_) => command,
         None => format!(
@@ -82,8 +96,8 @@ fn manual_hint(key_line: &str, server: &Server) -> String {
 }
 
 #[allow(clippy::question_mark)]
-fn send_key(admin: &SshAddress, key_line: &str) -> Result<()> {
-    let command = match remote_command(key_line) {
+fn send_key(server: &Server, admin: &SshAddress, key_line: &str) -> Result<()> {
+    let command = match remote_command(&server.address, key_line) {
         Ok(command) => command,
         Err(e) => return Err(e),
     };
@@ -106,7 +120,7 @@ pub fn install_key(server: &Server, key: &PublicKey) -> Result<()> {
         println!("{}", manual_hint(&key_line, server));
         return Ok(());
     };
-    match send_key(admin, &key_line) {
+    match send_key(server, admin, &key_line) {
         Ok(()) => Ok(()),
         Err(e) => {
             println!("{}", manual_hint(&key_line, server));

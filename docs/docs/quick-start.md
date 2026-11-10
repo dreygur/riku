@@ -97,7 +97,7 @@ password):
 rk server add edge riku@your-server-ip --admin you@your-server-ip
 ```
 
-This runs `sudo riku deploy-key add '<your key>'` on the server and, inside
+This runs `sudo riku deploy-key add --user riku '<your key>'` on the server and, inside
 your app's git repo, adds the `riku` remote. Without `--admin` it prints that
 command so you can run it on the server yourself.
 

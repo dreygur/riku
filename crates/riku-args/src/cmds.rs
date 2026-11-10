@@ -367,6 +367,9 @@ pub enum MarketplaceCmd {
 pub enum DeployKeyCmd {
     /// Authorize one public key line for git pushes
     Add {
+        /// Deploy account to authorize the key for (default: RIKU_USER, else riku)
+        #[arg(long)]
+        user: Option<String>,
         /// The key line, quoted: type, key data and an optional comment
         key: String,
     },
