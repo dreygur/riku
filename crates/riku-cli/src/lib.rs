@@ -20,6 +20,7 @@ pub mod dispatch;
 pub mod doctor;
 pub mod git;
 pub mod hooks;
+mod own_cert;
 pub mod plugins;
 pub mod router_helper;
 pub mod scp;

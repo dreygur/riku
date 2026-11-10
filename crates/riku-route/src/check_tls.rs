@@ -82,7 +82,7 @@ fn key_label(key: &PrivateKeyDer<'_>) -> &'static str {
 
 /// Refuse a pair that is not a certificate chain plus the key of its first
 /// certificate, and return the pair re-encoded from what was parsed.
-pub(crate) fn check_tls(tls: &Tls) -> Result<Tls> {
+pub fn check_tls(tls: &Tls) -> Result<Tls> {
     let chain = match certificate_chain(&tls.cert_pem) {
         Ok(chain) => chain,
         Err(e) => return Err(anyhow!("bad certificate: {e}")),

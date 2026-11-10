@@ -18,6 +18,7 @@ mod migrate_check;
 mod migrate_env;
 pub mod migrate_settings;
 mod mode_write;
+pub mod own_cert_check;
 pub mod package_tools;
 pub mod redeploy_sites;
 pub mod router_check;
@@ -190,6 +191,7 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     checks.push(checks::disk(paths));
     checks.push(checks::ssh_access());
     checks.extend(app_env::renamed_keys(paths));
+    checks.extend(own_cert_check::own_certificates(paths));
     checks
 }
 

@@ -26,9 +26,9 @@ pub fn placement_of(name: &str) -> Option<Placement> {
         "init" | "deploy-key" | "supervisor" | "router-helper" | "router-renew" | "dashboard"
         | "git-hook" | "git-receive-pack" | "git-upload-pack" | "scp" | "plugin-emit"
         | "__ns-shim" | "__dump-state" => Some(Placement::Server),
-        "apps" | "ps" | "logs" | "stats" | "config" | "settings" | "deploy" | "restart"
-        | "stop" | "destroy" | "rollback" | "run" | "backup" | "restore" | "addon" | "doctor"
-        | "agent" | "install-plugins" | "plugins" | "hook" => Some(Placement::Forwarded),
+        "apps" | "ps" | "logs" | "stats" | "config" | "settings" | "certs" | "deploy"
+        | "restart" | "stop" | "destroy" | "rollback" | "run" | "backup" | "restore" | "addon"
+        | "doctor" | "agent" | "install-plugins" | "plugins" | "hook" => Some(Placement::Forwarded),
         _ => None,
     }
 }

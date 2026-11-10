@@ -60,6 +60,7 @@ pub use caddy_apply::{apply_caddy, remove_caddy, CaddyRoots};
 #[cfg(feature = "test-server")]
 pub use caddy_test_server::serve_caddy_for_tests;
 pub use check::{check_caddy_route, check_nginx_route, CheckedRoute};
+pub use check_tls::check_tls;
 pub use listen::{bind_socket, restrict_umask, run};
 pub use nginx_apply::{apply_nginx, remove_nginx};
 pub use nginx_roots::{NginxRoots, ReloadMethod};

@@ -86,6 +86,44 @@ fn an_issued_certificate_gets_the_renew_hook_once() {
     );
 }
 
+fn write_own_pair(paths: &crate::config::RikuPaths) {
+    for suffix in ["key", "crt", "fullchain.crt", "own-cert"] {
+        std::fs::write(paths.nginx_root.join(format!("myapp.{suffix}")), "own").unwrap();
+    }
+}
+
+#[test]
+fn an_own_certificate_is_never_issued_replaced_or_hooked() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let argv_log = mock_acme_sh(&tmp, &paths, "exit 0");
+    write_own_pair(&paths);
+
+    assert!(ensure_ssl_certificates("myapp", &domains(&["example.com"]), &paths).unwrap());
+
+    assert!(
+        !argv_log.exists(),
+        "acme.sh ran for an own certificate: {:?}",
+        std::fs::read_to_string(&argv_log)
+    );
+    let key = paths.nginx_root.join("myapp.key");
+    assert_eq!(std::fs::read_to_string(&key).unwrap(), "own");
+    let mode = fs::metadata(&key).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600, "private key is mode {mode:o}");
+}
+
+#[test]
+fn an_own_marker_without_a_pair_is_an_error_not_a_self_signed_certificate() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    std::fs::write(paths.nginx_root.join("myapp.own-cert"), "").unwrap();
+
+    let outcome = ensure_ssl_certificates("myapp", &domains(&["example.com"]), &paths);
+
+    assert!(outcome.is_err(), "got {outcome:?}");
+    assert!(!paths.nginx_root.join("myapp.crt").exists());
+}
+
 #[test]
 fn one_certificate_covers_every_domain() {
     let tmp = TempDir::new().unwrap();

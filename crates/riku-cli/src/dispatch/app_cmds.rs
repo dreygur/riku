@@ -3,7 +3,7 @@
 use anyhow::{anyhow, Result};
 
 use crate::cli::require_app;
-use crate::cmds::{AddonCmd, AppsCmd, ConfigCmd, SettingsCmd, StatsCmd};
+use crate::cmds::{AddonCmd, AppsCmd, CertsCmd, ConfigCmd, SettingsCmd, StatsCmd};
 use crate::config::RikuPaths;
 use crate::{addon, apps};
 
@@ -38,6 +38,14 @@ pub(super) fn run_settings(paths: &RikuPaths, cmd: SettingsCmd) -> Result<()> {
         SettingsCmd::Get { app, key } => apps::cmd_settings_get(paths, &app, &key),
         SettingsCmd::Set { app, settings } => apps::cmd_settings_set(paths, &app, &settings),
         SettingsCmd::Unset { app, keys } => apps::cmd_settings_unset(paths, &app, &keys),
+    }
+}
+
+pub(super) fn run_certs(paths: &RikuPaths, cmd: CertsCmd) -> Result<()> {
+    match cmd {
+        CertsCmd::Set { app } => apps::cmd_certs_set(paths, &app),
+        CertsCmd::Show { app } => apps::cmd_certs_show(paths, &app),
+        CertsCmd::Unset { app } => apps::cmd_certs_unset(paths, &app),
     }
 }
 

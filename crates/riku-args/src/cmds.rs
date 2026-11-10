@@ -86,6 +86,33 @@ pub enum ConfigCmd {
     },
 }
 
+/// The TLS certificate an app serves when its owner supplies one.
+#[derive(Subcommand, Debug)]
+pub enum CertsCmd {
+    /// Save the certificate chain and key read from stdin and serve them
+    #[command(
+        after_help = "Examples:\n  cat fullchain.pem key.pem | riku certs set myapp\n  cat fullchain.pem key.pem | rk certs set myapp"
+    )]
+    Set {
+        /// App name
+        app: String,
+    },
+
+    /// Show where the certificate comes from, its names and its expiry
+    #[command(after_help = "Examples:\n  riku certs show myapp")]
+    Show {
+        /// App name
+        app: String,
+    },
+
+    /// Remove the own certificate; the next deploy issues a new one
+    #[command(after_help = "Examples:\n  riku certs unset myapp")]
+    Unset {
+        /// App name
+        app: String,
+    },
+}
+
 /// Server side riku settings of an app (`<env_root>/<app>/riku.toml`).
 /// Keys are `section.name`, as in riku.toml.
 #[derive(Subcommand, Debug)]

@@ -109,6 +109,7 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
         Commands::Apps { cmd } => app_cmds::run_apps(paths, cmd),
         Commands::Config(cmd) => app_cmds::run_config(paths, cmd),
         Commands::Settings(cmd) => app_cmds::run_settings(paths, cmd),
+        Commands::Certs(cmd) => app_cmds::run_certs(paths, cmd),
         Commands::Deploy { app, from } => {
             require_app(app).and_then(|app| apps::cmd_deploy(paths, &app, from.as_deref()))
         }

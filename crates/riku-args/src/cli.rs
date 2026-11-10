@@ -3,8 +3,8 @@
 use clap::{Parser, Subcommand};
 
 use crate::cmds::{
-    AddonCmd, AppsCmd, ConfigCmd, DeployKeyCmd, HookCmd, PluginCmd, PluginsCmd, ServerCmd,
-    SettingsCmd, StatsCmd,
+    AddonCmd, AppsCmd, CertsCmd, ConfigCmd, DeployKeyCmd, HookCmd, PluginCmd, PluginsCmd,
+    ServerCmd, SettingsCmd, StatsCmd,
 };
 
 /// riku: the smallest PaaS you've ever seen (Rust edition)
@@ -110,6 +110,13 @@ pub enum Commands {
         after_help = "Examples:\n  riku settings show myapp\n  riku settings set myapp routing.domains=shop.example\n  riku settings get myapp routing.domains\n  riku settings unset myapp routing.domains"
     )]
     Settings(SettingsCmd),
+
+    /// Serve an app's own TLS certificate instead of an issued one
+    #[command(
+        subcommand,
+        after_help = "Examples:\n  cat fullchain.pem key.pem | riku certs set myapp\n  riku certs show myapp\n  riku certs unset myapp"
+    )]
+    Certs(CertsCmd),
 
     /// Force redeploy of an app
     #[command(

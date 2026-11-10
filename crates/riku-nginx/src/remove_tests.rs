@@ -14,7 +14,14 @@ fn paths_in(dir: &std::path::Path) -> RikuPaths {
 fn removes_the_certificate_files_and_sockets_of_one_app_only() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = paths_in(tmp.path());
-    for name in ["myapp.key", "myapp.crt", "myapp.fullchain.crt", "other.key"] {
+    for name in [
+        "myapp.key",
+        "myapp.crt",
+        "myapp.fullchain.crt",
+        "myapp.own-cert",
+        "other.key",
+        "other.own-cert",
+    ] {
         fs::write(paths.nginx_root.join(name), "pem").unwrap();
     }
     for name in [
@@ -35,7 +42,15 @@ fn removes_the_certificate_files_and_sockets_of_one_app_only() {
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     left.sort();
-    assert_eq!(left, ["myapp-two@1.sock", "other.key", "other.sock"]);
+    assert_eq!(
+        left,
+        [
+            "myapp-two@1.sock",
+            "other.key",
+            "other.own-cert",
+            "other.sock"
+        ]
+    );
 }
 
 #[test]

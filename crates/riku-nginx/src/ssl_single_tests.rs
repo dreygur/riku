@@ -33,6 +33,22 @@ fn without_acme_sh_there_is_no_certificate_and_no_self_signed() {
 }
 
 #[test]
+fn an_own_certificate_is_reused_even_for_another_name() {
+    let (_tmp, paths) = paths();
+    for suffix in ["key", "crt", "fullchain.crt", "own-cert"] {
+        std::fs::write(paths.nginx_root.join(format!("myapp.{suffix}")), "pem").unwrap();
+    }
+    std::fs::create_dir_all(&paths.acme_sh_root).unwrap();
+    let acme_sh = paths.acme_sh_root.join("acme.sh");
+    std::fs::write(&acme_sh, "#!/bin/sh\ntouch \"$0.ran\"\n").unwrap();
+
+    let issued = issue_single("myapp", "myapp.203.0.113.10.example", &paths).unwrap();
+
+    assert!(issued);
+    assert!(!acme_sh.with_extension("sh.ran").exists(), "acme.sh ran");
+}
+
+#[test]
 fn invalid_app_name_is_refused() {
     let (_tmp, paths) = paths();
 

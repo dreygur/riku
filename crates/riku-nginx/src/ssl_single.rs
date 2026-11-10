@@ -20,6 +20,9 @@ pub fn issue_single(app: &str, domain: &str, paths: &RikuPaths) -> Result<bool> 
         Ok(checked) if checked == app => {}
         _ => return Err(anyhow!("'{app}' is not a valid app name for a certificate")),
     }
+    if crate::config::own_cert::has_own_cert(paths, app) {
+        return crate::ssl::own_pair_ready(app, paths);
+    }
     let key_path = paths.nginx_root.join(format!("{app}.key"));
     let chain_path = paths.nginx_root.join(format!("{app}.fullchain.crt"));
     if key_path.exists() && chain_path.exists() {

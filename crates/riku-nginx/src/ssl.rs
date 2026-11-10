@@ -73,8 +73,26 @@ fn generate_self_signed_certificate(
     }
 }
 
+/// The pair of an app that serves its own certificate. riku neither issues,
+/// renews nor replaces it, so a marker without a pair is an error rather
+/// than a reason to make a new one.
+pub(crate) fn own_pair_ready(app: &str, paths: &crate::config::RikuPaths) -> Result<bool> {
+    let key_path = paths.nginx_root.join(format!("{app}.key"));
+    let chain_path = paths.nginx_root.join(format!("{app}.fullchain.crt"));
+    if !key_path.exists() || !chain_path.exists() {
+        return Err(anyhow!(
+            "'{app}' is marked as serving its own certificate but its key or chain is missing; run `riku certs set {app}` or `riku certs unset {app}`"
+        ));
+    }
+    match restrict_key(&key_path) {
+        Ok(()) => Ok(true),
+        Err(e) => Err(e),
+    }
+}
+
 /// Ensure SSL certificates exist for an app.
 /// First tries to use acme.sh (Let's Encrypt), falls back to self-signed cert.
+/// An app with its own certificate (see `riku certs set`) is never touched.
 /// The key ends up `0600` whichever path made it, an existing one included.
 /// `app` reaches the acme.sh reload shell, which is why only plain names
 /// are accepted.
@@ -87,6 +105,9 @@ pub fn ensure_ssl_certificates(
     match crate::util::validate_app_name(app) {
         Ok(checked) if checked == app => {}
         _ => return Err(anyhow!("'{app}' is not a valid app name for a certificate")),
+    }
+    if crate::config::own_cert::has_own_cert(paths, app) {
+        return own_pair_ready(app, paths);
     }
     let key_path = paths.nginx_root.join(format!("{}.key", app));
     let crt_path = paths.nginx_root.join(format!("{}.crt", app));

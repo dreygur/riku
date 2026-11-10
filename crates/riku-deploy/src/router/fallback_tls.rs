@@ -102,8 +102,12 @@ pub(super) fn pair_is_stale(cert_for: Option<&str>, fallback: Option<&str>) -> b
 
 /// Delete `app`'s pair when it covers another name than `fallback`, so
 /// nginx never serves a certificate for the wrong name and a fresh one is
-/// issued. Clears the record of the old one.
+/// issued. Clears the record of the old one. A pair the owner supplied (see
+/// `riku certs set`) is never deleted.
 pub(super) fn drop_stale_pair(app: &str, fallback: Option<&str>, paths: &RikuPaths) {
+    if crate::config::own_cert::has_own_cert(paths, app) {
+        return;
+    }
     let entry = RoutingState::load(paths)
         .ok()
         .and_then(|state| state.entry(app).cloned());
