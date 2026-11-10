@@ -7,7 +7,7 @@ use riku_util::backend::Backend;
 use tempfile::TempDir;
 
 use crate::config::RikuPaths;
-use crate::workers::create_workers_with;
+use crate::workers::create_workers_probed;
 use crate::workers::mock_supervisor::{MockRoutes, MockSupervisor};
 
 fn procfile(app_path: &Path) -> Option<HashMap<String, String>> {
@@ -49,8 +49,8 @@ fn deploy_twice(
 ) -> (usize, MockRoutes) {
     let supervisor = MockSupervisor::start(paths);
     let mut routes = MockRoutes::new(paths);
-    for _ in 0..2 {
-        create_workers_with(
+    for deploy in 1..=2 {
+        let outcome = create_workers_probed(
             "myapp",
             app_path,
             procfile(app_path).as_ref(),
@@ -58,8 +58,14 @@ fn deploy_twice(
             paths,
             None,
             &mut routes,
-        )
-        .unwrap();
+            |_| false,
+        );
+        if let Err(e) = outcome {
+            panic!(
+                "deploy {deploy} failed: {e:#}; enabled: {:?}",
+                enabled_web(paths)
+            );
+        }
     }
     (supervisor.max_enabled_web(), routes)
 }
@@ -122,22 +128,16 @@ fn a_stopped_wsgi_copy_leaves_no_socket_behind() {
     );
 }
 
-/// A free port below every OS's ephemeral range. Sibling tests take their
-/// ports from `bind(0)`, which can hand them a port this test just released
-/// and make the pinned-port check see it as busy.
-fn free_port_below_ephemeral_range() -> u16 {
-    (20000..30000)
-        .find(|port| std::net::TcpListener::bind(("127.0.0.1", *port)).is_ok())
-        .expect("no free port in 20000..30000")
-}
-
 /// A pinned PORT cannot be held by two copies, so the old copy stops before
 /// its replacement starts.
 #[test]
 fn pinned_port_keeps_stop_first() {
     let tmp = TempDir::new().unwrap();
     let (paths, app_path) = web_app(&tmp);
-    let port = free_port_below_ephemeral_range();
+    // Another program on the host holding the port must not matter here:
+    // this test is about the stop order, and the host check has its own tests.
+    let held = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let port = held.local_addr().unwrap().port();
     let env = HashMap::from([("PORT".to_string(), port.to_string())]);
 
     let (max_web, routes) = deploy_twice(&paths, &app_path, &env);
