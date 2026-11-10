@@ -16,6 +16,7 @@ use crate::config::router::Router;
 use crate::config::{settings, RikuPaths};
 
 use super::{migrate_env, Check};
+use crate::setup::server_ip::ensure_routing_section;
 
 const NAME: &str = "settings migration";
 
@@ -111,9 +112,21 @@ fn app_names(paths: &RikuPaths) -> Vec<String> {
     names
 }
 
+fn add_routing(paths: &RikuPaths) -> Option<Check> {
+    match ensure_routing_section(paths) {
+        Ok(Some(note)) => Some(Check::ok(
+            NAME,
+            format!("added [routing] to settings.toml\n{note}"),
+        )),
+        Ok(None) => None,
+        Err(e) => Some(Check::fail(NAME, format!("{e:#}"))),
+    }
+}
+
 /// Run the migration without the root check (tests run unprivileged).
 fn migrate(paths: &RikuPaths) -> Vec<Check> {
     let mut checks = migrate_server_files(paths);
+    checks.extend(add_routing(paths));
     for app in app_names(paths) {
         checks.extend(migrate_env::migrate_app(paths, &app));
     }

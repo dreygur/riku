@@ -18,6 +18,7 @@ use super::init_router::persist_router;
 use super::prerequisites::{check_prerequisites, warn_not_root};
 use super::root_init::root_init;
 use super::router_choice;
+use super::server_ip::ensure_routing_section;
 use super::ssh::setup_ssh_key_interactive;
 use super::stale_binary::remove_stale_binary;
 use super::systemd::setup_systemd_service;
@@ -210,6 +211,11 @@ fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<()> {
     };
     if let Err(e) = persist_router(paths, &router) {
         return Err(e);
+    }
+    match ensure_routing_section(paths) {
+        Ok(Some(note)) => echo(&note, ""),
+        Ok(None) => {}
+        Err(e) => return Err(e),
     }
     if !user_steps {
         warn_not_root(&router);

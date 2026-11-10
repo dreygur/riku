@@ -1,0 +1,8 @@
+
+[routing]
+# An app with no domain of its own gets this name. {app} and {ip} are
+# filled in; nothing else is special. Remove the line to turn it off.
+fallback_domain = "{app}.{ip}.sslip.io"
+SERVER_IP_LINE
+shared_port = 8080          # path mode apps answer on http://<ip>:8080/<app>/
+port_range = "8100-8199"    # port mode apps with no port get one from here

@@ -236,7 +236,8 @@ work they describe.
   - 2b URLs on first push: plan `plans/2026-11-10-url-on-first-push.md`,
     EGM reviewed (design and implementation readiness, both applied),
     branch `feat/url-first-push`, native execution. Owner confirmed
-    refusing ports 80 and 443 in port mode. Tasks 1 to 6 not started.
+    refusing ports 80 and 443 in port mode. Task 1 (server routing
+    settings, IP detection) done.
 
 ### After developer experience: small boards and binary size
 

@@ -150,3 +150,33 @@ fn bad_duration_is_refused_naming_the_key() {
         );
     }
 }
+
+#[test]
+fn add_routing_section_keeps_comments_and_other_sections() {
+    let (_tmp, paths) = paths();
+    std::fs::write(&paths.settings_file, "[router]\nname = \"nginx\"\n").unwrap();
+
+    let added =
+        add_routing_section(&paths, Some(std::net::Ipv4Addr::new(203, 0, 113, 10))).unwrap();
+
+    let raw = std::fs::read_to_string(&paths.settings_file).unwrap();
+    let settings = load(&paths).unwrap();
+    assert!(added);
+    assert_eq!(settings.router.as_deref(), Some("nginx"));
+    assert!(settings.routing.present);
+    assert!(
+        raw.contains("# An app with no domain"),
+        "comments kept: {raw}"
+    );
+}
+
+#[test]
+fn add_routing_section_leaves_an_existing_section_alone() {
+    let (_tmp, paths) = paths();
+    std::fs::write(&paths.settings_file, "[routing]\nshared_port = 9000\n").unwrap();
+
+    let added = add_routing_section(&paths, None).unwrap();
+
+    assert!(!added);
+    assert_eq!(load(&paths).unwrap().routing.shared_port, 9000);
+}
