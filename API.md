@@ -83,7 +83,7 @@ The full contract is `PLUGIN_PROTOCOL.md`; this is the module map.
 
 - `manifest.rs`: `PluginManifest` (name, version, `plugin_type`, `api`,
   `entry`, optional `checksum`/`signature`, `capabilities`, and the opt-in
-  blocks `lifecycle`, `events`, `filters`, `ui`)
+  blocks `lifecycle`, `events`)
 - `bundles.rs`: discovers installed plugin bundles under `~/.riku/plugins/`
 - `install.rs`: `PluginInstaller`: install/remove, checksum + signature
   verification, `on_install`/`on_uninstall` lifecycle hook invocation
@@ -95,10 +95,6 @@ The full contract is `PLUGIN_PROTOCOL.md`; this is the module map.
 - `events/`: `EventBus`, `EventName` (kernel-emitted: `deploy.*`,
   `build.*`, `app.restarted`, `app.failed`), plugin-emitted
   `plugin.custom.*` events with kernel-stamped `source_plugin` provenance
-- `filters/`: `FilterBus`: a value-transform chain (`on_filter` verb),
-  always degrades to passthrough on any plugin failure
-- `ui/`: `ui_panel` verb dispatch for the Next.js dashboard's plugin panels
-  (structured JSON only, never HTML/JS)
 - `sandbox/`: Landlock + `no_new_privs` capability enforcement from a
   plugin's declared `[capabilities]`
 - `executor.rs`: shared spawn/timeout helpers used by every dispatch site
@@ -158,8 +154,8 @@ nothing else.
 `name`, `version`, `plugin_type` (`Runtime`/`Addon`/`Router`/`Notifier`/`Hook`),
 `api`, `entry`, optional `checksum`/`signature`/`description`/`author`,
 `capabilities` (`network`, `writes`, `privileged`), `lifecycle`
-(`install`/`uninstall`), `events` (`subscribe`, `mode`, `priority`, `emit`),
-`filters` (`subscribe`, `priority`).
+(`install`/`uninstall`), `events` (`subscribe`, `mode`, `priority`, `emit`).
+`events.mode` accepts only `"observe"`.
 
 ### `WorkerConfig` (`riku-supervisor::config`)
 `worker: WorkerInfo` (app, kind, command, ordinal), `env: HashMap<String,

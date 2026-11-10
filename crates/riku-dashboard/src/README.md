@@ -8,7 +8,7 @@
 - `restart`, `stop`, `scale` [service_mutations.rs] (fn): mutating actions on container services
 - `list`, `create`, `bind`, `unbind`, `backup`, `deprovision` [addons.rs] (fn): addon endpoints through `AddonService`
 - `get_env`, `edit_env` [appcfg.rs] (fn), `EnvEdit` [appcfg.rs:EnvEdit] (struct): `GET` and `POST /api/apps/:app/env`
-- `list`, `ui_panel` [installed.rs] (fn): `GET /api/plugins` and `GET /api/plugins/:name/ui`
+- `list` [installed.rs] (fn): `GET /api/plugins`
 - `stream` [logs.rs:stream] (fn), `LogQuery` [logs.rs:LogQuery] (struct): live log tail over Server-Sent Events
 - `list_sources`, `search`, `add_source`, `remove_source`, `install`, `remove_plugin`, `list_keys`, `add_key`, `remove_key` [market.rs] (fn): marketplace sources, plugin install and the signature trust keyring
 - `doctor`, `backup_app`, `restore_app` [system.rs] (fn): `riku doctor` as JSON, and app backup and restore

@@ -39,7 +39,7 @@ privileged  = false
 
 [events]                         # for event subscribers (notifier/hook)
 subscribe   = ["deploy.finished", "deploy.failed"]
-mode        = "observe"          # observe | gate
+mode        = "observe"          # the only accepted value, and the default
 priority    = 0                  # delivery order among subscribers of the
                                   # same event, lower first (default 0)
 emit        = false              # may this plugin fire its own plugin.custom.*
@@ -48,9 +48,6 @@ emit        = false              # may this plugin fire its own plugin.custom.*
 [lifecycle]                      # optional, any plugin type: install/remove hooks
 install     = true               # `riku plugins install` calls on_install
 uninstall   = true               # `riku plugins remove` calls on_uninstall
-
-[ui]                              # optional, any plugin type: dashboard panel
-nav_label   = "My Plugin"        # Next.js dashboard only, not the embedded one
 
 [router]                         # required for type = "router"
 protocol        = 2              # riku refuses a router without protocol = 2
@@ -86,9 +83,7 @@ neither verb is ever invoked.
 | **runtime** | `detect` / `build` / `env` / `start` | shipped (buildpacks): a plain executable or a bundle with `type = "runtime"`; a plain file wins a name clash |
 | **addon** | `provision` / `bind` / `unbind` / `deprovision` / `backup` | shipped |
 | **notifier / hook** | `on_event` (subscribes to lifecycle events) | shipped |
-| **router** | `configure` / `reload` | shipped: singleton named in `<riku root>/ROUTER`, for third party routers (nginx and Caddy are built in) |
-| **filter** (any type) | `on_filter` (`[filters]` block, any plugin type) | shipped, chained, augment-only |
-| **UI panel** (any type) | `ui_panel` (`[ui]` block, any plugin type) | shipped, Next.js dashboard only, read-only |
+| **router** | `configure` / `reload` | shipped: singleton named by `[router] name` in `settings.toml`, for third party routers (nginx and Caddy are built in) |
 
 ### Addons
 
@@ -109,8 +104,10 @@ riku addon destroy db1             # refused while bound
 A bundle with an `[events]` block is invoked with `on_event` and the event JSON
 on stdin for each subscribed lifecycle event (`deploy.requested`,
 `build.finished`, `deploy.finished`, `app.restarted`, `app.failed`, …).
-`observe` mode is fire-and-forget; `gate` mode (veto on pre-phase events)
-requires elevated trust.
+Delivery is fire-and-forget (`observe` mode, the only mode): a subscriber
+cannot veto anything, and a manifest with `mode = "gate"` is refused on
+install. To block a deploy, install a `riku-pre-deploy` lifecycle hook that
+exits non-zero.
 
 **Shipped example: `riku-notify`.** Bundled at `plugins/riku-notify/` (a
 `riku-plugin.toml` + a POSIX shell `bin/on-event`), it subscribes to both
@@ -135,27 +132,6 @@ rather than the checksum/signature path below:
 riku install-plugins --plugins riku-notify
 ```
 
-### Filters
-
-A bundle with a `[filters]` block is invoked with `on_filter` and
-`{"filter": "<name>", "data": <value>}` on stdin, expected to return
-`{"data": <transformed value>}`. Unlike events, filters transform a value
-and hand it back rather than firing-and-forgetting. Multiple plugins on the
-same filter name run as a **chain**, ordered by `filters.priority` (lower
-first), each seeing the previous one's output.
-
-**Must degrade safely**: a broken, timed-out, or malformed-output filter is
-skipped (logged) and the value passes through unchanged, a filter can only
-become a no-op, never break the thing calling it.
-
-No filter point ships in core today. The only one, `nginx.include_content`, fed the per app snippet file (`RIKU_NGINX_INCLUDE_FILE`), which the smaller core route removed.
-
-```toml
-[filters]
-subscribe = ["example.filter"]
-priority  = 0
-```
-
 ### Custom events
 
 Riku's own lifecycle events (`app.restarted`, `deploy.finished`, …) are
@@ -178,32 +154,6 @@ riku plugin-emit plugin.custom.backup-done --data '{"ok":true}'
 - Subscribers receive the same envelope shape as any other event, plus
   `source_plugin: "<name>"`, kernel-set, so you can always tell a
   kernel-truth event (`source_plugin: null`) from a plugin-claimed one.
-
-### UI panels
-
-A plugin declaring `[ui] nav_label = "..."` gets a nav entry and a page in
-the **Next.js browser dashboard** (`dashboard/`: not the embedded
-single-binary one, which has no plugin-panel seam). The dashboard dispatches
-`ui_panel` (no meaningful stdin) and expects structured JSON back:
-
-```json
-{"sections": [{"title": "Status", "fields": [{"label": "Queue depth", "value": "12"}]}]}
-```
-
-**Structured data only, never HTML/JS.** This is the deliberate scope-limiter
-that closes off injection risk: a plugin supplies labels and values, the
-dashboard renders them with its own components, nothing a plugin returns is
-ever interpreted as markup. There's no verb for a plugin-defined *action*
-(a button calling back into the plugin) yet: this is read-only display.
-
-Same degrade-safely contract as filters: a broken, timed-out, or
-malformed-output panel logs a warning and renders as empty, never breaks the
-dashboard.
-
-```toml
-[ui]
-nav_label = "My Plugin"
-```
 
 ## Installing & managing
 

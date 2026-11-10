@@ -13,7 +13,7 @@ through `api` from `lib/api.ts`, which goes through the `/api/riku` proxy.
 - [login](./login/README.md): `/login`
 - [marketplace](./marketplace/README.md): `/marketplace`
 - [metrics](./metrics/README.md): `/metrics`
-- [plugins](./plugins/README.md): `/plugins` and `/plugins/[name]`
+- [plugins](./plugins/README.md): `/plugins`
 
 ## Verification
 - Run: `nub run test:e2e`

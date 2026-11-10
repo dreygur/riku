@@ -79,7 +79,7 @@ pub fn tee_output(child: &mut Child) -> (Vec<JoinHandle<()>>, Arc<Mutex<String>>
 
 /// Spawn a thread that captures `child`'s entire stdout into a buffer.
 ///
-/// For seams where stdout itself is the return value (a verb/filter/panel's
+/// For seams where stdout itself is the return value (an addon verb's
 /// response payload), as opposed to [`tee_output`], which mirrors
 /// stdout/stderr live and only retains a diagnostic stderr tail. Returns the
 /// join handle (`None` if `child.stdout` wasn't piped) and the buffer;

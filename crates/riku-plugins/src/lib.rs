@@ -49,7 +49,6 @@ pub mod bundles;
 pub mod discovery;
 pub mod events;
 pub mod executor;
-pub mod filters;
 pub mod hooks;
 pub mod install;
 pub mod lockfile;
@@ -61,16 +60,13 @@ pub mod runtime;
 mod runtime_bundles;
 pub mod sandbox;
 pub mod signing;
-pub mod ui;
 
 // Re-export the public API (used by CLI plugin commands and external code)
 pub use addon::{AddonService, InstanceRecord};
 pub use discovery::{list_plugins, plugin_exists};
 pub use events::{EventBus, EventEnvelope, EventName};
-pub use filters::FilterBus;
 pub use hooks::{HookContext, PluginHook};
 pub use install::PluginInstaller;
 pub use manager::PluginManager;
 pub use manifest::PluginManifest;
 pub use marketplace::MarketplaceService;
-pub use ui::{run_ui_panel, PanelField, PanelSection, UiPanelResponse};

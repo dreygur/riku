@@ -58,6 +58,9 @@ phase 4 come after.
 
 ### Done
 
+- Unused plugin mechanisms removed on `chore/remove-unused-plugin-parts`
+  (2026-11-11): filters, UI panels, event gate mode and the supervisor's
+  `GET /plugins` client plugin listing. Not merged yet.
 - Remote CLI and redesigned embedded dashboard. Spec
   `specs/2026-10-29-remote-cli-design.md`, plan
   `plans/2026-10-29-remote-cli.md`. Merged into `feat/caddy-router` at

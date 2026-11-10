@@ -14,6 +14,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the setting did nothing, so an app that sets a version the server does not
   have (`20` on a server with node 22) stops deploying. Fix the setting or
   install that node. `18.17.0-nightly` style values are no longer accepted.
+- Event subscribers can no longer use `mode = "gate"`. It never vetoed
+  anything (it ran as `observe`), and now a manifest that sets it is
+  refused on install with a message. Remove the line, and to block a deploy
+  use a `riku-pre-deploy` hook that exits non-zero.
+
+### Removed
+
+- Plugin filters (`[filters]` manifest block, `on_filter` verb, `FilterBus`).
+  No filter point shipped in core.
+- Plugin UI panels (`[ui]` manifest block, `ui_panel` verb, the
+  `/api/plugins/:name/ui` route and the Next.js `/plugins/[name]` page).
+  The plugin list page stays.
+- Event gate mode (`SubscribeMode::Gate`), see Breaking above.
+- The supervisor's `GET /plugins` route that listed the server's client
+  plugins directory. Client plugins are a laptop feature and still work.
 
 ### Added
 

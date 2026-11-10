@@ -20,18 +20,8 @@ fn parses_a_valid_manifest() {
     let m = PluginManifest::from_toml_str(&valid_toml()).unwrap();
     assert_eq!(m.name, "slack-notify");
     assert_eq!(m.plugin_type, PluginType::Notifier);
-    assert_eq!(m.events.mode, SubscribeMode::Observe);
     assert!(m.subscribes_to("deploy.finished"));
     assert!(!m.subscribes_to("build.started"));
-}
-
-#[test]
-fn defaults_mode_to_observe_when_omitted() {
-    let toml = format!(
-        "name=\"n\"\nversion=\"1\"\ntype=\"hook\"\napi={RIKU_PLUGIN_API}\nentry=\"x\"\n[events]\nsubscribe=[\"deploy.finished\"]\n"
-    );
-    let m = PluginManifest::from_toml_str(&toml).unwrap();
-    assert_eq!(m.events.mode, SubscribeMode::Observe);
 }
 
 #[test]
@@ -74,4 +64,15 @@ fn entry_path_joins_under_bundle() {
         m.entry_path(Path::new("/plugins/slack")),
         Path::new("/plugins/slack/bin/notify")
     );
+}
+
+#[test]
+fn refuses_gate_mode_and_points_at_the_pre_deploy_hook() {
+    let toml = format!(
+        "name=\"n\"\nversion=\"1\"\ntype=\"hook\"\napi={RIKU_PLUGIN_API}\nentry=\"x\"\n[events]\nsubscribe=[\"deploy.started\"]\nmode=\"gate\"\n"
+    );
+    let err = PluginManifest::from_toml_str(&toml)
+        .expect_err("a gate manifest must not install")
+        .to_string();
+    assert!(err.contains("riku-pre-deploy"), "got: {err}");
 }

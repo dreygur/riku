@@ -91,12 +91,10 @@ original table didn't anticipate:
 | Runtime                   | `detect` / `build` / `env` / `start`                            | shipped |
 | Addon / Resource          | `provision` / `bind` / `unbind` / `deprovision` / `backup`      | shipped |
 | Legacy hook                | `pre`/`post` `deploy`/`build` (fixed, 4 stages)                 | shipped (predates the event bus below) |
-| Router                     | `configure` / `reload`                                          | shipped, host-level singleton named in `<riku root>/ROUTER`; nginx and Caddy are built in |
+| Router                     | `configure` / `reload`                                          | shipped, host-level singleton named by `[router] name` in `settings.toml`; nginx and Caddy are built in |
 | Event subscriber            | `on_event`: `subscribe`/`mode`/`priority` in `[events]`        | shipped, `deploy.*`, `build.*`, `app.restarted`, `app.failed`; `riku-notify` (webhook/Discord/Slack/Telegram) is the shipped first-party example |
 | Custom events               | `riku plugin-emit <plugin.custom.*>` (opt-in `events.emit`)     | shipped, namespaced, kernel-stamps `source_plugin` so a subscriber can tell a real kernel event from a plugin-claimed one |
-| Filter (value-transform)   | `on_filter`: `subscribe`/`priority` in `[filters]`             | shipped, chains, always degrades to passthrough on failure; `nginx.include_content` (augments the generated nginx config) is the shipped example |
 | Lifecycle hooks            | `on_install` / `on_uninstall` (opt-in `[lifecycle]`, any plugin type) | shipped |
-| UI panel                   | `ui_panel` (opt-in `[ui]`, Next.js dashboard only)              | shipped, structured JSON only, dashboard renders it, no plugin-supplied HTML/JS |
 | Auth / SSO                 | dashboard auth *provider* seam                                   | **not shipped**, the dashboard has real login (Phase 1 above), but not as something a plugin can supply/replace |
 
 The **addon contract is (still) the keystone**: it is how managed
@@ -195,7 +193,7 @@ Honest priority order across both tracks (items marked [x] shipped since this wa
 4. (shipped) Addon seam + Postgres/Redis/SQLite-volume as installable example addons (not bundled by default, an explicit `riku plugins add`, since addons hold credentials).
 5. (shipped) Backups + rollback + zero-downtime cutover + `doctor`.
 6. (shipped) Marketplace (`riku plugins marketplace add/list/remove`, `search`, `add name@market`) + lockfile + checksum/signature verification + capability declaration, shipped together from the start.
-7. (shipped) Notifier / router / filter / custom-event / UI-panel plugins. A searchable docs gallery beyond the existing reference pages is still open.
+7. (shipped) Notifier / router / custom-event plugins. Filters, UI panels and event gate mode were removed later (see CHANGELOG). A searchable docs gallery beyond the existing reference pages is still open.
 8. (shipped) Dashboard mutating actions. WASM plugin sandbox and a dashboard auth-*provider* seam (SSO as something a plugin supplies), **still open.**
 
 Given the above, every numbered item on this list has shipped except the
@@ -216,7 +214,7 @@ Estimates are for **one experienced Rust developer who already knows this codeba
 | 1: Dashboard | app list, live log stream, history, env editor, mutating actions, auth | shipped | - |
 | 2: Trust & resilience | backups/restore, rollback, zero-downtime cutover, `doctor` | shipped | - |
 | E0: Contract v1 | protocol version, spec, scaffold | shipped | - |
-| E1: Plugin types | addon/router/event/filter/custom-event/UI-panel/lifecycle dispatch | shipped (auth-provider seam still open) | - |
+| E1: Plugin types | addon/router/event/custom-event/lifecycle dispatch | shipped (auth-provider seam still open) | - |
 | 3: Postgres addon | first managed datastore | shipped (example bundle) | - |
 | E2: Marketplace | git fetch, manifest, search, install, lockfile, checksum | shipped | - |
 | E2.5: Trust model | signature verify, capability enforcement | shipped | - |
