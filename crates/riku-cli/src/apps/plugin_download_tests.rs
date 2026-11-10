@@ -49,3 +49,15 @@ fn host_target_names_the_plugin_when_unsupported() {
         "{message}"
     );
 }
+
+#[test]
+fn a_body_over_the_limit_is_refused() {
+    let at_limit = read_capped(std::io::Cursor::new(vec![7u8; 8]), 8, "u");
+    assert_eq!(at_limit.ok(), Some(vec![7u8; 8]));
+
+    let Err(FetchError::Failed(reason)) = read_capped(std::io::Cursor::new(vec![7u8; 9]), 8, "u")
+    else {
+        panic!("a 9 byte body under an 8 byte limit should fail");
+    };
+    assert!(reason.contains("more than 8 bytes"), "{reason}");
+}

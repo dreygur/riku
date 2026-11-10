@@ -6,6 +6,8 @@
 //! `.sha256` file published with it. That catches corruption and a swapped
 //! asset, not a compromised release (the hash comes from the same release).
 
+use std::io::Read;
+
 use anyhow::{anyhow, bail, Result};
 use sha2::{Digest, Sha256};
 
@@ -17,6 +19,9 @@ use super::plugin_write::write_plugin_file;
 const RELEASE_BASE: &str = "https://github.com/dreygur/riku/releases/download";
 const EXECUTABLE: u32 = 0o755;
 const SHA256_HEX_LEN: usize = 64;
+/// Far above any plugin binary riku publishes.
+const MAX_BINARY_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_SUMS_BYTES: u64 = 4096;
 
 /// Why a download failed.
 enum FetchError {
@@ -24,7 +29,7 @@ enum FetchError {
     Failed(String),
 }
 
-fn fetch(url: &str) -> Result<Vec<u8>, FetchError> {
+fn fetch(url: &str, limit: u64) -> Result<Vec<u8>, FetchError> {
     let client = match riku_http::blocking_client_builder().build() {
         Ok(client) => client,
         Err(e) => {
@@ -46,10 +51,22 @@ fn fetch(url: &str) -> Result<Vec<u8>, FetchError> {
             "HTTP {status} when fetching {url}"
         )));
     }
-    match response.bytes() {
-        Ok(body) => Ok(body.to_vec()),
-        Err(e) => Err(FetchError::Failed(format!("cannot read {url}: {e}"))),
+    read_capped(response, limit, url)
+}
+
+/// All of `body`, refusing more than `limit` bytes so a wrong or hostile
+/// response cannot exhaust memory.
+fn read_capped(body: impl Read, limit: u64, url: &str) -> Result<Vec<u8>, FetchError> {
+    let mut bytes = Vec::new();
+    if let Err(e) = body.take(limit + 1).read_to_end(&mut bytes) {
+        return Err(FetchError::Failed(format!("cannot read {url}: {e}")));
     }
+    if bytes.len() as u64 > limit {
+        return Err(FetchError::Failed(format!(
+            "{url} is more than {limit} bytes; not installed"
+        )));
+    }
+    Ok(bytes)
 }
 
 /// The release target triple riku builds plugins for on `os`/`arch`.
@@ -90,8 +107,14 @@ fn verify(name: &str, version: &str, bytes: &[u8], expected: &str) -> Result<()>
     bail!("checksum mismatch for plugin '{name}' (release v{version}); not installed")
 }
 
-fn fetch_or_explain(url: &str, name: &str, version: &str, triple: &str) -> Result<Vec<u8>> {
-    match fetch(url) {
+fn fetch_or_explain(
+    url: &str,
+    limit: u64,
+    name: &str,
+    version: &str,
+    triple: &str,
+) -> Result<Vec<u8>> {
+    match fetch(url, limit) {
         Ok(bytes) => Ok(bytes),
         Err(FetchError::NotFound) => Err(anyhow!(
             "no release v{version} of plugin '{name}' for {triple}"
@@ -111,11 +134,12 @@ pub(crate) fn install_binary_plugin(paths: &RikuPaths, name: &str) -> Result<()>
     };
     let url = binary_url(name, version, triple);
     display::info(&format!("Downloading {name} from {url}..."));
-    let bytes = match fetch_or_explain(&url, name, version, triple) {
+    let bytes = match fetch_or_explain(&url, MAX_BINARY_BYTES, name, version, triple) {
         Ok(bytes) => bytes,
         Err(e) => return Err(e),
     };
-    let sums = match fetch_or_explain(&format!("{url}.sha256"), name, version, triple) {
+    let sums_url = format!("{url}.sha256");
+    let sums = match fetch_or_explain(&sums_url, MAX_SUMS_BYTES, name, version, triple) {
         Ok(sums) => sums,
         Err(e) => return Err(e),
     };
