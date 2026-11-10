@@ -56,7 +56,7 @@ shelling out to the `riku` binary. Prefer (a) for anything mutating.
 
 | Feature | CLI | HTTP today | Dashboard surface |
 |---|---|---|---|
-| Runtime/hook plugins installed | `riku plugin list`, `riku hook list` | partial, `GET /plugins`, `GET /hooks` | Plugins panel |
+| Runtime/hook plugins installed | `riku plugin list`, `riku hook list` | partial, `GET /hooks` | Plugins panel |
 | Install bundled runtimes | `riku install-plugins [--plugins]` | yes, `POST /control/plugins/install` | "Install runtimes" |
 | Plugin bundles: install/list/remove | `riku plugins install|list|remove` | no | Plugin manager |
 | Search / add from marketplace | `riku plugins search|add` | no | Marketplace browser |
@@ -83,7 +83,7 @@ shelling out to the `riku` binary. Prefer (a) for anything mutating.
 
 ## 9. Security model the dashboard must honor
 
-- **Read-only** routes (`/health`, `/metrics*`, `/plugins`, `/hooks`, `/api/state`,
+- **Read-only** routes (`/health`, `/metrics*`, `/hooks`, `/api/state`,
   releases, logs), open on loopback; require token off-loopback.
 - **Mutating** routes (`/control/*`, scale, rollback, env writes), require the
   control token (`~/.riku/control.token`) and a same-origin/CSRF check. The

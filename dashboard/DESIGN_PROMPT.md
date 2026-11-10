@@ -83,7 +83,7 @@ the backend can fill in behind it.
 ## API contract (summary: full map in FEATURE_INVENTORY.md)
 
 - **Read (open on loopback):** `GET /api/state`, `/metrics`, `/metrics/apps[/:app]`,
-  `/metrics/stream` (SSE), `/plugins`, `/hooks`, `/api/apps/:app/releases`,
+  `/metrics/stream` (SSE), `/hooks`, `/api/apps/:app/releases`,
   `/api/apps/:app/logs` (SSE).
 - **Mutating (token + same-origin/CSRF, via the Next proxy):**
   `POST /control/apps` (create), `/control/apps/:app/{deploy,restart,stop}`,

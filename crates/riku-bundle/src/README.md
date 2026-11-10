@@ -9,7 +9,6 @@ Component package located at `crates/riku-bundle/src`.
 - `manifest` [lib.rs:manifest] (module)
 - `lib.rs` [lib.rs] (and 4 additional symbols)
 - `PluginType` [manifest.rs:PluginType] (enum)
-- `SubscribeMode` [manifest.rs:SubscribeMode] (enum)
 - `Capabilities` [manifest.rs:Capabilities] (struct)
 - `manifest.rs` [manifest.rs] (and 10 additional symbols)
 - `RouterSection` [router_section.rs:RouterSection] (struct)

@@ -34,9 +34,6 @@ impl ControlActions for CliControlActions {
     fn install_plugins(&self, paths: &RikuPaths, only: Option<Vec<String>>) -> Result<()> {
         crate::apps::cmd_install_plugins(paths, only)
     }
-    fn list_client_plugins(&self) -> Result<Vec<String>> {
-        crate::client_plugins::list_client_plugins()
-    }
     fn pull_service(&self, paths: &RikuPaths, app: &str, service: &str) -> Result<()> {
         crate::deploy::service_update::pull_service(app, paths, service)
     }

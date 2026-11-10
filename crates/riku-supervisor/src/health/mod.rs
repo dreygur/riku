@@ -6,7 +6,6 @@
 //! - GET /metrics/apps        - Per-app aggregated metrics
 //! - GET /metrics/apps/{app}  - Metrics for a specific app
 //! - GET /metrics/stream      - Server-Sent Events live metrics broadcast
-//! - GET /plugins             - List installed client plugins
 //! - GET /hooks                - List installed server-side hook plugins
 
 pub mod actions;
@@ -89,7 +88,6 @@ pub fn start_health_server(
         .route("/metrics/apps", get(metrics_apps_handler))
         .route("/metrics/apps/{app}", get(metrics_app_handler))
         .route("/metrics/stream", get(metrics_stream_handler))
-        .route("/plugins", get(plugins::plugins_handler))
         .route("/hooks", get(plugins::hooks_handler))
         .with_state(state)
         .layer(axum::extract::Extension(start_time))

@@ -24,7 +24,7 @@ that can never be a plugin; plugins extend Riku in exactly two ways:
             │ state (RikuPaths/ENV/worker TOML) · registry · event bus │
             └───┬──────────────┬──────────────┬───────────────┬───────┘
         seam:runtime    seam:addon      seam:router      event bus
-        (detect/build/  (provision/     (configure/      (observe / gate)
+        (detect/build/  (provision/     (configure/      (observe)
          env/start)      bind/…)          reload)
 ```
 
@@ -69,23 +69,16 @@ privileged  = false
 
 [events]                         # present iff the plugin subscribes to events
 subscribe   = ["deploy.finished", "deploy.failed"]
-mode        = "observe"          # observe | gate  (gate needs elevated trust, §7)
+mode        = "observe"          # only "observe" is accepted (default, §7.2)
 priority    = 0                  # delivery order among subscribers of the same
                                   # event, lower first (default 0; ties keep
                                   # filesystem discovery order, unspecified)
 emit        = false              # may this plugin fire its own plugin.custom.*
-                                  # events via `riku plugin-emit`? (§7.4)
+                                  # events via `riku plugin-emit`? (§7.3)
 
 [lifecycle]                      # present iff the plugin implements a hook;
 install     = true               # both default false, so no existing plugin
 uninstall   = true               # is affected
-
-[filters]                        # present iff the plugin registers filters (§7.3)
-subscribe   = ["example.filter"]
-priority    = 0                  # chain order, lower first (default 0)
-
-[ui]                              # present iff the plugin has a dashboard panel (§7.5)
-nav_label   = "My Plugin"        # nav label; Next.js dashboard only
 ```
 
 `type` is the *category*. `runtime`/`addon`/`router` bind the plugin to a
@@ -109,7 +102,7 @@ Every call is a fresh process:
 - **Context** is passed via environment variables. Always present:
   `RIKU_PLUGIN_API`, `RIKU_ROOT`, `RIKU_PLUGIN_NAME` (the manifest's own
   `name`: this is what lets a plugin's script identify itself when it
-  shells back out to `riku plugin-emit`, §7.4), and `RIKU_PLUGIN_DATA_PATH`,
+  shells back out to `riku plugin-emit`, §7.3), and `RIKU_PLUGIN_DATA_PATH`,
   a scratch directory the plugin owns (`data_root/plugin-data/<plugin-name>/`,
   created lazily on first use). App-scoped calls add `RIKU_APP`,
   `RIKU_APP_PATH`, `RIKU_ENV_PATH`. Seam-specific vars are listed per seam.
@@ -120,7 +113,7 @@ Every call is a fresh process:
   **stdin**. Simple verbs may ignore stdin entirely.
 - **Output:**
   - **exit code**: `0` = success / affirmative; non-zero = failure / negative.
-    `detect` and event `gate` decisions are expressed purely by exit code.
+    `detect` decisions are expressed purely by exit code.
   - **stdout**: either a single line (legacy runtime `start`/`env`) or a JSON
     object, as the seam specifies. Never mix the two for one verb.
   - **stderr**: human-readable logs; streamed to the deploy log live.
@@ -169,8 +162,10 @@ context for bind/unbind.
 ### 6.2 router _(new)_
 
 Exposes apps to the network. **Singleton**: exactly one router is active,
-chosen by the `<riku root>/ROUTER` file (`nginx`, `caddy`, or a router plugin
-name; written by `RIKU_ROUTER=<name> riku init`; default `nginx`). nginx and
+chosen by `[router] name` in `settings.toml` (`nginx`, `caddy`, or a router
+plugin name; written by `RIKU_ROUTER=<name> riku init`; default `nginx`). A
+`<riku root>/ROUTER` file written by an older version is still read when
+`settings.toml` names no router. nginx and
 Caddy are built in; this seam is for third party routers.
 
 | Verb          | Input (stdin JSON)                                      | Output           |
@@ -237,19 +232,19 @@ JSON on stdin:
 
 ### 7.1 Catalog (v1)
 
-| Event                | Phase | Gateable | Legacy hook    |
-| -------------------- | ----- | -------- | -------------- |
-| `deploy.requested`   | pre   | **yes**  | `pre-deploy`   |
-| `build.started`      | pre   | **yes**  | `pre-build`    |
-| `build.finished`     | post  | no       | `post-build`   |
-| `build.failed`       | post  | no       | - |
-| `release.activated`  | post  | no       | - |
-| `deploy.finished`    | post  | no       | `post-deploy`  |
-| `deploy.failed`      | post  | no       | - |
-| `app.scaled`         | post  | no       | - |
-| `app.stopped`        | post  | no       | - |
-| `app.restarted`      | post  | no       | - |
-| `app.failed`         | post  | no       | - |
+| Event                | Phase | Legacy hook    |
+| -------------------- | ----- | -------------- |
+| `deploy.requested`   | pre   | `pre-deploy`   |
+| `build.started`      | pre   | `pre-build`    |
+| `build.finished`     | post  | `post-build`   |
+| `build.failed`       | post  | - |
+| `release.activated`  | post  | - |
+| `deploy.finished`    | post  | `post-deploy`  |
+| `deploy.failed`      | post  | - |
+| `app.scaled`         | post  | - |
+| `app.stopped`        | post  | - |
+| `app.restarted`      | post  | - |
+| `app.failed`         | post  | - |
 
 The four legacy hooks are emitted at the **same points** as today, step 1 of
 the refactor is to emit these events there with **zero behavior change**.
@@ -267,47 +262,17 @@ to a generic webhook, Discord, Slack, and/or Telegram, see
 [Plugin Bundles](docs/docs/plugin-bundles.md). `app.scaled`/`app.stopped`
 remain reserved names only; nothing emits them yet.
 
-### 7.2 Modes: power is bounded by trust
+### 7.2 Delivery: observe only
 
-- **observe** (default): fire-and-forget. Runs async; failures are logged, never
-  fatal. **Open to any plugin** (a Slack notifier is harmless).
-- **gate**: only valid on **pre-phase / gateable** events. A non-zero exit
-  **vetoes** the action (e.g. block a deploy on a failing migration check).
-  Requires the elevated `events.gate` capability and a trusted marketplace
-  (§3, and the trust model in `ROADMAP.md` E2.5). Gated events block until all
-  gaters return or time out; a timeout is a veto (fail-closed), surfaced as an
-  install-time/config error rather than a silent stall.
-  **Not enforced yet:** today a gate subscription runs as observe and cannot
-  veto; riku logs a warning (`crates/riku-plugins/src/events/bus.rs`).
+Events are fire-and-forget. Delivery runs async; failures are logged, never
+fatal, and a subscriber cannot veto anything. `mode = "observe"` is the only
+accepted value and the default; a manifest that sets `mode = "gate"` is
+rejected on install.
 
-This is the core security idea: **observers are open and safe; only behavior
-that can change or block an action requires explicit trust.** The security model
-falls out of the seam model instead of being bolted on.
+**Blocking a deploy is done with a lifecycle hook, not an event.** Install a
+`riku-pre-deploy` (or `riku-pre-build`) hook that exits non-zero.
 
-### 7.3 Filters _(new)_
-
-Events are fire-and-forget; **filters** are the value-transform counterpart,
-a plugin receives a value and hands back a (possibly modified) one. Declared
-in the manifest `[filters]` block (§3), invoked with verb `on_filter`:
-
-```json
-{"filter": "example.filter", "data": "some value"}
-```
-
-expecting `{"data": "<transformed value>"}` back on stdout. Multiple plugins
-registered on the same filter name run as a **chain**, ordered by
-`filters.priority` (lower first: the same field and ordering rule as event
-`priority`, §7.1), each receiving the previous one's output.
-
-**Must degrade safely, never break the caller**: a non-zero exit, timeout, or
-malformed response is logged and the *input* passes through unchanged to the
-next filter in the chain. A broken filter can only become a no-op, never a
-hard failure: this is also why filters have no `gate`-equivalent mode: a
-filter can decline to transform, but never veto.
-
-**No filter point ships in core today.** The only one, `nginx.include_content`, fed the per app snippet file (`RIKU_NGINX_INCLUDE_FILE`) into the nginx config. That file is gone with the smaller core route, and a deploy that sets the key fails. The filter mechanism stays for future filter points.
-
-### 7.4 Plugin-emitted custom events _(new)_
+### 7.3 Plugin-emitted custom events _(new)_
 
 §7.1's catalog is kernel-emitted only: closed by design, since the
 event stream's trustworthiness depends on the kernel being the only thing
@@ -324,44 +289,20 @@ namespace:
   (including anything that *looks like* a kernel event, e.g. a plugin
   trying to fire its own `app.restarted`) is hard-rejected, not silently
   rewritten. This is the actual security boundary: it keeps `app.failed`-style
-  kernel events trustworthy for any subscriber, `gate`-mode or otherwise.
+  kernel events trustworthy for any subscriber.
 - The delivered envelope carries `source_plugin: "<name>"`, kernel-set,
   never a value the emitting plugin supplies itself, so a subscriber can
   always tell "the kernel said this happened" (`source_plugin: null`) from
   "a plugin claimed this happened" (`source_plugin: "<name>"`).
-- Delivery, priority ordering, and `observe`/`gate` modes are otherwise
-  identical to kernel events (§7.1–§7.2): a custom event is just a
-  differently-sourced instance of the same envelope.
-
-### 7.5 UI panels _(new: Next.js dashboard only)_
-
-A plugin declares `[ui] nav_label = "My Plugin"` to contribute a page to the
-Next.js browser dashboard (`dashboard/`: not the embedded single-binary
-one). The dashboard dispatches verb `ui_panel` (no meaningful stdin, `{}`)
-and expects **structured JSON only, never HTML/JS**:
-
-```json
-{"sections": [{"title": "Status", "fields": [{"label": "Queue depth", "value": "12"}]}]}
-```
-
-This is the scope-limiter that closes off injection risk: a plugin can only
-supply labels and values, which the dashboard renders with its own
-components (plain text nodes: nothing a plugin returns is ever interpreted
-as markup or executed). There is deliberately no verb for a plugin-defined
-*action* (a button that calls back into the plugin) in this version, v1 is
-read-only display.
-
-Same "must degrade safely" contract as filters (§7.3): a non-zero exit,
-timeout, spawn failure, or malformed response logs a warning and returns an
-**empty panel**, never breaks the dashboard. `GET /api/plugins` lists
-`ui.nav_label` for any plugin that declared it; the dashboard's nav bar and
-`GET /api/plugins/:name/ui` route are built from that.
+- Delivery and priority ordering are otherwise identical to kernel events
+  (§7.1–§7.2): a custom event is just a differently-sourced instance of the
+  same envelope.
 
 ## 8. Backward compatibility
 
 Existing runtime shell plugins have no manifest. They are loaded as **api = 0
 legacy runtimes** and keep working unchanged via argv+env and line output (§5).
-Events, capabilities, addon/router seams, and gating all require a manifest with
+Events, capabilities, and the addon/router seams all require a manifest with
 `api = 1`. No existing deployment breaks when v1 lands.
 
 ## 9. What is deliberately *not* a seam (v1)
@@ -405,7 +346,7 @@ implementation. These stay in the kernel for v1:
   Enforcement is unprivileged and **best-effort**: on a kernel without Landlock
   the filesystem/network limits degrade to a logged no-op while `no_new_privs`
   still applies. Legacy manifest-less runtime plugins (§8) are not sandboxed.
-- `gate` mode and `privileged` capability require explicit, elevated trust;
+- The `privileged` capability requires explicit, elevated trust;
   third-party marketplaces are opt-in. `privileged = true` opts a plugin **out**
   of the sandbox, so it is the one capability that widens authority.
 - WASM sandboxing for untrusted authors is the long-term answer (`ROADMAP.md`

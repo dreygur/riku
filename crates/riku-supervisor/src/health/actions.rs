@@ -36,7 +36,6 @@ pub trait ControlActions: Send + Sync {
     fn stop(&self, paths: &RikuPaths, app: &str) -> Result<()>;
     fn destroy(&self, paths: &RikuPaths, app: &str) -> Result<()>;
     fn install_plugins(&self, paths: &RikuPaths, only: Option<Vec<String>>) -> Result<()>;
-    fn list_client_plugins(&self) -> Result<Vec<String>>;
     /// Pull a fresh image and recreate a single compose service, without a
     /// full redeploy. Used by the daemon's periodic image-watch check
     /// (see `daemon::image_watch`).
@@ -82,9 +81,6 @@ impl ControlActions for NoopControlActions {
         Err(Self::unavailable())
     }
     fn install_plugins(&self, _: &RikuPaths, _: Option<Vec<String>>) -> Result<()> {
-        Err(Self::unavailable())
-    }
-    fn list_client_plugins(&self) -> Result<Vec<String>> {
         Err(Self::unavailable())
     }
     fn pull_service(&self, _: &RikuPaths, _: &str, _: &str) -> Result<()> {

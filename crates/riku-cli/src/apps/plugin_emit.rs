@@ -1,5 +1,5 @@
 //! `riku plugin-emit`: lets a plugin's own script fire a custom
-//! `plugin.custom.*` event (`PLUGIN_PROTOCOL.md` §7.4).
+//! `plugin.custom.*` event (`PLUGIN_PROTOCOL.md` §7.3).
 //!
 //! Must be run from within a plugin invocation (reads `RIKU_PLUGIN_NAME`,
 //! set by every dispatch site alongside `RIKU_PLUGIN_API`/`RIKU_ROOT`), and
@@ -7,7 +7,7 @@
 //! manifest. The `plugin.custom.` namespace is enforced here, not just
 //! documented: a plugin can never emit something that looks like a kernel
 //! event (`app.restarted`, `deploy.finished`, …), which is what keeps those
-//! events trustworthy for `gate`-mode subscribers.
+//! events trustworthy for subscribers.
 
 use anyhow::{bail, Context, Result};
 

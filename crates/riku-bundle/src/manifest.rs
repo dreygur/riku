@@ -30,17 +30,6 @@ pub enum PluginType {
     Hook,
 }
 
-/// How an event subscriber participates (`PLUGIN_PROTOCOL.md` §7.2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum SubscribeMode {
-    /// Fire-and-forget; failures are logged, never fatal. Open to any plugin.
-    #[default]
-    Observe,
-    /// May veto a gateable event. Requires elevated trust (not yet enforced).
-    Gate,
-}
-
 /// Declared capabilities: shown on install, enforced where the platform allows.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct Capabilities {
@@ -57,8 +46,13 @@ pub struct Capabilities {
 pub struct EventSubscription {
     #[serde(default)]
     pub subscribe: Vec<String>,
+    /// Only `"observe"` is accepted, and it is the default when omitted:
+    /// delivery is fire-and-forget and a subscriber failure is logged, never
+    /// fatal. Kept as a field so that a manifest written for the removed
+    /// `"gate"` mode is refused by [`PluginManifest::validate`] with a hint
+    /// instead of installing as something else.
     #[serde(default)]
-    pub mode: SubscribeMode,
+    pub mode: Option<String>,
     /// Delivery order among subscribers of the same event, lower runs
     /// first. Default `0`. Ties keep filesystem discovery order (unspecified).
     #[serde(default)]
@@ -68,32 +62,6 @@ pub struct EventSubscription {
     /// need not (and should not) declare this.
     #[serde(default)]
     pub emit: bool,
-}
-
-/// Filter-subscription block; present iff the plugin registers filters.
-/// Unlike events there's no `mode`: a filter is always fire-and-transform;
-/// see `FilterBus::apply`'s "must degrade to passthrough, never hard-fail"
-/// contract, which makes a `gate`-equivalent unnecessary (a filter can never
-/// veto, only decline to transform).
-#[derive(Debug, Clone, Default, Deserialize)]
-pub struct FilterSubscription {
-    #[serde(default)]
-    pub subscribe: Vec<String>,
-    /// Chain order among filters registered on the same name, lower runs
-    /// first, each receiving the previous one's output.
-    #[serde(default)]
-    pub priority: i32,
-}
-
-/// UI panel opt-in; present iff the plugin implements `ui_panel` and wants a
-/// dashboard nav entry. Absent (the default, `nav_label: None`) means the
-/// dashboard never dispatches `ui_panel` for this plugin and it gets no nav
-/// entry: every existing plugin is unaffected.
-#[derive(Debug, Clone, Default, Deserialize)]
-pub struct UiPanel {
-    /// Label shown in the dashboard's nav. `None` = no `[ui]` block declared.
-    #[serde(default)]
-    pub nav_label: Option<String>,
 }
 
 /// Install/uninstall lifecycle opt-in; present iff the plugin implements one
@@ -137,10 +105,6 @@ pub struct PluginManifest {
     pub lifecycle: Lifecycle,
     #[serde(default)]
     pub events: EventSubscription,
-    #[serde(default)]
-    pub filters: FilterSubscription,
-    #[serde(default)]
-    pub ui: UiPanel,
     /// Present on router plugins. `None` means the plugin predates router protocol 2.
     #[serde(default)]
     pub router: Option<RouterSection>,
@@ -162,7 +126,8 @@ impl PluginManifest {
         Ok(manifest)
     }
 
-    /// Reject unsupported API versions, unsafe names, and traversal in `entry`.
+    /// Reject unsupported API versions, unsafe names, traversal in `entry`,
+    /// and any event mode other than `observe`.
     pub fn validate(&self) -> Result<()> {
         if self.api != RIKU_PLUGIN_API {
             bail!(
@@ -196,6 +161,20 @@ impl PluginManifest {
                 "entry '{}' must be a relative path inside the bundle",
                 self.entry
             );
+        }
+
+        match self.events.mode.as_deref() {
+            None | Some("observe") => {}
+            Some("gate") => bail!(
+                "plugin '{}' sets events.mode = \"gate\", which is no longer supported; \
+                 event subscribers only observe. To block a deploy, install a \
+                 riku-pre-deploy hook that exits non-zero",
+                self.name
+            ),
+            Some(other) => bail!(
+                "plugin '{}' sets events.mode = \"{other}\"; the only supported mode is \"observe\"",
+                self.name
+            ),
         }
 
         Ok(())

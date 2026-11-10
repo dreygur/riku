@@ -9,7 +9,7 @@ Shared client and server code for the dashboard.
 - `hashPassword`, `verifyPassword` [password-hash.ts] (function): scrypt, Node only
 - `safeRedirectPath` [safe-redirect.ts:safeRedirectPath] (function): the login page's `from` target, kept only when it is a same-origin path, otherwise `/`
 - `DotKind` [status.ts:DotKind] (type), `statusMeta` [status.ts:statusMeta] (function): process status to dot colour and label
-- [types.ts]: the API response types (`ProcStatus`, `Worker`, `RouteState`, `AppState`, `RikuState`, `Release`, `DoctorCheck`, `AddonInstance`, `PluginsList`, `UiPanel`, `MarketplaceSource`, `MarketplaceHit`, `TrustKey` and others) and small helpers (`domainOf`, `httpsOf`, `routeBadge`, `isBusy`)
+- [types.ts]: the API response types (`ProcStatus`, `Worker`, `RouteState`, `AppState`, `RikuState`, `Release`, `DoctorCheck`, `AddonInstance`, `PluginsList`, `MarketplaceSource`, `MarketplaceHit`, `TrustKey` and others) and small helpers (`domainOf`, `httpsOf`, `routeBadge`, `isBusy`)
 - `usePendingRun` [use-pending-run.ts:usePendingRun] (function): tracks which async action is in flight so its control can show a pending state
 - `cn` [utils.ts:cn] (function): class name merge
 

@@ -4,11 +4,9 @@
 //! manifest subscribes to it: the entry executable is invoked with the verb
 //! `on_event` and the event JSON on stdin.
 //!
-//! Slice 2 implements **observe** mode only: delivery is fire-and-forget and a
-//! subscriber failure is logged, never fatal. `gate` mode (veto) needs the
-//! trust model (§7.2 / `ROADMAP.md` E2.5); a gate subscriber currently runs as
-//! observe and logs that the veto is not yet enforced, so it grants no false
-//! sense of security.
+//! Delivery is fire-and-forget (observe only): a subscriber failure is logged,
+//! never fatal, and a subscriber cannot veto anything. Blocking a deploy is
+//! done with a `riku-pre-deploy` lifecycle hook.
 
 use std::io::Write;
 use std::os::unix::process::CommandExt;
@@ -19,7 +17,7 @@ use crate::config::RikuPaths;
 use crate::executor::{
     emit_plugin_output, plugin_timeout, spawn_retrying_etxtbsy, wait_with_timeout,
 };
-use crate::manifest::{PluginManifest, SubscribeMode};
+use crate::manifest::PluginManifest;
 use crate::RIKU_PLUGIN_API;
 
 use super::{EventEnvelope, EventName};
@@ -41,7 +39,7 @@ impl<'a> EventBus<'a> {
     }
 
     /// Publish a `plugin.custom.*` event on behalf of `source_plugin`
-    /// (`riku plugin-emit`: `PLUGIN_PROTOCOL.md` §7.4). Callers are
+    /// (`riku plugin-emit`: `PLUGIN_PROTOCOL.md` §7.3). Callers are
     /// responsible for having already validated `name`'s namespace and that
     /// `source_plugin` declared `events.emit = true`; this method just
     /// builds the envelope and delivers it like any other event.
@@ -68,13 +66,6 @@ impl<'a> EventBus<'a> {
         tracing::debug!(target: "riku::events", "{line}");
 
         for (bundle, manifest) in self.subscribers_for(&envelope.event) {
-            if manifest.events.mode == SubscribeMode::Gate {
-                tracing::warn!(
-                    target: "riku::events",
-                    plugin = %manifest.name,
-                    "gate-mode subscription is not yet enforced; running as observe"
-                );
-            }
             self.run_subscriber(&bundle, &manifest, envelope, &line);
         }
     }

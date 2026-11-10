@@ -41,7 +41,6 @@ pub(crate) fn router(state: DashboardState) -> Router {
             "/api/plugins/{name}",
             axum::routing::delete(super::market::remove_plugin),
         )
-        .route("/api/plugins/{name}/ui", get(super::installed::ui_panel))
         .route(
             "/api/marketplace",
             get(super::market::list_sources).post(super::market::add_source),

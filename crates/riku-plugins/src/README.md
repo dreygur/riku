@@ -46,11 +46,9 @@ Component package located at `crates/riku-plugins/src`.
 - `signing.rs` [signing.rs] (and 4 additional symbols)
 - [addon](./addon/README.md) - Child contract for `addon`
 - [events](./events/README.md) - Child contract for `events`
-- [filters](./filters/README.md) - Child contract for `filters`
 - [marketplace](./marketplace/README.md) - Child contract for `marketplace`
 - [router](./router/README.md) - Child contract for `router`
 - [sandbox](./sandbox/README.md) - Child contract for `sandbox`
-- [ui](./ui/README.md) - Child contract for `ui`
 
 ## Invariants
 - [discovery.rs] Validates and sanitizes identifiers against path traversal and injection

@@ -14,8 +14,7 @@ details of the Riku system.
 3. **Reliability**: Improve stability and error handling
 4. **Maintainability**: Clean layering, no language-specific code in core
 5. **Extensibility**: A real plugin system, not just new runtimes, but
-   addons, routers, event subscribers, value-transform filters, and
-   dashboard UI panels
+   addons, routers, and event subscribers
 
 ## High-Level Architecture
 
@@ -30,8 +29,8 @@ details of the Riku system.
                         │  ┌─────────────┐ │    ┌─────────────────┐
                         │  │ Nginx       │ │    │  Plugins        │
                         │  │ (reverse    │ │◀──▶│  runtime/addon/ │
-                        │  │  proxy)     │ │    │  router/filter/ │
-                        │  └─────────────┘ │    │  event/ui       │
+                        │  │  proxy)     │ │    │  router/event   │
+                        │  └─────────────┘ │    │                 │
                         └──────────────────┘    └─────────────────┘
 ```
 
@@ -56,7 +55,7 @@ the crates were split out.
 
 `riku-plugins` is Service, not Provider, despite living next to `riku-cli`
 in spirit: `riku-supervisor`, `riku-deploy`, and `riku-nginx` all depend on
-it directly (for lifecycle hook dispatch, filters, and events), which only
+it directly (for lifecycle hook dispatch and events), which only
 makes sense if it sits below them in the dependency graph. A Provider
 label would mean those three services depend on something above them.
 
@@ -192,21 +191,12 @@ Riku extends in two ways:
     built in)
 - **Event subscribers**: the plugin reacts to lifecycle events the kernel
   emits (`deploy.*`, `build.*`, `app.restarted`, `app.failed`, …), verb
-  `on_event`, always fire-and-forget (`observe` mode) or veto-capable on
-  pre-phase events (`gate` mode, elevated trust). Subscribers on the same
+  `on_event`, always fire-and-forget (`observe` mode, the only mode: blocking
+  a deploy is done with a `riku-pre-deploy` hook). Subscribers on the same
   event run in `priority` order. A plugin may also declare `events.emit =
   true` to fire its own namespaced `plugin.custom.*` events via `riku
   plugin-emit`: the kernel stamps `source_plugin` so a subscriber can
   always tell a real kernel event from a plugin-claimed one.
-- **Filters**: the value-transform counterpart to events: verb
-  `on_filter`, a plugin receives a value and hands back a (possibly
-  transformed) one. Multiple filters on the same name chain in priority
-  order. Must degrade safely: any failure (non-zero exit, timeout,
-  malformed output) passes the input through unchanged rather than
-  breaking the caller: this is why filters have no veto/`gate` mode.
-- **UI panels**: verb `ui_panel`, Next.js dashboard only: a plugin returns
-  structured JSON (never HTML/JS) that the dashboard renders as its own
-  page, reached from a dynamically-added nav entry.
 - **Lifecycle hooks**: orthogonal to all of the above: any plugin may
   declare `on_install`/`on_uninstall`, invoked by `riku plugins
   install`/`remove`, always best-effort (a failing hook never blocks the
@@ -405,7 +395,7 @@ KEY2=VALUE2
 
 - Supervisor uses file watching (`notify` crate) instead of polling
 - Process monitoring is event-driven
-- Plugin dispatch (event/filter delivery) can run off the main
+- Plugin dispatch (event delivery) can run off the main
   supervisor tick on its own thread so a slow or unreachable plugin never
   delays health checks for other apps
 
@@ -415,8 +405,8 @@ KEY2=VALUE2
 
 - The system continues operating when individual apps fail
 - Configuration errors don't affect other applications
-- A broken filter/event-subscriber plugin degrades to a no-op (passthrough,
-  or a skipped delivery) rather than breaking the caller
+- A broken event-subscriber plugin degrades to a skipped delivery rather
+  than breaking the caller
 
 ### Logging
 
@@ -489,7 +479,7 @@ manual/browser-driven verification of dashboard and plugin changes.
 ├── workers-available/  # Available worker TOML configs
 ├── workers-enabled/    # Enabled worker configs (symlinks)
 ├── acme/               # ACME/Let's Encrypt certificates
-└── plugins/            # Plugin bundles (runtime, addon, router, event/filter/UI, legacy hooks)
+└── plugins/            # Plugin bundles (runtime, addon, router, event, legacy hooks)
 ```
 
 ### File Formats

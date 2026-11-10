@@ -62,7 +62,7 @@ pub struct EventEnvelope {
     /// Protocol version that produced this event.
     pub api: u32,
     /// Dotted event name. A `String`, not `&'static str`: kernel events use a
-    /// fixed name from [`EventName`], but `plugin.custom.*` events (§7.4) are
+    /// fixed name from [`EventName`], but `plugin.custom.*` events (§7.3) are
     /// dynamic strings supplied at emit time.
     pub event: String,
     /// RFC 3339 / ISO 8601 UTC timestamp.
@@ -75,7 +75,7 @@ pub struct EventEnvelope {
     /// `plugin.custom.*` event: always kernel-set from the emitting
     /// plugin's own manifest, never a value the plugin could supply itself,
     /// so a subscriber can trust this field to tell kernel-truth from
-    /// plugin-claimed (`PLUGIN_PROTOCOL.md` §7.4).
+    /// plugin-claimed (`PLUGIN_PROTOCOL.md` §7.3).
     pub source_plugin: Option<String>,
 }
 
@@ -94,7 +94,7 @@ impl EventEnvelope {
     }
 
     /// Build a plugin-emitted envelope. `name` must already be validated as
-    /// `plugin.custom.*` by the caller (`riku plugin-emit`: §7.4); this
+    /// `plugin.custom.*` by the caller (`riku plugin-emit`: §7.3); this
     /// constructor doesn't re-check it, since it's the one place
     /// `source_plugin` is ever set to `Some`, and that's what subscribers
     /// rely on to distinguish it from a kernel event.

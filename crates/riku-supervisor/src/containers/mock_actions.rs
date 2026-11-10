@@ -59,10 +59,6 @@ impl ControlActions for MockActions {
         Err(unexpected_call())
     }
 
-    fn list_client_plugins(&self) -> Result<Vec<String>> {
-        Err(unexpected_call())
-    }
-
     fn pull_service(&self, _: &RikuPaths, _: &str, _: &str) -> Result<()> {
         Err(unexpected_call())
     }
