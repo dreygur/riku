@@ -14,6 +14,7 @@ pub mod app_config;
 pub mod app_settings;
 pub mod container_engine;
 pub mod nginx_host;
+pub mod own_cert;
 pub mod program;
 pub mod reload_programs;
 mod root_dirs;
