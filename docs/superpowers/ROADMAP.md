@@ -237,7 +237,8 @@ work they describe.
     EGM reviewed (design and implementation readiness, both applied),
     branch `feat/url-first-push`, native execution. Owner confirmed
     refusing ports 80 and 443 in port mode. Task 1 (server routing
-    settings, IP detection) done.
+    settings, IP detection) and 2 (riku.toml mode and port, routing
+    state, port rules) done.
 
 ### After developer experience: small boards and binary size
 

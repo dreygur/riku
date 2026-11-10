@@ -29,18 +29,22 @@ use crate::util::domain::parse_domains;
 use crate::util::flag::https_only;
 use crate::util::route_plan::{HttpsPolicy, RoutePlan};
 
+mod app_routing;
 mod backends;
 mod caddy;
 mod check;
 mod fallback;
 mod helper_client;
+mod listening;
 mod nginx_site;
 mod plugin;
+mod port_rules;
 mod reload;
 mod remove;
 mod renew;
 mod route_build;
 mod route_env;
+mod routing_state;
 
 pub use backends::{copy_socket, current_backends};
 pub(crate) use backends::{parsed_worker, web_copies, worker_backend};
