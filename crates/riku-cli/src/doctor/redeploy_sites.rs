@@ -45,10 +45,13 @@ fn unrouted_apps(riku_root: &Path, site_root: &Path, extension: &str) -> Result<
 /// Redeploy every app that has a checkout under `<riku_root>/apps` and no
 /// `<site_root>/<app>.<extension>`, through `redeploy`, and report one check
 /// per app. Nothing is reported when every app has its site file.
+/// `wants_site` leaves out apps the router keeps no site for (path mode, a
+/// Caddy app with no domain), which would otherwise redeploy on every run.
 pub fn redeploy_unrouted_sites(
     riku_root: &Path,
     site_root: &Path,
     extension: &str,
+    wants_site: impl Fn(&str) -> bool,
     mut redeploy: impl FnMut(&str) -> Result<()>,
 ) -> Vec<Check> {
     let apps = match unrouted_apps(riku_root, site_root, extension) {
@@ -56,6 +59,7 @@ pub fn redeploy_unrouted_sites(
         Err(e) => return vec![Check::fail(NAME, e.to_string())],
     };
     apps.iter()
+        .filter(|app| wants_site(app))
         .map(|app| match redeploy(app) {
             Ok(()) => Check::ok(
                 NAME,

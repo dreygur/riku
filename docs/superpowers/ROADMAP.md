@@ -275,6 +275,12 @@ work they describe.
   one certificate for all of an app's domains (`riku-nginx/src/acme.rs`).
   Left: when that fails and riku falls back to one domain, nothing retries
   the others later; a pair that exists is kept until it is removed.
+- Fixed 2026-11-11: `riku doctor --fix` redeployed path mode apps (both
+  routers) and Caddy apps with no domain or port on every run, since they
+  have no site file of their own.
+- The dashboard Playwright suite targets the UI from before #71: none of
+  its selectors exist. It needs a rewrite; the owner deferred the Next.js
+  dashboard.
 - No supported way to serve your own certificate. With nginx, placing
   `<app>.key` and `<app>.fullchain.crt` in `nginx_root` works because an
   existing pair is kept, but it is undocumented, riku may replace a pair

@@ -109,6 +109,9 @@ fn redeploy_old_sites(paths: &RikuPaths) -> Vec<Check> {
         &paths.riku_root,
         Path::new(site_root),
         extension,
+        // An app whose routing cannot be read is redeployed, as before;
+        // the deploy then reports why.
+        |app| crate::deploy::router::site_expected(app, paths).unwrap_or(true),
         |app| crate::deploy::do_deploy(app, paths, &HashMap::new(), None),
     )
 }
