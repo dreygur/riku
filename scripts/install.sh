@@ -13,6 +13,8 @@
 #   RIKU_LIBC         gnu or musl, on Linux only (default: gnu when glibc
 #                     2.31 or newer is present, otherwise the static musl build)
 #   RIKU_NO_INIT=1    skip the post-install next-step hint
+# Set them after sudo, which drops the caller's environment:
+#   curl -fsSL .../install.sh | sudo RIKU_LIBC=musl sh
 set -eu
 
 REPO="dreygur/riku"
@@ -30,7 +32,12 @@ have() { command -v "$1" >/dev/null 2>&1; }
 linux_arch() {
   machine="$(uname -m)"
   case "$machine" in
-    x86_64 | amd64) say "amd64" ;;
+    x86_64 | amd64)
+      if [ "$(getconf LONG_BIT 2>/dev/null || echo 64)" = "32" ]; then
+        err "no 32 bit x86 build; this kernel is 64 bit but the userland is 32 bit"
+      fi
+      say "amd64"
+      ;;
     aarch64 | arm64)
       if [ "$(getconf LONG_BIT 2>/dev/null || echo 64)" = "32" ]; then
         say "armv7"
@@ -44,11 +51,17 @@ linux_arch() {
   esac
 }
 
-# Succeeds when glibc 2.31 or newer is present. `getconf GNU_LIBC_VERSION`
-# prints "glibc 2.36" and fails on musl systems such as Alpine.
-glibc_usable() {
+# The glibc version, such as 2.36, or "" when there is none. `getconf
+# GNU_LIBC_VERSION` prints "glibc 2.36" and fails on musl systems such as
+# Alpine.
+glibc_version() {
   version="$(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
-  version="${version##* }"
+  say "${version##* }"
+}
+
+# Succeeds when glibc 2.31 or newer is present.
+glibc_usable() {
+  version="$(glibc_version)"
   major="${version%%.*}"
   minor="${version#*.}"
   minor="${minor%%.*}"
@@ -59,12 +72,7 @@ glibc_usable() {
     [ "$major" -gt "$GLIBC_FLOOR_MAJOR" ]
     return
   fi
-  if [ "$minor" -ge "$GLIBC_FLOOR_MINOR" ]; then
-    return 0
-  fi
-  printf 'glibc %s is older than %s.%s, installing the musl build\n' \
-    "$version" "$GLIBC_FLOOR_MAJOR" "$GLIBC_FLOOR_MINOR" >&2
-  return 1
+  [ "$minor" -ge "$GLIBC_FLOOR_MINOR" ]
 }
 
 # "" for the glibc build, "-musl" for the static one.
@@ -76,7 +84,16 @@ libc_suffix() {
       say ""
       ;;
     '')
-      if glibc_usable; then say ""; else say "-musl"; fi
+      if glibc_usable; then
+        say ""
+        return
+      fi
+      found="$(glibc_version)"
+      if [ -n "$found" ]; then
+        printf 'glibc %s is older than %s.%s, installing the musl build\n' \
+          "$found" "$GLIBC_FLOOR_MAJOR" "$GLIBC_FLOOR_MINOR" >&2
+      fi
+      say "-musl"
       ;;
     *) err "RIKU_LIBC must be gnu or musl, not '${RIKU_LIBC}'" ;;
   esac

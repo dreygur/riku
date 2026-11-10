@@ -62,7 +62,8 @@ jobs:
       - name: Check the installer
         run: |
           shellcheck scripts/install.sh tests/install/pick_platform.sh
-          sh tests/install/pick_platform.sh
+          TEST_SH=dash sh tests/install/pick_platform.sh
+          TEST_SH=bash sh tests/install/pick_platform.sh
 
       - name: Build release
         run: mise run build:release
