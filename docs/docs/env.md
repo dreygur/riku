@@ -223,11 +223,12 @@ RIKU_NODE_VERSION=18.17.0
 ```
 
 - **Default:** (none, uses whatever `node` is on `$PATH`)
-- **Accepts:** `18`, `18.17`, `18.17.0`, `18.x`, `18.17.0-nightly`
-- **Description:** format-validated (a warning is printed if it doesn't
-  look like a version string) but **not currently read by the node
-  runtime plugin**: setting it does not select or install a specific
-  Node.js version. Kept here as a placeholder for that feature.
+- **Accepts:** `18`, `18.17`, `18.17.0`, `18.x`, `18.17.x`
+- **Description:** the node riku builds with must match. `18` and `18.x`
+  match any 18 release, `18.17` any 18.17 patch, `18.17.0` only that one.
+  Riku uses the server's `node` and does not install another version, so on
+  a mismatch the build fails and names both versions. Set it in riku.toml
+  as `[runtime] version`.
 - **Values:** Any valid Node.js version
 
 ### Node Package Manager
