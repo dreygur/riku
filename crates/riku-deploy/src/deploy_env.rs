@@ -24,11 +24,8 @@ fn warn_about(loaded: &AppEnv, dlog: &mut DeployLogger) {
     for w in &warnings {
         dlog.log_warn(w);
     }
-    for (old, new) in crate::util::legacy_env::legacy_keys(&loaded.env) {
-        warn(
-            &format!("ENV key {old} is no longer read, rename it to {new}"),
-            dlog,
-        );
+    for (old, replacement) in crate::util::legacy_env::legacy_keys(&loaded.env) {
+        warn(&format!("ENV key {}", replacement.hint(old)), dlog);
     }
     if !loaded.legacy_keys.is_empty() {
         warn(
