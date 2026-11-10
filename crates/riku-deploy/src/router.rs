@@ -29,11 +29,12 @@ use crate::util::domain::parse_domains;
 use crate::util::flag::https_only;
 use crate::util::route_plan::{HttpsPolicy, RoutePlan};
 
-mod app_routing;
+pub(crate) mod app_routing;
 mod backends;
 mod caddy;
 mod check;
 mod fallback;
+mod fallback_tls;
 mod helper_client;
 mod listening;
 mod nginx_site;
@@ -44,13 +45,15 @@ mod remove;
 mod renew;
 mod route_build;
 mod route_env;
-mod routing_state;
+pub(crate) mod routing_env;
+pub(crate) mod routing_state;
 
 pub use backends::{copy_socket, current_backends};
 pub(crate) use backends::{parsed_worker, web_copies, worker_backend};
 use caddy::apply_caddy_site;
 pub use check::check;
 use fallback::fallback_backends;
+use fallback_tls::mark_caddy_tls;
 pub use helper_client::send as send_to_helper;
 use nginx_site::apply_nginx_site;
 use plugin::configure_plugin;
@@ -59,6 +62,7 @@ use reload::{record_outcome, reload_router_plugin};
 pub use remove::remove;
 pub use renew::renew;
 pub use route_build::build_route;
+use routing_env::{routing_env, Record};
 
 /// Caddy reaches an app over loopback whatever `RIKU_BIND_ADDRESS` says.
 /// nginx and router plugins keep the address each copy listens on, since a
@@ -152,16 +156,24 @@ fn apply_to(
     paths: &RikuPaths,
     backends: &[Backend],
 ) -> Result<()> {
+    let (env, routing) = match routing_env(app, env, paths, active, Record::Save) {
+        Ok(routed) => routed,
+        Err(e) => return Err(anyhow!("cannot route '{app}': {e}")),
+    };
+    let env = &env;
     match active {
         Router::Nginx => {
             let send = |request: &Request| send_to_helper(paths, request);
-            let outcome = apply_nginx_site(send, app, app_path, env, backends, paths);
+            let outcome = apply_nginx_site(send, app, app_path, env, &routing, backends, paths);
             record_outcome(paths, &outcome);
             outcome
         }
         Router::Caddy => {
             let send = |request: &Request| send_to_helper(paths, request);
             let outcome = apply_caddy_site(send, app, env, backends, paths);
+            if outcome.is_ok() && routing.fallback {
+                mark_caddy_tls(app, paths);
+            }
             record_outcome(paths, &outcome);
             outcome
         }

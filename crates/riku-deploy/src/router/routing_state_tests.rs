@@ -53,6 +53,20 @@ fn a_failed_closure_writes_nothing() {
 }
 
 #[test]
+fn forget_drops_the_entry() {
+    let (_tmp, paths) = paths();
+    with_routing_lock(&paths, |state| {
+        state.set_entry("myapp", port_entry(8100));
+        Ok(())
+    })
+    .unwrap();
+
+    forget(&paths, "myapp");
+
+    assert_eq!(RoutingState::load(&paths).unwrap().entry("myapp"), None);
+}
+
+#[test]
 fn unknown_field_in_state_is_refused() {
     let (_tmp, paths) = paths();
     std::fs::create_dir_all(state_dir(&paths)).unwrap();

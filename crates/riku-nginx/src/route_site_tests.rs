@@ -8,6 +8,7 @@ struct Fixture {
     app: &'static str,
     shape: SiteShape,
     https_only: bool,
+    also_tls: bool,
     ipv6: bool,
     backends: Vec<Backend>,
 }
@@ -18,6 +19,7 @@ impl Fixture {
             app: "myapp",
             shape: SiteShape::Plain,
             https_only: false,
+            also_tls: false,
             ipv6: true,
             backends: vec![Backend::Unix(SOCKET.into())],
         }
@@ -36,6 +38,7 @@ impl Fixture {
             domains: &domains,
             shape: self.shape,
             https_only: self.https_only,
+            also_tls: self.also_tls,
             port: 80,
             backends: &self.backends,
             static_locations: &[],
@@ -89,6 +92,41 @@ fn socket_upstreams_always_carry_the_unix_prefix() {
         "{config}"
     );
     assert!(config.contains("uwsgi_pass riku_6d79617070;"), "{config}");
+}
+
+#[test]
+fn issued_fallback_serves_both_without_redirect() {
+    for shape in [SiteShape::Portmap, SiteShape::Plain] {
+        let site = Fixture {
+            shape,
+            also_tls: true,
+            backends: vec![Backend::loopback(5001)],
+            ..Fixture::new()
+        };
+
+        let config = site.render().unwrap();
+
+        assert!(
+            config.contains("listen              0.0.0.0:443 ssl;"),
+            "{config}"
+        );
+        assert!(
+            config.contains("listen              0.0.0.0:80;"),
+            "{config}"
+        );
+        assert!(
+            config.contains("ssl_certificate     /etc/riku/certs/myapp/fullchain.pem;"),
+            "{config}"
+        );
+        assert!(!config.contains("return 301"), "no redirect: {config}");
+    }
+}
+
+#[test]
+fn plain_site_without_tls_has_no_443() {
+    let config = Fixture::new().render().unwrap();
+
+    assert!(!config.contains("443"), "{config}");
 }
 
 #[test]

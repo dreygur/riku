@@ -168,6 +168,18 @@ pub fn with_routing_lock<T>(
     state.save(paths).map(|()| value)
 }
 
+/// Drop a destroyed app's entry, freeing its port. A failure is logged, not
+/// returned: the app is already gone, and a stale entry only holds a port.
+pub fn forget(paths: &RikuPaths, app: &str) {
+    let dropped = with_routing_lock(paths, |state| {
+        state.remove(app);
+        Ok(())
+    });
+    if let Err(e) = dropped {
+        tracing::warn!("cannot drop the routing entry of '{app}': {e:#}");
+    }
+}
+
 #[cfg(test)]
 #[path = "routing_state_tests.rs"]
 mod tests;

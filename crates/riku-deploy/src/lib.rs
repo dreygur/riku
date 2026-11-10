@@ -39,6 +39,7 @@ mod deploy_finish;
 pub mod env_setup;
 pub mod git_ops;
 pub mod hooks;
+mod live_urls;
 pub mod lock;
 #[cfg(test)]
 mod mock_engine;

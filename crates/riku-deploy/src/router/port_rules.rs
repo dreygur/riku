@@ -17,7 +17,7 @@ use crate::router::routing_state::RoutingState;
 const FIRST_UNPRIVILEGED_PORT: u16 = 1024;
 const CADDY_ADMIN_PORT: u16 = 2019;
 
-fn holder<'a>(state: &'a RoutingState, port: u16) -> Option<&'a str> {
+fn holder(state: &RoutingState, port: u16) -> Option<&str> {
     state
         .entries()
         .find(|(_, entry)| entry.port == Some(port))

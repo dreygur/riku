@@ -16,6 +16,7 @@ mod remove;
 mod route_site;
 mod sanitize;
 mod ssl;
+mod ssl_single;
 mod static_copy;
 mod static_site;
 mod template;
@@ -29,6 +30,7 @@ pub use remove::remove_deploy_files;
 pub use route_site::{render_route_site, RouteSite, SiteFiles, SiteShape};
 pub use sanitize::breaks_directive;
 pub use ssl::ensure_ssl_certificates;
+pub use ssl_single::issue_single;
 pub use static_site::{publish_static, remove_static, static_locations};
 
 /// Files an app might ship hoping to replace its generated nginx config.

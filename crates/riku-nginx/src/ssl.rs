@@ -16,7 +16,7 @@ const ACME_UMASK: libc::mode_t = 0o027;
 /// Make a private key readable by its owner only. nginx's master process
 /// runs as root and reads it before dropping to the worker user, so nothing
 /// else needs to.
-fn restrict_key(key_path: &std::path::Path) -> Result<()> {
+pub(crate) fn restrict_key(key_path: &std::path::Path) -> Result<()> {
     match fs::set_permissions(key_path, fs::Permissions::from_mode(KEY_FILE_MODE)) {
         Ok(()) => Ok(()),
         Err(e) => Err(anyhow!("cannot chmod {}: {e}", key_path.display())),
@@ -191,7 +191,7 @@ fn install_renew_hook(
 
 /// Attempt to issue certificates via acme.sh. Returns `Some(true)` on success,
 /// `None` if issuance failed for all domains (caller should fall back).
-fn try_acme_certificates(
+pub(crate) fn try_acme_certificates(
     app: &str,
     domains: &[String],
     paths: &crate::config::RikuPaths,

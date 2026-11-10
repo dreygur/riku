@@ -2,10 +2,11 @@
 
 use std::collections::HashMap;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use riku_route::Request;
 
 use super::nginx_site::check_nginx_site;
+use super::routing_env::{routing_env, Record};
 use super::send_to_helper;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
@@ -22,10 +23,14 @@ pub fn check(app: &str, env: &HashMap<String, String>, paths: &RikuPaths) -> Res
         Ok(router) => router,
         Err(e) => return Err(e),
     };
+    let routed = match routing_env(app, env, paths, &active, Record::Peek) {
+        Ok((routed, _)) => routed,
+        Err(e) => return Err(anyhow!("cannot route '{app}': {e}")),
+    };
     match active {
         Router::Nginx => {
             let send = |request: &Request| send_to_helper(paths, request);
-            check_nginx_site(send, app, env, paths)
+            check_nginx_site(send, app, &routed, paths)
         }
         Router::Caddy | Router::Plugin(_) => Ok(()),
     }

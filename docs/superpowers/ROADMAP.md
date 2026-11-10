@@ -238,7 +238,8 @@ work they describe.
     branch `feat/url-first-push`, native execution. Owner confirmed
     refusing ports 80 and 443 in port mode. Task 1 (server routing
     settings, IP detection) and 2 (riku.toml mode and port, routing
-    state, port rules) done.
+    state, port rules) and 3 (fallback domain, certificate order,
+    push URLs) done.
 
 ### After developer experience: small boards and binary size
 

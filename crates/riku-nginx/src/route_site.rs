@@ -48,6 +48,9 @@ pub struct RouteSite<'a> {
     pub domains: &'a [String],
     pub shape: SiteShape,
     pub https_only: bool,
+    /// Also serve HTTPS on 443 with the site's pair, with no redirect from
+    /// HTTP. Used for a fallback domain, whose certificate may lapse.
+    pub also_tls: bool,
     pub port: u16,
     pub backends: &'a [Backend],
     pub static_locations: &'a [String],
@@ -107,6 +110,7 @@ fn build_context(site: &RouteSite) -> Result<tera::Context> {
     };
 
     context.insert("IPV6", &site.ipv6);
+    context.insert("ALSO_TLS", &(site.also_tls && !site.https_only));
     context.insert("APP", site.app);
     context.insert("APP_UPSTREAM", &upstream_name(site.app));
     context.insert("RIKU_DOMAINS", &domains);

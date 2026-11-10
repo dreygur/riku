@@ -15,6 +15,7 @@ use riku_route::{Reply, Request};
 use super::nginx_site::{app_name, apply_nginx_site};
 use super::reload::record_outcome;
 use super::routed_backends;
+use super::routing_env::{routing_env, Record};
 use super::send_to_helper;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
@@ -70,7 +71,19 @@ fn renew_with(
         Ok(backends) => backends,
         Err(e) => return Err(e),
     };
-    let outcome = apply_nginx_site(send, name.as_str(), &app_path, &env, &backends, paths);
+    let (env, routing) = match routing_env(name.as_str(), &env, paths, &active, Record::Peek) {
+        Ok(routed) => routed,
+        Err(e) => return Err(e),
+    };
+    let outcome = apply_nginx_site(
+        send,
+        name.as_str(),
+        &app_path,
+        &env,
+        &routing,
+        &backends,
+        paths,
+    );
     record_outcome(paths, &outcome);
     outcome
 }
