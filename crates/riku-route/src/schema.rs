@@ -40,6 +40,14 @@ pub struct Route {
     pub open_port: Option<u16>,
 }
 
+/// One app under the shared path mode port, reached at `/<app>/`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PathApp {
+    pub app: String,
+    pub backends: Vec<RouteBackend>,
+}
+
 /// The shape of the site, in the order nginx's template choice tries them
 /// (after `https: only`, which takes the HTTPS template whatever the kind).
 /// One value, so contradictory combinations cannot be written.

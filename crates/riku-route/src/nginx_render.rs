@@ -28,7 +28,7 @@ fn shape(kind: SiteKind) -> SiteShape {
     }
 }
 
-fn backend(roots: &NginxRoots, app: &AppName, backend: &RouteBackend) -> Backend {
+pub(crate) fn backend(roots: &NginxRoots, app: &AppName, backend: &RouteBackend) -> Backend {
     match backend {
         RouteBackend::Tcp { host, port } => Backend::Tcp {
             host: *host,

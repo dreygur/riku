@@ -96,7 +96,7 @@ pub(crate) fn rolled_back(snapshot: &Snapshot, stage: Stage, cause: Error) -> Re
 /// Write `planned`, check, reload, and wait for `open_port` to be listened
 /// on (`probe` lists the ports in LISTEN); restore on any failure after the
 /// first write.
-fn commit(
+pub(crate) fn commit(
     roots: &NginxRoots,
     planned: &[Planned],
     open_port: Option<u16>,

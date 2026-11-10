@@ -26,6 +26,10 @@ pub(super) fn register_templates(tera: &mut tera::Tera) -> Result<()> {
             include_str!("../../../templates/nginx_acme.conf.tera"),
         ),
         (
+            "nginx_paths.conf.tera",
+            include_str!("../../../templates/nginx_paths.conf.tera"),
+        ),
+        (
             "nginx_open_port.conf.tera",
             include_str!("../../../templates/nginx_open_port.conf.tera"),
         ),

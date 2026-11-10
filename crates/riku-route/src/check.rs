@@ -45,7 +45,7 @@ fn domains(route: &Route) -> Result<()> {
     })
 }
 
-fn backend(backend: &RouteBackend) -> Result<()> {
+pub(crate) fn backend(backend: &RouteBackend) -> Result<()> {
     match backend {
         RouteBackend::Tcp { host, .. } if !host.is_loopback() => Err(anyhow!(
             "backend {host} is not a loopback address; the router only proxies to this host"

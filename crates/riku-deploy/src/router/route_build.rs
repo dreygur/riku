@@ -145,7 +145,7 @@ fn route_backend(app: &AppName, backend: &Backend, paths: &RikuPaths) -> Result<
     }
 }
 
-fn route_backends(
+pub(super) fn route_backends(
     app: &AppName,
     backends: &[Backend],
     paths: &RikuPaths,

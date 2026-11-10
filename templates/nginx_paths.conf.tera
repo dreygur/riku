@@ -1,0 +1,32 @@
+{% for app in APPS %}
+upstream {{ app.upstream }} {
+{% for address in app.addresses %}  server {{ address }};
+{% endfor %}}
+{% endfor %}
+
+server {
+  listen              0.0.0.0:{{ PORT }};
+  {% if IPV6 %}listen              [::]:{{ PORT }};{% endif %}
+  server_name         _;
+{% for app in APPS %}
+  location = /{{ app.name }} {
+    return 301 /{{ app.name }}/;
+  }
+
+  location /{{ app.name }}/ {
+    proxy_pass http://{{ app.upstream }}/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Port $server_port;
+    proxy_set_header X-Forwarded-Prefix /{{ app.name }};
+    proxy_redirect off;
+  }
+{% endfor %}
+  add_header X-Deployed-By "Riku" always;
+}

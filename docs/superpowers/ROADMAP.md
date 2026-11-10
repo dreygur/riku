@@ -240,7 +240,7 @@ work they describe.
     settings, IP detection) and 2 (riku.toml mode and port, routing
     state, port rules) and 3 (fallback domain, certificate order,
     push URLs) and 4 (port mode, bind check, external port key
-    removed) done.
+    removed) and 5 (path mode) done.
 
 ### After developer experience: small boards and binary size
 

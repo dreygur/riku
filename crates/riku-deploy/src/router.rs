@@ -37,6 +37,7 @@ mod fallback;
 mod fallback_tls;
 mod helper_client;
 mod nginx_site;
+mod paths;
 mod plugin;
 mod port_rules;
 mod reload;
@@ -55,6 +56,7 @@ use fallback::fallback_backends;
 use fallback_tls::mark_caddy_tls;
 pub use helper_client::send as send_to_helper;
 use nginx_site::apply_nginx_site;
+use paths::{previous_mode, publish_paths, route_by_path};
 use plugin::configure_plugin;
 pub use reload::ERROR_FILE as RELOAD_ERROR_FILE;
 use reload::{record_outcome, reload_router_plugin};
@@ -62,6 +64,7 @@ pub use remove::remove;
 pub use renew::renew;
 pub use route_build::build_route;
 use routing_env::{routing_env, Record};
+use routing_state::RoutingMode;
 
 /// Caddy reaches an app over loopback whatever `RIKU_BIND_ADDRESS` says.
 /// nginx and router plugins keep the address each copy listens on, since a
@@ -155,12 +158,18 @@ fn apply_to(
     paths: &RikuPaths,
     backends: &[Backend],
 ) -> Result<()> {
+    let previous = previous_mode(app, paths);
     let (env, routing) = match routing_env(app, env, paths, active, Record::Save) {
         Ok(routed) => routed,
         Err(e) => return Err(anyhow!("cannot route '{app}': {e}")),
     };
     let env = &env;
-    match active {
+    if routing.mode == RoutingMode::Path {
+        let outcome = route_by_path(active, app, env, paths, backends);
+        record_outcome(paths, &outcome);
+        return outcome;
+    }
+    let outcome = match active {
         Router::Nginx => {
             let send = |request: &Request| send_to_helper(paths, request);
             let outcome = apply_nginx_site(send, app, app_path, env, &routing, backends, paths);
@@ -180,7 +189,11 @@ fn apply_to(
             Ok(()) => reload_router_plugin(name, paths),
             Err(e) => Err(e),
         },
+    };
+    if outcome.is_ok() && previous == Some(RoutingMode::Path) {
+        return publish_paths(paths, active, (app, backends.to_vec()), true);
     }
+    outcome
 }
 
 /// The routing plan for an app: its domains and HTTPS policy from ENV, and

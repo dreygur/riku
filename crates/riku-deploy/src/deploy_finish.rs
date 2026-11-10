@@ -7,8 +7,8 @@ use std::path::Path;
 
 use crate::config::router::Router;
 use crate::config::{settings, RikuPaths};
-use crate::live_urls::{live_lines, port_lines, TlsState};
-use crate::router::app_routing::AppRouting;
+use crate::live_urls::{live_lines, path_lines, port_lines, TlsState};
+use crate::router::app_routing::{AppRouting, RoutingMode};
 use crate::router::routing_env::{routing_env, Record};
 use crate::router::routing_state::RoutingState;
 use crate::util::{deploy_logger::DeployLogger, echo};
@@ -50,11 +50,13 @@ fn announce(app: &str, env: &HashMap<String, String>, paths: &RikuPaths) {
         return;
     };
     let mut lines = live_lines(app, &routing, tls, crate::util::flag::https_only(env));
+    let server = settings::load(paths).ok().map(|loaded| loaded.routing);
+    let server_ip = server.as_ref().and_then(|routing| routing.server_ip);
     if let Some(port) = routing.port {
-        let server_ip = settings::load(paths)
-            .ok()
-            .and_then(|loaded| loaded.routing.server_ip);
         lines.extend(port_lines(port, server_ip));
+    }
+    if let (RoutingMode::Path, Some(server)) = (routing.mode, &server) {
+        lines.extend(path_lines(app, server.shared_port, server_ip));
     }
     for line in lines {
         echo(&format!("       {}", line.text), line.colour);

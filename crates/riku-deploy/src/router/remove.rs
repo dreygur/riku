@@ -10,9 +10,10 @@ use riku_route::Request;
 
 use super::caddy::remove_caddy_site;
 use super::nginx_site::remove_nginx_site;
+use super::paths::{previous_mode, publish_paths};
 use super::plugin::remove_plugin;
 use super::reload::record_outcome;
-use super::routing_state::forget;
+use super::routing_state::{forget, RoutingMode};
 use super::send_to_helper;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
@@ -47,8 +48,13 @@ pub fn remove(app: &str, paths: &RikuPaths) -> Result<()> {
             outcome
         }
     };
-    if outcome.is_ok() {
-        forget(paths, app);
+    if outcome.is_err() {
+        return outcome;
+    }
+    let was_path = previous_mode(app, paths) == Some(RoutingMode::Path);
+    forget(paths, app);
+    if was_path {
+        return publish_paths(paths, &active, (app, Vec::new()), true);
     }
     outcome
 }

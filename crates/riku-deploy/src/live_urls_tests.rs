@@ -112,6 +112,27 @@ fn port_lines_without_server_ip_say_where_to_look() {
 }
 
 #[test]
+fn path_mode_lists_the_path_and_warns_about_the_base_path() {
+    let routed = AppRouting {
+        mode: RoutingMode::Path,
+        ..routing(&[], false)
+    };
+
+    let mut lines = texts(live_lines("shop", &routed, None, false));
+    lines.extend(texts(path_lines(
+        "shop",
+        8080,
+        Some(Ipv4Addr::new(203, 0, 113, 10)),
+    )));
+
+    assert_eq!(lines[0], "Live at http://203.0.113.10:8080/shop/");
+    assert!(
+        lines.iter().any(|l| l.contains("base path /shop")),
+        "{lines:?}"
+    );
+}
+
+#[test]
 fn legacy_server_points_at_doctor_fix() {
     let routed = AppRouting {
         legacy: true,

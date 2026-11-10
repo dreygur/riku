@@ -3,7 +3,7 @@
 
 use std::net::Ipv4Addr;
 
-use crate::router::app_routing::AppRouting;
+use crate::router::app_routing::{AppRouting, RoutingMode};
 pub(crate) use crate::router::routing_state::TlsState;
 
 /// One line of the push output and its colour.
@@ -69,7 +69,8 @@ pub(crate) fn live_lines(
     tls: Option<TlsState>,
     https_only: bool,
 ) -> Vec<Line> {
-    if routing.domains.is_empty() && routing.port.is_some() {
+    let mode_has_own_lines = routing.port.is_some() || routing.mode == RoutingMode::Path;
+    if routing.domains.is_empty() && mode_has_own_lines {
         return Vec::new();
     }
     if routing.domains.is_empty() {
@@ -102,6 +103,21 @@ pub(crate) fn port_lines(port: u16, server_ip: Option<Ipv4Addr>) -> Vec<Line> {
         line(
             "A bare IP address gets HTTP only, no certificate".to_string(),
             "",
+        ),
+    ]
+}
+
+/// The push output for a path mode app on the shared port.
+pub(crate) fn path_lines(app: &str, shared_port: u16, server_ip: Option<Ipv4Addr>) -> Vec<Line> {
+    let host = match server_ip {
+        Some(ip) => ip.to_string(),
+        None => "<this server's address>".to_string(),
+    };
+    vec![
+        line(format!("Live at http://{host}:{shared_port}/{app}/"), "green"),
+        line(
+            format!("The app must handle the base path /{app}: requests reach it without the prefix, which is sent as X-Forwarded-Prefix"),
+            "yellow",
         ),
     ]
 }
