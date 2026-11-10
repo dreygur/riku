@@ -28,7 +28,7 @@ ssh-keygen -t ed25519 -C "cursor-agent@my-laptop" -f ~/.ssh/riku-cursor
 
 ```bash
 # Copy public key to server
-cat ~/.ssh/riku-cursor.pub | ssh riku@your-server \
+cat ~/.ssh/riku-cursor.pub | ssh riku@edge.example \
   "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
 ```
 

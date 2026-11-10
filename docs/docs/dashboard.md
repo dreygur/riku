@@ -29,7 +29,7 @@ chosen server (see [`rk`](cli.md)).
 
 Without `rk`, forward the port through an admin login, not the deploy key.
 The deploy key is installed with `no-port-forwarding`, so a tunnel through
-`riku@your-server` is refused:
+`riku@edge.example` is refused:
 
 ```bash
 ssh -t -L 8088:127.0.0.1:8088 admin@edge.example sudo -u riku -H riku dashboard
