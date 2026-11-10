@@ -245,7 +245,7 @@ Entry: `PluginManager::run_hook`, `PluginHook`, `HookContext` (`src/manager.rs`,
 
 - `src/discovery.rs`: `validate_plugin_name` (no `/`, `\`, `..`, empty), `list_plugins` (executable files in `plugin_root`), `plugin_exists`.
 - `src/hooks.rs`, `src/manager.rs`: legacy name-based hooks `riku-pre-deploy|pre-build|post-build|post-deploy` in `plugin_root`. Contract: pre-deploy, pre-build, post-build failure or timeout aborts; post-deploy only warns. Runs in its own process group.
-- `src/runtime.rs`: runtime plugins are executables in `plugin_root` not named `riku-*`; verbs `detect|build|env|start`. Order: `RIKU_RUNTIME` ENV override, else alphabetical first `detect` exit 0. Hidden files (an interrupted install's `.<name>.new`) are never plugins. `RIKU_RUNTIME` naming no installed plugin is the typed `MissingRuntime` error.
+- `src/runtime.rs`: runtime plugins are executables in `plugin_root` not named `riku-*`; verbs `detect|build|env|start`. Order: `RIKU_RUNTIME` ENV override, else alphabetical first `detect` exit 0. Hidden files (an interrupted install's `.<name>.<pid>.<serial>.new`) are never plugins. `RIKU_RUNTIME` naming no installed plugin is the typed `MissingRuntime` error.
 - `src/runtime_bundles.rs`: `add_runtime_bundles` adds bundle dirs with `type = "runtime"` to `discover`; a plain file wins a name clash.
 - `src/executor.rs`: timeout and output helpers. Reads `RIKU_PLUGIN_TIMEOUT` (`plugin_timeout`). Re-exports ETXTBSY-retry spawn from riku-util.
 - `src/bundles.rs`: finds `riku-plugin.toml` dirs; invalid manifests are skipped with a warning.

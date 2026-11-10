@@ -104,7 +104,7 @@ pub fn discover(plugin_root: &Path) -> Vec<RuntimePlugin> {
             let name = name.to_str()?;
 
             // Lifecycle hooks keep the riku- prefix. Hidden files are never
-            // plugins: an interrupted install leaves `.<name>.new` behind.
+            // plugins: an interrupted install leaves a hidden temp file behind.
             if name.starts_with("riku-") || name.starts_with('.') {
                 return None;
             }

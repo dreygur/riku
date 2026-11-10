@@ -80,7 +80,7 @@ fn discover_sorts_alphabetically() {
 #[test]
 fn discover_skips_hidden_files_such_as_a_half_written_plugin() {
     let tmp = TempDir::new().unwrap();
-    make_plugin(tmp.path(), ".node.new", "#!/bin/sh\n");
+    make_plugin(tmp.path(), ".node.123.0.new", "#!/bin/sh\n");
     make_plugin(tmp.path(), "node", "#!/bin/sh\n");
 
     let names: Vec<String> = discover(tmp.path()).into_iter().map(|p| p.name).collect();
