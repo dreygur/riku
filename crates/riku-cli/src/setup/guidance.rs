@@ -80,23 +80,28 @@ fn print_summary(scope: &InstallScope, no_systemd: bool) {
     echo("", "");
 }
 
-fn remote_line(user: &str) -> String {
-    format!("   git remote add riku {user}@your-server:myapp")
+/// The steps after init, run on the developer's laptop. riku cannot know
+/// the name the laptop reaches this host by, so `<host>` stays for them.
+fn first_app_guide(user: &str) -> Vec<String> {
+    vec![
+        "1. On your laptop, inside your app's git repo, register this server:".to_string(),
+        format!("   rk server add <name> {user}@<host> --admin <login>@<host>"),
+        "   It authorizes your ssh key and adds the riku git remote.".to_string(),
+        String::new(),
+        "2. Deploy:".to_string(),
+        "   git push riku main".to_string(),
+        String::new(),
+        "Processes come from riku.toml or a Procfile, else the runtime's start command."
+            .to_string(),
+    ]
 }
 
 fn print_first_app_guide(user: &str) {
     echo("Deploy your first app:", "green");
     echo("", "");
-    echo("1. Create an app directory on your local machine:", "");
-    echo("   mkdir myapp && cd myapp", "");
-    echo("   git init", "");
-    echo("", "");
-    echo("2. Add your code and a Procfile:", "");
-    echo("   echo 'web: python app.py' > Procfile", "");
-    echo("", "");
-    echo("3. Deploy:", "");
-    echo(&remote_line(user), "");
-    echo("   git push riku main", "");
+    for line in first_app_guide(user) {
+        echo(&line, "");
+    }
     echo("", "");
     echo(&format!("Documentation: {DOCS_URL}"), "");
 }

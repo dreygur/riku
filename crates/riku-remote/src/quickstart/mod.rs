@@ -60,11 +60,24 @@ fn scaffold_into(base: &Path, name: &str, runtime: &str, remote: Option<&str>) -
     Ok(())
 }
 
+/// The default registered server's address. An unreadable list counts as
+/// none: the instructions then say `rk server add`.
+fn default_server_address() -> Option<String> {
+    let list = crate::remote::store::servers_path()
+        .ok()
+        .and_then(|path| crate::remote::store::load(&path).ok());
+    list.and_then(|list| {
+        list.default_server()
+            .map(|s| s.address.as_str().to_string())
+    })
+}
+
 /// Scaffold `name` (a new directory in the current directory) for
-/// `runtime`, git-init it, and print deploy instructions. `remote` fills the
-/// `git remote add` line when known.
+/// `runtime`, git-init it, and print deploy instructions. `remote`, else
+/// the default registered server, fills the `git remote add` line.
 pub fn cmd_quickstart(name: &str, runtime: &str, remote: Option<&str>) -> Result<()> {
-    scaffold_into(Path::new("."), name, runtime, remote)
+    let remote = remote.map(str::to_string).or_else(default_server_address);
+    scaffold_into(Path::new("."), name, runtime, remote.as_deref())
 }
 
 /// Best-effort `git init` + initial commit. Returns whether a commit was made.
@@ -96,11 +109,17 @@ fn git_init_commit(dir: &Path) -> bool {
     ])
 }
 
-fn print_next_steps(app: &str, runtime: &str, remote: Option<&str>, committed: bool) {
-    let target = remote
-        .map(|r| format!("{r}:{app}"))
-        .unwrap_or_else(|| format!("<user>@<your-server>:{app}"));
+/// The step that points the repo at a server: the given remote, else
+/// `rk server add`, which also authorizes the key and names the remote
+/// after the directory, the app name here.
+fn remote_step(app: &str, remote: Option<&str>) -> String {
+    match remote {
+        Some(remote) => format!("git remote add riku {remote}:{app}"),
+        None => "rk server add <name> riku@<host> --admin <login>@<host>".to_string(),
+    }
+}
 
+fn print_next_steps(app: &str, runtime: &str, remote: Option<&str>, committed: bool) {
     display::blank();
     display::success(&format!("{runtime} app '{app}' is ready."));
     display::blank();
@@ -113,13 +132,13 @@ fn print_next_steps(app: &str, runtime: &str, remote: Option<&str>, committed: b
         println!("  {step}. git init && git add -A && git commit -m 'init'");
         step += 1;
     }
-    println!("  {step}. git remote add riku {target}");
+    println!("  {step}. {}", remote_step(app, remote));
     step += 1;
     println!("  {step}. git push riku main");
 
     display::blank();
     if remote.is_none() {
-        display::note("Replace <user>@<your-server> with your Riku host (see `riku init`).");
+        display::note("rk server add authorizes your ssh key and adds the riku git remote.");
     }
     display::note("On push, Riku detects the runtime, builds, and serves the app on $PORT.");
 }

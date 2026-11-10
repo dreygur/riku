@@ -31,7 +31,27 @@ sudo cp target/release/riku /usr/local/bin/
 
 ---
 
-## Step 2: Create Deploy User
+## Step 2: Install a Router
+
+Riku serves apps through nginx or Caddy. Install one before `riku init`: a
+fresh init uses the router it finds, asks when both are installed, and stops
+when there is none.
+
+```bash
+# Ubuntu/Debian
+sudo apt update && sudo apt install -y nginx
+
+# CentOS/RHEL
+sudo yum install -y nginx
+
+# Start nginx
+sudo systemctl enable nginx
+sudo systemctl start nginx
+```
+
+---
+
+## Step 3: Create Deploy User
 
 ```bash
 # Create a dedicated user for deployments
@@ -41,7 +61,7 @@ sudo su - riku
 
 ---
 
-## Step 3: Initialize Riku
+## Step 4: Initialize Riku
 
 ```bash
 # Initialize Riku directory structure
@@ -58,7 +78,7 @@ riku init
 
 ---
 
-## Step 4: Set Up SSH Access
+## Step 5: Set Up SSH Access
 
 ### On Your Local Machine
 
@@ -70,31 +90,16 @@ ssh-keygen -t ed25519 -C "your-email@example.com"
 
 ### Add Your Key to the Server
 
-```bash
-# Copy your public key to the server
-ssh-copy-id riku@your-server-ip
-
-# Or manually add it
-cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
-```
-
----
-
-## Step 5: Install Nginx
-
-Riku requires nginx as a reverse proxy:
+From your laptop, with an admin login on the server (sudo may ask for its
+password):
 
 ```bash
-# Ubuntu/Debian
-sudo apt update && sudo apt install -y nginx
-
-# CentOS/RHEL
-sudo yum install -y nginx
-
-# Start nginx
-sudo systemctl enable nginx
-sudo systemctl start nginx
+rk server add edge riku@your-server-ip --admin you@your-server-ip
 ```
+
+This runs `sudo riku deploy-key add '<your key>'` on the server and, inside
+your app's git repo, adds the `riku` remote. Without `--admin` it prints that
+command so you can run it on the server yourself.
 
 ---
 

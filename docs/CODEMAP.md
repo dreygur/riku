@@ -55,7 +55,7 @@ Entry: `remote::flow::run_or_forward` (`src/remote/flow.rs`), `remote::route::ta
 - `src/routing.rs`: `get_plugin_command` (which `Commands` a client plugin may override; `Rollback`, `Init`, `Backup`, `Doctor`, plugin/hook/agent commands cannot), `build_plugin_args`.
 - `src/plugin_cmd.rs`: dispatch for `riku plugin list|exists`.
 - `src/plugin_author/`: `plugins scaffold|keygen|sign` on the author's machine, `Program` (Riku or Rk) sets hint wording. Secret key created 0600 up front and never printed; signing covers the entry file only (see riku-bundle); `skeleton.rs` holds the manifest and entry text per `SeamType`.
-- `src/quickstart/`: `cmd_quickstart` writes a sample app (`Runtime` in `scaffold.rs`) into the current directory, `git init`s, prints `git remote add`/`git push`. `scaffold_into(base, ...)` takes the directory so tests do not change cwd.
+- `src/quickstart/`: `cmd_quickstart` writes a sample app (`Runtime` in `scaffold.rs`) into the current directory, `git init`s, prints the remote step (`--remote`, else the default registered server, else `rk server add`) and `git push`. `scaffold_into(base, ...)` takes the directory so tests do not change cwd.
 - `src/lib.rs`: `pub(crate)` aliases `cli`, `cmds`, `help`, `placement` (riku-args) and `util` (riku-util).
 
 Gotchas:

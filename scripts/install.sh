@@ -128,13 +128,11 @@ if [ "${RIKU_NO_INIT:-0}" != "1" ]; then
   say ""
   if [ "$bin" = "rk" ]; then
     say "Next: add a server"
-    say "  ${install_dir}/rk server add myserver riku@your-server-ip"
-    say "Then run a command on it:"
+    say "  ${install_dir}/rk server add myserver riku@edge.example --admin you@edge.example"
+    say "It authorizes your ssh key on the server. Then run a command on it:"
     say "  ${install_dir}/rk -s myserver apps"
   else
     say "Next: initialize the server"
     say "  ${install_dir}/riku init"
-    say "Then scaffold and deploy your first app:"
-    say "  ${install_dir}/riku quickstart"
   fi
 fi
