@@ -141,7 +141,6 @@ fn caddy_cannot_take(route: &Route) -> Option<&'static str> {
         .iter()
         .any(|b| matches!(b, RouteBackend::UnixCopy(_) | RouteBackend::UnixDefault));
     let refused = [
-        (route.tls.is_some(), "a tls pair"),
         (route.allow_git_folders, "allow_git_folders"),
         (route.listen != Listen::default(), "a custom listen"),
         (
@@ -163,14 +162,15 @@ fn caddy_cannot_take(route: &Route) -> Option<&'static str> {
 
 /// The common checks plus what Caddy cannot do: it takes none of the nginx
 /// only fields, no unix socket backends and no static sites, only TCP
-/// proxying with its own certificates.
+/// proxying. A TLS pair is allowed and checked like nginx's; without one
+/// Caddy issues its own certificate.
 pub fn check_caddy_route(app: &AppName, route: &Route) -> Result<CheckedRoute> {
     let outcome = match caddy_cannot_take(route) {
         Some(what) => Err(anyhow!("Caddy does not take {what}")),
-        None => common(route),
+        None => common(route).and_then(|()| normalized_tls(route)),
     };
     match outcome {
-        Ok(()) => Ok(checked(route, None)),
+        Ok(tls) => Ok(checked(route, tls)),
         Err(e) => Err(anyhow!("route for '{app}': {e}")),
     }
 }

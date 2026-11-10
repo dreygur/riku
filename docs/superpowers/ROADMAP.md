@@ -6,6 +6,19 @@ work they describe.
 
 ## How work runs here
 
+Pace rules from 2026-11-11 override the older bullets below where they
+differ: bug fixes go failing test, fix, commit with no plan; features get a
+half page design in chat that the owner approves, EGM only on request; the
+full suite and one review run once per batch; one PR per batch.
+
+Goal for 0.1.4 ("somewhat complete"), all merged to main 2026-11-11
+without CI at the owner's request, release not yet tagged: merge
+`feat/small-boards` and `fix/nginx-cache-catch-all`; custom certificates (`riku certs`); node
+plugin honours `RIKU_NODE_VERSION` by failing on a mismatch; no
+`your-server` placeholders in docs; `v0.1.4-rc.1` tag to prove the release
+workflow, then `v0.1.4`. The Next.js dashboard, the framework design and
+phase 4 come after.
+
 - Each project has a design in `docs/superpowers/specs/` (owner approved) and
   a plan in `docs/superpowers/plans/`, written just before it runs.
 - Plans run with superpowers:subagent-driven-development, cut for tokens
@@ -301,16 +314,31 @@ work they describe.
 
 ## Known open problems, outside the plans
 
-- nginx: `RIKU_NGINX_CACHE_PREFIXES` puts `proxy_cache_path` inside the
-  `server` block; nginx allows it only at `http` level, so `nginx -t` fails
-  for any app that sets it.
-- nginx: `RIKU_NGINX_CATCH_ALL` adds a second `location /`, a duplicate
-  wherever the template's default location or the uwsgi include is active.
-  Read from the templates, not run against nginx.
-- Certificates (`crates/riku-nginx/src/ssl.rs`): ACME issues per domain and
-  stops at the first success, so other domains are uncovered; nginx serves
-  the leaf `<app>.crt`, not `<app>.fullchain.crt`; `nginx_acme_firstrun`
-  is registered but never selected. Needs a design.
+- Checked 2026-11-11: the two nginx bugs once listed here
+  (`RIKU_NGINX_CACHE_PREFIXES`, `RIKU_NGINX_CATCH_ALL`) are gone; #73
+  removed both features and a deploy that sets either key is refused
+  (`route_build.rs` `REMOVED_KEYS`). nginx already serves the full chain
+  (`route_env.rs` `tls`) and `nginx_acme_firstrun` no longer exists.
+- Certificates: fixed on `fix/nginx-cache-catch-all`. acme.sh now issues
+  one certificate for all of an app's domains (`riku-nginx/src/acme.rs`).
+  Left: when that fails and riku falls back to one domain, nothing retries
+  the others later; a pair that exists is kept until it is removed.
+- Fixed 2026-11-11: `riku doctor --fix` redeployed path mode apps (both
+  routers) and Caddy apps with no domain or port on every run, since they
+  have no site file of their own.
+- The dashboard Playwright suite targets the UI from before #71: none of
+  its selectors exist. It needs a rewrite; the owner deferred the Next.js
+  dashboard.
+- Deferred from the 0.1.4 batch review (2026-11-11): after the single
+  domain fallback, nothing re-issues for all domains once DNS is fixed, and
+  each failing deploy makes one Let's Encrypt attempt per domain (rate
+  limit risk); a failed first Caddy apply leaves an empty `certs/<app>` dir.
+- Superseded below: own certificates shipped as `riku certs` (0.1.4).
+- No supported way to serve your own certificate. With nginx, placing
+  `<app>.key` and `<app>.fullchain.crt` in `nginx_root` works because an
+  existing pair is kept, but it is undocumented, riku may replace a pair
+  without the chain file, and Caddy has no equivalent. A `riku certs`
+  command is a candidate.
 
 - `riku install-plugins` failed to download inside a Docker test container.
   Cause: reqwest was built without a TLS backend, so every https request

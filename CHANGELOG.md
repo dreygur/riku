@@ -7,13 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+### Breaking
 
-- Linux release binaries needed glibc 2.39, because they were built on
-  Ubuntu 24.04, and did not start on Debian 12, Raspberry Pi OS bookworm or
-  Ubuntu 22.04. They now need glibc 2.31 or newer.
-- `riku install-plugins java|clojure` fetches the plugin built for riku's
-  own target. Before, every 32 bit ARM riku fetched the armv7 build.
+- The node plugin now honours `RIKU_NODE_VERSION` (riku.toml `[runtime]
+  version`): the build fails when the server's node does not match. Before,
+  the setting did nothing, so an app that sets a version the server does not
+  have (`20` on a server with node 22) stops deploying. Fix the setting or
+  install that node. `18.17.0-nightly` style values are no longer accepted.
 
 ### Added
 
@@ -22,6 +22,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The installer handles `armv6l`, a 64 bit kernel with a 32 bit userland
   (installs armv7), and hosts without glibc 2.31 (installs musl).
   `RIKU_LIBC=gnu|musl` overrides the choice (`| sudo RIKU_LIBC=musl sh`).
+- `riku certs set|show|unset <app>`: serve your own certificate
+  (`cat fullchain.pem key.pem | rk certs set myapp`) on nginx and Caddy.
+  riku never issues, renews or deletes it; `riku doctor` warns 14 days
+  before it ends. See docs/docs/certificates.md.
+
+### Fixed
+
+- Linux release binaries needed glibc 2.39, because they were built on
+  Ubuntu 24.04, and did not start on Debian 12, Raspberry Pi OS bookworm or
+  Ubuntu 22.04. They now need glibc 2.31 or newer.
+- `riku install-plugins java|clojure` fetches the plugin built for riku's
+  own target. Before, every 32 bit ARM riku fetched the armv7 build.
+- A multi domain app got a Let's Encrypt certificate for its first domain
+  only; the others got a name error. One certificate now names every domain.
+- An app whose acme.sh certificate is not due yet got a self-signed one on
+  a re-issue (acme.sh skips with exit 2); the held certificate is installed.
+- `riku doctor --fix` rebuilt path mode apps, and Caddy apps with no domain
+  or port, on every run.
 
 ## [0.1.3] - 2026-11-10
 

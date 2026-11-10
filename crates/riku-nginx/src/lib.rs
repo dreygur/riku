@@ -9,6 +9,7 @@
 pub(crate) use riku_config as config;
 pub(crate) use riku_util as util;
 
+mod acme;
 mod backends;
 mod default_server;
 mod host;
@@ -24,6 +25,7 @@ mod template;
 
 use std::path::Path;
 
+pub use acme::forget_acme;
 pub use backends::{bind_address, default_backends, upstream_port_number};
 pub use default_server::needs_catch_all;
 pub use host::{include_file_contents, include_line, includes_riku_sites, write_include_file};

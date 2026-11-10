@@ -148,3 +148,63 @@ fn riku_notify_keeps_its_bundle_layout() {
         0o755
     );
 }
+
+/// Run the shipped node plugin's `build` with a mock `node` that reports
+/// `installed` and a mock `npm`. Returns the exit status and stderr.
+fn node_build(wanted: Option<&str>, installed: &str) -> (bool, String) {
+    let tmp = tempfile::tempdir().unwrap();
+    let plugins = tmp.path().join("plugins");
+    let bin = tmp.path().join("bin");
+    let app = tmp.path().join("app");
+    for dir in [&plugins, &bin, &app] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    write_out(find("node").unwrap(), &plugins).unwrap();
+    std::fs::write(app.join("package.json"), "{}").unwrap();
+    for (name, body) in [
+        ("node", format!("echo v{installed}")),
+        ("npm", String::new()),
+    ] {
+        let tool = bin.join(name);
+        std::fs::write(&tool, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let mut command = std::process::Command::new(plugins.join("node"));
+    command
+        .arg("build")
+        .env_clear()
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+        .env("HOME", tmp.path())
+        .env("RIKU_APP_PATH", &app);
+    if let Some(wanted) = wanted {
+        command.env("RIKU_NODE_VERSION", wanted);
+    }
+    let output = command.output().unwrap();
+    (
+        output.status.success(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn node_version_matches_on_whole_version_parts() {
+    for wanted in ["22", "v22", "22.x", "22.11", "22.11.x", "22.11.1"] {
+        let (ok, stderr) = node_build(Some(wanted), "22.11.1");
+        assert!(ok, "{wanted} should match 22.11.1: {stderr}");
+    }
+    let (ok, _) = node_build(None, "18.0.0");
+    assert!(ok, "no version set builds with any node");
+}
+
+#[test]
+fn a_node_version_mismatch_fails_the_build_naming_both() {
+    for wanted in ["20", "2", "22.1"] {
+        let (ok, stderr) = node_build(Some(wanted), "22.11.1");
+
+        assert!(!ok, "{wanted} must not match 22.11.1");
+        assert!(
+            stderr.contains("RIKU_NODE_VERSION") && stderr.contains("22.11.1"),
+            "{stderr}"
+        );
+    }
+}

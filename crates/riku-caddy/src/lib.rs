@@ -11,4 +11,4 @@ mod site;
 pub use host::{has_import, import_line, ADMIN_ADDRESS, SYSTEM_CADDYFILE};
 pub use paths::render_paths;
 pub use riku_util::route_plan::HttpsPolicy;
-pub use site::{render_site, site_path};
+pub use site::{render_site, render_site_with_tls, site_path, TlsFiles};

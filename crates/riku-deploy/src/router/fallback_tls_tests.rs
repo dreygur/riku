@@ -82,6 +82,25 @@ fn drop_stale_pair_removes_the_files_and_the_record() {
 }
 
 #[test]
+fn drop_stale_pair_keeps_an_own_certificate() {
+    let (_tmp, paths) = paths();
+    std::fs::create_dir_all(&paths.nginx_root).unwrap();
+    for suffix in ["key", "crt", "fullchain.crt", "own-cert"] {
+        std::fs::write(paths.nginx_root.join(format!("myapp.{suffix}")), "pem").unwrap();
+    }
+    fallback_certificate_with(|_, _, _| Ok(true), "myapp", "old.example", &paths, 1000);
+
+    drop_stale_pair("myapp", None, &paths);
+
+    for suffix in ["key", "crt", "fullchain.crt", "own-cert"] {
+        assert!(
+            paths.nginx_root.join(format!("myapp.{suffix}")).exists(),
+            "{suffix} was deleted"
+        );
+    }
+}
+
+#[test]
 fn issued_certificate_is_recorded() {
     let (_tmp, paths) = paths();
 

@@ -27,7 +27,7 @@ curl -LO https://github.com/dreygur/riku/releases/latest/download/riku-linux-amd
 tar -xzf riku-linux-amd64.tar.gz && sudo ./riku init --ssh-key ~/.ssh/authorized_keys
 
 # on your laptop
-git remote add riku riku@your-server:myapp
+git remote add riku riku@edge.example:myapp
 git push riku main      # that's the deploy
 ```
 
@@ -104,7 +104,7 @@ fail to deploy until you unset it.
 `rk` is a separate binary for your laptop (Linux or macOS) that runs riku
 commands on your servers over ssh. Install it with
 `curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh -s -- --rk`,
-then `rk server add myserver riku@your-server` and `rk -s myserver apps`. See
+then `rk server add myserver riku@edge.example` and `rk -s myserver apps`. See
 [`docs/docs/installation.md`](docs/docs/installation.md#the-rk-laptop-client).
 
 ### From source
@@ -123,7 +123,7 @@ cargo build --release
 ```bash
 sudo adduser riku && sudo su - riku
 riku init
-ssh-copy-id riku@your-server      # add your SSH key
+ssh-copy-id riku@edge.example      # add your SSH key
 ```
 
 **2. Deploy an app.** Add a `Procfile`, commit, and push:
@@ -135,7 +135,7 @@ worker: python worker.py
 
 ```bash
 git init && git add . && git commit -m "first deploy"
-git remote add riku riku@your-server:myapp
+git remote add riku riku@edge.example:myapp
 git push riku main
 ```
 

@@ -18,6 +18,7 @@ mod migrate_check;
 mod migrate_env;
 pub mod migrate_settings;
 mod mode_write;
+pub mod own_cert_check;
 pub mod package_tools;
 pub mod redeploy_sites;
 pub mod router_check;
@@ -109,6 +110,9 @@ fn redeploy_old_sites(paths: &RikuPaths) -> Vec<Check> {
         &paths.riku_root,
         Path::new(site_root),
         extension,
+        // An app whose routing cannot be read is redeployed, as before;
+        // the deploy then reports why.
+        |app| crate::deploy::router::site_expected(app, paths).unwrap_or(true),
         |app| crate::deploy::do_deploy(app, paths, &HashMap::new(), None),
     )
 }
@@ -187,6 +191,7 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     checks.push(checks::disk(paths));
     checks.push(checks::ssh_access());
     checks.extend(app_env::renamed_keys(paths));
+    checks.extend(own_cert_check::own_certificates(paths));
     checks
 }
 

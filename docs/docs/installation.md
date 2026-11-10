@@ -309,14 +309,14 @@ git init
 echo 'web: python3 -m http.server $PORT' > Procfile
 git add .
 git commit -m "test"
-git remote add riku riku@your-server:test-app
+git remote add riku riku@edge.example:test-app
 git push riku main
 ```
 
 Give it a domain and push again:
 
 ```bash
-ssh riku@your-server settings set test-app routing.domains=test.example.com
+ssh riku@edge.example settings set test-app routing.domains=test.example.com
 git commit --allow-empty -m "domain" && git push riku main
 ```
 

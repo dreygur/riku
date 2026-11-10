@@ -75,6 +75,7 @@ nav:
       - Server Settings: settings.md
       - riku.toml: riku-toml.md
       - App URLs: routing.md
+      - Your Own Certificate: certificates.md
       - Runtimes: runtimes.md
       - Container Images: container-images.md
       - Nginx: nginx.md

@@ -94,7 +94,7 @@ From your laptop, with an admin login on the server (sudo may ask for its
 password):
 
 ```bash
-rk server add edge riku@your-server-ip --admin you@your-server-ip
+rk server add edge riku@edge.example --admin you@edge.example
 ```
 
 This runs `sudo riku deploy-key add --user riku '<your key>'` on the server and, inside
@@ -149,7 +149,7 @@ echo 'web: node server.js' > Procfile
 **Option 1: Standard (repo in `~/.riku/repos/`)**
 ```bash
 # Add your Riku server as a remote
-git remote add riku riku@your-server-ip:myapp
+git remote add riku riku@edge.example:myapp
 
 # Deploy
 git add . && git commit -m "Initial commit"
@@ -165,7 +165,7 @@ You can create your bare git repo anywhere and Riku will automatically symlink i
 git init --bare ~/my-projects/myapp.git
 
 # On local: push to custom path
-git remote add riku riku@your-server-ip:~/my-projects/myapp.git
+git remote add riku riku@edge.example:~/my-projects/myapp.git
 git push riku main
 
 # Riku will automatically:
@@ -218,20 +218,20 @@ When you push to Riku:
 Register the server once and the local `riku` runs commands on it over ssh:
 
 ```bash
-riku server add edge riku@your-server-ip
+riku server add edge riku@edge.example
 riku server default edge
 riku ps myapp
 ```
 
-Inside a repo whose git remote is `riku@your-server-ip:myapp`, the server and
+Inside a repo whose git remote is `riku@edge.example:myapp`, the server and
 the app name are picked up from the remote, so `riku restart` is enough. Riku
-prints `[*] edge (riku@your-server-ip)` on stderr so you can see where a
+prints `[*] edge (riku@edge.example)` on stderr so you can see where a
 command went. Use `-s <name>` for another server and `--local` to run on the
 current machine. `riku destroy` always needs the app name and does not ask for
 confirmation.
 
 To open the server's dashboard in your browser, register the server with an
-admin login (`--admin root@your-server-ip`) and run `riku dashboard -s
+admin login (`--admin root@edge.example`) and run `riku dashboard -s
 edge`. An existing entry has no way to be edited: remove it and add it
 again.
 
@@ -242,7 +242,7 @@ for a laptop. Install it and register the server:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh -s -- --rk
-rk server add edge riku@your-server-ip
+rk server add edge riku@edge.example
 rk -s edge ps myapp
 ```
 
@@ -273,8 +273,8 @@ The full rules are in [Remote Servers](cli.md#remote-servers).
 Point your domain to your server:
 
 ```
-A record: example.com → your-server-ip
-A record: *.example.com → your-server-ip
+A record: example.com → 203.0.113.10
+A record: *.example.com → 203.0.113.10
 ```
 
 ### Configure Riku
@@ -331,10 +331,10 @@ sudo netstat -tlnp | grep :80
 git remote -v
 
 # Verify SSH access
-ssh riku@your-server-ip
+ssh riku@edge.example
 
 # Check Riku logs
-ssh riku@your-server-ip "tail ~/.riku/logs/myapp/*.log"
+ssh riku@edge.example "tail ~/.riku/logs/myapp/*.log"
 ```
 
 ---

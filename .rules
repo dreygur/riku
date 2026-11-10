@@ -200,7 +200,13 @@ Read `docs/superpowers/ROADMAP.md` at the start of a session. It lists what is d
 
 Read `docs/CODEMAP.md` before searching code. It maps every crate and module to its job, entry points and contracts. Any commit that adds, moves, renames or changes the contract of a module updates the map in the same commit. Every implementer brief repeats this rule.
 
-Every design and every plan is reviewed with EGM (the `egm-review` skill) before it is handed over or executed. Report every bug found, in the same message, even outside the task. Never leave one unmentioned.
+Pace rules (owner, 2026-11-11):
+- Bug fixes: failing test, fix, commit. No plan document, no separate reviewer.
+- New features: a half page design in chat that the owner approves. EGM (the `egm-review` skill) only when the owner asks for it.
+- The full suite, clippy and one fresh review run once per batch, before the PR, not per step.
+- One PR per batch, so the owner approves once.
+
+Report every bug found, in the same message, even outside the task. Never leave one unmentioned.
 
 ## Project Overview
 

@@ -134,7 +134,6 @@ while nub is missing.
 
 ```bash
 RIKU_NODE_VERSION=18.17.0
-NODE_PACKAGE_MANAGER=npm
 PORT=3000
 ```
 

@@ -8,8 +8,9 @@
 
 use anyhow::{anyhow, Result};
 
+use crate::acme::try_acme_certificates;
 use crate::config::RikuPaths;
-use crate::ssl::{restrict_key, try_acme_certificates};
+use crate::ssl::restrict_key;
 
 /// Make sure `app` has a certificate for `domain`. Returns whether a pair is
 /// now in `nginx_root`; `false` means plain HTTP only.
@@ -18,6 +19,9 @@ pub fn issue_single(app: &str, domain: &str, paths: &RikuPaths) -> Result<bool> 
     match crate::util::validate_app_name(app) {
         Ok(checked) if checked == app => {}
         _ => return Err(anyhow!("'{app}' is not a valid app name for a certificate")),
+    }
+    if crate::config::own_cert::has_own_cert(paths, app) {
+        return crate::ssl::own_pair_ready(app, paths);
     }
     let key_path = paths.nginx_root.join(format!("{app}.key"));
     let chain_path = paths.nginx_root.join(format!("{app}.fullchain.crt"));

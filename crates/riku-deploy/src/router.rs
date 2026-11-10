@@ -47,6 +47,7 @@ mod route_build;
 mod route_env;
 pub(crate) mod routing_env;
 pub(crate) mod routing_state;
+mod site_expected;
 
 pub use backends::{copy_socket, current_backends};
 pub(crate) use backends::{parsed_worker, web_copies, worker_backend};
@@ -65,6 +66,7 @@ pub use renew::renew;
 pub use route_build::build_route;
 use routing_env::{routing_env, Record};
 use routing_state::{restore, RoutingMode};
+pub use site_expected::site_expected;
 
 /// Caddy reaches an app over loopback whatever `RIKU_BIND_ADDRESS` says.
 /// nginx and router plugins keep the address each copy listens on, since a

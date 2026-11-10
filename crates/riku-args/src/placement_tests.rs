@@ -29,6 +29,12 @@ fn settings_is_forwarded_by_rk() {
 }
 
 #[test]
+fn certs_is_forwarded_by_rk() {
+    assert_eq!(placement_of("certs"), Some(Placement::Forwarded));
+    assert_eq!(client_rule("certs"), ClientRule::Forwards);
+}
+
+#[test]
 fn unknown_name_has_no_placement() {
     assert_eq!(placement_of("frobnicate"), None);
 }

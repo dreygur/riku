@@ -52,7 +52,7 @@
 
 **A:** Just like Heroku or Piku:
 ```bash
-git remote add riku riku@your-server:myapp
+git remote add riku riku@edge.example:myapp
 git push riku main
 ```
 
