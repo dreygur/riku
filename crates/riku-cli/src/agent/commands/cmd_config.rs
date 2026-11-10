@@ -1,6 +1,5 @@
 /// Agent commands for configuration: config:get, config:set, config:show.
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::json;
 
@@ -33,36 +32,13 @@ pub fn cmd_agent_config_get(paths: &RikuPaths, app: &str, key: &str) -> AgentRes
     AgentResponse::error("KEY_NOT_FOUND", &format!("Key '{}' not found", key))
 }
 
-pub fn cmd_agent_config_set(_paths: &RikuPaths, app: &str, settings: &[String]) -> AgentResponse {
-    let critical_keys = [
-        "DATABASE_URL",
-        "SECRET_KEY",
-        "PASSWORD",
-        "API_KEY",
-        "PRIVATE_KEY",
-    ];
-
-    for setting in settings {
-        if let Some(key) = setting.split('=').next() {
-            if critical_keys.contains(&key.to_uppercase().as_str()) {
-                let token = format!(
-                    "config-{}-{}",
-                    app,
-                    SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs()
-                );
-                return AgentResponse::confirmation_required("config:set", app, &token);
-            }
-        }
-    }
-
-    AgentResponse::success(json!({
-        "message": format!("Configuration update initiated for {}", app),
-        "settings_count": settings.len(),
-        "note": "Use 'riku config:set' for immediate effect"
-    }))
+/// Not implemented: says so as an error, so an agent never believes the
+/// config changed.
+pub fn cmd_agent_config_set(_paths: &RikuPaths, _app: &str, _settings: &[String]) -> AgentResponse {
+    AgentResponse::error(
+        "NOT_IMPLEMENTED",
+        "agent config:set is not implemented; use `riku config set <app> KEY=VALUE`",
+    )
 }
 
 pub fn cmd_agent_config_show(paths: &RikuPaths, app: &str) -> AgentResponse {

@@ -162,13 +162,13 @@ fn print_general_help() {
     println!("  deploy      Deploy an application");
     println!("  destroy     Remove an application");
     println!("  config:get  Get configuration value");
-    println!("  config:set  Set configuration values");
+    println!("  config:set  Not implemented yet (use riku config set)");
     println!("  config:show Show all configuration");
     println!("  logs        View application logs");
     println!("  ps          Show process status");
     println!("  restart     Restart an application");
     println!("  stop        Stop an application");
-    println!("  run         Run command in app context");
+    println!("  run         Not implemented yet (use riku run)");
     println!("  stats       Show statistics");
     println!();
     println!("Use 'riku agent --help <command>' for command-specific help.");

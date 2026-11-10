@@ -15,6 +15,25 @@ fn missing_app_answers_json_instead_of_exiting() {
 }
 
 #[test]
+fn agent_run_and_config_set_say_they_are_not_implemented() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+
+    let run = cmd_agent_run(&paths, "shop", &["ls".to_string()]);
+    let set = super::super::cmd_config::cmd_agent_config_set(&paths, "shop", &["A=1".to_string()]);
+
+    for (name, resp) in [("run", run), ("config:set", set)] {
+        assert!(
+            !resp.success,
+            "{name} reported success without doing anything"
+        );
+        let code = resp.error.map(|e| e.code);
+        assert_eq!(code.as_deref(), Some("NOT_IMPLEMENTED"), "{name}");
+    }
+}
+
+#[test]
 fn stop_confirm_refuses_a_token_that_was_never_issued() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());

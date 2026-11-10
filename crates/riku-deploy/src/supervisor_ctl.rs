@@ -32,14 +32,13 @@ pub(crate) fn supervisor_is_running(paths: &RikuPaths) -> bool {
     }
 }
 
-fn resolve_from(installed: &Path) -> String {
+/// `installed` if it exists, else `current` (this process's executable),
+/// else `None`. Never a bare name for the loader to look up on `$PATH`.
+fn resolve_from(installed: &Path, current: Option<std::path::PathBuf>) -> Option<String> {
     if installed.exists() {
-        return installed.to_string_lossy().into_owned();
+        return Some(installed.to_string_lossy().into_owned());
     }
-    std::env::current_exe()
-        .ok()
-        .and_then(|p| p.to_str().map(str::to_string))
-        .unwrap_or_else(|| "riku".to_string())
+    current.and_then(|p| p.to_str().map(str::to_string))
 }
 
 /// Resolve which `riku` binary to exec when (re-)launching the supervisor.
@@ -55,9 +54,10 @@ fn resolve_from(installed: &Path) -> String {
 /// unsanitized shell environment), a bare-name lookup would let them get an
 /// arbitrary binary executed as the deploy user. `current_exe()` resolves
 /// via `/proc/self/exe` (Linux): an absolute path to the binary that is
-/// *actually currently running*, immune to `$PATH` content entirely.
-pub(crate) fn resolve_riku_bin() -> String {
-    resolve_from(Path::new(ROOT_BINARY))
+/// *actually currently running*, immune to `$PATH` content entirely. When
+/// neither is known the result is `None` and the supervisor is not started.
+pub(crate) fn resolve_riku_bin() -> Option<String> {
+    resolve_from(Path::new(ROOT_BINARY), std::env::current_exe().ok())
 }
 
 /// Check if supervisor is running (via PID file) and start it if not.
@@ -72,7 +72,13 @@ pub(crate) fn ensure_supervisor_running(paths: &RikuPaths) -> bool {
     }
 
     // Supervisor is not running, try to start it.
-    let riku_bin = resolve_riku_bin();
+    let Some(riku_bin) = resolve_riku_bin() else {
+        tracing::error!(
+            "cannot start the supervisor: no {} and the running binary's path is unknown",
+            ROOT_BINARY
+        );
+        return false;
+    };
 
     let riku_root = paths.riku_root.to_str().unwrap_or("/root/.riku");
 

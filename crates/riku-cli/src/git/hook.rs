@@ -47,6 +47,83 @@ fn clone_app(paths: &RikuPaths, app: &str) -> Result<()> {
     }
 }
 
+/// What one pushed ref does.
+#[derive(Debug, PartialEq, Eq)]
+enum RefPush {
+    Deploy,
+    /// Stored but not deployed, with the reason shown to the pusher.
+    Skip(String),
+}
+
+const ZERO_SHA_CHAR: char = '0';
+const BRANCH_PREFIX: &str = "refs/heads/";
+
+fn git_in(repo: &Path, args: &[&str]) -> Result<std::process::Output> {
+    match Command::new("git")
+        .arg("--git-dir")
+        .arg(repo)
+        .args(args)
+        .output()
+    {
+        Ok(output) => Ok(output),
+        Err(e) => Err(anyhow!("failed to run git in {}: {e}", repo.display())),
+    }
+}
+
+/// The repo's default branch ref: its `HEAD`. When `HEAD` names a branch
+/// that does not exist (a repo created with `master` that only ever got
+/// `main`), the pushed branch `refname` becomes `HEAD`, so the first branch
+/// pushed is the one that deploys.
+#[allow(clippy::question_mark)]
+fn default_ref(repo: &Path, refname: &str) -> Result<String> {
+    let head = match git_in(repo, &["symbolic-ref", "-q", "HEAD"]) {
+        Ok(output) if output.status.success() => {
+            String::from_utf8_lossy(&output.stdout).trim().to_string()
+        }
+        Ok(_) => return Err(anyhow!("{} has no symbolic HEAD", repo.display())),
+        Err(e) => return Err(e),
+    };
+    let exists = match git_in(repo, &["rev-parse", "--verify", "-q", &head]) {
+        Ok(output) => output.status.success(),
+        Err(e) => return Err(e),
+    };
+    if exists || !refname.starts_with(BRANCH_PREFIX) {
+        return Ok(head);
+    }
+    match git_in(repo, &["symbolic-ref", "HEAD", refname]) {
+        Ok(output) if output.status.success() => Ok(refname.to_string()),
+        Ok(_) => Err(anyhow!(
+            "cannot point HEAD of {} at {refname}",
+            repo.display()
+        )),
+        Err(e) => Err(e),
+    }
+}
+
+/// Whether a pushed ref deploys: only the default branch does. Tags, other
+/// branches and deletions are kept in the repo but not deployed.
+fn ref_push(refname: &str, newrev: &str, default: &str) -> RefPush {
+    if newrev.chars().all(|c| c == ZERO_SHA_CHAR) {
+        return RefPush::Skip(format!("{refname} was deleted"));
+    }
+    if refname != default {
+        let branch = default.strip_prefix(BRANCH_PREFIX).unwrap_or(default);
+        return RefPush::Skip(format!(
+            "{refname} is not the deploy branch; push to {branch} to deploy"
+        ));
+    }
+    RefPush::Deploy
+}
+
+/// The bare repo of `app`: the hook passes its own path; otherwise the
+/// standard location.
+fn repo_dir(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> std::path::PathBuf {
+    match repo_path {
+        Some(path) => std::path::PathBuf::from(path),
+        None => paths.git_root.join(format!("{app}.git")),
+    }
+}
+
 /// Post-receive git hook handler. A failure is also recorded for the push
 /// that ran the hook, so `git push` exits non-zero (see `push_status`).
 pub fn cmd_git_hook(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> Result<()> {
@@ -71,6 +148,7 @@ fn deploy_pushed_refs(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> 
     }
 
     let app_path = paths.app_root.join(&app);
+    let repo = repo_dir(paths, &app, repo_path);
 
     let stdin = io::stdin();
     for line in stdin.lock().lines() {
@@ -87,9 +165,17 @@ fn deploy_pushed_refs(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> 
         if parts.len() < 3 {
             continue;
         }
-        let _oldrev = parts[0];
         let newrev = parts[1];
-        let _refname = parts[2];
+        let refname = parts[2];
+
+        let default = match default_ref(&repo, refname) {
+            Ok(default) => default,
+            Err(e) => return Err(e),
+        };
+        if let RefPush::Skip(reason) = ref_push(refname, newrev, &default) {
+            echo(&format!("-----> Not deploying: {reason}"), "yellow");
+            continue;
+        }
 
         if needs_clone(&app_path) {
             if let Err(e) = clone_app(paths, &app) {
@@ -221,6 +307,88 @@ mod tests {
         assert!(
             !needs_clone(&app_path),
             "a checkout without a Procfile must not be cloned again"
+        );
+    }
+
+    const SHA: &str = "4b17a4c0e1c2d3f4a5b6c7d8e9f0a1b2c3d4e5f6";
+    const ZERO: &str = "0000000000000000000000000000000000000000";
+
+    #[test]
+    fn only_the_default_branch_deploys() {
+        let main = "refs/heads/main";
+        assert_eq!(ref_push(main, SHA, main), RefPush::Deploy);
+        assert!(matches!(
+            ref_push("refs/heads/feature", SHA, main),
+            RefPush::Skip(reason) if reason.contains("push to main")
+        ));
+        assert!(matches!(
+            ref_push("refs/tags/v1", SHA, main),
+            RefPush::Skip(_)
+        ));
+        assert!(matches!(ref_push(main, ZERO, main), RefPush::Skip(_)));
+    }
+
+    fn git(dir: &Path, args: &[&str]) {
+        let status = Command::new("git")
+            .args([
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .current_dir(dir)
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {args:?} failed");
+    }
+
+    #[test]
+    fn first_pushed_branch_becomes_the_default_when_head_is_unborn() {
+        let tmp = TempDir::new().unwrap();
+        let repo = tmp.path().join("myapp.git");
+        let work = tmp.path().join("work");
+        fs::create_dir_all(&work).unwrap();
+        git(
+            tmp.path(),
+            &["init", "--quiet", "--bare", repo.to_str().unwrap()],
+        );
+        git(&repo, &["symbolic-ref", "HEAD", "refs/heads/master"]);
+        git(&work, &["init", "--quiet"]);
+        git(
+            &work,
+            &["commit", "--quiet", "--allow-empty", "-m", "first"],
+        );
+        git(
+            &work,
+            &[
+                "push",
+                "--quiet",
+                repo.to_str().unwrap(),
+                "HEAD:refs/heads/main",
+            ],
+        );
+
+        assert_eq!(
+            default_ref(&repo, "refs/heads/main").unwrap(),
+            "refs/heads/main"
+        );
+
+        git(
+            &work,
+            &[
+                "push",
+                "--quiet",
+                repo.to_str().unwrap(),
+                "HEAD:refs/heads/feature",
+            ],
+        );
+        assert_eq!(
+            default_ref(&repo, "refs/heads/feature").unwrap(),
+            "refs/heads/main",
+            "a later branch must not take over"
         );
     }
 

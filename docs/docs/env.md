@@ -43,16 +43,18 @@ in an app ENV.
 | `NGINX_HTTPS_ONLY` | `RIKU_HTTPS_ONLY` |
 | `NGINX_INTERNAL_PORT` | `RIKU_UPSTREAM_PORT` |
 | `BIND_ADDRESS` | `RIKU_BIND_ADDRESS` |
-| `ACME_EMAIL` | `RIKU_ACME_EMAIL` |
-| `ACME_ROOT_CA` | `RIKU_ACME_ROOT_CA` |
 | `ACME_ROOT` | `RIKU_ACME_ROOT` |
 | `NODE_VERSION` | `RIKU_NODE_VERSION` |
 | `PYTHON_VERSION` | `RIKU_PYTHON_VERSION` |
-| `PYTHON_PACKAGE_MANAGER` | `RIKU_PYTHON_PACKAGE_MANAGER` |
 | `RUNTIME` | `RIKU_RUNTIME` |
 | `GHCR_USERNAME` | `RIKU_GHCR_USERNAME` |
 | `GHCR_TOKEN` | `RIKU_GHCR_TOKEN` |
 | `NGINX_<NAME>` (static, ...) | `RIKU_NGINX_<NAME>` |
+
+`ACME_EMAIL`, `ACME_ROOT_CA` and `PYTHON_PACKAGE_MANAGER` (and their `RIKU_`
+names) were never read and are retired: certificates come from Let's Encrypt
+without an account email, and Python apps build with uv or pip. Deploys and
+`riku doctor` say to remove them.
 
 Unchanged: `PORT`, `PATH`, `HOME`, `COMPOSE_FILE`, the `UWSGI_*` options
 (uWSGI reads them from its own environment), and names that already start
@@ -317,25 +319,9 @@ Checked every 60 seconds. Only meaningful for compose apps (see
 
 ## SSL/ACME Settings
 
-### ACME Root CA
-
-```bash
-RIKU_ACME_ROOT_CA=letsencrypt.org
-```
-
-- **Default:** `letsencrypt.org`
-- **Description:** Certificate authority for SSL certificates
-- **Values:** ACME-compatible CA domain
-
-### ACME Email
-
-```bash
-RIKU_ACME_EMAIL=admin@example.com
-```
-
-- **Default:** (none)
-- **Description:** Email for ACME certificate notifications
-- **Values:** Valid email address
+With nginx, riku issues certificates through acme.sh from Let's Encrypt,
+without an account email; there is no setting for either. Caddy issues its
+own certificates.
 
 ---
 
@@ -383,9 +369,6 @@ RIKU_WORKER_GRACE_PERIOD=60
 
 # Static files
 RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static
-
-# SSL
-RIKU_ACME_EMAIL=admin@example.com
 ```
 
 ---

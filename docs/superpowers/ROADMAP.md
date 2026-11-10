@@ -222,9 +222,10 @@ work they describe.
 - Plan `plans/2026-11-09-config-model.md` (EGM reviewed, stages 5 to 9 plus
   one re-audit). Execution: native, one final review.
 - Step 1 small fixes: done (Task 1 runtime bundles, Task 2 plugin docs).
-- Project 1 config model: Tasks 3 (server settings), 4 (riku.toml schema),
+- Project 1 config model: done, merged as #88 on 2026-11-10 (with #86, the
+  agent confirmation fix, and #87, uv and nub by default). Tasks 3 (server settings), 4 (riku.toml schema),
   5 (app config loader), 6 (readers on the loader), 7 (riku settings),
-  8 (doctor migration) and 9 (docs) done. Final gate and review next.
+  8 (doctor migration) and 9 (docs).
 - Project 2 first run, split in two plans (Claude's call):
   - 2a setup: plan `plans/2026-11-10-first-run-setup.md`, EGM reviewed
     (stages 5 to 9 and one re-audit), branch `feat/first-run`, native
@@ -241,7 +242,7 @@ work they describe.
     state, port rules) and 3 (fallback domain, certificate order,
     push URLs) and 4 (port mode, bind check, external port key
     removed), 5 (path mode) and 6 (docs: docs/docs/routing.md) done.
-    Final gate and review done (fixes f46fedd); ready for PR. Fixed on the way: the first deploy of an https_only
+    Merged in PR #90. Fixed on the way: the first deploy of an https_only
     domain issued before any site served the ACME challenge (always self
     signed); the push printed the raw comma list of domains; quick start
     claimed apps answer on the bare IP.

@@ -56,7 +56,7 @@ fn test_resolve_riku_bin_ignores_malicious_path_falls_back_to_current_exe() {
         format!("{}:/usr/bin", evil_dir.display()), // attacker's dir takes priority
     ] {
         with_env_var("PATH", &malicious_path, || {
-            let resolved = resolve_from(&not_installed);
+            let resolved = resolve_from(&not_installed, std::env::current_exe().ok()).unwrap();
 
             assert!(
                 resolved.starts_with('/'),
@@ -90,6 +90,15 @@ fn test_resolve_riku_bin_ignores_malicious_path_falls_back_to_current_exe() {
     }
 }
 
+/// When the running binary's path is unknown and there is no root install,
+/// there is no binary to start, rather than a bare `riku` for `$PATH`.
+#[test]
+fn unknown_current_exe_gives_no_binary_not_a_path_lookup() {
+    let tmp = TempDir::new().unwrap();
+
+    assert_eq!(resolve_from(&tmp.path().join("no-such-riku"), None), None);
+}
+
 /// A binary the deploy user owns in its home must never be picked, however
 /// it got there: it could be swapped for anything an app can write.
 #[test]
@@ -101,7 +110,7 @@ fn relaunch_skips_home_binary() {
     fs::write(home_bin.join("riku"), "#!/bin/sh\n").unwrap();
 
     with_env_var("HOME", tmp.path().to_str().unwrap(), || {
-        let resolved = resolve_riku_bin();
+        let resolved = resolve_riku_bin().unwrap();
         assert!(
             !resolved.starts_with(tmp.path().to_str().unwrap()),
             "relaunch picked a binary under the home: {resolved}"
