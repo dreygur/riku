@@ -12,14 +12,22 @@
 [![Latest release](https://img.shields.io/github/v/release/dreygur/riku?sort=semver)](https://github.com/dreygur/riku/releases)
 [![Made with Rust](https://img.shields.io/badge/made%20with-Rust-orange.svg)](https://www.rust-lang.org/)
 
+> **Read this first.** I built riku to serve my own needs, and most of its
+> code was written by AI. It is largely AI slop: it works for me, on my
+> servers, but it has not been reviewed or tested the way software you
+> depend on should be. If you plan to use it, be cautious. Read the code
+> you rely on, try it somewhere that does not matter first, and do not
+> trust it with anything you cannot afford to lose.
+
 Riku gives you a Heroku-style workflow on hardware you already own, a VPS, an old
 laptop, a Raspberry Pi. You `git push`, Riku detects the language, builds it, runs
 it under a supervisor, and wires up nginx. That's it. No control plane, no cluster,
 no container runtime to babysit.
 
 It's a Rust reimplementation of [Piku](https://github.com/piku/piku), keeping that
-project's directory layout and workflow while shipping as a single static binary
-with no runtime dependencies.
+project's directory layout and workflow while shipping as a single binary. The
+musl builds are fully static; the glibc builds need glibc 2.31 or newer. On the
+server riku also needs git, nginx or Caddy, and openssl.
 
 ```bash
 # on your server
