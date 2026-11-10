@@ -7,6 +7,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-10
+
+### Upgrade steps
+
+Install the new binary, run `sudo riku init` again (it adds the new
+`[routing]` section and restarts the router helper), then run
+`riku doctor --fix` as the deploy user. Doctor moves the `ROUTER` and
+`CONTAINER_ENGINE` files into `settings.toml`, moves each app's riku keys
+from its ENV into a server override, and adds `[routing]` when init did not.
+A server that skips this keeps routing exactly as 0.1.2 did. Downgrading
+after `riku doctor --fix` is not supported.
+
+### Security
+
+- `riku agent stop --confirm` ignored the token, and `riku agent destroy`
+  wrote a guessable token to `/tmp`. Both now use a random token kept in the
+  private agent state dir, bound to one action and app, expiring after five
+  minutes and used once.
+- The dashboard needs the token to read an app's env.
+- A push deploys only from the app's default branch.
+- riku never starts the supervisor through a `PATH` lookup.
+
+### Config files
+
+- `riku.toml`, optional and committed in the app repo, holds the app's riku
+  settings (`routing.domains`, `runtime.name`, `workers.timeout`, ...) and
+  may replace the Procfile with `[processes]` and `[cron]`. Server only keys
+  are refused in the repo file; errors name the file, line and key.
+- `riku settings show|get|set|unset` edits a per app server override.
+  `riku config set` keeps writing only the app's own env.
+- `settings.toml` holds the server settings: `[router]`, `[engine]` and the
+  new `[routing]`.
+- An ENV line without `=` now stops deploys for that app instead of being
+  skipped; `riku doctor` flags such files.
+
+### First run
+
+- The node, python, ruby, go and rust runtime plugins ship inside the riku
+  binary; java and clojure are downloaded from this release and checked
+  against their `.sha256`. `riku plugins install <runtime>` installs one by
+  name, and a push for an app without its plugin names the command to run.
+- `riku init` picks the router that is installed and asks when both nginx
+  and Caddy are.
+- `rk server add <name> user@host --admin you@host` installs your ssh key on
+  the server and adds the `riku` git remote in the current repo.
+- Python apps build with uv and Node apps with nub when installed, with pip
+  and npm as fallbacks; a failed install stops the build.
+
+### App URLs
+
+Every app gets a URL on its first push; see the App URLs page.
+
+- An app with no domain gets a fallback name such as
+  `myapp.203.0.113.10.sslip.io`, from `[routing] fallback_domain` and the
+  public IPv4 address init detects. On nginx it gets a certificate when one
+  can be issued and stays on plain HTTP otherwise; never self-signed.
+- `routing.mode = "port"` serves the app on a port of its own, picked from
+  `port_range` or set with `routing.port`. Ports below 1024, the Caddy admin
+  port, the shared port, another app's port and any port in use are refused.
+- `routing.mode = "path"` serves the app at `/<app>/` on the shared port.
+- The push lists every URL, the port to open in the firewall, or why there
+  is no URL.
+- `RIKU_NGINX_EXTERNAL_PORT` is no longer written; it is dropped from ENV
+  files.
+
+### Fixes
+
+- The first deploy of an `https_only` domain on nginx always got a
+  self-signed certificate: the certificate was requested before any site
+  served the ACME challenge.
+- The python plugin now honours `RIKU_PYTHON_VERSION` (riku.toml `[runtime]
+  version`). The node plugin still ignores `RIKU_NODE_VERSION`.
+- Old ENV keys whose feature is gone (the nginx cache keys, catch all, CSP,
+  include file, listen addresses, `DISABLE_IPV6`) and keys riku never read
+  (`ACME_EMAIL`, `ACME_ROOT_CA`, `PYTHON_PACKAGE_MANAGER` and their `RIKU_`
+  names) are reported as ones to remove, not to rename.
+- The agent JSON commands answer `APP_NOT_FOUND` for a missing app instead
+  of printing CLI help and exiting; `agent run` and `config:set` answer
+  `NOT_IMPLEMENTED` instead of reporting success.
+- `riku config set` and `riku run` exit non-zero when they fail.
+- Plugin downloads are capped in size, and two writes of one plugin no
+  longer race.
+
 ## [0.1.2] - 2026-11-07
 
 Version numbers restart here; the older 2.x and 3.0.0 entries below are kept as history.
