@@ -9,7 +9,8 @@
 //! as a copy number or as the default socket.
 //!
 //! A Caddy route carries only what Caddy uses (domains, https policy, TCP
-//! backends); the nginx only fields stay unset.
+//! backends, and the app's own certificate if it has one); the nginx only
+//! fields stay unset.
 
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
@@ -20,6 +21,7 @@ use riku_container::types::AppName;
 use riku_route::{check_caddy_route, Listen, Route, RouteBackend, SiteKind};
 
 use super::route_env::{open_port, tls};
+use crate::config::own_cert::has_own_cert;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::backend::Backend;
@@ -181,14 +183,33 @@ fn caddy_route(
     }
 }
 
+/// Caddy issues its own certificate, so the route carries a pair only when
+/// the app supplied one.
+fn caddy_tls(app: &AppName, base: Route, paths: &RikuPaths) -> Result<Route> {
+    if !has_own_cert(paths, app.as_str()) {
+        return Ok(base);
+    }
+    match tls(app, paths) {
+        Ok(Some(pair)) => Ok(Route {
+            tls: Some(pair),
+            ..base
+        }),
+        Ok(None) => Err(anyhow!(
+            "tls: '{app}' is marked as having its own certificate but its pair is missing from {}",
+            paths.nginx_root.display()
+        )),
+        Err(e) => Err(anyhow!("tls: {e}")),
+    }
+}
+
 fn nginx_route(
     app: &AppName,
     env: &HashMap<String, String>,
     base: Route,
     paths: &RikuPaths,
 ) -> Result<Route> {
-    let only_https = base.https == HttpsPolicy::Only;
-    let tls = if only_https {
+    let wanted = base.https == HttpsPolicy::Only || has_own_cert(paths, app.as_str());
+    let tls = if wanted {
         match tls(app, paths) {
             Ok(found) => found,
             Err(e) => return Err(anyhow!("tls: {e}")),
@@ -216,7 +237,8 @@ fn nginx_route(
 /// helper picks (`RIKU_NGINX_SOCKET`) fails the build, naming the key.
 /// `RIKU_NGINX_DOCUMENT_ROOT` and the sources in `RIKU_NGINX_STATIC_PATHS`
 /// only steer what a deploy publishes, not the route. A certificate and key
-/// found in `nginx_root` ride along when the app is `https_only`.
+/// found in `nginx_root` ride along when the app is `https_only`, and, for
+/// nginx and Caddy alike, whenever the app has an own certificate marker.
 pub fn build_route(
     app: &AppName,
     env: &HashMap<String, String>,
@@ -256,6 +278,10 @@ pub fn build_route(
     };
     let base = caddy_route(domains, https, backends, kind, port);
     if caddy {
+        let base = match caddy_tls(app, base, paths) {
+            Ok(route) => route,
+            Err(e) => return Err(route_error(app, e)),
+        };
         return match check_caddy_route(app, &base) {
             Ok(checked) => Ok(Some(checked.into_route())),
             Err(e) => Err(e),

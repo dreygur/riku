@@ -17,6 +17,37 @@ fn request(https: HttpsPolicy) -> RoutePlan {
 }
 
 #[test]
+fn own_certificate_site_names_the_pair_before_the_proxy() {
+    let tls = TlsFiles {
+        certificate: "/etc/riku/caddy/certs/shop/fullchain.pem".into(),
+        key: "/etc/riku/caddy/certs/shop/key.pem".into(),
+    };
+
+    let site = render_site_with_tls("shop", &request(HttpsPolicy::Only), Some(&tls)).unwrap();
+
+    assert_eq!(
+        site,
+        "# riku app: shop\n\
+        shop.example.com, www.shop.example.com {\n\
+        \ttls \"/etc/riku/caddy/certs/shop/fullchain.pem\" \"/etc/riku/caddy/certs/shop/key.pem\"\n\
+        \treverse_proxy 127.0.0.1:5000\n\
+        }\n"
+    );
+}
+
+#[test]
+fn a_certificate_path_that_could_break_out_of_its_quotes_is_refused() {
+    let tls = TlsFiles {
+        certificate: "/etc/riku/caddy/certs/shop/a\" {\nrespond".into(),
+        key: "/etc/riku/caddy/certs/shop/key.pem".into(),
+    };
+
+    let e = render_site_with_tls("shop", &request(HttpsPolicy::Only), Some(&tls)).unwrap_err();
+
+    assert!(e.to_string().contains("certificate path"), "{e}");
+}
+
+#[test]
 fn caddy_takes_open_port() {
     let port_only = RoutePlan {
         domains: Vec::new(),

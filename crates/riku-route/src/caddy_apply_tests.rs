@@ -6,7 +6,8 @@ use riku_util::route_plan::HttpsPolicy;
 use tempfile::TempDir;
 
 use super::*;
-use crate::schema::{Listen, SiteKind};
+use crate::schema::{Listen, SiteKind, Tls};
+use crate::test_pems::{CERT_A, KEY_A};
 
 struct Host {
     dir: TempDir,
@@ -150,4 +151,84 @@ fn remove_takes_the_site_out_and_reloads_once() {
     assert!(!host.roots.site_file(&shop).exists());
     assert_eq!(again, Reply::Ok { reloaded: false });
     assert_eq!(host.calls().lines().count(), 2, "{}", host.calls());
+}
+
+fn with_own_certificate(port: u16) -> Route {
+    Route {
+        tls: Some(Tls {
+            cert_pem: CERT_A.to_string(),
+            key_pem: KEY_A.to_string(),
+        }),
+        ..route(port)
+    }
+}
+
+fn mode(path: &std::path::Path) -> u32 {
+    fs::metadata(path).unwrap().permissions().mode() & 0o777
+}
+
+#[test]
+fn own_certificate_is_written_for_the_caddy_group_only_and_named_in_the_site() {
+    let host = Host::new();
+    let shop = app("shop");
+
+    let reply = apply_caddy(&host.roots, &shop, &with_own_certificate(5000));
+
+    assert_eq!(reply, Reply::Ok { reloaded: true });
+    let dir = host.roots.cert_dir(&shop);
+    assert_eq!(fs::read_to_string(dir.join("key.pem")).unwrap(), KEY_A);
+    assert_eq!(
+        fs::read_to_string(dir.join("fullchain.pem")).unwrap(),
+        CERT_A
+    );
+    assert_eq!(mode(&dir.join("key.pem")), 0o640);
+    assert_eq!(mode(&dir), 0o750);
+    assert_eq!(mode(&host.roots.cert_root()), 0o750);
+    let expected = format!(
+        "\ttls \"{}\" \"{}\"\n",
+        dir.join("fullchain.pem").display(),
+        dir.join("key.pem").display()
+    );
+    assert!(host.site(&shop).contains(&expected), "{}", host.site(&shop));
+}
+
+#[test]
+fn refused_reload_puts_the_previous_certificate_back() {
+    let host = Host::new();
+    let shop = app("shop");
+    apply_caddy(&host.roots, &shop, &with_own_certificate(5000));
+    let before = host.site(&shop);
+    host.refuse_reloads();
+    let other = Route {
+        tls: Some(Tls {
+            cert_pem: CERT_A.to_string(),
+            key_pem: "junk".to_string(),
+        }),
+        ..route(5000)
+    };
+
+    let (stage, _) = failure(apply_caddy(&host.roots, &shop, &other));
+    assert_eq!(stage, Stage::Schema);
+    let (stage, _) = failure(apply_caddy(&host.roots, &shop, &route(5001)));
+
+    assert_eq!(stage, Stage::Reload);
+    assert_eq!(host.site(&shop), before);
+    let dir = host.roots.cert_dir(&shop);
+    assert_eq!(fs::read_to_string(dir.join("key.pem")).unwrap(), KEY_A);
+}
+
+#[test]
+fn dropping_the_certificate_or_the_app_removes_the_pair_and_its_directory() {
+    let host = Host::new();
+    let shop = app("shop");
+    let dir = host.roots.cert_dir(&shop);
+    apply_caddy(&host.roots, &shop, &with_own_certificate(5000));
+
+    apply_caddy(&host.roots, &shop, &route(5000));
+    assert!(!dir.exists(), "pair stayed after the route lost its tls");
+
+    apply_caddy(&host.roots, &shop, &with_own_certificate(5000));
+    remove_caddy(&host.roots, &shop);
+    assert!(!dir.exists(), "pair stayed after the app was removed");
+    assert!(!host.roots.site_file(&shop).exists());
 }

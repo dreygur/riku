@@ -171,7 +171,6 @@ fn caddy_refuses_what_only_nginx_does() {
         change(&mut r);
         refused.push(r);
     };
-    with(|r| r.tls = tls(CERT_A, KEY_A));
     with(|r| r.listen.port = 8080);
     with(|r| r.backends = vec![RouteBackend::UnixCopy(1)]);
     with(|r| r.backends = vec![RouteBackend::UnixDefault]);
@@ -185,6 +184,18 @@ fn caddy_refuses_what_only_nginx_does() {
         assert!(e.to_string().contains("Caddy does not take"), "{r:?}: {e}");
     }
     check_caddy_route(&app(), &route()).unwrap();
+}
+
+#[test]
+fn caddy_takes_a_matching_pair_and_refuses_a_mismatched_one() {
+    let mut owned = route();
+    owned.tls = tls(CERT_A, KEY_A);
+    let checked = check_caddy_route(&app(), &owned).unwrap();
+    assert!(checked.route().tls.is_some(), "the pair was dropped");
+
+    owned.tls = tls(CERT_A, KEY_B);
+    let e = check_caddy_route(&app(), &owned).unwrap_err();
+    assert!(e.to_string().contains("does not match"), "{e}");
 }
 
 fn port_only(port: u16) -> Route {

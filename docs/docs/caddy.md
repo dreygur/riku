@@ -85,6 +85,8 @@ Do not edit these files by hand: every deploy rewrites them.
 
 A bare domain makes Caddy ask Let's Encrypt and ZeroSSL for a certificate. A domain no public CA will sign, such as `shop.test`, is refused (`rejectedIdentifier`) and Caddy keeps retrying until the app is destroyed, so a test host makes outbound ACME requests for every such app. Riku does not change this.
 
+An app that serves its own certificate is the exception. Riku writes the pair to `/etc/riku/caddy/certs/<app>/` (readable by the `caddy` group only) and the site file names it with a `tls` line, so Caddy issues nothing for that site. Removing the own certificate or the app removes the files.
+
 ---
 
 ## Limits

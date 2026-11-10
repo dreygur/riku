@@ -32,6 +32,7 @@
 mod answer;
 mod bounded;
 mod caddy_apply;
+mod caddy_certs;
 #[cfg(feature = "test-server")]
 mod caddy_test_server;
 mod check;
