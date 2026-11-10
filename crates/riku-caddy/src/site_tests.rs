@@ -35,6 +35,35 @@ fn own_certificate_site_names_the_pair_before_the_proxy() {
     );
 }
 
+/// Caddy refuses a `tls` line in a block that also listens on plain HTTP
+/// ("server listening on [:80] is HTTP, but attempts to configure TLS
+/// connection policies"), checked against caddy 2 on 2026-11-11.
+#[test]
+fn own_certificate_keeps_plain_http_addresses_in_their_own_block() {
+    let tls = TlsFiles {
+        certificate: "/c/fullchain.pem".into(),
+        key: "/c/key.pem".into(),
+    };
+    let plan = RoutePlan {
+        open_port: Some(8100),
+        ..request(HttpsPolicy::AlsoPlainHttp)
+    };
+
+    let site = render_site_with_tls("shop", &plan, Some(&tls)).unwrap();
+
+    assert_eq!(
+        site,
+        "# riku app: shop\n\
+        shop.example.com, www.shop.example.com {\n\
+        \ttls \"/c/fullchain.pem\" \"/c/key.pem\"\n\
+        \treverse_proxy 127.0.0.1:5000\n\
+        }\n\
+        http://shop.example.com, http://www.shop.example.com, http://:8100 {\n\
+        \treverse_proxy 127.0.0.1:5000\n\
+        }\n"
+    );
+}
+
 #[test]
 fn a_certificate_path_that_could_break_out_of_its_quotes_is_refused() {
     let tls = TlsFiles {

@@ -1,7 +1,8 @@
 # Your own certificate
 
-By default riku asks Let's Encrypt for a certificate for each app, or makes
-a self-signed one when that is not possible. When you already have a
+By default an app's certificate comes from Let's Encrypt: with nginx riku
+asks for it (or makes a self-signed one when that is not possible), with
+Caddy, Caddy does. When you already have a
 certificate (from a company CA, a wildcard you bought, an origin
 certificate), give it to the app instead. riku then serves it as is and never
 issues, renews or replaces it.
@@ -27,7 +28,9 @@ of the app's `RIKU_DOMAINS`. A wildcard such as `*.shop.example` covers one
 label (`www.shop.example`, not `a.b.shop.example` or `shop.example`).
 
 The key is written with mode `0600` and is never printed. The route is
-applied again right away, so no deploy is needed.
+applied again right away, so no deploy is needed. Both routers serve it:
+nginx directly, Caddy through a `tls` line in the app's site (plain HTTP
+addresses then get a separate site block, which Caddy requires).
 
 ## Show it
 
@@ -46,9 +49,9 @@ without the own certificate marker means acme.sh installed it.
 rk certs unset myapp
 ```
 
-removes the certificate, the key and the marker. The router keeps serving the
-old certificate until the next deploy, which issues a new one the usual way.
-`unset` refuses an app that has no own certificate.
+removes the certificate, the key and the marker, then applies the route
+again, so a certificate is issued the usual way right away. `unset` refuses
+an app that has no own certificate.
 
 ## Renewal is yours
 

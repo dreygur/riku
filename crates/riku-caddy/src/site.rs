@@ -88,24 +88,45 @@ pub fn render_site(app: &str, plan: &RoutePlan) -> Result<String> {
     render_site_with_tls(app, plan, None)
 }
 
+fn block(addresses: &[String], tls_line: &str, upstreams: &str) -> String {
+    format!(
+        "{} {{\n{tls_line}\treverse_proxy {upstreams}\n}}\n",
+        addresses.join(", ")
+    )
+}
+
 /// [`render_site`] with a `tls <certificate> <key>` line when the app serves
-/// its own certificate, so Caddy does not issue one for the site.
+/// its own certificate, so Caddy does not issue one for the site. Caddy
+/// refuses that line in a block that also listens on plain HTTP, so the
+/// `http://` addresses then get a block of their own.
 #[allow(clippy::question_mark)]
 pub fn render_site_with_tls(app: &str, plan: &RoutePlan, tls: Option<&TlsFiles>) -> Result<String> {
     let upstreams = match upstreams(plan) {
         Ok(upstreams) => upstreams,
         Err(e) => return Err(e),
     };
-    let tls_line = match tls.map(tls_line) {
-        Some(Ok(line)) => line,
-        Some(Err(e)) => return Err(e),
-        None => String::new(),
+    let addresses = site_addresses(plan);
+    let Some(tls) = tls else {
+        return Ok(format!(
+            "# riku app: {app}\n{}",
+            block(&addresses, "", &upstreams)
+        ));
     };
-    Ok(format!(
-        "# riku app: {app}\n{addresses} {{\n{tls_line}\treverse_proxy {upstreams}\n}}\n",
-        app = app,
-        addresses = site_addresses(plan).join(", "),
-    ))
+    let tls_line = match tls_line(tls) {
+        Ok(line) => line,
+        Err(e) => return Err(e),
+    };
+    let (plain, secure): (Vec<String>, Vec<String>) = addresses
+        .into_iter()
+        .partition(|address| address.starts_with(PLAIN_HTTP_SCHEME));
+    let mut site = format!("# riku app: {app}\n");
+    if !secure.is_empty() {
+        site.push_str(&block(&secure, &tls_line, &upstreams));
+    }
+    if !plain.is_empty() {
+        site.push_str(&block(&plain, "", &upstreams));
+    }
+    Ok(site)
 }
 
 #[cfg(test)]

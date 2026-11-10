@@ -128,14 +128,34 @@ fn unset_removes_an_own_pair_and_refuses_one_riku_issued() {
     let paths = paths_with_app(&tmp);
     fs::write(paths.nginx_root.join("myapp.crt"), "x").unwrap();
     fs::write(paths.nginx_root.join("myapp.fullchain.crt"), "x").unwrap();
-    assert!(remove_own(&paths, "myapp").is_err());
+    assert!(remove_own(&paths, "myapp", |_| Ok(())).is_err());
     assert!(
         paths.nginx_root.join("myapp.crt").exists(),
         "issued pair deleted"
     );
 
     install_bundle(&paths, "myapp", &bundle(VALID_CERT, VALID_KEY), |_| Ok(())).unwrap();
-    remove_own(&paths, "myapp").unwrap();
+    remove_own(&paths, "myapp", |_| Ok(())).unwrap();
 
     assert_eq!(fs::read_dir(&paths.nginx_root).unwrap().count(), 0);
+}
+
+#[test]
+fn unset_puts_the_route_back_on_riku_certificates_at_once() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = paths_with_app(&tmp);
+    install_bundle(&paths, "myapp", &bundle(VALID_CERT, VALID_KEY), |_| Ok(())).unwrap();
+    let applied = RefCell::new(Vec::new());
+
+    remove_own(&paths, "myapp", |app| {
+        assert!(
+            !paths.nginx_root.join("myapp.own-cert").exists(),
+            "the route was applied before the marker went"
+        );
+        applied.borrow_mut().push(app.to_string());
+        Ok(())
+    })
+    .unwrap();
+
+    assert_eq!(applied.into_inner(), ["myapp"]);
 }

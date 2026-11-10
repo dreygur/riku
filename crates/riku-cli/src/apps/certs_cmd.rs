@@ -13,7 +13,7 @@ use std::io::{IsTerminal, Read};
 use anyhow::{anyhow, bail, Result};
 use chrono::DateTime;
 
-use super::certs_reapply::reapply_route;
+use super::certs_reapply::{reapply_route, reconfigure};
 use super::settings_cmd::known_app;
 use crate::config::RikuPaths;
 use crate::own_cert::bundle::validate;
@@ -143,11 +143,17 @@ fn show_lines(paths: &RikuPaths, app: &str) -> Result<Vec<String>> {
     Ok(lines)
 }
 
-fn remove_own(paths: &RikuPaths, app: &str) -> Result<()> {
+/// Remove `app`'s own pair and marker, then apply the route through
+/// `reapply`, so the router stops serving the removed certificate now and
+/// riku issues one as it would for any app.
+fn remove_own(paths: &RikuPaths, app: &str, reapply: impl Fn(&str) -> Result<()>) -> Result<()> {
     if store::source(paths, app) != Source::Own {
         bail!("'{app}' has no own certificate, so there is nothing to remove");
     }
-    store::remove(paths, app)
+    if let Err(e) = store::remove(paths, app) {
+        return Err(e);
+    }
+    reapply(app)
 }
 
 /// Read one PEM bundle (chain and key) from stdin and serve it for `app`.
@@ -184,20 +190,19 @@ pub fn cmd_certs_show(paths: &RikuPaths, app: &str) -> Result<()> {
     }
 }
 
-/// Remove `app`'s own certificate. The router keeps serving it until the
-/// next deploy, which issues a new one.
+/// Remove `app`'s own certificate and apply the route again, which issues
+/// a certificate the way a deploy does.
 pub fn cmd_certs_unset(paths: &RikuPaths, app: &str) -> Result<()> {
     let app = match known_app(paths, app) {
         Ok(app) => app,
         Err(e) => return Err(e),
     };
-    if let Err(e) = remove_own(paths, &app) {
+    if let Err(e) = remove_own(paths, &app, |name| reconfigure(paths, name)) {
         return Err(e);
     }
-    display::success(&format!("removed the own certificate of '{app}'"));
-    display::note(
-        "the router serves the old one until the next deploy, which issues a new certificate",
-    );
+    display::success(&format!(
+        "removed the own certificate of '{app}'; the route now uses one riku issues"
+    ));
     Ok(())
 }
 

@@ -161,7 +161,10 @@ fn node_build(wanted: Option<&str>, installed: &str) -> (bool, String) {
     }
     write_out(find("node").unwrap(), &plugins).unwrap();
     std::fs::write(app.join("package.json"), "{}").unwrap();
-    for (name, body) in [("node", format!("echo v{installed}")), ("npm", String::new())] {
+    for (name, body) in [
+        ("node", format!("echo v{installed}")),
+        ("npm", String::new()),
+    ] {
         let tool = bin.join(name);
         std::fs::write(&tool, format!("#!/bin/sh\n{body}\n")).unwrap();
         std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
