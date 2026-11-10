@@ -39,13 +39,44 @@ fn checksum_mismatch_is_a_hard_error_naming_the_plugin() {
 }
 
 #[test]
-fn host_target_names_the_plugin_when_unsupported() {
-    let message = target_triple_for("java", "freebsd", "x86_64")
+fn armv6_riku_fetches_the_armv6_plugin() {
+    assert_eq!(
+        release_triple("java", "arm-unknown-linux-gnueabihf").ok(),
+        Some("arm-unknown-linux-gnueabihf")
+    );
+}
+
+#[test]
+fn musl_riku_fetches_the_musl_plugin() {
+    assert_eq!(
+        release_triple("java", "aarch64-unknown-linux-musl").ok(),
+        Some("aarch64-unknown-linux-musl")
+    );
+}
+
+#[test]
+fn release_triples_match_the_release_matrix() {
+    let workflow = include_str!("../../../../.github/workflows/release.yml");
+    let mut matrix: Vec<&str> = workflow
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("target: "))
+        .filter(|target| !target.starts_with("${{"))
+        .collect();
+    let mut known = RELEASE_TRIPLES.to_vec();
+    matrix.sort_unstable();
+    known.sort_unstable();
+
+    assert_eq!(matrix, known, "RELEASE_TRIPLES drifted from release.yml");
+}
+
+#[test]
+fn unshipped_target_names_plugin_and_triple() {
+    let message = release_triple("java", "riscv64gc-unknown-linux-gnu")
         .unwrap_err()
         .to_string();
 
     assert!(
-        message.contains("'java'") && message.contains("freebsd/x86_64"),
+        message.contains("'java'") && message.contains("riscv64gc-unknown-linux-gnu"),
         "{message}"
     );
 }
