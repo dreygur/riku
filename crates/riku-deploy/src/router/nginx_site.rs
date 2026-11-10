@@ -16,7 +16,7 @@ use riku_container::types::AppName;
 use riku_route::{Reply, Request, RouterKind};
 
 use super::app_routing::AppRouting;
-use super::fallback_tls::fallback_certificate;
+use super::fallback_tls::{drop_stale_pair, fallback_certificate};
 use super::route_build::{build_route, nginx_domains, CATCH_ALL_NAME};
 use super::route_env::tls;
 use super::routing_state::TlsState;
@@ -165,6 +165,7 @@ pub(super) fn apply_nginx_site(
     }
     let own_tls = https_only(env) && env.contains_key("RIKU_DOMAINS");
     let fallback_domain = routing.domains.first().filter(|_| routing.fallback);
+    drop_stale_pair(app, fallback_domain.map(String::as_str), paths);
     if (own_tls || fallback_domain.is_some()) && !has_pair(&name, paths) {
         let mut plain = env.clone();
         plain.remove(HTTPS_ONLY_KEY);

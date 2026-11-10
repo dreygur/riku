@@ -8,7 +8,7 @@
 //! server with no path apps never sends the helper a request it may not
 //! know.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use anyhow::{anyhow, Result};
 use riku_container::types::AppName;
@@ -17,13 +17,14 @@ use riku_route::{Listen, PathApp, Reply, Request, RouterKind};
 use super::caddy::remove_caddy_site;
 use super::nginx_site::{helper_outcome, remove_nginx_site};
 use super::route_build::route_backends;
-use super::routing_state::{RoutingMode, RoutingState};
+use super::routing_state::{with_routing_lock, Entry, RoutingMode, RoutingState};
 use super::{routed_backends, send_to_helper};
 use crate::config::router::Router;
 use crate::config::{settings, RikuPaths};
 use crate::containers::runs_containers;
 use crate::supervisor_ctl::read_app_env;
 use crate::util::backend::Backend;
+use crate::util::listening::listening_ports;
 
 const WSGI_KEY: &str = "RIKU_NGINX_WSGI";
 
@@ -50,11 +51,10 @@ fn path_app(app: &str, backends: Vec<Backend>, paths: &RikuPaths) -> Result<Path
     }
 }
 
-/// [`publish_paths`] with the helper and the backend lookup for the other
-/// path apps given. `current` is the app being routed and its backends;
-/// `leaving` is true when it just left path mode.
+/// Build the path site from `state` and send it.
 #[allow(clippy::question_mark)]
-pub(super) fn publish_paths_with(
+fn send_path_site(
+    state: &RoutingState,
     send: impl Fn(&Request) -> Result<Reply>,
     lookup: impl Fn(&str) -> Result<Vec<Backend>>,
     paths: &RikuPaths,
@@ -62,10 +62,6 @@ pub(super) fn publish_paths_with(
     current: (&str, Vec<Backend>),
     leaving: bool,
 ) -> Result<()> {
-    let state = match RoutingState::load(paths) {
-        Ok(state) => state,
-        Err(e) => return Err(e),
-    };
     let path_apps: Vec<&str> = state
         .entries()
         .filter(|(_, entry)| entry.mode == RoutingMode::Path)
@@ -109,6 +105,24 @@ pub(super) fn publish_paths_with(
     }
 }
 
+/// [`publish_paths`] with the helper and the backend lookup for the other
+/// path apps given. `current` is the app being routed and its backends;
+/// `leaving` is true when it just left path mode. The routing lock is held
+/// from reading the list to the helper's answer, so two deploys cannot
+/// publish in the wrong order and drop each other's app.
+pub(super) fn publish_paths_with(
+    send: impl Fn(&Request) -> Result<Reply>,
+    lookup: impl Fn(&str) -> Result<Vec<Backend>>,
+    paths: &RikuPaths,
+    active: &Router,
+    current: (&str, Vec<Backend>),
+    leaving: bool,
+) -> Result<()> {
+    with_routing_lock(paths, |state| {
+        send_path_site(state, send, lookup, paths, active, current, leaving)
+    })
+}
+
 /// Send the helper the path site for every path mode app. Other apps'
 /// backends are read from their ENV and running copies.
 pub(crate) fn publish_paths(
@@ -131,12 +145,40 @@ pub(crate) fn publish_paths(
     )
 }
 
-/// The mode `app` had before this apply, from the routing state.
-pub(crate) fn previous_mode(app: &str, paths: &RikuPaths) -> Option<RoutingMode> {
+/// Refuse the shared port when something already listens on it and the
+/// path site is not up yet (`site_up`): the router could not bind it, and
+/// the bind check would see the other program and pass.
+pub(super) fn check_shared_port(port: u16, listening: &BTreeSet<u16>, site_up: bool) -> Result<()> {
+    if !site_up && listening.contains(&port) {
+        return Err(anyhow!(
+            "shared_port {port} is already used by another program on this server; change [routing] shared_port in settings.toml"
+        ));
+    }
+    Ok(())
+}
+
+/// Whether the path site already serves an app other than `app`, or `app`
+/// itself was in path mode before this apply.
+fn path_site_up(app: &str, was_path: bool, paths: &RikuPaths) -> bool {
+    let others = RoutingState::load(paths).ok().is_some_and(|state| {
+        state
+            .entries()
+            .any(|(other, entry)| other != app && entry.mode == RoutingMode::Path)
+    });
+    was_path || others
+}
+
+/// `app`'s routing entry before this apply, from the routing state.
+pub(crate) fn previous_entry(app: &str, paths: &RikuPaths) -> Option<Entry> {
     match RoutingState::load(paths) {
-        Ok(state) => state.entry(app).map(|entry| entry.mode),
+        Ok(state) => state.entry(app).cloned(),
         Err(_) => None,
     }
+}
+
+/// The mode `app` had before this apply.
+pub(crate) fn previous_mode(app: &str, paths: &RikuPaths) -> Option<RoutingMode> {
+    previous_entry(app, paths).map(|entry| entry.mode)
 }
 
 /// Route a path mode app: drop its own site and publish the path site with
@@ -149,6 +191,7 @@ pub(super) fn route_by_path(
     env: &HashMap<String, String>,
     paths: &RikuPaths,
     backends: &[Backend],
+    was_path: bool,
 ) -> Result<()> {
     if env.contains_key(WSGI_KEY) {
         return Err(anyhow!(
@@ -163,6 +206,14 @@ pub(super) fn route_by_path(
         }
         Ok(false) => {}
         Err(e) => return Err(e),
+    }
+    let shared_port = match settings::load(paths) {
+        Ok(loaded) => loaded.routing.shared_port,
+        Err(e) => return Err(e),
+    };
+    let site_up = path_site_up(app, was_path, paths);
+    if let Err(e) = check_shared_port(shared_port, &listening_ports(), site_up) {
+        return Err(e);
     }
     let send = |request: &Request| send_to_helper(paths, request);
     let removed = match active {

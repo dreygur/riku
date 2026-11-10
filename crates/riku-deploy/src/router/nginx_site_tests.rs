@@ -216,6 +216,20 @@ fn fallback_with_a_pair_carries_the_fullchain() {
     fs::write(paths.nginx_root.join("myapp.key"), "KEY PEM").unwrap();
     fs::write(paths.nginx_root.join("myapp.crt"), "leaf only").unwrap();
     fs::write(paths.nginx_root.join("myapp.fullchain.crt"), "CHAIN PEM").unwrap();
+    crate::router::routing_state::with_routing_lock(&paths, |state| {
+        state.set_entry(
+            "myapp",
+            crate::router::routing_state::Entry {
+                mode: RoutingMode::Domain,
+                port: None,
+                picked: false,
+                tls: Some(crate::router::routing_state::TlsState::Issued),
+                cert_for: Some("myapp.203.0.113.10.example".to_string()),
+            },
+        );
+        Ok(())
+    })
+    .unwrap();
     let env = env(&[("RIKU_DOMAINS", "myapp.203.0.113.10.example")]);
     let routing = AppRouting {
         domains: vec!["myapp.203.0.113.10.example".to_string()],

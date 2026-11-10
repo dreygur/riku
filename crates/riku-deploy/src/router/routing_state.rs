@@ -62,6 +62,10 @@ pub struct Entry {
     pub picked: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tls: Option<TlsState>,
+    /// The name the certificate pair riku issued for the fallback covers, so a
+    /// pair is never served for another name. `None`: no riku issued pair.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cert_for: Option<String>,
 }
 
 /// Every app's entry.
@@ -177,6 +181,23 @@ pub fn forget(paths: &RikuPaths, app: &str) {
     });
     if let Err(e) = dropped {
         tracing::warn!("cannot drop the routing entry of '{app}': {e:#}");
+    }
+}
+
+/// Put back `app`'s entry from before an apply that failed, so the record
+/// keeps saying how the app is really routed: a mode switch that did not
+/// reach the router must not look done to the next deploy. `None` drops
+/// the entry a first, failed apply made.
+pub fn restore(paths: &RikuPaths, app: &str, previous: Option<Entry>) {
+    let restored = with_routing_lock(paths, |state| {
+        match previous {
+            Some(entry) => state.set_entry(app, entry),
+            None => state.remove(app),
+        }
+        Ok(())
+    });
+    if let Err(e) = restored {
+        tracing::warn!("cannot restore the routing entry of '{app}': {e:#}");
     }
 }
 

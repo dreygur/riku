@@ -13,6 +13,7 @@ fn port_entry(port: u16) -> Entry {
         port: Some(port),
         picked: true,
         tls: None,
+        cert_for: None,
     }
 }
 
@@ -64,6 +65,35 @@ fn forget_drops_the_entry() {
     forget(&paths, "myapp");
 
     assert_eq!(RoutingState::load(&paths).unwrap().entry("myapp"), None);
+}
+
+#[test]
+fn restore_puts_back_the_entry_from_before_a_failed_apply() {
+    let (_tmp, paths) = paths();
+    let before = Entry {
+        mode: RoutingMode::Path,
+        port: None,
+        picked: false,
+        tls: None,
+        cert_for: None,
+    };
+    with_routing_lock(&paths, |state| {
+        state.set_entry("myapp", port_entry(8100));
+        state.set_entry("newapp", port_entry(8101));
+        Ok(())
+    })
+    .unwrap();
+
+    restore(&paths, "myapp", Some(before.clone()));
+    restore(&paths, "newapp", None);
+    let state = RoutingState::load(&paths).unwrap();
+
+    assert_eq!(state.entry("myapp"), Some(&before));
+    assert_eq!(
+        state.entry("newapp"),
+        None,
+        "a first apply that failed leaves no entry"
+    );
 }
 
 #[test]

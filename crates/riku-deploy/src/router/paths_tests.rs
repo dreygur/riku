@@ -22,6 +22,7 @@ fn set_mode(paths: &RikuPaths, app: &str, mode: RoutingMode) {
                 port: None,
                 picked: false,
                 tls: None,
+                cert_for: None,
             },
         );
         Ok(())
@@ -57,6 +58,62 @@ fn every_path_app_is_published_on_the_shared_port() {
         }
         other => panic!("expected one apply_paths, got {other:?}"),
     }
+}
+
+fn lock_is_free(paths: &RikuPaths) -> bool {
+    use std::os::unix::io::AsRawFd;
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(paths.riku_root.join("routing").join("lock"))
+        .unwrap();
+    let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+    rc == 0
+}
+
+#[test]
+fn the_routing_lock_is_held_while_the_path_site_is_sent() {
+    let (_tmp, paths) = paths();
+    set_mode(&paths, "shop", RoutingMode::Path);
+    let free_during_send = RefCell::new(None);
+    let send = |_: &Request| {
+        *free_during_send.borrow_mut() = Some(lock_is_free(&paths));
+        Ok(Reply::Ok { reloaded: true })
+    };
+    let lookup = |_: &str| Ok(vec![Backend::loopback(6000)]);
+
+    publish_paths_with(
+        send,
+        lookup,
+        &paths,
+        &Router::Nginx,
+        ("shop", vec![Backend::loopback(5001)]),
+        false,
+    )
+    .unwrap();
+
+    assert_eq!(
+        *free_during_send.borrow(),
+        Some(false),
+        "another deploy could publish a stale list in between"
+    );
+}
+
+#[test]
+fn busy_shared_port_is_refused_before_the_path_site_exists() {
+    let listening = std::collections::BTreeSet::from([8080]);
+
+    let message = check_shared_port(8080, &listening, false)
+        .unwrap_err()
+        .to_string();
+
+    assert!(message.contains("8080"), "{message}");
+    assert!(
+        check_shared_port(8080, &listening, true).is_ok(),
+        "once the path site is up, the router itself listens there"
+    );
+    assert!(check_shared_port(8080, &Default::default(), false).is_ok());
 }
 
 #[test]

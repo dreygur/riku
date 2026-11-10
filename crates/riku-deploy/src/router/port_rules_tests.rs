@@ -21,6 +21,7 @@ fn holding(app: &str, port: u16) -> RoutingState {
             port: Some(port),
             picked: false,
             tls: None,
+            cert_for: None,
         },
     );
     state

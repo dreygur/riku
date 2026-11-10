@@ -15,6 +15,7 @@ fn paths() -> (tempfile::TempDir, RikuPaths) {
                 port: None,
                 picked: false,
                 tls: None,
+                cert_for: None,
             },
         );
         Ok(())
@@ -38,6 +39,46 @@ fn recorded(paths: &RikuPaths) -> Option<TlsState> {
         .unwrap()
         .entry("myapp")
         .and_then(|entry| entry.tls)
+}
+
+#[test]
+fn a_pair_is_stale_when_the_name_it_covers_changes() {
+    assert!(!pair_is_stale(None, None), "an own domain pair stays");
+    assert!(!pair_is_stale(Some("a.example"), Some("a.example")));
+    assert!(
+        pair_is_stale(Some("a.example"), None),
+        "fallback pair on an own domain"
+    );
+    assert!(
+        pair_is_stale(None, Some("a.example")),
+        "own domain pair on the fallback"
+    );
+    assert!(
+        pair_is_stale(Some("a.example"), Some("b.example")),
+        "server_ip changed"
+    );
+}
+
+#[test]
+fn drop_stale_pair_removes_the_files_and_the_record() {
+    let (_tmp, paths) = paths();
+    std::fs::create_dir_all(&paths.nginx_root).unwrap();
+    for suffix in ["key", "crt", "fullchain.crt"] {
+        std::fs::write(paths.nginx_root.join(format!("myapp.{suffix}")), "pem").unwrap();
+    }
+    let outcome =
+        fallback_certificate_with(|_, _, _| Ok(true), "myapp", "old.example", &paths, 1000);
+    assert_eq!(outcome, TlsState::Issued);
+
+    drop_stale_pair("myapp", None, &paths);
+
+    for suffix in ["key", "crt", "fullchain.crt"] {
+        assert!(
+            !paths.nginx_root.join(format!("myapp.{suffix}")).exists(),
+            "{suffix} kept"
+        );
+    }
+    assert_eq!(recorded(&paths), None);
 }
 
 #[test]

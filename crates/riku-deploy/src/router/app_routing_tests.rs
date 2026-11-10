@@ -50,6 +50,16 @@ fn no_domain_no_fallback_resolves_to_port_mode() {
 }
 
 #[test]
+fn domainless_uwsgi_or_static_app_stays_out_of_port_mode() {
+    for key in ["RIKU_NGINX_WSGI", "RIKU_NGINX_STATIC"] {
+        let routed = resolve_fresh(&env(&[(key, "true")]), &routing(false)).unwrap();
+
+        assert_eq!(routed.mode, RoutingMode::Domain, "{key}");
+        assert_eq!(routed.port, None, "{key}");
+    }
+}
+
+#[test]
 fn own_domains_win_over_fallback() {
     let routed = resolve_fresh(
         &env(&[("RIKU_DOMAINS", "shop.example,www.shop.example")]),

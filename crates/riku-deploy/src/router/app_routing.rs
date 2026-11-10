@@ -25,6 +25,10 @@ pub use crate::router::routing_state::RoutingMode;
 const DOMAINS_KEY: &str = "RIKU_DOMAINS";
 const MODE_KEY: &str = "RIKU_ROUTING_MODE";
 const PORT_KEY: &str = "RIKU_ROUTING_PORT";
+/// uWSGI and static sites have no port mode listener, so a domainless one
+/// stays in domain mode and routes as it did before port mode existed.
+const WSGI_KEY: &str = "RIKU_NGINX_WSGI";
+const STATIC_KEY: &str = "RIKU_NGINX_STATIC";
 
 /// How one app is reached.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -169,6 +173,7 @@ pub fn resolve(
     {
         return Err(anyhow!("the router plugin supports domain mode only"));
     }
+    let kept_cert = state.entry(app).and_then(|entry| entry.cert_for.clone());
     if mode_set == Some(RoutingMode::Path) {
         if !domains.is_empty() || port_set.is_some() {
             return Err(anyhow!("path mode takes no domains or port"));
@@ -180,6 +185,7 @@ pub fn resolve(
                 port: None,
                 picked: false,
                 tls: None,
+                cert_for: kept_cert.clone(),
             },
         );
         return Ok(routed(Vec::new(), RoutingMode::Path));
@@ -195,7 +201,8 @@ pub fn resolve(
             Err(why) => routing.fallback_skipped = why,
         }
     }
-    let implicit_port = routing.domains.is_empty() && !plugin_router;
+    let serves_a_port = !env.contains_key(WSGI_KEY) && !env.contains_key(STATIC_KEY);
+    let implicit_port = routing.domains.is_empty() && !plugin_router && serves_a_port;
     routing.mode = match mode_set {
         Some(mode) => mode,
         None if implicit_port => RoutingMode::Port,
@@ -218,6 +225,7 @@ pub fn resolve(
             port,
             picked,
             tls,
+            cert_for: kept_cert,
         },
     );
     Ok(routing)
