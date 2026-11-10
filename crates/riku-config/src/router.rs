@@ -31,10 +31,10 @@ pub enum Router {
     Plugin(String),
 }
 
-fn legacy_router(file: &Path) -> Result<Router> {
+fn legacy_router(file: &Path) -> Result<Option<Router>> {
     match fs::read_to_string(file) {
-        Ok(name) => Ok(Router::from(name.as_str())),
-        Err(e) if e.kind() == ErrorKind::NotFound => Ok(Router::Nginx),
+        Ok(name) => Ok(Some(Router::from(name.as_str()))),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
         Err(e) => Err(anyhow!(
             "failed to read router file {}: {e}",
             file.display()
@@ -42,19 +42,29 @@ fn legacy_router(file: &Path) -> Result<Router> {
     }
 }
 
+/// The router stored for this host: settings.toml `[router] name`, else the
+/// legacy `ROUTER` file; `None` when neither is set. Init uses this to tell a
+/// stored choice from the nginx default.
+#[allow(clippy::question_mark)]
+pub fn stored(paths: &RikuPaths) -> Result<Option<Router>> {
+    let settings = match settings::load(paths) {
+        Ok(settings) => settings,
+        Err(e) => return Err(e),
+    };
+    match settings.router {
+        Some(name) => Ok(Some(Router::from(name.as_str()))),
+        None => legacy_router(&paths.router_file),
+    }
+}
+
 impl Router {
     /// Read the host router: settings.toml first, then the legacy `ROUTER`
     /// file, else nginx. An invalid settings file or an unreadable `ROUTER`
     /// file is an error, so a broken file never silently becomes nginx.
-    #[allow(clippy::question_mark)]
     pub fn load(paths: &RikuPaths) -> Result<Router> {
-        let settings = match settings::load(paths) {
-            Ok(settings) => settings,
-            Err(e) => return Err(e),
-        };
-        match settings.router {
-            Some(name) => Ok(Router::from(name.as_str())),
-            None => legacy_router(&paths.router_file),
+        match stored(paths) {
+            Ok(router) => Ok(router.unwrap_or(Router::Nginx)),
+            Err(e) => Err(e),
         }
     }
 

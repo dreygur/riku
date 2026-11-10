@@ -229,8 +229,8 @@ work they describe.
   - 2a setup: plan `plans/2026-11-10-first-run-setup.md`, EGM reviewed
     (stages 5 to 9 and one re-audit), branch `feat/first-run`, native
     execution. Tasks 1 (one workspace version), 2 (embedded runtime
-    plugins, verified downloads) and 3 (plugins install by runtime name)
-    done.
+    plugins, verified downloads), 3 (plugins install by runtime name) and
+    4 (router choice at init) done.
   - 2b URLs on first push: not planned yet.
 
 ### After developer experience: small boards and binary size

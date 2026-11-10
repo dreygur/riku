@@ -17,6 +17,7 @@ const FALLBACK_DIRS: &[&str] = &[
     "/usr/local/bin",
     "/usr/bin",
     "/bin",
+    "/snap/bin",
 ];
 
 fn is_executable(path: &Path) -> bool {
@@ -32,12 +33,9 @@ fn find_in(name: &str, dirs: impl IntoIterator<Item = PathBuf>) -> Option<PathBu
         .find(|candidate| is_executable(candidate))
 }
 
-/// Find `name` in `$PATH`, then in the standard system directories.
-///
-/// Returns the first executable regular file found. When there is none, the
-/// bare `name` comes back unchanged, so spawning it fails with the OS's own
-/// "not found" error.
-pub fn find_program(name: &str) -> PathBuf {
+/// The first executable regular file called `name` in `$PATH`, then in the
+/// standard system directories; `None` when the program is not installed.
+pub fn installed_program(name: &str) -> Option<PathBuf> {
     let path_dirs = match std::env::var_os("PATH") {
         Some(value) => std::env::split_paths(&value).collect::<Vec<_>>(),
         None => Vec::new(),
@@ -45,7 +43,16 @@ pub fn find_program(name: &str) -> PathBuf {
     let dirs = path_dirs
         .into_iter()
         .chain(FALLBACK_DIRS.iter().map(PathBuf::from));
-    match find_in(name, dirs) {
+    find_in(name, dirs)
+}
+
+/// Find `name` in `$PATH`, then in the standard system directories.
+///
+/// Returns the first executable regular file found. When there is none, the
+/// bare `name` comes back unchanged, so spawning it fails with the OS's own
+/// "not found" error.
+pub fn find_program(name: &str) -> PathBuf {
+    match installed_program(name) {
         Some(found) => found,
         None => PathBuf::from(name),
     }
