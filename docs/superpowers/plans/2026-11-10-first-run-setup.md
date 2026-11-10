@@ -1,139 +1,174 @@
 # First Run Setup Implementation Plan (Project 2a)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Implement with superpowers:subagent-driven-development or superpowers:executing-plans, one task at a time. Steps use checkboxes (`- [ ]`).
 
-**Problem:** A new server today installs with a warning when no router exists, runtime plugins come from GitHub's `main` branch with no integrity check, a deploy that needs a missing runtime says "run riku install-plugins", `rk server add` cannot reach the server's deploy account, and the guides print `your-server` placeholders and require a Procfile.
+**Problem:**
+- With no router installed, `riku init` warns and continues.
+- Runtime plugins are downloaded from GitHub's `main` branch (shell plugins, the `riku-notify` bundle) or `releases/latest` (java, clojure) with no integrity check.
+- A deploy missing a runtime plugin says "run riku install-plugins", and `riku plugins install node` does not install the node plugin.
+- `rk server add` saves an entry but cannot put the laptop key on the server.
+- The guides print `your-server` placeholders and require a Procfile.
 
-**Goal:** Project 2a of the spec: init picks the router the developer brought, runtime plugins install on demand from a pinned release with checksums compiled into riku, a missing plugin is named with the exact command, `rk server add` can install the laptop key through an admin login and add the git remote, and the guides stop lying.
+**Goal:** `riku init` uses the router the developer installed and fails on a fresh install without one; bundled runtime plugins are built into riku and written out on demand, so nothing unverified is downloaded; a missing plugin error names the install command; `rk server add` installs the laptop key through the admin login and adds the git remote; the init guides print real values.
 
-**Architecture:** Router choice is a pure function over what `find_program` sees, called by init before anything is written. Runtime installs download the asset for this riku's version tag and compare it with a sha256 table generated at build time from `plugins/`. A marker table in riku-plugins maps repo files to the bundled runtime they need; the deploy and `rk deploy` both use it. Key install is a new root only server command fed by `rk server add --admin`.
+**Architecture:** The five shell runtime plugins and the `riku-notify` bundle are embedded with `include_bytes!` and written to `~/.riku/plugins` when asked. java and clojure stay downloads, pinned to the release tag of this riku's version and checked against the `.sha256` published with them. Router choice is a pure function of what is installed, the operator's request, any stored choice and whether `~/.riku` existed before init started. Deploy key installation goes through the existing relay that runs riku as the deploy user.
 
-**Tech Stack:** Rust workspace; `sha2` (already in Cargo.lock through a dependency) as a direct dependency of riku-cli and its build script; `std::io::IsTerminal` for prompts.
+**Tech Stack:** Rust workspace; `std::io::IsTerminal`; `sha2 = "0.11"` (already used by riku-deploy and riku-plugins) for the java and clojure check.
 
-**Spec:** `docs/superpowers/specs/2026-11-09-developer-experience-design.md`, Project 2 sections "Router detection", "Runtime plugins on demand", "Laptop setup", "Guidance text". Project 2b (URL on first push: domain, port, path modes, fallback domain and TLS, port rules) is a separate plan.
+**Spec:** `docs/superpowers/specs/2026-11-09-developer-experience-design.md`, Project 2 sections "Router detection", "Runtime plugins on demand", "Laptop setup", "Guidance text". Project 2b (URL on first push) has its own plan.
 
-## Owner decisions for this plan (2026-11-10)
+**Terms:** `rk` is the laptop client (crate riku-client); it forwards server commands over ssh. The deploy user owns `~/.riku` and receives pushes; its ssh keys carry riku's forced command. The admin login is a separate account on the server that can run `sudo`, stored per server by `rk server add --admin`. `riku init` run as root creates the deploy user, then re-runs itself as that user (the user steps) through `DeployUser` (`crates/riku-cli/src/setup/deploy_user.rs`). riku.toml is the per app file in the repo; settings.toml is the server file under `~/.riku`.
 
-- Plugin trust: download from the release tag of the running riku version and verify a sha256; refuse on mismatch.
-- Key copy: `rk server add` uses `--admin user@host` to install the key; without it, it prints the exact command.
-- A bare bundled runtime name given to `riku plugins install` installs that runtime; a local bundle path must start with `./` or `/`.
+## Owner decisions (2026-11-10)
 
-## Calls made by Claude
+- Bundled shell runtime plugins are embedded in the binary and written on demand. java and clojure downloads are pinned to the release tag and verified.
+- `rk server add` installs the key through the admin login; without one it prints the command to run on the server.
+- A bare bundled runtime name given to `riku plugins install` installs that runtime.
 
-- Shell plugin hashes are compiled into riku by a build script, so a changed release asset cannot pass. java and clojure binaries are checked against the `.sha256` file published with the same tag, which only catches corruption; said in the docs.
-- One version for the workspace (`[workspace.package] version = "0.1.2"`, the current release), so riku knows which tag to fetch.
-- `rk deploy` keeps its meaning (redeploy on the server). It gains the plugin check and offer before it forwards. It does not push code.
-- The server lists installed runtimes with a new forwarded command, `riku plugins runtimes`, one name per line.
-- The key command is `riku deploy-key add`, root only, one public key on stdin.
+## Decisions made during planning
 
-## Non goals
+- One workspace version (`[workspace.package] version = "0.1.2"`). Today 18 crates say 0.1.0 while the release is 0.1.2, so the agent schema, health and router helper report the wrong version, and Task 2 needs the right one to pick a release tag.
+- The release workflow fails unless the tag equals `v` plus the workspace version.
+- `riku install-plugins` stays and goes through the same install function as `riku plugins install <name>`; one code path, two spellings.
+- The key reaches the server as one shell quoted argument, never on stdin, so `sudo` can still ask for a password.
 
-- Anything in Project 2b.
-- Signing plugins or rotating trust keys; the release pipeline stays as it is apart from publishing shell plugins.
-- Installing routers for the developer.
+## Out of scope versus spec
 
-## Global Constraints
+- `rk deploy` does not check or offer missing plugins (spec "Yes installs then pushes"). A deploy or push already fails with the exact install command (Task 5), and a laptop side check would guess wrong for container apps and server overrides. `rk deploy` keeps its meaning: redeploy on the server.
+- Key copy needs an admin login (spec says `rk server add` copies the key). Only root can add a deploy key.
+- Project 2b.
 
-- `.claude/CLAUDE.md` rules: no `?` (explicit match), tests in sibling `_tests.rs`, files under about 200 lines, doc comments on public items, no emoji, no em dashes, security model in module docs.
-- Read `docs/CODEMAP.md` first; update it in the same commit as any module change. ROADMAP status in the same commit as the work.
-- Native file tools only; no python or perl. Commits: imperative subject under 50 characters, `git commit -F <file> --no-verify`, no AI attribution.
+## Alternatives considered
+
+- Pin shell plugin downloads to a release and check a compiled hash: rejected by the owner after review. v0.1.2 has no shell plugin assets, every dev build after a plugin edit would fail the check, and offline servers could not install.
+- A laptop side plugin check in `rk deploy`: dropped, see above.
+
+## Risks
+
+- java and clojure still need GitHub: a server without network or a release without assets gets a clear error with the manual step.
+- `riku deploy-key add` runs as root and grants push access; it accepts exactly one key, keeps only the key type and blob, and writes through the deploy user.
+- A server that reruns `sudo riku init` must keep its router; the fresh check must run before init creates anything.
+
+## Global constraints
+
+- `.claude/CLAUDE.md`: no `?` (explicit match), tests in sibling `_tests.rs`, files under about 200 lines, doc comments on public items, security model in module docs, no emoji, no em dashes, no hyphenated compounds in prose.
+- Read `docs/CODEMAP.md` first; update it and the ROADMAP status in the same commit as the work.
+- Native file tools only; no python or perl. Commits: subject under 50 characters, `git commit -F <file> --no-verify`, no AI attribution.
 - Confidential names never written; use `prod`, `edge.example`, `myapp`.
-- Per task: `cargo check --workspace` and `cargo test -p <touched crates>`; full suite, clippy, Docker e2e once at the end.
-- An existing server that re-runs nothing keeps working: router detection fails hard only on a fresh install (no `[router] name` in settings.toml and no legacy `ROUTER` file).
+- Per task: `cargo check --workspace` and `cargo test -p <touched crates>`. Full suite, clippy and Docker e2e once at the end.
+- Tests never change the process working directory, environment or depend on running as root or not.
 
-## Review Focus
+## Review focus
 
-1. Offline server, or a riku build whose version has no release: install fails with the manual command, writes nothing. Task 2.
-2. A downloaded plugin whose bytes do not match the compiled hash: refused, nothing written, error names the plugin. Task 2.
-3. Both nginx and Caddy installed and `sudo riku init` run without a terminal (piped over ssh): fails naming `RIKU_ROUTER=nginx|caddy`. Task 4.
-4. `rk deploy` with stdin not a terminal and a plugin missing: treated as no, prints `rk plugins install <name>`. Task 6.
-5. `riku plugins install node` while a `./node` directory exists in the deploy user's home: installs the node runtime, not the directory. Task 3.
+1. `sudo riku init` rerun on an existing server installed without `RIKU_ROUTER`, with both nginx and Caddy present: keeps nginx, does not fail. Task 4.
+2. Fresh install with both routers and no terminal (init piped over ssh): fails naming `RIKU_ROUTER`. Task 4.
+3. A crash between writing and renaming a plugin leaves nothing that `runtime::discover` would run. Task 2.
+4. A key whose comment holds `;` or `$(...)`, or with `command=` options: reaches the server as one argument and lands as type plus blob only. Task 6.
+5. `riku plugins install node` with a `./node` directory in the deploy user's home: installs the runtime. Task 3.
+6. A java download whose bytes do not match its `.sha256`: hard error naming the plugin, exit non zero, nothing written. Task 2.
 
 ---
 
+## Tasks
+
 ### Task 1: One workspace version
 
-**Files:** `Cargo.toml` (add `[workspace.package] version = "0.1.2"`), every `crates/*/Cargo.toml` (`version.workspace = true`), `crates/riku-args/src/cli.rs:13` (clap `version` from `env!("CARGO_PKG_VERSION")`).
+**Files:** `Cargo.toml` (`[workspace.package] version = "0.1.2"`), every `crates/*/Cargo.toml` (`version.workspace = true`), `crates/riku-args/src/cli.rs:13` (`version = env!("CARGO_PKG_VERSION")`), `crates/riku-cli/src/apps/dump_state/builder.rs:175` (`env!("CARGO_PKG_VERSION")`), `.github/workflows/release.yml` (first step of the release job: fail unless `GITHUB_REF_NAME == "v$(cargo metadata ... version)"`, or a grep of the workspace version).
 
-- [ ] Test `version_matches_the_workspace` in `crates/riku-args/src/cli_tests.rs` (or the existing args test file): `Cli::command().get_version() == Some(env!("CARGO_PKG_VERSION"))` and that value is `"0.1.2"`.
-- [ ] Run it, it fails; implement; `cargo check --workspace`; `cargo test -p riku-args`.
-- [ ] Commit `Use one version for the workspace`.
+- [ ] Test `cli_version_is_the_crate_version` in `crates/riku-args/src/cli_tests.rs` (create if missing, with a `#[path]` module in cli.rs): `Cli::command().get_version() == Some(env!("CARGO_PKG_VERSION"))`.
+- [ ] Run it and confirm it fails. Implement. `cargo check --workspace`; `cargo test -p riku-args`.
+- [ ] Commit `Use one version for the workspace` (body names the 0.1.0 reports it fixes).
 
-### Task 2: Pinned, verified runtime plugin install
+### Task 2: Embedded runtime plugins, verified downloads
 
-**Files:** Create `crates/riku-cli/build.rs` (sha256 of `../../plugins/{node,python,ruby,go,rust-lang}` into `OUT_DIR/plugin_hashes.rs` as `&[(&str, &str)]`), `crates/riku-cli/src/apps/plugin_fetch.rs` (URL, download, verify, atomic write), `plugin_fetch_tests.rs`. Modify `crates/riku-cli/src/apps/install_plugins.rs:35-140` to use it, `crates/riku-cli/Cargo.toml` (`sha2` dep and build-dep), `.github/workflows/release.yml:135-163` (also publish `plugins/<name>` as asset `riku-plugin-<name>` for the five shell plugins).
+**Files:** Create `crates/riku-cli/src/apps/embedded_plugins.rs` (the table), `crates/riku-cli/src/apps/plugin_write.rs` and `plugin_write_tests.rs` (safe write), modify `crates/riku-cli/src/apps/install_plugins.rs:16-203`, `crates/riku-plugins/src/runtime.rs:62-110` (`discover` skips names starting with `.`), `crates/riku-cli/Cargo.toml` (`sha2 = "0.11"`).
 
 **Interfaces:**
-- Produces: `pub(crate) fn asset_url(name: &str, version: &str, target: Option<&str>) -> String` = `https://github.com/dreygur/riku/releases/download/v{version}/riku-plugin-{name}` (plus `-{target}` for java, clojure); `pub(crate) fn verify(name: &str, bytes: &[u8], expected: &str) -> Result<()>`; `pub(crate) fn install_runtime(paths: &RikuPaths, name: &str) -> Result<()>` (used by Tasks 3 and 6 through `cmd_install_plugins`).
-- Shell plugins verify against the compiled table; binary plugins against the `.sha256` asset of the same tag.
-- Write to `<plugin_root>/.<name>.new` with mode 0755, then rename. A failed download or mismatch leaves the plugin root unchanged.
-- Errors: mismatch `checksum mismatch for plugin '<name>' (release v<version>); refusing to install`; HTTP 404 `no release v<version> of plugin '<name>'; copy plugins/<name> from the riku source to <plugin_root>/<name>`; network failure names the URL.
+- `pub(crate) const EMBEDDED: &[EmbeddedPlugin]` with `struct EmbeddedPlugin { name: &'static str, files: &'static [(&'static str, &'static [u8])] }`: the five runtimes, one file each (`include_bytes!("../../../../plugins/node")` and so on), and `riku-notify` with `riku-plugin.toml` and `bin/on-event`. The canonical runtime list is `pub(crate) fn bundled_runtimes() -> impl Iterator<Item = &'static str>` over this table plus `BINARY_PLUGINS`; `SHELL_PLUGINS` and the download code for them go away.
+- `pub(crate) fn write_plugin_file(dir: &Path, name: &str, bytes: &[u8], mode: u32) -> Result<()>`: writes `dir/.<name>.new` with mode 0600, fsyncs, sets `mode`, renames to `dir/<name>`. On any error the `.new` file is removed.
+- `pub(crate) fn install_runtime(paths: &RikuPaths, name: &str) -> Result<()>`: embedded names are written out (runtimes 0755; for `riku-notify`, the toml 0644 and the entry 0755 under `plugin_root/riku-notify/`); `java` and `clojure` download from `https://github.com/dreygur/riku/releases/download/v{CARGO_PKG_VERSION}/riku-plugin-{name}-{triple}` and compare sha256 with the first field of `.../riku-plugin-{name}-{triple}.sha256` before `write_plugin_file`.
+- Download errors are typed: `enum FetchError { NotFound(String), Status(u16, String), Network(String) }`. Messages: not found `no release v{version} of plugin '{name}' for {triple}`; mismatch `checksum mismatch for plugin '{name}' (release v{version}); not installed`.
+- `cmd_install_plugins` (CLI `riku install-plugins` and the supervisor `/control/plugins/install` route, `crates/riku-cli/src/control_actions.rs:34`) returns an error naming every plugin that failed, and fails when any failed. A checksum mismatch never reads as a network problem.
+- Fix `host_target_triple` (`install_plugins.rs:178-183`): it prints the OS as the plugin name; take `name` as a parameter.
 
-- [ ] Tests: `asset_url_is_pinned_to_the_version` (`v0.1.2` in the URL, never `main` or `latest`); `verify_refuses_changed_bytes`; `verify_accepts_matching_bytes`; `build_table_covers_the_five_shell_plugins`; `failed_install_leaves_plugin_root_unchanged` (verify failure, no file and no `.new` left).
-- [ ] Run, fail, implement, `cargo test -p riku-cli plugin_fetch`.
-- [ ] Commit `Install runtime plugins pinned and verified`.
+- [ ] Tests: `write_plugin_file_never_leaves_an_executable_temp_file` (fail after the write: no `.node.new`; a leftover `.x.new` is not returned by `runtime::discover`, Review Focus 3); `embedded_table_holds_the_five_runtimes_and_riku_notify`; `install_runtime_writes_node_without_network` (temp plugin root); `checksum_mismatch_is_a_hard_error` (bytes and a wrong hash through the verify function, Review Focus 6); `binary_url_is_pinned_to_the_version` (`v` plus `CARGO_PKG_VERSION`, never `latest`); `host_target_triple_names_the_plugin`.
+- [ ] Run and confirm they fail. Implement. `cargo test -p riku-cli -p riku-plugins`.
+- [ ] Commit `Embed runtime plugins and verify downloads`.
 
-### Task 3: plugins install with a runtime name
+### Task 3: `plugins install` accepts a runtime name
 
-**Files:** `crates/riku-cli/src/plugins/mod.rs:33-43` (`cmd_plugins_install`), test in its tests module or a new `plugins/install_route_tests.rs`.
+**Files:** `crates/riku-cli/src/plugins/mod.rs:33-43`, create `crates/riku-cli/src/plugins/install_route.rs` and `install_route_tests.rs` (mod.rs is already 258 lines).
 
-**Interfaces:** Produces `fn install_target(source: &str) -> InstallTarget` with `enum InstallTarget { Runtime(&'static str), Bundle(String) }`: a name in `SHELL_PLUGINS` or `BINARY_PLUGINS` is `Runtime`; anything else goes to the bundle installer unchanged (git URLs, `./path`, `/path`). A bare name that is neither is an error naming the known runtimes.
+**Interfaces:** `fn install_target(source: &str) -> Result<InstallTarget>`, `enum InstallTarget { Runtime(&'static str), Bundle(String) }`:
+1. A source containing `/` or `:`, or ending in `.git`, is a `Bundle` (paths `./x`, `../x`, `/x`, `plugins/x`, `github:o/r`, `git@...`, `https://...`).
+2. A bare source (none of the above) in `bundled_runtimes()` is `Runtime`.
+3. Any other bare source is an error listing the bundled runtimes. A bare relative bundle dir such as `mybundle` is no longer accepted; write `./mybundle`.
 
-- [ ] Tests: `bare_runtime_name_installs_the_runtime` (also with a `./node` dir present in cwd: still `Runtime`, Review Focus 5); `dot_slash_path_is_a_bundle`; `git_url_is_a_bundle`; `unknown_bare_name_is_refused`.
-- [ ] Run, fail, implement, test. Commit `Route runtime names in plugins install`.
+`Runtime` calls `install_runtime` from Task 2. `riku install-plugins` keeps working and uses the same function.
 
-### Task 4: Router detection at init
+- [ ] Tests: `bare_runtime_name_is_a_runtime` (with a `node` dir present in a temp dir passed in, never the process cwd; Review Focus 5); `paths_and_git_sources_are_bundles` (each form in rule 1); `unknown_bare_name_is_refused`.
+- [ ] Run, confirm failure, implement, `cargo test -p riku-cli install_route`.
+- [ ] Commit `Install runtimes by name in plugins install`.
 
-**Files:** Create `crates/riku-cli/src/setup/router_choice.rs` + tests; modify `crates/riku-cli/src/setup/init_router.rs:31-49` (`persist_router`), `crates/riku-cli/src/setup/root_init.rs:54-104` (choose before spawning the user step, pass the answer through `RIKU_ROUTER`), `crates/riku-cli/src/setup/prerequisites.rs:39-46` (drop the router warning; detection owns it).
+### Task 4: Choose the router at init
 
-**Interfaces:** `pub(super) fn choose_router(installed: &[Router], requested: Option<Router>, current: Option<Router>, interactive: bool) -> RouterChoice` with `enum RouterChoice { Use(Router), Ask(Vec<Router>), Fail(String) }`. Order: `RIKU_ROUTER` wins; else an existing choice (settings or legacy file) is kept; else exactly one installed router is used; two installed and interactive asks; two and not interactive fails naming `RIKU_ROUTER=nginx` or `RIKU_ROUTER=caddy`; none fails with `no router found: install nginx (apt install nginx) or Caddy, then run riku init again`. `installed_routers() -> Vec<Router>` uses `find_program(..).is_file()` for `nginx` and `caddy`. The prompt reads one line from stdin only when `std::io::stdin().is_terminal()`.
+**Files:** create `crates/riku-cli/src/setup/router_choice.rs` and tests; modify `crates/riku-cli/src/setup/root_init.rs:54-104`, `crates/riku-cli/src/setup/init.rs` (plain, non root init), `crates/riku-cli/src/setup/init_router.rs:31-49` (`persist_router` only writes), `crates/riku-cli/src/setup/prerequisites.rs:39-46` (drop the router warning), `crates/riku-config/src/program.rs` (add `pub fn installed_program(name: &str) -> Option<PathBuf>`; add `/snap/bin` to `FALLBACK_DIRS`), `crates/riku-config/src/router.rs` (add `pub fn stored(paths: &RikuPaths) -> Result<Option<Router>>`: settings `[router] name`, else the legacy file, else `None`).
 
-- [ ] Tests (pure, no host state): `requested_router_wins`; `existing_choice_is_kept_without_a_router_binary` (an existing server is never failed); `single_installed_router_is_used`; `two_routers_ask_when_interactive`; `two_routers_without_a_terminal_name_riku_router` (Review Focus 3); `no_router_on_a_fresh_install_fails_with_the_install_command`.
-- [ ] Run, fail, implement, `cargo test -p riku-cli router_choice`.
+**Interfaces:** `pub(super) fn choose_router(installed: &[Router], requested: Option<Router>, stored: Option<Router>, fresh: bool, interactive: bool) -> RouterChoice`, `enum RouterChoice { Use(Router), Ask(Vec<Router>), Fail(String) }`. In order:
+1. `requested` (`RIKU_ROUTER`, any name including a router plugin) wins.
+2. `stored` wins.
+3. Not `fresh` (the riku tree existed before init started): nginx, the old default. Init then stores it.
+4. One installed router: use it.
+5. Two installed: `Ask` when interactive, else `Fail("nginx and Caddy are both installed; run init again with RIKU_ROUTER=nginx or RIKU_ROUTER=caddy")`.
+6. None: `Fail("no router found: install nginx (apt install nginx) or Caddy, then run riku init again")`.
+
+`fresh` is taken before anything is created: in root init before `ensure_account` (root_init.rs:81), as "the deploy user's riku root does not exist"; in plain init at its start. Root resolves the choice, then sets `RIKU_ROUTER` with `std::env::set_var` before `run_user_steps`, which already passes `RIKU_ROUTER` to the user steps (`deploy_user.rs:30`). The prompt reads one line only when `stdin().is_terminal()`: `Router to use [nginx/caddy]:`; an answer other than those two names fails with the rule 5 message.
+
+- [ ] Tests (pure): `requested_router_wins`; `stored_router_wins`; `existing_tree_keeps_nginx_without_a_stored_choice` (Review Focus 1); `single_installed_router_is_used`; `two_routers_ask_when_interactive`; `two_routers_without_a_terminal_name_riku_router` (Review Focus 2); `no_router_on_a_fresh_install_fails_with_the_install_command`; in riku-config, `stored_is_none_without_settings_or_file`.
+- [ ] Run, confirm failure, implement, `cargo test -p riku-cli -p riku-config`.
 - [ ] Commit `Choose the router the developer installed`.
 
-### Task 5: Name the missing runtime plugin on push
+### Task 5: Name the missing runtime plugin
 
-**Files:** Create `crates/riku-util/src/runtime_markers.rs` + tests (`pub fn needed_runtime(app_path: &Path) -> Option<&'static str>`: `package.json` node, `requirements.txt` or `pyproject.toml` python, `Gemfile` ruby, `go.mod` go, `Cargo.toml` rust-lang, first match in that order; in riku-util because `rk` uses it too and may not link riku-plugins, see `crates/riku-client/tests/deps.rs`); modify `crates/riku-deploy/src/procfile_deploy.rs:23-37` (`detect_runtime`) and `crates/riku-plugins/src/runtime.rs` (the `RIKU_RUNTIME` names a missing plugin error).
+**Files:** create `crates/riku-util/src/runtime_markers.rs` and tests; modify `crates/riku-plugins/src/runtime.rs:119-136` (`detect`), `crates/riku-deploy/src/procfile_deploy.rs:23-37` (`detect_runtime`).
 
-**Interfaces:** When no plugin detects the app and a marker names a runtime that is not installed: `app '<app>' needs the <name> plugin. Install it: rk plugins install <name>, then push again.` When `RIKU_RUNTIME` names a plugin that is not installed: the same message for that name. When a marker's plugin is installed but did not detect, the existing message stays.
+**Interfaces:**
+- `pub fn needed_runtime(app_path: &Path) -> Option<&'static str>`, markers checked in this order, first match wins: `go.mod` or any `*.go` file at the top level go; `package.json` node; `requirements.txt`, `pyproject.toml` or `setup.py` python; `Gemfile` ruby; `Cargo.toml` rust-lang. (Alphabetical, like server detection.)
+- `riku_plugins::runtime::MissingRuntime { name: String }`, an error type returned by `detect` when `RIKU_RUNTIME` names a plugin that is not installed (today a plain message, runtime.rs:130).
+- `detect_runtime` formats: when `RIKU_RUNTIME` names a missing bundled runtime, or no plugin matched and `needed_runtime` names a bundled runtime that is not installed: `app '{app}' needs the {name} plugin. Install it with: rk plugins install {name} (on the server: riku plugins install {name}), then push again.` A missing name that is not bundled keeps the current message. Container apps never reach this code.
 
-- [ ] Tests: `marker_picks_the_bundled_runtime` (each of the five); `no_marker_gives_none`; in riku-deploy, `missing_runtime_plugin_names_the_install_command`; `riku_runtime_naming_a_missing_plugin_names_it`.
-- [ ] Run, fail, implement, test riku-plugins and riku-deploy. Commit `Name the missing runtime plugin on push`.
+- [ ] Tests: in riku-util `markers_pick_the_runtime` (each marker), `no_marker_gives_none`; in riku-plugins `missing_riku_runtime_is_a_typed_error`; in riku-deploy `missing_bundled_plugin_names_the_install_command`, `missing_custom_plugin_keeps_the_old_message`.
+- [ ] Run, confirm failure, implement, `cargo test -p riku-util -p riku-plugins -p riku-deploy`.
+- [ ] Commit `Name the missing runtime plugin on push`.
 
-### Task 6: rk deploy offers the missing plugin
+### Task 6: `rk server add` installs the key and the remote
 
-**Files:** Create `crates/riku-cli/src/apps/runtimes_cmd.rs` (server command `riku plugins runtimes`: installed runtime plugin names, one per line, from `runtime::discover`); modify `crates/riku-args/src/cmds.rs` (`PluginsCmd::Runtimes`), `crates/riku-cli/src/dispatch/plugins.rs`; create `crates/riku-remote/src/remote/plugin_check.rs` + tests; modify `crates/riku-remote/src/remote/flow.rs` (before forwarding `Deploy`, run the check).
+**Files:** create `crates/riku-cli/src/setup/deploy_key_cmd.rs` and tests; modify `crates/riku-args/src/cli.rs` and `cmds.rs` (`Commands::DeployKey` with `add <key>`; `--key PATH` on `ServerCmd::Add`), `crates/riku-args/src/placement.rs` (`deploy-key` is Server), `crates/riku-cli/src/dispatch/mod.rs`, `crates/riku-cli/src/setup/root_init.rs` (a hidden user step that only adds keys), `crates/riku-remote/src/remote/server_cmd.rs:74-86` (`run_at` gains `repo_dir: &Path`), create `crates/riku-remote/src/remote/key_install.rs` and tests.
 
-**Interfaces:** `plugin_check::missing_runtime(repo_dir: &Path, server_runtimes: &[String]) -> Option<String>` uses the riku.toml `[runtime] name` in `repo_dir` when present (read as plain TOML: rk may not link riku-config), else `riku_util::runtime_markers::needed_runtime` (Task 5). The prompt: `<name> plugin needed on <server>, install? [y/N]`; yes forwards `plugins install <name>` then the deploy; no, or stdin not a terminal, stops with `rk plugins install <name>` printed.
+**Interfaces:**
+- Server: `riku deploy-key add '<key line>'`. `pub(crate) fn add_deploy_key(is_root: bool, key_line: &str, user: &DeployUser) -> Result<()>`: refuses unless `is_root`; parses with `PublicKey::try_from` (keeps type and blob, drops options and comments; refuses anything else); runs riku as the deploy user through `DeployUser::run_relayed` with the hidden `init --user-steps --keys-only --add-key <key>` so the deploy user writes its own `authorized_keys` with `add_deploy_keys` (duplicates skipped). The command passes `nix::unistd::Uid::effective().is_root()`.
+- Laptop: `rk server add NAME user@host [--admin admin@host] [--key PATH]` saves the entry as today, then:
+  - key: `--key` or `~/.ssh/id_ed25519.pub`, else `~/.ssh/id_rsa.pub`; validated with `PublicKey::try_from` before sending.
+  - with an admin (given now or stored on the entry): runs `ssh -t <admin> <cmd>` where `<cmd>` is `shlex::try_join(["sudo", "riku", "deploy-key", "add", <key line>])`; stdin stays free for the sudo password. On failure the entry stays and the manual command is printed.
+  - without an admin: prints `Add the key on the server: sudo riku deploy-key add '<key line>'` and `or rerun with --admin <your login>@<host>`, with the host filled in.
+  - `fn add_git_remote(repo_dir: &Path, server: &Server) -> Result<RemoteOutcome>`: when `repo_dir` is a git repo with no remote pointing at the server (`git_remote::read_remotes`) and no remote named `riku`, runs `git remote add riku <user@host>:<app>`, where `app` is the repo root's directory name validated as an app name. An invalid name or an existing remote is reported and skipped.
 
-- [ ] Tests: `missing_runtime_from_markers`; `riku_toml_runtime_name_wins_over_markers`; `installed_runtime_is_not_missing`; `non_terminal_stdin_answers_no` (Review Focus 4); `runtimes_lists_installed_runtime_names_only` (server side, no `riku-*` hooks).
-- [ ] Run, fail, implement, `cargo test -p riku-remote -p riku-cli -p riku-client` (the deps guard must still pass).
-- [ ] Commit `Offer the missing plugin on rk deploy`.
-
-### Task 7: rk server add installs the key and the remote
-
-**Files:** Create `crates/riku-cli/src/setup/deploy_key_cmd.rs` (server: `riku deploy-key add`, refuses unless root, reads stdin, `parse_public_keys`, exactly one key, adds it through `DeployUser` like `add_deploy_keys` in `setup/deploy_keys.rs:86`), args and dispatch (`Commands::DeployKey`, placement Server); modify `crates/riku-remote/src/remote/server_cmd.rs:76-86` (`add`).
-
-**Interfaces:** `rk server add NAME user@host [--admin admin@host] [--key PATH]` saves the entry as today, then:
-- with `--admin`: runs `ssh -t <admin> sudo riku deploy-key add` with the public key (default `~/.ssh/id_ed25519.pub`, else `id_rsa.pub`) on stdin; failure is reported with the manual command, the saved entry stays.
-- without `--admin`: prints `ssh <admin login> sudo riku deploy-key add < <key>`.
-- inside a git repo with no remote pointing at that server: `git remote add riku <user@host>:<dir name>` after validating the dir name as an app name; an existing `riku` remote is left alone and named in the output.
-
-- [ ] Tests: `deploy_key_add_refuses_non_root` (as the test user); `deploy_key_add_refuses_two_keys`; `server_add_prints_the_key_command_without_admin`; `server_add_adds_the_git_remote_in_a_repo` (temp git repo); `server_add_keeps_an_existing_riku_remote`.
-- [ ] Run, fail, implement, `cargo test -p riku-cli -p riku-remote -p riku-client`.
+- [ ] Tests: `deploy_key_add_refuses_non_root` (`is_root = false`); `deploy_key_add_refuses_two_keys`; `key_with_options_lands_as_type_and_blob`; `remote_command_quotes_the_key` (a comment with `;` and `$(id)` stays one argument after `shlex::split`, Review Focus 4); `server_add_without_admin_prints_the_server_command`; `remote_added_in_a_repo` and `existing_riku_remote_is_kept` (temp repos passed as `repo_dir`).
+- [ ] Run, confirm failure, implement, `cargo test -p riku-cli -p riku-remote -p riku-args -p riku-client` (the rk dependency guard must pass).
 - [ ] Commit `Install the deploy key from rk server add`.
 
-### Task 8: Guidance text, docs, map
+### Task 7: Guidance text and docs
 
-**Files:** `crates/riku-cli/src/setup/guidance.rs:84,94-95`, `crates/riku-remote/src/quickstart/mod.rs:100-122`, `scripts/install.sh:131-138`, `docs/docs/plugins.md`, `docs/docs/installation.md`, `docs/docs/quick-start.md`, `docs/CODEMAP.md`, `docs/superpowers/ROADMAP.md`.
+**Files:** `crates/riku-cli/src/setup/guidance.rs:84,94-95` and `guidance_tests.rs:11-12`, `crates/riku-cli/src/apps/create.rs:90`, `crates/riku-cli/src/apps/list.rs:15,29`, `crates/riku-dashboard/assets/js/render/panels.js:44`, `crates/riku-remote/src/quickstart/mod.rs:100-122`, `scripts/install.sh:131-138`, `docs/docs/plugins.md`, `docs/docs/installation.md`, `docs/docs/quick-start.md`, `docs/docs/cli.md`, `docs/CODEMAP.md`, `docs/superpowers/ROADMAP.md`.
 
-- Guidance: no Procfile requirement (riku.toml or Procfile, or the runtime's start command); the git remote line uses the known user and host (`hostname -f` at init; else omit the line rather than print `your-server`).
-- quickstart: when no registered server, say `rk server add` instead of `<user>@<your-server>`.
-- install.sh: server branch ends at `riku init`; the laptop branch shows `rk server add myserver riku@<host> --admin <you>@<host>`.
+- Guidance says processes come from riku.toml or a Procfile, or the runtime's start command; no Procfile requirement.
+- No `your-server` or `your-app` placeholder: where riku cannot know the host, it prints `rk server add <name> <user>@<host> --admin <login>@<host>` as the next step instead of a fake remote line. The quickstart says `rk server add` when no server is registered.
+- install.sh: the server branch ends at `riku init`; the laptop branch shows `rk server add myserver riku@edge.example --admin you@edge.example`.
+- Docs: `riku plugins install <name>`, embedded runtimes, the java and clojure check, `riku deploy-key add`, router detection.
 
-- [ ] Test `guidance_has_no_placeholder_or_procfile_requirement` in `guidance_tests.rs`.
-- [ ] Commit `Fix first run guidance text`.
+- [ ] Test `guidance_has_no_placeholder_or_procfile_requirement` (replaces the assertion at `guidance_tests.rs:11-12`).
+- [ ] Run, confirm failure, implement, `cargo test -p riku-cli guidance`.
+- [ ] Commit `Fix first run guidance and docs`.
 
 ### Final gate
 
