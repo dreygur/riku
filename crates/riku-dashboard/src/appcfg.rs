@@ -1,7 +1,11 @@
 //! App configuration (environment) endpoints.
 //!
-//! - `GET  /api/apps/:app/env`, current key/values (read gate).
+//! - `GET  /api/apps/:app/env`, current key/values (token gate).
 //! - `POST /api/apps/:app/env`, `{ "set": {K:V}, "unset": [K] }` (token gate).
+//!
+//! Security: the ENV file holds the app's secrets, so reading it needs the
+//! same Bearer token as editing it. The open read gate would hand every
+//! secret to any local process that can reach loopback.
 //!
 //! Reads parse the app's `ENV` file directly; writes go through the same
 //! `config set` / `config unset` command functions the CLI uses, so validation
@@ -9,13 +13,12 @@
 
 use std::collections::HashMap;
 
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Json, Response};
 use serde::Deserialize;
 
 use super::mutations::{authorize_mutation, finish};
-use super::routes::authorize;
 use super::DashboardState;
 
 /// GET /api/apps/:app/env
@@ -23,9 +26,8 @@ pub(crate) async fn get_env(
     State(state): State<DashboardState>,
     headers: HeaderMap,
     Path(app): Path<String>,
-    Query(query): Query<HashMap<String, String>>,
 ) -> Response {
-    if let Some(denied) = authorize(&state, &headers, &query) {
+    if let Some(denied) = authorize_mutation(&state, &headers) {
         return denied;
     }
     let app = match crate::util::validate_app_name(&app) {
@@ -33,8 +35,11 @@ pub(crate) async fn get_env(
         Err(e) => return (StatusCode::BAD_REQUEST, e.to_string()).into_response(),
     };
     let mut map: HashMap<String, String> = HashMap::new();
-    let _ = crate::util::parse_settings(&state.paths.env_root.join(&app).join("ENV"), &mut map);
-    Json(map).into_response()
+    let env_file = state.paths.env_root.join(&app).join("ENV");
+    match crate::util::parse_settings(&env_file, &mut map) {
+        Ok(_) => Json(map).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
 }
 
 #[derive(Deserialize)]
@@ -74,3 +79,7 @@ pub(crate) async fn edit_env(
     .await;
     finish(result, "config")
 }
+
+#[cfg(test)]
+#[path = "appcfg_tests.rs"]
+mod tests;
