@@ -50,7 +50,7 @@ jobs:
       # Pinned to a commit, not a branch: a mutable ref on a third-party action
       # means whoever can push to it runs code in this job.
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@81df5c23b0dc775b009efdfc9895c5965b7a4e40 # v1.26.1
+        uses: cargo-bins/cargo-binstall@851112458b5f28a29e5bc14a690c3f283d9dcc6f # v1.26.2
 
       # Installs mise and the helper tools declared in mise.toml
       # (nextest, llvm-cov, audit, deny); caches them between runs.
