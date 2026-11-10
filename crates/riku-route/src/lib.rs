@@ -44,6 +44,7 @@ mod nginx_roots;
 mod nginx_run;
 #[cfg(test)]
 mod nginx_syntax_tests;
+mod port_wait;
 mod protocol;
 mod schema;
 mod server;

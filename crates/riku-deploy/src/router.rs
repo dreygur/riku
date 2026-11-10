@@ -36,7 +36,6 @@ mod check;
 mod fallback;
 mod fallback_tls;
 mod helper_client;
-mod listening;
 mod nginx_site;
 mod plugin;
 mod port_rules;
@@ -207,6 +206,7 @@ fn route_plan(env: &HashMap<String, String>, backends: &[Backend]) -> Result<Rou
         domains,
         https,
         backends: backends.to_vec(),
+        open_port: None,
     })
 }
 

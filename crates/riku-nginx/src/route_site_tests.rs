@@ -9,6 +9,8 @@ struct Fixture {
     shape: SiteShape,
     https_only: bool,
     also_tls: bool,
+    open_port: Option<u16>,
+    domains: Vec<String>,
     ipv6: bool,
     backends: Vec<Backend>,
 }
@@ -20,6 +22,8 @@ impl Fixture {
             shape: SiteShape::Plain,
             https_only: false,
             also_tls: false,
+            open_port: None,
+            domains: vec!["myapp.example.com".to_string()],
             ipv6: true,
             backends: vec![Backend::Unix(SOCKET.into())],
         }
@@ -32,13 +36,14 @@ impl Fixture {
             acme_root: PathBuf::from("/var/lib/riku/acme"),
             static_root: PathBuf::from("/var/lib/riku/static"),
         };
-        let domains = vec!["myapp.example.com".to_string()];
+
         render_route_site(&RouteSite {
             app: self.app,
-            domains: &domains,
+            domains: &self.domains,
             shape: self.shape,
             https_only: self.https_only,
             also_tls: self.also_tls,
+            open_port: self.open_port,
             port: 80,
             backends: &self.backends,
             static_locations: &[],
@@ -119,6 +124,58 @@ fn issued_fallback_serves_both_without_redirect() {
             "{config}"
         );
         assert!(!config.contains("return 301"), "no redirect: {config}");
+    }
+}
+
+#[test]
+fn nginx_renders_catch_all_server_on_open_port() {
+    let site = Fixture {
+        shape: SiteShape::Portmap,
+        domains: Vec::new(),
+        open_port: Some(8100),
+        ipv6: false,
+        backends: vec![Backend::loopback(5001)],
+        ..Fixture::new()
+    };
+
+    let config = site.render().unwrap();
+
+    assert!(
+        config.contains("listen              0.0.0.0:8100;"),
+        "{config}"
+    );
+    assert!(
+        !config.contains("0.0.0.0:80;"),
+        "a port only app must not claim 80: {config}"
+    );
+    assert!(config.contains("server_name         _;"), "{config}");
+}
+
+#[test]
+fn domain_and_port_render_both() {
+    for (shape, https_only) in [
+        (SiteShape::Portmap, false),
+        (SiteShape::Plain, false),
+        (SiteShape::Plain, true),
+    ] {
+        let site = Fixture {
+            shape,
+            https_only,
+            open_port: Some(8100),
+            backends: vec![Backend::loopback(5001)],
+            ..Fixture::new()
+        };
+
+        let config = site.render().unwrap();
+
+        assert!(
+            config.contains("listen              0.0.0.0:8100;"),
+            "{config}"
+        );
+        assert!(
+            config.contains("server_name         myapp.example.com;"),
+            "{config}"
+        );
     }
 }
 

@@ -1,6 +1,8 @@
 //! The lines a push ends with: where the app is live, or why it has no URL
 //! and how to give it one.
 
+use std::net::Ipv4Addr;
+
 use crate::router::app_routing::AppRouting;
 pub(crate) use crate::router::routing_state::TlsState;
 
@@ -67,6 +69,9 @@ pub(crate) fn live_lines(
     tls: Option<TlsState>,
     https_only: bool,
 ) -> Vec<Line> {
+    if routing.domains.is_empty() && routing.port.is_some() {
+        return Vec::new();
+    }
     if routing.domains.is_empty() {
         return no_domain_lines(app, routing);
     }
@@ -79,6 +84,26 @@ pub(crate) fn live_lines(
         .iter()
         .map(|domain| line(format!("Live at {scheme}://{domain}"), "green"))
         .collect()
+}
+
+/// The push output for an app answering on `port`. `server_ip` is the
+/// address from settings.toml, when known.
+pub(crate) fn port_lines(port: u16, server_ip: Option<Ipv4Addr>) -> Vec<Line> {
+    let host = match server_ip {
+        Some(ip) => ip.to_string(),
+        None => "<this server's address>".to_string(),
+    };
+    vec![
+        line(format!("Live at http://{host}:{port}"), "green"),
+        line(
+            format!("Open port {port} in the server's firewall if it is closed"),
+            "",
+        ),
+        line(
+            "A bare IP address gets HTTP only, no certificate".to_string(),
+            "",
+        ),
+    ]
 }
 
 #[cfg(test)]

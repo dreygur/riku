@@ -33,6 +33,11 @@ pub struct Route {
     pub kind: SiteKind,
     #[serde(default)]
     pub allow_git_folders: bool,
+    /// A plain HTTP port that answers any host name, for port mode. Left out
+    /// of the JSON when unset, so a helper from before port mode still takes
+    /// every route that does not use it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub open_port: Option<u16>,
 }
 
 /// The shape of the site, in the order nginx's template choice tries them

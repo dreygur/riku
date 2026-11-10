@@ -12,6 +12,7 @@ use crate::schema::{Listen, Route, RouteBackend, SiteKind, Tls};
 const HTTP_PORT: u16 = 80;
 const FIRST_UNPRIVILEGED_PORT: u16 = 1024;
 const CATCH_ALL_NAME: &str = "_";
+const CADDY_ADMIN_PORT: u16 = 2019;
 
 /// A route that passed the gate. Its TLS pair is the normalized text, so the
 /// only form a caller can write to a file is one built from parsed DER.
@@ -29,8 +30,8 @@ impl CheckedRoute {
 }
 
 fn domains(route: &Route) -> Result<()> {
-    if route.domains.is_empty() {
-        return Err(anyhow!("a route needs at least one domain"));
+    if route.domains.is_empty() && route.open_port.is_none() {
+        return Err(anyhow!("a route needs at least one domain or an open_port"));
     }
     route.domains.iter().try_for_each(|raw| {
         if raw == CATCH_ALL_NAME {
@@ -78,6 +79,20 @@ fn listen(route: &Route) -> Result<()> {
     Ok(())
 }
 
+/// Port mode never takes a privileged port (80 and 443 serve domains) or
+/// the Caddy admin port.
+fn open_port(route: &Route) -> Result<()> {
+    match route.open_port {
+        Some(port) if port < FIRST_UNPRIVILEGED_PORT || port == CADDY_ADMIN_PORT => Err(anyhow!(
+            "open_port {port} is refused; use {FIRST_UNPRIVILEGED_PORT} and above, not {CADDY_ADMIN_PORT}"
+        )),
+        Some(_) if matches!(route.kind, SiteKind::Wsgi | SiteKind::Static) => Err(anyhow!(
+            "open_port is only for proxied sites, not uWSGI or static ones"
+        )),
+        _ => Ok(()),
+    }
+}
+
 fn locations(route: &Route) -> Result<()> {
     route
         .static_paths
@@ -86,7 +101,7 @@ fn locations(route: &Route) -> Result<()> {
 }
 
 fn common(route: &Route) -> Result<()> {
-    let checks: [fn(&Route) -> Result<()>; 4] = [domains, backends, listen, locations];
+    let checks: [fn(&Route) -> Result<()>; 5] = [domains, backends, listen, open_port, locations];
     checks.iter().try_for_each(|check| check(route))
 }
 

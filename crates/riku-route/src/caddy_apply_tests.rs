@@ -67,6 +67,7 @@ fn route(port: u16) -> Route {
         static_paths: Vec::new(),
         kind: SiteKind::Plain,
         allow_git_folders: false,
+        open_port: None,
     }
 }
 

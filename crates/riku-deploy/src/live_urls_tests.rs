@@ -1,3 +1,5 @@
+use std::net::Ipv4Addr;
+
 use super::*;
 use crate::router::app_routing::{AppRouting, RoutingMode};
 
@@ -75,6 +77,38 @@ fn no_domain_no_fallback_says_how_to_add_one() {
             && l.contains("rk config set")),
         "{lines:?}"
     );
+}
+
+#[test]
+fn port_only_app_has_no_domain_lines() {
+    let routed = AppRouting {
+        port: Some(8100),
+        mode: RoutingMode::Port,
+        ..routing(&[], false)
+    };
+
+    assert!(live_lines("myapp", &routed, None, false).is_empty());
+}
+
+#[test]
+fn port_lines_name_the_url_and_the_firewall() {
+    let lines = texts(port_lines(8100, Some(Ipv4Addr::new(203, 0, 113, 10))));
+
+    assert_eq!(lines[0], "Live at http://203.0.113.10:8100");
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("firewall") && l.contains("8100")),
+        "{lines:?}"
+    );
+    assert!(lines.iter().any(|l| l.contains("HTTP only")), "{lines:?}");
+}
+
+#[test]
+fn port_lines_without_server_ip_say_where_to_look() {
+    let lines = texts(port_lines(8100, None));
+
+    assert_eq!(lines[0], "Live at http://<this server's address>:8100");
 }
 
 #[test]

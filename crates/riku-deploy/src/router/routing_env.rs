@@ -1,5 +1,5 @@
 //! The env a router sees: the app's own env with its fallback domain in
-//! `RIKU_DOMAINS`.
+//! `RIKU_DOMAINS` and its resolved port mode port in `RIKU_ROUTING_PORT`.
 //!
 //! Every route builder, the plugin route plan and certificate renewal read
 //! domains from `RIKU_DOMAINS`, so laying the fallback domain over a copy of
@@ -15,11 +15,12 @@ use anyhow::Result;
 use crate::config::router::Router;
 use crate::config::{settings, RikuPaths};
 use crate::router::app_routing::{resolve, AppRouting};
-use crate::router::listening::listening_ports;
 use crate::router::routing_state::{with_routing_lock, RoutingState};
+use crate::util::listening::listening_ports;
 
 const DOMAINS_KEY: &str = "RIKU_DOMAINS";
 const HTTPS_ONLY_KEY: &str = "RIKU_HTTPS_ONLY";
+const PORT_KEY: &str = "RIKU_ROUTING_PORT";
 
 /// Whether resolving records the app's entry in the routing state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,6 +70,10 @@ pub fn routing_env(
         Err(e) => return Err(e),
     };
     let mut routed = env.clone();
+    match routing.port {
+        Some(port) => routed.insert(PORT_KEY.to_string(), port.to_string()),
+        None => routed.remove(PORT_KEY),
+    };
     if routing.fallback {
         routed.insert(DOMAINS_KEY.to_string(), routing.domains.join(","));
         routed.remove(HTTPS_ONLY_KEY);

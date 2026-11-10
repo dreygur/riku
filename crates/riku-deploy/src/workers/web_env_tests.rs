@@ -43,6 +43,22 @@ fn switching_web_kind_drops_old_route_keys() {
 }
 
 #[test]
+fn stale_external_port_key_is_dropped() {
+    let tmp = TempDir::new().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    let base = HashMap::from([("RIKU_NGINX_EXTERNAL_PORT".to_string(), "8080".to_string())]);
+
+    let env = build_worker_env("shop", "web", copy_one(), &base, &[], &paths).unwrap();
+
+    assert!(!env.contains_key("RIKU_NGINX_EXTERNAL_PORT"), "{env:?}");
+    assert!(
+        !persisted(&paths).contains_key("RIKU_NGINX_EXTERNAL_PORT"),
+        "{:?}",
+        persisted(&paths)
+    );
+}
+
+#[test]
 fn a_port_set_in_the_app_env_is_used_and_no_port_is_persisted() {
     let tmp = TempDir::new().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());

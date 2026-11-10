@@ -6,8 +6,8 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::config::router::Router;
-use crate::config::RikuPaths;
-use crate::live_urls::{live_lines, TlsState};
+use crate::config::{settings, RikuPaths};
+use crate::live_urls::{live_lines, port_lines, TlsState};
 use crate::router::app_routing::AppRouting;
 use crate::router::routing_env::{routing_env, Record};
 use crate::router::routing_state::RoutingState;
@@ -49,7 +49,14 @@ fn announce(app: &str, env: &HashMap<String, String>, paths: &RikuPaths) {
     let Some((routing, tls)) = routed(app, env, paths) else {
         return;
     };
-    for line in live_lines(app, &routing, tls, crate::util::flag::https_only(env)) {
+    let mut lines = live_lines(app, &routing, tls, crate::util::flag::https_only(env));
+    if let Some(port) = routing.port {
+        let server_ip = settings::load(paths)
+            .ok()
+            .and_then(|loaded| loaded.routing.server_ip);
+        lines.extend(port_lines(port, server_ip));
+    }
+    for line in lines {
         echo(&format!("       {}", line.text), line.colour);
     }
 }

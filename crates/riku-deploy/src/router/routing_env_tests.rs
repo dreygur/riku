@@ -62,6 +62,20 @@ fn no_routing_section_keeps_todays_env() {
 }
 
 #[test]
+fn port_mode_overlay_sets_the_picked_port() {
+    let (_tmp, paths) = paths_with(Some("[routing]\nport_range = \"9100-9110\"\n"));
+
+    let (routed_env, routing) =
+        routing_env("myapp", &env(&[]), &paths, &Router::Nginx, Record::Save).unwrap();
+
+    assert_eq!(routing.port, Some(9100));
+    assert_eq!(
+        routed_env.get("RIKU_ROUTING_PORT").map(String::as_str),
+        Some("9100")
+    );
+}
+
+#[test]
 fn save_records_the_entry_and_peek_does_not() {
     let (_tmp, paths) = paths_with(Some(ROUTING));
 

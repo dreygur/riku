@@ -19,7 +19,7 @@ use anyhow::{anyhow, Result};
 use riku_container::types::AppName;
 use riku_route::{check_caddy_route, Listen, Route, RouteBackend, SiteKind};
 
-use super::route_env::{listen, tls};
+use super::route_env::{open_port, tls};
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::backend::Backend;
@@ -65,10 +65,14 @@ fn refused_key(env: &HashMap<String, String>) -> Option<String> {
         .map(|(key, why)| format!("{key} is no longer supported, {why}"))
 }
 
-/// What nginx's generator would serve: the listed names, `<app>.example.com`
-/// when `RIKU_DOMAINS` is unset, and `_` as the catch all name.
+/// What nginx's generator would serve: the listed names, `_` as the catch
+/// all name, none for a port mode app, and `<app>.example.com` for an app
+/// with neither (a server without `[routing]`, routed as before).
 pub(super) fn nginx_domains(app: &AppName, env: &HashMap<String, String>) -> Result<Vec<String>> {
     let Some(raw) = env.get("RIKU_DOMAINS") else {
+        if env.contains_key("RIKU_ROUTING_PORT") {
+            return Ok(Vec::new());
+        }
         return Ok(vec![format!("{app}.example.com")]);
     };
     raw.split(|c: char| c == ',' || c.is_whitespace())
@@ -162,6 +166,7 @@ fn caddy_route(
     https: HttpsPolicy,
     backends: Vec<RouteBackend>,
     kind: SiteKind,
+    open_port: Option<u16>,
 ) -> Route {
     Route {
         domains,
@@ -172,6 +177,7 @@ fn caddy_route(
         static_paths: Vec::new(),
         kind,
         allow_git_folders: false,
+        open_port,
     }
 }
 
@@ -182,10 +188,6 @@ fn nginx_route(
     paths: &RikuPaths,
 ) -> Result<Route> {
     let only_https = base.https == HttpsPolicy::Only;
-    let listen = match listen(env, base.kind, only_https) {
-        Ok(listen) => listen,
-        Err(e) => return Err(anyhow!("listen: {e}")),
-    };
     let tls = if only_https {
         match tls(app, paths) {
             Ok(found) => found,
@@ -195,7 +197,6 @@ fn nginx_route(
         None
     };
     Ok(Route {
-        listen,
         tls,
         static_paths: riku_nginx::static_locations(env),
         allow_git_folders: flag(env, "RIKU_NGINX_ALLOW_GIT_FOLDERS"),
@@ -237,7 +238,11 @@ pub fn build_route(
         Err(e) => return Err(route_error(app, e)),
     };
     let kind = site_kind(env, router);
-    if caddy && domains.is_empty() && kind == SiteKind::Plain {
+    let port = match open_port(env) {
+        Ok(port) => port,
+        Err(e) => return Err(route_error(app, e)),
+    };
+    if caddy && domains.is_empty() && kind == SiteKind::Plain && port.is_none() {
         return Ok(None);
     }
     let backends = match route_backends(app, backends, paths) {
@@ -249,7 +254,7 @@ pub fn build_route(
     } else {
         HttpsPolicy::AlsoPlainHttp
     };
-    let base = caddy_route(domains, https, backends, kind);
+    let base = caddy_route(domains, https, backends, kind, port);
     if caddy {
         return match check_caddy_route(app, &base) {
             Ok(checked) => Ok(Some(checked.into_route())),

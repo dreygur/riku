@@ -67,7 +67,7 @@ fn env_maps_to_route() {
         &[
             ("RIKU_DOMAINS", "Myapp.example www.myapp.example"),
             ("RIKU_NGINX_PORTMAP", "80:5001"),
-            ("RIKU_NGINX_EXTERNAL_PORT", "8080"),
+            ("RIKU_ROUTING_PORT", "8181"),
             ("RIKU_NGINX_STATIC", "public"),
             ("RIKU_NGINX_STATIC_PATHS", "/assets:dist, /media:uploads"),
             ("RIKU_NGINX_ALLOW_GIT_FOLDERS", "1"),
@@ -88,11 +88,12 @@ fn env_maps_to_route() {
                 },
                 RouteBackend::UnixCopy(2)
             ],
-            listen: Listen { port: 8080 },
+            listen: Listen::default(),
             tls: None,
             static_paths: vec!["/assets".to_string(), "/media".to_string()],
             kind: SiteKind::Portmap,
             allow_git_folders: true,
+            open_port: Some(8181),
         }
     );
 }
@@ -127,7 +128,6 @@ fn https_only_carries_the_normalized_certificate_pair() {
             ("RIKU_DOMAINS", "myapp.example"),
             ("RIKU_HTTPS_ONLY", "true"),
             ("RIKU_NGINX_WSGI", "true"),
-            ("RIKU_NGINX_EXTERNAL_PORT", "8080"),
         ],
         &[Backend::Unix(paths.socket_root.join("myapp@1.sock"))],
     )
@@ -240,6 +240,25 @@ fn catch_all_domain_and_bind_all_address_work_as_before() {
 }
 
 #[test]
+fn port_mode_route_has_open_port_and_no_domain() {
+    let tmp = TempDir::new().unwrap();
+    let backends = [Backend::loopback(5001)];
+    let port_only = [("RIKU_ROUTING_PORT", "8100")];
+
+    let nginx = build_for(&tmp, &Router::Nginx, &port_only, &backends)
+        .unwrap()
+        .unwrap();
+    let caddy = build_for(&tmp, &Router::Caddy, &port_only, &backends)
+        .unwrap()
+        .expect("Caddy routes a port mode app");
+
+    for route in [nginx, caddy] {
+        assert!(route.domains.is_empty(), "{route:?}");
+        assert_eq!(route.open_port, Some(8100));
+    }
+}
+
+#[test]
 fn caddy_route_keeps_only_what_caddy_uses() {
     let tmp = TempDir::new().unwrap();
     let backends = [Backend::loopback(5001)];
@@ -253,7 +272,6 @@ fn caddy_route_keeps_only_what_caddy_uses() {
         &[
             ("RIKU_DOMAINS", "myapp.example"),
             ("RIKU_NGINX_PORTMAP", "80:5001"),
-            ("RIKU_NGINX_EXTERNAL_PORT", "8080"),
         ],
         &backends,
     )

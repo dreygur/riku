@@ -67,6 +67,7 @@ pub(crate) fn render(roots: &NginxRoots, app: &AppName, route: &Route) -> Result
         shape: shape(route.kind),
         https_only: route.https == HttpsPolicy::Only,
         also_tls: route.https == HttpsPolicy::AlsoPlainHttp && route.tls.is_some(),
+        open_port: route.open_port,
         port: route.listen.port,
         backends: &backends,
         static_locations: &route.static_paths,

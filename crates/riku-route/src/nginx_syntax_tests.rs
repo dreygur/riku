@@ -46,6 +46,7 @@ fn base(domain: &str) -> Route {
         static_paths: Vec::new(),
         kind: SiteKind::Plain,
         allow_git_folders: false,
+        open_port: None,
     }
 }
 
