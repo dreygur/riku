@@ -184,11 +184,16 @@ cat | RIKU_ROOT="$HOME/.riku" riku git-hook "myapp" "$REPO_PATH"
 
 ## Step 7: Access Your App
 
-Your app should now be running. Access it at:
+The push ends with the app's URL, for example:
 
 ```
-http://your-server-ip
+-----> myapp deployed!
+       Live at http://myapp.203.0.113.10.sslip.io
 ```
+
+An app with no domain gets the server's fallback name, or a port of its own
+when the server has none. See [App URLs](routing.md) for the three ways an
+app is reached and how to pick one.
 
 ### How It Works
 
