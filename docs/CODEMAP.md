@@ -320,7 +320,7 @@ Gotchas:
 - Two worker kinds of copies: Procfile copies are `workers_enabled/<app>@<kind>.<n>.toml`, container copies are engine containers with `riku.*` labels. `rolling/` serves both through `CopyRuntime`, so change ordering rules there once.
 - Container apps are detected by `RIKU_RUNTIME=container`, a compose file (`COMPOSE_FILE` in ENV picks another name) or a Containerfile/Dockerfile (`containers/app.rs`). A switch from Procfile to containers parks old workers as `<name>.toml.migrating`.
 - `lock.rs` file is keyed by app name; container control ops (`containers/control.rs`) and `copy_restart.rs` take it too, so they conflict with a deploy by design.
-- `resolve_riku_bin` doc says never fall back to bare `riku`, but `resolve_from` returns `"riku"` if `current_exe()` fails (supervisor_ctl.rs:40).
+- `resolve_riku_bin` returns `None` (supervisor not started) when there is no `ROOT_BINARY` and `current_exe()` fails; it never hands a bare `riku` to a `$PATH` lookup.
 - Registry login (`containers/images.rs`) stores credentials in the engine user's shared auth file; last login wins across apps.
 - `start_copy` re-walks bind sources for symlinks right before `run` (check then use, accepted).
 - `RIKU_*` app env keys are not passed to containers (`containers/spec.rs`); the compose project label is dropped.
@@ -401,9 +401,9 @@ Gotchas:
 - `cmd_hook_check` calls `std::process::exit`, and `cmd_doctor` and `cmd_scp` exit the process too; they do not return to the dispatcher.
 - Two ways to install the supervisor unit: `setup/user_service.rs` (plain user) and `setup/system_service.rs` (root init); changes to the unit text usually need both.
 - `RIKU_USER` (default `riku`) is read in `setup/deploy_user.rs` and again by `router_helper.rs`; `RIKU_DEFAULT_BRANCH` in `default_branch.rs`.
-- `git/hook.rs` deploys every pushed ref, ignoring the ref name; any branch push redeploys with that commit.
+- `git/hook.rs` deploys only the repo's default branch (its `HEAD`); other branches, tags and deletions are skipped with a message. When `HEAD` names a branch that does not exist, the first pushed branch becomes `HEAD`.
 - `control_actions.rs` and the dashboard both call `apps::cmd_*`; those functions print to the terminal.
-- Agent `config:set` and `run` are stubs (see bugs); agent scope table in `types.rs::allows` lists `config:unset` but no handler exists.
+- Agent `config:set` and `run` are not implemented and return `NOT_IMPLEMENTED`; agent scope table in `types.rs::allows` lists `config:unset` but no handler exists.
 - Files here use `?` in older code; new code follows rule 16 with `#[allow(clippy::question_mark)]`.
 
 ## riku-dashboard
@@ -413,7 +413,7 @@ Entry: `run(paths, bind, token)` (src/lib.rs); prints `riku-dashboard-bound <por
 - `src/lib.rs`: `run`, `DashboardState` (paths, optional token). Contract: non-loopback bind requires a token (`--token` or `RIKU_DASHBOARD_TOKEN`); single-threaded tokio runtime.
 - `src/routes.rs`: `router`, read gate `authorize`, `/healthz`, `/api/state` (from `cli::apps::state_json`), `/api/apps/{app}/releases`. Contract: without a token only loopback `Host` headers pass; with a token, Bearer header or `?token=` is accepted (constant-time compare) and Host is not checked.
 - `src/mutations.rs`: `authorize_mutation` (token required, Bearer header only), restart, stop, redeploy, scale, rollback, per-worker restart and delete; `finish`, `run_action` run the CLI functions on `spawn_blocking`. `service_mutations.rs`: container service restart, stop, scale.
-- `src/appcfg.rs`: env GET (read gate) and POST (mutation gate, via `config set/unset`). `addons.rs`: addon endpoints via `AddonService`. `market.rs`: marketplace sources, plugin install/remove, trust keyring. `installed.rs`: `/api/plugins` and plugin `ui_panel`. `system.rs`: `/api/doctor`, backup, restore upload (2 GiB limit on that route only; scratch file under `data_root`). `logs.rs`: SSE tail of `{log_root}/{app}/*.log`.
+- `src/appcfg.rs`: env GET and POST, both behind the mutation gate (Bearer token required: ENV holds secrets); POST goes through `config set/unset`. `addons.rs`: addon endpoints via `AddonService`. `market.rs`: marketplace sources, plugin install/remove, trust keyring. `installed.rs`: `/api/plugins` and plugin `ui_panel`. `system.rs`: `/api/doctor`, backup, restore upload (2 GiB limit on that route only; scratch file under `data_root`). `logs.rs`: SSE tail of `{log_root}/{app}/*.log`.
 - `src/assets.rs`: `/` and `/assets/{*path}`, served from the fixed `ASSETS` table (`include_str!` of `assets/`). Contract: path is a table key, never a filesystem path; public, no data.
 - `assets/`: UI with no build step. `index.html`, `app.css`, ES modules in `js/` (`main.js` entry, `poll.js` refresh loop, `api.js` fetch, `state.js`, `page.js`/`card.js`/`card-events.js` rendering, `render/` pure string builders, `logs/` drawer and stream, `actions.js`, `scale.js`, `releases.js`, `auth.js`); `js/tests/` node tests; `jsconfig.json` for tsc check.
 
