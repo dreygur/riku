@@ -74,7 +74,7 @@ Entry: re-exports in `src/lib.rs`: `validate_app_name`, `ensure_path_within`, `p
 - `src/write_dir.rs`: `check_write_dir`: root writes only into a real dir owned by `owner` with no group/other write.
 - `src/socket_dir.rs`: uWSGI socket dir, mode 2750 with shared group; `prepare`, `ensure_exists`, `group_id`. Refuses a non-directory (symlink) before chown/chmod.
 - `src/env.rs`: `parse_settings` (KEY=VALUE with `$VAR` expansion, strips control chars; a line without `=` is an error naming file and line, and the caller's map is left untouched), `write_config` (atomic, 0600), `expandvars`.
-- `src/runtime_markers.rs`: `BUNDLED_RUNTIMES`, the runtime plugins riku can install by name (shared by server and laptop code).
+- `src/runtime_markers.rs`: `BUNDLED_RUNTIMES`, the runtime plugins riku can install by name, and `needed_runtime`, the shell runtime an app's marker files call for (shared by server and laptop code).
 - `src/legacy_env.rs`: `RENAMED_KEYS`, `legacy_keys`: old env names no longer read; deploy and doctor report them.
 - `src/flag.rs`: `is_on`, `https_only`, `https_only_warning`: only explicit yes values are on, typos are off.
 - `src/nginx_validation.rs`: `validate_env_vars`, `print_env_warnings`: warns only, the route gate decides what reaches config.
@@ -245,7 +245,7 @@ Entry: `PluginManager::run_hook`, `PluginHook`, `HookContext` (`src/manager.rs`,
 
 - `src/discovery.rs`: `validate_plugin_name` (no `/`, `\`, `..`, empty), `list_plugins` (executable files in `plugin_root`), `plugin_exists`.
 - `src/hooks.rs`, `src/manager.rs`: legacy name-based hooks `riku-pre-deploy|pre-build|post-build|post-deploy` in `plugin_root`. Contract: pre-deploy, pre-build, post-build failure or timeout aborts; post-deploy only warns. Runs in its own process group.
-- `src/runtime.rs`: runtime plugins are executables in `plugin_root` not named `riku-*`; verbs `detect|build|env|start`. Order: `RIKU_RUNTIME` ENV override, else alphabetical first `detect` exit 0. Hidden files (an interrupted install's `.<name>.new`) are never plugins.
+- `src/runtime.rs`: runtime plugins are executables in `plugin_root` not named `riku-*`; verbs `detect|build|env|start`. Order: `RIKU_RUNTIME` ENV override, else alphabetical first `detect` exit 0. Hidden files (an interrupted install's `.<name>.new`) are never plugins. `RIKU_RUNTIME` naming no installed plugin is the typed `MissingRuntime` error.
 - `src/runtime_bundles.rs`: `add_runtime_bundles` adds bundle dirs with `type = "runtime"` to `discover`; a plain file wins a name clash.
 - `src/executor.rs`: timeout and output helpers. Reads `RIKU_PLUGIN_TIMEOUT` (`plugin_timeout`). Re-exports ETXTBSY-retry spawn from riku-util.
 - `src/bundles.rs`: finds `riku-plugin.toml` dirs; invalid manifests are skipped with a warning.
@@ -294,7 +294,7 @@ Entry: `do_deploy`, `rollback` (src/lib.rs); `spawn_app` (supervisor_ctl.rs); `c
 - `src/lib.rs`: `do_deploy` pipeline. Takes deploy lock, git sync, loads ENV, branches container app vs Procfile app, then `finish_deploy`. Re-exports dependency crates as `config`, `error`, `nginx`, `plugins`, `supervisor`, `util` (crate-internal aliases). Contract: container apps refuse scaling `deltas`; `rollback` redeploys a prior sha from `ReleaseLog`.
 - `src/deploy_env.rs`: `load_deploy_env` (merged env via `app_config::load_env`, warns on invalid, renamed and legacy keys, sets env dir 0700 and ENV 0600), `load_deploy_processes` (`app_config::load_processes`, logged), `refuse_container_processes` (container apps refuse riku.toml `[processes]`/`[cron]`). `do_deploy` loads each once.
 - `src/deploy_finish.rs`: `finish_deploy`. Post-deploy hooks, release record, tells pusher where app is live. Never fails the deploy.
-- `src/procfile_deploy.rs`: `deploy_procfile_app` takes the process list (riku.toml or Procfile). Runtime plugin detect/build, preflight/release, scaling deltas, workers, router, returns runtime name.
+- `src/procfile_deploy.rs`: `deploy_procfile_app` takes the process list (riku.toml or Procfile). Runtime plugin detect/build (a missing shipped runtime names `rk plugins install <name>`), preflight/release, scaling deltas, workers, router, returns runtime name.
 - `src/env_setup.rs`: `run_preflight`, `run_release`, `write_live_env`, `update_env_and_redeploy`. Runs Procfile commands via `sh -c` with resource limits applied in `pre_exec`.
 - `src/git_ops.rs`: `sync_app_repo`, `git_fetch`, `git_reset`, `git_update_submodules`, `head_sha`. Shells out to git.
 - `src/hooks.rs`: `run_pre_deploy`, `run_pre_build`, `run_post_build`, `run_post_deploy`. Publishes the lifecycle event, then runs plugin hooks via `PluginManager`. Pre hooks abort the deploy.

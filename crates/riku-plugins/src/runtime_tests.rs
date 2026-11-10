@@ -99,12 +99,16 @@ fn discover_skips_non_executable() {
 }
 
 #[test]
-fn detect_runtime_override_missing_plugin_errors() {
+fn missing_riku_runtime_is_a_typed_error() {
     let tmp = TempDir::new().unwrap();
     let plugins = discover(tmp.path());
     let mut env = HashMap::new();
     env.insert("RIKU_RUNTIME".into(), "ghost".into());
-    assert!(detect(&plugins, tmp.path(), &env).is_err());
+    let err = detect(&plugins, tmp.path(), &env).unwrap_err();
+    let missing = err
+        .downcast_ref::<MissingRuntime>()
+        .expect("RIKU_RUNTIME naming no plugin should be MissingRuntime");
+    assert_eq!(missing.name, "ghost");
 }
 
 #[test]

@@ -230,7 +230,8 @@ work they describe.
     (stages 5 to 9 and one re-audit), branch `feat/first-run`, native
     execution. Tasks 1 (one workspace version), 2 (embedded runtime
     plugins, verified downloads), 3 (plugins install by runtime name) and
-    4 (router choice at init) done.
+    4 (router choice at init) and 5 (name the missing runtime plugin)
+    done.
   - 2b URLs on first push: not planned yet.
 
 ### After developer experience: small boards and binary size

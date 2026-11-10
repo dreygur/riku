@@ -40,6 +40,26 @@ pub struct RuntimePlugin {
     pub path: PathBuf,
 }
 
+/// `RIKU_RUNTIME` names a plugin that is not installed. Typed so the deploy
+/// can tell the developer how to install a runtime riku ships.
+#[derive(Debug)]
+pub struct MissingRuntime {
+    /// The plugin name `RIKU_RUNTIME` gave.
+    pub name: String,
+}
+
+impl std::fmt::Display for MissingRuntime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "RIKU_RUNTIME='{0}' is set but no plugin named '{0}' was found in plugins directory",
+            self.name
+        )
+    }
+}
+
+impl std::error::Error for MissingRuntime {}
+
 /// Context passed to every runtime plugin subcommand via environment variables.
 pub struct RuntimeContext<'a> {
     pub app: &'a str,
@@ -123,17 +143,13 @@ pub fn detect(
     app_env: &HashMap<String, String>,
 ) -> Result<Option<RuntimePlugin>> {
     if let Some(runtime_name) = app_env.get("RIKU_RUNTIME") {
-        let plugin = plugins
-            .iter()
-            .find(|p| p.name == *runtime_name)
-            .ok_or_else(|| {
-                anyhow!(
-                    "RIKU_RUNTIME='{}' is set but no plugin named '{}' was found in plugins directory",
-                    runtime_name,
-                    runtime_name
-                )
-            })?;
-        return Ok(Some(plugin.clone()));
+        return match plugins.iter().find(|p| p.name == *runtime_name) {
+            Some(plugin) => Ok(Some(plugin.clone())),
+            None => Err(MissingRuntime {
+                name: runtime_name.clone(),
+            }
+            .into()),
+        };
     }
 
     for plugin in plugins {
