@@ -325,9 +325,15 @@ phase 4 come after.
   install, the doubled push failure, init and plugin output, the port URL
   placeholder. Fixed after: the dashboard's per worker restart now bumps
   the config mtime and sends SIGHUP (`app_restart::restart_configs`).
-  Open, found on the way and not fixed: with `RIKU_AUTO_RESTART=false` the
-  only way to start a new build is `riku stop` then `riku deploy`; the
-  first push prints `Linked <repo> to <repo>` above the deploy intro.
+  The `RIKU_AUTO_RESTART=false` item was a misreading: every deploy
+  rewrites the worker configs and `spawn_app` sends SIGHUP, so the new
+  build runs either way; the flag only skips stopping non web workers
+  first (and leaves a non web kind dropped from the Procfile running).
+  Docs corrected. A real "write now, apply on `riku restart`" mode needs a
+  pending config generation (web kinds roll inside the deploy, the
+  checkout is replaced in place, the supervisor loads whatever is enabled
+  on start); not designed. Open: the first push prints
+  `Linked <repo> to <repo>` above the deploy intro.
 
 - Checked 2026-11-11: the two nginx bugs once listed here
   (`RIKU_NGINX_CACHE_PREFIXES`, `RIKU_NGINX_CATCH_ALL`) are gone; #73

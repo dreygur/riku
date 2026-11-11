@@ -129,7 +129,8 @@ riku logs myapp web
 riku restart myapp
 ```
 
-Or set `RIKU_AUTO_RESTART=false` and restart manually.
+This restarts the running workers from the current build. A new build
+starts with `git push` or `riku deploy myapp`.
 
 **Q: Where are logs stored?**
 

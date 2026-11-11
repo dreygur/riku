@@ -15,9 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the checkout again, so after a failed push it rebuilt the broken commit
   and left the app down. A rebuild, a config change to apply, or starting a
   stopped app is now `riku deploy <app>`; restart of an app with no running
-  workers is refused with that pointer. With `RIKU_AUTO_RESTART=false`, run
-  `riku stop` and then `riku deploy` to start a new build. `--hot` is now
-  the same as a plain restart. Container apps keep their restart behavior.
+  workers is refused with that pointer. `--hot` is now the same as a plain
+  restart. Container apps keep their restart behavior.
 
 ### Fixed
 

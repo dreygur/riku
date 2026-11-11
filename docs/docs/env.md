@@ -73,12 +73,16 @@ RIKU_AUTO_RESTART=true
 ```
 
 - **Default:** `true`
-- **Description:** Automatically restart workers on deploy
+- **Description:** Stop non web workers before a deploy rewrites their configs
 - **Values:** `true` | `false`
 
-When set to `false`, a deploy keeps the running workers and their old
-configs. `riku restart <app>` restarts them on those old configs; to run the
-new build, `riku stop <app>` and then `riku deploy <app>`.
+Every deploy rewrites the app's worker configs and signals the supervisor,
+so the workers run the new build either way. With `true` the non web
+workers are stopped first and started from the new configs. With `false`
+their configs are replaced in place and the supervisor restarts each one as
+a changed config (a worker with a health check is replaced by a checked
+canary), and a non web kind that left the Procfile keeps running until
+`riku stop <app>`. Web facing kinds are always replaced one copy at a time.
 
 ---
 
