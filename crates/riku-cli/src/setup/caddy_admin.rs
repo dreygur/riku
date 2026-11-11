@@ -10,6 +10,9 @@
 //! and the directory is owned by `caddy` with mode `0750`, so only `caddy`
 //! and root reach the admin API. Every command runs with a fixed argv.
 
+// Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
+#![allow(clippy::question_mark)]
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -110,9 +113,6 @@ pub(super) fn move_admin_to_socket(group: &str, caddyfile_changed: bool) -> Resu
         Ok(changed) => changed,
         Err(e) => return Err(anyhow!("{e}")),
     };
-    if drop_in_changed && !systemctl_ok(&["daemon-reload"]) {
-        return Err(anyhow!("systemctl daemon-reload failed"));
-    }
     if let Err(e) = create_run_dir(group) {
         return Err(anyhow!("{e}"));
     }
@@ -132,10 +132,12 @@ pub(super) fn move_admin_to_socket(group: &str, caddyfile_changed: bool) -> Resu
                 ))
             }
         },
-        CaddyAction::Restart => match systemctl_ok(&["restart", "caddy"]) {
-            true => "restarted",
-            false => return Err(anyhow!("could not restart caddy onto the admin socket")),
-        },
+        CaddyAction::Restart => {
+            if let Err(e) = restart_with_current_unit() {
+                return Err(e);
+            }
+            "restarted"
+        }
     };
     if !wait_for_socket(Path::new(ADMIN_SOCKET), SOCKET_POLLS) {
         return Err(anyhow!(
@@ -143,6 +145,19 @@ pub(super) fn move_admin_to_socket(group: &str, caddyfile_changed: bool) -> Resu
         ));
     }
     display::step_done("Caddy", &format!("{done}, admin on {ADMIN_SOCKET}"));
+    Ok(())
+}
+
+/// Restarts Caddy after a `daemon-reload`, every time: an earlier init may
+/// have written the drop-in and then failed before reloading, and a rerun
+/// sees the drop-in unchanged. The reload does not touch the running Caddy.
+fn restart_with_current_unit() -> Result<()> {
+    if !systemctl_ok(&["daemon-reload"]) {
+        return Err(anyhow!("systemctl daemon-reload failed"));
+    }
+    if !systemctl_ok(&["restart", "caddy"]) {
+        return Err(anyhow!("could not restart caddy onto the admin socket"));
+    }
     Ok(())
 }
 

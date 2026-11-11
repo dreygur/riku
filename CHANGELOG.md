@@ -134,7 +134,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Every `riku init` restarted Caddy, which dropped every site for a moment
   even with nothing to change. Caddy is now restarted only to move its admin
   endpoint onto the socket (first run, or a changed drop-in), reloaded when
-  only the Caddyfile changed, and left running otherwise.
+  only the Caddyfile changed, and left running otherwise. Every such restart
+  runs `systemctl daemon-reload` first, so an init rerun after a failed
+  reload does not restart Caddy against the old unit.
 - `sudo riku init` on an upgrade left the old supervisor running: it ran
   `systemctl start`, which does nothing for a running service. A running
   supervisor is now restarted when it runs another binary than the
