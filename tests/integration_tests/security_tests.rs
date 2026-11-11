@@ -475,4 +475,34 @@ working_dir = "/tmp"
 
         Ok(())
     }
+
+    /// `config set` output reaches terminals, CI logs and agent
+    /// transcripts, so it names the keys it set and never their values.
+    #[test]
+    fn config_set_output_never_shows_the_value() {
+        let home = TempDir::new().unwrap();
+        fs::create_dir_all(home.path().join(".riku/apps/shop")).unwrap();
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_riku"))
+            .args(["config", "set", "shop", "API_KEY=s3cr3t-value"])
+            .env("HOME", home.path())
+            .env("XDG_CONFIG_HOME", home.path())
+            .env_remove("RIKU_ROOT")
+            .env_remove("SSH_ORIGINAL_COMMAND")
+            .current_dir(home.path())
+            .output()
+            .unwrap();
+        let shown = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            shown.contains("Set  API_KEY"),
+            "the key is not named:\n{shown}"
+        );
+        assert!(
+            !shown.contains("s3cr3t-value"),
+            "the value leaked:\n{shown}"
+        );
+    }
 }

@@ -32,8 +32,8 @@ mod table;
 mod tail;
 
 pub use rail::{
-    detail, detail_err, error, intro, outro, render_line, render_summary, step_done, step_failed,
-    summary, warn, Mark,
+    detail, detail_err, error, failure_already_shown, intro, mark_failure_shown, outro,
+    render_line, render_summary, step_done, step_failed, summary, warn, Mark,
 };
 pub use style::{paint, Paint, Stream};
 pub use table::{format_table, print_table, print_table_with_title};

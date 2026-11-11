@@ -43,10 +43,14 @@ fn parse(argv: &[String], via_ssh: bool) -> ArgMatches {
     }
 }
 
-/// Prints a failure on the output rail (`■  reason` on stderr) and exits 1.
+/// Prints a failure on the output rail (`■  reason` on stderr), unless the
+/// command already showed it in full (a failed deploy), and exits 1.
 fn main() {
     if let Err(e) = run() {
-        riku::util::display::error(&format!("{e:#}"));
+        let reason = format!("{e:#}");
+        if !riku::util::display::failure_already_shown(&reason) {
+            riku::util::display::error(&reason);
+        }
         std::process::exit(1);
     }
 }

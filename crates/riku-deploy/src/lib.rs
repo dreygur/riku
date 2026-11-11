@@ -101,7 +101,9 @@ pub fn do_deploy(
     let (_deploy_lock, dlog) = match prepare(app, paths) {
         Ok(prepared) => prepared,
         Err(e) => {
-            util::display::error(&format!("{e:#}"));
+            let reason = format!("{e:#}");
+            util::display::error(&reason);
+            util::display::mark_failure_shown(&reason);
             return Err(e);
         }
     };

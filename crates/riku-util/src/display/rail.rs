@@ -20,7 +20,31 @@
 //! per stream (see [`super::style`]); errors and warnings go to stderr,
 //! everything else to stdout.
 
+use std::sync::Mutex;
+
 use super::style::{paint, Paint, Stream};
+
+/// The last failure a command printed in full, so the binary's top level
+/// error print can skip repeating it.
+static SHOWN_FAILURE: Mutex<Option<String>> = Mutex::new(None);
+
+/// Record that `reason` was already shown to the user, with its context.
+pub fn mark_failure_shown(reason: &str) {
+    let mut shown = match SHOWN_FAILURE.lock() {
+        Ok(shown) => shown,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    *shown = Some(reason.to_string());
+}
+
+/// Whether `reason` is the failure [`mark_failure_shown`] recorded.
+pub fn failure_already_shown(reason: &str) -> bool {
+    let shown = match SHOWN_FAILURE.lock() {
+        Ok(shown) => shown,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    shown.as_deref() == Some(reason)
+}
 
 /// What a rail line marks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

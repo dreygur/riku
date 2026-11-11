@@ -133,6 +133,7 @@ impl DeployProgress {
     /// summary that says how to retry.
     pub(crate) fn failed(&mut self, err: &anyhow::Error, branch: &str) {
         let reason = format!("{err:#}");
+        display::mark_failure_shown(&reason);
         self.log.log_raw(&format!("[ERROR] {reason}"));
         let mut lines = reason.lines();
         let label = format!("{} failed", self.phase.label());

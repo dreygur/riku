@@ -16,7 +16,7 @@ pub fn cmd_config_show(paths: &RikuPaths, app: &str) -> Result<()> {
     let config_file = paths.env_root.join(&app).join("ENV");
     if config_file.exists() {
         let content = fs::read_to_string(&config_file)?;
-        display::note(content.trim());
+        println!("{}", content.trim());
     } else {
         display::warn(&format!("app '{}' not deployed, no config found.", app));
     }
@@ -31,13 +31,39 @@ pub fn cmd_config_get(paths: &RikuPaths, app: &str, key: &str) -> Result<()> {
     if config_file.exists() {
         let mut env = HashMap::new();
         let settings = parse_settings(&config_file, &mut env)?;
+        // Raw, for `$(riku config get app KEY)` in scripts.
         if let Some(val) = settings.get(key) {
-            display::note(val);
+            println!("{val}");
         }
     } else {
         display::note(&format!("no active configuration for '{}'", app));
     }
     Ok(())
+}
+
+/// Write `env` as the app's ENV, print `◇  <label>  <keys>`, then redeploy.
+/// Only key names are printed: values are often secrets, and this output
+/// reaches terminals, CI logs and agent transcripts.
+fn write_and_redeploy(
+    paths: &RikuPaths,
+    app: &str,
+    env: &HashMap<String, String>,
+    label: &str,
+    keys: &[&str],
+) -> Result<()> {
+    if let Err(e) = crate::deploy::env_setup::write_env(app, paths, env) {
+        return Err(e);
+    }
+    display::step_done(label, &keys.join(", "));
+    crate::deploy::env_setup::redeploy(app, paths)
+}
+
+/// The key of each `KEY=VALUE` argument, in order.
+fn set_keys(settings: &[String]) -> Vec<&str> {
+    settings
+        .iter()
+        .filter_map(|s| s.split_once('=').map(|(key, _)| key.trim()))
+        .collect()
 }
 
 /// Set config values (KEY=VALUE pairs), write config, trigger deploy.
@@ -50,13 +76,15 @@ pub fn cmd_config_set(paths: &RikuPaths, app: &str, settings: &[String]) -> Resu
         Ok(env) => env,
         Err(e) => return Err(e),
     };
-    crate::deploy::env_setup::update_env_and_redeploy(&app, paths, &env)
+    write_and_redeploy(paths, &app, &env, "Set", &set_keys(settings))
 }
 
-/// The app's ENV with `settings` applied, without writing it. Each argument
-/// is one `KEY=VALUE` pair taken as is, so a value may hold spaces; the
-/// caller's shell or the ssh split already removed any quoting. Refuses riku
-/// settings, malformed pairs and newlines. `app` must already be validated.
+/// The app's ENV with `settings` applied, without writing it or printing
+/// anything (the agent path calls it before asking for confirmation). Each
+/// argument is one `KEY=VALUE` pair taken as is, so a value may hold spaces;
+/// the caller's shell or the ssh split already removed any quoting. Refuses
+/// riku settings, malformed pairs and newlines. `app` must already be
+/// validated.
 pub fn config_after_set(
     paths: &RikuPaths,
     app: &str,
@@ -84,7 +112,6 @@ pub fn config_after_set(
                 );
             }
 
-            display::note(&format!("Setting {}={} for '{}'", k, v, app));
             env.insert(k, v);
         } else {
             anyhow::bail!("malformed setting '{}': expected KEY=VALUE", s);
@@ -103,11 +130,12 @@ pub fn cmd_config_unset(paths: &RikuPaths, app: &str, keys: &[String]) -> Result
         Ok(env) => env,
         Err(e) => return Err(e),
     };
-    crate::deploy::env_setup::update_env_and_redeploy(&app, paths, &env)
+    let names: Vec<&str> = keys.iter().map(String::as_str).collect();
+    write_and_redeploy(paths, &app, &env, "Unset", &names)
 }
 
-/// The app's ENV without `keys`, without writing it. `app` must already be
-/// validated.
+/// The app's ENV without `keys`, without writing it or printing anything.
+/// `app` must already be validated.
 pub fn config_after_unset(
     paths: &RikuPaths,
     app: &str,
@@ -119,10 +147,8 @@ pub fn config_after_unset(
         return Err(e);
     }
 
-    for s in keys {
-        if env.remove(s).is_some() {
-            display::note(&format!("Unsetting {} for '{}'", s, app));
-        }
+    for key in keys {
+        env.remove(key);
     }
     Ok(env)
 }
@@ -134,7 +160,7 @@ pub fn cmd_config_live(paths: &RikuPaths, app: &str) -> Result<()> {
     let live_config = paths.env_root.join(&app).join("LIVE_ENV");
     if live_config.exists() {
         let content = fs::read_to_string(&live_config)?;
-        display::note(content.trim());
+        println!("{}", content.trim());
     } else {
         display::warn(&format!("app '{}' not deployed, no config found.", app));
     }
