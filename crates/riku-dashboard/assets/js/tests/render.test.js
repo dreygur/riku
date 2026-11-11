@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { esc } from "../format.js";
+import { esc, uptimeText } from "../format.js";
 import { serviceControlsHtml } from "../render/containers.js";
 import { alertHtml, routeHtml } from "../render/meta.js";
 import { emptyHtml, pushHost } from "../render/panels.js";
@@ -44,4 +44,11 @@ test("the empty panel escapes the host in the copy commands, and hides loopback 
   assertNoRawMarkup(emptyHtml(EVIL));
   assert.equal(pushHost("127.0.0.1"), "<host>");
   assert.equal(pushHost("deploy.example.com"), "deploy.example.com");
+});
+
+test("the supervisor pill shows why the uptime is missing when the server says", () => {
+  const why = "not read as root, the pid file belongs to the deploy user";
+  assert.equal(uptimeText({ supervisor_uptime_seconds: null, supervisor_uptime_unavailable: why }), why);
+  assert.equal(uptimeText({ supervisor_uptime_seconds: null }), "uptime unknown");
+  assert.equal(uptimeText({ supervisor_uptime_seconds: 3700 }), "up 1h 1m");
 });

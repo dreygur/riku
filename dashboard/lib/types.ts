@@ -37,7 +37,10 @@ export interface AppState {
 export interface RikuState {
   generated_at: number;
   riku_version: string;
-  supervisor_uptime_seconds: number;
+  /** `null` when no supervisor holds the pid file, or when it was not read. */
+  supervisor_uptime_seconds: number | null;
+  /** Why the uptime was not read (the server ran as root); absent otherwise. */
+  supervisor_uptime_unavailable?: string;
   apps: AppState[];
 }
 

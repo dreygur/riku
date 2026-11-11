@@ -48,6 +48,7 @@
  * @typedef {object} StateData
  * @property {App[]} [apps]
  * @property {number | null} [supervisor_uptime_seconds]
+ * @property {string} [supervisor_uptime_unavailable] why the uptime was not read (a root run)
  * @property {{ name: string, version: string }} [engine]
  * @property {string} [riku_version]
  */

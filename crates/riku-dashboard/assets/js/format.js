@@ -51,6 +51,16 @@ export const fmtDur = (s) => {
   return m + "m";
 };
 
+/**
+ * The uptime part of the supervisor pill: the uptime, the server's reason
+ * when it could not read one (a root run), or "uptime unknown".
+ * @param {{ supervisor_uptime_seconds?: number | null, supervisor_uptime_unavailable?: string }} d
+ */
+export const uptimeText = (d) => {
+  if (d.supervisor_uptime_seconds != null) { return "up " + fmtDur(d.supervisor_uptime_seconds); }
+  return d.supervisor_uptime_unavailable || "uptime unknown";
+};
+
 /** @param {unknown} ms CPU time in milliseconds */
 export const fmtCpu = (ms) => {
   let s = Math.round(num(ms) / 1000);

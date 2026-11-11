@@ -27,8 +27,11 @@ function StatusText({ state }: { state: RikuState | null }) {
   if (!state) return <>connecting…</>;
   return (
     <>
-      <span className="text-foreground">v{state.riku_version}</span> · up{" "}
-      {fmtDur(state.supervisor_uptime_seconds)} ·{" "}
+      <span className="text-foreground">v{state.riku_version}</span> ·{" "}
+      {state.supervisor_uptime_seconds != null
+        ? `up ${fmtDur(state.supervisor_uptime_seconds)}`
+        : (state.supervisor_uptime_unavailable ?? "uptime unknown")}{" "}
+      ·{" "}
       <span className="text-foreground">{state.apps.length}</span> app
       {state.apps.length === 1 ? "" : "s"}
     </>
