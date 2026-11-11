@@ -93,6 +93,22 @@ fn stop_dropped_kinds(deploy: &WebDeploy<'_>, kept: &HashMap<String, String>) ->
     Ok(())
 }
 
+/// Run every check [`create_workers_generic`] makes before it changes a
+/// config, without changing anything, so a deploy can tell a refusal from a
+/// failure that left workers half replaced.
+pub(crate) fn check_workers(
+    app: &str,
+    processes: Option<&HashMap<String, String>>,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+    start_cmd: Option<&str>,
+) -> Result<()> {
+    match plan_workers(app, processes, env, paths, start_cmd, port_in_use) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
 /// [`create_workers_generic`] with the route sink web copies publish to.
 pub(crate) fn create_workers_with(
     app: &str,

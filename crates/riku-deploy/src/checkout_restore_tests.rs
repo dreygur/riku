@@ -3,7 +3,9 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::config::RikuPaths;
+use crate::progress::DeployProgress;
 use crate::releases::ReleaseLog;
+use crate::util::deploy_logger::DeployLogger;
 
 fn git(dir: &Path, args: &[&str]) -> String {
     let out = Command::new("git")
@@ -57,6 +59,28 @@ fn failed_deploy_puts_the_checkout_back_at_the_last_release() {
     assert_eq!(
         head, good,
         "after the failed deploy of {broken} the checkout must be back at the released {good}"
+    );
+}
+
+#[test]
+fn failure_after_workers_changed_keeps_the_new_checkout() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    let (_good, pushed) = app_with_release(&paths);
+    let log = DeployLogger::new(&paths.deploy_log_file("shop")).unwrap();
+    let mut progress = DeployProgress::new("shop", &paths, log);
+    progress.processes_changing();
+
+    crate::restore_checkout("shop", &paths, &mut progress);
+
+    let head = git(&paths.app_root.join("shop"), &["rev-parse", "HEAD"]);
+    assert_eq!(
+        head, pushed,
+        "the new worker configs run {pushed}, so the checkout must stay there"
+    );
+    assert!(
+        !progress.previous_release_runs(),
+        "the outro must not claim the previous release still runs"
     );
 }
 

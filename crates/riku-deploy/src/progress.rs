@@ -68,6 +68,9 @@ pub(crate) struct DeployProgress {
     phase_started: Instant,
     output: OutputTail,
     had_release: bool,
+    /// Set once the deploy starts rewriting worker configs; from then on the
+    /// previous release no longer runs as it was.
+    processes_changed: bool,
 }
 
 impl DeployProgress {
@@ -81,7 +84,25 @@ impl DeployProgress {
             phase_started: now,
             output: OutputTail::default(),
             had_release: !ReleaseLog::new(paths).list(app).is_empty(),
+            processes_changed: false,
         }
+    }
+
+    /// Record that worker configs are about to change, so a later failure
+    /// neither resets the checkout under them nor claims the old release
+    /// still runs.
+    pub(crate) fn processes_changing(&mut self) {
+        self.processes_changed = true;
+    }
+
+    pub(crate) fn processes_changed(&self) -> bool {
+        self.processes_changed
+    }
+
+    /// Whether the app still runs its previous release unchanged after a
+    /// failure at this point.
+    pub(crate) fn previous_release_runs(&self) -> bool {
+        self.had_release && !self.processes_changed && self.phase.keeps_previous_release()
     }
 
     /// `┌  Deploying <app>  <sha> "<subject>"`.
@@ -146,8 +167,7 @@ impl DeployProgress {
                 display::detail(&line);
             }
         }
-        let previous_kept = self.had_release && self.phase.keeps_previous_release();
-        display::outro(failure_outro(previous_kept));
+        display::outro(failure_outro(self.previous_release_runs()));
         display::summary(&as_pairs(&failure_summary(&self.app, branch)));
     }
 }

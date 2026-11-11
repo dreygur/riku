@@ -138,6 +138,10 @@ fn release_and_start(
         progress.done_timed(release_cmd);
     }
     progress.begin(Phase::Processes);
+    if let Err(e) = workers::check_workers(app, Some(workers), env, paths, start_cmd) {
+        return Err(e);
+    }
+    progress.processes_changing();
     if let Err(e) = env_setup::write_live_env(app, paths, env) {
         return Err(e);
     }

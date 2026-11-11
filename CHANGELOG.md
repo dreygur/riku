@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A deploy that failed after it had written the new worker configs (for
+  example when the router step failed) reset the checkout to the last
+  release, so the new configs ran the old code. The checkout now stays at
+  the pushed commit once worker configs changed, and the failure outro no
+  longer says the previous release was left as it was.
 - A deploy refused while reading copy counts or checking ports and sockets
   had already removed the enabled configs of the app's non-web workers, so
   they stayed stopped. Every check and count now runs before any config is
