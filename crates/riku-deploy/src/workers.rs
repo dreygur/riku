@@ -29,6 +29,7 @@ mod files;
 #[cfg(test)]
 mod mock_supervisor;
 mod pinned;
+mod plan;
 mod ports;
 pub(crate) mod process_runtime;
 mod scaling;
@@ -37,11 +38,11 @@ mod stop_wait;
 pub(crate) mod web_env;
 mod web_rollout;
 
+use pinned::port_in_use;
+use plan::plan_workers;
 pub use scaling::read_scaling_count;
 
 use files::{remove_stale_configs, write_worker_config};
-use pinned::{check_pinned_port_with, port_in_use};
-use socket::check_custom_socket;
 use web_env::{build_worker_env, clear_route_env, is_web_facing};
 use web_rollout::{roll_web_kind, stop_web_kind, WebDeploy, WebRoutes};
 
@@ -128,18 +129,14 @@ pub(crate) fn create_workers_probed(
     routes: &mut impl RouteSink,
     in_use: impl Fn(u16) -> bool,
 ) -> Result<()> {
-    if let Err(e) = check_pinned_port_with(app, env, paths, in_use) {
-        return Err(e);
-    }
-    if let Err(e) = check_custom_socket(app, env, paths) {
-        return Err(e);
-    }
+    let plan = match plan_workers(app, processes, env, paths, start_cmd, in_use) {
+        Ok(plan) => plan,
+        Err(e) => return Err(e),
+    };
     remove_stale_configs(app, paths);
-
-    let entries = match (processes, start_cmd) {
-        (Some(declared), _) if !declared.is_empty() => declared.clone(),
-        (_, Some(cmd)) => HashMap::from([(WEB_KIND.to_string(), cmd.to_string())]),
-        (_, None) => {
+    let plan = match plan {
+        Some(plan) => plan,
+        None => {
             echo(
                 "-----> No processes declared, skipping process creation",
                 "yellow",
@@ -148,7 +145,7 @@ pub(crate) fn create_workers_probed(
         }
     };
 
-    if !entries.keys().any(|kind| is_web_facing(kind)) {
+    if !plan.entries.keys().any(|kind| is_web_facing(kind)) {
         if let Err(e) = clear_route_env(app, paths) {
             return Err(e);
         }
@@ -160,35 +157,18 @@ pub(crate) fn create_workers_probed(
         env,
         paths,
     };
-    let processes: Vec<(&String, &String)> = entries
-        .iter()
-        .filter(|(kind, _)| !ONE_SHOT_KINDS.contains(&kind.as_str()))
-        .collect();
-    let mut counts = HashMap::new();
-    for (kind, _) in &processes {
-        match read_scaling_count(paths, app, kind) {
-            Ok(count) => counts.insert(kind.to_string(), count),
-            Err(e) => return Err(e),
-        };
-    }
-
-    for (kind, command) in processes {
-        let effective_cmd = if command.is_empty() {
-            start_cmd.unwrap_or(command.as_str())
-        } else {
-            command.as_str()
-        };
-        let count = counts[kind.as_str()];
-        let outcome = match (is_web_facing(kind), count) {
+    for planned in &plan.kinds {
+        let (kind, command) = (planned.kind.as_str(), planned.command.as_str());
+        let outcome = match (is_web_facing(kind), planned.count) {
             (true, 0) => stop_web_kind(&deploy, kind),
-            (true, want) => roll_web_kind(&deploy, kind, effective_cmd, want, routes),
-            (false, count) => write_copies(&deploy, kind, effective_cmd, count),
+            (true, want) => roll_web_kind(&deploy, kind, command, want, routes),
+            (false, count) => write_copies(&deploy, kind, command, count),
         };
         if let Err(e) = outcome {
             return Err(e);
         }
     }
-    stop_dropped_kinds(&deploy, &entries)
+    stop_dropped_kinds(&deploy, &plan.entries)
 }
 
 /// Create worker configs for every entry of `processes`, the app's process

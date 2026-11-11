@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A deploy refused while reading copy counts or checking ports and sockets
+  had already removed the enabled configs of the app's non-web workers, so
+  they stayed stopped. Every check and count now runs before any config is
+  removed. A `SCALING` line whose count is not a whole number (`worker=two`)
+  is now an error naming the line instead of quietly running one copy.
 - Atomic file writes (ENV files, worker configs, plugin records and the
   rest) opened their temp file `.<name>.tmp-<pid>` with create and
   truncate, so a symlink planted at that name was followed and the write
