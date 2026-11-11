@@ -1,15 +1,17 @@
 //! `riku doctor` check that a riku deploy key is authorized for `git push`.
 //!
 //! Security: under `sudo riku doctor` this reads the deploy user's
-//! `authorized_keys` as root. The file is opened with `O_NOFOLLOW` and
-//! `O_NONBLOCK` and must be a regular file, so a symlink or FIFO planted at
-//! that name is refused instead of followed or waited on. Only a count of
-//! riku lines leaves this module.
+//! `authorized_keys` as root. Root refuses a `.ssh` that is not a real
+//! directory (a symlink to another user's directory, say). The file is
+//! opened with `O_NOFOLLOW` and `O_NONBLOCK` and must be a regular file, so a
+//! symlink or FIFO planted at that name is refused instead of followed or
+//! waited on, and at most [`MAX_LEN`] bytes are read. Only a count of riku
+//! lines leaves this module.
 
 // Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
 #![allow(clippy::question_mark)]
 
-use std::fs::OpenOptions;
+use std::fs::{self, OpenOptions};
 use std::io::{self, Read};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
@@ -22,10 +24,39 @@ use super::Check;
 
 const NAME: &str = "ssh access";
 
+/// The most of `authorized_keys` read; a bigger file is refused.
+const MAX_LEN: u64 = 1024 * 1024;
+
+/// Who reads the keys.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reader {
+    /// Root, reading the deploy user's files.
+    Root,
+    /// The user whose home it is.
+    Owner,
+}
+
+impl Reader {
+    pub fn current() -> Reader {
+        if nix::unistd::Uid::effective().is_root() {
+            Reader::Root
+        } else {
+            Reader::Owner
+        }
+    }
+}
+
 /// Count the riku deploy keys in the `authorized_keys` of the user whose
 /// home is `home`.
-pub fn ssh_access(home: &Path) -> Check {
+pub fn ssh_access(home: &Path, reader: Reader) -> Check {
     let path = authorized_keys_path(home);
+    if reader == Reader::Root {
+        if let Some(ssh_dir) = path.parent() {
+            if let Err(e) = real_directory(ssh_dir) {
+                return Check::warn(NAME, format!("could not read {}: {e}", path.display()));
+            }
+        }
+    }
     let text = match read_regular_file(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
@@ -50,8 +81,22 @@ pub fn ssh_access(home: &Path) -> Check {
     }
 }
 
+/// Fails unless `dir` itself, not a link to one, is a directory. A missing
+/// one passes, so the read reports the missing file.
+fn real_directory(dir: &Path) -> io::Result<()> {
+    match fs::symlink_metadata(dir) {
+        Ok(meta) if meta.is_dir() => Ok(()),
+        Ok(_) => Err(io::Error::other(format!(
+            "{} is not a directory",
+            dir.display()
+        ))),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
 fn read_regular_file(path: &Path) -> io::Result<String> {
-    let mut file = match OpenOptions::new()
+    let file = match OpenOptions::new()
         .read(true)
         .custom_flags((OFlag::O_NOFOLLOW | OFlag::O_NONBLOCK).bits())
         .open(path)
@@ -65,10 +110,17 @@ fn read_regular_file(path: &Path) -> io::Result<String> {
         Err(e) => return Err(e),
     }
     let mut text = String::new();
-    match file.read_to_string(&mut text) {
-        Ok(_) => Ok(text),
-        Err(e) => Err(e),
+    let read = match file.take(MAX_LEN + 1).read_to_string(&mut text) {
+        Ok(read) => read,
+        Err(e) => return Err(e),
+    };
+    if read as u64 > MAX_LEN {
+        return Err(io::Error::other(format!(
+            "larger than {} MiB",
+            MAX_LEN / 1024 / 1024
+        )));
     }
+    Ok(text)
 }
 
 #[cfg(test)]

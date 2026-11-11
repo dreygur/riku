@@ -197,7 +197,7 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     checks.push(checks::plugins(paths));
     checks.push(checks::disk(paths));
     checks.push(match &home {
-        Some(home) => ssh_check::ssh_access(home),
+        Some(home) => ssh_check::ssh_access(home, ssh_check::Reader::current()),
         None => Check::warn(
             "ssh access",
             "home not found, cannot locate authorized_keys",
