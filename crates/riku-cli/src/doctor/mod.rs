@@ -172,7 +172,9 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     checks.push(checks::directories(paths));
     checks.extend(binary_check::binary());
     checks.push(checks::systemd_service());
+    let deploy_user = crate::setup::deploy_user::deploy_user_name();
     checks.extend(supervisor_check::supervisor_binary(
+        supervisor_check::Runner::current(&deploy_user),
         &paths.riku_root.join("supervisor.pid"),
         Path::new("/proc"),
     ));

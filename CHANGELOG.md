@@ -74,6 +74,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   running the plugin. An app deployed by an older riku has none; restart
   then runs the plugin's `env` as before and says so, until the next
   deploy.
+- `sudo riku doctor` said nothing about the supervisor binary, since root
+  no longer reads the deploy user's pid file. It now prints a `▲` line
+  that the check was skipped, with the command to run it as the deploy
+  user (`Run as riku: riku doctor`).
 - A push whose `LIVE_ENV` could not be written left the checkout at the
   pushed commit while the old workers kept running from it, and said the
   previous release no longer ran. Nothing has changed at that point, so

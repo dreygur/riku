@@ -6,6 +6,11 @@
 //! owned by the effective user, so a planted link, a FIFO or another user's
 //! file reads as no pid file and never blocks. The lock is probed on the same
 //! handle and at most [`MAX_LEN`] bytes are read from it.
+//!
+//! Root still opens the deploy user's file this way, but only its metadata
+//! is read: the owner check fails, so neither the lock nor the pid is used
+//! and root sees no pid file. A root caller that needs the answer says it
+//! skipped the check (`riku doctor`'s supervisor binary line).
 
 // Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
 #![allow(clippy::question_mark)]
