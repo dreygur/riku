@@ -36,7 +36,12 @@ pub fn setup_systemd_service(paths: &RikuPaths, router: &Router) -> Result<()> {
         Ok(change) => change,
         Err(e) => return Err(e),
     };
-    user_systemctl(&["daemon-reload"]);
+    if !user_systemctl(&["daemon-reload"]) {
+        return Err(anyhow::anyhow!(
+            "systemctl --user daemon-reload failed, so the riku user unit was not restarted \
+             with the new unit"
+        ));
+    }
     let mut done = vec!["user unit written"];
     if user_systemctl(&["enable", "riku"]) {
         done.push("enabled");

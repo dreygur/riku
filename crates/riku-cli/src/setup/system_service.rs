@@ -80,10 +80,15 @@ pub(super) fn systemctl_ok(args: &[&str]) -> bool {
 /// which of those worked. A supervisor that already runs is restarted only
 /// when it runs another binary than [`ROOT_BINARY`] or `unit` changed (see
 /// [`super::supervisor_binary`]). Whether the supervisor stays up is checked
-/// by the init summary. An error when systemd cannot say whether the
-/// service runs.
+/// by the init summary. An error when `daemon-reload` fails, since a
+/// restart would then run the old unit text, or when systemd cannot say
+/// whether the service runs.
 fn start_riku_service(unit: UnitChange) -> Result<()> {
-    let _ = systemctl_ok(&["daemon-reload"]);
+    if !systemctl_ok(&["daemon-reload"]) {
+        return Err(anyhow!(
+            "systemctl daemon-reload failed, so riku.service was not restarted with the new unit"
+        ));
+    }
     let mut done = vec!["riku.service written"];
     if systemctl_ok(&["enable", "riku"]) {
         done.push("enabled");
