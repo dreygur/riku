@@ -27,7 +27,8 @@ pub fn minimal_config(command: &str, working_dir: &str, log_file: &str) -> Worke
             grace_period: 2,
             max_restarts: 3,
             health_check: None,
-            isolation: None,
+            limits: None,
+            sandbox: None,
         },
     }
 }

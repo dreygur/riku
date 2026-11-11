@@ -5,7 +5,6 @@ Component package located at `crates/riku-supervisor/src/process/isolation`.
 
 ## Interface
 - `exec_isolated` [linux.rs:exec_isolated] (fn)
-- `NamespaceConfig` [mod.rs:NamespaceConfig] (struct)
 - `exec_isolated` [mod.rs:exec_isolated] (fn)
 
 ## Invariants

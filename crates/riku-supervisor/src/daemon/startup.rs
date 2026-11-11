@@ -52,17 +52,17 @@ impl Supervisor {
         }
     }
 
-    /// Take over the supervisor's delegated cgroup so isolated workers can
-    /// get their own. Non-fatal: isolation is opt-in per worker, so a riku
-    /// deployment that never uses it still runs, and the diagnostic names
-    /// the fix at boot instead of at the first isolated deploy.
+    /// Take over the supervisor's delegated cgroup so workers that set a
+    /// resource limit can get their own. Non-fatal: limits are opt-in per
+    /// worker, so a riku deployment that never sets one still runs, and the
+    /// diagnostic names the fix at boot instead of at the first such deploy.
     pub(super) fn check_cgroup_isolation(&mut self) {
         match crate::cgroups::take_over_own() {
             Ok(tree) => {
                 let missing = tree.missing_controllers();
                 if !missing.is_empty() {
                     report_startup_problem(&format!(
-                        "cgroup controllers not delegated to riku: {}; isolated workers \
+                        "cgroup controllers not delegated to riku: {}; workers \
                          that set those limits will refuse to start",
                         missing.join(", ")
                     ));

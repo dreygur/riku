@@ -1,6 +1,7 @@
 //! cgroups v2 resource constraints for spawned worker processes.
 //!
-//! Provisions one cgroup per isolated worker under the supervisor's own
+//! Provisions one cgroup per worker that sets a resource limit or a
+//! sandbox, under the supervisor's own
 //! delegated cgroup (see [`tree`]) and writes `memory.max`, `cpu.max` and
 //! `pids.max` before the worker starts running, so it is constrained from
 //! its very first instruction.
@@ -96,7 +97,7 @@ pub struct WorkerCgroup {
 
 /// Render a structured startup diagnostic for a failed [`take_over_own`]:
 /// what failed, why it matters, and how to fix it, so the operator sees it
-/// at boot instead of the first time a worker asks for isolation.
+/// at boot instead of the first time a worker sets a resource limit.
 pub fn startup_diagnostic(err: &anyhow::Error) -> String {
     format!(
         "riku startup diagnostic\n\
@@ -104,7 +105,7 @@ pub fn startup_diagnostic(err: &anyhow::Error) -> String {
          \x20 check     : write access to the supervisor's own cgroup (from /proc/self/cgroup)\n\
          \x20 status    : FAILED\n\
          \x20 detail    : {err:#}\n\
-         \x20 impact    : any worker with `isolation` enabled in its config refuses to start\n\
+         \x20 impact    : any worker that sets a resource limit or a sandbox refuses to start\n\
          \x20 remedy    : add Delegate=yes to the riku unit (re-run riku init to rewrite it)\n\
          \x20             and restart it; cgroup v2 must be mounted at {mount}",
         mount = tree::CGROUP_MOUNT,

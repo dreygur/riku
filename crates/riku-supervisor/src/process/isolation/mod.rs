@@ -42,25 +42,10 @@
 //! doesn't apply here.
 
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[cfg(target_os = "linux")]
 mod linux;
-
-/// Namespace isolation settings for a worker process. Used by
-/// `spawn_process` to decide whether to exec the worker directly or route
-/// it through `riku __ns-shim`: see module docs for why.
-#[derive(Debug, Clone, Default)]
-pub struct NamespaceConfig {
-    /// Master switch. When false, the worker runs with the same namespaces
-    /// as the supervisor (today's behavior).
-    pub enabled: bool,
-    /// Directory the worker's mount namespace is rooted at via
-    /// `pivot_root`. Must contain everything the worker needs (its app
-    /// directory, libraries, `/proc`, `/dev`, etc.) since the rest of the
-    /// host filesystem becomes unreachable. Required when `enabled`.
-    pub isolated_root: Option<PathBuf>,
-}
 
 /// Set up namespace isolation rooted at `root` and exec `command` (via
 /// `sh -c`) inside it. Called from the `riku __ns-shim` subcommand handler,

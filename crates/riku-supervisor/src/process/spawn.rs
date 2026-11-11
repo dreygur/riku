@@ -12,7 +12,6 @@ use std::time::{Duration, Instant};
 
 use crate::config::WorkerConfig;
 
-use super::isolation::NamespaceConfig;
 use super::ProcessManager;
 
 impl ProcessManager {
@@ -63,47 +62,36 @@ impl ProcessManager {
                 .map(|g| g.gid)
         });
 
-        // Provision the worker's cgroup (if isolation is enabled) before
-        // spawning, so the constraints already exist when the worker joins
-        // it from within pre_exec.
+        // Provision the worker's cgroup (when it sets a limit or a sandbox)
+        // before spawning, so the constraints already exist when the
+        // worker joins it from within pre_exec.
         let cgroup = match self.worker_cgroup(config) {
             Ok(cgroup) => cgroup,
             Err(e) => return Err(e),
         };
         let cgroup_for_child = cgroup.clone();
 
-        let namespace_config = NamespaceConfig {
-            enabled: config.options.isolation.is_some(),
-            isolated_root: config
-                .options
-                .isolation
-                .as_ref()
-                .map(|opts| std::path::PathBuf::from(&opts.root_dir)),
-        };
-
-        // When namespace isolation is enabled, exec the `riku __ns-shim`
-        // subcommand instead of the worker command directly: it does the
-        // unshare/fork/exec dance itself, from its own `main`, well after
-        // this `Command::spawn()` has returned. See isolation.rs for why
+        // A sandboxed worker is started through the `riku __ns-shim`
+        // subcommand instead of directly: it does the unshare/fork/exec
+        // dance itself, from its own `main`, well after this
+        // `Command::spawn()` has returned. See `isolation/mod.rs` for why
         // that fork can't happen inside this process's own `pre_exec`.
-        let mut cmd = if namespace_config.enabled {
-            let shim_exe = match std::env::current_exe() {
-                Ok(exe) => exe,
-                Err(e) => return Err(e.into()),
-            };
-            let Some(isolated_root) = namespace_config.isolated_root.as_ref() else {
-                return Err(anyhow::anyhow!(
-                    "isolation enabled but no root_dir configured"
-                ));
-            };
-            let mut c = Command::new(shim_exe);
-            c.arg("__ns-shim").env("RIKU_NS_ROOT", isolated_root);
-            c.env("RIKU_NS_CMD", &config.worker.command);
-            c
-        } else {
-            let mut c = Command::new("sh");
-            c.arg("-c").arg(&config.worker.command);
-            c
+        let mut cmd = match &config.options.sandbox {
+            Some(sandbox) => {
+                let shim_exe = match std::env::current_exe() {
+                    Ok(exe) => exe,
+                    Err(e) => return Err(e.into()),
+                };
+                let mut c = Command::new(shim_exe);
+                c.arg("__ns-shim").env("RIKU_NS_ROOT", &sandbox.root_dir);
+                c.env("RIKU_NS_CMD", &config.worker.command);
+                c
+            }
+            None => {
+                let mut c = Command::new("sh");
+                c.arg("-c").arg(&config.worker.command);
+                c
+            }
         };
 
         // Clone resource limits for use in pre_exec closure

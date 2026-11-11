@@ -26,7 +26,8 @@ fn test_worker_config_serialization() {
             grace_period: default_grace_period(),
             max_restarts: default_max_restarts(),
             health_check: None,
-            isolation: None,
+            limits: None,
+            sandbox: None,
         },
     };
 
@@ -183,6 +184,67 @@ fn test_create_worker_config_health_check_defaults() {
 
     // Health check should be None if not configured
     assert!(config.options.health_check.is_none());
+}
+
+fn config_from_env(pairs: &[(&str, &str)]) -> WorkerConfig {
+    let env = pairs
+        .iter()
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect();
+    create_worker_config("app", "web", "run", 1, env, "/srv/app", "/srv/log")
+}
+
+#[test]
+fn memory_limit_without_isolation_root_gets_a_cgroup_and_no_sandbox() {
+    let config = config_from_env(&[("RIKU_ISOLATION_MAX_MEMORY_MB", "256")]);
+
+    let limits = config
+        .options
+        .limits
+        .expect("a memory limit alone must still give the worker cgroup limits");
+    assert_eq!(limits.max_memory_bytes, Some(256 * 1024 * 1024));
+    assert!(
+        config.options.sandbox.is_none(),
+        "limits alone must not chroot or unshare namespaces"
+    );
+}
+
+#[test]
+fn isolation_root_turns_on_the_sandbox_and_keeps_the_limits() {
+    let config = config_from_env(&[
+        ("RIKU_ISOLATION_ROOT", "/srv/jail"),
+        ("RIKU_ISOLATION_MAX_PIDS", "64"),
+    ]);
+
+    let sandbox = config.options.sandbox.expect("RIKU_ISOLATION_ROOT is set");
+    assert_eq!(sandbox.root_dir, "/srv/jail");
+    let pids = config.options.limits.and_then(|limits| limits.max_pids);
+    assert_eq!(pids, Some(64), "the sandbox must not drop the limits");
+}
+
+#[test]
+fn cpu_period_alone_asks_for_no_cgroup() {
+    let config = config_from_env(&[("RIKU_ISOLATION_CPU_PERIOD_US", "50000")]);
+
+    assert!(
+        config.options.limits.is_none(),
+        "a period without a quota limits nothing: {:?}",
+        config.options.limits
+    );
+}
+
+#[test]
+fn limits_and_sandbox_survive_a_toml_round_trip() {
+    let config = config_from_env(&[
+        ("RIKU_ISOLATION_ROOT", "/srv/jail"),
+        ("RIKU_ISOLATION_CPU_QUOTA_US", "20000"),
+    ]);
+
+    let text = toml::to_string(&config).unwrap();
+    let parsed: WorkerConfig = toml::from_str(&text).unwrap();
+    let quota = parsed.options.limits.and_then(|limits| limits.cpu_quota_us);
+    assert_eq!(quota, Some(20000), "written TOML:\n{text}");
+    assert!(parsed.options.sandbox.is_some(), "written TOML:\n{text}");
 }
 
 #[test]

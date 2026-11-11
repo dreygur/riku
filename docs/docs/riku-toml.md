@@ -71,6 +71,31 @@ from the app's ENV file.
 | `secrets.ghcr_username` | string, server only | `RIKU_GHCR_USERNAME` |
 | `secrets.ghcr_token` | string, server only | `RIKU_GHCR_TOKEN` |
 
+### cgroup limits and the sandbox
+
+The `limits.isolation_*` keys are per worker cgroup v2 limits. Setting
+`isolation_max_memory_mb` (`memory.max`), `isolation_max_pids` (`pids.max`)
+or `isolation_cpu_quota_us` (`cpu.max`, as quota per
+`isolation_cpu_period_us`, default 100000) puts each of the app's workers in
+its own cgroup under the supervisor's, with those limits. Nothing else
+changes: the worker keeps the host filesystem and network, so a web worker
+still answers the router. `isolation_cpu_period_us` alone limits nothing
+and asks for no cgroup.
+
+The supervisor can only create these cgroups when its systemd unit has
+`Delegate=yes`, which `riku init` writes. Without it the supervisor prints a
+cgroup diagnostic at startup, and a worker that sets one of these limits
+refuses to start rather than run unlimited.
+
+The full sandbox is a separate switch: the `RIKU_ISOLATION_ROOT` env var,
+set with `riku config set <app> RIKU_ISOLATION_ROOT=<dir>`. It starts the worker inside a `pivot_root` to
+that directory, which must hold everything the worker needs, with its own
+PID, mount and network namespaces. The network namespace leaves the worker
+only its own loopback, so a sandboxed worker cannot reach the router, a
+database or anything else on the host network. Use it only for self
+contained workers, never for `web`. A sandboxed worker also gets its own
+cgroup, with the limits above when they are set.
+
 An unknown key, a value of the wrong type, or a malformed file stops the
 deploy with an error naming the file, the line and the key. The error never
 prints the value.

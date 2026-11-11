@@ -336,6 +336,10 @@ phase 4 come after.
   Owner decision 2026-11-11: the flag is removed; deploys always stop
   non web kinds first and stop kinds no longer declared. Also fixed: the first push no longer prints
   `Linked <repo> to <repo>` above the deploy intro (debug log only).
+  Also fixed: the `limits.isolation_*` settings were only applied with
+  `RIKU_ISOLATION_ROOT`, whose network namespace cuts a web worker off;
+  owner decision "limits alone": a limit now gives the worker its own
+  cgroup without chroot or namespaces (`config/limits.rs`).
 
 - Checked 2026-11-11: the two nginx bugs once listed here
   (`RIKU_NGINX_CACHE_PREFIXES`, `RIKU_NGINX_CATCH_ALL`) are gone; #73

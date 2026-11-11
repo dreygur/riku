@@ -24,8 +24,8 @@ Two of these are opt-in and are left unset unless you configure them:
 - **Memory** caps *virtual* address space (`RLIMIT_AS`). Node/v8 and the JVM
   reserve multiple GB of virtual memory at startup and abort under a tight cap,
   so applying one by default would make those builds and workers unrunnable.
-  Resident memory for isolated workers is bounded by the cgroup `memory.max`
-  instead (see [Supervisor](supervisor.md)).
+  Resident memory is bounded by the cgroup `memory.max` instead, set with
+  `limits.isolation_max_memory_mb` (see [riku.toml](riku-toml.md)).
 - **Processes** (`RLIMIT_NPROC`) is UID-wide, not per-worker: every process the
   deploy user owns counts against it, including the supervisor and your shell.
   A per-app-looking number set here can lock the whole user out of forking.
