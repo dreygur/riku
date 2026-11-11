@@ -35,6 +35,7 @@ macro_rules! parse_env_opt {
 }
 
 mod limits;
+mod options_file;
 pub use limits::{Sandbox, WorkerLimits};
 
 /// The main worker configuration structure stored in TOML files.
@@ -61,30 +62,25 @@ impl WorkerInfo {
     }
 }
 
-/// Options for the worker process.
+/// Options for the worker process. Read through [`options_file`], which
+/// holds the defaults and accepts the older `[options.isolation]` layout.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(from = "options_file::OptionsFile")]
 pub struct WorkerOptions {
     pub working_dir: String,
     pub log_file: String,
-    #[serde(default)]
     pub uid: Option<String>,
-    #[serde(default)]
     pub gid: Option<String>,
-    #[serde(default = "default_timeout")]
     pub timeout: u64,
-    #[serde(default = "default_grace_period")]
     pub grace_period: u64,
-    #[serde(default = "default_max_restarts")]
     pub max_restarts: u32,
-    #[serde(default)]
     pub health_check: Option<HealthCheck>,
     /// cgroup limits. `Some` puts the worker in its own cgroup with these
     /// limits, without any sandbox.
-    #[serde(default)]
     pub limits: Option<WorkerLimits>,
     /// The opt in chroot and namespace sandbox. See [`Sandbox`] for why it
     /// is off by default.
-    #[serde(default, rename = "isolation")]
+    #[serde(rename = "isolation")]
     pub sandbox: Option<Sandbox>,
 }
 

@@ -50,10 +50,12 @@ impl WorkerLimits {
             ),
             max_pids: parse_env_opt!(env, "RIKU_ISOLATION_MAX_PIDS", u64),
         };
-        let limits_something = limits.max_memory_bytes.is_some()
-            || limits.cpu_quota_us.is_some()
-            || limits.max_pids.is_some();
-        limits_something.then_some(limits)
+        limits.limits_something().then_some(limits)
+    }
+
+    /// Whether a memory, CPU quota or pids limit is set.
+    pub(super) fn limits_something(&self) -> bool {
+        self.max_memory_bytes.is_some() || self.cpu_quota_us.is_some() || self.max_pids.is_some()
     }
 }
 
@@ -64,10 +66,9 @@ impl WorkerLimits {
 /// router, a database or anything else on the host network.
 ///
 /// Serialized as `[options.isolation]`, the key older configs used for
-/// both the sandbox and the limits, so a config written before the split
-/// still starts sandboxed. Its limits are read again from the app's env on
-/// the next deploy or restart.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+/// both the sandbox and the limits. `options_file` reads it, along with any
+/// limits an older config kept beside `root_dir`.
+#[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct Sandbox {
     /// Directory to `pivot_root` the worker into. Must hold everything the
     /// worker needs (app code, libraries, `/proc`, `/dev`).

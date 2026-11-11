@@ -248,6 +248,46 @@ fn limits_and_sandbox_survive_a_toml_round_trip() {
 }
 
 #[test]
+fn a_config_from_before_the_split_keeps_its_limits_and_sandbox() {
+    let text = r#"
+[worker]
+app = "app"
+kind = "web"
+command = "run"
+ordinal = 1
+
+[env]
+
+[options]
+working_dir = "/srv/app"
+log_file = "/srv/log"
+
+[options.isolation]
+root_dir = "/srv/jail"
+max_memory_bytes = 268435456
+cpu_quota_us = 20000
+cpu_period_us = 50000
+max_pids = 64
+"#;
+
+    let parsed: WorkerConfig = toml::from_str(text).unwrap();
+
+    let expected = WorkerLimits {
+        max_memory_bytes: Some(268435456),
+        cpu_quota_us: Some(20000),
+        cpu_period_us: 50000,
+        max_pids: Some(64),
+    };
+    assert_eq!(
+        parsed.options.limits,
+        Some(expected),
+        "old limits must not be dropped"
+    );
+    let root = parsed.options.sandbox.map(|sandbox| sandbox.root_dir);
+    assert_eq!(root.as_deref(), Some("/srv/jail"));
+}
+
+#[test]
 fn test_create_worker_config_with_worker_processes() {
     let mut env = HashMap::new();
     env.insert(
