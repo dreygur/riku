@@ -100,7 +100,7 @@ pub fn cmd_supervisor(paths: &RikuPaths) -> Result<()> {
 /// Stop an app by removing its worker configs and its copies' sockets.
 fn do_stop(paths: &RikuPaths, app: &str) -> Result<()> {
     match crate::deploy::app_stop::stop_procfile_app(app, paths) {
-        Ok(0) => display::error(&format!("app '{}' not deployed!", app)),
+        Ok(0) => display::error(&format!("app '{}' is not deployed", app)),
         Ok(_) => display::info(&format!("Stopped app '{}'.", app)),
         Err(e) => return Err(anyhow::anyhow!("cannot stop '{app}': {e}")),
     }
