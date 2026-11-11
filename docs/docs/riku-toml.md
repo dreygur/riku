@@ -101,8 +101,9 @@ The full sandbox is a separate switch, the server only key
 set it, and `riku config set` refuses `RIKU_ISOLATION_ROOT` like every other
 key in the table above. The value must be an absolute path other than `/`,
 with no `..` part, made only of letters, digits and `. - _ /`. The
-supervisor refuses to start a sandboxed worker whose root is not an existing
-directory. It starts the worker inside a `pivot_root` to
+supervisor refuses to start a sandboxed worker whose root breaks that rule
+(a `RIKU_ISOLATION_ROOT` left in an older ENV file included) or is not an
+existing directory. It starts the worker inside a `pivot_root` to
 that directory, which must hold everything the worker needs, with its own
 PID, mount and network namespaces. The network namespace leaves the worker
 only its own loopback, so a sandboxed worker cannot reach the router, a

@@ -83,15 +83,19 @@ impl Sandbox {
         })
     }
 
-    /// Refuses a `root_dir` that is not an absolute path to an existing
-    /// directory. `riku settings set` checks the path's shape, but a worker
-    /// config can also come from an older ENV file or be edited by hand, and
-    /// the directory can vanish after it was set.
+    /// Refuses a `root_dir` without the shape `riku settings set` requires
+    /// (riku-config `is_isolation_root`) or that is not an existing
+    /// directory. A worker config can also come from an older ENV file or be
+    /// edited by hand, and the directory can vanish after it was set.
     pub fn check_root(&self) -> anyhow::Result<()> {
-        let root = Path::new(&self.root_dir);
-        if !root.is_absolute() {
-            anyhow::bail!("sandbox root {} is not an absolute path", self.root_dir);
+        if !riku_config::app_settings::is_isolation_root(&self.root_dir) {
+            anyhow::bail!(
+                "sandbox root {} must be an absolute path below / with no .. made of \
+                 letters, digits and . - _ /",
+                self.root_dir
+            );
         }
+        let root = Path::new(&self.root_dir);
         if !root.is_dir() {
             anyhow::bail!(
                 "sandbox root {} is not an existing directory",

@@ -52,7 +52,7 @@ fn check_text(key: &Key, text: &str, source: Source) -> Result<(), String> {
     {
         return Err(format!("{path} must be a relative path inside the app"));
     }
-    if path == "limits.isolation_root" && !plain_absolute_dir(text) {
+    if path == "limits.isolation_root" && !is_isolation_root(text) {
         return Err(format!(
             "{path} must be an absolute path below / with no .. made of letters, digits and . - _ /"
         ));
@@ -60,9 +60,11 @@ fn check_text(key: &Key, text: &str, source: Source) -> Result<(), String> {
     Ok(())
 }
 
-/// An absolute path other than `/`, with no `..` part, made only of
-/// letters, digits and `. - _ /`.
-fn plain_absolute_dir(text: &str) -> bool {
+/// Whether `text` has the shape a sandbox root must have: an absolute path
+/// other than `/`, with no `..` part, made only of letters, digits and
+/// `. - _ /`. The settings check and the supervisor both use it, so a root
+/// from any source meets the same rule.
+pub fn is_isolation_root(text: &str) -> bool {
     text.starts_with('/')
         && !text.trim_matches('/').is_empty()
         && !text.split('/').any(|part| part == "..")

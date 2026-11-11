@@ -27,6 +27,8 @@ mod parse;
 mod processes;
 mod values;
 
+pub use values::is_isolation_root;
+
 use keys::{EnvName, Key};
 use values::Value;
 

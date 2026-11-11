@@ -252,6 +252,31 @@ fn sandbox_root_must_be_an_existing_absolute_directory() {
     );
 }
 
+/// A root from an older ENV file skipped the settings check, so the
+/// supervisor applies the same shape rule to every root it is given.
+#[test]
+fn sandbox_root_must_have_the_settings_shape_whatever_its_source() {
+    let tmp = tempfile::tempdir().unwrap();
+    let spaced = tmp.path().join("a b");
+    std::fs::create_dir(&spaced).unwrap();
+    let dotted = tmp.path().join("x");
+    std::fs::create_dir(&dotted).unwrap();
+
+    for root in [
+        spaced.display().to_string(),
+        format!("{}/..", dotted.display()),
+        "/".to_string(),
+    ] {
+        let sandbox = Sandbox {
+            root_dir: root.clone(),
+        };
+        assert!(
+            sandbox.check_root().is_err(),
+            "accepted {root} as a sandbox root"
+        );
+    }
+}
+
 #[test]
 fn cpu_period_alone_asks_for_no_cgroup() {
     let config = config_from_env(&[("RIKU_ISOLATION_CPU_PERIOD_US", "50000")]);
