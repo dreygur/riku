@@ -3,7 +3,7 @@
 use std::process::Command;
 
 use crate::config::router::Router;
-use crate::util::echo;
+use crate::util::display;
 
 /// The router's display name, `None` for a plugin router.
 fn router_label(router: &Router) -> Option<&'static str> {
@@ -16,37 +16,21 @@ fn router_label(router: &Router) -> Option<&'static str> {
 
 /// Tell a non-root caller what a root init would also set up.
 pub fn warn_not_root(router: &Router) {
-    echo("⚠ Warning: Not running as root", "yellow");
-    echo("  Some features require root privileges:", "yellow");
-    echo("    - System-wide systemd service", "yellow");
-    if let Some(label) = router_label(router) {
-        echo(&format!("    - {label} configuration"), "yellow");
-    }
-    echo("  Run 'sudo riku init' for full installation.", "yellow");
-    echo("", "");
+    let extra = match router_label(router) {
+        Some(label) => format!("the system service and the {label} configuration"),
+        None => "the system service".to_string(),
+    };
+    display::warn("Not running as root");
+    display::detail(&format!("sudo riku init also sets up {extra}"));
 }
 
-/// Report missing git. The router binary is checked earlier, when init
-/// chooses the router (see [`super::router_choice`]).
+/// Report missing git. The router binary is checked when init chooses the
+/// router (see [`super::router_choice`]).
 pub fn check_prerequisites() {
-    echo("Checking prerequisites...", "");
-    let mut missing_deps = Vec::new();
-
-    if Command::new("git").arg("--version").output().is_err() {
-        missing_deps.push("git");
+    if Command::new("git").arg("--version").output().is_ok() {
+        display::step_done("Prerequisites", "git");
+        return;
     }
-
-    if !missing_deps.is_empty() {
-        echo(
-            &format!("  ⚠ Missing dependencies: {}", missing_deps.join(", ")),
-            "yellow",
-        );
-        echo(
-            &format!("  Install with: apt install {}", missing_deps.join(" ")),
-            "yellow",
-        );
-    } else {
-        echo("  ✓ All required dependencies found", "green");
-    }
-    echo("", "");
+    display::warn("Missing git");
+    display::detail("Install it with: apt install git");
 }

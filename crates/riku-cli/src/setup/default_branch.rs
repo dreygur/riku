@@ -14,8 +14,6 @@ use std::process::{Command, Output};
 
 use anyhow::{anyhow, Result};
 
-use crate::util::echo;
-
 /// Init reads this to override the branch.
 pub const BRANCH_ENV: &str = "RIKU_DEFAULT_BRANCH";
 const DEFAULT_BRANCH: &str = "main";
@@ -85,16 +83,13 @@ fn write_default_branch(home: &Path, branch: &str) -> Result<()> {
 /// Set the default branch for repos created under `home`.
 ///
 /// `requested` is the `RIKU_DEFAULT_BRANCH` value. Without one, a branch
-/// already in the user's git config wins over `main`.
+/// already in the user's git config wins over `main`. Returns the branch.
 #[allow(clippy::question_mark)]
-pub fn set_default_branch(home: &Path, requested: Option<String>) -> Result<()> {
+pub fn set_default_branch(home: &Path, requested: Option<String>) -> Result<String> {
     let branch = match requested {
         Some(branch) => branch,
         None => match read_default_branch(home) {
-            Ok(Some(existing)) => {
-                echo(&format!("      ✓ Default branch: {existing}"), "green");
-                return Ok(());
-            }
+            Ok(Some(existing)) => return Ok(existing),
             Ok(None) => DEFAULT_BRANCH.to_string(),
             Err(e) => return Err(e),
         },
@@ -105,8 +100,7 @@ pub fn set_default_branch(home: &Path, requested: Option<String>) -> Result<()> 
     if let Err(e) = write_default_branch(home, &branch) {
         return Err(e);
     }
-    echo(&format!("      ✓ Default branch: {branch}"), "green");
-    Ok(())
+    Ok(branch)
 }
 
 #[cfg(test)]

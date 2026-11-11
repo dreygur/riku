@@ -6,7 +6,7 @@ use std::process::Command;
 
 use crate::config::router::Router;
 use crate::config::{ACME_WEBROOT, SOCKET_ROOT, STATIC_ROOT};
-use crate::util::{echo, ROOT_BINARY};
+use crate::util::{display, ROOT_BINARY};
 
 use super::deploy_user::{deploy_user_name, passwd_home, running_as_root};
 use super::router_units::{remove_stale_units, unit_ordering, STALE_UNITS};
@@ -73,10 +73,6 @@ fn write_system_unit(systemd_dir: &Path, content: &str) -> Result<()> {
     if let Err(e) = fs::write(&service_path, content) {
         return Err(anyhow!("failed to write {}: {e}", service_path.display()));
     }
-    echo(
-        &format!("✓ Created systemd service at {}", service_path.display()),
-        "green",
-    );
     Ok(())
 }
 
@@ -87,27 +83,19 @@ pub(super) fn systemctl_ok(args: &[&str]) -> bool {
         .is_ok_and(|output| output.status.success())
 }
 
+/// Reload, enable and start `riku.service`, then print one step saying
+/// which of those worked. Whether the supervisor stays up is checked by the
+/// init summary.
 fn start_riku_service() {
-    if systemctl_ok(&["daemon-reload"]) {
-        echo("✓ Reloaded systemd daemon", "green");
-    }
+    let _ = systemctl_ok(&["daemon-reload"]);
+    let mut done = vec!["riku.service written"];
     if systemctl_ok(&["enable", "riku"]) {
-        echo("✓ Enabled riku service (starts on boot)", "green");
+        done.push("enabled");
     }
-    if !systemctl_ok(&["start", "riku"]) {
-        return;
+    if systemctl_ok(&["start", "riku"]) {
+        done.push("started");
     }
-    echo("✓ Started riku service", "green");
-
-    std::thread::sleep(std::time::Duration::from_millis(500));
-    if let Ok(status) = Command::new("systemctl")
-        .args(["is-active", "riku"])
-        .output()
-    {
-        if String::from_utf8_lossy(&status.stdout).trim() == "active" {
-            echo("✓ Supervisor daemon is running", "green");
-        }
-    }
+    display::step_done("Service", &done.join(", "));
 }
 
 /// Stop and delete the reload watcher units an earlier init installed.
@@ -124,7 +112,7 @@ fn remove_old_watchers(systemd_dir: &Path) -> Result<()> {
         return Ok(());
     }
     let _ = systemctl_ok(&["daemon-reload"]);
-    echo("✓ Removed the old nginx reload watcher", "green");
+    display::detail("Removed the old nginx reload watcher");
     Ok(())
 }
 
@@ -147,7 +135,6 @@ pub fn install_systemd_service(router: &Router) -> Result<()> {
         return Err(e);
     }
 
-    echo("Enabling riku systemd service...", "green");
     start_riku_service();
     remove_old_watchers(systemd_dir)
 }

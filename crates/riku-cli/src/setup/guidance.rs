@@ -1,9 +1,10 @@
-//! Post-init user-facing output: verification summary and first-app guide.
+//! The end of `riku init`: the supervisor check, the outro and the summary
+//! that says what to run next.
 
 use std::path::Path;
 use std::process::Command;
 
-use crate::util::{echo, ROOT_BINARY};
+use crate::util::{display, ROOT_BINARY};
 
 const DOCS_URL: &str = "https://dreygur.github.io/riku/";
 const SYSTEM_SERVICE_CHECK: [&str; 2] = ["is-active", "riku"];
@@ -49,69 +50,50 @@ fn supervisor_running(scope: &InstallScope) -> bool {
         .unwrap_or(false)
 }
 
-fn print_summary(scope: &InstallScope, no_systemd: bool) {
-    echo("[4/4] Verifying installation...", "");
-    let binary = Path::new(ROOT_BINARY);
-    if binary.exists() {
-        echo(
-            &format!("      ✓ Binary installed: {}", binary.display()),
-            "",
-        );
-    } else {
-        echo(&format!("Binary not found: {}", binary.display()), "yellow");
-    }
-
+fn check_supervisor(scope: &InstallScope, no_systemd: bool) {
     if no_systemd {
-        echo(
-            "      Supervisor not started (start it with: riku supervisor)",
-            "",
+        display::step_done(
+            "Supervisor",
+            "not started (--no-systemd), run: riku supervisor",
         );
     } else if supervisor_running(scope) {
-        echo("      ✓ Supervisor running", "");
+        display::step_done("Supervisor", "running");
     } else {
-        echo(
-            &format!(
-                "Supervisor not running (start it with: {})",
-                scope.start_hint()
-            ),
-            "yellow",
-        );
+        display::warn(&format!(
+            "Supervisor not running, start it with: {}",
+            scope.start_hint()
+        ));
     }
-    echo("", "");
 }
 
-/// The steps after init, run on the developer's laptop. riku cannot know
-/// the name the laptop reaches this host by, so `<host>` stays for them.
-fn first_app_guide(user: &str) -> Vec<String> {
+/// The summary after the outro: what was set up and what the developer
+/// runs next on the laptop (`--admin` authorizes their key for pushes).
+/// riku cannot know the name the laptop reaches this host by, so `<host>`
+/// stays for them.
+fn finish_summary(user: &str, router: &str) -> Vec<(&'static str, String)> {
     vec![
-        "1. On your laptop, inside your app's git repo, register this server:".to_string(),
-        format!("   rk server add <name> {user}@<host> --admin <login>@<host>"),
-        "   It authorizes your ssh key and adds the riku git remote.".to_string(),
-        String::new(),
-        "2. Deploy:".to_string(),
-        "   git push riku main".to_string(),
-        String::new(),
-        "Processes come from riku.toml or a Procfile, else the runtime's start command."
-            .to_string(),
+        ("Router", router.to_string()),
+        ("Binary", ROOT_BINARY.to_string()),
+        (
+            "Next",
+            format!(
+                "rk server add <name> {user}@<host> --admin <login>@<host>, then git push riku main"
+            ),
+        ),
+        ("Docs", DOCS_URL.to_string()),
     ]
 }
 
-fn print_first_app_guide(user: &str) {
-    echo("Deploy your first app:", "green");
-    echo("", "");
-    for line in first_app_guide(user) {
-        echo(&line, "");
+/// Check the supervisor, then print the outro and the summary.
+pub(super) fn print_finish(scope: &InstallScope, no_systemd: bool, router: &str) {
+    if !Path::new(ROOT_BINARY).exists() {
+        display::warn(&format!("Binary not found: {ROOT_BINARY}"));
     }
-    echo("", "");
-    echo(&format!("Documentation: {DOCS_URL}"), "");
-}
-
-/// Print the verification summary and the first app guide after an init.
-pub(super) fn print_finish(scope: &InstallScope, no_systemd: bool) {
-    print_summary(scope, no_systemd);
-    echo("Riku server initialized successfully!", "green");
-    echo("", "");
-    print_first_app_guide(scope.user());
+    check_supervisor(scope, no_systemd);
+    display::outro("Riku is ready");
+    let rows = finish_summary(scope.user(), router);
+    let pairs: Vec<(&str, &str)> = rows.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    display::summary(&pairs);
 }
 
 #[cfg(test)]

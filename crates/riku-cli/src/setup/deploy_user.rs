@@ -161,22 +161,42 @@ impl DeployUser {
     }
 
     /// Run `program` as the deploy user and replay its output on root's
-    /// terminal once it exits, failure included, stripped of control
-    /// characters (see [`printable`]).
+    /// stdout once it exits, failure included, stripped of control
+    /// characters (see [`printable`]). Its stdout and stderr share one pipe,
+    /// so its warnings stay in place among its steps.
+    #[allow(clippy::question_mark)]
     pub fn run_relayed(&self, program: &Path, args: &[&str]) -> Result<()> {
         let shown = format!("{} {}", program.display(), args.join(" "));
-        let output = match self.command(program).args(args).output() {
-            Ok(output) => output,
-            Err(e) => return Err(anyhow!("failed to run {shown} as {}: {e}", self.name)),
+        let fail = |e: std::io::Error| anyhow!("failed to run {shown} as {}: {e}", self.name);
+        let (mut reader, writer) = match std::io::pipe() {
+            Ok(pipe) => pipe,
+            Err(e) => return Err(fail(e)),
         };
-        print!("{}", printable(&output.stdout));
-        eprint!("{}", printable(&output.stderr));
-        if !output.status.success() {
-            return Err(anyhow!(
-                "{shown} as {} failed: {}",
-                self.name,
-                output.status
-            ));
+        let stderr_writer = match writer.try_clone() {
+            Ok(clone) => clone,
+            Err(e) => return Err(fail(e)),
+        };
+        let mut command = self.command(program);
+        command.args(args).stdout(writer).stderr(stderr_writer);
+        let mut child = match command.spawn() {
+            Ok(child) => child,
+            Err(e) => return Err(fail(e)),
+        };
+        // The Command holds the parent's copies of the write end; reading to
+        // the end only finishes once they are closed.
+        drop(command);
+        let mut relayed = Vec::new();
+        let read = std::io::Read::read_to_end(&mut reader, &mut relayed);
+        let status = match child.wait() {
+            Ok(status) => status,
+            Err(e) => return Err(fail(e)),
+        };
+        print!("{}", printable(&relayed));
+        if let Err(e) = read {
+            return Err(fail(e));
+        }
+        if !status.success() {
+            return Err(anyhow!("{shown} as {} failed: {status}", self.name));
         }
         Ok(())
     }

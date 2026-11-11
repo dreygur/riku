@@ -16,7 +16,7 @@ use anyhow::{anyhow, Result};
 
 use crate::config::router::{self, Router};
 use crate::config::{settings, RikuPaths};
-use crate::util::echo;
+use crate::util::display;
 
 use super::caddy_host::setup_caddy_host;
 use super::deploy_user::DeployUser;
@@ -35,7 +35,7 @@ pub fn persist_router(paths: &RikuPaths, router: &Router) -> Result<()> {
     if let Err(e) = router::save(paths, router) {
         return Err(e);
     }
-    echo(&format!("      ✓ router: {}", router.name()), "green");
+    display::step_done("Router", router.name());
     Ok(())
 }
 

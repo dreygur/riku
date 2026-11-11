@@ -98,7 +98,7 @@ fn keep_after_reboot(user: &str) -> Result<()> {
     }
     echo(
         &format!(
-            "      warning: systemd-tmpfiles not found, so {SOCKET_ROOT} is gone after a reboot. \
+            "systemd-tmpfiles not found, so {SOCKET_ROOT} is gone after a reboot. \
              The supervisor recreates it only if it can write /run; otherwise re-run \
              sudo riku init after each boot"
         ),
@@ -131,7 +131,7 @@ pub(super) fn setup_socket_root(user: &DeployUser) -> Result<()> {
         return Err(e);
     }
     echo(
-        &format!("      ✓ {SOCKET_ROOT} holds app sockets ({SOCKET_GROUP} only)"),
+        &format!("{SOCKET_ROOT} holds app sockets ({SOCKET_GROUP} only)"),
         "green",
     );
     Ok(())

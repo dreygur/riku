@@ -114,9 +114,9 @@ fn app_names(paths: &RikuPaths) -> Vec<String> {
 
 fn add_routing(paths: &RikuPaths) -> Option<Check> {
     match ensure_routing_section(paths) {
-        Ok(Some(note)) => Some(Check::ok(
+        Ok(Some(fallback)) => Some(Check::ok(
             NAME,
-            format!("added [routing] to settings.toml\n{note}"),
+            format!("added [routing] to settings.toml, {fallback}"),
         )),
         Ok(None) => None,
         Err(e) => Some(Check::fail(NAME, format!("{e:#}"))),

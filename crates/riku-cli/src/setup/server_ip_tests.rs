@@ -28,7 +28,7 @@ fn public_address_is_kept() {
 
 #[test]
 fn routing_note_without_public_ip_says_how_to_set_it() {
-    let note = routing_note(Some(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 5))), None);
+    let note = routing_note(Some(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 5))), None).to_string();
 
     assert!(
         note.contains("10.0.0.5") && note.contains("server_ip"),

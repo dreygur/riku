@@ -50,22 +50,43 @@ pub fn public_v4(ip: IpAddr) -> Option<Ipv4Addr> {
     Some(v4)
 }
 
-/// What init prints about the fallback domain.
-pub fn routing_note(detected: Option<IpAddr>, public: Option<Ipv4Addr>) -> String {
+/// Whether the fallback domain came out on when init wrote `[routing]`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FallbackDomain {
+    /// On, built from this public address.
+    On(Ipv4Addr),
+    /// Off, with why no public address was found.
+    Off(String),
+}
+
+/// How to turn the fallback domain on by hand.
+pub const SERVER_IP_HINT: &str =
+    "Add server_ip = \"<public IPv4>\" under [routing] in settings.toml to turn it on.";
+
+impl std::fmt::Display for FallbackDomain {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FallbackDomain::On(ip) => write!(f, "fallback domain on, server_ip {ip}"),
+            FallbackDomain::Off(why) => write!(f, "fallback domain off: {why}. {SERVER_IP_HINT}"),
+        }
+    }
+}
+
+/// The fallback domain outcome for a `detected` address and its `public`
+/// form.
+pub fn routing_note(detected: Option<IpAddr>, public: Option<Ipv4Addr>) -> FallbackDomain {
     match (public, detected) {
-        (Some(ip), _) => format!("      ✓ fallback domain on, server_ip {ip}"),
-        (None, Some(ip)) => format!(
-            "      ! this host's address {ip} is not public; the fallback domain is off.\n        Add server_ip = \"<public IPv4>\" under [routing] in settings.toml to turn it on."
-        ),
-        (None, None) => "      ! no server address found; the fallback domain is off.\n        Add server_ip = \"<public IPv4>\" under [routing] in settings.toml to turn it on.".to_string(),
+        (Some(ip), _) => FallbackDomain::On(ip),
+        (None, Some(ip)) => FallbackDomain::Off(format!("{ip} is not a public address")),
+        (None, None) => FallbackDomain::Off("no server address found".to_string()),
     }
 }
 
 /// Add `[routing]` to `paths`' settings.toml when it has none, filling in
-/// the public IPv4 address when one is found. Returns the note to print, or
-/// `None` when the section was already there.
+/// the public IPv4 address when one is found. Returns the fallback domain
+/// outcome, or `None` when the section was already there.
 #[allow(clippy::question_mark)]
-pub fn ensure_routing_section(paths: &RikuPaths) -> Result<Option<String>> {
+pub fn ensure_routing_section(paths: &RikuPaths) -> Result<Option<FallbackDomain>> {
     let detected = detect_server_ip();
     let public = detected.and_then(public_v4);
     match settings::add_routing_section(paths, public) {

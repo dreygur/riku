@@ -50,7 +50,7 @@ fn wants_catch_all(paths: &RikuPaths) -> bool {
         ),
         _ => {
             echo(
-                "      warning: nginx -T failed, so no catch-all server was added for unknown hosts",
+                "nginx -T failed, so no catch-all server was added for unknown hosts",
                 "yellow",
             );
             false
@@ -84,10 +84,7 @@ fn install_include(paths: &RikuPaths, root_uid: u32) -> Result<bool> {
 fn load_riku_sites(paths: &RikuPaths) -> Result<()> {
     match install_include(paths, ROOT_UID) {
         Ok(true) => echo(
-            &format!(
-                "      {} loads riku sites",
-                paths.nginx_include_file.display()
-            ),
+            &format!("{} loads riku sites", paths.nginx_include_file.display()),
             "green",
         ),
         Ok(false) => {}
@@ -100,11 +97,10 @@ pub(super) use riku_util::write_dir::{check_write_dir, ROOT_UID};
 
 fn missing_dir_warning(paths: &RikuPaths, dir: &Path) -> String {
     if !paths.reload_programs.nginx.is_file() {
-        return "      warning: nginx is not installed; after installing it, re-run: sudo riku init"
-            .to_string();
+        return "nginx is not installed; after installing it, re-run: sudo riku init".to_string();
     }
     format!(
-        "      warning: {} does not exist: create it, include {}/*.conf inside the http block \
+        "{} does not exist: create it, include {}/*.conf inside the http block \
          of nginx.conf, then re-run: sudo riku init",
         dir.display(),
         dir.display()

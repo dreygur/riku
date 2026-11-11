@@ -175,7 +175,7 @@ pub(super) fn clear_deploy_owned_router_files(
                 if meta.uid() != root_uid {
                     echo(
                         &format!(
-                            "      warning: {} is a directory not owned by root; remove it by hand",
+                            "{} is a directory not owned by root; remove it by hand",
                             path.display()
                         ),
                         "yellow",
@@ -192,7 +192,7 @@ pub(super) fn clear_deploy_owned_router_files(
             };
             echo(
                 &format!(
-                    "      moved {} to {}: root nginx must not load it",
+                    "moved {} to {}: root nginx must not load it",
                     path.display(),
                     dest.display()
                 ),
@@ -244,7 +244,7 @@ fn remove_entry(path: &Path) -> Result<()> {
         return Err(anyhow!("failed to remove {}: {e}", path.display()));
     }
     echo(
-        &format!("      removed {}: not a root owned file", path.display()),
+        &format!("removed {}: not a root owned file", path.display()),
         "yellow",
     );
     Ok(())

@@ -93,7 +93,7 @@ pub(super) fn grant_nginx_sockets() -> Result<()> {
         return Err(e);
     }
     echo(
-        &format!("      ✓ nginx ({worker}) can reach the app sockets through {SOCKET_GROUP}"),
+        &format!("nginx ({worker}) can reach the app sockets through {SOCKET_GROUP}"),
         "green",
     );
     Ok(())
