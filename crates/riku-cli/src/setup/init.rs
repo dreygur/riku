@@ -27,6 +27,7 @@ use super::router_choice;
 use super::server_ip::{ensure_routing_section, FallbackDomain, SERVER_IP_HINT};
 use super::ssh::setup_ssh_key_interactive;
 use super::stale_binary::remove_stale_binary;
+use super::system_install::refuse_beside_system_install;
 use super::systemd::setup_systemd_service;
 
 fn create_directory_structure(paths: &RikuPaths, router: &Router) -> Result<()> {
@@ -208,6 +209,9 @@ fn init_router_choice(paths: &RikuPaths, user_steps: bool) -> Result<Router> {
 fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<Router> {
     let user_steps = options.user_steps;
     if !user_steps {
+        if let Err(e) = refuse_beside_system_install() {
+            return Err(e);
+        }
         if let Err(e) = require_root_binary() {
             return Err(e);
         }

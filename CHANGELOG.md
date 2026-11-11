@@ -21,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A plain (not root) `riku init` on a host where root already installed
+  riku built a second install for the caller: its own `~/.riku`, a user
+  unit running a second supervisor, an ssh key and a forced command in
+  the caller's `authorized_keys`. It now refuses before changing anything
+  when `/etc/systemd/system/riku.service` exists or the deploy account
+  (`RIKU_USER`, default `riku`) is another account, and names
+  `sudo riku init`. Single-user mode on a host without a system install is
+  unchanged.
 - `riku restart --hot` on a Procfile app only rewrote the worker configs
   through their `workers-enabled` symlinks and sent no SIGHUP. A write
   through a symlink lands in `workers-available`, outside the watched

@@ -24,6 +24,7 @@ pub(crate) mod server_ip;
 mod socket_group;
 pub mod ssh;
 mod stale_binary;
+mod system_install;
 pub mod system_service;
 pub mod systemd;
 pub mod user_service;

@@ -22,7 +22,7 @@ curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.s
 sudo riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
-After running `sudo riku init`, the binary is installed to `/usr/local/bin/riku`, owned by root so the deploy user cannot change it. Units, git hooks and deploy keys all name that path. A plain `riku init` as the deploy user needs it to exist already.
+After running `sudo riku init`, the binary is installed to `/usr/local/bin/riku`, owned by root so the deploy user cannot change it. Units, git hooks and deploy keys all name that path. A plain `riku init` (single-user mode, no system service) needs it to exist already, and is refused on a host where `sudo riku init` already ran (the system `riku.service` exists, or the deploy account is another user): it would build a second install next to the system one. Run `sudo riku init` again there instead.
 
 `sudo riku init` also installs and starts `riku-router-helper.service`, a small root service on `/run/riku-router.sock`. It writes the nginx or Caddy site of each app (`/etc/riku/nginx`, `/etc/riku/caddy`, certificates in `/etc/riku/certs`) and reloads the router. See [Nginx](nginx.md#the-router-helper).
 
