@@ -16,7 +16,7 @@ Crate layers, lowest first:
 Job: the `riku` binary. Parses argv, picks local vs forwarded target, runs local commands. Depends on: riku-config, riku-util, riku-error, riku-nginx, riku-plugins, riku-supervisor, riku-deploy, riku-cli, riku-dashboard. Used by: tests (`riku-route` is a dev-dependency only).
 Entry: `fn main` in `src/main.rs`.
 
-- `src/main.rs`: init tracing (`RUST_LOG`, default info), `cli::ssh_command::process_argv`, `parse` (help heading names the implied server), `route::target_for`, `run_or_forward`, then `RikuPaths::from_env` and `cli::dispatch::run_local` (or `dashboard::run`). An error is printed as `■  <error>` on stderr and exits 1. Contract: `SSH_ORIGINAL_COMMAND` set means "running as the ssh forced command", which never forwards again.
+- `src/main.rs`: init tracing once the command is parsed (stderr, `RUST_LOG`, default info for `supervisor`, `router-helper` and `dashboard`, warn otherwise, escapes only on a terminal), `cli::ssh_command::process_argv`, `parse` (help heading names the implied server), `route::target_for`, `run_or_forward`, then `RikuPaths::from_env` and `cli::dispatch::run_local` (or `dashboard::run`). An error is printed as `■  <error>` on stderr and exits 1. Contract: `SSH_ORIGINAL_COMMAND` set means "running as the ssh forced command", which never forwards again.
 - `src/lib.rs`: facade of `pub use` aliases (cli, config, dashboard, deploy, error, nginx, plugins, supervisor, util) so integration tests reach every crate as `riku::x`. No logic.
 - `Cargo.toml`: wires the `[[test]]` targets `integration_tests` and `stress_tests` to `../../tests/` and the bench `core_benchmarks` to `../../benches/`.
 

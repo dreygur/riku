@@ -16,15 +16,27 @@ use riku::{cli, dashboard};
 
 const PROGRAM: &str = "riku";
 
-/// Initialize tracing subscriber for structured logging
-fn init_tracing() {
+/// Commands that run as services, whose INFO logs are their journal.
+const DAEMONS: [&str; 3] = ["supervisor", "router-helper", "dashboard"];
+
+/// Structured logs go to stderr, so stdout stays for command output (and
+/// agent JSON). `RUST_LOG` overrides the level: INFO for the daemons, WARN
+/// for everything else, whose user facing output is the rail. Escapes only
+/// on a terminal and never with `NO_COLOR`.
+fn init_tracing(command: &str) {
     use tracing_subscriber::{fmt, EnvFilter};
 
-    // Default to INFO level, can be overridden with RUST_LOG env var
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let default = if DAEMONS.contains(&command) {
+        "info"
+    } else {
+        "warn"
+    };
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default));
 
     fmt()
         .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .with_ansi(riku::util::display::Stream::Stderr.colour())
         .with_target(false)
         .with_thread_ids(false)
         .with_file(false)
@@ -58,9 +70,6 @@ fn main() {
 // Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
 #[allow(clippy::question_mark)]
 fn run() -> Result<()> {
-    // Initialize structured logging
-    init_tracing();
-
     let argv = match cli::ssh_command::process_argv() {
         Ok(argv) => argv,
         Err(e) => return Err(e),
@@ -77,6 +86,7 @@ fn run() -> Result<()> {
         via_ssh,
     };
     let (command_name, subcommand_name) = command_names(&matches);
+    init_tracing(command_name);
     let target = match route::target_for(command_name, subcommand_name, selection) {
         Ok(target) => target,
         Err(e) => return Err(e),

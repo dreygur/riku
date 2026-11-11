@@ -38,7 +38,7 @@ pub(super) fn container_cleanup(paths: &RikuPaths, app: &str, mode: DestroyMode)
         ))),
         DestroyMode::Force => {
             echo(
-                &format!("--> Containers of '{app}' may still be running, remove them by hand"),
+                &format!("Containers of '{app}' may still be running, remove them by hand"),
                 "yellow",
             );
             Ok(())
