@@ -5,8 +5,9 @@
 //!
 //! The plugin's output is the one the last deploy stored (see
 //! `plugin_env.rs`), since a plugin's `env` may depend on what its build
-//! left. An app last deployed by a riku that stored none falls back to
-//! running the plugin's `env`, and says so.
+//! left. When the app's ENV or server settings changed since it was stored,
+//! or none was stored, the plugin's `env` runs again with the current env,
+//! restart says so, and its output is stored for the next restart.
 
 // Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
 #![allow(clippy::question_mark)]
@@ -16,6 +17,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 
 use crate::config::RikuPaths;
+use crate::plugin_env::Stored;
 use crate::plugins::runtime::{get_env, RuntimeContext};
 use crate::util::display;
 use crate::{deploy_env, plugin_env, procfile_deploy};
@@ -50,13 +52,19 @@ pub(crate) fn worker_env(app: &str, paths: &RikuPaths) -> Result<HashMap<String,
         Err(e) => return Err(e),
     };
     let plugin_env = match plugin_env::load(app, paths) {
-        Ok(Some(stored)) => stored,
-        Ok(None) => {
+        Ok(Stored::Current(stored)) => stored,
+        Ok(Stored::Stale) => {
+            display::detail("ENV or settings changed since the deploy; running the plugin's env");
+            match rerun_and_store(app, paths, &env) {
+                Ok(fresh) => fresh,
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(Stored::Missing) => {
             display::detail(
-                "no runtime plugin env stored by the last deploy; running the plugin's env \
-                 (the next deploy stores it)",
+                "no runtime plugin env stored by the last deploy; running the plugin's env",
             );
-            match run_plugin_env(app, paths, &env) {
+            match rerun_and_store(app, paths, &env) {
                 Ok(fresh) => fresh,
                 Err(e) => return Err(e),
             }
@@ -65,6 +73,23 @@ pub(crate) fn worker_env(app: &str, paths: &RikuPaths) -> Result<HashMap<String,
     };
     env.extend(plugin_env);
     Ok(env)
+}
+
+/// Runs the plugin's `env` and stores its output with the current config
+/// digest, so the next restart with unchanged config skips it.
+fn rerun_and_store(
+    app: &str,
+    paths: &RikuPaths,
+    env: &HashMap<String, String>,
+) -> Result<HashMap<String, String>> {
+    let fresh = match run_plugin_env(app, paths, env) {
+        Ok(fresh) => fresh,
+        Err(e) => return Err(e),
+    };
+    match plugin_env::save(app, paths, &fresh) {
+        Ok(()) => Ok(fresh),
+        Err(e) => Err(e),
+    }
 }
 
 #[cfg(test)]

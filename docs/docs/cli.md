@@ -319,6 +319,9 @@ riku restart myapp worker   # one process kind, or one container service
 A Procfile app's worker configs are written again from the app's current
 ENV and riku settings, the env a deploy would give them (the runtime
 plugin's `env` output included), so a value edited in ENV takes effect.
+The plugin's `env` output is the one the last deploy stored; when ENV or
+the server settings changed since, restart runs the plugin's `env` again
+with the current env and stores that instead.
 No build, release or preflight runs and the checkout is left as it is. Each
 kind keeps its command and its number of copies. Web facing kinds are
 replaced one copy at a time as on a deploy: a new copy starts, passes its
