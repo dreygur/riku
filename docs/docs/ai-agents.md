@@ -48,8 +48,11 @@ stdout for the details.
 | Scope | Commands |
 |-------|----------|
 | `readonly` | `apps`, `logs`, `ps`, `config:get`, `config:show`, `stats` |
-| `staging` | readonly plus `deploy`, `restart`, `run`, `config:set`, `config:unset` |
-| `production` | staging plus `stop`, `destroy` |
+| `staging` | readonly plus `deploy`, `restart`, `config:set`, `config:unset` |
+| `production` | staging plus `stop`, `destroy`, `run` |
+
+`run` executes as the riku user and can do anything riku can, so it is
+production only and every call needs confirmation.
 
 A call without `--scope` is read only. The scope comes from that key's own
 forced command, never from another line in `authorized_keys` or from the
@@ -76,7 +79,7 @@ forced command gives the client full access and lets it choose everything.
 | `ps` | `<app>` | |
 | `restart` | `<app> [process]` | |
 | `stop` | `<app>` | Needs confirmation |
-| `run` | `<app> <command>...` | No shell, live env, app directory. Returns `exit_code`, `stdout`, `stderr`, `truncated`, `timed_out`. Each stream is capped at 64 KiB and the command is killed after 300 seconds |
+| `run` | `<app> <command>...` | Needs confirmation. No shell; PATH, HOME and the live env only; app directory. Returns `exit_code`, `stdout`, `stderr`, `truncated`, `timed_out`. Each stream is capped at 64 KiB and the command is killed after 300 seconds |
 | `stats` | `[app]` | All apps when no app is given |
 
 ---
@@ -122,9 +125,11 @@ Confirmation request:
 
 ## Confirmation flow
 
-`destroy` and `stop` always ask for confirmation first. `config:set` and
-`config:unset` ask when a key name contains `SECRET`, `PASSWORD`, `TOKEN`,
-`_KEY` or `DATABASE_URL`.
+`destroy`, `stop` and `run` always ask for confirmation first. `config:set`
+and `config:unset` ask when a key they change has a name containing
+`SECRET`, `PASS`, `PWD`, `TOKEN`, `_KEY`, `AUTH`, `CREDENTIAL`, `PRIVATE` or
+`DATABASE_URL`. The match is by name only: a secret stored under another
+name, such as a password inside `REDIS_URL`, does not ask.
 
 ```bash
 ssh riku@server destroy myapp
@@ -135,8 +140,13 @@ ssh riku@server destroy myapp --confirm 9f2c...
 ```
 
 A token is used once, is bound to its action and app, and expires after 5
-minutes. A `config:set` or `config:unset` token is also bound to the exact
-keys and values, so it cannot be spent on a different change.
+minutes. A `run`, `config:set` or `config:unset` token is also bound to the
+exact command or keys and values, so it cannot be spent on a different
+request.
+
+The token comes back to the agent that asked. Riku cannot tell whether a
+human saw the request: the confirmation step relies on the agent showing it
+to one before it sends `--confirm`.
 
 ---
 

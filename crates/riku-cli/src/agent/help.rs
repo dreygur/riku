@@ -66,9 +66,9 @@ Response:
         "config:set" => {
             r#"Usage: riku agent config:set <app> KEY=value [KEY2=value2 ...] [--confirm <token>]
 
-Set configuration values and redeploy. A key whose name contains SECRET,
-PASSWORD, TOKEN, _KEY or DATABASE_URL needs human confirmation; the token
-only works for the exact same request.
+Set configuration values and redeploy. Changing a key whose name contains
+SECRET, PASS, PWD, TOKEN, _KEY, AUTH, CREDENTIAL, PRIVATE or DATABASE_URL
+needs human confirmation; the token only works for the exact same request.
 
 Example:
   riku agent config:set myapp DEBUG=true
@@ -136,14 +136,17 @@ Response:
   {"confirmation_required": true, "confirm_token": "abc123"}"#
         }
         "run" => {
-            r#"Usage: riku agent run <app> [--] <command>...
+            r#"Usage: riku agent run <app> [--] <command>... [--confirm <token>]
 
-Run a command in the app directory with its live env, without a shell.
-Each output stream is capped at 64 KiB; the command is killed after 300s.
-Put -- before arguments that start with -.
+Run a command in the app directory with PATH, HOME and the app's live env,
+without a shell. It runs as the riku user, so it needs 'production' scope
+and human confirmation every time; the token only works for the exact same
+command. Each output stream is capped at 64 KiB; the command is killed
+after 300s. Put -- before arguments that start with -.
 
 Example:
   riku agent run myapp python manage.py migrate
+  riku agent run myapp --confirm <token> -- python manage.py migrate
 
 Response:
   {"success": true, "data": {"exit_code": 0, "stdout": "...", "stderr": "",

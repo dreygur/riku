@@ -23,10 +23,10 @@ impl AgentScope {
     pub fn allows(&self, action: &str) -> bool {
         match action {
             "apps" | "logs" | "ps" | "config:get" | "config:show" | "stats" => true,
-            "deploy" | "restart" | "run" | "config:set" | "config:unset" => {
+            "deploy" | "restart" | "config:set" | "config:unset" => {
                 matches!(self, AgentScope::Staging | AgentScope::Production)
             }
-            "destroy" | "stop" => matches!(self, AgentScope::Production),
+            "destroy" | "stop" | "run" => matches!(self, AgentScope::Production),
             _ => false,
         }
     }

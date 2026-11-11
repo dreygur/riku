@@ -192,7 +192,7 @@ fn run_agent_command(
             if args.len() < 2 {
                 AgentResponse::error("INVALID_PARAMETERS", "Missing app name or command")
             } else {
-                cmd_agent_run(paths, &args[0], &args[1..])
+                cmd_agent_run(paths, &state, &args[0], &args[1..], confirm_token)
             }
         }
         "stats" => {

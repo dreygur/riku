@@ -6,13 +6,18 @@
 //! shared directory such as `/tmp`, so another local user can neither plant
 //! nor redirect one. A token is checked to be lowercase hex before it becomes
 //! part of a path, binds one action on one app, expires after
-//! `TOKEN_TTL_SECS`, and is deleted on first use.
+//! `TOKEN_TTL_SECS`, and is deleted on first use. Expired records are pruned
+//! whenever a new token is issued.
+//!
+//! The token goes back to the calling agent, which is trusted to show the
+//! request to a human before spending it. Nothing here proves a human saw it.
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use riku_util::token::generate_token;
+use sha2::{Digest, Sha256};
 
 use super::state::{open_private, Access};
 use super::types::AgentResponse;
@@ -52,8 +57,44 @@ fn record_text(action: &str, app: &str, expires: u64) -> String {
     format!("{action}\n{app}\n{expires}\n")
 }
 
+fn record_expiry(path: &Path) -> Option<u64> {
+    let mut text = String::new();
+    match open_private(path, Access::Read) {
+        Ok(mut file) => {
+            if file.read_to_string(&mut text).is_err() {
+                return None;
+            }
+        }
+        Err(_) => return None,
+    }
+    match text.lines().nth(2).map(str::parse::<u64>) {
+        Some(Ok(expires)) => Some(expires),
+        _ => None,
+    }
+}
+
+/// Deletes the records of tokens that expired unused, so requests that are
+/// never confirmed cannot fill the state directory.
+fn prune_expired(state: &Path, now: u64) {
+    let entries = match std::fs::read_dir(state) {
+        Ok(entries) => entries,
+        Err(_) => return,
+    };
+    for entry in entries.filter_map(Result::ok) {
+        let is_record = entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with(RECORD_PREFIX);
+        let path = entry.path();
+        if is_record && record_expiry(&path).is_some_and(|expires| now > expires) {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+}
+
 #[allow(clippy::question_mark)]
 fn issue_at(state: &Path, action: &str, app: &str, now: u64) -> std::io::Result<String> {
+    prune_expired(state, now);
     let token = generate_token();
     let mut file = match open_private(&record_path(state, &token), Access::Rewrite) {
         Ok(file) => file,
@@ -126,6 +167,44 @@ pub fn request(state: &Path, action: &str, app: &str) -> AgentResponse {
             &format!("Agent state is unavailable: {e}"),
         ),
     }
+}
+
+/// An action name bound to the exact request: `action` plus a SHA-256 of
+/// `words`, so a token approved for one request cannot be spent on another.
+/// The digest keeps secrets and newlines out of the record.
+pub fn bound_action(action: &str, words: &[String]) -> String {
+    let mut digest = Sha256::new();
+    for word in words {
+        digest.update(word.as_bytes());
+        digest.update([0]);
+    }
+    format!("{action}:{}", hex::encode(digest.finalize()))
+}
+
+/// Gate for a request that needs confirmation. Without a token it issues one
+/// for `bound` and returns the confirmation reply; with a token it returns
+/// the refusal reply unless the token matches. `None` means go ahead.
+/// `shown` is the plain action name the agent sees.
+pub fn gate(
+    state: &Path,
+    shown: &str,
+    bound: &str,
+    app: &str,
+    token: Option<&str>,
+) -> Option<AgentResponse> {
+    let token = match token {
+        Some(token) => token,
+        None => {
+            return Some(match issue(state, bound, app) {
+                Ok(token) => AgentResponse::confirmation_required(shown, app, &token),
+                Err(e) => AgentResponse::error(
+                    "STATE_UNAVAILABLE",
+                    &format!("cannot issue a confirmation token: {e}"),
+                ),
+            });
+        }
+    };
+    refused(state, bound, app, token)
 }
 
 /// `None` when `token` allows `action` on `app`, else the refusal reply.

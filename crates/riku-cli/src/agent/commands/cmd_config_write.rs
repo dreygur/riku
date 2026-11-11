@@ -1,17 +1,17 @@
 //! `agent config:set` and `config:unset`.
 //!
 //! Security model: the scope check (staging and up) happens in `execute.rs`.
-//! A change that touches a secret-looking key needs a human confirm token.
-//! The token is bound to a SHA-256 of the exact request, so a token approved
-//! for one value cannot be spent on another. Validation (riku settings,
-//! malformed pairs, newlines) is the same service `riku config set` uses, and
-//! runs before anything is written.
+//! A change that touches a secret-looking key needs a confirm token, bound to
+//! the exact request (`confirm::bound_action`). Which keys a request changes
+//! is read from the parsed result the config service will write, not from
+//! the agent's words. Validation (riku settings, malformed pairs, newlines)
+//! is the same service `riku config set` uses, and runs before a token is
+//! issued or anything is written.
 
 use std::collections::HashMap;
 use std::path::Path;
 
 use serde_json::json;
-use sha2::{Digest, Sha256};
 
 use crate::agent::confirm;
 use crate::agent::types::AgentResponse;
@@ -20,7 +20,20 @@ use crate::config::RikuPaths;
 use crate::deploy::env_setup::{redeploy, write_env};
 use crate::util::{existing_app, parse_settings};
 
-const SECRET_MARKERS: [&str; 5] = ["SECRET", "PASSWORD", "TOKEN", "_KEY", "DATABASE_URL"];
+/// Name fragments that mark a key as secret. A name match is a heuristic: a
+/// secret under an unrelated name (`REDIS_URL` with a password inside) is not
+/// caught.
+const SECRET_MARKERS: [&str; 9] = [
+    "SECRET",
+    "PASS",
+    "PWD",
+    "TOKEN",
+    "_KEY",
+    "AUTH",
+    "CREDENTIAL",
+    "PRIVATE",
+    "DATABASE_URL",
+];
 
 /// What the agent asked for, which decides the confirmation action name.
 #[derive(Clone, Copy)]
@@ -60,17 +73,6 @@ fn changed_keys(before: &HashMap<String, String>, after: &HashMap<String, String
 fn is_secret(key: &str) -> bool {
     let key = key.to_ascii_uppercase();
     SECRET_MARKERS.iter().any(|marker| key.contains(marker))
-}
-
-/// The confirm record's action line: the command plus a digest of the exact
-/// words, so the line never holds a secret or a newline.
-fn bound_action(change: ConfigChange, words: &[String]) -> String {
-    let mut digest = Sha256::new();
-    for word in words {
-        digest.update(word.as_bytes());
-        digest.update([0]);
-    }
-    format!("{}:{}", change.action(), hex::encode(digest.finalize()))
 }
 
 fn apply(
@@ -125,21 +127,9 @@ fn change_config(
     if !keys.iter().any(|key| is_secret(key)) {
         return apply(paths, &app, &after, &keys);
     }
-    let action = bound_action(change, words);
-    let token = match confirm_token {
-        Some(token) => token,
-        None => {
-            return match confirm::issue(state, &action, &app) {
-                Ok(token) => AgentResponse::confirmation_required(change.action(), &app, &token),
-                Err(e) => {
-                    let message = format!("cannot issue a confirmation token: {e}");
-                    AgentResponse::error("STATE_UNAVAILABLE", &message)
-                }
-            };
-        }
-    };
-    if let Some(refusal) = confirm::refused(state, &action, &app, token) {
-        return refusal;
+    let bound = confirm::bound_action(change.action(), words);
+    if let Some(stop) = confirm::gate(state, change.action(), &bound, &app, confirm_token) {
+        return stop;
     }
     apply(paths, &app, &after, &keys)
 }

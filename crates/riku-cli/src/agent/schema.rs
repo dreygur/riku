@@ -19,7 +19,7 @@ pub fn cmd_agent_intro(_paths: &RikuPaths, session: &AgentSession) -> Result<()>
         "agent_id": agent_id,
         "permissions": match scope {
             AgentScope::Readonly => vec!["apps", "logs", "ps", "config:get", "config:show", "stats"],
-            AgentScope::Staging => vec!["apps", "logs", "ps", "config:get", "config:show", "stats", "deploy", "restart", "run", "config:set", "config:unset"],
+            AgentScope::Staging => vec!["apps", "logs", "ps", "config:get", "config:show", "stats", "deploy", "restart", "config:set", "config:unset"],
             AgentScope::Production => vec!["apps", "logs", "ps", "config:get", "config:show", "stats", "deploy", "destroy", "restart", "stop", "run", "config:set", "config:unset"],
         },
         "scope": match scope {
@@ -118,7 +118,7 @@ pub fn cmd_agent_schema() -> Result<()> {
                 },
                 "requires_confirmation": "when a key name contains one of confirmation_markers",
                 "permissions": ["staging", "production"],
-                "confirmation_markers": ["SECRET", "PASSWORD", "TOKEN", "_KEY", "DATABASE_URL"]
+                "confirmation_markers": ["SECRET", "PASS", "PWD", "TOKEN", "_KEY", "AUTH", "CREDENTIAL", "PRIVATE", "DATABASE_URL"]
             },
             {
                 "name": "config:unset",
@@ -137,7 +137,7 @@ pub fn cmd_agent_schema() -> Result<()> {
                 },
                 "requires_confirmation": "when a key name contains one of confirmation_markers",
                 "permissions": ["staging", "production"],
-                "confirmation_markers": ["SECRET", "PASSWORD", "TOKEN", "_KEY", "DATABASE_URL"]
+                "confirmation_markers": ["SECRET", "PASS", "PWD", "TOKEN", "_KEY", "AUTH", "CREDENTIAL", "PRIVATE", "DATABASE_URL"]
             },
             {
                 "name": "config:show",
@@ -231,8 +231,8 @@ pub fn cmd_agent_schema() -> Result<()> {
                     }
                 },
                 "returns": "exit_code, stdout, stderr, truncated, timed_out; a nonzero exit or timeout is COMMAND_FAILED with the same data",
-                "requires_confirmation": false,
-                "permissions": ["staging", "production"]
+                "requires_confirmation": true,
+                "permissions": ["production"]
             },
             {
                 "name": "stats",
