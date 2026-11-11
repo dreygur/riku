@@ -83,6 +83,22 @@ fn other_scope(scope: UnitScope) -> UnitScope {
     }
 }
 
+/// Both main pids. A failed query is an error, except for the user manager
+/// asked from a root init's deploy user child: that child has no user bus
+/// (no `XDG_RUNTIME_DIR`), so its user unit counts as not running there.
+fn main_pids(scope: UnitScope) -> Result<MainPids> {
+    let own = match service_main_pid(scope) {
+        Ok(pid) => pid,
+        Err(e) => return Err(e),
+    };
+    let other = match (other_scope(scope), service_main_pid(other_scope(scope))) {
+        (_, Ok(pid)) => pid,
+        (UnitScope::User, Err(_)) => None,
+        (UnitScope::System, Err(e)) => return Err(e),
+    };
+    Ok(MainPids { own, other })
+}
+
 /// Stops a supervisor running outside the `scope` unit and says so on the
 /// rail. Prints nothing when there is none. An error when it does not stop
 /// within [`STOP_WAIT`], since the unit cannot run while it holds the lock,
@@ -94,9 +110,13 @@ pub(super) fn replace_outside_supervisor(paths: &RikuPaths, scope: UnitScope) ->
         Some(seen) => seen,
         None => return Ok(()),
     };
-    let units = MainPids {
-        own: service_main_pid(scope),
-        other: service_main_pid(other_scope(scope)),
+    let units = match main_pids(scope) {
+        Ok(units) => units,
+        Err(e) => {
+            return Err(
+                e.context("cannot tell whether systemd runs the supervisor, so it is not stopped")
+            )
+        }
     };
     let pid = match holder(units, seen.pid) {
         Holder::OwnUnit => return Ok(()),

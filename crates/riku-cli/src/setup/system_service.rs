@@ -80,19 +80,24 @@ pub(super) fn systemctl_ok(args: &[&str]) -> bool {
 /// which of those worked. A supervisor that already runs is restarted only
 /// when it runs another binary than [`ROOT_BINARY`] or `unit` changed (see
 /// [`super::supervisor_binary`]). Whether the supervisor stays up is checked
-/// by the init summary.
-fn start_riku_service(unit: UnitChange) {
+/// by the init summary. An error when systemd cannot say whether the
+/// service runs.
+fn start_riku_service(unit: UnitChange) -> Result<()> {
     let _ = systemctl_ok(&["daemon-reload"]);
     let mut done = vec!["riku.service written"];
     if systemctl_ok(&["enable", "riku"]) {
         done.push("enabled");
     }
-    let main_pid = service_main_pid(UnitScope::System);
+    let main_pid = match service_main_pid(UnitScope::System) {
+        Ok(pid) => pid,
+        Err(e) => return Err(e),
+    };
     let action = action_for(main_pid, unit, Path::new("/proc"), Path::new(ROOT_BINARY));
     if systemctl_ok(&[action.verb(), "riku"]) {
         done.push(action.outcome());
     }
     display::step_done("Service", &done.join(", "));
+    Ok(())
 }
 
 /// Stop and delete the reload watcher units an earlier init installed.
@@ -133,7 +138,9 @@ pub fn install_systemd_service(router: &Router) -> Result<()> {
         Err(e) => return Err(e),
     };
 
-    start_riku_service(change);
+    if let Err(e) = start_riku_service(change) {
+        return Err(e);
+    }
     remove_old_watchers(systemd_dir)
 }
 

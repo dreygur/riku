@@ -44,7 +44,10 @@ pub fn setup_systemd_service(paths: &RikuPaths, router: &Router) -> Result<()> {
     if let Err(e) = replace_outside_supervisor(paths, UnitScope::User) {
         return Err(e);
     }
-    let main_pid = service_main_pid(UnitScope::User);
+    let main_pid = match service_main_pid(UnitScope::User) {
+        Ok(pid) => pid,
+        Err(e) => return Err(e),
+    };
     let action = action_for(main_pid, change, Path::new("/proc"), Path::new(ROOT_BINARY));
     if user_systemctl(&[action.verb(), "riku"]) {
         done.push(action.outcome());

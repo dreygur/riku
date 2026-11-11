@@ -15,7 +15,7 @@ use anyhow::{anyhow, Result};
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Output};
 
 /// The `systemctl` action init takes on the service.
 #[derive(Debug, PartialEq, Eq)]
@@ -81,27 +81,44 @@ pub(super) enum UnitScope {
     User,
 }
 
-/// The service's main pid from `systemctl show -p MainPID --value`, which
-/// prints `0` for a stopped service.
-pub(super) fn parse_main_pid(output: &str) -> Option<u32> {
-    match output.trim().parse::<u32>() {
-        Ok(0) | Err(_) => None,
-        Ok(pid) => Some(pid),
+/// The service's main pid from the result of `systemctl show -p MainPID
+/// --value`. Only exit 0 with `0` means stopped; a query that could not
+/// run, exited non-zero or printed anything but a number is an error, since
+/// reading it as stopped would treat the unit's own supervisor as a stray.
+pub(super) fn main_pid_from(output: std::io::Result<Output>) -> Result<Option<u32>> {
+    let output = match output {
+        Ok(output) => output,
+        Err(e) => return Err(anyhow!("cannot run systemctl: {e}")),
+    };
+    if !output.status.success() {
+        return Err(anyhow!(
+            "systemctl show riku failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    match text.trim().parse::<u32>() {
+        Ok(0) => Ok(None),
+        Ok(pid) => Ok(Some(pid)),
+        Err(_) => Err(anyhow!(
+            "systemctl show riku printed no MainPID: {}",
+            text.trim()
+        )),
     }
 }
 
-/// The main pid of the `riku` unit in `scope`, `None` when it is stopped or
-/// systemd cannot be asked.
-pub(super) fn service_main_pid(scope: UnitScope) -> Option<u32> {
+/// The main pid of the `riku` unit in `scope`, `None` when it is stopped,
+/// an error when systemd cannot be asked.
+pub(super) fn service_main_pid(scope: UnitScope) -> Result<Option<u32>> {
     let mut command = Command::new("systemctl");
     if let UnitScope::User = scope {
         command.arg("--user");
     }
-    command
-        .args(["show", "-p", "MainPID", "--value", "riku"])
-        .output()
-        .ok()
-        .and_then(|out| parse_main_pid(&String::from_utf8_lossy(&out.stdout)))
+    main_pid_from(
+        command
+            .args(["show", "-p", "MainPID", "--value", "riku"])
+            .output(),
+    )
 }
 
 /// What to do with a service whose main process is `main_pid`, given the

@@ -3,6 +3,32 @@ use std::path::Path;
 
 use super::*;
 
+fn systemctl_output(code: i32, stdout: &str) -> std::io::Result<std::process::Output> {
+    use std::os::unix::process::ExitStatusExt;
+    Ok(std::process::Output {
+        status: std::process::ExitStatus::from_raw(code << 8),
+        stdout: stdout.as_bytes().to_vec(),
+        stderr: Vec::new(),
+    })
+}
+
+/// A query that failed (no user bus, no systemctl, garbage) is not a
+/// stopped unit: reading it as one would SIGTERM the unit's own supervisor.
+#[test]
+fn a_failed_main_pid_query_is_an_error_not_a_stopped_unit() {
+    let no_bus = systemctl_output(1, "");
+    let not_found = Err(std::io::Error::from(std::io::ErrorKind::NotFound));
+    let garbage = systemctl_output(0, "Failed to connect to bus\n");
+
+    for (case, output) in [
+        ("no bus", no_bus),
+        ("no systemctl", not_found),
+        ("garbage", garbage),
+    ] {
+        assert!(main_pid_from(output).is_err(), "{case} must be an error");
+    }
+}
+
 /// `<proc>/<pid>/exe` pointing at `binary`, as the kernel shows it.
 fn running_from(proc_root: &Path, pid: u32, binary: &Path) {
     let dir = proc_root.join(pid.to_string());
@@ -80,8 +106,15 @@ fn a_rewritten_unit_restarts_a_supervisor_on_the_installed_binary() {
 fn a_stopped_service_is_started() {
     let tmp = tempfile::tempdir().unwrap();
 
-    assert_eq!(parse_main_pid("0\n"), None, "systemd prints 0 when stopped");
-    assert_eq!(parse_main_pid("1234\n"), Some(1234));
+    assert_eq!(
+        main_pid_from(systemctl_output(0, "0\n")).unwrap(),
+        None,
+        "systemd prints 0 when stopped"
+    );
+    assert_eq!(
+        main_pid_from(systemctl_output(0, "1234\n")).unwrap(),
+        Some(1234)
+    );
     assert_eq!(
         action_for(
             None,
