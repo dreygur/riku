@@ -7,11 +7,24 @@ fn supervisor_running(exe: &str) -> (tempfile::TempDir, Vec<Check>) {
     let tmp = tempfile::tempdir().unwrap();
     let pid_file = tmp.path().join("supervisor.pid");
     fs::write(&pid_file, "4242\n").unwrap();
+    let held = fs::File::open(&pid_file).unwrap();
+    held.lock().unwrap();
     let proc_dir = tmp.path().join("proc/4242");
     fs::create_dir_all(&proc_dir).unwrap();
     symlink(exe, proc_dir.join("exe")).unwrap();
     let checks = supervisor_binary(&pid_file, &tmp.path().join("proc"));
     (tmp, checks)
+}
+
+/// A supervisor that exited leaves its pid file, unlocked; that pid may
+/// belong to anything by now.
+#[test]
+fn an_unlocked_pid_file_reports_nothing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let pid_file = tmp.path().join("supervisor.pid");
+    fs::write(&pid_file, "4242\n").unwrap();
+
+    assert!(supervisor_binary(&pid_file, &tmp.path().join("proc")).is_empty());
 }
 
 #[test]

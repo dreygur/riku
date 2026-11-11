@@ -157,13 +157,18 @@ fn test_supervisor_uptime_seconds_missing_pid_file_returns_none() {
     assert!(supervisor_uptime_seconds(&paths).is_none());
 }
 
+/// The pid file outlives its supervisor, so only a locked one has an uptime.
 #[test]
-fn test_supervisor_uptime_seconds_present() {
+fn supervisor_uptime_needs_a_locked_pid_file() {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
-    fs::write(paths.riku_root.join("supervisor.pid"), "1\n").unwrap();
-    let uptime = supervisor_uptime_seconds(&paths);
-    assert!(uptime.is_some());
+    let pid_file = paths.riku_root.join("supervisor.pid");
+    fs::write(&pid_file, "1\n").unwrap();
+    assert_eq!(supervisor_uptime_seconds(&paths), None, "unlocked: exited");
+
+    let held = fs::File::open(&pid_file).unwrap();
+    held.lock().unwrap();
+    assert!(supervisor_uptime_seconds(&paths).is_some());
 }
 
 #[test]

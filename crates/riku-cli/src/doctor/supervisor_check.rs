@@ -18,13 +18,14 @@ const DELETED_SUFFIX: &str = " (deleted)";
 
 /// Compare `<proc_root>/<pid>/exe` of the pid in `pid_file` with
 /// [`ROOT_BINARY`]. No pid file means no supervisor is running, which the
-/// service check reports; this one stays quiet then. So does a pid file
-/// riku-deploy `supervisor_pid::probe` refuses (a link, a FIFO, another
-/// user's file).
+/// service check reports; this one stays quiet then. So does an unlocked
+/// pid file, left by a supervisor that exited (the file is kept on exit),
+/// and one riku-deploy `supervisor_pid::probe` refuses (a link, a FIFO,
+/// another user's file).
 pub fn supervisor_binary(pid_file: &Path, proc_root: &Path) -> Vec<Check> {
     let probed = match supervisor_pid::probe(pid_file) {
-        Some(probed) => probed,
-        None => return Vec::new(),
+        Some(probed) if probed.locked => probed,
+        _ => return Vec::new(),
     };
     let pid = match probed.pid {
         Some(pid) => pid,

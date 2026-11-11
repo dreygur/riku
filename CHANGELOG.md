@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A supervisor exiting cleanly unlinked `supervisor.pid` after releasing
+  its lock. A supervisor starting at that moment could win the lock on the
+  unlinked file while the next start locked a new one, leaving two
+  supervisors. The file now stays on exit; only the lock says a supervisor
+  runs, so `riku doctor` and the state dump ignore an unlocked file.
 - `riku restart` could leave an app half restarted: it wrote `LIVE_ENV`
   and rewrote kinds sorting before `web` (such as `beat`) before asking the
   router, so a router helper that was down failed the restart after those
