@@ -31,10 +31,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   control API restart) on a Procfile app restarts the running workers from
   the current build and never rebuilds. It used to stop the app and deploy
   the checkout again, so after a failed push it rebuilt the broken commit
-  and left the app down. A rebuild, a config change to apply, or starting a
-  stopped app is now `riku deploy <app>`; restart of an app with no running
-  workers is refused with that pointer. `--hot` is now the same as a plain
-  restart. Container apps keep their restart behavior.
+  and left the app down. Restart rewrites the running workers' configs from
+  the current ENV and riku settings (plus the runtime plugin's `env`
+  output, as a deploy computes them), so an edited ENV takes effect without
+  a build, release, preflight or checkout change; each kind keeps its
+  command and copy count, web facing kinds are rolled one copy at a time
+  through the router as on a deploy, and restart holds the app's deploy
+  lock. A rebuild, a Procfile or routing change, or starting a stopped app
+  is `riku deploy <app>`; restart of an app with no running workers is
+  refused with that pointer. `--hot` is now the same as a plain restart.
+  Container apps keep their restart behavior.
 
 ### Fixed
 

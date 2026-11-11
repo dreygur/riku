@@ -32,6 +32,7 @@ mod pinned;
 mod plan;
 mod ports;
 pub(crate) mod process_runtime;
+mod rewrite;
 mod scaling;
 mod socket;
 mod stop_wait;
@@ -40,6 +41,7 @@ mod web_rollout;
 
 use pinned::port_in_use;
 use plan::plan_workers;
+pub(crate) use rewrite::rewrite_running;
 pub use scaling::read_scaling_count;
 
 use files::{remove_stale_configs, write_worker_config};

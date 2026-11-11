@@ -308,20 +308,26 @@ log to the same files, written by the supervisor.
 ### `riku restart <app> [process]`
 
 Restart the running processes of an application from the current build.
-Nothing is built. To rebuild, or to apply a config change, run
-`riku deploy <app>`.
+Nothing is built. To rebuild, or to apply a change to the Procfile, the
+domains or other routing settings, run `riku deploy <app>`.
 
 ```bash
 riku restart myapp
 riku restart myapp worker   # one process kind, or one container service
 ```
 
-A Procfile app's workers start again from the configs and build of the last
-successful deploy. A worker with a health check is replaced by a probed
-canary, so it keeps serving. An app with no running workers (never deployed,
-or stopped) is refused with a pointer to `riku deploy`. Naming a process
-kind (`web`, `worker`, ...) restarts only that kind's workers; a kind the
-app does not run is refused with the list of kinds it does run.
+A Procfile app's worker configs are written again from the app's current
+ENV and riku settings, the env a deploy would give them (the runtime
+plugin's `env` output included), so a value edited in ENV takes effect.
+No build, release or preflight runs and the checkout is left as it is. Each
+kind keeps its command and its number of copies. Web facing kinds are
+replaced one copy at a time as on a deploy: a new copy starts, passes its
+health check and joins the router before an old one stops. Other kinds are
+stopped and started with the new config. An app with no running workers
+(never deployed, or stopped) is refused with a pointer to `riku deploy`, and
+so is an ENV that still sets the removed `RIKU_AUTO_RESTART`. Naming a
+process kind (`web`, `worker`, ...) restarts only that kind's workers; a
+kind the app does not run is refused with the list of kinds it does run.
 
 A container app replaces the copies of the named service, or of every
 service in start order, one at a time from the images they run now, without

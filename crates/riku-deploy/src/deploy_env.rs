@@ -72,6 +72,19 @@ pub(crate) fn load_deploy_env(
     Ok(loaded.env)
 }
 
+/// The merged env as [`load_deploy_env`] reads it, refusing the same keys,
+/// for `riku restart`: nothing is printed and no file mode changes.
+pub(crate) fn load_restart_env(app: &str, paths: &RikuPaths) -> Result<HashMap<String, String>> {
+    let loaded = match app_config::load_env(paths, app) {
+        Ok(loaded) => loaded,
+        Err(e) => return Err(e),
+    };
+    match refuse_removed_keys(app, &loaded.env) {
+        Ok(()) => Ok(loaded.env),
+        Err(e) => Err(e),
+    }
+}
+
 /// The ENV form of the removed `workers.auto_restart`, which riku.toml
 /// refuses when it is parsed (riku-config `app_settings/keys.rs`).
 const AUTO_RESTART_KEY: &str = "RIKU_AUTO_RESTART";

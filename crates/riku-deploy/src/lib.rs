@@ -51,6 +51,7 @@ mod pipeline;
 mod procfile_deploy;
 mod progress;
 pub mod releases;
+mod restart_env;
 pub mod rolling;
 pub mod router;
 pub mod scaling;

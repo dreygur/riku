@@ -44,7 +44,7 @@ riku addon create postgres db1
 # Bind it to an app, injecting DATABASE_URL into myapp's environment
 riku addon bind db1 myapp
 
-# Deploy so the app picks up the new env (a restart keeps the old one)
+# Deploy so the app picks up the new env
 riku deploy myapp
 ```
 

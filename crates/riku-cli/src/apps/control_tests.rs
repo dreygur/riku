@@ -28,19 +28,35 @@ fn run_succeeds_for_a_passing_command() {
     assert!(result.is_ok(), "riku run failed: {result:?}");
 }
 
+/// A runtime plugin that takes any app and leaves `built` in the checkout
+/// when its `build` runs.
+const PLUGIN: &str = "#!/bin/sh\n[ \"$1\" = build ] && touch \"$RIKU_APP_PATH/built\"\nexit 0\n";
+
 /// A deployed `kind` worker of `shop` whose config was last written an hour
-/// ago. Returns the config file the enabled link points at.
+/// ago, with the runtime plugin that built it. Returns the config file the
+/// enabled link points at.
 fn deployed_worker(paths: &RikuPaths, kind: &str) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+
     fs::create_dir_all(paths.app_root.join("shop")).unwrap();
     fs::create_dir_all(&paths.workers_available).unwrap();
     fs::create_dir_all(&paths.workers_enabled).unwrap();
+    fs::create_dir_all(&paths.plugin_root).unwrap();
+    let plugin = paths.plugin_root.join("fake");
+    fs::write(&plugin, PLUGIN).unwrap();
+    fs::set_permissions(&plugin, fs::Permissions::from_mode(0o755)).unwrap();
     let name = format!("shop@{kind}.1.toml");
     let config = paths.workers_available.join(&name);
-    fs::write(
-        &config,
-        format!("[worker]\napp = \"shop\"\nkind = \"{kind}\"\n"),
-    )
-    .unwrap();
+    let worker = crate::supervisor::config::create_worker_config(
+        "shop",
+        kind,
+        "sleep 60",
+        1,
+        Default::default(),
+        &paths.app_root.join("shop").to_string_lossy(),
+        &paths.log_root.join("shop").to_string_lossy(),
+    );
+    fs::write(&config, toml::to_string(&worker).unwrap()).unwrap();
     let hour_ago = SystemTime::now() - Duration::from_secs(3600);
     let file = fs::File::options().write(true).open(&config).unwrap();
     file.set_modified(hour_ago).unwrap();
@@ -65,11 +81,13 @@ fn fake_supervisor(paths: &RikuPaths) -> (std::process::Child, fs::File) {
     (child, lock)
 }
 
+/// A `worker` kind, since rolling a web kind needs a router; that path is
+/// covered by riku-deploy's `workers/rewrite_tests.rs`.
 #[test]
 fn restart_of_a_procfile_app_restarts_its_workers_without_a_build() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());
-    let config = deployed_worker(&paths, "web");
+    let config = deployed_worker(&paths, "worker");
     let (mut supervisor, _lock) = fake_supervisor(&paths);
     let before = modified(&config);
 
@@ -82,7 +100,11 @@ fn restart_of_a_procfile_app_restarts_its_workers_without_a_build() {
         "restart must not run a deploy, but it opened the deploy log"
     );
     assert!(
-        paths.workers_enabled.join("shop@web.1.toml").exists(),
+        !paths.app_root.join("shop").join("built").exists(),
+        "restart must not run the runtime plugin's build"
+    );
+    assert!(
+        paths.workers_enabled.join("shop@worker.1.toml").exists(),
         "restart must keep the worker enabled"
     );
     assert!(

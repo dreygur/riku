@@ -57,7 +57,7 @@ fn install_hint(app: &str, runtime: &str) -> anyhow::Error {
 
 /// The installed plugin that builds `app`. When none does and the app needs
 /// a runtime riku ships, the error names the command that installs it.
-fn detect_runtime(
+pub(crate) fn detect_runtime(
     app: &str,
     app_path: &Path,
     paths: &RikuPaths,

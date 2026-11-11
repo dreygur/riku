@@ -1,89 +1,55 @@
 //! Restarting the running workers of a Procfile app, or of one of its
-//! process kinds, as `riku restart` does. Nothing is built: the workers start again from the build and the
-//! configs the last deploy left. A rebuild is `riku deploy`.
+//! process kinds, as `riku restart` does.
 //!
-//! The supervisor reloads a worker whose config file's mtime advanced, on
-//! the file watcher's event or on the next SIGHUP. The enabled entries are
-//! symlinks into `workers-available`, so bumping the target's mtime raises
-//! no event in the watched directory; the SIGHUP is what makes it reliable.
+//! `riku restart` rewrites the running workers' configs from the app's
+//! current ENV and riku settings, the env a deploy would compute, so an
+//! edited ENV takes effect. Nothing is built, no release or preflight runs,
+//! and the checkout is left as it is; the runtime plugin's `env` subcommand
+//! is the only plugin call. Web facing kinds are rolled one copy at a time
+//! as on a deploy, so the router never loses them. A rebuild is
+//! `riku deploy`.
+//!
+//! A single worker restart (the dashboard's button) keeps its config and
+//! advances the config file's mtime instead. The supervisor reloads a worker
+//! whose config file's mtime advanced, on the file watcher's event or on the
+//! next SIGHUP; the enabled entries are symlinks into `workers-available`,
+//! so the SIGHUP is what makes it reliable.
 
 // Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
 #![allow(clippy::question_mark)]
 
-use std::fs;
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 
 use anyhow::{anyhow, Result};
-use riku_supervisor::config::app_worker_configs;
+use riku_supervisor::config::{app_worker_configs, WorkerConfig};
 
 use crate::config::RikuPaths;
-use crate::supervisor_ctl;
 use crate::util::file_names::worker::WorkerName;
+use crate::{env_setup, lock, restart_env, supervisor_ctl, workers};
 
-/// The config file `config` leads to: the target of an enabled link, or the
-/// file itself. It must sit directly in `workers_available`; the returned
-/// path is under the canonical form of that directory, so only its last
-/// component can still be a link, and opening refuses that.
-fn config_in_available(config: &Path, paths: &RikuPaths) -> Result<PathBuf> {
-    let target = match fs::read_link(config) {
-        Ok(target) => match config.parent() {
-            Some(dir) => dir.join(target),
-            None => target,
-        },
-        Err(_) => config.to_path_buf(),
-    };
-    let (dir, name) = match (target.parent(), target.file_name()) {
-        (Some(dir), Some(name)) => (dir, name),
-        _ => return Err(anyhow!("{} is not a worker config", config.display())),
-    };
-    let available = fs::canonicalize(&paths.workers_available);
-    match (fs::canonicalize(dir), available) {
-        (Ok(dir), Ok(available)) if dir == available => Ok(available.join(name)),
-        _ => Err(anyhow!(
-            "{} does not lead to a config in {}",
-            config.display(),
-            paths.workers_available.display()
-        )),
-    }
-}
+mod config_file;
 
-/// Advance the mtime of the config `config` leads to, so the supervisor
-/// reloads that worker. Opened read only, non blocking and without following
-/// a final link; refused unless it is a regular file this user owns.
-fn bump_mtime(config: &Path, paths: &RikuPaths) -> Result<()> {
-    let target = match config_in_available(config, paths) {
-        Ok(target) => target,
-        Err(e) => return Err(e),
-    };
-    let opened = fs::File::options()
-        .read(true)
-        .custom_flags(nix::libc::O_NOFOLLOW | nix::libc::O_NONBLOCK)
-        .open(&target);
-    let file = match opened {
-        Ok(file) => file,
-        Err(e) => return Err(anyhow!("cannot open {}: {e}", target.display())),
-    };
-    let meta = match file.metadata() {
-        Ok(meta) => meta,
-        Err(e) => return Err(anyhow!("cannot stat {}: {e}", target.display())),
-    };
-    if !meta.is_file() {
-        return Err(anyhow!("{} is not a regular file", target.display()));
+use config_file::{bump_mtime, read_config};
+
+/// Fails unless a supervisor runs, starting one with `start_supervisor` when
+/// none does.
+fn require_supervisor(
+    paths: &RikuPaths,
+    start_supervisor: impl Fn(&RikuPaths) -> bool,
+) -> Result<()> {
+    if supervisor_ctl::supervisor_is_running(paths) || start_supervisor(paths) {
+        return Ok(());
     }
-    if meta.uid() != nix::unistd::geteuid().as_raw() {
-        return Err(anyhow!("{} is not owned by this user", target.display()));
-    }
-    match file.set_modified(SystemTime::now()) {
-        Ok(()) => Ok(()),
-        Err(e) => Err(anyhow!("cannot touch {}: {e}", target.display())),
-    }
+    Err(anyhow!(
+        "the supervisor is not running and could not be started, so nothing restarted; \
+         see riku doctor"
+    ))
 }
 
 /// Restart the workers whose configs are `configs` (enabled entries or the
-/// files they point at). Starts the supervisor when it is not running,
-/// which starts them too. An error when no supervisor runs afterwards.
+/// files they point at) as they are. Starts the supervisor when it is not
+/// running, which starts them too. An error when no supervisor runs
+/// afterwards.
 pub fn restart_configs(configs: &[PathBuf], paths: &RikuPaths) -> Result<()> {
     restart_configs_with(configs, paths, supervisor_ctl::ensure_supervisor_running)
 }
@@ -100,11 +66,8 @@ fn restart_configs_with(
             return Err(e);
         }
     }
-    if !supervisor_ctl::supervisor_is_running(paths) && !start_supervisor(paths) {
-        return Err(anyhow!(
-            "the supervisor is not running and could not be started, so nothing restarted; \
-             see riku doctor"
-        ));
+    if let Err(e) = require_supervisor(paths, start_supervisor) {
+        return Err(e);
     }
     supervisor_ctl::notify_supervisor_reload(paths);
     Ok(())
@@ -136,30 +99,74 @@ fn configs_of_kind(app: &str, kind: &str, enabled: Vec<PathBuf>) -> Result<Vec<P
     ))
 }
 
-/// Restart the enabled workers of `app`, or only those of process `kind`
-/// (`web`, `worker`, ...), and return how many there are. An app with no
-/// enabled workers (never deployed, or stopped) is an error that names
-/// `riku deploy`.
-pub fn restart_procfile_app(app: &str, kind: Option<&str>, paths: &RikuPaths) -> Result<usize> {
+/// The enabled configs of `app`, or of its process `kind`.
+fn chosen_configs(app: &str, kind: Option<&str>, paths: &RikuPaths) -> Result<Vec<PathBuf>> {
     let enabled = app_worker_configs(&paths.workers_enabled, app);
     if enabled.is_empty() {
         return Err(anyhow!(
             "'{app}' has no running processes to restart; start it with riku deploy {app}"
         ));
     }
-    let chosen = match kind {
-        Some(kind) => match configs_of_kind(app, kind, enabled) {
-            Ok(chosen) => chosen,
-            Err(e) => return Err(e),
-        },
-        None => enabled,
-    };
-    match restart_configs(&chosen, paths) {
-        Ok(()) => Ok(chosen.len()),
-        Err(e) => Err(e),
+    match kind {
+        Some(kind) => configs_of_kind(app, kind, enabled),
+        None => Ok(enabled),
     }
+}
+
+/// Restart the enabled workers of `app`, or only those of process `kind`
+/// (`web`, `worker`, ...), with configs rewritten from the current ENV and
+/// riku settings, and return how many there are. An app with no enabled
+/// workers (never deployed, or stopped) is an error that names
+/// `riku deploy`. Holds the app's deploy lock throughout.
+pub fn restart_procfile_app(app: &str, kind: Option<&str>, paths: &RikuPaths) -> Result<usize> {
+    restart_procfile_app_with(app, kind, paths, supervisor_ctl::ensure_supervisor_running)
+}
+
+/// [`restart_procfile_app`] with the way a missing supervisor is started
+/// given, so a test never launches one.
+fn restart_procfile_app_with(
+    app: &str,
+    kind: Option<&str>,
+    paths: &RikuPaths,
+    start_supervisor: impl Fn(&RikuPaths) -> bool,
+) -> Result<usize> {
+    let chosen = match chosen_configs(app, kind, paths) {
+        Ok(chosen) => chosen,
+        Err(e) => return Err(e),
+    };
+    let _lock = match lock::acquire_for_deploy(app, paths) {
+        Ok(lock) => lock,
+        Err(e) => return Err(e),
+    };
+    let mut running: Vec<WorkerConfig> = Vec::with_capacity(chosen.len());
+    for config in &chosen {
+        match read_config(config, paths) {
+            Ok(parsed) => running.push(parsed),
+            Err(e) => return Err(e),
+        }
+    }
+    let env = match restart_env::worker_env(app, paths) {
+        Ok(env) => env,
+        Err(e) => return Err(e),
+    };
+    if let Err(e) = require_supervisor(paths, start_supervisor) {
+        return Err(e);
+    }
+    if let Err(e) = env_setup::write_live_env(app, paths, &env) {
+        return Err(e);
+    }
+    let app_path = paths.app_root.join(app);
+    if let Err(e) = workers::rewrite_running(app, &app_path, &running, &env, paths) {
+        return Err(e);
+    }
+    supervisor_ctl::notify_supervisor_reload(paths);
+    Ok(running.len())
 }
 
 #[cfg(test)]
 #[path = "app_restart_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "app_restart_env_tests.rs"]
+mod env_tests;
