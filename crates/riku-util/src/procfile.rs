@@ -102,7 +102,7 @@ pub fn parse_procfile(filename: &Path) -> Result<Option<HashMap<String, String>>
         if workers.contains_key(&kind) {
             echo(
                 &format!(
-                    "Warning: found multiple {} workers, only the last one will be used.",
+                    "found multiple {} workers, only the last one will be used.",
                     kind
                 ),
                 "yellow",
@@ -118,7 +118,7 @@ pub fn parse_procfile(filename: &Path) -> Result<Option<HashMap<String, String>>
         && workers.contains_key("web")
     {
         echo(
-            "Warning: found both 'wsgi' and 'web' workers, disabling 'web'",
+            "found both 'wsgi' and 'web' workers, disabling 'web'",
             "yellow",
         );
         workers.remove("web");

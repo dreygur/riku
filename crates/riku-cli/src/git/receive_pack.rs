@@ -91,7 +91,7 @@ pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
             .status();
         match status {
             Ok(status) if status.success() => {}
-            Ok(_) => echo("Error: git init failed.", "red"),
+            Ok(_) => echo("git init failed.", "red"),
             Err(e) => return Err(anyhow!("cannot run git init: {e}")),
         }
     }

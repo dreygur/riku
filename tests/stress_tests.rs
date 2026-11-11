@@ -449,8 +449,13 @@ fn test_build_phase_memory_limit_chokes_runaway_allocation() {
         ..ResourceLimits::default()
     };
     let start = Instant::now();
-    let result =
-        riku::plugins::runtime::build_with_limits(&plugin, &ctx, limits, Duration::from_secs(15));
+    let result = riku::plugins::runtime::build_with_limits(
+        &plugin,
+        &ctx,
+        limits,
+        Duration::from_secs(15),
+        &riku::util::display::OutputTail::default(),
+    );
     let elapsed = start.elapsed();
 
     let err = result.expect_err("a build step that exceeds RIKU_MAX_MEMORY_MB must fail, got Ok");

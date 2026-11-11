@@ -83,19 +83,23 @@ fn test_exit_code_for_signal_uses_128_plus_signal_convention() {
 // tee_output
 
 #[test]
-fn test_tee_output_captures_stderr_tail() {
+fn tee_output_keeps_the_stderr_tail_and_recent_lines_of_both_streams() {
     let mut child = Command::new("sh")
         .args(["-c", "echo to stdout; echo to stderr error >&2"])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    let (handles, tail) = tee_output(&mut child);
+    let recent = riku_util::display::OutputTail::default();
+    let (handles, tail) = tee_output(&mut child, &recent);
     child.wait().unwrap();
     for h in handles {
         h.join().unwrap();
     }
     assert!(tail.lock().unwrap().contains("to stderr error"));
+    let mut lines = recent.lines();
+    lines.sort();
+    assert_eq!(lines, ["to stderr error", "to stdout"]);
 }
 
 // wait_with_timeout

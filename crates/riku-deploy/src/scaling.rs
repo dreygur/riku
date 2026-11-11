@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::fs;
 
 use crate::config::RikuPaths;
-use crate::util::echo;
+use crate::util::display;
 use crate::util::file_names::worker::WorkerName;
 
 /// The counts in an app's SCALING file, `kind=count` per line.
@@ -43,10 +43,7 @@ fn remove_scaled_down(app: &str, kind: &str, from: u32, to: u32, paths: &RikuPat
         if let Err(e) = fs::remove_file(&enabled_path) {
             return Err(anyhow!("cannot remove {}: {e}", enabled_path.display()));
         }
-        echo(
-            &format!("-----> Removed worker config: {config_filename} (scaled down)"),
-            "yellow",
-        );
+        display::detail(&format!("Removed {config_filename} (scaled down)"));
     }
     Ok(())
 }
@@ -82,13 +79,7 @@ pub(crate) fn apply_scaling_deltas(
             current + (*delta as u32)
         };
         new_counts.insert(kind.clone(), new_count);
-        echo(
-            &format!(
-                "-----> Scaling '{}': {} -> {} (delta: {})",
-                kind, current, new_count, delta
-            ),
-            "green",
-        );
+        display::detail(&format!("Scaling {kind}: {current} to {new_count}"));
     }
 
     let mut counts: Vec<_> = new_counts.iter().collect();

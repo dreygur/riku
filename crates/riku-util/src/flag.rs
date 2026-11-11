@@ -35,7 +35,7 @@ pub fn https_only_warning(env: &HashMap<String, String>) -> Option<String> {
         return None;
     }
     Some(format!(
-        "Warning: {HTTPS_ONLY_KEY}={value} is not a recognized value and is treated as off. Use true or false."
+        "{HTTPS_ONLY_KEY}={value} is not a recognized value and is treated as off. Use true or false."
     ))
 }
 

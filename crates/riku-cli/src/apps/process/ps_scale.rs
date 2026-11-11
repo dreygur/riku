@@ -64,7 +64,7 @@ fn scale_procfile(paths: &RikuPaths, app: &str, settings: &[String]) -> Result<(
             match v_str.parse::<i64>() {
                 Ok(c) => {
                     if c < 0 {
-                        echo(&format!("Error: cannot scale type '{}' below 0", k), "red");
+                        echo(&format!("cannot scale type '{}' below 0", k), "red");
                         return Ok(());
                     }
                     if let Some(current) = worker_count.get(&k) {
@@ -73,7 +73,7 @@ fn scale_procfile(paths: &RikuPaths, app: &str, settings: &[String]) -> Result<(
                                 deltas.insert(k, c - current_val);
                             }
                             Err(_) => {
-                                echo(&format!("Error: malformed setting '{}'", s), "red");
+                                echo(&format!("malformed setting '{}'", s), "red");
                                 return Ok(());
                             }
                         }
@@ -86,12 +86,12 @@ fn scale_procfile(paths: &RikuPaths, app: &str, settings: &[String]) -> Result<(
                     }
                 }
                 Err(_) => {
-                    echo(&format!("Error: malformed setting '{}'", s), "red");
+                    echo(&format!("malformed setting '{}'", s), "red");
                     return Ok(());
                 }
             }
         } else {
-            echo(&format!("Error: malformed setting '{}'", s), "red");
+            echo(&format!("malformed setting '{}'", s), "red");
             return Ok(());
         }
     }

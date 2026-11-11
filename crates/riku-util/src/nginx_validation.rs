@@ -30,7 +30,7 @@ pub fn validate_env_vars(env: &HashMap<String, String>) -> Vec<String> {
     for var in &deprecated_vars {
         if env.contains_key(*var) {
             warnings.push(format!(
-                "Warning: {} is deprecated - Riku uses a custom supervisor instead of uWSGI. \
+                "{} is deprecated - Riku uses a custom supervisor instead of uWSGI. \
                  Use RIKU_* variables or the SCALING file instead.",
                 var
             ));

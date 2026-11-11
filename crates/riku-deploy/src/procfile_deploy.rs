@@ -9,16 +9,43 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 
+use crate::app_command::{run_one_shot, OneShot};
+use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::plugins::runtime::{MissingRuntime, RuntimeContext, RuntimePlugin};
+use crate::progress::{DeployProgress, Phase};
 use crate::util::runtime_markers::{is_bundled_runtime, needed_runtime};
-use crate::util::{deploy_logger::DeployLogger, echo};
+use crate::workers::{read_scaling_count, ONE_SHOT_KINDS};
 use crate::{env_setup, hooks, workers};
 
 /// What the runtime plugin's build left for the start step.
 struct PluginOutput {
     env: HashMap<String, String>,
     start_cmd: Option<String>,
+}
+
+/// What a finished app deploy reports: the runtime that built it and its
+/// process counts (`web 1, worker 2`), empty when riku does not count them.
+pub(crate) struct Deployed {
+    pub runtime: String,
+    pub workers: String,
+}
+
+/// `web 1, worker 2` for the long running kinds in `declared`, sorted.
+fn process_counts(app: &str, paths: &RikuPaths, declared: &HashMap<String, String>) -> String {
+    let mut kinds: Vec<&String> = declared
+        .keys()
+        .filter(|kind| !ONE_SHOT_KINDS.contains(&kind.as_str()) && !kind.starts_with("cron"))
+        .collect();
+    kinds.sort();
+    kinds
+        .iter()
+        .map(|kind| {
+            let count = read_scaling_count(paths, app, kind).unwrap_or(1);
+            format!("{kind} {count}")
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn install_hint(app: &str, runtime: &str) -> anyhow::Error {
@@ -61,9 +88,9 @@ fn build_with_plugin(
     plugin: &RuntimePlugin,
     ctx: &RuntimeContext,
     paths: &RikuPaths,
-    dlog: &mut DeployLogger,
+    progress: &mut DeployProgress,
 ) -> Result<PluginOutput> {
-    dlog.log_raw("Running pre-build hooks");
+    progress.log.log_raw("Running pre-build hooks");
     if let Err(e) = hooks::run_pre_build(
         ctx.app,
         ctx.app_path,
@@ -73,8 +100,8 @@ fn build_with_plugin(
     ) {
         return Err(e);
     }
-    dlog.log_raw("Building application");
-    if let Err(e) = crate::plugins::runtime::build(plugin, ctx) {
+    progress.log.log_raw("Building application");
+    if let Err(e) = crate::plugins::runtime::build(plugin, ctx, progress.output()) {
         return Err(e);
     }
     let env = match crate::plugins::runtime::get_env(plugin, ctx) {
@@ -96,19 +123,21 @@ fn release_and_start(
     workers: &HashMap<String, String>,
     start_cmd: Option<&str>,
     env: &HashMap<String, String>,
-    dlog: &mut DeployLogger,
-) -> Result<()> {
+    progress: &mut DeployProgress,
+) -> Result<String> {
     let app_path = paths.app_root.join(app);
-    dlog.log_raw("Running post-build hooks");
+    progress.log.log_raw("Running post-build hooks");
     if let Err(e) = hooks::run_post_build(app, &app_path, paths, Some(runtime), env) {
         return Err(e);
     }
     if let Some(release_cmd) = workers.get("release") {
-        dlog.log("Running release command");
-        if let Err(e) = env_setup::run_release(release_cmd, &app_path) {
+        progress.begin(Phase::Release);
+        if let Err(e) = run_one_shot(OneShot::Release, release_cmd, &app_path, progress.output()) {
             return Err(e);
         }
+        progress.done_timed(release_cmd);
     }
+    progress.begin(Phase::Processes);
     if let Err(e) = env_setup::write_live_env(app, paths, env) {
         return Err(e);
     }
@@ -118,24 +147,42 @@ fn release_and_start(
     {
         return Err(e);
     }
-    dlog.log("Starting application processes");
-    crate::spawn_app(app, paths)
+    // An app that declares no processes runs the plugin's start command as web.
+    let counts = if workers.is_empty() {
+        process_counts(
+            app,
+            paths,
+            &HashMap::from([("web".to_string(), String::new())]),
+        )
+    } else {
+        process_counts(app, paths, workers)
+    };
+    progress.done(&counts);
+    progress.begin(Phase::Route);
+    if let Err(e) = crate::spawn_app(app, paths) {
+        return Err(e);
+    }
+    let router = match Router::load(paths) {
+        Ok(router) => router.name().to_string(),
+        Err(_) => String::new(),
+    };
+    progress.done(&router);
+    Ok(counts)
 }
 
 /// Build and start a Procfile app from its process list (riku.toml or
 /// Procfile, empty when it declares none), after applying `deltas` to its
 /// copy counts. An app with no processes runs its runtime plugin's start
 /// command as `web`. Plugin provided env is merged into `env`, so the post
-/// deploy hook sees what the processes run with. Returns the runtime
-/// plugin's name.
+/// deploy hook sees what the processes run with.
 pub(crate) fn deploy_procfile_app(
     app: &str,
     paths: &RikuPaths,
     deltas: &HashMap<String, i64>,
     mut workers: HashMap<String, String>,
     env: &mut HashMap<String, String>,
-    dlog: &mut DeployLogger,
-) -> Result<String> {
+    progress: &mut DeployProgress,
+) -> Result<Deployed> {
     let app_path = paths.app_root.join(app);
     if let Err(e) = workers::apply_scaling_deltas(app, paths, deltas, &workers) {
         return Err(e);
@@ -144,19 +191,27 @@ pub(crate) fn deploy_procfile_app(
     // kinds still counts as declared, so no start command is added as web.
     let declared = workers.clone();
     if let Some(preflight_cmd) = workers.remove("preflight") {
-        dlog.log("Running preflight command");
-        env_setup::run_preflight(&preflight_cmd, &app_path);
+        progress.begin(Phase::Preflight);
+        if let Err(e) = run_one_shot(
+            OneShot::Preflight,
+            &preflight_cmd,
+            &app_path,
+            progress.output(),
+        ) {
+            return Err(e);
+        }
+        progress.done_timed(&preflight_cmd);
     }
-    dlog.log_raw("Running pre-deploy hooks");
+    progress.log.log_raw("Running pre-deploy hooks");
     if let Err(e) = hooks::run_pre_deploy(app, &app_path, paths, env) {
         return Err(e);
     }
+    progress.begin(Phase::Runtime);
     let plugin = match detect_runtime(app, &app_path, paths, env) {
         Ok(plugin) => plugin,
         Err(e) => return Err(e),
     };
-    dlog.log(&format!("Detected runtime: {}", plugin.name));
-    echo(&format!("-----> {} app detected.", plugin.name), "green");
+    progress.done(&plugin.name);
     let env_path = paths.env_root.join(app);
     let ctx = RuntimeContext {
         app,
@@ -165,22 +220,33 @@ pub(crate) fn deploy_procfile_app(
         riku_root: &paths.riku_root,
         app_env: env,
     };
-    let output = match build_with_plugin(&plugin, &ctx, paths, dlog) {
+    progress.begin(Phase::Build);
+    let output = match build_with_plugin(&plugin, &ctx, paths, progress) {
         Ok(output) => output,
         Err(e) => return Err(e),
     };
     if workers.is_empty() && output.start_cmd.is_none() {
-        let reason = format!(
-            "No processes declared for app '{app}' (riku.toml or Procfile) and runtime '{}' gave no start command. Deploy aborted.",
+        return Err(anyhow!(
+            "no processes declared for app '{app}' (riku.toml or Procfile) and runtime '{}' gave no start command",
             plugin.name
-        );
-        dlog.log_error(&reason);
-        return Err(anyhow!(reason));
+        ));
     }
+    progress.done_timed("");
     env.extend(output.env);
     let start_cmd = output.start_cmd.as_deref();
-    match release_and_start(app, paths, &plugin.name, &declared, start_cmd, env, dlog) {
-        Ok(()) => Ok(plugin.name),
+    match release_and_start(
+        app,
+        paths,
+        &plugin.name,
+        &declared,
+        start_cmd,
+        env,
+        progress,
+    ) {
+        Ok(workers) => Ok(Deployed {
+            runtime: plugin.name,
+            workers,
+        }),
         Err(e) => Err(e),
     }
 }

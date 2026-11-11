@@ -43,9 +43,17 @@ fn parse(argv: &[String], via_ssh: bool) -> ArgMatches {
     }
 }
 
+/// Prints a failure on the output rail (`■  reason` on stderr) and exits 1.
+fn main() {
+    if let Err(e) = run() {
+        riku::util::display::error(&format!("{e:#}"));
+        std::process::exit(1);
+    }
+}
+
 // Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
 #[allow(clippy::question_mark)]
-fn main() -> Result<()> {
+fn run() -> Result<()> {
     // Initialize structured logging
     init_tracing();
 

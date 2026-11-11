@@ -10,7 +10,6 @@ use anyhow::{anyhow, Result};
 use super::web_env::is_web_facing;
 use crate::config::RikuPaths;
 use crate::supervisor::config::{app_worker_configs, create_worker_config, WorkerConfig};
-use crate::util::echo;
 use crate::util::file_names::worker::WorkerName;
 
 /// Whether `path` is named after a copy of a web facing kind.
@@ -110,9 +109,6 @@ pub(super) fn write_worker_config(
         return Err(anyhow!("cannot enable {filename}: {e}"));
     }
 
-    echo(
-        &format!("-----> Created worker config: {}", filename),
-        "green",
-    );
+    tracing::debug!("created worker config {filename}");
     Ok(config)
 }

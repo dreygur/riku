@@ -74,12 +74,12 @@ fn deploy_from_path(paths: &RikuPaths, app: &str, source: &str) -> Result<()> {
     let source_path = Path::new(source);
 
     if !source_path.exists() {
-        display::error(&format!("Error: path '{}' does not exist.", source));
+        display::error(&format!("path '{}' does not exist.", source));
         bail!("Source path does not exist");
     }
 
     if !source_path.is_dir() {
-        display::error(&format!("Error: '{}' is not a directory.", source));
+        display::error(&format!("'{}' is not a directory.", source));
         bail!("Source is not a directory");
     }
 
@@ -88,7 +88,7 @@ fn deploy_from_path(paths: &RikuPaths, app: &str, source: &str) -> Result<()> {
         Err(e) => return Err(e),
     };
     if !declared {
-        display::error("Error: no Procfile or riku.toml [processes] in source directory.");
+        display::error("no Procfile or riku.toml [processes] in source directory.");
         display::warn("Declare the processes to run in either one.");
         display::warn("Example: echo 'web: npm start' > Procfile");
         bail!("no processes declared");
@@ -96,7 +96,7 @@ fn deploy_from_path(paths: &RikuPaths, app: &str, source: &str) -> Result<()> {
 
     let git_dir = source_path.join(".git");
     if !git_dir.exists() {
-        display::warn("Warning: source is not a git repository.");
+        display::warn("source is not a git repository.");
         display::warn("  Consider initializing git: git init");
     }
 

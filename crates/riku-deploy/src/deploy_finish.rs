@@ -7,12 +7,17 @@ use std::path::Path;
 
 use crate::config::router::Router;
 use crate::config::{settings, RikuPaths};
-use crate::live_urls::{live_lines, path_lines, port_lines, TlsState};
+use crate::live_urls::{live_lines, path_lines, port_lines, Line, TlsState};
+use crate::procfile_deploy::Deployed;
+use crate::progress::{DeployProgress, Outcome};
 use crate::router::app_routing::{AppRouting, RoutingMode};
 use crate::router::routing_env::{routing_env, Record};
 use crate::router::routing_state::RoutingState;
-use crate::util::{deploy_logger::DeployLogger, echo};
+use crate::util::display;
 use crate::{git_ops, hooks, releases};
+
+/// The prefix of a live URL line; the summary lists the URL alone.
+const LIVE_AT: &str = "Live at ";
 
 fn record_release(app: &str, app_path: &Path, paths: &RikuPaths) {
     let Some(sha) = git_ops::head_sha(app_path) else {
@@ -45,16 +50,13 @@ fn routed(
     Ok((routing, tls))
 }
 
-fn announce(app: &str, env: &HashMap<String, String>, paths: &RikuPaths) {
-    echo(&format!("-----> {} deployed!", app), "green");
+/// Where the app is live, as `live_urls` words it.
+fn live_at(app: &str, env: &HashMap<String, String>, paths: &RikuPaths) -> Vec<Line> {
     let (routing, tls) = match routed(app, env, paths) {
         Ok(found) => found,
         Err(e) => {
-            echo(
-                &format!("       Cannot tell where the app is live: {e:#}"),
-                "yellow",
-            );
-            return;
+            display::warn(&format!("Cannot tell where the app is live: {e:#}"));
+            return Vec::new();
         }
     };
     let mut lines = live_lines(app, &routing, tls, crate::util::flag::https_only(env));
@@ -66,24 +68,41 @@ fn announce(app: &str, env: &HashMap<String, String>, paths: &RikuPaths) {
     if let (RoutingMode::Path, Some(server)) = (routing.mode, &server) {
         lines.extend(path_lines(app, server.shared_port, server_ip));
     }
+    lines
+}
+
+/// Splits `lines` into the URLs for the summary, printing every other line
+/// on the rail before the outro.
+fn urls_after_notes(lines: Vec<Line>) -> Vec<String> {
+    let mut urls = Vec::new();
     for line in lines {
-        echo(&format!("       {}", line.text), line.colour);
+        match line.text.strip_prefix(LIVE_AT) {
+            Some(url) => urls.push(url.to_string()),
+            None if line.colour == "yellow" => display::warn(&line.text),
+            None => display::detail(&line.text),
+        }
     }
+    urls
 }
 
 /// Run the post deploy hooks (their failures are warnings only), record the
-/// deployed revision and print where the app is live.
+/// deployed revision and print the outro with where the app is live.
 pub(crate) fn finish_deploy(
     app: &str,
     paths: &RikuPaths,
-    runtime: &str,
+    deployed: &Deployed,
     env: &HashMap<String, String>,
-    dlog: &mut DeployLogger,
+    progress: &mut DeployProgress,
 ) {
     let app_path = paths.app_root.join(app);
-    dlog.log_raw("Running post-deploy hooks");
-    let _ = hooks::run_post_deploy(app, &app_path, paths, Some(runtime), env);
-    dlog.log(&format!("Deploy of '{}' complete", app));
+    progress.log.log_raw("Running post-deploy hooks");
+    let _ = hooks::run_post_deploy(app, &app_path, paths, Some(&deployed.runtime), env);
     record_release(app, &app_path, paths);
-    announce(app, env, paths);
+    let urls = urls_after_notes(live_at(app, env, paths));
+    let commit = git_ops::head_commit(&app_path);
+    progress.succeeded(&Outcome {
+        commit: commit.as_ref(),
+        urls: &urls,
+        workers: &deployed.workers,
+    });
 }

@@ -11,6 +11,8 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use crate::util::display::{self, OutputTail};
+
 /// Read plugin timeout from `RIKU_PLUGIN_TIMEOUT` env var (seconds).
 /// Defaults to 300 seconds (5 minutes).
 pub fn plugin_timeout() -> Duration {
@@ -36,33 +38,42 @@ pub use riku_util::spawn::{output_retrying_etxtbsy, spawn_retrying_etxtbsy};
 const STDERR_TAIL_CAP: usize = 4096;
 
 /// Spawn background threads that mirror `child`'s stdout/stderr to this
-/// process's own stdout/stderr line-by-line: preserving real-time
-/// streaming for whoever's watching `riku deploy`: while also retaining
-/// the last [`STDERR_TAIL_CAP`] bytes of stderr in the returned buffer, so
-/// a failed exit can be classified by [`classify_resource_exit`] afterward.
-/// `child.stdout`/`child.stderr` must be `Stdio::piped()` for this to do
-/// anything (a `None` pipe is silently skipped).
+/// process's own stdout/stderr line by line, each under the output rail
+/// (`│  line`), so whoever watches `riku deploy` or `git push` sees it live.
+/// Every line from either stream also goes into `recent`, which a failed
+/// deploy shows again. The last [`STDERR_TAIL_CAP`] bytes of stderr are kept
+/// in the returned buffer, so a failed exit can be classified by
+/// [`classify_resource_exit`] afterward. `child.stdout`/`child.stderr` must
+/// be `Stdio::piped()` for this to do anything (a `None` pipe is silently
+/// skipped).
 ///
 /// Callers must `child.wait()` (or `wait_with_timeout`) and then join the
 /// returned handles before reading the tail buffer, so they don't race the
 /// reader threads still draining the pipes.
-pub fn tee_output(child: &mut Child) -> (Vec<JoinHandle<()>>, Arc<Mutex<String>>) {
+pub fn tee_output(
+    child: &mut Child,
+    recent: &OutputTail,
+) -> (Vec<JoinHandle<()>>, Arc<Mutex<String>>) {
     let tail = Arc::new(Mutex::new(String::new()));
     let mut handles = Vec::new();
 
     if let Some(stdout) = child.stdout.take() {
+        let recent = recent.clone();
         handles.push(std::thread::spawn(move || {
             for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-                println!("{}", line);
+                display::detail(&line);
+                recent.push(&line);
             }
         }));
     }
 
     if let Some(stderr) = child.stderr.take() {
         let tail = Arc::clone(&tail);
+        let recent = recent.clone();
         handles.push(std::thread::spawn(move || {
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-                eprintln!("{}", line);
+                display::detail_err(&line);
+                recent.push(&line);
                 let mut buf = tail.lock().unwrap();
                 buf.push_str(&line);
                 buf.push('\n');

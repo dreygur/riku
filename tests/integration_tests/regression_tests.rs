@@ -645,7 +645,8 @@ mod agent_state_tests {
     }
 
     /// Deploy progress, ours and the child processes', must go to stderr so
-    /// stdout stays one JSON object an agent can parse.
+    /// stdout stays one JSON object an agent can parse, with no rail
+    /// characters from the human output format.
     #[test]
     fn agent_deploy_keeps_progress_off_stdout() {
         let home = TempDir::new().unwrap();
@@ -662,6 +663,14 @@ mod agent_state_tests {
         let stderr = String::from_utf8_lossy(&out.stderr);
         let response: Result<serde_json::Value, _> = serde_json::from_str(stdout.trim_end());
         assert!(response.is_ok(), "stdout is not one JSON object:\n{stdout}");
-        assert!(stderr.contains("Deploying app 'shop'"), "{stderr}");
+        assert!(
+            !stdout.contains(['┌', '│', '◇', '▲', '■', '└']),
+            "rail characters leaked into agent stdout:\n{stdout}"
+        );
+        assert!(stderr.contains("┌  Deploying shop"), "{stderr}");
+        assert!(
+            !stderr.contains('\x1b'),
+            "a piped stream must get no color escapes:\n{stderr:?}"
+        );
     }
 }

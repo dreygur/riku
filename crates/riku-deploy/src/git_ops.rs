@@ -6,17 +6,73 @@ use std::process::Command;
 
 use crate::util::echo;
 
+/// `git` run in the app's working tree. A post-receive hook exports
+/// `GIT_DIR` for the bare repo, which would otherwise win over the checkout.
+fn git_in_checkout(app_path: &Path) -> Command {
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
+        .arg(app_path)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE");
+    cmd
+}
+
 /// The current HEAD commit SHA of the app's working tree, if resolvable.
 pub fn head_sha(app_path: &Path) -> Option<String> {
-    let out = Command::new("git")
-        .args(["-C", app_path.to_str()?, "rev-parse", "HEAD"])
+    let out = match git_in_checkout(app_path)
+        .args(["rev-parse", "HEAD"])
         .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
+    {
+        Ok(out) if out.status.success() => out,
+        _ => return None,
+    };
     let sha = String::from_utf8_lossy(&out.stdout).trim().to_string();
     (!sha.is_empty()).then_some(sha)
+}
+
+/// The checked out commit, as the deploy intro names it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Commit {
+    /// The first seven characters of the SHA.
+    pub short_sha: String,
+    /// The first line of the commit message.
+    pub subject: String,
+}
+
+/// The HEAD commit of the app's working tree, if git can read it.
+pub fn head_commit(app_path: &Path) -> Option<Commit> {
+    let out = match git_in_checkout(app_path)
+        .args(["log", "-1", "--format=%h%n%s", "--abbrev=7"])
+        .output()
+    {
+        Ok(out) if out.status.success() => out,
+        _ => return None,
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    let mut lines = text.lines();
+    let short_sha = match lines.next() {
+        Some(sha) if !sha.is_empty() => sha.to_string(),
+        _ => return None,
+    };
+    Some(Commit {
+        short_sha,
+        subject: lines.next().unwrap_or("").to_string(),
+    })
+}
+
+/// The branch the bare `repo`'s `HEAD` names: the one a push deploys.
+pub fn deploy_branch(repo: &Path) -> Option<String> {
+    let out = match Command::new("git")
+        .arg("--git-dir")
+        .arg(repo)
+        .args(["symbolic-ref", "--short", "-q", "HEAD"])
+        .output()
+    {
+        Ok(out) if out.status.success() => out,
+        _ => return None,
+    };
+    let branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (!branch.is_empty()).then_some(branch)
 }
 
 /// Fetch from origin (best-effort; logs a warning on failure).
@@ -29,7 +85,7 @@ pub fn git_fetch(app_path: &Path) {
         .status();
 
     if let Err(e) = result {
-        echo(&format!("Warning: git fetch failed: {}", e), "yellow");
+        echo(&format!("git fetch failed: {}", e), "yellow");
     }
 }
 
@@ -38,7 +94,7 @@ pub fn git_fetch(app_path: &Path) {
 /// Returns an error if the reset command fails or exits non-zero.
 pub fn git_reset(app_path: &Path, newrev: &str) -> Result<()> {
     let status = Command::new("git")
-        .args(["reset", "--hard", newrev])
+        .args(["reset", "--quiet", "--hard", newrev])
         .current_dir(app_path)
         .env_remove("GIT_DIR")
         .env_remove("GIT_WORK_TREE")
@@ -65,10 +121,7 @@ pub fn git_update_submodules(app_path: &Path) {
         .status();
 
     if let Err(e) = init {
-        echo(
-            &format!("Warning: git submodule init failed: {}", e),
-            "yellow",
-        );
+        echo(&format!("git submodule init failed: {}", e), "yellow");
     }
 
     let update = Command::new("git")
@@ -79,10 +132,7 @@ pub fn git_update_submodules(app_path: &Path) {
         .status();
 
     if let Err(e) = update {
-        echo(
-            &format!("Warning: git submodule update failed: {}", e),
-            "yellow",
-        );
+        echo(&format!("git submodule update failed: {}", e), "yellow");
     }
 }
 
