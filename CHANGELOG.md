@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The laptop server list (`~/.config/riku/servers.toml`) was renamed into
+  place without an fsync, so a crash right after `rk server add` could
+  leave it empty. It is now written through the same private atomic write
+  as the server's ENV files, which syncs before the rename.
 - Swapping a symlink (enabling a worker config) built its temp link as
   `.<link>.tmp-<pid>` and first removed whatever had that name, so two
   threads swapping the same link removed or renamed each other's temp link
