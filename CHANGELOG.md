@@ -39,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `no router`); the root steps read `Label  detail` (`Sockets`,
   `Shared files`, `Router files`, `Caddyfile`, `Caddy`, `Router helper`,
   `Nginx include`, `Nginx sockets`, `Old binary`) instead of sentences.
+- The bundled python and node plugins printed their notices with a
+  `-----> ` prefix, which showed as `│  -----> ...` inside the deploy rail.
+  The prefix is gone.
 - `riku restart --hot` on a Procfile app only rewrote the worker configs
   through their `workers-enabled` symlinks and sent no SIGHUP. A write
   through a symlink lands in `workers-available`, outside the watched

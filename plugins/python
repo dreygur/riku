@@ -62,8 +62,8 @@ build_with_pip() {
   if [ -n "$PYTHON_VERSION" ]; then
     python="python$PYTHON_VERSION"
     if ! command -v "$python" >/dev/null 2>&1; then
-      echo "-----> RIKU_PYTHON_VERSION is $PYTHON_VERSION but $python is not installed on the server." >&2
-      echo "       Install it, or install uv, which fetches the interpreter itself." >&2
+      echo "RIKU_PYTHON_VERSION is $PYTHON_VERSION but $python is not installed on the server." >&2
+      echo "Install it, or install uv, which fetches the interpreter itself." >&2
       exit 1
     fi
   fi
@@ -95,8 +95,8 @@ case "$CMD" in
     if command -v uv >/dev/null 2>&1; then
       build_with_uv
     else
-      echo "-----> uv not found, building with pip. Install uv for faster, locked builds:" >&2
-      echo "       curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
+      echo "uv not found, building with pip. Install uv for faster, locked builds:" >&2
+      echo "  curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
       build_with_pip
     fi
     ;;

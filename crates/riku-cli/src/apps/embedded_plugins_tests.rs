@@ -15,6 +15,21 @@ fn embedded_runtimes_plus_binaries_are_the_bundled_list() {
     }
 }
 
+#[test]
+fn bundled_plugins_print_plain_lines_for_the_deploy_rail() {
+    for plugin in EMBEDDED {
+        for file in plugin.files {
+            let text = String::from_utf8_lossy(file.bytes);
+            assert!(
+                !text.contains("-----> "),
+                "{}/{} prints a -----> prefix, which shows as `│  -----> ..` inside the rail",
+                plugin.name,
+                file.name
+            );
+        }
+    }
+}
+
 /// Run the shipped python plugin's `build` in an app with `files`, with a
 /// mock `uv` (when `with_uv`) that logs its arguments. Returns the exit
 /// status, the uv log and stderr.

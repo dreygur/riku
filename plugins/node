@@ -26,8 +26,8 @@ case "$CMD" in
       case "$installed." in
         "$wanted".*) ;;
         *)
-          echo "-----> RIKU_NODE_VERSION is $wanted, but this server's node is ${installed:-not installed}." >&2
-          echo "       Install node $wanted on the server, or change [runtime] version in riku.toml." >&2
+          echo "RIKU_NODE_VERSION is $wanted, but this server's node is ${installed:-not installed}." >&2
+          echo "Install node $wanted on the server, or change [runtime] version in riku.toml." >&2
           exit 1
           ;;
       esac
@@ -49,8 +49,8 @@ case "$CMD" in
         nub install --prod
       fi
     else
-      echo "-----> nub not found, building with npm. Install nub for faster, lockfile exact builds:" >&2
-      echo "       npm install -g @nubjs/nub" >&2
+      echo "nub not found, building with npm. Install nub for faster, lockfile exact builds:" >&2
+      echo "  npm install -g @nubjs/nub" >&2
       if [ -f "package-lock.json" ]; then
         npm ci --production
       else
