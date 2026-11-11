@@ -7,8 +7,10 @@ use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::Path;
 
 mod atomic;
+mod symlink;
 
 pub use atomic::{write_atomic, write_private};
+pub use symlink::replace_symlink;
 
 /// Create `dir` and any missing parents `0700`, and set `dir` itself to
 /// `0700` when it already existed with a looser mode. For directories that
@@ -38,35 +40,6 @@ pub fn restrict_to_owner(path: &Path) -> Result<()> {
 
 const PRIVATE_FILE_MODE: u32 = 0o600;
 const PRIVATE_DIR_MODE: u32 = 0o700;
-
-/// Point the symlink `link` at `target`, replacing whatever `link` was.
-///
-/// The new link is made under a `.tmp-<pid>` name and renamed over `link`, so
-/// `link` always resolves to the old or the new target, never to nothing. The
-/// supervisor watches `workers-enabled`, and a moment without the link would
-/// read as the worker being removed.
-pub fn replace_symlink(target: &Path, link: &Path) -> Result<()> {
-    let dir = link
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
-    let tmp_link = dir.join(format!(
-        ".{}.tmp-{}",
-        link.file_name()
-            .map(|n| n.to_string_lossy())
-            .unwrap_or_default(),
-        std::process::id()
-    ));
-    let _ = fs::remove_file(&tmp_link);
-    if let Err(e) = std::os::unix::fs::symlink(target, &tmp_link) {
-        return Err(anyhow::anyhow!("cannot link {}: {e}", tmp_link.display()));
-    }
-    if let Err(e) = fs::rename(&tmp_link, link) {
-        let _ = fs::remove_file(&tmp_link);
-        return Err(anyhow::anyhow!("cannot replace {}: {e}", link.display()));
-    }
-    Ok(())
-}
 
 /// Recursively copy `source` into `dest`, skipping `.git` and `node_modules`.
 pub fn copy_dir_recursive(source: &Path, dest: &Path) -> Result<()> {

@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Swapping a symlink (enabling a worker config) built its temp link as
+  `.<link>.tmp-<pid>` and first removed whatever had that name, so two
+  threads swapping the same link removed or renamed each other's temp link
+  and one swap failed. The temp link now takes the per call name atomic
+  writes use, and a taken name is skipped, never removed.
 - The push summary showed a port or path mode URL on a private address
   (the detected LAN address when `routing.server_ip` is not set) like any
   other URL. It is still shown, now as `http://192.168.10.121:8100 (LAN)`,

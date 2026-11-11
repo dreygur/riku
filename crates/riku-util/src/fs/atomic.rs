@@ -48,7 +48,7 @@ const SHARED_FILE_MODE: u32 = 0o666;
 
 /// Temp names tried before giving up, each one already taken by a leftover
 /// file or a planted link.
-const TEMP_ATTEMPTS: u32 = 16;
+pub(super) const TEMP_ATTEMPTS: u32 = 16;
 
 static TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
@@ -60,7 +60,7 @@ enum Access {
     Private,
 }
 
-fn next_temp_seq() -> u64 {
+pub(super) fn next_temp_seq() -> u64 {
     TEMP_SEQ.fetch_add(1, Ordering::Relaxed)
 }
 
@@ -70,7 +70,8 @@ fn parent_dir(path: &Path) -> &Path {
         .unwrap_or_else(|| Path::new("."))
 }
 
-fn temp_path(path: &Path, seq: u64) -> PathBuf {
+/// `.<name>.tmp-<pid>-<seq>` beside `path`.
+pub(super) fn temp_path(path: &Path, seq: u64) -> PathBuf {
     let name = path
         .file_name()
         .map(|n| n.to_string_lossy())
