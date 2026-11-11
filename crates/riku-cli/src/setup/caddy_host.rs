@@ -112,8 +112,10 @@ pub(super) fn run(program: &str, args: &[&str]) -> Result<()> {
     }
 }
 
+/// Adds riku's import and the admin socket to the Caddyfile. True when the
+/// file changed.
 #[allow(clippy::question_mark)]
-fn add_caddyfile_import(paths: &RikuPaths) -> Result<()> {
+fn add_caddyfile_import(paths: &RikuPaths) -> Result<bool> {
     let current = match fs::read_to_string(CADDYFILE) {
         Ok(text) => text,
         Err(e) if e.kind() == ErrorKind::NotFound => {
@@ -131,7 +133,7 @@ fn add_caddyfile_import(paths: &RikuPaths) -> Result<()> {
     let text = with_admin.as_deref().unwrap_or(&current);
     let with_import = caddyfile_with_import(text, &import_line(paths));
     let Some(updated) = with_import.or(with_admin) else {
-        return Ok(());
+        return Ok(false);
     };
     if let Err(e) = write_atomic(Path::new(CADDYFILE), updated.as_bytes()) {
         return Err(e);
@@ -140,7 +142,7 @@ fn add_caddyfile_import(paths: &RikuPaths) -> Result<()> {
         "Caddyfile",
         &format!("{CADDYFILE} imports riku sites, admin socket"),
     );
-    Ok(())
+    Ok(true)
 }
 
 /// The name of the `caddy` user's primary group, the only group the site
@@ -209,14 +211,15 @@ pub fn setup_caddy_host(paths: &RikuPaths) -> Result<()> {
     if let Err(e) = clear_foreign_entries(&paths.caddy_root, ROOT_UID) {
         return Err(e);
     }
-    if let Err(e) = add_caddyfile_import(paths) {
-        return Err(e);
-    }
+    let caddyfile_changed = match add_caddyfile_import(paths) {
+        Ok(changed) => changed,
+        Err(e) => return Err(e),
+    };
     display::step_done(
         "Router files",
         &format!("{}, group {group}", paths.caddy_root.display()),
     );
-    move_admin_to_socket(&group)
+    move_admin_to_socket(&group, caddyfile_changed)
 }
 
 #[cfg(test)]

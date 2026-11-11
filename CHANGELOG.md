@@ -125,6 +125,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the link points at, which did not change. It now restarts the worker the
   way `riku restart` does (the config's mtime advances, the supervisor gets
   a SIGHUP). Restarting a worker that is not enabled is refused.
+- Every `riku init` restarted Caddy, which dropped every site for a moment
+  even with nothing to change. Caddy is now restarted only to move its admin
+  endpoint onto the socket (first run, or a changed drop-in), reloaded when
+  only the Caddyfile changed, and left running otherwise.
 - `sudo riku init` on an upgrade left the old supervisor running: it ran
   `systemctl start`, which does nothing for a running service. A running
   supervisor is now restarted when it runs another binary than the
