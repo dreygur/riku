@@ -28,6 +28,7 @@ use anyhow::{anyhow, Result};
 use riku_supervisor::config::{app_worker_configs, WorkerConfig};
 
 use crate::config::RikuPaths;
+use crate::rolling::RouteSink;
 use crate::util::display;
 use crate::util::file_names::worker::WorkerName;
 use crate::{env_setup, lock, restart_env, supervisor_ctl, workers};
@@ -138,18 +139,28 @@ fn warn_route_down(running: &[WorkerConfig], env: &HashMap<String, String>) -> R
 /// (`web`, `worker`, ...), with configs rewritten from the current ENV and
 /// riku settings, and return how many there are. An app with no enabled
 /// workers (never deployed, or stopped) is an error that names
-/// `riku deploy`. Holds the app's deploy lock throughout.
+/// `riku deploy`. Holds the app's deploy lock throughout. `LIVE_ENV` is
+/// written only once every config was rewritten.
 pub fn restart_procfile_app(app: &str, kind: Option<&str>, paths: &RikuPaths) -> Result<usize> {
-    restart_procfile_app_with(app, kind, paths, supervisor_ctl::ensure_supervisor_running)
+    let app_path = paths.app_root.join(app);
+    let mut routes = workers::app_routes(app, &app_path, paths);
+    restart_procfile_app_with(
+        app,
+        kind,
+        paths,
+        supervisor_ctl::ensure_supervisor_running,
+        &mut routes,
+    )
 }
 
 /// [`restart_procfile_app`] with the way a missing supervisor is started
-/// given, so a test never launches one.
+/// and the router given, so a test never launches or reaches either.
 fn restart_procfile_app_with(
     app: &str,
     kind: Option<&str>,
     paths: &RikuPaths,
     start_supervisor: impl Fn(&RikuPaths) -> bool,
+    routes: &mut impl RouteSink,
 ) -> Result<usize> {
     let chosen = match chosen_configs(app, kind, paths) {
         Ok(chosen) => chosen,
@@ -176,11 +187,11 @@ fn restart_procfile_app_with(
     if let Err(e) = warn_route_down(&running, &env) {
         return Err(e);
     }
-    if let Err(e) = env_setup::write_live_env(app, paths, &env) {
+    let app_path = paths.app_root.join(app);
+    if let Err(e) = workers::rewrite_running(app, &app_path, &running, &env, paths, routes) {
         return Err(e);
     }
-    let app_path = paths.app_root.join(app);
-    if let Err(e) = workers::rewrite_running(app, &app_path, &running, &env, paths) {
+    if let Err(e) = env_setup::write_live_env(app, paths, &env) {
         return Err(e);
     }
     supervisor_ctl::notify_supervisor_reload(paths);

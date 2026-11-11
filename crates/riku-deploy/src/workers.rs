@@ -27,7 +27,7 @@ pub(crate) const ONE_SHOT_KINDS: [&str; 2] = ["release", "preflight"];
 
 mod files;
 #[cfg(test)]
-mod mock_supervisor;
+pub(crate) mod mock_supervisor;
 mod pinned;
 mod plan;
 mod ports;
@@ -41,12 +41,12 @@ mod web_rollout;
 
 use pinned::port_in_use;
 use plan::plan_workers;
-pub(crate) use rewrite::{kinds_down_while_restarting, rewrite_running};
+pub(crate) use rewrite::{app_routes, kinds_down_while_restarting, rewrite_running};
 pub use scaling::read_scaling_count;
 
 use files::{remove_stale_configs, write_worker_config};
 use web_env::{build_worker_env, clear_route_env, is_web_facing};
-use web_rollout::{roll_web_kind, stop_web_kind, WebDeploy, WebRoutes};
+use web_rollout::{roll_web_kind, stop_web_kind, WebDeploy};
 
 /// Writes `count` configs for a kind no router fronts. Its old copies were
 /// removed first (see `remove_stale_configs`), so this is stop first.
@@ -210,11 +210,7 @@ pub fn create_workers_generic(
     paths: &RikuPaths,
     start_cmd: Option<&str>,
 ) -> Result<()> {
-    let mut routes = WebRoutes {
-        app,
-        app_path,
-        paths,
-    };
+    let mut routes = app_routes(app, app_path, paths);
     create_workers_with(app, app_path, processes, env, paths, start_cmd, &mut routes)
 }
 

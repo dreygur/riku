@@ -46,6 +46,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `riku restart` could leave an app half restarted: it wrote `LIVE_ENV`
+  and rewrote kinds sorting before `web` (such as `beat`) before asking the
+  router, so a router helper that was down failed the restart after those
+  had restarted. It now checks the router first, rolls web kinds before the
+  others and writes `LIVE_ENV` last. When the router does not confirm a
+  new copy (on a restart, a deploy or a scale), the previous routes are
+  published again and the new copy stopped, instead of leaving one copy
+  too many that a later restart kept for good; if the router cannot
+  confirm that either, the copy is still left running for the next deploy.
 - A push whose `LIVE_ENV` could not be written left the checkout at the
   pushed commit while the old workers kept running from it, and said the
   previous release no longer ran. Nothing has changed at that point, so

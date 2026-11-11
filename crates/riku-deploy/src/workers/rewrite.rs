@@ -89,8 +89,15 @@ pub(crate) fn kinds_down_while_restarting<'a>(
     Ok(down)
 }
 
-/// [`rewrite_running`] with the route sink web copies publish to.
-pub(crate) fn rewrite_running_with(
+/// Rewrite the configs of the `running` workers of `app` with `env`, the
+/// env a deploy would give them, publishing web copies to `routes`. Needs
+/// the supervisor running: web copies are only replaced once their
+/// successors are healthy.
+///
+/// The router is checked before any config changes, and web facing kinds
+/// roll before the others are rewritten, so a router that is down or would
+/// refuse the app leaves every worker as it was.
+pub(crate) fn rewrite_running(
     app: &str,
     app_path: &Path,
     running: &[WorkerConfig],
@@ -104,39 +111,41 @@ pub(crate) fn rewrite_running_with(
         env,
         paths,
     };
-    for (kind, found) in by_kind(running) {
-        let outcome = if is_web_facing(kind) {
-            let want = found.ordinals.len() as u32;
-            roll_web_kind(&deploy, kind, found.command, want, routes)
-        } else {
-            found
-                .ordinals
-                .iter()
-                .try_for_each(|ordinal| rewrite_copy(&deploy, kind, found.command, *ordinal))
-        };
-        if let Err(e) = outcome {
+    let (web, other): (Vec<_>, Vec<_>) = by_kind(running)
+        .into_iter()
+        .partition(|(kind, _)| is_web_facing(kind));
+    if !web.is_empty() {
+        if let Err(e) = routes.check() {
+            return Err(e.context("nothing restarted: the router would refuse the app"));
+        }
+    }
+    for (kind, found) in web {
+        let want = found.ordinals.len() as u32;
+        if let Err(e) = roll_web_kind(&deploy, kind, found.command, want, routes) {
             return Err(e);
+        }
+    }
+    for (kind, found) in other {
+        for ordinal in &found.ordinals {
+            if let Err(e) = rewrite_copy(&deploy, kind, found.command, *ordinal) {
+                return Err(e);
+            }
         }
     }
     Ok(())
 }
 
-/// Rewrite the configs of the `running` workers of `app` with `env`, the
-/// env a deploy would give them. Needs the supervisor running: web copies
-/// are only replaced once their successors are healthy.
-pub(crate) fn rewrite_running(
-    app: &str,
-    app_path: &Path,
-    running: &[WorkerConfig],
-    env: &HashMap<String, String>,
-    paths: &RikuPaths,
-) -> Result<()> {
-    let mut routes = WebRoutes {
+/// The route sink a Procfile app's web copies publish to: the active router.
+pub(crate) fn app_routes<'a>(
+    app: &'a str,
+    app_path: &'a Path,
+    paths: &'a RikuPaths,
+) -> impl RouteSink + 'a {
+    WebRoutes {
         app,
         app_path,
         paths,
-    };
-    rewrite_running_with(app, app_path, running, env, paths, &mut routes)
+    }
 }
 
 #[cfg(test)]

@@ -127,8 +127,9 @@ fn replace_one(
 /// With [`ReplaceOrder::Overlap`] a new copy is started and proven healthy
 /// before any route changes, the old copy leaves the routes before it is
 /// stopped, and a failure at any step leaves the old copies serving. If the
-/// router cannot confirm that the new copy was added, that copy stays running
-/// and the next deploy drains or replaces it. [`ReplaceOrder::StopFirst`] drains and
+/// router cannot confirm that the new copy was added, the old routes are
+/// published again and, once confirmed, the new copy is stopped; if not, it
+/// stays running and the next deploy drains or replaces it. [`ReplaceOrder::StopFirst`] drains and
 /// stops the old copy before its replacement starts, so the two never run
 /// together; the service is down in between, and when the old copy is the
 /// only routed one the drain publish is skipped because routers refuse an

@@ -34,8 +34,10 @@ fn unconfirmed_reload_keeps_old_copy() {
     );
 }
 
+/// A restart counts the copies it finds, so a copy left over from a failed
+/// publish would stay one too many for good.
 #[test]
-fn unconfirmed_add_keeps_new_copy_running() {
+fn unconfirmed_add_is_withdrawn_once_the_old_routes_are_confirmed() {
     let log = CallLog::default();
     let mut runtime = mock_runtime(&log, &[1]);
     let mut routes = mock_routes(&log, Some(1));
@@ -44,10 +46,35 @@ fn unconfirmed_add_keeps_new_copy_running() {
 
     let message = format!("{:#}", outcome.unwrap_err());
     assert!(
+        message.contains("copy 2 stopped"),
+        "error must say the copy was withdrawn: {message}"
+    );
+    assert_eq!(
+        calls(&log),
+        ["start 2", "healthy 2", "publish 2", "publish 1", "stop 2"]
+    );
+    assert_eq!(runtime.running.len(), 1, "back to the one copy wanted");
+}
+
+#[test]
+fn unconfirmed_add_keeps_new_copy_running_while_the_router_is_down() {
+    let log = CallLog::default();
+    let mut runtime = mock_runtime(&log, &[1]);
+    let mut routes = mock_routes(&log, None);
+    routes.down_from = Some(1);
+
+    let outcome = replace_all(&mut runtime, &mut routes, ReplaceOrder::Overlap, 1);
+
+    let message = format!("{:#}", outcome.unwrap_err());
+    assert!(
         message.contains("copy 2 left running") && message.contains("next deploy"),
         "error must name the copy left running: {message}"
     );
-    assert_eq!(calls(&log), ["start 2", "healthy 2", "publish 2"]);
+    assert_eq!(
+        calls(&log),
+        ["start 2", "healthy 2", "publish 2", "publish 1"],
+        "a copy the router may still send traffic to is not stopped"
+    );
 }
 
 #[test]

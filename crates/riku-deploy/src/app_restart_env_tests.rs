@@ -5,6 +5,8 @@ use std::os::unix::process::ExitStatusExt;
 
 use super::*;
 use crate::fake_supervisor::FakeSupervisor;
+use crate::rolling::NoRoutes;
+use crate::workers::mock_supervisor::{MockRoutes, MockSupervisor};
 
 /// A runtime plugin that takes any app, leaves `built` in the checkout when
 /// its `build` runs, and adds `PLUGIN_ENV=1` from its `env`.
@@ -48,7 +50,7 @@ fn restart_rewrites_configs_from_the_edited_env_without_a_build() {
     fs::write(paths.env_root.join("myapp").join("ENV"), "FLAG=new\n").unwrap();
     let mut supervisor = FakeSupervisor::start(&paths);
 
-    let restarted = restart_procfile_app_with("myapp", None, &paths, |_| false);
+    let restarted = restart_procfile_app_with("myapp", None, &paths, |_| false, &mut NoRoutes);
 
     let status = supervisor.child.wait().unwrap();
     assert_eq!(restarted.ok(), Some(1), "one worker restarted");
@@ -88,7 +90,7 @@ fn restart_is_refused_while_env_holds_the_removed_auto_restart_key() {
     .unwrap();
     let _supervisor = FakeSupervisor::start(&paths);
 
-    let restarted = restart_procfile_app_with("myapp", None, &paths, |_| false);
+    let restarted = restart_procfile_app_with("myapp", None, &paths, |_| false, &mut NoRoutes);
 
     assert!(
         restarted.is_err(),
@@ -99,4 +101,54 @@ fn restart_is_refused_while_env_holds_the_removed_auto_restart_key() {
         before,
         "config unchanged"
     );
+}
+
+/// A router helper that is down fails the restart before anything is
+/// written: no worker config, and no `LIVE_ENV` describing an env the
+/// workers do not run with.
+#[test]
+fn a_refused_router_writes_neither_configs_nor_live_env() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    let worker = deployed_app(&paths);
+    let app_path = paths.app_root.join("myapp");
+    let mock_supervisor = MockSupervisor::start(&paths);
+    let mut routes = MockRoutes::new(&paths);
+    let processes = HashMap::from([
+        ("web".to_string(), "python app.py".to_string()),
+        ("worker".to_string(), "python jobs.py".to_string()),
+    ]);
+    let old = HashMap::from([("FLAG".to_string(), "old".to_string())]);
+    workers::create_workers_with(
+        "myapp",
+        &app_path,
+        Some(&processes),
+        &old,
+        &paths,
+        None,
+        &mut routes,
+    )
+    .unwrap();
+    let web = paths.workers_available.join("myapp@web.1.toml");
+    let before = (
+        fs::read_to_string(&worker).unwrap(),
+        fs::read_to_string(&web).unwrap(),
+    );
+    fs::write(paths.env_root.join("myapp").join("ENV"), "FLAG=new\n").unwrap();
+    let _supervisor = FakeSupervisor::start(&paths);
+    routes.refuse_check = true;
+
+    let restarted = restart_procfile_app_with("myapp", None, &paths, |_| false, &mut routes);
+
+    assert!(restarted.is_err(), "a refused router check must fail");
+    let after = (
+        fs::read_to_string(&worker).unwrap(),
+        fs::read_to_string(&web).unwrap(),
+    );
+    assert_eq!(after, before, "no worker config may change");
+    assert!(
+        !paths.env_root.join("myapp").join("LIVE_ENV").exists(),
+        "LIVE_ENV must not be written when nothing restarted"
+    );
+    drop(mock_supervisor);
 }
