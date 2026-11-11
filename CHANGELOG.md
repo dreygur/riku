@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The first push to a repo named without `.git` printed
+  `│  Linked <repos>/<app>.git to <repos>/<app>` above the deploy intro.
+  That link is internal and is now only logged at debug level.
 - `riku restart <app> <name>` and `riku agent restart <app> <name>` read
   `<name>` only as a container service, so on a Procfile app they always
   failed. For a Procfile app it is now a process kind (`web`, `worker`,

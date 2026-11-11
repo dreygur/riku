@@ -304,11 +304,7 @@ fn link_external_repo(paths: &RikuPaths, app: &str, actual_repo: &str) -> Result
     }
 
     std::os::unix::fs::symlink(&resolved, &riku_repo)?;
-    display::detail(&format!(
-        "Linked {} to {}",
-        riku_repo.display(),
-        resolved.display()
-    ));
+    tracing::debug!("linked {} to {}", riku_repo.display(), resolved.display());
     Ok(())
 }
 

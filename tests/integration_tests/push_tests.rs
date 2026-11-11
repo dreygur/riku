@@ -101,3 +101,28 @@ fn a_push_whose_deploy_fails_exits_non_zero_and_shows_the_failure_once() {
         "the failure comes from the hook through git's sideband, stderr:\n{stderr}"
     );
 }
+
+#[test]
+fn a_first_push_prints_nothing_on_the_rail_before_the_deploy_intro() {
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join("home")).unwrap();
+    let work = committed_app(tmp.path());
+    repo_with_hook(tmp.path(), "firstapp");
+
+    let out = push_to_riku(&work, tmp.path(), "firstapp");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+
+    let intro = stderr.lines().position(|l| l.contains("┌"));
+    let Some(intro) = intro else {
+        panic!("the push must show the deploy intro, stderr:\n{stderr}");
+    };
+    let before: Vec<&str> = stderr
+        .lines()
+        .take(intro)
+        .filter(|l| l.contains("│"))
+        .collect();
+    assert!(
+        before.is_empty(),
+        "nothing may sit on the rail above the intro, got {before:?}, stderr:\n{stderr}"
+    );
+}

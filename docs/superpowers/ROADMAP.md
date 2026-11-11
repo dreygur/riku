@@ -332,8 +332,8 @@ phase 4 come after.
   Docs corrected. A real "write now, apply on `riku restart`" mode needs a
   pending config generation (web kinds roll inside the deploy, the
   checkout is replaced in place, the supervisor loads whatever is enabled
-  on start); not designed. Open: the first push prints
-  `Linked <repo> to <repo>` above the deploy intro.
+  on start); not designed. Also fixed: the first push no longer prints
+  `Linked <repo> to <repo>` above the deploy intro (debug log only).
 
 - Checked 2026-11-11: the two nginx bugs once listed here
   (`RIKU_NGINX_CACHE_PREFIXES`, `RIKU_NGINX_CATCH_ALL`) are gone; #73
