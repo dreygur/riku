@@ -93,6 +93,7 @@ pub fn run_at(path: &Path, repo_dir: &Path, cmd: ServerCmd) -> Result<()> {
             if let Err(e) = mutate(path, |list| list.add(saved)) {
                 return Err(e);
             }
+            display::intro(&format!("server add  {name} {address}"));
             finish_add(repo_dir, &server, key.as_ref())
         }
         ServerCmd::List => match store::load(path) {

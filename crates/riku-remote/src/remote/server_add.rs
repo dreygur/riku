@@ -11,6 +11,7 @@ use anyhow::{anyhow, Result};
 use super::key_install::{install_key, key_path, read_public_key};
 use super::remote_add::{add_git_remote, RemoteOutcome};
 use super::types::Server;
+use crate::util::display;
 use crate::util::public_key::PublicKey;
 
 const NO_KEY: &str = "No public key found in ~/.ssh; pass --key PATH to authorize one for pushes";
@@ -30,13 +31,15 @@ pub fn chosen_key(explicit: Option<&Path>) -> Result<Option<PublicKey>> {
 
 fn report_remote(outcome: Result<RemoteOutcome>) {
     match outcome {
-        Ok(RemoteOutcome::Added(url)) => println!("Added git remote riku -> {url}"),
-        Ok(RemoteOutcome::Kept(remote)) => println!("Kept existing git remote {remote}"),
-        Ok(RemoteOutcome::NotARepo) => {}
-        Ok(RemoteOutcome::InvalidName(reason)) => {
-            println!("No git remote added: the repo directory is not an app name ({reason})")
+        Ok(RemoteOutcome::Added(url)) => display::step_done("Git remote", &format!("riku {url}")),
+        Ok(RemoteOutcome::Kept(remote)) => {
+            display::step_done("Git remote", &format!("kept {remote}"))
         }
-        Err(e) => eprintln!("No git remote added: {e}"),
+        Ok(RemoteOutcome::NotARepo) => {}
+        Ok(RemoteOutcome::InvalidName(reason)) => display::warn(&format!(
+            "No git remote added: the repo directory is not an app name ({reason})"
+        )),
+        Err(e) => display::warn(&format!("No git remote added: {e}")),
     }
 }
 
@@ -44,13 +47,18 @@ fn report_remote(outcome: Result<RemoteOutcome>) {
 /// at `repo_dir`. The remote step runs even when the key step fails; the
 /// key step's error is returned after it.
 pub fn finish_add(repo_dir: &Path, server: &Server, key: Option<&PublicKey>) -> Result<()> {
+    display::step_done("Server", &format!("{} saved", server.name.as_str()));
     let installed = match key {
         Some(key) => install_key(server, key),
         None => {
-            println!("{NO_KEY}");
+            display::warn(NO_KEY);
             Ok(())
         }
     };
     report_remote(add_git_remote(repo_dir, server));
+    if installed.is_ok() {
+        display::outro(&format!("{} added", server.name.as_str()));
+        display::summary(&[("Deploy", "git push riku main")]);
+    }
     installed
 }

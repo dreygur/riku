@@ -54,8 +54,13 @@ fn run(argv: Vec<String>) -> Result<()> {
     }
 }
 
-fn main() -> Result<()> {
-    run(std::env::args().collect())
+/// Prints a local failure on the output rail (`■  reason` on stderr) and
+/// exits 1. A forwarded command's failure was already printed by the server.
+fn main() {
+    if let Err(e) = run(std::env::args().collect()) {
+        riku_util::display::error(&format!("{e:#}"));
+        std::process::exit(1);
+    }
 }
 
 #[cfg(test)]

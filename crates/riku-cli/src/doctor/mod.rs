@@ -30,12 +30,11 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::Result;
-use colored::Colorize;
 
 use crate::config::router::Router;
 use crate::config::{RikuPaths, CADDY_SITE_ROOT, NGINX_SITE_ROOT};
 use crate::setup::deploy_user::{running_as_root, DeployUser};
-use crate::util::display;
+use crate::util::display::{self, Mark};
 
 /// Outcome of a single diagnostic check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -148,11 +147,7 @@ pub fn cmd_doctor(paths: &RikuPaths, fix: bool) -> Result<()> {
         Ok(paths) => paths,
         Err(e) => return Err(e),
     };
-    display::info(&format!(
-        "Running Riku diagnostics on {}...",
-        paths.riku_root.display()
-    ));
-    display::blank();
+    display::intro(&format!("riku doctor  {}", paths.riku_root.display()));
 
     let mut checks = Vec::new();
     if fix {
@@ -195,18 +190,26 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     checks
 }
 
-/// Print one line per check (plus an indented detail line).
+/// The rail line of one check, its detail on the `│` lines under it. All on
+/// stdout, so a piped report keeps its order.
+fn render_check(check: &Check, colour: bool) -> String {
+    let mark = match check.status {
+        Status::Ok => Mark::Step,
+        Status::Warn => Mark::Warn,
+        Status::Fail => Mark::Error,
+    };
+    let mut out = display::render_line(mark, &check.name, "", colour);
+    for line in check.detail.lines() {
+        out.push('\n');
+        out.push_str(&display::render_line(Mark::Rail, line, "", colour));
+    }
+    out
+}
+
 fn render(checks: &[Check]) {
-    for c in checks {
-        let line = match c.status {
-            Status::Ok => format!("{} {}", "✓".green().bold(), c.name.bold()),
-            Status::Warn => format!("{} {}", "!".yellow().bold(), c.name.yellow().bold()),
-            Status::Fail => format!("{} {}", "✗".red().bold(), c.name.red().bold()),
-        };
-        println!("  {line}");
-        if !c.detail.is_empty() {
-            println!("      {}", c.detail.dimmed());
-        }
+    let colour = display::Stream::Stdout.colour();
+    for check in checks {
+        println!("{}", render_check(check, colour));
     }
 }
 
@@ -228,16 +231,16 @@ fn tally(checks: &[Check]) -> (usize, usize, usize) {
 /// Print the tally and terminate the process with an appropriate exit code.
 fn summarize_and_exit(checks: &[Check]) {
     let (ok, warn, fail) = tally(checks);
-
-    display::blank();
-    let summary = format!("{ok} ok, {warn} warning(s), {fail} failure(s)");
+    let counts = format!("{ok} ok, {warn} warning(s), {fail} failure(s)");
+    let outro = match (warn, fail) {
+        (_, 1..) => "Diagnostics found problems",
+        (1.., 0) => "Diagnostics passed with warnings",
+        _ => "All checks passed",
+    };
+    display::outro(outro);
+    display::summary(&[("Checks", &counts)]);
     if fail > 0 {
-        display::error(&format!("Diagnostics found problems: {summary}"));
         std::process::exit(1);
-    } else if warn > 0 {
-        display::warn(&format!("Diagnostics passed with warnings: {summary}"));
-    } else {
-        display::success(&format!("All checks passed: {summary}"));
     }
 }
 

@@ -46,15 +46,24 @@ fn scaffold_into(base: &Path, name: &str, runtime: &str, remote: Option<&str>) -
         bail!("'{app}' already exists here, choose another name or remove it");
     }
 
-    display::info(&format!("Scaffolding {} app in ./{app}...", rt.label()));
-    for file in rt.files(&app) {
+    display::intro(&format!("riku quickstart  {app} ({})", rt.label()));
+    let files = rt.files(&app);
+    for file in &files {
         if let Err(e) = write_file(&dir.join(file.path), &file.contents) {
             return Err(e);
         }
-        display::note(&format!("created {app}/{}", file.path));
+    }
+    display::step_done("Files", &format!("{} in ./{app}", files.len()));
+    for file in &files {
+        display::detail(&format!("{app}/{}", file.path));
     }
 
     let committed = git_init_commit(&dir);
+    if committed {
+        display::step_done("Git", "initial commit");
+    } else {
+        display::warn("Git repository not created, commit it yourself");
+    }
 
     print_next_steps(&app, rt.label(), remote, committed);
     Ok(())
@@ -119,28 +128,29 @@ fn remote_step(app: &str, remote: Option<&str>) -> String {
     }
 }
 
-fn print_next_steps(app: &str, runtime: &str, remote: Option<&str>, committed: bool) {
-    display::blank();
-    display::success(&format!("{runtime} app '{app}' is ready."));
-    display::blank();
-    display::section("Deploy it");
-
-    let mut step = 1;
-    println!("  {step}. cd {app}");
-    step += 1;
+/// The commands that deploy the new app, in order, as summary rows.
+fn next_steps(app: &str, remote: Option<&str>, committed: bool) -> Vec<(&'static str, String)> {
+    let mut rows = vec![("Enter", format!("cd {app}"))];
     if !committed {
-        println!("  {step}. git init && git add -A && git commit -m 'init'");
-        step += 1;
+        rows.push((
+            "Commit",
+            "git init && git add -A && git commit -m 'init'".to_string(),
+        ));
     }
-    println!("  {step}. {}", remote_step(app, remote));
-    step += 1;
-    println!("  {step}. git push riku main");
+    rows.push(("Remote", remote_step(app, remote)));
+    rows.push(("Deploy", "git push riku main".to_string()));
+    rows
+}
 
-    display::blank();
+fn print_next_steps(app: &str, runtime: &str, remote: Option<&str>, committed: bool) {
     if remote.is_none() {
-        display::note("rk server add authorizes your ssh key and adds the riku git remote.");
+        display::detail("rk server add authorizes your ssh key and adds the riku git remote.");
     }
-    display::note("On push, Riku detects the runtime, builds, and serves the app on $PORT.");
+    display::detail("On push, Riku detects the runtime, builds, and serves the app on $PORT.");
+    display::outro(&format!("{runtime} app {app} is ready"));
+    let rows = next_steps(app, remote, committed);
+    let pairs: Vec<(&str, &str)> = rows.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    display::summary(&pairs);
 }
 
 #[cfg(test)]

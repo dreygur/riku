@@ -103,9 +103,18 @@ fn apply_unset(paths: &RikuPaths, app: &str, keys_to_remove: &[String]) -> Resul
     save_override(paths, app, &settings)
 }
 
-fn redeploy(paths: &RikuPaths, app: &str) -> Result<()> {
-    display::note(&format!("Redeploying '{app}'"));
+/// `◇  <label>  <keys>` (names only, values may be secrets), then redeploy.
+fn redeploy(paths: &RikuPaths, app: &str, label: &str, keys: &[String]) -> Result<()> {
+    display::step_done(label, &keys.join(", "));
     crate::deploy::do_deploy(app, paths, &HashMap::new(), None)
+}
+
+/// The key of each `key=value` pair, split the way [`apply_set`] splits.
+fn pair_keys(pairs: &[String]) -> Vec<String> {
+    shell_split(&pairs.join(" "))
+        .iter()
+        .filter_map(|pair| pair.split_once('=').map(|(key, _)| key.trim().to_string()))
+        .collect()
 }
 
 /// Print the server settings of `app`.
@@ -124,7 +133,7 @@ pub fn cmd_settings_show(paths: &RikuPaths, app: &str) -> Result<()> {
         display::note(&format!("No server settings for '{app}'."));
     }
     for line in lines {
-        display::note(&line);
+        println!("{line}");
     }
     Ok(())
 }
@@ -143,8 +152,9 @@ pub fn cmd_settings_get(paths: &RikuPaths, app: &str, key: &str) -> Result<()> {
         Ok(settings) => settings,
         Err(e) => return Err(e),
     };
+    // Raw, for `$(riku settings get app key)` in scripts.
     if let Some(value) = settings.get(key) {
-        display::note(&value);
+        println!("{value}");
     }
     Ok(())
 }
@@ -159,7 +169,7 @@ pub fn cmd_settings_set(paths: &RikuPaths, app: &str, pairs: &[String]) -> Resul
     if let Err(e) = apply_set(paths, &app, pairs) {
         return Err(e);
     }
-    redeploy(paths, &app)
+    redeploy(paths, &app, "Set", &pair_keys(pairs))
 }
 
 /// Remove server settings of `app`, then redeploy it.
@@ -172,7 +182,7 @@ pub fn cmd_settings_unset(paths: &RikuPaths, app: &str, keys_to_remove: &[String
     if let Err(e) = apply_unset(paths, &app, keys_to_remove) {
         return Err(e);
     }
-    redeploy(paths, &app)
+    redeploy(paths, &app, "Unset", keys_to_remove)
 }
 
 #[cfg(test)]

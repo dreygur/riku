@@ -9,13 +9,10 @@ use std::path::Path;
 
 use crate::config::RikuPaths;
 use crate::nginx::remove_static;
-use crate::util::{echo, ensure_path_within};
+use crate::util::{display, ensure_path_within};
 
 fn remove_dir(path: &Path) -> Result<()> {
-    echo(
-        &format!("--> Removing folder '{}'", path.display()),
-        "yellow",
-    );
+    display::detail(&format!("Removing {}", path.display()));
     match fs::remove_dir_all(path) {
         Ok(()) => Ok(()),
         Err(e) => Err(anyhow!("failed to remove {}: {e}", path.display())),
@@ -30,7 +27,7 @@ fn remove_dir_if_present(path: &Path) -> Result<()> {
 }
 
 fn remove_file(path: &Path) -> Result<()> {
-    echo(&format!("--> Removing file '{}'", path.display()), "yellow");
+    display::detail(&format!("Removing {}", path.display()));
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(e) => Err(anyhow!("failed to remove {}: {e}", path.display())),
@@ -76,19 +73,13 @@ fn remove_acme_certs(paths: &RikuPaths, app: &str) -> Result<()> {
                 return Err(e);
             }
         } else {
-            echo(
-                &format!(
-                    "WARNING: ACME cert path '{}' points outside expected directories, skipping removal",
-                    acme_certs.display()
-                ),
-                "yellow",
-            );
+            display::warn(&format!(
+                "ACME cert path '{}' points outside expected directories, skipping removal",
+                acme_certs.display()
+            ));
         }
     }
-    echo(
-        &format!("--> Removing file '{}'", acme_link.display()),
-        "yellow",
-    );
+    display::detail(&format!("Removing {}", acme_link.display()));
     if let Err(e) = fs::remove_file(&acme_link) {
         tracing::warn!("Could not remove ACME symlink {:?}: {}", acme_link, e);
     }

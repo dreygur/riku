@@ -6,17 +6,16 @@ use anyhow::Result;
 use super::destroy_engine::container_cleanup;
 use super::destroy_files::remove_app_files;
 use crate::config::RikuPaths;
-use crate::util::{echo, exit_if_invalid};
+use crate::util::{display, exit_if_invalid};
 
 /// The runtime plugin removes what it started outside the app directory.
 /// A failure is reported and destroy goes on: the app is going away either
 /// way, and its files are what the plugin would need to retry.
 fn plugin_cleanup(paths: &RikuPaths, app: &str) {
     if let Err(e) = crate::deploy::teardown::plugin_destroy(app, paths) {
-        echo(
-            &format!("--> Runtime cleanup failed, containers may remain: {e}"),
-            "yellow",
-        );
+        display::warn(&format!(
+            "Runtime cleanup failed, containers may remain: {e}"
+        ));
     }
 }
 
@@ -46,6 +45,7 @@ pub fn cmd_destroy(paths: &RikuPaths, app: &str, mode: DestroyMode) -> Result<()
         Ok(app) => app,
         Err(e) => return Err(e),
     };
+    display::intro(&format!("riku destroy {app}"));
 
     if let Err(e) = container_cleanup(paths, &app, mode) {
         if e.downcast_ref::<crate::deploy::containers::EngineUnreachable>()
@@ -61,27 +61,25 @@ pub fn cmd_destroy(paths: &RikuPaths, app: &str, mode: DestroyMode) -> Result<()
 
     // First, while the app still exists: a failure here leaves an app a
     // retried destroy can find, not a router config with no app.
-    echo(
-        &format!("--> Removing router config for '{}'", app),
-        "yellow",
-    );
     if let Err(e) = crate::deploy::router::remove(&app, paths) {
         return Err(e);
     }
+    display::step_done("Route", "removed");
     if let Err(e) = remove_app_files(paths, &app) {
         return Err(e);
     }
+    display::step_done("Files", "removed");
 
-    for dir in [&paths.data_root, &paths.cache_root] {
-        let path = dir.join(&app);
-        if path.exists() {
-            echo(
-                &format!("==> Preserving folder '{}'", path.display()),
-                "red",
-            );
-        }
+    let kept: Vec<String> = [&paths.data_root, &paths.cache_root]
+        .iter()
+        .map(|dir| dir.join(&app))
+        .filter(|path| path.exists())
+        .map(|path| path.display().to_string())
+        .collect();
+    display::outro(&format!("Destroyed {app}"));
+    if !kept.is_empty() {
+        display::summary(&[("Kept", &kept.join(", "))]);
     }
-
     Ok(())
 }
 
