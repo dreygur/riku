@@ -2,6 +2,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 
+use super::files::write_worker_config;
 use super::mock_supervisor::{MockRoutes, MockSupervisor};
 use super::*;
 use crate::util::backend::Backend;

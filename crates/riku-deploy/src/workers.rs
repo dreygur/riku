@@ -11,8 +11,6 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::path::Path;
 
-use riku_container::types::CopyIndex;
-
 use crate::config::RikuPaths;
 use crate::rolling::RouteSink;
 use crate::util::echo;
@@ -25,6 +23,7 @@ const WEB_KIND: &str = "web";
 /// restart them every time they exit.
 pub(crate) const ONE_SHOT_KINDS: [&str; 2] = ["release", "preflight"];
 
+mod copies;
 mod files;
 #[cfg(test)]
 pub(crate) mod mock_supervisor;
@@ -47,56 +46,10 @@ pub(crate) use rewrite::{
 };
 pub use scaling::read_scaling_count;
 
-use files::{remove_stale_configs, write_worker_config};
-use web_env::{build_worker_env, clear_route_env, is_web_facing};
+use copies::{stop_dropped_kinds, write_copies};
+use files::remove_stale_configs;
+use web_env::{clear_route_env, is_web_facing};
 use web_rollout::{roll_web_kind, stop_web_kind, WebDeploy};
-
-/// Writes `count` configs for a kind no router fronts. Its old copies were
-/// removed first (see `remove_stale_configs`), so this is stop first.
-fn write_copies(deploy: &WebDeploy<'_>, kind: &str, command: &str, count: u32) -> Result<()> {
-    for copy in (1..=count).filter_map(CopyIndex::new) {
-        let worker_env =
-            match build_worker_env(deploy.app, kind, copy, deploy.env, &[], deploy.paths) {
-                Ok(worker_env) => worker_env,
-                Err(e) => return Err(e),
-            };
-        let written = write_worker_config(
-            deploy.app,
-            deploy.app_path,
-            kind,
-            command,
-            copy.get(),
-            worker_env,
-            deploy.paths,
-        );
-        if let Err(e) = written {
-            return Err(e);
-        }
-    }
-    Ok(())
-}
-
-/// Stops the web facing kinds that still run but left the Procfile, such as
-/// `wsgi` after the app moved to `web`.
-fn stop_dropped_kinds(deploy: &WebDeploy<'_>, kept: &HashMap<String, String>) -> Result<()> {
-    let running = match crate::router::web_copies(deploy.app, deploy.paths) {
-        Ok(running) => running,
-        Err(e) => return Err(e),
-    };
-    let mut dropped: Vec<&str> = running
-        .iter()
-        .map(|config| config.worker.kind.as_str())
-        .filter(|kind| !kept.contains_key(*kind))
-        .collect();
-    dropped.sort_unstable();
-    dropped.dedup();
-    for kind in dropped {
-        if let Err(e) = stop_web_kind(deploy, kind) {
-            return Err(e);
-        }
-    }
-    Ok(())
-}
 
 /// Run every check [`create_workers_generic`] makes before it changes a
 /// config, without changing anything, so a deploy can tell a refusal from a
