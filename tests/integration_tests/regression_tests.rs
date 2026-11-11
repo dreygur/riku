@@ -617,4 +617,25 @@ mod agent_state_tests {
         assert_eq!(response["error"]["code"], "PERMISSION_DENIED", "{stdout}");
         assert_eq!(out.status.code(), Some(1), "{stdout}");
     }
+
+    /// Deploy progress, ours and the child processes', must go to stderr so
+    /// stdout stays one JSON object an agent can parse.
+    #[test]
+    fn agent_deploy_keeps_progress_off_stdout() {
+        let home = TempDir::new().unwrap();
+        std::fs::create_dir_all(home.path().join(".riku/apps/shop")).unwrap();
+        let bin =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku");
+        let out = std::process::Command::new(bin)
+            .args(["agent", "--scope", "staging", "deploy", "shop"])
+            .env("HOME", home.path())
+            .env_remove("RIKU_ROOT")
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let response: Result<serde_json::Value, _> = serde_json::from_str(stdout.trim_end());
+        assert!(response.is_ok(), "stdout is not one JSON object:\n{stdout}");
+        assert!(stderr.contains("Deploying app 'shop'"), "{stderr}");
+    }
 }

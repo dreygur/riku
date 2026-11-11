@@ -11,6 +11,7 @@ use super::commands::{
     cmd_agent_ps, cmd_agent_restart, cmd_agent_run, cmd_agent_stats, cmd_agent_stop,
     cmd_agent_stop_confirm,
 };
+use super::quiet_stdout::with_stdout_on_stderr;
 use super::state::agent_dir;
 use super::types::AgentResponse;
 
@@ -29,6 +30,8 @@ fn print_response(response: &AgentResponse) -> Result<()> {
 /// A response carrying an error code also returns `Err`, so the process exits
 /// nonzero and a caller can tell failure apart without parsing stdout. A
 /// confirmation request is not an error: it exits zero with its token.
+// Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
+#[allow(clippy::question_mark)]
 pub fn cmd_agent_execute(
     paths: &RikuPaths,
     session: &AgentSession,
@@ -36,7 +39,11 @@ pub fn cmd_agent_execute(
     args: &[String],
     confirm_token: Option<&str>,
 ) -> Result<()> {
-    let response = run_agent_command(paths, session, command, args, confirm_token);
+    let run = || run_agent_command(paths, session, command, args, confirm_token);
+    let response = match with_stdout_on_stderr(run) {
+        Ok(response) => response,
+        Err(e) => return Err(e),
+    };
     match (print_response(&response), response.error) {
         (Err(e), _) => Err(e),
         (Ok(()), Some(error)) => Err(anyhow::anyhow!("agent {command} failed: {}", error.code)),
