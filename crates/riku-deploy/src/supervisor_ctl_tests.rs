@@ -162,6 +162,24 @@ fn test_read_supervisor_pid_returns_none_for_empty_file() {
     assert!(pid.is_none(), "Empty PID file should return None");
 }
 
+/// `kill(0, ..)` signals the caller's process group and `kill(-1, ..)` every
+/// process the caller may signal, so neither may come out of the pid file.
+#[test]
+fn pid_file_of_zero_or_negative_is_never_a_pid() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    fs::create_dir_all(&paths.riku_root).unwrap();
+
+    for content in ["0\n", "-1\n", "-4242\n"] {
+        fs::write(paths.riku_root.join("supervisor.pid"), content).unwrap();
+        assert_eq!(
+            read_supervisor_pid(&paths),
+            None,
+            "pid file {content:?} must not be read as a pid"
+        );
+    }
+}
+
 // --- pid_is_alive ---
 
 #[test]

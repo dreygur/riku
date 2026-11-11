@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A `supervisor.pid` holding `0` or a negative number was trusted, so the
+  reload signal after a deploy or restart could go to riku's own process
+  group (`0`) or to every process the deploy user may signal (`-1`). Only
+  a positive pid is read now.
 - A deploy that failed after it had written the new worker configs (for
   example when the router step failed) reset the checkout to the last
   release, so the new configs ran the old code. The checkout now stays at

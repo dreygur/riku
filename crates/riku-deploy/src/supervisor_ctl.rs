@@ -10,13 +10,20 @@ use std::path::Path;
 use crate::config::RikuPaths;
 use crate::util::{echo, ROOT_BINARY};
 
-/// Read the supervisor PID from the PID file. Returns None if the file is absent,
-/// unreadable, or contains a non-numeric value.
+/// Read the supervisor PID from the PID file. Returns None if the file is
+/// absent or unreadable, or holds anything but a positive number: `kill(0, ..)`
+/// would signal our own process group and a negative pid a whole group or,
+/// for -1, every process we may signal.
 fn read_supervisor_pid(paths: &RikuPaths) -> Option<i32> {
     let pid_file = paths.riku_root.join("supervisor.pid");
-    let content = std::fs::read_to_string(&pid_file).ok()?;
-    let pid: i32 = content.trim().parse().ok()?;
-    Some(pid)
+    let content = match std::fs::read_to_string(&pid_file) {
+        Ok(content) => content,
+        Err(_) => return None,
+    };
+    match content.trim().parse::<i32>() {
+        Ok(pid) if pid > 0 => Some(pid),
+        _ => None,
+    }
 }
 
 /// Return true if a process with the given PID exists (sending signal 0).
