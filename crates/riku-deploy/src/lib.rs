@@ -33,6 +33,7 @@ pub(crate) use riku_util as util;
 mod app_command;
 pub mod app_stop;
 pub mod backup;
+mod checkout_restore;
 pub mod containers;
 mod deploy_env;
 mod deploy_finish;
@@ -111,10 +112,27 @@ pub fn do_deploy(
     match pipeline::run(app, paths, deltas, newrev, &mut progress) {
         Ok(()) => Ok(()),
         Err(e) => {
+            restore_checkout(app, paths, &mut progress);
             let repo = paths.git_root.join(format!("{app}.git"));
             let branch = git_ops::deploy_branch(&repo).unwrap_or_else(|| "main".to_string());
             progress.failed(&e, &branch);
             Err(e)
+        }
+    }
+}
+
+/// After a failed deploy, put the checkout back at the release that still
+/// runs. Recorded in the deploy log; only a failure to do so is shown.
+fn restore_checkout(app: &str, paths: &RikuPaths, progress: &mut progress::DeployProgress) {
+    match checkout_restore::restore_last_release(app, paths) {
+        Ok(Some(sha)) => progress
+            .log
+            .log_raw(&format!("Checkout reset to the last release {sha}")),
+        Ok(None) => {}
+        Err(e) => {
+            let reason = format!("could not reset the checkout to the last release: {e:#}");
+            progress.log.log_raw(&format!("[WARN] {reason}"));
+            util::display::warn(&reason);
         }
     }
 }

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A failed deploy left the app checkout at the commit that failed, while
+  the old processes kept running the previous build. The checkout now goes
+  back to the last recorded release. A failed first deploy leaves it alone.
+
 ## [0.1.4-rc.3] - 2026-11-11
 
 Release candidate, published as a GitHub prerelease. Install it with
