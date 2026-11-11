@@ -30,6 +30,21 @@ fn readonly_agent_sees_secret_values_masked() {
 }
 
 #[test]
+fn readonly_mask_covers_values_that_expand_a_secret() {
+    let (_tmp, paths) = shop();
+    fs::write(
+        paths.env_root.join("shop/ENV"),
+        "DATABASE_URL=postgres://u:pw@db/shop\nCOPY=$DATABASE_URL\n",
+    )
+    .unwrap();
+
+    let got = cmd_agent_config_get(&paths, &AgentScope::Readonly, "shop", "COPY");
+
+    let value = &got.data.expect("get returned no data")["value"];
+    assert_eq!(value, "***", "secret leaked through a variable reference");
+}
+
+#[test]
 fn staging_agent_sees_secret_values() {
     let (_tmp, paths) = shop();
 
