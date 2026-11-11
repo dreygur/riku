@@ -81,7 +81,9 @@ or `isolation_cpu_quota_us` (`cpu.max`, as quota per
 its own cgroup under the supervisor's, with those limits. Nothing else
 changes: the worker keeps the host filesystem and network, so a web worker
 still answers the router. `isolation_cpu_period_us` alone limits nothing
-and asks for no cgroup.
+and asks for no cgroup. A memory limit also sets `memory.swap.max` to 0
+where the kernel has swap accounting, so a worker at its limit is OOM
+killed instead of paging out to swap past it.
 
 The supervisor can only create these cgroups when its systemd unit has
 `Delegate=yes`, which `riku init` writes. Without it the supervisor prints a

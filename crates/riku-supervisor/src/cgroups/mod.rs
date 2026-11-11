@@ -69,6 +69,9 @@ struct LimitNode {
 enum NodeValue {
     /// The limit the config sets.
     Set(String),
+    /// A value that goes with a set limit, written only where the kernel
+    /// offers the file (`memory.swap.max` needs swap accounting).
+    SetWherePresent(String),
     /// No limit is set: the unlimited value, written only over a file that
     /// already exists, so a reused cgroup drops a limit an older config set.
     Unlimited(String),
@@ -98,9 +101,15 @@ impl LimitNode {
 }
 
 impl CgroupLimits {
-    /// Every limit file, with the limit or the unlimited value.
+    /// Every limit file, with the limit or the unlimited value. A memory
+    /// limit also sets `memory.swap.max` to 0: with swap the worker would
+    /// page out past `memory.max` instead of being OOM killed.
     fn nodes(&self) -> Vec<LimitNode> {
         let period = self.cpu_period_us;
+        let swap = match self.memory_max_bytes {
+            Some(_) => NodeValue::SetWherePresent("0".to_string()),
+            None => NodeValue::Unlimited("max".to_string()),
+        };
         vec![
             LimitNode::new(
                 "memory",
@@ -108,6 +117,11 @@ impl CgroupLimits {
                 self.memory_max_bytes.map(|bytes| bytes.to_string()),
                 "max".to_string(),
             ),
+            LimitNode {
+                controller: "memory",
+                file: "memory.swap.max",
+                value: swap,
+            },
             LimitNode::new(
                 "cpu",
                 "cpu.max",
@@ -130,6 +144,12 @@ impl CgroupLimits {
 fn apply_node(path: &Path, node: &LimitNode, missing: &[&str]) -> Result<()> {
     match &node.value {
         NodeValue::Set(value) => write_node(path, node.file, value),
+        NodeValue::SetWherePresent(value) => {
+            if !path.join(node.file).exists() {
+                return Ok(());
+            }
+            write_node(path, node.file, value)
+        }
         NodeValue::Unlimited(value) => {
             if missing.contains(&node.controller) || !path.join(node.file).exists() {
                 return Ok(());

@@ -62,6 +62,34 @@ fn reprovision_resets_limits_the_new_config_dropped() {
     }
 }
 
+/// With swap accounting the kernel offers `memory.swap.max`, and a worker
+/// at its `memory.max` swaps instead of being OOM killed. A memory limit
+/// must also turn swap off for the worker, and leave the file uncreated
+/// where the kernel has none.
+#[test]
+fn a_memory_limit_turns_off_swap_where_the_kernel_offers_it() {
+    let (_own, tree) = taken_over("memory cpu pids");
+    let limits = CgroupLimits {
+        memory_max_bytes: Some(128 * 1024 * 1024),
+        cpu_period_us: 100_000,
+        ..CgroupLimits::default()
+    };
+    let with_swap = tree.apps_dir().join("shop@web.1");
+    std::fs::create_dir_all(&with_swap).unwrap();
+    std::fs::write(with_swap.join("memory.swap.max"), "max").unwrap();
+
+    WorkerCgroup::provision(&tree, &WorkerName::new("shop", "web", 1), &limits).unwrap();
+    let no_swap =
+        WorkerCgroup::provision(&tree, &WorkerName::new("shop", "web", 2), &limits).unwrap();
+
+    let swap = std::fs::read_to_string(with_swap.join("memory.swap.max")).unwrap();
+    assert_eq!(swap, "0", "the memory limit must also bound swap");
+    assert!(
+        !no_swap.path.join("memory.swap.max").exists(),
+        "no swap file is created where the kernel has none"
+    );
+}
+
 #[test]
 fn provision_refuses_a_limit_whose_controller_is_not_delegated() {
     let (own, tree) = taken_over("cpu pids");
