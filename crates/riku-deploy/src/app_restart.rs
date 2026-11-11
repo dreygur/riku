@@ -11,6 +11,7 @@
 #![allow(clippy::question_mark)]
 
 use std::fs;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -21,14 +22,62 @@ use crate::config::RikuPaths;
 use crate::supervisor_ctl;
 use crate::util::file_names::worker::WorkerName;
 
-fn bump_mtime(config: &Path) -> Result<()> {
-    let file = match fs::File::options().write(true).open(config) {
-        Ok(file) => file,
-        Err(e) => return Err(anyhow!("cannot open {}: {e}", config.display())),
+/// The config file `config` leads to: the target of an enabled link, or the
+/// file itself. It must sit directly in `workers_available`; the returned
+/// path is under the canonical form of that directory, so only its last
+/// component can still be a link, and opening refuses that.
+fn config_in_available(config: &Path, paths: &RikuPaths) -> Result<PathBuf> {
+    let target = match fs::read_link(config) {
+        Ok(target) => match config.parent() {
+            Some(dir) => dir.join(target),
+            None => target,
+        },
+        Err(_) => config.to_path_buf(),
     };
+    let (dir, name) = match (target.parent(), target.file_name()) {
+        (Some(dir), Some(name)) => (dir, name),
+        _ => return Err(anyhow!("{} is not a worker config", config.display())),
+    };
+    let available = fs::canonicalize(&paths.workers_available);
+    match (fs::canonicalize(dir), available) {
+        (Ok(dir), Ok(available)) if dir == available => Ok(available.join(name)),
+        _ => Err(anyhow!(
+            "{} does not lead to a config in {}",
+            config.display(),
+            paths.workers_available.display()
+        )),
+    }
+}
+
+/// Advance the mtime of the config `config` leads to, so the supervisor
+/// reloads that worker. Opened read only, non blocking and without following
+/// a final link; refused unless it is a regular file this user owns.
+fn bump_mtime(config: &Path, paths: &RikuPaths) -> Result<()> {
+    let target = match config_in_available(config, paths) {
+        Ok(target) => target,
+        Err(e) => return Err(e),
+    };
+    let opened = fs::File::options()
+        .read(true)
+        .custom_flags(nix::libc::O_NOFOLLOW | nix::libc::O_NONBLOCK)
+        .open(&target);
+    let file = match opened {
+        Ok(file) => file,
+        Err(e) => return Err(anyhow!("cannot open {}: {e}", target.display())),
+    };
+    let meta = match file.metadata() {
+        Ok(meta) => meta,
+        Err(e) => return Err(anyhow!("cannot stat {}: {e}", target.display())),
+    };
+    if !meta.is_file() {
+        return Err(anyhow!("{} is not a regular file", target.display()));
+    }
+    if meta.uid() != nix::unistd::geteuid().as_raw() {
+        return Err(anyhow!("{} is not owned by this user", target.display()));
+    }
     match file.set_modified(SystemTime::now()) {
         Ok(()) => Ok(()),
-        Err(e) => Err(anyhow!("cannot touch {}: {e}", config.display())),
+        Err(e) => Err(anyhow!("cannot touch {}: {e}", target.display())),
     }
 }
 
@@ -47,7 +96,7 @@ fn restart_configs_with(
     start_supervisor: impl Fn(&RikuPaths) -> bool,
 ) -> Result<()> {
     for config in configs {
-        if let Err(e) = bump_mtime(config) {
+        if let Err(e) = bump_mtime(config, paths) {
             return Err(e);
         }
     }

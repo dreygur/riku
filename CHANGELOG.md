@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `riku restart` opened every enabled worker entry for writing and followed
+  links, so an entry linked to a file outside `workers-available` had that
+  file's mtime changed, and one leading to a FIFO hung the restart. It now
+  only touches a regular file in `workers-available` that the deploy user
+  owns, opened without following a final link and without blocking.
 - `riku restart` (and a single worker restart from the dashboard) said
   `Restarted N worker(s)` when the supervisor was not running and could not
   be started, and it trusted any live process whose pid sat in a stale
