@@ -116,7 +116,7 @@ fn build_with_plugin(
 
 /// Post build hooks, the `release` command, then worker configs and the
 /// processes themselves.
-fn release_and_start(
+pub(crate) fn release_and_start(
     app: &str,
     paths: &RikuPaths,
     runtime: &str,
@@ -141,10 +141,10 @@ fn release_and_start(
     if let Err(e) = workers::check_workers(app, Some(workers), env, paths, start_cmd) {
         return Err(e);
     }
-    progress.processes_changing();
     if let Err(e) = env_setup::write_live_env(app, paths, env) {
         return Err(e);
     }
+    progress.processes_changing();
     if let Err(e) =
         workers::create_workers_generic(app, &app_path, Some(workers), env, paths, start_cmd)
     {

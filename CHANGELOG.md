@@ -44,6 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A push whose `LIVE_ENV` could not be written left the checkout at the
+  pushed commit while the old workers kept running from it, and said the
+  previous release no longer ran. Nothing has changed at that point, so
+  the checkout now goes back to the last release and the push says the
+  previous release was left as it was. The same holds for a refusal of
+  the worker checks.
 - The laptop server list (`~/.config/riku/servers.toml`) was renamed into
   place without an fsync, so a crash right after `rk server add` could
   leave it empty. It is now written through the same private atomic write

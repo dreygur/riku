@@ -42,6 +42,7 @@ fn deploy_container_app(
     progress.begin(Phase::Runtime);
     progress.done(containers::CONTAINER_RUNTIME);
     progress.begin(Phase::Processes);
+    progress.release_replacing();
     if let Err(e) = containers::deploy_containers(&name, paths, env) {
         return Err(e);
     }

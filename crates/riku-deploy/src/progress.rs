@@ -44,12 +44,6 @@ impl Phase {
     fn streams_output(self) -> bool {
         matches!(self, Phase::Preflight | Phase::Build | Phase::Release)
     }
-
-    /// Whether the app's running processes are still the previous release
-    /// when this phase fails: nothing is restarted before `Processes`.
-    fn keeps_previous_release(self) -> bool {
-        !matches!(self, Phase::Processes | Phase::Route)
-    }
 }
 
 /// The facts the success summary lists.
@@ -68,8 +62,12 @@ pub(crate) struct DeployProgress {
     phase_started: Instant,
     output: OutputTail,
     had_release: bool,
-    /// Set once the deploy starts rewriting worker configs; from then on the
-    /// previous release no longer runs as it was.
+    /// Set once the deploy starts replacing what runs (worker configs or
+    /// containers); from then on the previous release no longer runs as it
+    /// was.
+    release_replaced: bool,
+    /// Set once the deploy starts rewriting worker configs, which point at
+    /// the new checkout, so a failure keeps the checkout where it is.
     processes_changed: bool,
 }
 
@@ -84,8 +82,16 @@ impl DeployProgress {
             phase_started: now,
             output: OutputTail::default(),
             had_release: !ReleaseLog::new(paths).list(app).is_empty(),
+            release_replaced: false,
             processes_changed: false,
         }
+    }
+
+    /// Record that the running release is about to be replaced by something
+    /// other than worker configs, so a later failure does not claim the old
+    /// release still runs.
+    pub(crate) fn release_replacing(&mut self) {
+        self.release_replaced = true;
     }
 
     /// Record that worker configs are about to change, so a later failure
@@ -93,6 +99,7 @@ impl DeployProgress {
     /// still runs.
     pub(crate) fn processes_changing(&mut self) {
         self.processes_changed = true;
+        self.release_replaced = true;
     }
 
     pub(crate) fn processes_changed(&self) -> bool {
@@ -102,7 +109,7 @@ impl DeployProgress {
     /// Whether the app still runs its previous release unchanged after a
     /// failure at this point.
     pub(crate) fn previous_release_runs(&self) -> bool {
-        self.had_release && !self.processes_changed && self.phase.keeps_previous_release()
+        self.had_release && !self.release_replaced
     }
 
     /// `┌  Deploying <app>  <sha> "<subject>"`.

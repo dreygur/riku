@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -81,6 +82,43 @@ fn failure_after_workers_changed_keeps_the_new_checkout() {
     assert!(
         !progress.previous_release_runs(),
         "the outro must not claim the previous release still runs"
+    );
+}
+
+#[test]
+fn live_env_write_failure_resets_the_checkout_and_keeps_the_old_release() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    let (good, _pushed) = app_with_release(&paths);
+    fs::create_dir_all(paths.env_root.join("shop").join("LIVE_ENV")).unwrap();
+    let log = DeployLogger::new(&paths.deploy_log_file("shop")).unwrap();
+    let mut progress = DeployProgress::new("shop", &paths, log);
+    let workers = HashMap::from([("worker".to_string(), "sleep 1".to_string())]);
+
+    let started = crate::procfile_deploy::release_and_start(
+        "shop",
+        &paths,
+        "test",
+        &workers,
+        None,
+        &HashMap::new(),
+        &mut progress,
+    );
+    crate::restore_checkout("shop", &paths, &mut progress);
+
+    let err = started.expect_err("a LIVE_ENV path that is a directory cannot be written");
+    assert!(
+        format!("{err:#}").contains("LIVE_ENV"),
+        "unexpected error: {err:#}"
+    );
+    let head = git(&paths.app_root.join("shop"), &["rev-parse", "HEAD"]);
+    assert_eq!(
+        head, good,
+        "no worker config changed, so the checkout must go back to the released {good}"
+    );
+    assert!(
+        progress.previous_release_runs(),
+        "nothing was restarted, so the outro must say the previous release was left as it was"
     );
 }
 

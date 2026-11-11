@@ -40,11 +40,6 @@ fn failure_says_how_to_retry_and_whether_the_old_release_runs() {
         "\n   Full log   rk logs agenttest --deploy\
          \n   Retry      git push riku main"
     );
-    assert!(Phase::Build.keeps_previous_release());
-    assert!(
-        !Phase::Route.keeps_previous_release(),
-        "workers were already replaced when routing fails"
-    );
     assert_eq!(failure_outro(false), "Deploy failed.");
     assert_eq!(
         without_label(
