@@ -64,7 +64,7 @@ fn check_text(key: &Key, text: &str, source: Source) -> Result<(), String> {
 /// letters, digits and `. - _ /`.
 fn plain_absolute_dir(text: &str) -> bool {
     text.starts_with('/')
-        && text.trim_matches('/') != ""
+        && !text.trim_matches('/').is_empty()
         && !text.split('/').any(|part| part == "..")
         && text
             .bytes()
