@@ -97,21 +97,40 @@ else
 fi
 
 # A checksum that cannot be fetched stops the install, unless
-# RIKU_SKIP_CHECKSUM=1 says to go on unverified. `download` is mocked to
-# fail, as on a network error.
+# RIKU_SKIP_CHECKSUM=1 says to go on unverified. MOCKS ($1) replaces
+# `download` (and the hash tools) inside the installer's shell.
 checksum_case() {
   # shellcheck disable=SC2016
   "$test_sh" -c '
     . "$0"
-    download() { return 1; }
+    eval "$1"
     asset="$(mktemp)"
     verify_checksum "$asset" "https://example.invalid/riku.sha256" "${asset}.sum"
-    rm -f "$asset"
+    rm -f "$asset" "${asset}.sum"
     echo "installing"
-  ' "$script" 2>"$stderr_file"
+  ' "$script" "$1" 2>"$stderr_file"
 }
 
-out="$(RIKU_INSTALL_LIB=1 checksum_case)"
+# An empty checksum must never match an empty hash: either one empty stops.
+# The mocks expand in the installer's shell, so they are single quoted.
+# shellcheck disable=SC2016
+for mocks in \
+  'download() { : > "$2"; }' \
+  'download() { echo "abc123  riku" > "$2"; }; sha256sum() { return 1; }; shasum() { return 1; }'
+do
+  out="$(RIKU_INSTALL_LIB=1 checksum_case "$mocks")"
+  status=$?
+  errors="$(cat "$stderr_file")"
+  case "$status $out $errors" in
+    "1  ■  "*"empty"*"RIKU_SKIP_CHECKSUM=1"*)
+      echo "ok   empty checksum or hash -> stops ($errors)" ;;
+    *)
+      echo "FAIL empty checksum or hash ($mocks): status $status, stdout '$out', stderr '$errors'"
+      failures=$((failures + 1)) ;;
+  esac
+done
+
+out="$(RIKU_INSTALL_LIB=1 checksum_case 'download() { return 1; }')"
 status=$?
 errors="$(cat "$stderr_file")"
 case "$status $out $errors" in
@@ -122,7 +141,7 @@ case "$status $out $errors" in
     failures=$((failures + 1)) ;;
 esac
 
-out="$(RIKU_INSTALL_LIB=1 RIKU_SKIP_CHECKSUM=1 checksum_case)"
+out="$(RIKU_INSTALL_LIB=1 RIKU_SKIP_CHECKSUM=1 checksum_case 'download() { return 1; }')"
 status=$?
 errors="$(cat "$stderr_file")"
 case "$status $out $errors" in

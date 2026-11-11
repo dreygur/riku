@@ -192,6 +192,16 @@ verify_checksum() {
     unverified "no sha256sum or shasum to check the download with"
     return 0
   fi
+  # Two empty strings compare equal, so an empty body or a failed hash
+  # would otherwise pass.
+  if [ -z "$expected" ]; then
+    unverified "the checksum $2 is empty"
+    return 0
+  fi
+  if [ -z "$actual" ]; then
+    unverified "the sha256 of the download came out empty"
+    return 0
+  fi
   if [ "$actual" != "$expected" ]; then
     err "checksum mismatch (expected $expected, got $actual)"
   fi
