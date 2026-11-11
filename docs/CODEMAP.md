@@ -313,9 +313,9 @@ Entry: `do_deploy`, `rollback` (src/lib.rs); `spawn_app` (supervisor_ctl.rs); `c
 - `src/releases.rs`: `ReleaseLog` (`record`, `list`, `previous`). File `releases/<app>.log`, lines `<unix_ts> <sha>`.
 - `src/scaling.rs`: `apply_scaling_deltas`. Reads and writes the app `SCALING` file, prunes worker symlinks.
 - `src/supervisor_ctl.rs`: `ensure_supervisor_running`, `notify_supervisor_reload` (SIGHUP via nix), `resolve_riku_bin`, `spawn_app`, `read_app_env` (merged env via `app_config::load_env`; feeds spawn, router renew and web rollout). Contract: pid from `<riku_root>/supervisor.pid`; binary is `ROOT_BINARY` if present, else `current_exe()`.
-- `src/app_restart.rs`: `restart_procfile_app` (`riku restart` of a Procfile app). Bumps the mtime of each enabled worker config, starts the supervisor if needed and sends it SIGHUP; never builds. No enabled workers is an error naming `riku deploy`.
+- `src/app_restart.rs`: `restart_procfile_app` (`riku restart` of a Procfile app) and `restart_configs` (the shared mechanism). Bumps the mtime of each worker config, starts the supervisor if needed and sends it SIGHUP; never builds. No enabled workers is an error naming `riku deploy`.
 - `src/app_stop.rs`: `stop_procfile_app`. Removes enabled worker configs and riku-made uWSGI sockets (`riku stop`).
-- `src/worker_control.rs`: `restart_worker`, `delete_worker` for one `kind` + ordinal. Validates app name and kind before building paths.
+- `src/worker_control.rs`: `restart_worker`, `delete_worker` for one `kind` + ordinal. Validates app name and kind before building paths. Restart goes through `app_restart::restart_configs` for that one enabled config.
 - `src/teardown.rs`: `plugin_destroy`. Runtime plugin cleanup on destroy, detected with the merged env so `runtime.name` in riku.toml counts.
 - `src/backup.rs`: `BackupService::{backup, restore}`. tar.gz of `apps/`, `envs/`, `data/`, `repos/<app>.git`. Restore validates every member (no absolute, no `..`, must sit under this app's dirs).
 - `src/service_update.rs`: `pull_service`. Supervisor image watch: pull, compare image ids, replace only that service's copies.

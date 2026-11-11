@@ -11,7 +11,7 @@
 #![allow(clippy::question_mark)]
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use anyhow::{anyhow, Result};
@@ -31,8 +31,21 @@ fn bump_mtime(config: &Path) -> Result<()> {
     }
 }
 
-/// Restart every enabled worker of `app` and return how many there are.
-/// Starts the supervisor when it is not running, which starts them too. An
+/// Restart the workers whose configs are `configs` (enabled entries or the
+/// files they point at). Starts the supervisor when it is not running,
+/// which starts them too.
+pub fn restart_configs(configs: &[PathBuf], paths: &RikuPaths) -> Result<()> {
+    for config in configs {
+        if let Err(e) = bump_mtime(config) {
+            return Err(e);
+        }
+    }
+    supervisor_ctl::start_supervisor(paths);
+    supervisor_ctl::notify_supervisor_reload(paths);
+    Ok(())
+}
+
+/// Restart every enabled worker of `app` and return how many there are. An
 /// app with no enabled workers (never deployed, or stopped) is an error
 /// that names `riku deploy`.
 pub fn restart_procfile_app(app: &str, paths: &RikuPaths) -> Result<usize> {
@@ -42,12 +55,8 @@ pub fn restart_procfile_app(app: &str, paths: &RikuPaths) -> Result<usize> {
             "'{app}' has no running processes to restart; start it with riku deploy {app}"
         ));
     }
-    for config in &enabled {
-        if let Err(e) = bump_mtime(config) {
-            return Err(e);
-        }
+    match restart_configs(&enabled, paths) {
+        Ok(()) => Ok(enabled.len()),
+        Err(e) => Err(e),
     }
-    supervisor_ctl::start_supervisor(paths);
-    supervisor_ctl::notify_supervisor_reload(paths);
-    Ok(enabled.len())
 }

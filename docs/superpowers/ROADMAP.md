@@ -323,10 +323,9 @@ phase 4 come after.
   not pushed: restart after a failed push took the app down (checkout reset
   to the last release, restart never builds), plain init beside a system
   install, the doubled push failure, init and plugin output, the port URL
-  placeholder. Open, found on the way and not fixed: the dashboard's per
-  worker restart (`worker_control::restart_worker`) only swaps the enabled
-  symlink, which leaves the followed mtime unchanged, so the supervisor
-  likely ignores it (not reproduced); with `RIKU_AUTO_RESTART=false` the
+  placeholder. Fixed after: the dashboard's per worker restart now bumps
+  the config mtime and sends SIGHUP (`app_restart::restart_configs`).
+  Open, found on the way and not fixed: with `RIKU_AUTO_RESTART=false` the
   only way to start a new build is `riku stop` then `riku deploy`; the
   first push prints `Linked <repo> to <repo>` above the deploy intro.
 

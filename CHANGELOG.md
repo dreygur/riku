@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The dashboard's restart button for one worker did nothing: it replaced
+  the enabled symlink, but the supervisor compares the mtime of the file
+  the link points at, which did not change. It now restarts the worker the
+  way `riku restart` does (the config's mtime advances, the supervisor gets
+  a SIGHUP). Restarting a worker that is not enabled is refused.
 - `sudo riku init` on an upgrade left the old supervisor running: it ran
   `systemctl start`, which does nothing for a running service. A running
   supervisor is now restarted, so the new binary takes over (its workers

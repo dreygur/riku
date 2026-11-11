@@ -9,6 +9,7 @@ use anyhow::{bail, Result};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::app_restart::restart_configs;
 use crate::config::RikuPaths;
 use crate::scaling::apply_scaling_deltas;
 use crate::util::file_names::worker::WorkerName;
@@ -55,24 +56,22 @@ fn worker_paths(
     ))
 }
 
-/// Restart exactly one worker by re-triggering its symlink swap in
-/// `workers-enabled/`: the same atomic rename dance `write_worker_config`
-/// performs on every deploy, which the supervisor's file watcher already
-/// reliably treats as "this worker changed, stop and respawn it" (see
-/// `handle_modified_config`). Content is unchanged; only the symlink moves,
-/// which is what triggers the watcher.
+/// Restart exactly one worker the way `riku restart` restarts an app: its
+/// config's mtime advances and the supervisor gets a SIGHUP. The supervisor
+/// compares the mtime of the file the enabled link points at, so moving the
+/// link alone would not restart anything.
 #[allow(clippy::question_mark)]
 pub fn restart_worker(app: &str, paths: &RikuPaths, kind: &str, ordinal: u32) -> Result<()> {
     let (available, enabled) = match worker_paths(app, paths, kind, ordinal) {
         Ok(found) => found,
         Err(e) => return Err(e),
     };
-    if !available.exists() {
+    if !available.exists() || !enabled.exists() {
         bail!(
-            "no worker config for '{app}' {kind}.{ordinal} -- it may have been scaled away; nothing to restart"
+            "no running worker '{app}' {kind}.{ordinal}; it may have been scaled away or stopped"
         );
     }
-    crate::util::fs::replace_symlink(&available, &enabled)
+    restart_configs(&[enabled], paths)
 }
 
 /// Remove exactly one worker's config, stopping it without touching sibling
