@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4-rc.2] - 2026-11-11
+
+Release candidate, published as a GitHub prerelease. Install it with
+`curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sudo RIKU_VERSION=v0.1.4-rc.2 sh`.
+
+### Breaking
+
+- `riku config set` takes each argument as one `KEY=VALUE` pair. A value
+  may now hold spaces (`riku config set shop "MSG=hello world"`), but one
+  quoted argument holding two pairs (`"A=1 B=2"`) now sets `A` to `1 B=2`.
+- `riku agent run` needs the production scope and a confirm token for every
+  call. It runs as the riku user, so a staging key with `run` could do
+  anything riku can.
+- A readonly agent sees secret-looking config values, and values that
+  reference another variable, as `***`.
+- An agent call whose response carries an error exits 1 instead of 0.
+
+### Added
+
+- Agent keys work over ssh: with a forced command such as
+  `riku agent --scope staging --agent-id cursor`, the agent sends only the
+  command (`ssh riku@host ps myapp`). A request that sets `--scope`,
+  `--agent-id` or any other option is refused.
+- `riku agent run`, `config:set` and `config:unset`. Changing a key whose
+  name looks secret needs a confirm token bound to the exact request.
+- `skills/riku/SKILL.md`: a skill that teaches AI agents the riku commands.
+
+### Fixed
+
+- `riku agent deploy myapp` failed to parse; agent arguments needed `--`.
+- `riku agent logs` returned the oldest 100 lines of each log, and read the
+  whole file into memory. It now streams the newest 100.
+- `riku agent deploy` and `restart` printed progress on stdout ahead of the
+  JSON, so the response could not be parsed.
+- The agent help, schema and docs described flags and commands that do not
+  exist (`riku --json`, `--lines`, `job-status`).
+
+### Removed
+
+- The root `ROADMAP.md` and `API.md`, which were out of date; see
+  `docs/superpowers/ROADMAP.md` and `docs/CODEMAP.md`.
+
 ## [0.1.4-rc.1] - 2026-11-11
 
 Release candidate, published as a GitHub prerelease, so the installer's
