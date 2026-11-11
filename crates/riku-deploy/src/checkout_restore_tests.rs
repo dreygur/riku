@@ -63,21 +63,23 @@ fn failed_deploy_puts_the_checkout_back_at_the_last_release() {
     );
 }
 
+/// Worker configs or containers started replacing the release: either now
+/// runs the pushed checkout, so a failure must not reset it under them.
 #[test]
-fn failure_after_workers_changed_keeps_the_new_checkout() {
+fn failure_after_the_release_started_changing_keeps_the_new_checkout() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());
     let (_good, pushed) = app_with_release(&paths);
     let log = DeployLogger::new(&paths.deploy_log_file("shop")).unwrap();
     let mut progress = DeployProgress::new("shop", &paths, log);
-    progress.processes_changing();
+    progress.release_replacing();
 
     crate::restore_checkout("shop", &paths, &mut progress);
 
     let head = git(&paths.app_root.join("shop"), &["rev-parse", "HEAD"]);
     assert_eq!(
         head, pushed,
-        "the new worker configs run {pushed}, so the checkout must stay there"
+        "the new workers or containers run {pushed}, so the checkout must stay there"
     );
     assert!(
         !progress.previous_release_runs(),

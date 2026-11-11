@@ -151,7 +151,7 @@ pub(crate) fn release_and_start(
     if let Err(e) = plugin_env::save(app, paths, &plugin.env) {
         return Err(e);
     }
-    progress.processes_changing();
+    progress.release_replacing();
     if let Err(e) =
         workers::create_workers_generic(app, &app_path, Some(workers), env, paths, start_cmd)
     {

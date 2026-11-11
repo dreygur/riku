@@ -85,6 +85,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   service started. Init now stops any supervisor holding the lock that is
   not the unit's own, and fails, naming the pid, when it does not stop
   within 30 s.
+- A container app push that failed after its containers started being
+  replaced reset the checkout to the last release under the new
+  containers. The checkout now stays at the pushed commit once anything
+  that runs it has changed, as it already did for Procfile workers.
 - A push whose `LIVE_ENV` could not be written left the checkout at the
   pushed commit while the old workers kept running from it, and said the
   previous release no longer ran. Nothing has changed at that point, so

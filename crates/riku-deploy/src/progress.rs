@@ -63,12 +63,10 @@ pub(crate) struct DeployProgress {
     output: OutputTail,
     had_release: bool,
     /// Set once the deploy starts replacing what runs (worker configs or
-    /// containers); from then on the previous release no longer runs as it
-    /// was.
+    /// containers). From then on the previous release no longer runs as it
+    /// was, and what replaces it runs the new checkout, so a failure keeps
+    /// the checkout where it is.
     release_replaced: bool,
-    /// Set once the deploy starts rewriting worker configs, which point at
-    /// the new checkout, so a failure keeps the checkout where it is.
-    processes_changed: bool,
 }
 
 impl DeployProgress {
@@ -83,27 +81,19 @@ impl DeployProgress {
             output: OutputTail::default(),
             had_release: !ReleaseLog::new(paths).list(app).is_empty(),
             release_replaced: false,
-            processes_changed: false,
         }
     }
 
-    /// Record that the running release is about to be replaced by something
-    /// other than worker configs, so a later failure does not claim the old
-    /// release still runs.
+    /// Record that worker configs or containers are about to change, so a
+    /// later failure neither resets the checkout under them nor claims the
+    /// old release still runs.
     pub(crate) fn release_replacing(&mut self) {
         self.release_replaced = true;
     }
 
-    /// Record that worker configs are about to change, so a later failure
-    /// neither resets the checkout under them nor claims the old release
-    /// still runs.
-    pub(crate) fn processes_changing(&mut self) {
-        self.processes_changed = true;
-        self.release_replaced = true;
-    }
-
-    pub(crate) fn processes_changed(&self) -> bool {
-        self.processes_changed
+    /// Whether the deploy started replacing what runs.
+    pub(crate) fn release_replaced(&self) -> bool {
+        self.release_replaced
     }
 
     /// Whether the app still runs its previous release unchanged after a

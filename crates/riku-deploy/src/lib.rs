@@ -131,13 +131,13 @@ pub fn do_deploy(
 /// After a failed deploy, put the checkout back at the release that still
 /// runs. Recorded in the deploy log; only a failure to do so is shown.
 ///
-/// Once worker configs were rewritten they point at the new checkout, so it
-/// stays: resetting it would leave the new configs running the old code.
+/// Once worker configs or containers started changing they run the new
+/// checkout, so it stays: resetting it would leave them running the old code.
 fn restore_checkout(app: &str, paths: &RikuPaths, progress: &mut progress::DeployProgress) {
-    if progress.processes_changed() {
-        progress
-            .log
-            .log_raw("Checkout kept at the pushed commit: worker configs already changed");
+    if progress.release_replaced() {
+        progress.log.log_raw(
+            "Checkout kept at the pushed commit: worker configs or containers already changed",
+        );
         return;
     }
     match checkout_restore::restore_last_release(app, paths) {
