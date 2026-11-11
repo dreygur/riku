@@ -6,6 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
 
 /// cgroup v2 limits for one worker, from the `RIKU_ISOLATION_*` limit
 /// settings. Present only when at least one real limit is set.
@@ -80,5 +81,23 @@ impl Sandbox {
         env.get("RIKU_ISOLATION_ROOT").map(|root_dir| Sandbox {
             root_dir: root_dir.clone(),
         })
+    }
+
+    /// Refuses a `root_dir` that is not an absolute path to an existing
+    /// directory. `riku settings set` checks the path's shape, but a worker
+    /// config can also come from an older ENV file or be edited by hand, and
+    /// the directory can vanish after it was set.
+    pub fn check_root(&self) -> anyhow::Result<()> {
+        let root = Path::new(&self.root_dir);
+        if !root.is_absolute() {
+            anyhow::bail!("sandbox root {} is not an absolute path", self.root_dir);
+        }
+        if !root.is_dir() {
+            anyhow::bail!(
+                "sandbox root {} is not an existing directory",
+                self.root_dir
+            );
+        }
+        Ok(())
     }
 }

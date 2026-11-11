@@ -36,6 +36,22 @@ fn each_argument_is_one_setting_so_values_keep_their_spaces() {
 }
 
 #[test]
+fn isolation_root_is_refused_as_a_plain_env_key() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = app_with_env(tmp.path());
+
+    let result = config_after_set(&paths, "shop", &["RIKU_ISOLATION_ROOT=/".to_string()]);
+
+    match result {
+        Ok(_) => panic!("config set accepted RIKU_ISOLATION_ROOT"),
+        Err(e) => assert!(
+            e.to_string().contains("limits.isolation_root"),
+            "should point at the server setting: {e}"
+        ),
+    }
+}
+
+#[test]
 fn newline_in_value_fails() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = app_with_env(tmp.path());

@@ -170,6 +170,12 @@ pub const KEYS: &[Key] = &[
         "RIKU_ISOLATION_CPU_PERIOD_US",
         Kind::Int,
     ),
+    server(
+        "limits",
+        "isolation_root",
+        "RIKU_ISOLATION_ROOT",
+        Kind::Text,
+    ),
     key(
         "containers",
         "watch_services",

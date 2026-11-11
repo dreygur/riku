@@ -223,6 +223,36 @@ fn isolation_root_turns_on_the_sandbox_and_keeps_the_limits() {
 }
 
 #[test]
+fn sandbox_root_must_be_an_existing_absolute_directory() {
+    let tmp = tempfile::tempdir().unwrap();
+    let file = tmp.path().join("file");
+    std::fs::write(&file, "").unwrap();
+    let missing = tmp.path().join("missing");
+
+    for root in [
+        "srv/jail".to_string(),
+        missing.display().to_string(),
+        file.display().to_string(),
+    ] {
+        let sandbox = Sandbox {
+            root_dir: root.clone(),
+        };
+        match sandbox.check_root() {
+            Ok(()) => panic!("accepted {root} as a sandbox root"),
+            Err(e) => assert!(e.to_string().contains(&root), "names the root: {e}"),
+        }
+    }
+
+    let sandbox = Sandbox {
+        root_dir: tmp.path().display().to_string(),
+    };
+    assert!(
+        sandbox.check_root().is_ok(),
+        "an existing directory is a valid root"
+    );
+}
+
+#[test]
 fn cpu_period_alone_asks_for_no_cgroup() {
     let config = config_from_env(&[("RIKU_ISOLATION_CPU_PERIOD_US", "50000")]);
 

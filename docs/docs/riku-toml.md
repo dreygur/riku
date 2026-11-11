@@ -67,6 +67,7 @@ from the app's ENV file.
 | `limits.isolation_max_pids` | whole number, server only | `RIKU_ISOLATION_MAX_PIDS` |
 | `limits.isolation_cpu_quota_us` | whole number, server only | `RIKU_ISOLATION_CPU_QUOTA_US` |
 | `limits.isolation_cpu_period_us` | whole number, server only | `RIKU_ISOLATION_CPU_PERIOD_US` |
+| `limits.isolation_root` | absolute path, server only | `RIKU_ISOLATION_ROOT` |
 | `containers.watch_services` | list of strings | `RIKU_WATCH_SERVICES` |
 | `secrets.ghcr_username` | string, server only | `RIKU_GHCR_USERNAME` |
 | `secrets.ghcr_token` | string, server only | `RIKU_GHCR_TOKEN` |
@@ -87,8 +88,14 @@ The supervisor can only create these cgroups when its systemd unit has
 cgroup diagnostic at startup, and a worker that sets one of these limits
 refuses to start rather than run unlimited.
 
-The full sandbox is a separate switch: the `RIKU_ISOLATION_ROOT` env var,
-set with `riku config set <app> RIKU_ISOLATION_ROOT=<dir>`. It starts the worker inside a `pivot_root` to
+The full sandbox is a separate switch, the server only key
+`limits.isolation_root`, set with
+`riku settings set <app> limits.isolation_root=<dir>`. The repo file cannot
+set it, and `riku config set` refuses `RIKU_ISOLATION_ROOT` like every other
+key in the table above. The value must be an absolute path other than `/`,
+with no `..` part, made only of letters, digits and `. - _ /`. The
+supervisor refuses to start a sandboxed worker whose root is not an existing
+directory. It starts the worker inside a `pivot_root` to
 that directory, which must hold everything the worker needs, with its own
 PID, mount and network namespaces. The network namespace leaves the worker
 only its own loopback, so a sandboxed worker cannot reach the router, a

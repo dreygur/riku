@@ -26,6 +26,12 @@ impl ProcessManager {
 
         let process_id = config.worker.name().to_string();
 
+        if let Some(sandbox) = &config.options.sandbox {
+            if let Err(e) = sandbox.check_root() {
+                return Err(e.context(format!("{process_id} refuses to start")));
+            }
+        }
+
         if self.processes.contains_key(&process_id) {
             tracing::info!("Process {} already exists, stopping it first", process_id);
             if let Err(e) = self.stop_process_by_id(&process_id) {

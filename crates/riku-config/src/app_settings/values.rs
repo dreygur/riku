@@ -6,7 +6,9 @@
 //! router config, an env file or a shell can carry quoting, separators or
 //! control characters. `document_root` must be a relative path with no `..`.
 //! The server override is operator input, so it is only refused control
-//! characters (they would corrupt an env file). Error messages name the key,
+//! characters (they would corrupt an env file), except `isolation_root`,
+//! which becomes the worker's `pivot_root` target and must be a plain
+//! absolute path other than `/` with no `..`. Error messages name the key,
 //! never the value, because a misspelled secret key would otherwise print the
 //! secret.
 
@@ -50,7 +52,23 @@ fn check_text(key: &Key, text: &str, source: Source) -> Result<(), String> {
     {
         return Err(format!("{path} must be a relative path inside the app"));
     }
+    if path == "limits.isolation_root" && !plain_absolute_dir(text) {
+        return Err(format!(
+            "{path} must be an absolute path below / with no .. made of letters, digits and . - _ /"
+        ));
+    }
     Ok(())
+}
+
+/// An absolute path other than `/`, with no `..` part, made only of
+/// letters, digits and `. - _ /`.
+fn plain_absolute_dir(text: &str) -> bool {
+    text.starts_with('/')
+        && text.trim_matches('/') != ""
+        && !text.split('/').any(|part| part == "..")
+        && text
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b".-_/".contains(&b))
 }
 
 fn wrong_type(key: &Key, expected: &str) -> String {

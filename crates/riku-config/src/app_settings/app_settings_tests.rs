@@ -117,10 +117,31 @@ fn refuses_server_only_keys_in_repo() {
         "[secrets]\nghcr_token = \"abc\"\n",
         "[limits]\nmax_memory_mb = 4096\n",
         "[routing]\nbind_address = \"0.0.0.0\"\n",
+        "[limits]\nisolation_root = \"/srv/jail\"\n",
     ] {
         let message = err(repo(raw));
         assert!(message.contains("riku settings set"), "{raw}: {message}");
     }
+}
+
+#[test]
+fn isolation_root_must_be_a_plain_absolute_path() {
+    for root in ["srv/jail", "/srv/../etc", "/srv/ja il", "/srv/$HOME", "/"] {
+        let raw = format!("[limits]\nisolation_root = \"{root}\"\n");
+        let message = err(server(&raw));
+        assert!(
+            message.contains("limits.isolation_root"),
+            "{root}: {message}"
+        );
+    }
+
+    let env = server("[limits]\nisolation_root = \"/srv/jail-1/app.d\"\n")
+        .unwrap()
+        .env();
+    assert_eq!(
+        env.get("RIKU_ISOLATION_ROOT").map(String::as_str),
+        Some("/srv/jail-1/app.d")
+    );
 }
 
 #[test]
