@@ -29,9 +29,8 @@ After running `sudo riku init`, the binary is installed to `/usr/local/bin/riku`
 ### Upgrading an existing host
 
 1. Install the new binary: the installer above, or `sudo cp riku /usr/local/bin/riku` from the release tarball.
-2. Run `sudo riku init`. It installs the router helper and rewrites the units.
+2. Run `sudo riku init`. It installs the router helper, rewrites the units and restarts the supervisor when it runs an older binary or the unit text changed. Its `Service` line says whether it did.
 3. As the deploy user, run `riku doctor --fix`. It redeploys every app that has no site file in the router's site root (`/etc/riku/nginx` or `/etc/riku/caddy`) and rewrites stale keys and hooks.
-4. Restart the supervisor: `sudo systemctl restart riku`.
 
 `sudo riku init` does not delete what an older version left in `/etc/nginx/sites-enabled` and `/etc/nginx/conf.d` that the deploy user could write. It moves those files and links to `/etc/riku/removed/<unix time>/` (root only, mode `0700`), as links, and prints where each one went. Put one back if you wanted it. It does delete the old deploy owned `*.caddy` files in `/etc/riku/caddy`, which `riku doctor --fix` renders again.
 
@@ -332,16 +331,14 @@ cd ~/riku
 git pull
 cargo build --release
 
-# Install the new binary, rewrite units and the router helper, and refresh
-# the built-in runtime plugins you have not changed
+# Install the new binary, rewrite units and the router helper, refresh
+# the built-in runtime plugins you have not changed, and restart the
+# supervisor when it runs the old binary
 sudo cp target/release/riku /usr/local/bin/riku
 sudo riku init
 
 # As the deploy user, redeploy apps without a site file and rewrite stale hooks
 riku doctor --fix
-
-# Restart the supervisor
-sudo systemctl restart riku
 ```
 
 `sudo riku init` also removes the deploy user's old `~/.local/bin/riku`, which would otherwise shadow `/usr/local/bin/riku`.

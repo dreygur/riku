@@ -55,13 +55,14 @@ A deploy fails with the helper's message when it cannot reach the socket. See [N
 
 ## Upgrading
 
-A new `riku` binary needs root to install. Install it, then run init again so the units and the helper are rewritten, and restart the services:
+A new `riku` binary needs root to install. Install it, then run init again so the units and the helper are rewritten:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sudo sh
 sudo riku init
-sudo systemctl restart riku riku-router-helper
 ```
+
+Init restarts the services itself. The router helper is always restarted. The supervisor is restarted when it runs another binary than `/usr/local/bin/riku` or when the text of `riku.service` changed, and left running otherwise. The `Service` line of the init output says which happened.
 
 Then, as the deploy user, run `riku doctor --fix` to redeploy apps that were routed by an older version.
 
