@@ -7,6 +7,7 @@ pub mod health_check;
 mod health_interval;
 pub mod isolation;
 pub(crate) mod lifecycle_events;
+mod log_capture;
 pub mod orchestration;
 pub mod pid_file;
 pub mod spawn;
