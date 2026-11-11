@@ -1,226 +1,90 @@
 # AI Agent Interface
 
-`riku agent` is a JSON interface for AI agents (Claude, Cursor, Copilot and
-others). Each call prints one JSON object on stdout, checks the agent's
-permission scope, rate limits it and writes an audit log entry.
+`riku agent` is a JSON interface for AI agents. Each call prints one JSON
+object on stdout, checks the agent's scope, rate limits it and writes an
+audit log entry. A response with an error code exits 1; every other response,
+a confirmation request included, exits 0. `riku agent --schema` lists every
+command, parameter and error code.
 
----
+## Setting up a key
+
+Give each agent its own key with a forced command in `~/.ssh/authorized_keys`:
+
+```bash
+command="riku agent --scope readonly --agent-id monitor",no-port-forwarding,no-pty ssh-ed25519 AAAA... monitor
+command="riku agent --scope staging --agent-id cursor",no-port-forwarding,no-pty ssh-ed25519 BBBB... cursor
+```
+
+The forced command holds only `riku agent` with `--scope`, `--agent-id` and
+optionally `--json` (accepted, output is always JSON). Without `--scope` the
+key is read only. A forced command that names a command itself always runs
+that command and ignores the request. Never use a bare `riku` forced command
+for an agent: it gives the client the whole CLI. Never allow `RIKU_*`
+variables through sshd `AcceptEnv`.
 
 ## Calling it
 
-Over ssh, through a key whose forced command is `riku agent --scope ...`
-(see [SSH key setup](#ssh-key-setup)), the agent sends only the command:
+The agent sends only the command:
 
 ```bash
 ssh riku@server apps
 ssh riku@server ps myapp
-ssh riku@server config:get myapp DATABASE_URL
 ssh riku@server run myapp -- ls -la   # put -- before arguments that start with -
 ssh riku@server --intro               # scope, permitted commands, version
-ssh riku@server --schema              # full command schema (JSON)
-ssh riku@server --agent-help deploy   # help for one command
+ssh riku@server --agent-help deploy
 ```
 
-A leading `riku` or `riku agent` in the request is ignored, so
-`ssh riku@server riku agent ps myapp` works too. The request may only hold the
+A leading `riku` or `riku agent` is ignored. The request may hold only the
 command, its arguments, `--confirm <token>`, `--intro`, `--schema`,
 `--agent-help` and `--json`. Any other option, `--scope` and `--agent-id`
-included, is refused with `INVALID_PARAMETERS`: scope and identity only ever
-come from the forced command.
+included, is refused with `INVALID_PARAMETERS`. On the server the same calls
+run as `riku agent ps myapp`.
 
-On the server itself the same commands run as `riku agent ps myapp`.
+## Scopes and commands
 
-`--json` is accepted so existing forced commands keep working, but changes
-nothing: the output is always JSON. It is a flag of `riku agent`, not of
-`riku` itself, so `riku --json ps` is an error.
+| Scope | Adds | Rate limit |
+|-------|------|------------|
+| `readonly` | `apps`, `logs`, `ps`, `config:get`, `config:show`, `stats` | 60/min |
+| `staging` | `deploy`, `restart`, `config:set`, `config:unset` | 30/min |
+| `production` | `stop`, `destroy`, `run` | 20/min |
 
-### Exit status
+- `config:get` and `config:show`: a readonly agent sees secret-looking values,
+  and values that reference another variable, as `***`.
+- `config:set` and `config:unset` redeploy. If the redeploy fails the error is
+  `DEPLOY_FAILED` and the config is already saved.
+- `logs` returns the last 100 lines of each log file.
+- `run` executes as the riku user, so it can do anything riku can. It uses no
+  shell, gets only PATH, HOME and the app's live env, caps each output stream
+  at 64 KiB and is killed after 300 seconds. It returns `exit_code`, `stdout`,
+  `stderr`, `truncated` and `timed_out`; a nonzero exit is `COMMAND_FAILED`
+  with the same data.
 
-A response that carries an error exits 1, and riku also prints
-`Error: agent <command> failed: <CODE>` on stderr. Every other response exits
-0, including a confirmation request. Read `success` and `error.code` from
-stdout for the details.
+## Confirmation
 
----
-
-## Scopes
-
-| Scope | Commands |
-|-------|----------|
-| `readonly` | `apps`, `logs`, `ps`, `config:get`, `config:show`, `stats` |
-| `staging` | readonly plus `deploy`, `restart`, `config:set`, `config:unset` |
-| `production` | staging plus `stop`, `destroy`, `run` |
-
-`run` executes as the riku user and can do anything riku can, so it is
-production only and every call needs confirmation.
-
-A call without `--scope` is read only. The scope comes from that key's own
-forced command, never from another line in `authorized_keys` or from the
-environment. The name in the audit log comes from `--agent-id` in the same
-forced command. Never allow `RIKU_*` variables through sshd `AcceptEnv`.
-
-The forced command of an agent key must start with `riku agent`. A bare `riku`
-forced command gives the client full access and lets it choose everything.
-
----
-
-## Commands
-
-| Command | Arguments | Notes |
-|---------|-----------|-------|
-| `apps` | | Lists apps, `running` is true when workers are enabled |
-| `deploy` | `<app>` | Runs the deploy and returns when it finishes |
-| `destroy` | `<app>` | Needs confirmation |
-| `config:get` | `<app> <key>` | A readonly agent sees secret-looking values as `***` |
-| `config:show` | `<app>` | A readonly agent sees secret-looking values as `***` |
-| `config:set` | `<app> KEY=value ...` | Redeploys. Secret-looking keys need confirmation |
-| `config:unset` | `<app> KEY ...` | Redeploys. Secret-looking keys need confirmation |
-| `logs` | `<app> [process]` | Last 100 lines of each log file |
-| `ps` | `<app>` | |
-| `restart` | `<app> [process]` | |
-| `stop` | `<app>` | Needs confirmation |
-| `run` | `<app> <command>...` | Needs confirmation. No shell; PATH, HOME and the live env only; app directory. Returns `exit_code`, `stdout`, `stderr`, `truncated`, `timed_out`. Each stream is capped at 64 KiB and the command is killed after 300 seconds |
-| `stats` | `[app]` | All apps when no app is given |
-
----
-
-## Responses
-
-Success:
-
-```json
-{"success": true, "confirmation_required": false, "data": {"apps": [{"name": "myapp", "running": true}]}}
-```
-
-Error:
-
-```json
-{"success": false, "confirmation_required": false, "error": {"code": "APP_NOT_FOUND", "message": "Application 'myapp' not found"}}
-```
-
-Confirmation request:
-
-```json
-{"success": false, "confirmation_required": true, "message": "Human confirmation required for destroy", "confirm_token": "9f2c..."}
-```
-
-### Error codes
-
-| Code | Meaning |
-|------|---------|
-| `APP_NOT_FOUND` | Application does not exist |
-| `KEY_NOT_FOUND` | Configuration key is not set |
-| `PERMISSION_DENIED` | The scope does not allow the command |
-| `INVALID_COMMAND` | Unknown command |
-| `INVALID_PARAMETERS` | Missing or invalid arguments |
-| `INVALID_TOKEN` | Confirmation token is unknown, used, expired or for another action |
-| `RATE_LIMIT_EXCEEDED` | Too many requests |
-| `STATE_UNAVAILABLE` | Rate limit or audit state cannot be read or written |
-| `COMMAND_FAILED` | `run` could not start, exited nonzero or timed out; `data` still holds the output |
-| `CONFIG_FAILED` | The ENV file could not be written; nothing changed |
-| `DEPLOY_FAILED` | Deploy failed. After `config:set` or `config:unset` the config was saved |
-| `RESTART_FAILED`, `STOP_FAILED`, `DESTROY_FAILED` | The operation itself failed |
-
----
-
-## Confirmation flow
-
-`destroy`, `stop` and `run` always ask for confirmation first. `config:set`
-and `config:unset` ask when a key they change has a name containing
-`SECRET`, `PASS`, `PWD`, `TOKEN`, `_KEY`, `AUTH`, `CREDENTIAL`, `PRIVATE` or
-`DATABASE_URL`. The match is by name only: a secret stored under another
-name, such as a password inside `REDIS_URL`, does not ask.
+`destroy`, `stop` and `run` always ask first. `config:set` and `config:unset`
+ask when a key they change has a name containing `SECRET`, `PASS`, `PWD`,
+`TOKEN`, `_KEY`, `AUTH`, `CREDENTIAL`, `PRIVATE` or `DATABASE_URL`. The match
+is by name only, so a password inside `REDIS_URL` does not ask.
 
 ```bash
 ssh riku@server destroy myapp
-# {"confirmation_required": true, "confirm_token": "9f2c...", ...}
-
-# The agent asks the human. After they approve:
-ssh riku@server destroy myapp --confirm 9f2c...
+# {"success": false, "confirmation_required": true, "confirm_token": "9f2c...", ...}
+ssh riku@server destroy myapp --confirm 9f2c...   # after the human approves
 ```
 
-A token is used once, is bound to its action and app, and expires after 5
-minutes. A `run`, `config:set` or `config:unset` token is also bound to the
-exact command or keys and values, so it cannot be spent on a different
-request.
-
-The token comes back to the agent that asked. Riku cannot tell whether a
-human saw the request: the confirmation step relies on the agent showing it
-to one before it sends `--confirm`.
-
----
-
-## SSH key setup
-
-Each line in `~/.ssh/authorized_keys` can restrict a key:
-
-```bash
-# Read only (monitoring, logs, config:get)
-command="riku agent --scope readonly --agent-id monitor",no-port-forwarding,no-pty ssh-ed25519 AAAA... monitor
-
-# Staging (can deploy and restart)
-command="riku agent --scope staging --agent-id cursor-staging",no-port-forwarding,no-pty ssh-ed25519 BBBB... cursor-staging
-```
-
-| Option | Purpose |
-|--------|---------|
-| `command="..."` | Fix the command and its scope |
-| `no-port-forwarding` | Prevent ssh tunnels |
-| `no-pty` | No interactive shell |
-| `no-X11-forwarding` | Disable X11 forwarding |
-| `from="IP"` | Only allow these addresses |
-
-The forced command must hold only `riku agent` with `--scope`, `--agent-id`
-and `--json`. Then the client's request supplies the command. A forced command
-that names a command itself (`riku agent --scope readonly apps`) always runs
-that command and ignores the request.
-
----
+A token works once, for the same action and app, within 5 minutes. A `run`,
+`config:set` or `config:unset` token also only works for the exact same
+command or values. The token goes back to the agent that asked: riku cannot
+tell whether a human saw the request.
 
 ## Audit log
 
 Every call is logged to `~/.riku/state/agent/audit.log`, one JSON object per
-line with the fields `time`, `agent`, `action`, `app` and `status`. Control
-characters in a client supplied value are escaped, so an entry cannot be split
-or forged.
-
-```
-{"time":"2026-02-23T14:30:00+00:00","agent":"cursor-staging","action":"deploy","app":"myapp","status":"success"}
-```
-
-Commands that change something open the audit log before they run and are
-refused with `STATE_UNAVAILABLE` if it cannot be opened. Read only commands
-still run if the log cannot be written. The state directory is readable only
-by the riku user. Read it with an admin login:
+line with `time`, `agent`, `action`, `app` and `status`. Commands that change
+something are refused with `STATE_UNAVAILABLE` if the log cannot be opened.
+The state directory is private to the riku user, so read it with an admin
+login:
 
 ```bash
 ssh admin@server 'tail -n 50 ~riku/.riku/state/agent/audit.log'
 ```
-
----
-
-## Rate limits
-
-| Scope | Commands per minute |
-|-------|---------------------|
-| `readonly` | 60 |
-| `staging` | 30 |
-| `production` | 20 |
-
-Over the limit the response is `RATE_LIMIT_EXCEEDED`.
-
----
-
-## Security notes
-
-- Give each agent its own key and the smallest scope that works.
-- Never share agent keys between systems; rotate them and revoke a leaked key at once.
-- Review the audit log, and alert on `destroy` and `stop`.
-
----
-
-## See also
-
-- [CLI Reference](cli.md)
-- [Environment Variables](env.md)
-- [Plugin System](plugins.md)

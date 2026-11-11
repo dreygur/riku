@@ -349,5 +349,5 @@ implementation. These stay in the kernel for v1:
 - The `privileged` capability requires explicit, elevated trust;
   third-party marketplaces are opt-in. `privileged = true` opts a plugin **out**
   of the sandbox, so it is the one capability that widens authority.
-- WASM sandboxing for untrusted authors is the long-term answer (`ROADMAP.md`
-  E3), not a v1 requirement.
+- WASM sandboxing for untrusted authors is the long-term answer, not a v1
+  requirement.

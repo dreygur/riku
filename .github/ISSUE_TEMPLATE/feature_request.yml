@@ -26,6 +26,6 @@ body:
     id: scope
     attributes:
       label: Fit with Riku's scope
-      description: Riku is a single-binary, single-box, no-Docker PaaS (see ROADMAP.md "Out of Scope").
+      description: Riku is a single-binary, single-box, no-Docker PaaS.
       options:
         - label: This keeps Riku to one box and one binary (not cluster/multi-server orchestration).

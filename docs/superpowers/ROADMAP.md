@@ -20,7 +20,9 @@ workflow, then `v0.1.4`. The Next.js dashboard, the framework design and
 phase 4 come after.
 
 - Each project has a design in `docs/superpowers/specs/` (owner approved) and
-  a plan in `docs/superpowers/plans/`, written just before it runs.
+  a plan in `docs/superpowers/plans/`, written just before it runs. Specs
+  and plans of finished work are deleted (2026-11-11); the paths named
+  below are in git history (`git log --all -- docs/superpowers/plans`).
 - Plans run with superpowers:subagent-driven-development, cut for tokens
   (owner, 2026-11-07):
   - No review after each task. One whole branch review at the end, then

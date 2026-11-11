@@ -80,43 +80,20 @@ riku certs show|unset myapp
 
 `config` holds the app's own env vars. `settings` holds riku keys (`routing.*`, `runtime.*`, `workers.*`, `health.*`, `limits.*`, `secrets.*`). `config set` refuses `RIKU_*` keys and names the `settings` key to use. Precedence per key, later wins: repo `riku.toml`, legacy `RIKU_*` in ENV, `riku settings`. Server-only keys (`limits.*`, `secrets.*`, `routing.bind_address`) are refused in the repo `riku.toml`.
 
-Addons and plugins:
-
-```bash
-riku addon create postgres db1 | bind db1 myapp | unbind db1 myapp | backup db1 | destroy db1
-riku plugins add postgres[@marketplace] | install <dir|github:owner/repo> | list | remove <name> | search
-riku hook list | riku plugin list      # server hooks | laptop client plugins
-```
-
-Server admin (run on the server):
-
-```bash
-sudo riku init [--no-systemd] [--ssh-key FILE]
-sudo riku deploy-key add 'ssh-ed25519 AAAA... me@laptop'
-riku doctor [--fix]
-riku dashboard [--bind 127.0.0.1:8088] [--token T]    # on laptop: opens browser, needs --admin server
-```
+Also: `riku addon` (databases, caches), `riku plugins` (bundles, marketplaces), `riku doctor [--fix]`, `sudo riku init`. Each has `--help` with examples.
 
 ## Agent interface (JSON)
 
-`riku agent` prints one JSON object per call on stdout; progress goes to stderr. A response with an error code exits 1; success and confirmation requests exit 0.
-
-Through an agent key (forced command `riku agent --scope ...`) send only the command: `ssh riku@host ps myapp`. On the server: `riku agent ps myapp`.
+Through an agent key send only the command (`ssh riku@host ps myapp`); on the server use `riku agent ps myapp`. Each call prints one JSON object; an error exits 1. Start with `--intro` (your scope and commands) and `--schema` (every command and error code).
 
 ```bash
-ssh riku@host --intro                          # scope and permitted commands
-ssh riku@host --schema                         # full JSON command schema
-ssh riku@host ps myapp
-ssh riku@host logs myapp [web]                 # newest 100 lines per log file
-ssh riku@host config:get myapp KEY
 ssh riku@host config:set myapp DEBUG=1         # redeploys
-ssh riku@host config:unset myapp DEBUG
-ssh riku@host run myapp -- python manage.py migrate   # production; returns confirm_token, then repeat with --confirm before --
+ssh riku@host run myapp -- python manage.py migrate
 ssh riku@host destroy myapp                    # returns confirm_token
 ssh riku@host destroy myapp --confirm <token>  # only after a human approves
 ```
 
-Scopes: `readonly` (apps, logs, ps, config:get, config:show, stats; secret-looking values shown as `***`), `staging` (adds deploy, restart, config:set, config:unset), `production` (adds stop, destroy, run). Scope and identity come only from the forced command; a request carrying `--scope` or `--agent-id` is refused. `destroy`, `stop`, `run`, and `config:set`/`config:unset` changing a key whose name contains SECRET, PASS, PWD, TOKEN, _KEY, AUTH, CREDENTIAL, PRIVATE or DATABASE_URL return a confirm token first; the token only works for the identical request. Show the request to the human before sending `--confirm`: riku cannot check that you did. `run` executes as the riku user with no shell, only PATH, HOME and the app's live env, 64 KiB output per stream, killed after 300 s.
+`destroy`, `stop`, `run` and changes to secret-looking config keys return a confirm token first. Show the request to the human before sending `--confirm`; riku cannot check that you did. Details: `docs/docs/ai-agents.md`.
 
 ## Common Mistakes
 

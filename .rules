@@ -371,7 +371,7 @@ config.rs     ← Repository layer: path resolution, env var access
 - Services orchestrate logic, no direct user I/O, no `println!` (use `tracing`)
 - Providers (CLI, plugins) wire services, handle user-facing output
 
-See `ARCHITECTURE.md` and `API.md` for detailed documentation.
+See `ARCHITECTURE.md` and `docs/CODEMAP.md` for detailed documentation.
 
 ## Common Tasks
 
@@ -407,7 +407,7 @@ journalctl -u riku-nginx
 
 ## Resources
 
-- [API Documentation](API.md)
+- [Codebase Map](docs/CODEMAP.md)
 - [Architecture Design](ARCHITECTURE.md)
 - [Systemd Integration](docs/docs/systemd.md)
 - [Contributing Guide](CONTRIBUTING.md)
