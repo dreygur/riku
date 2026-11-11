@@ -1,7 +1,9 @@
 //! What `riku init` does to the `riku` service it just wrote: start it when
-//! it is down, leave it running when it already runs the installed binary,
-//! restart it only when that binary changed. Every restart stops every app's
-//! workers, so re-running init without an upgrade must not cause one.
+//! it is down, leave it running when it already runs the installed binary
+//! under the same unit text, restart it when the binary or the unit text
+//! changed. Every restart stops every app's workers, so re-running init
+//! without an upgrade must not cause one. Unit settings such as
+//! `Delegate=yes` reach a running service only through a restart.
 //!
 //! "Changed" compares the running process's binary, read through
 //! `/proc/<pid>/exe`, with the installed one. That link still opens the old
@@ -9,6 +11,7 @@
 //! on an upgrade: same inode, or same bytes, means unchanged. An exe that
 //! cannot be read counts as changed, so an upgrade is never left half done.
 
+use anyhow::{anyhow, Result};
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
@@ -19,7 +22,21 @@ use std::process::Command;
 pub(super) enum ServiceAction {
     Start,
     KeepRunning,
-    Restart,
+    Restart(RestartReason),
+}
+
+/// Why a running service is restarted.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum RestartReason {
+    NewBinary,
+    NewUnit,
+}
+
+/// Whether writing the unit file changed its text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum UnitChange {
+    Same,
+    Changed,
 }
 
 impl ServiceAction {
@@ -27,7 +44,7 @@ impl ServiceAction {
     pub(super) fn verb(&self) -> &'static str {
         match self {
             ServiceAction::Start | ServiceAction::KeepRunning => "start",
-            ServiceAction::Restart => "restart",
+            ServiceAction::Restart(_) => "restart",
         }
     }
 
@@ -36,9 +53,23 @@ impl ServiceAction {
         match self {
             ServiceAction::Start => "started",
             ServiceAction::KeepRunning => "running",
-            ServiceAction::Restart => "restarted (new binary)",
+            ServiceAction::Restart(RestartReason::NewBinary) => "restarted (new binary)",
+            ServiceAction::Restart(RestartReason::NewUnit) => "restarted (unit changed)",
         }
     }
+}
+
+/// Writes `content` to the unit file at `path` and says whether its text
+/// changed. A missing or unreadable file counts as changed.
+pub(super) fn write_unit(path: &Path, content: &str) -> Result<UnitChange> {
+    let change = match fs::read_to_string(path) {
+        Ok(old) if old == content => UnitChange::Same,
+        _ => UnitChange::Changed,
+    };
+    if let Err(e) = fs::write(path, content) {
+        return Err(anyhow!("failed to write {}: {e}", path.display()));
+    }
+    Ok(change)
 }
 
 /// Which systemd manager runs the `riku` unit.
@@ -74,16 +105,24 @@ pub(super) fn service_main_pid(scope: UnitScope) -> Option<u32> {
 }
 
 /// What to do with a service whose main process is `main_pid`, given the
-/// `installed` binary. `proc_root` is `/proc` outside tests.
+/// `installed` binary and whether init just changed the unit text.
+/// `proc_root` is `/proc` outside tests. The caller runs `daemon-reload`
+/// first, so a restart picks up the new unit.
 pub(super) fn action_for(
     main_pid: Option<u32>,
+    unit: UnitChange,
     proc_root: &Path,
     installed: &Path,
 ) -> ServiceAction {
-    match main_pid {
-        None => ServiceAction::Start,
-        Some(pid) if runs_binary(proc_root, pid, installed) => ServiceAction::KeepRunning,
-        Some(_) => ServiceAction::Restart,
+    let Some(pid) = main_pid else {
+        return ServiceAction::Start;
+    };
+    if !runs_binary(proc_root, pid, installed) {
+        return ServiceAction::Restart(RestartReason::NewBinary);
+    }
+    match unit {
+        UnitChange::Changed => ServiceAction::Restart(RestartReason::NewUnit),
+        UnitChange::Same => ServiceAction::KeepRunning,
     }
 }
 

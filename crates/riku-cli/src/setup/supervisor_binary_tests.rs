@@ -24,11 +24,11 @@ fn rerunning_init_without_an_upgrade_keeps_the_supervisor_running() {
     running_from(&proc_root, 42, &copy);
 
     assert_eq!(
-        action_for(Some(41), &proc_root, &installed),
+        action_for(Some(41), UnitChange::Same, &proc_root, &installed),
         ServiceAction::KeepRunning
     );
     assert_eq!(
-        action_for(Some(42), &proc_root, &installed),
+        action_for(Some(42), UnitChange::Same, &proc_root, &installed),
         ServiceAction::KeepRunning,
         "the same bytes under another inode are not a new binary"
     );
@@ -46,11 +46,34 @@ fn a_new_binary_restarts_the_supervisor() {
     let proc_root = tmp.path().join("proc");
     running_from(&proc_root, 41, &old);
 
-    let action = action_for(Some(41), &proc_root, &installed);
+    let action = action_for(Some(41), UnitChange::Same, &proc_root, &installed);
 
-    assert_eq!(action, ServiceAction::Restart);
+    assert_eq!(action, ServiceAction::Restart(RestartReason::NewBinary));
     assert_eq!(action.verb(), "restart");
     assert_eq!(action.outcome(), "restarted (new binary)");
+}
+
+#[test]
+fn a_rewritten_unit_restarts_a_supervisor_on_the_installed_binary() {
+    let tmp = tempfile::tempdir().unwrap();
+    let installed = tmp.path().join("riku");
+    fs::write(&installed, "riku 0.1.4").unwrap();
+    let proc_root = tmp.path().join("proc");
+    running_from(&proc_root, 41, &installed);
+    let unit = tmp.path().join("riku.service");
+
+    assert_eq!(
+        write_unit(&unit, "old").unwrap(),
+        UnitChange::Changed,
+        "new file"
+    );
+    assert_eq!(write_unit(&unit, "old").unwrap(), UnitChange::Same);
+    let change = write_unit(&unit, "Delegate=yes").unwrap();
+
+    let action = action_for(Some(41), change, &proc_root, &installed);
+    assert_eq!(action, ServiceAction::Restart(RestartReason::NewUnit));
+    assert_eq!(action.outcome(), "restarted (unit changed)");
+    assert_eq!(fs::read_to_string(&unit).unwrap(), "Delegate=yes");
 }
 
 #[test]
@@ -60,7 +83,12 @@ fn a_stopped_service_is_started() {
     assert_eq!(parse_main_pid("0\n"), None, "systemd prints 0 when stopped");
     assert_eq!(parse_main_pid("1234\n"), Some(1234));
     assert_eq!(
-        action_for(None, tmp.path(), &tmp.path().join("riku")),
+        action_for(
+            None,
+            UnitChange::Changed,
+            tmp.path(),
+            &tmp.path().join("riku")
+        ),
         ServiceAction::Start
     );
 }

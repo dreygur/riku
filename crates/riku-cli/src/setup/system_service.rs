@@ -10,7 +10,7 @@ use crate::util::{display, ROOT_BINARY};
 
 use super::deploy_user::{deploy_user_name, passwd_home, running_as_root};
 use super::router_units::{remove_stale_units, unit_ordering, STALE_UNITS};
-use super::supervisor_binary::{action_for, service_main_pid, UnitScope};
+use super::supervisor_binary::{action_for, service_main_pid, write_unit, UnitChange, UnitScope};
 
 pub const SYSTEMD_DIR: &str = "/etc/systemd/system";
 
@@ -69,14 +69,6 @@ WantedBy=multi-user.target
     )
 }
 
-fn write_system_unit(systemd_dir: &Path, content: &str) -> Result<()> {
-    let service_path = systemd_dir.join("riku.service");
-    if let Err(e) = fs::write(&service_path, content) {
-        return Err(anyhow!("failed to write {}: {e}", service_path.display()));
-    }
-    Ok(())
-}
-
 pub(super) fn systemctl_ok(args: &[&str]) -> bool {
     Command::new("systemctl")
         .args(args)
@@ -86,17 +78,17 @@ pub(super) fn systemctl_ok(args: &[&str]) -> bool {
 
 /// Reload, enable and start `riku.service`, then print one step saying
 /// which of those worked. A supervisor that already runs is restarted only
-/// when it runs another binary than [`ROOT_BINARY`] (see
+/// when it runs another binary than [`ROOT_BINARY`] or `unit` changed (see
 /// [`super::supervisor_binary`]). Whether the supervisor stays up is checked
 /// by the init summary.
-fn start_riku_service() {
+fn start_riku_service(unit: UnitChange) {
     let _ = systemctl_ok(&["daemon-reload"]);
     let mut done = vec!["riku.service written"];
     if systemctl_ok(&["enable", "riku"]) {
         done.push("enabled");
     }
     let main_pid = service_main_pid(UnitScope::System);
-    let action = action_for(main_pid, Path::new("/proc"), Path::new(ROOT_BINARY));
+    let action = action_for(main_pid, unit, Path::new("/proc"), Path::new(ROOT_BINARY));
     if systemctl_ok(&[action.verb(), "riku"]) {
         done.push(action.outcome());
     }
@@ -136,11 +128,12 @@ pub fn install_systemd_service(router: &Router) -> Result<()> {
     }
 
     let unit = render_system_unit(router, &deploy_user, &deploy_home, ROOT_BINARY);
-    if let Err(e) = write_system_unit(systemd_dir, &unit) {
-        return Err(e);
-    }
+    let change = match write_unit(&systemd_dir.join("riku.service"), &unit) {
+        Ok(change) => change,
+        Err(e) => return Err(e),
+    };
 
-    start_riku_service();
+    start_riku_service(change);
     remove_old_watchers(systemd_dir)
 }
 

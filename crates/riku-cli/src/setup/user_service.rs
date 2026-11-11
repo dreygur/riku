@@ -8,9 +8,11 @@ use crate::config::RikuPaths;
 use crate::util::{display, ROOT_BINARY};
 
 use super::outside_supervisor::replace_outside_supervisor;
-use super::supervisor_binary::{action_for, service_main_pid, UnitScope};
+use super::supervisor_binary::{action_for, service_main_pid, write_unit, UnitScope};
 
 /// Setup systemd service for Riku supervisor (user-level, no root required).
+// Project rule 16 forbids `?`, so the early return is spelled out.
+#[allow(clippy::question_mark)]
 pub fn setup_systemd_service(paths: &RikuPaths, router: &Router) -> Result<()> {
     let Some(home_dir) = dirs::home_dir() else {
         return Err(anyhow::anyhow!("Could not determine home directory"));
@@ -26,13 +28,10 @@ pub fn setup_systemd_service(paths: &RikuPaths, router: &Router) -> Result<()> {
 
     let service_content = render_user_unit(router, &paths.riku_root.to_string_lossy());
 
-    let service_file = systemd_dir.join("riku.service");
-    if let Err(e) = std::fs::write(&service_file, &service_content) {
-        return Err(anyhow::anyhow!(
-            "failed to write {}: {e}",
-            service_file.display()
-        ));
-    }
+    let change = match write_unit(&systemd_dir.join("riku.service"), &service_content) {
+        Ok(change) => change,
+        Err(e) => return Err(e),
+    };
     user_systemctl(&["daemon-reload"]);
     let mut done = vec!["user unit written"];
     if user_systemctl(&["enable", "riku"]) {
@@ -40,7 +39,7 @@ pub fn setup_systemd_service(paths: &RikuPaths, router: &Router) -> Result<()> {
     }
     replace_outside_supervisor(paths, UnitScope::User);
     let main_pid = service_main_pid(UnitScope::User);
-    let action = action_for(main_pid, Path::new("/proc"), Path::new(ROOT_BINARY));
+    let action = action_for(main_pid, change, Path::new("/proc"), Path::new(ROOT_BINARY));
     if user_systemctl(&[action.verb(), "riku"]) {
         done.push(action.outcome());
     }
