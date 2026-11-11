@@ -18,7 +18,7 @@ use crate::agent::types::AgentResponse;
 use crate::apps::{config_after_set, config_after_unset};
 use crate::config::RikuPaths;
 use crate::deploy::env_setup::{redeploy, write_env};
-use crate::util::existing_app;
+use crate::util::{existing_app, parse_settings};
 
 const SECRET_MARKERS: [&str; 5] = ["SECRET", "PASSWORD", "TOKEN", "_KEY", "DATABASE_URL"];
 
@@ -38,8 +38,23 @@ impl ConfigChange {
     }
 }
 
-fn key_of(word: &str) -> &str {
-    word.split_once('=').map_or(word, |(key, _)| key)
+/// Keys whose value differs between `before` and `after`, added and removed
+/// ones included. The secret check runs on these, not on the agent's words,
+/// so it sees exactly what the config service parsed and will write.
+fn changed_keys(before: &HashMap<String, String>, after: &HashMap<String, String>) -> Vec<String> {
+    let mut keys: Vec<String> = after
+        .iter()
+        .filter(|(key, value)| before.get(*key) != Some(*value))
+        .map(|(key, _)| key.clone())
+        .chain(
+            before
+                .keys()
+                .filter(|key| !after.contains_key(*key))
+                .cloned(),
+        )
+        .collect();
+    keys.sort();
+    keys
 }
 
 fn is_secret(key: &str) -> bool {
@@ -58,19 +73,15 @@ fn bound_action(change: ConfigChange, words: &[String]) -> String {
     format!("{}:{}", change.action(), hex::encode(digest.finalize()))
 }
 
-fn apply(paths: &RikuPaths, app: &str, change: ConfigChange, words: &[String]) -> AgentResponse {
-    let planned = match change {
-        ConfigChange::Set => config_after_set(paths, app, words),
-        ConfigChange::Unset => config_after_unset(paths, app, words),
-    };
-    let env: HashMap<String, String> = match planned {
-        Ok(env) => env,
-        Err(e) => return AgentResponse::error("INVALID_PARAMETERS", &e.to_string()),
-    };
-    if let Err(e) = write_env(app, paths, &env) {
+fn apply(
+    paths: &RikuPaths,
+    app: &str,
+    env: &HashMap<String, String>,
+    keys: &[String],
+) -> AgentResponse {
+    if let Err(e) = write_env(app, paths, env) {
         return AgentResponse::error("CONFIG_FAILED", &format!("config not saved: {e}"));
     }
-    let keys: Vec<&str> = words.iter().map(|word| key_of(word)).collect();
     match redeploy(app, paths) {
         Ok(()) => AgentResponse::success(json!({"app": app, "keys": keys, "redeployed": true})),
         Err(e) => {
@@ -98,8 +109,21 @@ fn change_config(
     if words.is_empty() {
         return AgentResponse::error("INVALID_PARAMETERS", "Missing keys");
     }
-    if !words.iter().any(|word| is_secret(key_of(word))) {
-        return apply(paths, &app, change, words);
+    let mut before = HashMap::new();
+    if let Err(e) = parse_settings(&paths.env_root.join(&app).join("ENV"), &mut before) {
+        return AgentResponse::error("CONFIG_FAILED", &e.to_string());
+    }
+    let planned = match change {
+        ConfigChange::Set => config_after_set(paths, &app, words),
+        ConfigChange::Unset => config_after_unset(paths, &app, words),
+    };
+    let after = match planned {
+        Ok(env) => env,
+        Err(e) => return AgentResponse::error("INVALID_PARAMETERS", &e.to_string()),
+    };
+    let keys = changed_keys(&before, &after);
+    if !keys.iter().any(|key| is_secret(key)) {
+        return apply(paths, &app, &after, &keys);
     }
     let action = bound_action(change, words);
     let token = match confirm_token {
@@ -117,7 +141,7 @@ fn change_config(
     if let Some(refusal) = confirm::refused(state, &action, &app, token) {
         return refusal;
     }
-    apply(paths, &app, change, words)
+    apply(paths, &app, &after, &keys)
 }
 
 /// Sets `KEY=VALUE` pairs and redeploys.

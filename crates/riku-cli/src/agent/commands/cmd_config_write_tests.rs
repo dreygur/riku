@@ -75,8 +75,31 @@ fn riku_setting_is_refused_before_anything_is_written() {
 }
 
 #[test]
+fn secret_key_hidden_inside_one_argument_still_needs_a_token() {
+    let (tmp, paths) = shop();
+
+    let resp = cmd_agent_config_set(
+        &paths,
+        tmp.path(),
+        "shop",
+        &args(&["DEBUG=1 API_KEY=x"]),
+        None,
+    );
+
+    assert!(
+        resp.confirmation_required,
+        "API_KEY slipped past confirmation"
+    );
+    assert!(
+        !paths.env_root.join("shop/ENV").exists(),
+        "ENV written anyway"
+    );
+}
+
+#[test]
 fn unsetting_a_secret_key_also_needs_a_token() {
     let (tmp, paths) = shop();
+    fs::write(paths.env_root.join("shop/ENV"), "API_KEY=x\n").unwrap();
 
     let resp = cmd_agent_config_unset(&paths, tmp.path(), "shop", &args(&["API_KEY"]), None);
 
