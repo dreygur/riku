@@ -49,7 +49,6 @@ web: $(if [ "$RUNTIME" = "static" ]; then echo "static: ."; else echo "$RUNTIME 
 EOF
 
 cat > ENV <<EOF
-RIKU_AUTO_RESTART=true
 RIKU_BIND_ADDRESS=127.0.0.1
 RIKU_DOMAINS=${APP_NAME}.example.com
 EOF

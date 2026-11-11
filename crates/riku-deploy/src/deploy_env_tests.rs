@@ -68,6 +68,54 @@ fn riku_toml_processes_are_the_deploy_process_list() {
 }
 
 #[test]
+fn removed_auto_restart_key_in_env_blocks_the_deploy() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let paths = app(&tmp);
+    let mut dlog = DeployLogger::new(&tmp.path().join("deploy.log")).unwrap();
+
+    for value in ["false", "true"] {
+        fs::write(
+            paths.env_root.join("myapp").join("ENV"),
+            format!("RIKU_AUTO_RESTART={value}\n"),
+        )
+        .unwrap();
+
+        let message = format!(
+            "{:#}",
+            load_deploy_env("myapp", &paths, &mut dlog).expect_err("the removed key must block")
+        );
+
+        assert!(
+            message.contains("RIKU_AUTO_RESTART was removed")
+                && message.contains("riku config unset myapp RIKU_AUTO_RESTART"),
+            "the refusal must say how to remove it: {message}"
+        );
+    }
+}
+
+#[test]
+fn removed_auto_restart_key_in_riku_toml_blocks_the_deploy() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let paths = app(&tmp);
+    fs::write(
+        paths.app_settings_repo("myapp"),
+        "[workers]\nauto_restart = false\n",
+    )
+    .unwrap();
+    let mut dlog = DeployLogger::new(&tmp.path().join("deploy.log")).unwrap();
+
+    let message = format!(
+        "{:#}",
+        load_deploy_env("myapp", &paths, &mut dlog).expect_err("the removed key must block")
+    );
+
+    assert!(
+        message.contains("workers.auto_restart was removed"),
+        "{message}"
+    );
+}
+
+#[test]
 fn deploy_tightens_a_hand_written_env_file() {
     let tmp = tempfile::TempDir::new().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());

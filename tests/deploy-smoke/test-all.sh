@@ -140,7 +140,6 @@ test_env_vars() {
 
     # Test basic env vars
     cat > "$app_dir/ENV" <<'EOF'
-RIKU_AUTO_RESTART=true
 RIKU_BIND_ADDRESS=127.0.0.1
 RIKU_WORKER_TIMEOUT=3600
 RIKU_WORKER_GRACE_PERIOD=60

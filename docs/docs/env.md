@@ -71,8 +71,9 @@ override an app sets in its ENV.
 Every successful deploy runs the new build: web facing kinds are replaced
 one copy at a time, other kinds are stopped and started from the new
 configs, and a kind that left the Procfile stops. `RIKU_AUTO_RESTART` was
-removed; an ENV that still sets it is ignored, and `workers.auto_restart` in
-riku.toml is refused with a message.
+removed. A deploy is refused until it is gone: an ENV that still sets it
+(any value) names `riku config unset <app> RIKU_AUTO_RESTART`, and
+`workers.auto_restart` in riku.toml says to delete the line.
 
 ---
 

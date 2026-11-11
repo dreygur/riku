@@ -65,8 +65,28 @@ pub(crate) fn load_deploy_env(
         Ok(loaded) => loaded,
         Err(e) => return Err(e),
     };
+    if let Err(e) = refuse_removed_keys(app, &loaded.env) {
+        return Err(e);
+    }
     warn_about(&loaded, dlog);
     Ok(loaded.env)
+}
+
+/// The ENV form of the removed `workers.auto_restart`, which riku.toml
+/// refuses when it is parsed (riku-config `app_settings/keys.rs`).
+const AUTO_RESTART_KEY: &str = "RIKU_AUTO_RESTART";
+
+/// Refuse an env that still sets a key riku stopped honoring, so the app
+/// owner learns the behavior changed instead of having it ignored.
+fn refuse_removed_keys(app: &str, env: &HashMap<String, String>) -> Result<()> {
+    if env.contains_key(AUTO_RESTART_KEY) {
+        return Err(anyhow!(
+            "{AUTO_RESTART_KEY} was removed: every deploy replaces non-web processes and \
+             stops a kind that left the Procfile. Remove it with: \
+             riku config unset {app} {AUTO_RESTART_KEY}"
+        ));
+    }
+    Ok(())
 }
 
 /// The app's process list for a Procfile deploy.
