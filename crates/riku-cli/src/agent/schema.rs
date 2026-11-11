@@ -196,7 +196,7 @@ pub fn cmd_agent_schema() -> Result<()> {
                     "process": {
                         "type": "string",
                         "required": false,
-                        "description": "Only this service of a container app"
+                        "description": "Only this service of a container app, or this process kind (web, worker, ...) of a Procfile app"
                     }
                 },
                 "requires_confirmation": false,

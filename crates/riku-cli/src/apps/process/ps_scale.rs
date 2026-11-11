@@ -109,7 +109,7 @@ pub fn cmd_ps_scale(paths: &RikuPaths, app: &str, settings: &[String]) -> Result
     };
     match control_target(paths, &app, None) {
         Ok(ControlTarget::Containers { app, .. }) => scale_containers(paths, &app, settings),
-        Ok(ControlTarget::Procfile) => scale_procfile(paths, &app, settings),
+        Ok(ControlTarget::Procfile { .. }) => scale_procfile(paths, &app, settings),
         Err(e) => Err(e),
     }
 }

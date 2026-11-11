@@ -305,7 +305,7 @@ log to the same files, written by the supervisor.
 
 ---
 
-### `riku restart <app> [service]`
+### `riku restart <app> [process]`
 
 Restart the running processes of an application from the current build.
 Nothing is built. To rebuild, or to apply a config change, run
@@ -313,13 +313,15 @@ Nothing is built. To rebuild, or to apply a config change, run
 
 ```bash
 riku restart myapp
-riku restart myapp worker   # one service of a container app
+riku restart myapp worker   # one process kind, or one container service
 ```
 
 A Procfile app's workers start again from the configs and build of the last
 successful deploy. A worker with a health check is replaced by a probed
 canary, so it keeps serving. An app with no running workers (never deployed,
-or stopped) is refused with a pointer to `riku deploy`.
+or stopped) is refused with a pointer to `riku deploy`. Naming a process
+kind (`web`, `worker`, ...) restarts only that kind's workers; a kind the
+app does not run is refused with the list of kinds it does run.
 
 A container app replaces the copies of the named service, or of every
 service in start order, one at a time from the images they run now, without

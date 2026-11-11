@@ -210,12 +210,13 @@ pub enum Commands {
                       built: a Procfile app's workers start again from the last deploy, a \
                       container app's copies are replaced one at a time from the images they \
                       run now. To rebuild, run riku deploy.",
-        after_help = "Examples:\n  riku restart myapp\n  riku restart myapp web\n  riku deploy myapp    (rebuild and restart)"
+        after_help = "Examples:\n  riku restart myapp\n  riku restart myapp worker\n  riku deploy myapp    (rebuild and restart)"
     )]
     Restart {
         /// App name (default: the app of this repo's riku git remote)
         app: Option<String>,
-        /// Only this service of a container app
+        /// Only this service of a container app, or this process kind (web, worker, ...) of a Procfile app
+        #[arg(value_name = "PROCESS")]
         service: Option<String>,
         /// Same as a plain restart, kept for scripts
         #[arg(long, conflicts_with = "service")]

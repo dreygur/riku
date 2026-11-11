@@ -22,7 +22,7 @@ pub(super) fn container_cleanup(paths: &RikuPaths, app: &str, mode: DestroyMode)
     };
     let container_app = match target {
         ControlTarget::Containers { app, .. } => app,
-        ControlTarget::Procfile => return Ok(()),
+        ControlTarget::Procfile { .. } => return Ok(()),
     };
     let err = match destroy_containers(&container_app, paths) {
         Ok(()) => return Ok(()),

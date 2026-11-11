@@ -1,5 +1,6 @@
 //! Telling container apps apart for the commands that act on them per
-//! service: `riku restart`, `riku stop` and `riku ps --scale`.
+//! service: `riku restart`, `riku stop` and `riku ps --scale`. Restart also
+//! takes a process kind of a Procfile app.
 //!
 //! # Security model
 //!
@@ -20,8 +21,20 @@ pub(crate) enum ControlTarget {
         app: AppName,
         service: Option<ServiceName>,
     },
-    /// A Procfile app whose processes the supervisor runs.
-    Procfile,
+    /// A Procfile app whose processes the supervisor runs, and the process
+    /// kind named on the command line (`None` means every kind). The name
+    /// is only compared with the app's worker names, never used in a path.
+    Procfile { process: Option<String> },
+}
+
+/// Refuse a process name for a command that acts on a whole Procfile app.
+pub(crate) fn whole_procfile_app(app: &str, process: Option<&str>) -> Result<()> {
+    match process {
+        None => Ok(()),
+        Some(name) => Err(anyhow!(
+            "'{app}' is not a container app, so it has no service '{name}'; leave the service out"
+        )),
+    }
 }
 
 fn service_name(raw: Option<&str>) -> Result<Option<ServiceName>> {
@@ -34,8 +47,8 @@ fn service_name(raw: Option<&str>) -> Result<Option<ServiceName>> {
     }
 }
 
-/// Classify `app` for a command that may name one of its services. Naming a
-/// service of a Procfile app is refused.
+/// Classify `app` for a command that may name one of its services (a
+/// container app) or process kinds (a Procfile app).
 #[allow(clippy::question_mark)]
 pub(crate) fn control_target(
     paths: &RikuPaths,
@@ -47,12 +60,9 @@ pub(crate) fn control_target(
         Err(e) => return Err(e),
     };
     if !containers {
-        return match service {
-            None => Ok(ControlTarget::Procfile),
-            Some(name) => Err(anyhow!(
-                "'{app}' is not a container app, so it has no service '{name}'; leave the service out"
-            )),
-        };
+        return Ok(ControlTarget::Procfile {
+            process: service.map(str::to_string),
+        });
     }
     let app = match AppName::try_from(app) {
         Ok(app) => app,

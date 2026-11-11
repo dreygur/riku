@@ -109,15 +109,16 @@ Response:
   {"processes": {"web": {"running": 2, "desired": 2}}}"#
         }
         "restart" => {
-            r#"Usage: riku agent restart <app> [service]
+            r#"Usage: riku agent restart <app> [process]
 
 Restart an application's running processes from the current build. Nothing
-is built; use deploy to rebuild. A service names one service of a container
-app.
+is built; use deploy to rebuild. For a container app, process names one
+service; for a Procfile app, one process kind (web, worker, ...). An
+unknown kind fails and lists the app's kinds.
 
 Example:
   riku agent restart myapp
-  riku agent restart myapp web
+  riku agent restart myapp worker
 
 Response:
   {"success": true}"#

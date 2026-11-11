@@ -1,5 +1,5 @@
-//! Restarting the running workers of a Procfile app, as `riku restart`
-//! does. Nothing is built: the workers start again from the build and the
+//! Restarting the running workers of a Procfile app, or of one of its
+//! process kinds, as `riku restart` does. Nothing is built: the workers start again from the build and the
 //! configs the last deploy left. A rebuild is `riku deploy`.
 //!
 //! The supervisor reloads a worker whose config file's mtime advanced, on
@@ -19,6 +19,7 @@ use riku_supervisor::config::app_worker_configs;
 
 use crate::config::RikuPaths;
 use crate::supervisor_ctl;
+use crate::util::file_names::worker::WorkerName;
 
 fn bump_mtime(config: &Path) -> Result<()> {
     let file = match fs::File::options().write(true).open(config) {
@@ -45,18 +46,52 @@ pub fn restart_configs(configs: &[PathBuf], paths: &RikuPaths) -> Result<()> {
     Ok(())
 }
 
-/// Restart every enabled worker of `app` and return how many there are. An
-/// app with no enabled workers (never deployed, or stopped) is an error
-/// that names `riku deploy`.
-pub fn restart_procfile_app(app: &str, paths: &RikuPaths) -> Result<usize> {
+fn config_kind(config: &Path) -> Option<String> {
+    config
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .and_then(WorkerName::parse)
+        .map(|name| name.kind)
+}
+
+/// The configs in `enabled` that run `kind`. None of them is an error that
+/// names the kinds the app does run.
+fn configs_of_kind(app: &str, kind: &str, enabled: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
+    let (matching, others): (Vec<PathBuf>, Vec<PathBuf>) = enabled
+        .into_iter()
+        .partition(|config| config_kind(config).as_deref() == Some(kind));
+    if !matching.is_empty() {
+        return Ok(matching);
+    }
+    let mut kinds: Vec<String> = others.iter().filter_map(|c| config_kind(c)).collect();
+    kinds.sort_unstable();
+    kinds.dedup();
+    Err(anyhow!(
+        "'{app}' runs no process '{kind}'; its processes are: {}",
+        kinds.join(", ")
+    ))
+}
+
+/// Restart the enabled workers of `app`, or only those of process `kind`
+/// (`web`, `worker`, ...), and return how many there are. An app with no
+/// enabled workers (never deployed, or stopped) is an error that names
+/// `riku deploy`.
+pub fn restart_procfile_app(app: &str, kind: Option<&str>, paths: &RikuPaths) -> Result<usize> {
     let enabled = app_worker_configs(&paths.workers_enabled, app);
     if enabled.is_empty() {
         return Err(anyhow!(
             "'{app}' has no running processes to restart; start it with riku deploy {app}"
         ));
     }
-    match restart_configs(&enabled, paths) {
-        Ok(()) => Ok(enabled.len()),
+    let chosen = match kind {
+        Some(kind) => match configs_of_kind(app, kind, enabled) {
+            Ok(chosen) => chosen,
+            Err(e) => return Err(e),
+        },
+        None => enabled,
+    };
+    match restart_configs(&chosen, paths) {
+        Ok(()) => Ok(chosen.len()),
         Err(e) => Err(e),
     }
 }

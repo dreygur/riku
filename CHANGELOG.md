@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `riku restart <app> <name>` and `riku agent restart <app> <name>` read
+  `<name>` only as a container service, so on a Procfile app they always
+  failed. For a Procfile app it is now a process kind (`web`, `worker`,
+  ...) and only that kind's workers restart; a kind the app does not run
+  is refused with the list of kinds it runs. `riku stop` still refuses a
+  name for a Procfile app.
 - The dashboard's restart button for one worker did nothing: it replaced
   the enabled symlink, but the supervisor compares the mtime of the file
   the link points at, which did not change. It now restarts the worker the
