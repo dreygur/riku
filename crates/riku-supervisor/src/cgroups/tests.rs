@@ -1,25 +1,52 @@
 use super::*;
 
-#[test]
-fn test_cpu_max_value_with_quota() {
-    let limits = CgroupLimits {
-        memory_max_bytes: None,
-        cpu_quota_us: Some(50_000),
-        cpu_period_us: 100_000,
-        pids_max: None,
-    };
-    assert_eq!(limits.cpu_max_value(), "50000 100000");
+/// A tempdir standing in for the supervisor's own cgroup, taken over with
+/// `offered` as its `cgroup.controllers`.
+fn taken_over(offered: &str) -> (tempfile::TempDir, CgroupTree) {
+    let own = tempfile::tempdir().unwrap();
+    std::fs::write(own.path().join("cgroup.controllers"), offered).unwrap();
+    let mut tree = CgroupTree::locate(own.path(), "0::/\n").unwrap();
+    tree.take_over(1).unwrap();
+    (own, tree)
 }
 
 #[test]
-fn test_cpu_max_value_unlimited() {
+fn provision_writes_only_the_limits_that_are_set() {
+    let (_own, tree) = taken_over("memory cpu pids");
     let limits = CgroupLimits {
-        memory_max_bytes: None,
-        cpu_quota_us: None,
+        memory_max_bytes: Some(1024),
         cpu_period_us: 100_000,
-        pids_max: None,
+        ..CgroupLimits::default()
     };
-    assert_eq!(limits.cpu_max_value(), "max 100000");
+
+    let cgroup =
+        WorkerCgroup::provision(&tree, &WorkerName::new("shop", "web", 1), &limits).unwrap();
+
+    assert!(cgroup.path.join("memory.max").exists());
+    for node in ["cpu.max", "pids.max"] {
+        assert!(
+            !cgroup.path.join(node).exists(),
+            "{node} written without a limit"
+        );
+    }
+}
+
+#[test]
+fn provision_refuses_a_limit_whose_controller_is_not_delegated() {
+    let (own, tree) = taken_over("cpu pids");
+    let limits = CgroupLimits {
+        memory_max_bytes: Some(1024),
+        ..CgroupLimits::default()
+    };
+
+    let refused = WorkerCgroup::provision(&tree, &WorkerName::new("shop", "web", 1), &limits);
+
+    let message = format!(
+        "{:#}",
+        refused.err().expect("a memory limit without memory ran")
+    );
+    assert!(message.contains("memory"), "{message}");
+    assert!(!own.path().join("apps/shop@web.1").exists());
 }
 
 /// A fake cgroup tree in a tempdir: this checks placement and the values

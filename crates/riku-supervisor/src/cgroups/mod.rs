@@ -38,7 +38,8 @@ pub struct CgroupLimits {
     /// the kernel default (`max`, i.e. unlimited).
     pub memory_max_bytes: Option<u64>,
     /// CPU quota in microseconds per `cpu_period_us`, written to `cpu.max`
-    /// as `"<quota> <period>"`. `None` writes `"max <period>"` (unlimited).
+    /// as `"<quota> <period>"`. `None` leaves `cpu.max` alone (unlimited)
+    /// and so needs no cpu controller.
     pub cpu_quota_us: Option<u64>,
     /// CPU accounting period in microseconds (kernel default and most
     /// common choice is 100000, i.e. 100ms).
@@ -56,13 +57,32 @@ pub struct CgroupLimits {
     pub pids_max: Option<u64>,
 }
 
+/// One limit to write: the controller that owns it, its file, its value.
+struct LimitNode {
+    controller: &'static str,
+    file: &'static str,
+    value: String,
+}
+
 impl CgroupLimits {
-    /// Render the `cpu.max` file contents for these limits.
-    fn cpu_max_value(&self) -> String {
-        match self.cpu_quota_us {
-            Some(quota) => format!("{} {}", quota, self.cpu_period_us),
-            None => format!("max {}", self.cpu_period_us),
-        }
+    /// The files these limits ask for. A limit left at `None` writes none.
+    fn nodes(&self) -> Vec<LimitNode> {
+        let memory = self.memory_max_bytes.map(|bytes| LimitNode {
+            controller: "memory",
+            file: "memory.max",
+            value: bytes.to_string(),
+        });
+        let cpu = self.cpu_quota_us.map(|quota| LimitNode {
+            controller: "cpu",
+            file: "cpu.max",
+            value: format!("{quota} {}", self.cpu_period_us),
+        });
+        let pids = self.pids_max.map(|pids| LimitNode {
+            controller: "pids",
+            file: "pids.max",
+            value: pids.to_string(),
+        });
+        [memory, cpu, pids].into_iter().flatten().collect()
     }
 }
 
@@ -96,7 +116,8 @@ impl WorkerCgroup {
     /// supervisor's `apps/` cgroup and write `limits` to it. Call this from
     /// the supervisor (parent) before spawning the worker, so the
     /// constraints already exist by the time the worker joins via
-    /// `add_self`.
+    /// `add_self`. Refuses a limit whose controller the unit's cgroup does
+    /// not offer, rather than run the worker without it.
     #[allow(clippy::question_mark)]
     pub fn provision(
         tree: &CgroupTree,
@@ -109,25 +130,25 @@ impl WorkerCgroup {
                 "refusing a cgroup for malformed worker name {dir_name:?}"
             ));
         }
+        let nodes = limits.nodes();
+        let missing = tree.missing_controllers();
+        if let Some(node) = nodes.iter().find(|n| missing.contains(&n.controller)) {
+            return Err(anyhow!(
+                "{worker} sets {}, but the {} controller is not delegated to riku",
+                node.file,
+                node.controller
+            ));
+        }
+
         let path = tree.apps_dir().join(dir_name);
         if let Err(e) = tree::create_cgroup(&path) {
             return Err(e);
         }
-
-        if let Some(bytes) = limits.memory_max_bytes {
-            if let Err(e) = write_node(&path, "memory.max", &bytes.to_string()) {
+        for node in &nodes {
+            if let Err(e) = write_node(&path, node.file, &node.value) {
                 return Err(e);
             }
         }
-        if let Err(e) = write_node(&path, "cpu.max", &limits.cpu_max_value()) {
-            return Err(e);
-        }
-        if let Some(pids) = limits.pids_max {
-            if let Err(e) = write_node(&path, "pids.max", &pids.to_string()) {
-                return Err(e);
-            }
-        }
-
         Ok(WorkerCgroup { path })
     }
 

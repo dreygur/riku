@@ -35,6 +35,8 @@ const APPS_DIR: &str = "apps";
 #[derive(Debug, Clone)]
 pub struct CgroupTree {
     own: PathBuf,
+    /// Wanted controllers `<own>` does not offer, known after `take_over`.
+    missing: Vec<&'static str>,
 }
 
 impl CgroupTree {
@@ -55,14 +57,15 @@ impl CgroupTree {
         };
         Ok(CgroupTree {
             own: mount.join(relative),
+            missing: Vec::new(),
         })
     }
 
     /// Moves process `pid` into `<own>/supervisor`, then lets `<own>` and
-    /// `<own>/apps` hand the wanted controllers down. Returns the wanted
-    /// controllers `<own>` does not offer, which isolated workers cannot use.
-    /// Fails when the cgroup is not delegated to this user.
-    pub fn take_over(&self, pid: u32) -> Result<Vec<&'static str>> {
+    /// `<own>/apps` hand the wanted controllers down, and remembers the
+    /// wanted controllers `<own>` does not offer. Fails when the cgroup is
+    /// not delegated to this user.
+    pub fn take_over(&mut self, pid: u32) -> Result<()> {
         let supervisor = self.own.join(SUPERVISOR_LEAF);
         if let Err(e) = create_cgroup(&supervisor) {
             return Err(e);
@@ -89,7 +92,14 @@ impl CgroupTree {
         if let Err(e) = enable_controllers(&apps, &enabled) {
             return Err(e);
         }
-        Ok(missing)
+        self.missing = missing;
+        Ok(())
+    }
+
+    /// Controllers isolated workers cannot use, because the unit's cgroup
+    /// does not offer them. Empty before `take_over`.
+    pub fn missing_controllers(&self) -> &[&'static str] {
+        &self.missing
     }
 
     /// The parent of every isolated worker's cgroup.
@@ -99,17 +109,17 @@ impl CgroupTree {
 }
 
 /// Locates and takes over the running supervisor's own cgroup.
-pub fn take_over_own() -> Result<(CgroupTree, Vec<&'static str>)> {
+pub fn take_over_own() -> Result<CgroupTree> {
     let text = match fs::read_to_string("/proc/self/cgroup") {
         Ok(text) => text,
         Err(e) => return Err(anyhow!("reading /proc/self/cgroup: {e}")),
     };
-    let tree = match CgroupTree::locate(Path::new(CGROUP_MOUNT), &text) {
+    let mut tree = match CgroupTree::locate(Path::new(CGROUP_MOUNT), &text) {
         Ok(tree) => tree,
         Err(e) => return Err(e),
     };
     match tree.take_over(std::process::id()) {
-        Ok(missing) => Ok((tree, missing)),
+        Ok(()) => Ok(tree),
         Err(e) => Err(e),
     }
 }

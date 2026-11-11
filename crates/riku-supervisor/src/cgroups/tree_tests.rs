@@ -34,13 +34,11 @@ fn refuses_a_host_without_cgroup_v2_or_a_path_that_climbs() {
 fn take_over_moves_the_pid_and_enables_only_offered_controllers() {
     let own = tempfile::tempdir().unwrap();
     fs::write(own.path().join("cgroup.controllers"), "cpuset cpu pids\n").unwrap();
-    let tree = CgroupTree {
-        own: own.path().to_path_buf(),
-    };
+    let mut tree = CgroupTree::locate(own.path(), "0::/\n").unwrap();
 
-    let missing = tree.take_over(4242).unwrap();
+    tree.take_over(4242).unwrap();
 
-    assert_eq!(missing, vec!["memory"]);
+    assert_eq!(tree.missing_controllers(), ["memory"]);
     let read = |rel: &str| fs::read_to_string(own.path().join(rel)).unwrap();
     assert_eq!(read("supervisor/cgroup.procs"), "4242");
     assert_eq!(read("cgroup.subtree_control"), "+cpu +pids");

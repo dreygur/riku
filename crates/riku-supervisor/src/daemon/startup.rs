@@ -58,11 +58,12 @@ impl Supervisor {
     /// the fix at boot instead of at the first isolated deploy.
     pub(super) fn check_cgroup_isolation(&mut self) {
         match crate::cgroups::take_over_own() {
-            Ok((tree, missing)) => {
+            Ok(tree) => {
+                let missing = tree.missing_controllers();
                 if !missing.is_empty() {
                     report_startup_problem(&format!(
                         "cgroup controllers not delegated to riku: {}; isolated workers \
-                         that set those limits will fail to start",
+                         that set those limits will refuse to start",
                         missing.join(", ")
                     ));
                 }
