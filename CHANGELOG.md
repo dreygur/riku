@@ -41,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   temp file (one rename then failed). The temp file is now created
   exclusively with `O_NOFOLLOW` under a name unique to each call, a taken
   name is skipped, and the temp file is removed when the rename fails.
+- Two plugin installs at once (the CLI and the supervisor's install route)
+  could each rewrite `~/.riku/plugins/.bundled` from the copy they read,
+  dropping one plugin's entry, so `riku init` treated that plugin as
+  installed by an older riku and never refreshed it. The update now holds
+  an exclusive lock on `~/.riku/plugins/.bundled.lock` from read to write.
 - `scripts/install.sh` printed the old `-----> ` and ` !     ` lines and
   `error: ...`. It now uses the rail: `┌  riku install  <version>`, the
   `Download`, `Checksum` and `Install` steps, `▲` warnings, `■` errors,

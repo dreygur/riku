@@ -8,24 +8,32 @@
 //! Security: the record is read through [`super::owned_file`], so a symlink
 //! or a file owned by someone else is refused, and written like a plugin file
 //! (unique temp name created new, renamed over) with mode `0600`. The name is
-//! hidden, so runtime discovery skips it. Two installs running at once can
-//! each rewrite the record from the copy they read, losing one entry; that
-//! plugin then reads as installed by an older riku and init only lists it.
+//! hidden, so runtime discovery skips it.
+//!
+//! An update holds an exclusive `flock` on `<plugin root>/.bundled.lock`
+//! from the read to the rename, so two installs at once (the CLI and the
+//! supervisor route) apply one after the other and neither entry is lost.
+//! The lock file is opened `0600` with `O_NOFOLLOW`, so a planted symlink
+//! fails the update instead of being followed.
 
 // Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
 #![allow(clippy::question_mark)]
 
 use std::collections::BTreeMap;
+use std::fs::File;
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
+use nix::fcntl::{Flock, FlockArg};
 use sha2::{Digest, Sha256};
 
 use super::embedded_plugins::EmbeddedPlugin;
 use super::owned_file::{read_owned, Owned};
 use super::plugin_write::write_plugin_file;
+use crate::agent::state::{open_private, Access};
 
 const RECORD_NAME: &str = ".bundled";
+const LOCK_NAME: &str = ".bundled.lock";
 const RECORD_MODE: u32 = 0o600;
 
 /// Recorded sha256 (lowercase hex) by path relative to the plugin root.
@@ -72,8 +80,26 @@ pub(crate) fn load(plugin_root: &Path) -> Result<BundledRecord> {
     }
 }
 
+/// Blocks until this process holds the record's update lock; dropping the
+/// returned guard releases it.
+fn lock_record(plugin_root: &Path) -> Result<Flock<File>> {
+    let path = plugin_root.join(LOCK_NAME);
+    let file = match open_private(&path, Access::Update) {
+        Ok(file) => file,
+        Err(e) => return Err(anyhow!("cannot open {}: {e}", path.display())),
+    };
+    match Flock::lock(file, FlockArg::LockExclusive) {
+        Ok(locked) => Ok(locked),
+        Err((_, errno)) => Err(anyhow!("cannot lock {}: {errno}", path.display())),
+    }
+}
+
 /// Note the hashes of the files `plugin` just wrote under `plugin_root`.
 pub(crate) fn record_written(plugin: &EmbeddedPlugin, plugin_root: &Path) -> Result<()> {
+    let _lock = match lock_record(plugin_root) {
+        Ok(lock) => lock,
+        Err(e) => return Err(e),
+    };
     let mut record = match load(plugin_root) {
         Ok(record) => record,
         Err(e) => return Err(e),
@@ -90,3 +116,7 @@ pub(crate) fn record_written(plugin: &EmbeddedPlugin, plugin_root: &Path) -> Res
         RECORD_MODE,
     )
 }
+
+#[cfg(test)]
+#[path = "bundled_record_tests.rs"]
+mod tests;
