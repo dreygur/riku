@@ -16,6 +16,7 @@ pub mod init;
 mod init_router;
 mod nginx_host;
 mod nginx_worker;
+mod outside_supervisor;
 mod prerequisites;
 mod root_init;
 mod router_choice;

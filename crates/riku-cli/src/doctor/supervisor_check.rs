@@ -7,6 +7,7 @@
 use std::fs;
 use std::path::Path;
 
+use crate::deploy::supervisor_pid;
 use crate::util::ROOT_BINARY;
 
 use super::Check;
@@ -17,15 +18,17 @@ const DELETED_SUFFIX: &str = " (deleted)";
 
 /// Compare `<proc_root>/<pid>/exe` of the pid in `pid_file` with
 /// [`ROOT_BINARY`]. No pid file means no supervisor is running, which the
-/// service check reports; this one stays quiet then.
+/// service check reports; this one stays quiet then. So does a pid file
+/// riku-deploy `supervisor_pid::probe` refuses (a link, a FIFO, another
+/// user's file).
 pub fn supervisor_binary(pid_file: &Path, proc_root: &Path) -> Vec<Check> {
-    let text = match fs::read_to_string(pid_file) {
-        Ok(text) => text,
-        Err(_) => return Vec::new(),
+    let probed = match supervisor_pid::probe(pid_file) {
+        Some(probed) => probed,
+        None => return Vec::new(),
     };
-    let pid: u32 = match text.trim().parse() {
-        Ok(pid) => pid,
-        Err(_) => {
+    let pid = match probed.pid {
+        Some(pid) => pid,
+        None => {
             return vec![Check::warn(
                 NAME,
                 format!("{} does not hold a pid", pid_file.display()),

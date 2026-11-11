@@ -12,6 +12,7 @@
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
+use std::process::Command;
 
 /// The `systemctl` action init takes on the service.
 #[derive(Debug, PartialEq, Eq)]
@@ -40,6 +41,15 @@ impl ServiceAction {
     }
 }
 
+/// Which systemd manager runs the `riku` unit.
+#[derive(Debug, Clone, Copy)]
+pub(super) enum UnitScope {
+    /// `/etc/systemd/system/riku.service`, written by a root init.
+    System,
+    /// The plain user's `~/.config/systemd/user/riku.service`.
+    User,
+}
+
 /// The service's main pid from `systemctl show -p MainPID --value`, which
 /// prints `0` for a stopped service.
 pub(super) fn parse_main_pid(output: &str) -> Option<u32> {
@@ -49,6 +59,20 @@ pub(super) fn parse_main_pid(output: &str) -> Option<u32> {
     }
 }
 
+/// The main pid of the `riku` unit in `scope`, `None` when it is stopped or
+/// systemd cannot be asked.
+pub(super) fn service_main_pid(scope: UnitScope) -> Option<u32> {
+    let mut command = Command::new("systemctl");
+    if let UnitScope::User = scope {
+        command.arg("--user");
+    }
+    command
+        .args(["show", "-p", "MainPID", "--value", "riku"])
+        .output()
+        .ok()
+        .and_then(|out| parse_main_pid(&String::from_utf8_lossy(&out.stdout)))
+}
+
 /// What to do with a service whose main process is `main_pid`, given the
 /// `installed` binary. `proc_root` is `/proc` outside tests.
 pub(super) fn action_for(
@@ -56,16 +80,16 @@ pub(super) fn action_for(
     proc_root: &Path,
     installed: &Path,
 ) -> ServiceAction {
-    let pid = match main_pid {
-        Some(pid) => pid,
-        None => return ServiceAction::Start,
-    };
-    let running = proc_root.join(pid.to_string()).join("exe");
-    if same_binary(&running, installed) {
-        ServiceAction::KeepRunning
-    } else {
-        ServiceAction::Restart
+    match main_pid {
+        None => ServiceAction::Start,
+        Some(pid) if runs_binary(proc_root, pid, installed) => ServiceAction::KeepRunning,
+        Some(_) => ServiceAction::Restart,
     }
+}
+
+/// Whether `<proc_root>/<pid>/exe` is the `installed` binary.
+pub(super) fn runs_binary(proc_root: &Path, pid: u32, installed: &Path) -> bool {
+    same_binary(&proc_root.join(pid.to_string()).join("exe"), installed)
 }
 
 fn same_binary(running: &Path, installed: &Path) -> bool {

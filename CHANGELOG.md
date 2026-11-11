@@ -144,7 +144,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inode and then by content), so the new binary takes over and its workers
   restart with it; the `Service` step says `restarted (new binary)`.
   Re-running `riku init` without an upgrade leaves it running (`running`)
-  and restarts no app.
+  and restarts no app. A supervisor a deploy started outside systemd on
+  an older binary held the pid file lock, so the service's own supervisor
+  failed to start in a loop while init said `started`. Init now stops it
+  first, as the deploy user, and prints a `Supervisor` step saying so.
+- `supervisor.pid` was read with a plain open, also by root (`riku
+  doctor`), so a link in the deploy user's tree made root read another
+  file and a FIFO hung it. Every reader now opens it without following
+  links or blocking, and ignores anything but a regular file the reader
+  owns.
 - A plain (not root) `riku init` on a host where root already installed
   riku built a second install for the caller: its own `~/.riku`, a user
   unit running a second supervisor, an ssh key and a forced command in

@@ -8,56 +8,24 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::config::RikuPaths;
+use crate::supervisor_pid;
 use crate::util::{echo, ROOT_BINARY};
-
-/// Read the supervisor PID from the PID file. Returns None if the file is
-/// absent or unreadable, or holds anything but a positive number: `kill(0, ..)`
-/// would signal our own process group and a negative pid a whole group or,
-/// for -1, every process we may signal.
-fn read_supervisor_pid(paths: &RikuPaths) -> Option<i32> {
-    let pid_file = paths.riku_root.join("supervisor.pid");
-    let content = match std::fs::read_to_string(&pid_file) {
-        Ok(content) => content,
-        Err(_) => return None,
-    };
-    match content.trim().parse::<i32>() {
-        Ok(pid) if pid > 0 => Some(pid),
-        _ => None,
-    }
-}
 
 /// Whether some process holds the lock on `supervisor.pid`. A running
 /// supervisor keeps an exclusive `flock` on it for its whole life (see
 /// riku-supervisor `create_pid_file_with_lock`), so an unlocked file is left
 /// over from a dead one, whatever pid it names: that pid may since belong to
-/// an unrelated process.
-///
-/// The probe takes a shared lock for an instant, so two probes never block
-/// each other; a supervisor starting in that instant fails its own lock.
-fn pid_file_locked(paths: &RikuPaths) -> bool {
-    use std::os::unix::fs::OpenOptionsExt;
-
-    let opened = std::fs::File::options()
-        .read(true)
-        .custom_flags(nix::libc::O_NOFOLLOW)
-        .open(paths.riku_root.join("supervisor.pid"));
-    let file = match opened {
-        Ok(file) => file,
-        Err(_) => return false,
-    };
-    matches!(
-        file.try_lock_shared(),
-        Err(std::fs::TryLockError::WouldBlock)
-    )
+/// an unrelated process. A supervisor starting in the probe's instant fails
+/// its own lock.
+pub(crate) fn pid_file_locked(paths: &RikuPaths) -> bool {
+    supervisor_pid::probe(&paths.riku_root.join(supervisor_pid::PID_FILE))
+        .is_some_and(|file| file.locked)
 }
 
 /// The pid of the running supervisor: the pid file must be locked and hold
-/// a positive pid.
-fn running_supervisor_pid(paths: &RikuPaths) -> Option<i32> {
-    if !pid_file_locked(paths) {
-        return None;
-    }
-    read_supervisor_pid(paths)
+/// a positive pid (see [`supervisor_pid`] for how it is read).
+pub fn running_supervisor_pid(paths: &RikuPaths) -> Option<i32> {
+    supervisor_pid::running_pid(&paths.riku_root.join(supervisor_pid::PID_FILE))
 }
 
 /// Return true when a supervisor holds its pid file lock.

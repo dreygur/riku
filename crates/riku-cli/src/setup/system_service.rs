@@ -10,7 +10,7 @@ use crate::util::{display, ROOT_BINARY};
 
 use super::deploy_user::{deploy_user_name, passwd_home, running_as_root};
 use super::router_units::{remove_stale_units, unit_ordering, STALE_UNITS};
-use super::supervisor_binary::{action_for, parse_main_pid};
+use super::supervisor_binary::{action_for, service_main_pid, UnitScope};
 
 pub const SYSTEMD_DIR: &str = "/etc/systemd/system";
 
@@ -95,11 +95,7 @@ fn start_riku_service() {
     if systemctl_ok(&["enable", "riku"]) {
         done.push("enabled");
     }
-    let main_pid = Command::new("systemctl")
-        .args(["show", "-p", "MainPID", "--value", "riku"])
-        .output()
-        .ok()
-        .and_then(|out| parse_main_pid(&String::from_utf8_lossy(&out.stdout)));
+    let main_pid = service_main_pid(UnitScope::System);
     let action = action_for(main_pid, Path::new("/proc"), Path::new(ROOT_BINARY));
     if systemctl_ok(&[action.verb(), "riku"]) {
         done.push(action.outcome());

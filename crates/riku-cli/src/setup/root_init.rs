@@ -50,12 +50,15 @@ fn print_ssh_hint() {
     display::detail("Add yours with: sudo riku init --ssh-key <your .pub or authorized_keys file>");
 }
 
-fn run_user_steps(user: &DeployUser, keys: &[PublicKey]) -> Result<()> {
+fn run_user_steps(user: &DeployUser, keys: &[PublicKey], no_systemd: bool) -> Result<()> {
     let key_args: Vec<String> = keys
         .iter()
         .flat_map(|key| ["--add-key".to_string(), key.to_string()])
         .collect();
     let mut args = vec!["init", "--user-steps"];
+    if no_systemd {
+        args.push("--no-systemd");
+    }
     args.extend(key_args.iter().map(String::as_str));
     user.run_relayed(Path::new(ROOT_BINARY), &args)
 }
@@ -144,7 +147,7 @@ pub fn root_init(options: &InitOptions) -> Result<(DeployUser, Router)> {
     // variable reaches them through `DeployUser`'s passed environment.
     std::env::set_var(ROUTER_ENV, router.name());
 
-    if let Err(e) = run_user_steps(&user, &keys) {
+    if let Err(e) = run_user_steps(&user, &keys, options.no_systemd) {
         return Err(e);
     }
     // Before the router: nginx host setup adds its worker to the group.

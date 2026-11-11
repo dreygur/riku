@@ -57,6 +57,8 @@ pub mod router;
 pub mod scaling;
 pub mod service_update;
 pub mod supervisor_ctl;
+pub mod supervisor_pid;
+pub mod supervisor_stop;
 pub mod teardown;
 pub mod worker_control;
 pub mod workers;
