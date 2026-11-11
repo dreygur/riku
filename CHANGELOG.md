@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4-rc.3] - 2026-11-11
+
+Release candidate, published as a GitHub prerelease. Install it with
+`curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sudo RIKU_VERSION=v0.1.4-rc.3 sh`.
+
 ### Changed
 
 - All riku and rk output uses one format, a rail like `npx skills add`:

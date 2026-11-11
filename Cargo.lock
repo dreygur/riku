@@ -1718,7 +1718,7 @@ dependencies = [
 
 [[package]]
 name = "riku"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -1744,7 +1744,7 @@ dependencies = [
 
 [[package]]
 name = "riku-args"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -1752,7 +1752,7 @@ dependencies = [
 
 [[package]]
 name = "riku-bundle"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
  "ed25519-dalek",
@@ -1764,7 +1764,7 @@ dependencies = [
 
 [[package]]
 name = "riku-caddy"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
  "riku-config",
@@ -1774,7 +1774,7 @@ dependencies = [
 
 [[package]]
 name = "riku-cli"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1809,7 +1809,7 @@ dependencies = [
 
 [[package]]
 name = "riku-client"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -1822,7 +1822,7 @@ dependencies = [
 
 [[package]]
 name = "riku-config"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
  "riku-util",
@@ -1832,7 +1832,7 @@ dependencies = [
 
 [[package]]
 name = "riku-container"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
  "nix",
@@ -1848,7 +1848,7 @@ dependencies = [
 
 [[package]]
 name = "riku-dashboard"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
  "axum",
@@ -1868,7 +1868,7 @@ dependencies = [
 
 [[package]]
 name = "riku-deploy"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1897,14 +1897,14 @@ dependencies = [
 
 [[package]]
 name = "riku-error"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "riku-http"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "reqwest",
  "rustls",
@@ -1912,7 +1912,7 @@ dependencies = [
 
 [[package]]
 name = "riku-nginx"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
  "libc",
@@ -1925,21 +1925,21 @@ dependencies = [
 
 [[package]]
 name = "riku-plugin-clojure"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
 ]
 
 [[package]]
 name = "riku-plugin-java"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
 ]
 
 [[package]]
 name = "riku-plugins"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1963,7 +1963,7 @@ dependencies = [
 
 [[package]]
 name = "riku-remote"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -1980,7 +1980,7 @@ dependencies = [
 
 [[package]]
 name = "riku-route"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
  "base64",
@@ -1999,7 +1999,7 @@ dependencies = [
 
 [[package]]
 name = "riku-supervisor"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
  "axum",
@@ -2030,7 +2030,7 @@ dependencies = [
 
 [[package]]
 name = "riku-util"
-version = "0.1.4-rc.2"
+version = "0.1.4-rc.3"
 dependencies = [
  "anyhow",
  "chrono",
