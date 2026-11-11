@@ -13,6 +13,9 @@
 #   RIKU_LIBC         gnu or musl, on Linux only (default: gnu when glibc
 #                     2.31 or newer is present, otherwise the static musl build)
 #   RIKU_NO_INIT=1    skip the post-install next-step hint
+#   RIKU_SKIP_CHECKSUM=1  install even when the release's .sha256 cannot be
+#                     fetched or no sha256 tool exists (default: stop). A
+#                     checksum that does not match always stops.
 # Set them after sudo, which drops the caller's environment:
 #   curl -fsSL .../install.sh | sudo RIKU_LIBC=musl sh
 set -eu
@@ -161,6 +164,40 @@ pick_platform() {
   esac
 }
 
+# unverified REASON: stop with REASON, or with RIKU_SKIP_CHECKSUM=1 warn
+# and go on without a checksum.
+unverified() {
+  if [ "${RIKU_SKIP_CHECKSUM:-0}" = "1" ]; then
+    warn "$1; RIKU_SKIP_CHECKSUM=1, installing unverified"
+    return 0
+  fi
+  err "$1 (set RIKU_SKIP_CHECKSUM=1 to install unverified)"
+}
+
+# verify_checksum FILE URL SUMFILE: compare FILE's sha256 with the one
+# published at URL, fetched into SUMFILE. Fails closed: the binary is
+# installed as root, so a checksum that cannot be fetched or computed stops
+# the install unless RIKU_SKIP_CHECKSUM=1.
+verify_checksum() {
+  if ! download "$2" "$3" 2>/dev/null; then
+    unverified "could not fetch the checksum $2"
+    return 0
+  fi
+  expected="$(awk '{print $1}' "$3")"
+  if have sha256sum; then
+    actual="$(sha256sum "$1" | awk '{print $1}')"
+  elif have shasum; then
+    actual="$(shasum -a 256 "$1" | awk '{print $1}')"
+  else
+    unverified "no sha256sum or shasum to check the download with"
+    return 0
+  fi
+  if [ "$actual" != "$expected" ]; then
+    err "checksum mismatch (expected $expected, got $actual)"
+  fi
+  step "Checksum" "sha256 matches"
+}
+
 main() {
   bin="riku"
   while [ $# -gt 0 ]; do
@@ -209,25 +246,7 @@ main() {
     || err "download failed: ${base}/${asset}"
   step "Download" "$asset"
 
-  if download "${base}/${sum}" "${tmp}/sum" 2>/dev/null; then
-    expected="$(awk '{print $1}' "${tmp}/sum")"
-    if have sha256sum; then
-      actual="$(sha256sum "${tmp}/${asset}" | awk '{print $1}')"
-    elif have shasum; then
-      actual="$(shasum -a 256 "${tmp}/${asset}" | awk '{print $1}')"
-    else
-      actual=""
-      warn "no sha256 tool found; skipping verification"
-    fi
-    if [ -n "$actual" ] && [ "$actual" != "$expected" ]; then
-      err "checksum mismatch (expected $expected, got $actual)"
-    fi
-    if [ -n "$actual" ]; then
-      step "Checksum" "sha256 matches"
-    fi
-  else
-    warn "no checksum published for $asset; skipping verification"
-  fi
+  verify_checksum "${tmp}/${asset}" "${base}/${sum}" "${tmp}/sum"
 
   tar -xzf "${tmp}/${asset}" --no-same-owner -C "$tmp"
   if [ "$(id -u)" = "0" ]; then

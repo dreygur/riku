@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `scripts/install.sh` installed the download unverified, as root, when
+  fetching its `.sha256` failed for any reason (a network error included)
+  or no sha256 tool was found, with only a warning. It now stops before
+  installing; `RIKU_SKIP_CHECKSUM=1` restores the old warn-and-install
+  behavior for a host that needs it. A mismatching checksum still stops.
 - `riku restart` opened every enabled worker entry for writing and followed
   links, so an entry linked to a file outside `workers-available` had that
   file's mtime changed, and one leading to a FIFO hung the restart. It now

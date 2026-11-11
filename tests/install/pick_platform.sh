@@ -96,4 +96,41 @@ else
   echo "ok   --bogus -> $errors"
 fi
 
+# A checksum that cannot be fetched stops the install, unless
+# RIKU_SKIP_CHECKSUM=1 says to go on unverified. `download` is mocked to
+# fail, as on a network error.
+checksum_case() {
+  # shellcheck disable=SC2016
+  "$test_sh" -c '
+    . "$0"
+    download() { return 1; }
+    asset="$(mktemp)"
+    verify_checksum "$asset" "https://example.invalid/riku.sha256" "${asset}.sum"
+    rm -f "$asset"
+    echo "installing"
+  ' "$script" 2>"$stderr_file"
+}
+
+out="$(RIKU_INSTALL_LIB=1 checksum_case)"
+status=$?
+errors="$(cat "$stderr_file")"
+case "$status $out $errors" in
+  "1  ■  could not fetch the checksum"*"RIKU_SKIP_CHECKSUM=1"*)
+    echo "ok   unfetched checksum -> stops" ;;
+  *)
+    echo "FAIL unfetched checksum: status $status, stdout '$out', stderr '$errors'"
+    failures=$((failures + 1)) ;;
+esac
+
+out="$(RIKU_INSTALL_LIB=1 RIKU_SKIP_CHECKSUM=1 checksum_case)"
+status=$?
+errors="$(cat "$stderr_file")"
+case "$status $out $errors" in
+  "0 installing ▲  could not fetch the checksum"*"installing unverified"*)
+    echo "ok   unfetched checksum with RIKU_SKIP_CHECKSUM=1 -> warns, goes on" ;;
+  *)
+    echo "FAIL RIKU_SKIP_CHECKSUM=1: status $status, stdout '$out', stderr '$errors'"
+    failures=$((failures + 1)) ;;
+esac
+
 [ "$failures" -eq 0 ] || { echo "$failures case(s) failed"; exit 1; }

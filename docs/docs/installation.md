@@ -47,7 +47,9 @@ Install it with the install script and the `--rk` flag:
 curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh -s -- --rk
 ```
 
-The script downloads the matching release build (see [Release builds](#release-builds)), checks it against the release `.sha256` when one is published, and installs to `~/.local/bin` (or `/usr/local/bin` as root). `RIKU_INSTALL_DIR` and `RIKU_VERSION` override the directory and release tag. Set them on the `sh` side of the pipe, after `sudo` when there is one, or they never reach the script: `curl -fsSL .../install.sh | sudo RIKU_VERSION=v0.1.3 sh`. Without `--rk` the same script installs `riku`, which it only does as root, into `/usr/local/bin`.
+The script downloads the matching release build (see [Release builds](#release-builds)), checks it against the release `.sha256`, and installs to `~/.local/bin` (or `/usr/local/bin` as root). `RIKU_INSTALL_DIR` and `RIKU_VERSION` override the directory and release tag. Set them on the `sh` side of the pipe, after `sudo` when there is one, or they never reach the script: `curl -fsSL .../install.sh | sudo RIKU_VERSION=v0.1.3 sh`. Without `--rk` the same script installs `riku`, which it only does as root, into `/usr/local/bin`.
+
+When the `.sha256` cannot be fetched (a network error, a release without one) or the host has neither `sha256sum` nor `shasum`, the script stops before installing anything. `RIKU_SKIP_CHECKSUM=1` makes it warn and install the unverified download instead: `curl -fsSL .../install.sh | sudo RIKU_SKIP_CHECKSUM=1 sh`. A checksum that is fetched and does not match always stops the install.
 
 First use:
 
