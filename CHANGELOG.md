@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   them. A symlink, or a file the deploy user does not own, is never read or
   replaced. Before this an upgrade kept the old plugin text, so a server
   went on running an outdated python plugin.
+- `riku init` names the installed downloaded plugins (java, clojure) in
+  one `▲` line with `riku install-plugins --plugins <names>`, since init
+  does not download them and an upgrade otherwise kept the old release's
+  binary without saying so.
 
 ### Changed
 

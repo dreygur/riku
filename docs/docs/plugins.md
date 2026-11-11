@@ -61,8 +61,10 @@ record:
 - a symlink, or not a regular file owned by the deploy user: never read or
   replaced, and named in a warning
 
-The downloaded `java` and `clojure` plugins are not refreshed this way;
-reinstall them with `riku plugins install java` after an upgrade.
+The downloaded `java` and `clojure` plugins are not refreshed this way:
+init never downloads. When either is installed, init lists it with a `▲`
+line and the command to update it, `riku install-plugins --plugins
+java,clojure` (only the installed ones are named).
 
 ### Plugin Protocol
 
