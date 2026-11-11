@@ -674,3 +674,30 @@ mod agent_state_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod closed_pipe_tests {
+    use tempfile::TempDir;
+
+    /// A pusher whose connection drops leaves riku writing to a closed pipe.
+    /// Printing must not panic: a panic in the git hook skips recording a
+    /// failed deploy, and git push then reports success.
+    #[test]
+    fn output_to_a_closed_pipe_does_not_panic() {
+        let dir = TempDir::new().unwrap();
+        let (reader, writer) = std::io::pipe().unwrap();
+        drop(reader);
+        let bin =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku");
+        let out = std::process::Command::new(bin)
+            .args(["quickstart", "demo"])
+            .current_dir(dir.path())
+            .stdout(writer)
+            .stderr(std::process::Stdio::piped())
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(!stderr.contains("panicked"), "{stderr}");
+        assert_ne!(out.status.code(), Some(101), "riku panicked:\n{stderr}");
+    }
+}

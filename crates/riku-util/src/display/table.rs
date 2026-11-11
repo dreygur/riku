@@ -1,6 +1,7 @@
 //! Plain column tables for listing commands (`apps`, `ps`, `stats`). Tables
 //! stay outside the rail: they are data, not progress.
 
+use super::rail::emit;
 use super::style::{paint, Paint, Stream};
 
 /// Build a formatted table from headers and rows.
@@ -41,7 +42,7 @@ fn padded_row(cells: &[&str], widths: &[usize], spacing: &str) -> String {
 
 /// Print a table.
 pub fn print_table(headers: &[&str], rows: &[Vec<String>], column_spacing: usize) {
-    println!("{}", format_table(headers, rows, column_spacing));
+    emit(Stream::Stdout, &format_table(headers, rows, column_spacing));
 }
 
 /// Print a table under a bold title line.
@@ -51,8 +52,11 @@ pub fn print_table_with_title(
     rows: &[Vec<String>],
     column_spacing: usize,
 ) {
-    println!("{}", paint(title, Paint::Bold, Stream::Stdout.colour()));
-    println!();
+    emit(
+        Stream::Stdout,
+        &paint(title, Paint::Bold, Stream::Stdout.colour()),
+    );
+    emit(Stream::Stdout, "");
     print_table(headers, rows, column_spacing);
 }
 

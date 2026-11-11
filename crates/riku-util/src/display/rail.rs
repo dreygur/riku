@@ -20,6 +20,7 @@
 //! per stream (see [`super::style`]); errors and warnings go to stderr,
 //! everything else to stdout.
 
+use std::io::Write;
 use std::sync::Mutex;
 
 use super::style::{paint, Paint, Stream};
@@ -148,13 +149,19 @@ pub fn render_summary(rows: &[(&str, &str)], colour: bool) -> String {
     out
 }
 
+/// Writes `text` and a newline, ignoring write errors. `println!` panics on
+/// a closed pipe, and a panic in the git hook skips recording a failed
+/// deploy, so a dropped ssh connection would turn a failure into a success.
+pub(super) fn emit(stream: Stream, text: &str) {
+    let _ = match stream {
+        Stream::Stdout => writeln!(std::io::stdout().lock(), "{text}"),
+        Stream::Stderr => writeln!(std::io::stderr().lock(), "{text}"),
+    };
+}
+
 fn print(mark: Mark, label: &str, detail: &str) {
     let stream = mark.stream();
-    let line = render_line(mark, label, detail, stream.colour());
-    match stream {
-        Stream::Stdout => println!("{line}"),
-        Stream::Stderr => eprintln!("{line}"),
-    }
+    emit(stream, &render_line(mark, label, detail, stream.colour()));
 }
 
 /// `┌  title` followed by a bare rail line.
@@ -192,10 +199,8 @@ pub fn detail(msg: &str) {
 /// `│  msg` on stderr: a detail line that belongs with errors, such as a
 /// streamed command's stderr.
 pub fn detail_err(msg: &str) {
-    eprintln!(
-        "{}",
-        render_line(Mark::Rail, msg, "", Stream::Stderr.colour())
-    );
+    let line = render_line(Mark::Rail, msg, "", Stream::Stderr.colour());
+    emit(Stream::Stderr, &line);
 }
 
 /// A bare rail line, then `└  msg`.
@@ -209,7 +214,10 @@ pub fn summary(rows: &[(&str, &str)]) {
     if rows.is_empty() {
         return;
     }
-    println!("{}", render_summary(rows, Stream::Stdout.colour()));
+    emit(
+        Stream::Stdout,
+        &render_summary(rows, Stream::Stdout.colour()),
+    );
 }
 
 #[cfg(test)]
