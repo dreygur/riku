@@ -75,7 +75,7 @@ fn repo_with_hook(root: &Path, app: &str) {
 }
 
 #[test]
-fn a_push_whose_deploy_fails_exits_non_zero() {
+fn a_push_whose_deploy_fails_exits_non_zero_and_shows_the_failure_once() {
     let tmp = TempDir::new().unwrap();
     fs::create_dir_all(tmp.path().join("home")).unwrap();
     let work = committed_app(tmp.path());
@@ -90,8 +90,14 @@ fn a_push_whose_deploy_fails_exits_non_zero() {
         !out.status.success(),
         "the push must fail when its deploy fails, stderr:\n{stderr}"
     );
+    let failure_lines: Vec<&str> = stderr.lines().filter(|l| l.contains("■")).collect();
+    assert_eq!(
+        failure_lines.len(),
+        1,
+        "the client must see why the push failed, once, stderr:\n{stderr}"
+    );
     assert!(
-        stderr.contains("The push was received, but the deploy failed"),
-        "the client must see why the push failed, stderr:\n{stderr}"
+        failure_lines[0].starts_with("remote:"),
+        "the failure comes from the hook through git's sideband, stderr:\n{stderr}"
     );
 }

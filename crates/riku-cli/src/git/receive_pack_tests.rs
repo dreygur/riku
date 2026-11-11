@@ -3,18 +3,31 @@ use super::*;
 #[test]
 fn a_failed_deploy_fails_the_push_unless_receive_pack_failed_first() {
     let status = NamedTempFile::new().unwrap();
-    assert_eq!(push_exit_code(Some(0), status.path()), 0, "clean push");
+    assert_eq!(push_outcome(Some(0), status.path()).0, 0, "clean push");
     assert_eq!(
-        push_exit_code(Some(128), status.path()),
+        push_outcome(Some(128), status.path()).0,
         128,
         "receive-pack's own failure keeps its code"
     );
 
     fs::write(status.path(), "build failed").unwrap();
     assert_eq!(
-        push_exit_code(Some(0), status.path()),
-        1,
-        "a recorded deploy failure must fail the push"
+        push_outcome(Some(0), status.path()),
+        (1, None),
+        "a recorded deploy failure fails the push, and the hook already showed it, so it is not printed again"
+    );
+}
+
+#[test]
+fn an_unreadable_deploy_result_fails_the_push_and_says_why() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let (code, message) = push_outcome(Some(0), &dir.path().join("gone"));
+
+    assert_eq!(code, 1, "an unknown deploy result must not pass as success");
+    assert!(
+        message.is_some_and(|m| m.contains("cannot read the deploy result")),
+        "nobody else reported this, so the push must"
     );
 }
 

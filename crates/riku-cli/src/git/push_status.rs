@@ -44,12 +44,23 @@ pub(crate) fn record_deploy_failure(err: &anyhow::Error) {
     }
 }
 
-/// The deploy error the hook recorded in `status_file`, if any.
-pub(crate) fn deploy_failure(status_file: &Path) -> Option<String> {
+/// What the hook left in the status file.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum DeployResult {
+    Succeeded,
+    /// The hook recorded this error. The hook printed it too, and the
+    /// pusher saw it through git's sideband.
+    Failed(String),
+    /// The status file could not be read, so nobody has reported anything.
+    Unknown(String),
+}
+
+/// Read the result the hook recorded in `status_file`.
+pub(crate) fn deploy_result(status_file: &Path) -> DeployResult {
     match fs::read_to_string(status_file) {
-        Ok(reason) if !reason.trim().is_empty() => Some(reason.trim().to_string()),
-        Ok(_) => None,
-        Err(e) => Some(format!("cannot read the deploy result: {e}")),
+        Ok(reason) if !reason.trim().is_empty() => DeployResult::Failed(reason.trim().to_string()),
+        Ok(_) => DeployResult::Succeeded,
+        Err(e) => DeployResult::Unknown(format!("cannot read the deploy result: {e}")),
     }
 }
 

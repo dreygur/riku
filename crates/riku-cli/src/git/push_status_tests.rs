@@ -5,8 +5,8 @@ use tempfile::{NamedTempFile, TempDir};
 fn a_recorded_deploy_error_is_read_back_for_the_push() {
     let status = NamedTempFile::new().unwrap();
     assert_eq!(
-        deploy_failure(status.path()),
-        None,
+        deploy_result(status.path()),
+        DeployResult::Succeeded,
         "an untouched status file means the deploy did not fail"
     );
 
@@ -14,8 +14,8 @@ fn a_recorded_deploy_error_is_read_back_for_the_push() {
     write_failure(status.path(), &err).unwrap();
 
     assert_eq!(
-        deploy_failure(status.path()).as_deref(),
-        Some("deploy already in progress for app 'c2'")
+        deploy_result(status.path()),
+        DeployResult::Failed("deploy already in progress for app 'c2'".to_string())
     );
 }
 

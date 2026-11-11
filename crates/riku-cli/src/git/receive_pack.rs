@@ -15,7 +15,7 @@ use crate::config::RikuPaths;
 use crate::util::echo;
 use crate::util::validation::{validate_app_name, REPO_SUFFIX};
 
-use super::push_status::{deploy_failure, STATUS_ENV};
+use super::push_status::{deploy_result, DeployResult, STATUS_ENV};
 use super::repo::{ensure_repo_symlink, post_receive_hook};
 
 /// The directory under `repos/` a pushed path names. `riku@host:shop` and
@@ -115,28 +115,27 @@ pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
         Ok(status) => status,
         Err(e) => return Err(anyhow!("cannot run git-receive-pack: {e}")),
     };
-    let code = push_exit_code(status.code(), status_file.path());
+    let (code, message) = push_outcome(status.code(), status_file.path());
     drop(status_file);
+    if let Some(message) = message {
+        echo(&message, "red");
+    }
     std::process::exit(code);
 }
 
-/// git-receive-pack's own failure, else 1 when the deploy the hook ran
-/// failed. Its stderr reaches the pushing client, so the reason goes there.
-fn push_exit_code(receive_pack: Option<i32>, status_file: &Path) -> i32 {
+/// The exit code of the push: git-receive-pack's own failure, else 1 when
+/// the deploy the hook ran failed. Also what to print: a deploy failure is
+/// not printed here, because the hook already showed it to the pusher.
+fn push_outcome(receive_pack: Option<i32>, status_file: &Path) -> (i32, Option<String>) {
     match receive_pack {
         Some(0) => {}
-        Some(code) => return code,
-        None => return 1,
+        Some(code) => return (code, None),
+        None => return (1, None),
     }
-    match deploy_failure(status_file) {
-        Some(reason) => {
-            echo(
-                &format!("The push was received, but the deploy failed: {reason}"),
-                "red",
-            );
-            1
-        }
-        None => 0,
+    match deploy_result(status_file) {
+        DeployResult::Succeeded => (0, None),
+        DeployResult::Failed(_) => (1, None),
+        DeployResult::Unknown(why) => (1, Some(why)),
     }
 }
 
