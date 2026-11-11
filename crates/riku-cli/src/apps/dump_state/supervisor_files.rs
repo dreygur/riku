@@ -43,6 +43,33 @@ pub(super) fn supervisor_uptime_seconds(paths: &RikuPaths) -> Option<u64> {
         .map(|d| d.as_secs())
 }
 
+const UPTIME_SKIPPED_AS_ROOT: &str =
+    "not read as root, the pid file belongs to the deploy user; run riku __dump-state as that user";
+
+/// Supervisor uptime as the dump reports it.
+pub(super) struct SupervisorUptime {
+    pub seconds: Option<u64>,
+    /// Why `seconds` was not read at all, as opposed to no supervisor
+    /// running.
+    pub unavailable: Option<&'static str>,
+}
+
+/// The uptime, or for root a reason instead: riku-deploy `supervisor_pid`
+/// never trusts another user's pid file, so root would otherwise see a
+/// stopped supervisor.
+pub(super) fn supervisor_uptime(paths: &RikuPaths, as_root: bool) -> SupervisorUptime {
+    if as_root {
+        return SupervisorUptime {
+            seconds: None,
+            unavailable: Some(UPTIME_SKIPPED_AS_ROOT),
+        };
+    }
+    SupervisorUptime {
+        seconds: supervisor_uptime_seconds(paths),
+        unavailable: None,
+    }
+}
+
 pub(super) fn unix_timestamp_now() -> u64 {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)

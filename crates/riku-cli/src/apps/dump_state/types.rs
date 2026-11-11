@@ -35,6 +35,10 @@ pub struct StateDump {
     pub generated_at: u64,
     pub riku_version: &'static str,
     pub supervisor_uptime_seconds: Option<u64>,
+    /// Why the uptime was not read (run as root), left out otherwise. A
+    /// `null` uptime without it means no supervisor holds the pid file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supervisor_uptime_unavailable: Option<&'static str>,
     pub engine: Option<EngineInfo>,
     pub apps: Vec<AppStateEntry>,
 }

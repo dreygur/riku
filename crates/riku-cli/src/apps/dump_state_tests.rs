@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use tempfile::TempDir;
 
-use super::supervisor_files::{load_app_stats, supervisor_uptime_seconds};
+use super::supervisor_files::{load_app_stats, supervisor_uptime, supervisor_uptime_seconds};
 use super::*;
 use crate::config::RikuPaths;
 
@@ -169,6 +169,35 @@ fn supervisor_uptime_needs_a_locked_pid_file() {
     let held = fs::File::open(&pid_file).unwrap();
     held.lock().unwrap();
     assert!(supervisor_uptime_seconds(&paths).is_some());
+}
+
+/// Root never reads the deploy user's pid file, so it must say why the
+/// uptime is missing instead of looking like a stopped supervisor.
+#[test]
+fn root_reports_the_uptime_as_unavailable() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let pid_file = paths.riku_root.join("supervisor.pid");
+    fs::write(&pid_file, "1\n").unwrap();
+    let held = fs::File::open(&pid_file).unwrap();
+    held.lock().unwrap();
+
+    let as_root = supervisor_uptime(&paths, true);
+    assert_eq!(as_root.seconds, None, "root must not read the pid file");
+    assert!(
+        as_root
+            .unavailable
+            .is_some_and(|why| why.contains("as root")),
+        "root gets a reason: {:?}",
+        as_root.unavailable
+    );
+
+    let as_user = supervisor_uptime(&paths, false);
+    assert!(
+        as_user.seconds.is_some(),
+        "the deploy user reads the uptime"
+    );
+    assert_eq!(as_user.unavailable, None);
 }
 
 #[test]

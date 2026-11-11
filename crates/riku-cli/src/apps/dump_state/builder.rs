@@ -11,7 +11,7 @@ use crate::config::RikuPaths;
 use crate::deploy::lock;
 
 use super::route::route_state;
-use super::supervisor_files::{load_app_stats, supervisor_uptime_seconds, unix_timestamp_now};
+use super::supervisor_files::{load_app_stats, supervisor_uptime, unix_timestamp_now};
 use super::types::{AppStateEntry, EngineInfo, LockState, StateDump, UnitKind, WorkerStateEntry};
 
 /// Known non-secret routing/port keys an app's `ENV` file may carry.
@@ -171,10 +171,12 @@ pub fn build_state_dump(paths: &RikuPaths) -> Result<StateDump> {
     }
     apps.sort_by(|a, b| a.app.cmp(&b.app));
 
+    let uptime = supervisor_uptime(paths, nix::unistd::Uid::effective().is_root());
     Ok(StateDump {
         generated_at: unix_timestamp_now(),
         riku_version: env!("CARGO_PKG_VERSION"),
-        supervisor_uptime_seconds: supervisor_uptime_seconds(paths),
+        supervisor_uptime_seconds: uptime.seconds,
+        supervisor_uptime_unavailable: uptime.unavailable,
         engine: detect_engine(paths),
         apps,
     })
