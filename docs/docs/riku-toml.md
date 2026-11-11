@@ -72,6 +72,11 @@ from the app's ENV file.
 | `secrets.ghcr_username` | string, server only | `RIKU_GHCR_USERNAME` |
 | `secrets.ghcr_token` | string, server only | `RIKU_GHCR_TOKEN` |
 
+The `limits.max_*` keys are stored in the app's env but not applied to its
+workers today: the supervisor takes those rlimits from its own environment
+for every app (see [Resource limits](resource-limits.md)). Per app limits
+that do apply are the `limits.isolation_*` keys below.
+
 ### cgroup limits and the sandbox
 
 The `limits.isolation_*` keys are per worker cgroup v2 limits. Setting
