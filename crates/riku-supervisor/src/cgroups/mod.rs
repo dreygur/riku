@@ -25,8 +25,8 @@ use std::time::{Duration, Instant};
 mod limits;
 pub mod tree;
 
-pub use limits::CgroupLimits;
 use limits::apply_node;
+pub use limits::CgroupLimits;
 pub use tree::{take_over_own, CgroupTree};
 
 #[cfg(test)]
