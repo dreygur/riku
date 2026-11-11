@@ -102,8 +102,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a SIGHUP). Restarting a worker that is not enabled is refused.
 - `sudo riku init` on an upgrade left the old supervisor running: it ran
   `systemctl start`, which does nothing for a running service. A running
-  supervisor is now restarted, so the new binary takes over (its workers
-  restart with it).
+  supervisor is now restarted when it runs another binary than the
+  installed `/usr/local/bin/riku` (compared through `/proc/<pid>/exe`, by
+  inode and then by content), so the new binary takes over and its workers
+  restart with it; the `Service` step says `restarted (new binary)`.
+  Re-running `riku init` without an upgrade leaves it running (`running`)
+  and restarts no app.
 - A plain (not root) `riku init` on a host where root already installed
   riku built a second install for the caller: its own `~/.riku`, a user
   unit running a second supervisor, an ssh key and a forced command in

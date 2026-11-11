@@ -10,6 +10,7 @@ use crate::util::{display, ROOT_BINARY};
 
 use super::deploy_user::{deploy_user_name, passwd_home, running_as_root};
 use super::router_units::{remove_stale_units, unit_ordering, STALE_UNITS};
+use super::supervisor_binary::{action_for, parse_main_pid};
 
 pub const SYSTEMD_DIR: &str = "/etc/systemd/system";
 
@@ -84,22 +85,24 @@ pub(super) fn systemctl_ok(args: &[&str]) -> bool {
 }
 
 /// Reload, enable and start `riku.service`, then print one step saying
-/// which of those worked. A supervisor that already runs is restarted, so an
-/// upgrade takes effect: `start` leaves the old binary running. Whether the
-/// supervisor stays up is checked by the init summary.
+/// which of those worked. A supervisor that already runs is restarted only
+/// when it runs another binary than [`ROOT_BINARY`] (see
+/// [`super::supervisor_binary`]). Whether the supervisor stays up is checked
+/// by the init summary.
 fn start_riku_service() {
     let _ = systemctl_ok(&["daemon-reload"]);
     let mut done = vec!["riku.service written"];
     if systemctl_ok(&["enable", "riku"]) {
         done.push("enabled");
     }
-    let running = systemctl_ok(&["is-active", "--quiet", "riku"]);
-    let (verb, outcome) = match running {
-        true => ("restart", "restarted"),
-        false => ("start", "started"),
-    };
-    if systemctl_ok(&[verb, "riku"]) {
-        done.push(outcome);
+    let main_pid = Command::new("systemctl")
+        .args(["show", "-p", "MainPID", "--value", "riku"])
+        .output()
+        .ok()
+        .and_then(|out| parse_main_pid(&String::from_utf8_lossy(&out.stdout)));
+    let action = action_for(main_pid, Path::new("/proc"), Path::new(ROOT_BINARY));
+    if systemctl_ok(&[action.verb(), "riku"]) {
+        done.push(action.outcome());
     }
     display::step_done("Service", &done.join(", "));
 }

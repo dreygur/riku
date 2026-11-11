@@ -412,7 +412,7 @@ Entry: `dispatch::run_local` (src/dispatch/mod.rs, one match over `Commands`); `
 Gotchas:
 - Some READMEs under src/ list stale symbols (`container.rs`, `ContainerCmd`, `DeployUser::create_dir`/`chmod` do not exist); trust the code.
 - `cmd_hook_check` calls `std::process::exit`, and `cmd_doctor` and `cmd_scp` exit the process too; they do not return to the dispatcher.
-- Two ways to install the supervisor unit: `setup/user_service.rs` (plain user) and `setup/system_service.rs` (root init); changes to the unit text usually need both.
+- Two ways to install the supervisor unit: `setup/user_service.rs` (plain user) and `setup/system_service.rs` (root init); changes to the unit text usually need both. Both ask `supervisor_binary.rs` `action_for` whether to `start` (stopped, or already running the installed binary: step says `running`) or `restart` (`/proc/<MainPID>/exe` differs from `ROOT_BINARY` by inode and content, or cannot be read: `restarted (new binary)`), so re-running init does not bounce every app.
 - `RIKU_USER` (default `riku`) is read in `setup/deploy_user.rs` and again by `router_helper.rs`; `RIKU_DEFAULT_BRANCH` in `default_branch.rs`.
 - `git/hook.rs` deploys only the repo's default branch (its `HEAD`); other branches, tags and deletions are skipped with a message. When `HEAD` names a branch that does not exist, the first pushed branch becomes `HEAD`.
 - `control_actions.rs` and the dashboard both call `apps::cmd_*`; those functions print to the terminal.

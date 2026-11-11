@@ -1,10 +1,13 @@
 /// User-level (non-root) systemd service setup for riku.
 use anyhow::Result;
+use std::path::Path;
 use std::process::Command;
 
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::{display, ROOT_BINARY};
+
+use super::supervisor_binary::{action_for, parse_main_pid};
 
 /// Setup systemd service for Riku supervisor (user-level, no root required).
 pub fn setup_systemd_service(paths: &RikuPaths, router: &Router) -> Result<()> {
@@ -71,14 +74,14 @@ WantedBy=default.target
     if user_systemctl(&["enable", "riku"]) {
         done.push("enabled");
     }
-    // Restart a running supervisor so an upgraded binary takes over.
-    let running = user_systemctl(&["is-active", "--quiet", "riku"]);
-    let (verb, outcome) = match running {
-        true => ("restart", "restarted"),
-        false => ("start", "started"),
-    };
-    if user_systemctl(&[verb, "riku"]) {
-        done.push(outcome);
+    let main_pid = Command::new("systemctl")
+        .args(["--user", "show", "-p", "MainPID", "--value", "riku"])
+        .output()
+        .ok()
+        .and_then(|out| parse_main_pid(&String::from_utf8_lossy(&out.stdout)));
+    let action = action_for(main_pid, Path::new("/proc"), Path::new(ROOT_BINARY));
+    if user_systemctl(&[action.verb(), "riku"]) {
+        done.push(action.outcome());
     }
     display::step_done("Service", &done.join(", "));
     Ok(())
