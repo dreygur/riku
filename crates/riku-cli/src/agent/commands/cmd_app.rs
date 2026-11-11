@@ -1,7 +1,6 @@
 /// Agent commands for app lifecycle: apps, deploy, destroy.
 use std::fs;
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use riku_supervisor::config::app_worker_configs;
 use serde_json::json;
@@ -46,17 +45,8 @@ pub fn cmd_agent_deploy(paths: &RikuPaths, app: &str) -> AgentResponse {
         return AgentResponse::error("APP_NOT_FOUND", &format!("Application '{}' not found", app));
     }
 
-    let job_id = format!(
-        "deploy-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-    );
-
     match crate::apps::cmd_deploy(paths, app, None) {
         Ok(_) => AgentResponse::success(json!({
-            "job_id": job_id,
             "status": "completed",
             "message": format!("Deployment completed for {}", app)
         })),

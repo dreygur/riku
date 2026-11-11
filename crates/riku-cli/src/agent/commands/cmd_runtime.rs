@@ -1,6 +1,7 @@
 /// Agent commands for runtime operations: logs, ps, restart, stop, run, stats.
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 use riku_supervisor::config::app_worker_configs;
@@ -15,10 +16,29 @@ use crate::agent::types::AgentResponse;
 /// Lines `agent logs` returns from each log file, newest last.
 const LOG_LINES: usize = 100;
 
-fn last_lines(content: &str, count: usize) -> Vec<String> {
-    let all: Vec<&str> = content.lines().collect();
-    let start = all.len().saturating_sub(count);
-    all[start..].iter().map(|line| line.to_string()).collect()
+/// Streams the file so memory stays at `count` lines however large the log
+/// grows. Bytes that are not UTF-8 are replaced rather than dropping the file.
+fn last_lines(path: &Path, count: usize) -> Vec<String> {
+    let file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(_) => return Vec::new(),
+    };
+    let mut reader = BufReader::new(file);
+    let mut kept: VecDeque<String> = VecDeque::with_capacity(count);
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        match reader.read_until(b'\n', &mut line) {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+        }
+        if kept.len() == count {
+            kept.pop_front();
+        }
+        let text = String::from_utf8_lossy(&line);
+        kept.push_back(text.trim_end_matches(['\n', '\r']).to_string());
+    }
+    kept.into()
 }
 
 pub fn cmd_agent_logs(paths: &RikuPaths, app: &str, process: &str) -> AgentResponse {
@@ -46,9 +66,7 @@ pub fn cmd_agent_logs(paths: &RikuPaths, app: &str, process: &str) -> AgentRespo
                             .map(|s| s.to_string_lossy().contains(process))
                             .unwrap_or(false))
                 {
-                    if let Ok(content) = fs::read_to_string(&path) {
-                        lines.extend(last_lines(&content, LOG_LINES));
-                    }
+                    lines.extend(last_lines(&path, LOG_LINES));
                 }
             }
         }

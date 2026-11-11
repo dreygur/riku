@@ -59,7 +59,6 @@ pub struct AgentResponse {
     pub message: Option<String>,
     pub confirmation_required: bool,
     pub confirm_token: Option<String>,
-    pub job_id: Option<String>,
 }
 
 impl AgentResponse {
@@ -71,7 +70,6 @@ impl AgentResponse {
             message: None,
             confirmation_required: false,
             confirm_token: None,
-            job_id: None,
         }
     }
 
@@ -86,7 +84,6 @@ impl AgentResponse {
             message: None,
             confirmation_required: false,
             confirm_token: None,
-            job_id: None,
         }
     }
 
@@ -98,7 +95,6 @@ impl AgentResponse {
             message: Some(format!("Human confirmation required for {}", action)),
             confirmation_required: true,
             confirm_token: Some(token.to_string()),
-            job_id: None,
         }
     }
 
@@ -126,10 +122,6 @@ impl AgentResponse {
 
         if let Some(ref token) = self.confirm_token {
             result["confirm_token"] = json!(token);
-        }
-
-        if let Some(ref job_id) = self.job_id {
-            result["job_id"] = json!(job_id);
         }
 
         result

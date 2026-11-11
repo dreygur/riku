@@ -27,13 +27,14 @@ Response:
         "deploy" => {
             r#"Usage: riku agent deploy <app>
 
-Deploy an application. Requires 'staging' or 'production' scope.
+Deploy an application and wait for the deploy to finish.
+Requires 'staging' or 'production' scope.
 
 Example:
   riku agent deploy myapp
 
 Response:
-  {"success": true, "job_id": "deploy-123"}"#
+  {"success": true, "data": {"status": "completed", "message": "..."}}"#
         }
         "destroy" => {
             r#"Usage: riku agent destroy <app> --confirm <token>
