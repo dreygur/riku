@@ -204,16 +204,20 @@ pub enum Commands {
         cmd: Vec<String>,
     },
 
-    /// Restart an app (hot reload for zero downtime)
+    /// Restart an app's running processes from the current build
     #[command(
-        after_help = "Examples:\n  riku restart myapp\n  riku restart myapp --hot\n  riku restart myapp web"
+        long_about = "Restart an app's running processes from the current build. Nothing is \
+                      built: a Procfile app's workers start again from the last deploy, a \
+                      container app's copies are replaced one at a time from the images they \
+                      run now. To rebuild, run riku deploy.",
+        after_help = "Examples:\n  riku restart myapp\n  riku restart myapp web\n  riku deploy myapp    (rebuild and restart)"
     )]
     Restart {
         /// App name (default: the app of this repo's riku git remote)
         app: Option<String>,
         /// Only this service of a container app
         service: Option<String>,
-        /// Use hot reload (zero downtime)
+        /// Same as a plain restart, kept for scripts
         #[arg(long, conflicts_with = "service")]
         hot: bool,
     },

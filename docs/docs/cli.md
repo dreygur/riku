@@ -307,20 +307,27 @@ log to the same files, written by the supervisor.
 
 ### `riku restart <app> [service]`
 
-Restart all processes for an application.
+Restart the running processes of an application from the current build.
+Nothing is built. To rebuild, or to apply a config change, run
+`riku deploy <app>`.
 
 ```bash
 riku restart myapp
 riku restart myapp worker   # one service of a container app
 ```
 
-A Procfile app is stopped and deployed again. For zero-downtime rolling restarts, use `riku restart myapp --hot`.
+A Procfile app's workers start again from the configs and build of the last
+successful deploy. A worker with a health check is replaced by a probed
+canary, so it keeps serving. An app with no running workers (never deployed,
+or stopped) is refused with a pointer to `riku deploy`.
 
 A container app replaces the copies of the named service, or of every
 service in start order, one at a time from the images they run now, without
-a rebuild. A stopped service starts again. `--hot` does the same for a
-container app and cannot be combined with a service. See
+a rebuild. A stopped service starts again. See
 [Rolling replacement](runtimes.md#rolling-replacement).
+
+`--hot` is the same as a plain restart, kept for scripts, and cannot be
+combined with a service.
 
 ---
 
@@ -333,7 +340,8 @@ riku stop myapp
 riku stop myapp worker   # one service of a container app
 ```
 
-To restart, use `riku restart <app>` or push a new commit.
+To start a stopped Procfile app again, use `riku deploy <app>` or push a new
+commit. A stopped container service starts again with `riku restart <app>`.
 
 For a container app, stop removes the copies of the named service, or every
 container of the app, and keeps the volumes. When the routed service is
@@ -908,12 +916,12 @@ riku config show myapp
 # Scale up
 riku ps myapp --scale web=4 worker=2
 
-# Restart after config change
+# Restart the running processes, no rebuild
 riku restart myapp
 
 # Stop for maintenance
 riku stop myapp
 
-# Start again
-riku restart myapp
+# Start again (rebuilds from the checkout)
+riku deploy myapp
 ```

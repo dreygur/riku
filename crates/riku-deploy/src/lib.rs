@@ -31,6 +31,7 @@ pub(crate) use riku_util as util;
 
 // Deployment infrastructure modules (kept in binary)
 mod app_command;
+pub mod app_restart;
 pub mod app_stop;
 pub mod backup;
 mod checkout_restore;

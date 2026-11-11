@@ -659,8 +659,8 @@ riku stop myapp             # every container of the app
 ```
 
 `riku restart` replaces the copies from the images they run now, without a
-rebuild, and starts a stopped service again. `riku restart --hot` does the
-same for a container app. `riku stop` takes the app off the router first when
+rebuild, and starts a stopped service again. `riku restart --hot` is the
+same as a plain restart. `riku stop` takes the app off the router first when
 the routed service is among the stopped ones, stops dependents before the
 services they depend on, and keeps volumes. Naming a service of a Procfile
 app is refused.

@@ -43,9 +43,11 @@ pub fn cmd_run(paths: &RikuPaths, app: &str, cmd: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// Restart an app. A container app replaces the copies of `service`, or of
-/// every service, one at a time from the images it runs now; a Procfile app
-/// is stopped and deployed again. Naming a service of a Procfile app fails.
+/// Restart an app without building it. A container app replaces the copies
+/// of `service`, or of every service, one at a time from the images it runs
+/// now; a Procfile app's supervisor restarts its workers from the current
+/// build. Naming a service of a Procfile app fails. A rebuild is
+/// `riku deploy`.
 #[allow(clippy::question_mark)]
 pub fn cmd_restart(paths: &RikuPaths, app: &str, service: Option<&str>) -> Result<()> {
     let app = match exit_if_invalid(app, &paths.app_root) {
@@ -61,12 +63,17 @@ pub fn cmd_restart(paths: &RikuPaths, app: &str, service: Option<&str>) -> Resul
         ControlTarget::Containers { app, service } => {
             crate::deploy::containers::restart_service(&app, paths, service.as_ref())
         }
-        ControlTarget::Procfile => {
-            if let Err(e) = do_stop(paths, &app) {
-                return Err(e);
-            }
-            crate::deploy::do_deploy(&app, paths, &HashMap::new(), None)
+        ControlTarget::Procfile => restart_workers(paths, &app),
+    }
+}
+
+fn restart_workers(paths: &RikuPaths, app: &str) -> Result<()> {
+    match crate::deploy::app_restart::restart_procfile_app(app, paths) {
+        Ok(count) => {
+            display::step_done("Restarted", &format!("{count} worker(s) of '{app}'"));
+            Ok(())
         }
+        Err(e) => Err(e),
     }
 }
 

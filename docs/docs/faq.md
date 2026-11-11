@@ -170,7 +170,7 @@ cron: 0 2 * * * /path/to/script.sh
 
 **Q: Does Riku support zero-downtime deployments?**
 
-**A:** Yes. Use `riku restart myapp --hot` for a rolling zero-downtime restart. Standard `riku restart` does a graceful restart (brief downtime). Set `RIKU_AUTO_RESTART=true` (default) for automatic restarts on deploy.
+**A:** For a worker with a health check, yes: a deploy or `riku restart myapp` starts the new copy next to the old one and swaps it in once it passes its probe. A worker without a health check is stopped and started again, with a brief gap. Container apps are replaced one copy at a time. `riku restart` never rebuilds; `riku deploy` does.
 
 ## Migration from Piku
 

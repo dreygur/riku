@@ -76,7 +76,9 @@ RIKU_AUTO_RESTART=true
 - **Description:** Automatically restart workers on deploy
 - **Values:** `true` | `false`
 
-When set to `false`, you must manually restart with `riku restart <app>`.
+When set to `false`, a deploy keeps the running workers and their old
+configs. `riku restart <app>` restarts them on those old configs; to run the
+new build, `riku stop <app>` and then `riku deploy <app>`.
 
 ---
 
@@ -413,7 +415,7 @@ Shows the actual configuration being used by the supervisor.
 ### Variable Not Applied
 
 1. Check spelling: `riku config get myapp KEY_NAME`
-2. Restart the app: `riku restart myapp`
+2. Deploy the app so its workers get the new env: `riku deploy myapp`
 3. Check live config: `riku config live myapp`
 
 ### Interpolation Not Working

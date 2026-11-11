@@ -109,9 +109,11 @@ Response:
   {"processes": {"web": {"running": 2, "desired": 2}}}"#
         }
         "restart" => {
-            r#"Usage: riku agent restart <app> [process]
+            r#"Usage: riku agent restart <app> [service]
 
-Restart an application or specific process.
+Restart an application's running processes from the current build. Nothing
+is built; use deploy to rebuild. A service names one service of a container
+app.
 
 Example:
   riku agent restart myapp
@@ -193,7 +195,7 @@ fn print_general_help() {
     println!("  config:show   Show all configuration");
     println!("  logs          View application logs");
     println!("  ps            Show process status");
-    println!("  restart       Restart an application");
+    println!("  restart       Restart an application without rebuilding");
     println!("  stop          Stop an application");
     println!("  run           Run a command in the app context");
     println!("  stats         Show statistics");

@@ -7,7 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Breaking: `riku restart` (and `riku agent restart`, the dashboard and the
+  control API restart) on a Procfile app restarts the running workers from
+  the current build and never rebuilds. It used to stop the app and deploy
+  the checkout again, so after a failed push it rebuilt the broken commit
+  and left the app down. A rebuild, a config change to apply, or starting a
+  stopped app is now `riku deploy <app>`; restart of an app with no running
+  workers is refused with that pointer. With `RIKU_AUTO_RESTART=false`, run
+  `riku stop` and then `riku deploy` to start a new build. `--hot` is now
+  the same as a plain restart. Container apps keep their restart behavior.
+
 ### Fixed
+
+- `riku restart --hot` on a Procfile app only rewrote the worker configs
+  through their `workers-enabled` symlinks and sent no SIGHUP. A write
+  through a symlink lands in `workers-available`, outside the watched
+  directory, so the supervisor could miss it. Restart now also sends the
+  supervisor a SIGHUP.
 
 - A failed deploy left the app checkout at the commit that failed, while
   the old processes kept running the previous build. The checkout now goes

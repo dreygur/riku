@@ -49,7 +49,10 @@ fn failed_deploy_puts_the_checkout_back_at_the_last_release() {
 
     let deployed = crate::do_deploy("shop", &paths, &Default::default(), Some(&broken));
 
-    assert!(deployed.is_err(), "an app no runtime detects must not deploy");
+    assert!(
+        deployed.is_err(),
+        "an app no runtime detects must not deploy"
+    );
     let head = git(&paths.app_root.join("shop"), &["rev-parse", "HEAD"]);
     assert_eq!(
         head, good,
@@ -68,7 +71,10 @@ fn failed_first_deploy_leaves_the_checkout_alone() {
 
     let deployed = crate::do_deploy("shop", &paths, &Default::default(), Some(&first));
 
-    assert!(deployed.is_err(), "an app no runtime detects must not deploy");
+    assert!(
+        deployed.is_err(),
+        "an app no runtime detects must not deploy"
+    );
     let head = git(&checkout, &["rev-parse", "HEAD"]);
     assert_eq!(
         head, first,

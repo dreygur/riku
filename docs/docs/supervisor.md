@@ -396,7 +396,7 @@ cron:    1/1 running
 ### Start Processes
 
 ```bash
-riku restart myapp
+riku deploy myapp
 ```
 
 ### Stop Processes
