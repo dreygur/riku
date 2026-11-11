@@ -135,8 +135,8 @@ impl DeployProgress {
         let reason = format!("{err:#}");
         display::mark_failure_shown(&reason);
         self.log.log_raw(&format!("[ERROR] {reason}"));
-        let mut lines = reason.lines();
         let label = format!("{} failed", self.phase.label());
+        let mut lines = without_label(&reason, &label).lines();
         display::step_failed(&label, lines.next().unwrap_or(""));
         for line in lines {
             display::detail(line);
@@ -149,6 +149,17 @@ impl DeployProgress {
         let previous_running = self.had_release && self.phase.keeps_previous_release();
         display::outro(failure_outro(previous_running));
         display::summary(&as_pairs(&failure_summary(&self.app, branch)));
+    }
+}
+
+/// `reason` without a leading `<label>: `, so `Build failed: plugin ..`
+/// does not read `Build failed  Build failed: plugin ..` on the rail.
+fn without_label<'a>(reason: &'a str, label: &str) -> &'a str {
+    match reason.get(..label.len()) {
+        Some(head) if head.eq_ignore_ascii_case(label) => {
+            reason[label.len()..].strip_prefix(": ").unwrap_or(reason)
+        }
+        _ => reason,
     }
 }
 

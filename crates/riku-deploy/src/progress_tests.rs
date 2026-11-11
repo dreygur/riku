@@ -46,6 +46,14 @@ fn failure_says_how_to_retry_and_whether_the_old_release_runs() {
         "workers were already replaced when routing fails"
     );
     assert_eq!(failure_outro(false), "Deploy failed.");
+    assert_eq!(
+        without_label(
+            "Build failed: plugin 'demo' exited with code 1",
+            "Build failed"
+        ),
+        "plugin 'demo' exited with code 1",
+        "the reason must not repeat the step label"
+    );
 }
 
 #[test]
