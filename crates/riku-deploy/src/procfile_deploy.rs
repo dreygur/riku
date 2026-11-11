@@ -136,7 +136,13 @@ pub(crate) fn release_and_start(
     }
     if let Some(release_cmd) = workers.get("release") {
         progress.begin(Phase::Release);
-        if let Err(e) = run_one_shot(OneShot::Release, release_cmd, &app_path, progress.output()) {
+        if let Err(e) = run_one_shot(
+            OneShot::Release,
+            release_cmd,
+            &app_path,
+            env,
+            progress.output(),
+        ) {
             return Err(e);
         }
         progress.done_timed(release_cmd);
@@ -206,6 +212,7 @@ pub(crate) fn deploy_procfile_app(
             OneShot::Preflight,
             &preflight_cmd,
             &app_path,
+            env,
             progress.output(),
         ) {
             return Err(e);

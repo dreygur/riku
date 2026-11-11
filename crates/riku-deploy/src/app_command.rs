@@ -10,6 +10,7 @@
 //! long enough to report it to `git push`, and the dashboard runs deploys
 //! inside its own server process.
 
+use std::collections::HashMap;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -39,15 +40,18 @@ impl OneShot {
     }
 }
 
-/// Run `command` with `sh -c` in `app_path`. A command stopped by a resource
-/// limit gets the structured diagnostic instead of a bare exit code.
+/// Run `command` with `sh -c` in `app_path`, under the server limits with
+/// the `limits.max_*` values in `app_env` put over them. A command stopped by
+/// a resource limit gets the structured diagnostic instead of a bare exit
+/// code.
 pub(crate) fn run_one_shot(
     kind: OneShot,
     command: &str,
     app_path: &Path,
+    app_env: &HashMap<String, String>,
     recent: &OutputTail,
 ) -> Result<()> {
-    let limits = ResourceLimits::from_env();
+    let limits = ResourceLimits::from_env().with_app_env(app_env);
     let mut cmd = Command::new("sh");
     cmd.arg("-c")
         .arg(command)

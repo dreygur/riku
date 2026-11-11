@@ -205,11 +205,11 @@ pub fn build(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>, recent: &OutputTa
     // script can't run unbounded. The memory ceiling (RLIMIT_AS) is opt-in
     // (`RIKU_MAX_MEMORY_MB`): a default virtual-address cap aborts node/v8 and
     // JVM builds, which reserve multiple GB of virtual memory at startup. See
-    // `ResourceLimits::from_env`.
+    // `ResourceLimits::from_env`. The app's own `limits.max_*` values win.
     build_with_limits(
         plugin,
         ctx,
-        crate::util::resource_limits::ResourceLimits::from_env(),
+        crate::util::resource_limits::ResourceLimits::from_env().with_app_env(ctx.app_env),
         plugin_timeout(),
         recent,
     )

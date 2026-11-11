@@ -38,15 +38,33 @@ Set either one explicitly when you want it enforced.
 
 ### Where the limits are read
 
-The supervisor reads these variables from its own environment once, at
-startup, and applies the same limits to every worker of every app. A
-`riku run` command reads them from the environment of the riku process
-that runs it.
+The server wide limits come from the environment of the process that starts
+the command. The supervisor reads these variables once, at startup, for
+every worker and cron job of every app. A build and the Procfile
+`preflight` and `release` commands read them from the riku process that
+runs the deploy. `riku run` applies none of these limits.
 
-The `limits.max_*` keys of `riku settings` (see [riku.toml](riku-toml.md))
-are written into the app's env, but the supervisor does not read them from
-there today, so they do not change a worker's limits. Set the variables on
-the supervisor's unit instead.
+An app can set its own value for any of them with the `limits.max_*` keys
+of `riku settings` (see [riku.toml](riku-toml.md)):
+
+```bash
+riku settings set myapp limits.max_open_files=4096 limits.max_cpu_seconds=7200
+```
+
+| Key | Variable |
+|-----|----------|
+| `limits.max_memory_mb` | `RIKU_MAX_MEMORY_MB` |
+| `limits.max_cpu_seconds` | `RIKU_MAX_CPU_SECONDS` |
+| `limits.max_open_files` | `RIKU_MAX_OPEN_FILES` |
+| `limits.max_processes` | `RIKU_MAX_PROCESSES` |
+| `limits.max_file_size_mb` | `RIKU_MAX_FILE_SIZE_MB` |
+
+A value the app sets replaces the server wide one for that app's workers,
+cron jobs, builds and `preflight` and `release` commands, in either
+direction. A limit the app does not set keeps the server wide value. `set`
+redeploys the app, so the new limits apply from that deploy. Core dumps
+have no per app key. `limits.max_processes` is still UID-wide, as described
+above, even when one app sets it.
 
 ### Systemd Service
 
@@ -119,9 +137,10 @@ Environment="RIKU_MAX_PROCESSES=128"
 Environment="RIKU_MAX_FILE_SIZE_MB=2048"
 ```
 
-Per app memory, CPU and process limits come from the cgroup settings
-`limits.isolation_*` instead (see [riku.toml](riku-toml.md)), which
-`riku settings set` does apply per app.
+To give one app different values, use its `limits.max_*` keys (see
+"Where the limits are read" above). For per worker resident memory, CPU
+share and process count, use the cgroup settings `limits.isolation_*` (see
+[riku.toml](riku-toml.md)).
 
 ---
 
@@ -365,7 +384,6 @@ Environment="RIKU_MAX_PROCESSES=1024"
 
 Planned improvements:
 
-- [ ] **Per-App Limits** - Apply the `limits.max_*` settings per app (they are stored but not read today)
 - [ ] **Automatic Scaling** - Increase limits based on metrics
 - [ ] **Limit Notifications** - Alert when apps approach limits
 

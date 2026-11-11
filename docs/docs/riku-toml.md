@@ -72,10 +72,10 @@ from the app's ENV file.
 | `secrets.ghcr_username` | string, server only | `RIKU_GHCR_USERNAME` |
 | `secrets.ghcr_token` | string, server only | `RIKU_GHCR_TOKEN` |
 
-The `limits.max_*` keys are stored in the app's env but not applied to its
-workers today: the supervisor takes those rlimits from its own environment
-for every app (see [Resource limits](resource-limits.md)). Per app limits
-that do apply are the `limits.isolation_*` keys below.
+The `limits.max_*` keys are the app's rlimits. Each one set replaces the
+server wide value of the same `RIKU_MAX_*` variable for the app's workers,
+cron jobs, builds and `preflight` and `release` commands; one left unset
+keeps the server wide value (see [Resource limits](resource-limits.md)).
 
 ### cgroup limits and the sandbox
 

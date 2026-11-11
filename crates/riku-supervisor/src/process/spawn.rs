@@ -99,8 +99,9 @@ impl ProcessManager {
             }
         };
 
-        // Clone resource limits for use in pre_exec closure
-        let limits = self.resource_limits.clone();
+        // The worker env is the app env, so it carries the app's own
+        // `limits.max_*` values over the supervisor's.
+        let limits = self.resource_limits.with_app_env(&config.env);
 
         // Set resource limits to prevent runaway processes (pre_exec is unsafe)
         unsafe {

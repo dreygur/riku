@@ -33,8 +33,10 @@ impl Supervisor {
             // context (e.g. virtualenv PATH, DATABASE_URL, etc.).
             let (working_dir, env_vars) = self.get_app_context(&app);
 
-            // Get resource limits from ProcessManager to apply to cron jobs
-            let limits = self.process_manager.get_resource_limits().clone();
+            let limits = self
+                .process_manager
+                .get_resource_limits()
+                .with_app_env(&env_vars);
 
             // Execute cron job in thread pool to prevent unbounded thread creation.
             // Thread pool limits concurrent cron jobs to prevent resource exhaustion.

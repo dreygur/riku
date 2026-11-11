@@ -6,6 +6,7 @@ Component package located at `crates/riku-util/src/resource_limits`.
 ## Interface
 - `ResourceLimits` [mod.rs:ResourceLimits] (struct)
 - `from_env` [mod.rs:from_env] (fn)
+- `with_app_env` [mod.rs:with_app_env] (fn)
 - `apply` [mod.rs:apply] (fn)
 - `mod.rs` [mod.rs] (and 1 additional symbols)
 

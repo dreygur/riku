@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::*;
 
 #[test]
@@ -41,6 +43,53 @@ fn configured_memory_and_cpu_override_the_defaults() {
 
     assert_eq!(limits.max_memory_bytes, Some(256 * 1024 * 1024));
     assert_eq!(limits.max_cpu_seconds, Some(7200));
+}
+
+fn server_limits() -> ResourceLimits {
+    ResourceLimits::from_lookup(|key| match key {
+        "RIKU_MAX_OPEN_FILES" => Some(2048),
+        "RIKU_MAX_CPU_SECONDS" => Some(600),
+        _ => None,
+    })
+}
+
+fn app_env(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+    pairs
+        .iter()
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect()
+}
+
+#[test]
+fn app_limits_override_the_server_limits_they_name() {
+    let env = app_env(&[
+        ("RIKU_MAX_OPEN_FILES", "64"),
+        ("RIKU_MAX_MEMORY_MB", "256"),
+        ("RIKU_MAX_FILE_SIZE_MB", "10"),
+    ]);
+
+    let limits = server_limits().with_app_env(&env);
+
+    assert_eq!(limits.max_open_files, Some(64));
+    assert_eq!(limits.max_memory_bytes, Some(256 * 1024 * 1024));
+    assert_eq!(limits.max_file_size_bytes, Some(10 * 1024 * 1024));
+    assert_eq!(
+        limits.max_cpu_seconds,
+        Some(600),
+        "a limit the app does not set must keep the server value"
+    );
+}
+
+#[test]
+fn app_env_without_limit_keys_keeps_the_server_limits() {
+    let env = app_env(&[
+        ("DATABASE_URL", "postgres://db"),
+        ("RIKU_MAX_CPU_SECONDS", "lots"),
+    ]);
+
+    let limits = server_limits().with_app_env(&env);
+
+    assert_eq!(limits, server_limits());
 }
 
 #[test]

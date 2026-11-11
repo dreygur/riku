@@ -52,6 +52,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The per app `limits.max_*` settings (`riku settings set <app>
+  limits.max_open_files=...` and the other four) were stored but never
+  applied: every worker, cron job, build and `preflight`/`release` command
+  ran under the server wide `RIKU_MAX_*` limits. A value an app sets now
+  replaces the server wide one for that app; an app that sets none runs
+  under the same limits as before.
 - A supervisor exiting cleanly unlinked `supervisor.pid` after releasing
   its lock. A supervisor starting at that moment could win the lock on the
   unlinked file while the next start locked a new one, leaving two
