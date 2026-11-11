@@ -75,10 +75,10 @@ fn riku_setting_is_refused_before_anything_is_written() {
 }
 
 #[test]
-fn secret_key_hidden_inside_one_argument_still_needs_a_token() {
+fn one_argument_cannot_smuggle_a_second_key() {
     let (tmp, paths) = shop();
 
-    let resp = cmd_agent_config_set(
+    cmd_agent_config_set(
         &paths,
         tmp.path(),
         "shop",
@@ -86,14 +86,10 @@ fn secret_key_hidden_inside_one_argument_still_needs_a_token() {
         None,
     );
 
-    assert!(
-        resp.confirmation_required,
-        "API_KEY slipped past confirmation"
-    );
-    assert!(
-        !paths.env_root.join("shop/ENV").exists(),
-        "ENV written anyway"
-    );
+    let mut env = HashMap::new();
+    parse_settings(&paths.env_root.join("shop/ENV"), &mut env).unwrap();
+    assert_eq!(env.get("DEBUG").map(String::as_str), Some("1 API_KEY=x"));
+    assert!(!env.contains_key("API_KEY"), "API_KEY set without a token");
 }
 
 #[test]

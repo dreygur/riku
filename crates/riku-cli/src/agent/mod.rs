@@ -12,6 +12,7 @@ pub mod execute;
 pub mod help;
 mod quiet_stdout;
 pub mod schema;
+mod secret_keys;
 pub mod state;
 pub mod types;
 

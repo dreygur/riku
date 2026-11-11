@@ -129,7 +129,7 @@ fn run_agent_command(
             if args.len() < 2 {
                 AgentResponse::error("INVALID_PARAMETERS", "Missing app name or key")
             } else {
-                cmd_agent_config_get(paths, &args[0], &args[1])
+                cmd_agent_config_get(paths, scope, &args[0], &args[1])
             }
         }
         "config:set" => {
@@ -150,7 +150,7 @@ fn run_agent_command(
             if args.is_empty() {
                 AgentResponse::error("INVALID_PARAMETERS", "Missing app name")
             } else {
-                cmd_agent_config_show(paths, &args[0])
+                cmd_agent_config_show(paths, scope, &args[0])
             }
         }
         "logs" => {

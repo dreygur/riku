@@ -14,26 +14,12 @@ use std::path::Path;
 use serde_json::json;
 
 use crate::agent::confirm;
+use crate::agent::secret_keys::is_secret;
 use crate::agent::types::AgentResponse;
 use crate::apps::{config_after_set, config_after_unset};
 use crate::config::RikuPaths;
 use crate::deploy::env_setup::{redeploy, write_env};
 use crate::util::{existing_app, parse_settings};
-
-/// Name fragments that mark a key as secret. A name match is a heuristic: a
-/// secret under an unrelated name (`REDIS_URL` with a password inside) is not
-/// caught.
-const SECRET_MARKERS: [&str; 9] = [
-    "SECRET",
-    "PASS",
-    "PWD",
-    "TOKEN",
-    "_KEY",
-    "AUTH",
-    "CREDENTIAL",
-    "PRIVATE",
-    "DATABASE_URL",
-];
 
 /// What the agent asked for, which decides the confirmation action name.
 #[derive(Clone, Copy)]
@@ -68,11 +54,6 @@ fn changed_keys(before: &HashMap<String, String>, after: &HashMap<String, String
         .collect();
     keys.sort();
     keys
-}
-
-fn is_secret(key: &str) -> bool {
-    let key = key.to_ascii_uppercase();
-    SECRET_MARKERS.iter().any(|marker| key.contains(marker))
 }
 
 fn apply(

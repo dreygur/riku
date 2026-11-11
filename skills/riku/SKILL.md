@@ -116,7 +116,7 @@ ssh riku@host destroy myapp                    # returns confirm_token
 ssh riku@host destroy myapp --confirm <token>  # only after a human approves
 ```
 
-Scopes: `readonly` (apps, logs, ps, config:get, config:show, stats), `staging` (adds deploy, restart, config:set, config:unset), `production` (adds stop, destroy, run). Scope and identity come only from the forced command; a request carrying `--scope` or `--agent-id` is refused. `destroy`, `stop`, `run`, and `config:set`/`config:unset` changing a key whose name contains SECRET, PASS, PWD, TOKEN, _KEY, AUTH, CREDENTIAL, PRIVATE or DATABASE_URL return a confirm token first; the token only works for the identical request. Show the request to the human before sending `--confirm`: riku cannot check that you did. `run` executes as the riku user with no shell, only PATH, HOME and the app's live env, 64 KiB output per stream, killed after 300 s.
+Scopes: `readonly` (apps, logs, ps, config:get, config:show, stats; secret-looking values shown as `***`), `staging` (adds deploy, restart, config:set, config:unset), `production` (adds stop, destroy, run). Scope and identity come only from the forced command; a request carrying `--scope` or `--agent-id` is refused. `destroy`, `stop`, `run`, and `config:set`/`config:unset` changing a key whose name contains SECRET, PASS, PWD, TOKEN, _KEY, AUTH, CREDENTIAL, PRIVATE or DATABASE_URL return a confirm token first; the token only works for the identical request. Show the request to the human before sending `--confirm`: riku cannot check that you did. `run` executes as the riku user with no shell, only PATH, HOME and the app's live env, 64 KiB output per stream, killed after 300 s.
 
 ## Common Mistakes
 

@@ -71,8 +71,8 @@ forced command gives the client full access and lets it choose everything.
 | `apps` | | Lists apps, `running` is true when workers are enabled |
 | `deploy` | `<app>` | Runs the deploy and returns when it finishes |
 | `destroy` | `<app>` | Needs confirmation |
-| `config:get` | `<app> <key>` | |
-| `config:show` | `<app>` | |
+| `config:get` | `<app> <key>` | A readonly agent sees secret-looking values as `***` |
+| `config:show` | `<app>` | A readonly agent sees secret-looking values as `***` |
 | `config:set` | `<app> KEY=value ...` | Redeploys. Secret-looking keys need confirmation |
 | `config:unset` | `<app> KEY ...` | Redeploys. Secret-looking keys need confirmation |
 | `logs` | `<app> [process]` | Last 100 lines of each log file |

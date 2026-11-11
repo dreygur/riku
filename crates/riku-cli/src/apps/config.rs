@@ -56,7 +56,9 @@ pub fn cmd_config_set(paths: &RikuPaths, app: &str, settings: &[String]) -> Resu
     crate::deploy::env_setup::update_env_and_redeploy(&app, paths, &env)
 }
 
-/// The app's ENV with `settings` applied, without writing it. Refuses riku
+/// The app's ENV with `settings` applied, without writing it. Each argument
+/// is one `KEY=VALUE` pair taken as is, so a value may hold spaces; the
+/// caller's shell or the ssh split already removed any quoting. Refuses riku
 /// settings, malformed pairs and newlines. `app` must already be validated.
 pub fn config_after_set(
     paths: &RikuPaths,
@@ -69,11 +71,7 @@ pub fn config_after_set(
         return Err(e);
     }
 
-    // Join all settings and split them shell-style
-    let joined = settings.join(" ");
-    let parts = shell_split(&joined);
-
-    for s in &parts {
+    for s in settings {
         if let Some(eq_pos) = s.find('=') {
             let k = s[..eq_pos].trim().to_string();
             let v = s[eq_pos + 1..].trim().to_string();
