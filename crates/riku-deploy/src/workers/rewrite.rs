@@ -12,63 +12,38 @@
 // Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
 #![allow(clippy::question_mark)]
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::path::Path;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use riku_container::compose::ReplaceOrder;
-use riku_container::types::CopyIndex;
 use riku_supervisor::config::WorkerConfig;
 
-use super::files::write_worker_config;
-use super::web_env::{build_worker_env, is_web_facing};
-use super::web_rollout::{roll_web_kind, web_order, WebDeploy, WebRoutes};
+use super::rewrite_plan::{apply_plan, plan_kinds, KindPlan};
+use super::web_env::is_web_facing;
+use super::web_rollout::{web_order, WebDeploy, WebRoutes};
 use crate::config::RikuPaths;
 use crate::rolling::RouteSink;
 
-/// One running kind: its command and the ordinals of its copies.
-struct RunningKind<'a> {
-    command: &'a str,
-    ordinals: Vec<u32>,
+/// How a rewrite failed, and whether it changed anything first.
+#[derive(Debug)]
+pub(crate) enum RewriteError {
+    /// Nothing changed: a config could not be rendered, or the router would
+    /// refuse the app.
+    Untouched(anyhow::Error),
+    /// A step failed after configs started changing.
+    Partial(PartialRewrite),
 }
 
-fn by_kind(running: &[WorkerConfig]) -> BTreeMap<&str, RunningKind<'_>> {
-    let mut kinds: BTreeMap<&str, RunningKind<'_>> = BTreeMap::new();
-    for config in running {
-        kinds
-            .entry(config.worker.kind.as_str())
-            .or_insert_with(|| RunningKind {
-                command: config.worker.command.as_str(),
-                ordinals: Vec::new(),
-            })
-            .ordinals
-            .push(config.worker.ordinal);
-    }
-    kinds
-}
-
-fn rewrite_copy(deploy: &WebDeploy<'_>, kind: &str, command: &str, ordinal: u32) -> Result<()> {
-    let copy = match CopyIndex::new(ordinal) {
-        Some(copy) => copy,
-        None => return Err(anyhow!("{kind} copy {ordinal} is not a valid copy number")),
-    };
-    let env = match build_worker_env(deploy.app, kind, copy, deploy.env, &[], deploy.paths) {
-        Ok(env) => env,
-        Err(e) => return Err(e),
-    };
-    let written = write_worker_config(
-        deploy.app,
-        deploy.app_path,
-        kind,
-        command,
-        ordinal,
-        env,
-        deploy.paths,
-    );
-    match written {
-        Ok(_) => Ok(()),
-        Err(e) => Err(e),
-    }
+/// A rewrite that stopped part way.
+#[derive(Debug)]
+pub(crate) struct PartialRewrite {
+    pub cause: anyhow::Error,
+    /// The kinds whose every copy now runs the new env.
+    pub restarted: Vec<String>,
+    /// The kind that failed and the kinds never reached. Their copies may
+    /// still run the old env.
+    pub left_old: Vec<String>,
 }
 
 /// The web facing kinds among `kinds` whose old copy is stopped before its
@@ -89,14 +64,20 @@ pub(crate) fn kinds_down_while_restarting<'a>(
     Ok(down)
 }
 
+fn kind_names(plans: &[KindPlan<'_>]) -> Vec<String> {
+    plans.iter().map(|plan| plan.kind().to_string()).collect()
+}
+
 /// Rewrite the configs of the `running` workers of `app` with `env`, the
 /// env a deploy would give them, publishing web copies to `routes`. Needs
 /// the supervisor running: web copies are only replaced once their
 /// successors are healthy.
 ///
-/// The router is checked before any config changes, and web facing kinds
-/// roll before the others are rewritten, so a router that is down or would
-/// refuse the app leaves every worker as it was.
+/// Every other kind's config is rendered in memory and the router is checked
+/// before any config changes, so a bad env or a router that is down or would
+/// refuse the app leaves every worker as it was ([`RewriteError::Untouched`]).
+/// Web facing kinds then roll before the others are written; a failure from
+/// there on is [`RewriteError::Partial`], naming which kinds made it.
 pub(crate) fn rewrite_running(
     app: &str,
     app_path: &Path,
@@ -104,32 +85,31 @@ pub(crate) fn rewrite_running(
     env: &HashMap<String, String>,
     paths: &RikuPaths,
     routes: &mut impl RouteSink,
-) -> Result<()> {
+) -> std::result::Result<(), RewriteError> {
     let deploy = WebDeploy {
         app,
         app_path,
         env,
         paths,
     };
-    let (web, other): (Vec<_>, Vec<_>) = by_kind(running)
-        .into_iter()
-        .partition(|(kind, _)| is_web_facing(kind));
-    if !web.is_empty() {
+    let plans = match plan_kinds(&deploy, running) {
+        Ok(plans) => plans,
+        Err(e) => return Err(RewriteError::Untouched(e.context("nothing restarted"))),
+    };
+    if plans.iter().any(KindPlan::is_web) {
         if let Err(e) = routes.check() {
-            return Err(e.context("nothing restarted: the router would refuse the app"));
+            return Err(RewriteError::Untouched(
+                e.context("nothing restarted: the router would refuse the app"),
+            ));
         }
     }
-    for (kind, found) in web {
-        let want = found.ordinals.len() as u32;
-        if let Err(e) = roll_web_kind(&deploy, kind, found.command, want, routes) {
-            return Err(e);
-        }
-    }
-    for (kind, found) in other {
-        for ordinal in &found.ordinals {
-            if let Err(e) = rewrite_copy(&deploy, kind, found.command, *ordinal) {
-                return Err(e);
-            }
+    for (done, plan) in plans.iter().enumerate() {
+        if let Err(cause) = apply_plan(&deploy, plan, routes) {
+            return Err(RewriteError::Partial(PartialRewrite {
+                cause,
+                restarted: kind_names(&plans[..done]),
+                left_old: kind_names(&plans[done..]),
+            }));
         }
     }
     Ok(())

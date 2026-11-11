@@ -20,7 +20,7 @@ esac
 "#;
 
 /// `myapp` deployed with one `worker` copy while its ENV said `FLAG=old`.
-fn deployed_app(paths: &RikuPaths) -> PathBuf {
+pub(super) fn deployed_app(paths: &RikuPaths) -> PathBuf {
     for dir in [
         &paths.workers_available,
         &paths.workers_enabled,
@@ -50,7 +50,14 @@ fn restart_rewrites_configs_from_the_edited_env_without_a_build() {
     fs::write(paths.env_root.join("myapp").join("ENV"), "FLAG=new\n").unwrap();
     let mut supervisor = FakeSupervisor::start(&paths);
 
-    let restarted = restart_procfile_app_with("myapp", None, &paths, |_| false, &mut NoRoutes);
+    let restarted = restart_procfile_app_with(
+        "myapp",
+        None,
+        &paths,
+        |_| false,
+        supervisor_ctl::notify_supervisor_reload,
+        &mut NoRoutes,
+    );
 
     let status = supervisor.child.wait().unwrap();
     assert_eq!(restarted.ok(), Some(1), "one worker restarted");
@@ -90,7 +97,14 @@ fn restart_is_refused_while_env_holds_the_removed_auto_restart_key() {
     .unwrap();
     let _supervisor = FakeSupervisor::start(&paths);
 
-    let restarted = restart_procfile_app_with("myapp", None, &paths, |_| false, &mut NoRoutes);
+    let restarted = restart_procfile_app_with(
+        "myapp",
+        None,
+        &paths,
+        |_| false,
+        supervisor_ctl::notify_supervisor_reload,
+        &mut NoRoutes,
+    );
 
     assert!(
         restarted.is_err(),
@@ -138,7 +152,14 @@ fn a_refused_router_writes_neither_configs_nor_live_env() {
     let _supervisor = FakeSupervisor::start(&paths);
     routes.refuse_check = true;
 
-    let restarted = restart_procfile_app_with("myapp", None, &paths, |_| false, &mut routes);
+    let restarted = restart_procfile_app_with(
+        "myapp",
+        None,
+        &paths,
+        |_| false,
+        supervisor_ctl::notify_supervisor_reload,
+        &mut routes,
+    );
 
     assert!(restarted.is_err(), "a refused router check must fail");
     let after = (

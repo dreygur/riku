@@ -33,6 +33,7 @@ mod plan;
 mod ports;
 pub(crate) mod process_runtime;
 mod rewrite;
+mod rewrite_plan;
 mod scaling;
 mod socket;
 mod stop_wait;
@@ -41,7 +42,9 @@ mod web_rollout;
 
 use pinned::port_in_use;
 use plan::plan_workers;
-pub(crate) use rewrite::{app_routes, kinds_down_while_restarting, rewrite_running};
+pub(crate) use rewrite::{
+    app_routes, kinds_down_while_restarting, rewrite_running, PartialRewrite, RewriteError,
+};
 pub use scaling::read_scaling_count;
 
 use files::{remove_stale_configs, write_worker_config};

@@ -79,6 +79,9 @@ pub(crate) struct MockRoutes {
     pub published: Vec<(Vec<Backend>, usize)>,
     /// Makes `check` fail, as a router helper that is down does.
     pub refuse_check: bool,
+    /// Runs after every publish, for a test that breaks something the
+    /// caller only touches later.
+    pub after_publish: Option<Box<dyn FnMut()>>,
     /// The 1-based publish call that fails.
     fail_publish: Option<usize>,
     publishes: usize,
@@ -90,6 +93,7 @@ impl MockRoutes {
         MockRoutes {
             published: Vec::new(),
             refuse_check: false,
+            after_publish: None,
             fail_publish: None,
             publishes: 0,
             paths: paths.clone(),
@@ -107,6 +111,9 @@ impl RouteSink for MockRoutes {
         self.publishes += 1;
         let enabled = web_count(&enabled_configs(&self.paths.workers_enabled));
         self.published.push((backends.to_vec(), enabled));
+        if let Some(after) = self.after_publish.as_mut() {
+            after();
+        }
         if self.fail_publish == Some(self.publishes) {
             return Err(anyhow::anyhow!("reload not confirmed"));
         }

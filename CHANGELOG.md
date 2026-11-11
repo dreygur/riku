@@ -60,6 +60,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   published again and the new copy stopped, instead of leaving one copy
   too many that a later restart kept for good; if the router cannot
   confirm that either, the copy is still left running for the next deploy.
+- A `riku restart` that failed writing a non web kind's config after the
+  web kinds had rolled left web on the new env while `LIVE_ENV` still
+  described the old one and the supervisor was not told to reload. Every
+  non web config is now built before anything changes; if a write still
+  fails, `LIVE_ENV` follows the kinds now on the new env, the supervisor
+  reloads, and the error names which kinds run the new env and which may
+  still run the old one.
 - A push whose `LIVE_ENV` could not be written left the checkout at the
   pushed commit while the old workers kept running from it, and said the
   previous release no longer ran. Nothing has changed at that point, so

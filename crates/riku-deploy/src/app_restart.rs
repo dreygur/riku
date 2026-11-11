@@ -31,11 +31,14 @@ use crate::config::RikuPaths;
 use crate::rolling::RouteSink;
 use crate::util::display;
 use crate::util::file_names::worker::WorkerName;
+use crate::workers::RewriteError;
 use crate::{env_setup, lock, restart_env, supervisor_ctl, workers};
 
 mod config_file;
+mod partial;
 
 use config_file::{bump_mtime, read_config};
+use partial::finish_partial;
 
 /// Fails unless a supervisor runs, starting one with `start_supervisor` when
 /// none does.
@@ -140,7 +143,8 @@ fn warn_route_down(running: &[WorkerConfig], env: &HashMap<String, String>) -> R
 /// riku settings, and return how many there are. An app with no enabled
 /// workers (never deployed, or stopped) is an error that names
 /// `riku deploy`. Holds the app's deploy lock throughout. `LIVE_ENV` is
-/// written only once every config was rewritten.
+/// written once every config was rewritten, or, when the rewrite stopped
+/// part way, once any kind runs the new env (`app_restart/partial.rs`).
 pub fn restart_procfile_app(app: &str, kind: Option<&str>, paths: &RikuPaths) -> Result<usize> {
     let app_path = paths.app_root.join(app);
     let mut routes = workers::app_routes(app, &app_path, paths);
@@ -149,17 +153,20 @@ pub fn restart_procfile_app(app: &str, kind: Option<&str>, paths: &RikuPaths) ->
         kind,
         paths,
         supervisor_ctl::ensure_supervisor_running,
+        supervisor_ctl::notify_supervisor_reload,
         &mut routes,
     )
 }
 
-/// [`restart_procfile_app`] with the way a missing supervisor is started
-/// and the router given, so a test never launches or reaches either.
+/// [`restart_procfile_app`] with the way a missing supervisor is started,
+/// how a running one is told to reload, and the router given, so a test
+/// never launches or reaches any of them.
 fn restart_procfile_app_with(
     app: &str,
     kind: Option<&str>,
     paths: &RikuPaths,
     start_supervisor: impl Fn(&RikuPaths) -> bool,
+    reload_supervisor: impl Fn(&RikuPaths),
     routes: &mut impl RouteSink,
 ) -> Result<usize> {
     let chosen = match chosen_configs(app, kind, paths) {
@@ -188,13 +195,17 @@ fn restart_procfile_app_with(
         return Err(e);
     }
     let app_path = paths.app_root.join(app);
-    if let Err(e) = workers::rewrite_running(app, &app_path, &running, &env, paths, routes) {
-        return Err(e);
+    match workers::rewrite_running(app, &app_path, &running, &env, paths, routes) {
+        Ok(()) => {}
+        Err(RewriteError::Untouched(e)) => return Err(e),
+        Err(RewriteError::Partial(partial)) => {
+            return Err(finish_partial(app, paths, &env, partial, reload_supervisor))
+        }
     }
     if let Err(e) = env_setup::write_live_env(app, paths, &env) {
         return Err(e);
     }
-    supervisor_ctl::notify_supervisor_reload(paths);
+    reload_supervisor(paths);
     Ok(running.len())
 }
 
@@ -205,3 +216,7 @@ mod tests;
 #[cfg(test)]
 #[path = "app_restart_env_tests.rs"]
 mod env_tests;
+
+#[cfg(test)]
+#[path = "app_restart_partial_tests.rs"]
+mod partial_tests;

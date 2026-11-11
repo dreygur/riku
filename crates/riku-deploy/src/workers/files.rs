@@ -35,9 +35,15 @@ pub(super) fn remove_stale_configs(app: &str, paths: &RikuPaths) {
     }
 }
 
-/// Write a single worker TOML config to `workers_available`, symlink it into
-/// `workers_enabled`, and return the config written.
-pub(super) fn write_worker_config(
+/// A worker config built and serialized but not yet on disk.
+pub(super) struct RenderedConfig {
+    pub config: WorkerConfig,
+    text: String,
+}
+
+/// Build and serialize one worker config without touching the disk, so every
+/// fallible step but the write itself happens here.
+pub(super) fn render_worker_config(
     app: &str,
     app_path: &Path,
     kind: &str,
@@ -45,7 +51,7 @@ pub(super) fn write_worker_config(
     index: u32,
     env: HashMap<String, String>,
     paths: &RikuPaths,
-) -> Result<WorkerConfig> {
+) -> Result<RenderedConfig> {
     let log_path = paths
         .log_root
         .join(app)
@@ -60,17 +66,24 @@ pub(super) fn write_worker_config(
         &app_path.to_string_lossy(),
         &log_path.to_string_lossy(),
     );
+    match toml::to_string(&config) {
+        Ok(text) => Ok(RenderedConfig { config, text }),
+        Err(e) => Err(anyhow!(
+            "cannot serialize worker config {}: {e}",
+            config.worker.name().file_name()
+        )),
+    }
+}
 
-    let filename = config.worker.name().file_name();
+/// Write `rendered` to `workers_available` and symlink it into
+/// `workers_enabled`.
+pub(super) fn install_worker_config(rendered: &RenderedConfig, paths: &RikuPaths) -> Result<()> {
+    let filename = rendered.config.worker.name().file_name();
     let available = paths.workers_available.join(&filename);
     let enabled = paths.workers_enabled.join(&filename);
 
-    let serialized = match toml::to_string(&config) {
-        Ok(text) => text,
-        Err(e) => return Err(anyhow!("cannot serialize worker config {filename}: {e}")),
-    };
     // The config carries the app's whole environment, secrets included.
-    if let Err(e) = crate::util::write_private(&available, serialized.as_bytes()) {
+    if let Err(e) = crate::util::write_private(&available, rendered.text.as_bytes()) {
         return Err(anyhow!("cannot write {}: {e}", available.display()));
     }
     if let Err(e) = crate::util::fs::replace_symlink(&available, &enabled) {
@@ -78,5 +91,26 @@ pub(super) fn write_worker_config(
     }
 
     tracing::debug!("created worker config {filename}");
-    Ok(config)
+    Ok(())
+}
+
+/// Write a single worker TOML config to `workers_available`, symlink it into
+/// `workers_enabled`, and return the config written.
+pub(super) fn write_worker_config(
+    app: &str,
+    app_path: &Path,
+    kind: &str,
+    command: &str,
+    index: u32,
+    env: HashMap<String, String>,
+    paths: &RikuPaths,
+) -> Result<WorkerConfig> {
+    let rendered = match render_worker_config(app, app_path, kind, command, index, env, paths) {
+        Ok(rendered) => rendered,
+        Err(e) => return Err(e),
+    };
+    match install_worker_config(&rendered, paths) {
+        Ok(()) => Ok(rendered.config),
+        Err(e) => Err(e),
+    }
 }
