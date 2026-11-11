@@ -102,7 +102,7 @@ impl Supervisor {
             }
         };
         // Held until the file is dropped, so for the supervisor's whole life.
-        if let Err(e) = file.try_lock() {
+        if let Err(e) = lock_waiting_out_probes(&file) {
             return Err(anyhow::anyhow!(
                 "Failed to lock PID file (another supervisor running?): {e}"
             ));
@@ -122,6 +122,26 @@ impl Supervisor {
         Ok(file)
     }
 }
+
+/// Tries the exclusive lock for up to a second. `riku restart` checks that
+/// the supervisor runs by taking a shared lock for an instant, so a start in
+/// that instant must retry; another supervisor holding the lock still wins.
+fn lock_waiting_out_probes(file: &fs::File) -> std::result::Result<(), fs::TryLockError> {
+    let mut tries = 0;
+    loop {
+        match file.try_lock() {
+            Ok(()) => return Ok(()),
+            Err(e) if tries == LOCK_TRIES => return Err(e),
+            Err(_) => {
+                tries += 1;
+                std::thread::sleep(LOCK_RETRY);
+            }
+        }
+    }
+}
+
+const LOCK_TRIES: u32 = 20;
+const LOCK_RETRY: Duration = Duration::from_millis(50);
 
 #[cfg(test)]
 #[path = "init_tests.rs"]
