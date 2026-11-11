@@ -17,6 +17,7 @@ path = "src/main.rs"
 [dependencies]
 riku-args = { path = "../riku-args" }
 riku-remote = { path = "../riku-remote" }
+riku-util = { path = "../riku-util" }
 anyhow = { workspace = true }
 clap = { workspace = true }
 

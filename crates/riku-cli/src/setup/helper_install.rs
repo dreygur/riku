@@ -88,7 +88,7 @@ fn enable_and_restart(systemd_dir: &Path, deploy_user: &str) -> Result<()> {
             "{UNIT_NAME} is not running. See: journalctl -u {UNIT_NAME} -n 20"
         ));
     }
-    echo("✓ Started the router helper", "green");
+    echo("Started the router helper", "green");
     Ok(())
 }
 
@@ -99,7 +99,7 @@ pub fn install_router_helper(deploy_user: &str) -> Result<()> {
     }
     echo(
         &format!(
-            "      This host does not run systemd. Start the router helper as root: \
+            "This host does not run systemd. Start the router helper as root: \
              RIKU_USER={deploy_user} {ROOT_BINARY} router-helper"
         ),
         "yellow",

@@ -90,7 +90,7 @@ pub fn setup_post_receive_hook(repo_path: &Path, _app: &str) -> Result<()> {
     fs::set_permissions(&hook_path, PermissionsExt::from_mode(0o755))?;
 
     echo(
-        &format!("✓ Created post-receive hook in {}", repo_path.display()),
+        &format!("Created post-receive hook in {}", repo_path.display()),
         "green",
     );
     Ok(())
@@ -159,7 +159,7 @@ pub fn extract_bare_repo_to_app(bare_repo: &Path, app: &str, paths: &RikuPaths) 
         (_, Err(e)) => return Err(anyhow::anyhow!("tar failed to run: {e}")),
     }
 
-    echo("✓ Extracted files from bare repo", "green");
+    echo("Extracted files from bare repo", "green");
     Ok(())
 }
 

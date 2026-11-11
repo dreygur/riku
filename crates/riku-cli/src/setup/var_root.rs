@@ -135,7 +135,7 @@ pub(super) fn setup_var_root(user: &DeployUser) -> Result<()> {
         return Err(e);
     }
     echo(
-        &format!("      ✓ {ACME_WEBROOT} and {STATIC_ROOT} ready ({SOCKET_GROUP} reads them)"),
+        &format!("{ACME_WEBROOT} and {STATIC_ROOT} ready ({SOCKET_GROUP} reads them)"),
         "green",
     );
     Ok(())

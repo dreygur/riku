@@ -1,6 +1,42 @@
 use super::*;
 use std::process::{Command, Stdio};
 
+fn tee_shell(script: &str) -> (Vec<String>, String) {
+    let mut child = Command::new("sh")
+        .args(["-c", script])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let recent = OutputTail::new(1000);
+    let (handles, tail) = tee_output(&mut child, &recent);
+    child.wait().unwrap();
+    for handle in handles {
+        handle.join().expect("an output reader thread panicked");
+    }
+    let tail = tail.lock().unwrap().clone();
+    (recent.lines(), tail)
+}
+
+#[test]
+fn tee_output_keeps_reading_past_bytes_that_are_not_utf8() {
+    let (lines, _) = tee_shell(r"printf 'bad \377 byte\nafter\n'");
+
+    assert!(
+        lines.iter().any(|l| l == "after"),
+        "stopped early: {lines:?}"
+    );
+}
+
+#[test]
+fn tee_output_trims_a_long_non_ascii_stderr_tail_without_panicking() {
+    // Six byte lines: the first trim cuts 2 bytes, inside the leading 漢.
+    let (_, tail) = tee_shell("i=0; while [ $i -lt 2000 ]; do echo '漢é' >&2; i=$((i+1)); done");
+
+    assert!(tail.len() <= STDERR_TAIL_CAP, "tail grew to {}", tail.len());
+    assert!(tail.ends_with("漢é\n"), "lost the newest stderr line");
+}
+
 // classify_resource_exit
 
 #[test]
@@ -83,19 +119,23 @@ fn test_exit_code_for_signal_uses_128_plus_signal_convention() {
 // tee_output
 
 #[test]
-fn test_tee_output_captures_stderr_tail() {
+fn tee_output_keeps_the_stderr_tail_and_recent_lines_of_both_streams() {
     let mut child = Command::new("sh")
         .args(["-c", "echo to stdout; echo to stderr error >&2"])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    let (handles, tail) = tee_output(&mut child);
+    let recent = riku_util::display::OutputTail::default();
+    let (handles, tail) = tee_output(&mut child, &recent);
     child.wait().unwrap();
     for h in handles {
         h.join().unwrap();
     }
     assert!(tail.lock().unwrap().contains("to stderr error"));
+    let mut lines = recent.lines();
+    lines.sort();
+    assert_eq!(lines, ["to stderr error", "to stdout"]);
 }
 
 // wait_with_timeout

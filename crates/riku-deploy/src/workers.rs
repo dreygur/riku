@@ -23,7 +23,7 @@ pub(crate) use super::scaling::apply_scaling_deltas;
 const WEB_KIND: &str = "web";
 /// Procfile entries the deploy runs once. As workers, the supervisor would
 /// restart them every time they exit.
-const ONE_SHOT_KINDS: [&str; 2] = ["release", "preflight"];
+pub(crate) const ONE_SHOT_KINDS: [&str; 2] = ["release", "preflight"];
 
 mod files;
 #[cfg(test)]

@@ -85,7 +85,7 @@ pub(super) fn move_admin_to_socket(group: &str) -> Result<()> {
             "caddy did not create {ADMIN_SOCKET}. See: journalctl -u caddy -n 20"
         ));
     }
-    echo("      ✓ Caddy restarted on the admin socket", "green");
+    echo("Caddy restarted on the admin socket", "green");
     Ok(())
 }
 

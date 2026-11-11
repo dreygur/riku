@@ -29,6 +29,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+use crate::util::display::OutputTail;
+
 use super::executor::{plugin_timeout, wait_with_timeout};
 
 /// A runtime plugin discovered in the plugins directory.
@@ -193,9 +195,10 @@ fn plugin_accepts(
     Ok(status.success())
 }
 
-/// Run `plugin build`, streaming stdout and stderr to the terminal in real time.
+/// Run `plugin build`, streaming stdout and stderr to the terminal in real
+/// time under the output rail and keeping the last lines in `recent`.
 /// Aborts the deploy if the build exits non-zero or times out.
-pub fn build(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result<()> {
+pub fn build(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>, recent: &OutputTail) -> Result<()> {
     // The build step (npm install, pip install, cargo build, ...) is bounded by
     // the same RLIMIT_* ceilings as workers (CPU time, open files, file size,
     // core dumps) plus the build timeout, so a malicious or buggy postinstall
@@ -208,6 +211,7 @@ pub fn build(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result<()> {
         ctx,
         crate::util::resource_limits::ResourceLimits::from_env(),
         plugin_timeout(),
+        recent,
     )
 }
 
@@ -221,6 +225,7 @@ pub fn build_with_limits(
     ctx: &RuntimeContext<'_>,
     limits: crate::util::resource_limits::ResourceLimits,
     timeout: Duration,
+    recent: &OutputTail,
 ) -> Result<()> {
     tracing::info!(plugin = plugin.name.as_str(), "running build");
 
@@ -240,7 +245,7 @@ pub fn build_with_limits(
     let mut child = super::executor::spawn_retrying_etxtbsy(&mut cmd)
         .map_err(|e| anyhow!("Failed to spawn '{} build': {}", plugin.name, e))?;
 
-    let (tee_handles, stderr_tail) = super::executor::tee_output(&mut child);
+    let (tee_handles, stderr_tail) = super::executor::tee_output(&mut child, recent);
     let timed_out = wait_with_timeout(&mut child, timeout);
     let status = child.wait()?;
     for h in tee_handles {
@@ -251,7 +256,10 @@ pub fn build_with_limits(
         anyhow::bail!("Build timed out for plugin '{}'", plugin.name);
     }
     if !status.success() {
-        let tail = stderr_tail.lock().unwrap().clone();
+        let tail = stderr_tail
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
         if let Some(cause) = super::executor::classify_resource_exit(&status, &tail) {
             return Err(crate::error::DeployError::resource_exhausted(
                 "build",

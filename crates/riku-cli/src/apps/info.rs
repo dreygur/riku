@@ -38,7 +38,7 @@ pub fn cmd_apps_info(paths: &RikuPaths, app: &str) -> Result<()> {
     let app_dir = paths.app_root.join(&app);
 
     if !app_dir.exists() {
-        display::error(&format!("Error: app '{}' not found.", app));
+        display::error(&format!("app '{}' not found.", app));
         bail!("App not found");
     }
 

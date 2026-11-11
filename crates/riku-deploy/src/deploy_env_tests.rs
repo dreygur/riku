@@ -59,11 +59,7 @@ fn riku_toml_processes_are_the_deploy_process_list() {
         "[processes]\nworker = \"node jobs.js\"\n",
     )
     .unwrap();
-    let mut dlog = DeployLogger::new(&tmp.path().join("deploy.log")).unwrap();
-
-    let processes = load_deploy_processes("myapp", &paths, &mut dlog)
-        .unwrap()
-        .unwrap();
+    let processes = load_deploy_processes("myapp", &paths).unwrap().unwrap();
 
     assert_eq!(
         processes.get("worker").map(String::as_str),

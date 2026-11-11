@@ -645,7 +645,8 @@ mod agent_state_tests {
     }
 
     /// Deploy progress, ours and the child processes', must go to stderr so
-    /// stdout stays one JSON object an agent can parse.
+    /// stdout stays one JSON object an agent can parse, with no rail
+    /// characters from the human output format.
     #[test]
     fn agent_deploy_keeps_progress_off_stdout() {
         let home = TempDir::new().unwrap();
@@ -662,6 +663,59 @@ mod agent_state_tests {
         let stderr = String::from_utf8_lossy(&out.stderr);
         let response: Result<serde_json::Value, _> = serde_json::from_str(stdout.trim_end());
         assert!(response.is_ok(), "stdout is not one JSON object:\n{stdout}");
-        assert!(stderr.contains("Deploying app 'shop'"), "{stderr}");
+        assert!(
+            !stdout.contains(['┌', '│', '◇', '▲', '■', '└']),
+            "rail characters leaked into agent stdout:\n{stdout}"
+        );
+        assert!(stderr.contains("┌  Deploying shop"), "{stderr}");
+        assert!(
+            !stderr.contains('\x1b'),
+            "a piped stream must get no color escapes:\n{stderr:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod closed_pipe_tests {
+    use tempfile::TempDir;
+
+    /// A pusher whose connection drops leaves riku writing to a closed pipe.
+    /// Printing must not panic: a panic in the git hook skips recording a
+    /// failed deploy, and git push then reports success.
+    #[test]
+    fn output_to_a_closed_pipe_does_not_panic() {
+        let dir = TempDir::new().unwrap();
+        let (reader, writer) = std::io::pipe().unwrap();
+        drop(reader);
+        let bin =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku");
+        let out = std::process::Command::new(bin)
+            .args(["quickstart", "demo"])
+            .current_dir(dir.path())
+            .stdout(writer)
+            .stderr(std::process::Stdio::piped())
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(!stderr.contains("panicked"), "{stderr}");
+        assert_ne!(out.status.code(), Some(101), "riku panicked:\n{stderr}");
+    }
+
+    /// `$(riku config get app KEY)` must capture nothing but the value; a
+    /// notice on stdout would become the value in a script.
+    #[test]
+    fn config_get_without_config_prints_nothing_on_stdout() {
+        let home = TempDir::new().unwrap();
+        std::fs::create_dir_all(home.path().join(".riku/apps/shop")).unwrap();
+        let bin =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku");
+        let out = std::process::Command::new(bin)
+            .args(["--local", "config", "get", "shop", "KEY"])
+            .env("HOME", home.path())
+            .env_remove("RIKU_ROOT")
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(stdout, "", "stdout must hold only the value");
     }
 }

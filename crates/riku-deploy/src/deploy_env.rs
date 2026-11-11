@@ -63,28 +63,20 @@ pub(crate) fn load_deploy_env(
     }
     let loaded = match app_config::load_env(paths, app) {
         Ok(loaded) => loaded,
-        Err(e) => {
-            dlog.log_error(&format!("{e:#}"));
-            return Err(e);
-        }
+        Err(e) => return Err(e),
     };
     warn_about(&loaded, dlog);
     Ok(loaded.env)
 }
 
-/// The app's process list for a Procfile deploy, logging why it is refused.
+/// The app's process list for a Procfile deploy.
 pub(crate) fn load_deploy_processes(
     app: &str,
     paths: &RikuPaths,
-    dlog: &mut DeployLogger,
 ) -> Result<Option<HashMap<String, String>>> {
     match app_config::load_processes(paths, app) {
         Ok(processes) => Ok(processes),
-        Err(e) => {
-            let reason = format!("Invalid process list for app '{app}': {e:#}. Deploy aborted.");
-            dlog.log_error(&reason);
-            Err(anyhow!(reason))
-        }
+        Err(e) => Err(anyhow!("invalid process list for app '{app}': {e:#}")),
     }
 }
 

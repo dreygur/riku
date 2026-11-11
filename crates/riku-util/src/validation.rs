@@ -101,7 +101,7 @@ pub fn existing_app(app: &str, app_root: &Path) -> Result<String> {
 pub fn exit_if_invalid(app: &str, app_root: &Path) -> Result<String> {
     let app = sanitize_app_name(app);
     if app.is_empty() {
-        echo(&format!("Error: invalid app name '{}'.", app), "red");
+        echo(&format!("invalid app name '{}'.", app), "red");
         echo(
             "App names must contain only alphanumeric characters, dots, underscores, and hyphens.",
             "yellow",
@@ -113,7 +113,7 @@ pub fn exit_if_invalid(app: &str, app_root: &Path) -> Result<String> {
         process::exit(1);
     }
     if !app_root.join(&app).exists() {
-        echo(&format!("Error: app '{}' not found.", app), "red");
+        echo(&format!("app '{}' not found.", app), "red");
         echo("", "");
         echo("To deploy a new app:", "yellow");
         echo("  Option 1: Create app and push via git", "yellow");

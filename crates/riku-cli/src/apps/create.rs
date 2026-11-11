@@ -53,7 +53,7 @@ pub fn cmd_apps_create(paths: &RikuPaths, name: &str) -> Result<()> {
         return Err(e);
     }
     echo(
-        &format!("✓ Created app directory: {}", app_dir.display()),
+        &format!("Created app directory: {}", app_dir.display()),
         "green",
     );
 
@@ -65,7 +65,7 @@ pub fn cmd_apps_create(paths: &RikuPaths, name: &str) -> Result<()> {
         return Err(e);
     }
     echo(
-        &format!("✓ Created git repository: {}", repo_dir.display()),
+        &format!("Created git repository: {}", repo_dir.display()),
         "green",
     );
 
@@ -78,7 +78,7 @@ pub fn cmd_apps_create(paths: &RikuPaths, name: &str) -> Result<()> {
         return Err(e);
     }
     echo(
-        &format!("✓ Created git hook: {}", post_receive.display()),
+        &format!("Created git hook: {}", post_receive.display()),
         "green",
     );
     echo("", "");

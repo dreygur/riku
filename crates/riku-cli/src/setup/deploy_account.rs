@@ -9,7 +9,7 @@ use std::process::Command;
 use anyhow::{anyhow, Result};
 use nix::unistd::User;
 
-use crate::util::echo;
+use crate::util::display;
 
 const MAX_NAME_LEN: usize = 32;
 /// An unmatchable password hash. `useradd` leaves `!` (locked), and OpenSSH
@@ -75,7 +75,7 @@ pub fn ensure_account(name: &str) -> Result<()> {
     if let Err(e) = create_account(&name) {
         return Err(e);
     }
-    echo(&format!("Created deploy user {}", name.as_str()), "green");
+    display::step_done("Deploy user", &format!("{} created", name.as_str()));
     Ok(())
 }
 

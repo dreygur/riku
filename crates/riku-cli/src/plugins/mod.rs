@@ -44,18 +44,27 @@ pub fn cmd_plugins_install(paths: &RikuPaths, source: &str) -> Result<()> {
         }
         Err(e) => return Err(e),
     };
-    display::info(&format!("Installing plugin from {source}..."));
+    display::intro(&format!("riku plugins install  {source}"));
     let manifest = match PluginInstaller::new(paths).install(&source) {
         Ok(manifest) => manifest,
         Err(e) => return Err(e),
     };
-    display::success(&format!(
-        "Installed {} v{} ({:?})",
-        manifest.name, manifest.version, manifest.plugin_type
-    ));
-    report_trust(&manifest);
-    print_capabilities(&manifest);
+    finish_install(&manifest);
     Ok(())
+}
+
+/// The steps after a bundle install, then the outro.
+fn finish_install(manifest: &PluginManifest) {
+    display::step_done(
+        "Installed",
+        &format!(
+            "{} v{} ({:?})",
+            manifest.name, manifest.version, manifest.plugin_type
+        ),
+    );
+    report_trust(manifest);
+    print_capabilities(manifest);
+    display::outro(&format!("{} is ready", manifest.name));
 }
 
 /// Report how trustworthy the installed bundle is: a verified signature is the
@@ -127,20 +136,18 @@ pub fn cmd_plugins_search(paths: &RikuPaths, query: &str) -> Result<()> {
 }
 
 /// `riku plugins add <name|name@marketplace>`
+#[allow(clippy::question_mark)]
 pub fn cmd_plugins_add(paths: &RikuPaths, spec: &str) -> Result<()> {
-    let (name, market, version) = parse_spec(spec)?;
-    display::info(&format!(
-        "Resolving '{name}'{}{}...",
-        market.map(|m| format!(" from '{m}'")).unwrap_or_default(),
-        version.map(|v| format!(" at '{v}'")).unwrap_or_default()
-    ));
-    let manifest = MarketplaceService::new(paths).install_named(name, market, version)?;
-    display::success(&format!(
-        "Installed {} v{}",
-        manifest.name, manifest.version
-    ));
-    report_trust(&manifest);
-    print_capabilities(&manifest);
+    let (name, market, version) = match parse_spec(spec) {
+        Ok(parsed) => parsed,
+        Err(e) => return Err(e),
+    };
+    display::intro(&format!("riku plugins add  {spec}"));
+    let manifest = match MarketplaceService::new(paths).install_named(name, market, version) {
+        Ok(manifest) => manifest,
+        Err(e) => return Err(e),
+    };
+    finish_install(&manifest);
     Ok(())
 }
 

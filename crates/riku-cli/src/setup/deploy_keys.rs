@@ -15,7 +15,7 @@ use anyhow::{anyhow, Result};
 
 use crate::util::authorized_keys::authorized_keys_path;
 use crate::util::public_key::{parse_public_keys, PublicKey};
-use crate::util::{echo, setup_authorized_keys_in, ROOT_BINARY};
+use crate::util::{display, setup_authorized_keys_in, ROOT_BINARY};
 
 /// The keys in a `.pub` or `authorized_keys` file.
 pub fn read_key_file(path: &Path) -> Result<Vec<PublicKey>> {
@@ -95,9 +95,9 @@ pub fn add_deploy_keys(keys: &[PublicKey]) -> Result<()> {
         Err(e) => return Err(e),
     };
 
+    let mut added = 0;
     for key in keys {
         if existing.contains(key.blob()) {
-            echo("      ✓ Key already authorized", "green");
             continue;
         }
         let fp = match fingerprint(key) {
@@ -107,9 +107,19 @@ pub fn add_deploy_keys(keys: &[PublicKey]) -> Result<()> {
         if let Err(e) = authorize_key(&home, &fp, key) {
             return Err(e);
         }
-        echo(&format!("      ✓ Added deploy key {fp}"), "green");
+        added += 1;
     }
+    display::step_done("Deploy keys", &keys_outcome(added, keys.len() - added));
     Ok(())
+}
+
+/// `2 added, 1 already authorized`, leaving out a zero part.
+fn keys_outcome(added: usize, known: usize) -> String {
+    match (added, known) {
+        (_, 0) => format!("{added} added"),
+        (0, _) => format!("{known} already authorized"),
+        _ => format!("{added} added, {known} already authorized"),
+    }
 }
 
 #[cfg(test)]

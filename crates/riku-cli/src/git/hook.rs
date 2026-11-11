@@ -7,7 +7,7 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::config::RikuPaths;
-use crate::util::echo;
+use crate::util::display;
 
 /// Whether `app_path` still needs its first clone. Only a missing checkout
 /// counts: an app without a Procfile is still a checkout, and cloning into
@@ -21,7 +21,6 @@ fn clone_app(paths: &RikuPaths, app: &str) -> Result<()> {
     let app_path = paths.app_root.join(app);
     let data_path = paths.data_root.join(app);
 
-    echo(&format!("-----> Creating app '{}'", app), "green");
     for dir in [&app_path, &data_path] {
         if let Err(e) = fs::create_dir_all(dir) {
             return Err(anyhow!("failed to create {}: {e}", dir.display()));
@@ -124,26 +123,52 @@ fn repo_dir(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> std::path:
     }
 }
 
-/// Post-receive git hook handler. A failure is also recorded for the push
-/// that ran the hook, so `git push` exits non-zero (see `push_status`).
-pub fn cmd_git_hook(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> Result<()> {
-    let deployed = deploy_pushed_refs(paths, app, repo_path);
-    if let Err(e) = &deployed {
-        super::push_status::record_deploy_failure(e);
+/// Why a hook run failed.
+enum HookFailure {
+    /// The deploy failed and already printed its failure block.
+    Shown(anyhow::Error),
+    /// Failed before a deploy could report anything.
+    Silent(anyhow::Error),
+}
+
+impl From<anyhow::Error> for HookFailure {
+    fn from(e: anyhow::Error) -> Self {
+        HookFailure::Silent(e)
     }
-    deployed
+}
+
+/// Post-receive git hook handler. A failure is also recorded for the push
+/// that ran the hook, so `git push` exits non-zero (see `push_status`). A
+/// deploy failure the deploy already printed exits 1 without printing it a
+/// second time; git ignores a post-receive status anyway.
+pub fn cmd_git_hook(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> Result<()> {
+    match deploy_pushed_refs(paths, app, repo_path) {
+        Ok(()) => Ok(()),
+        Err(HookFailure::Shown(e)) => {
+            super::push_status::record_deploy_failure(&e);
+            std::process::exit(1);
+        }
+        Err(HookFailure::Silent(e)) => {
+            super::push_status::record_deploy_failure(&e);
+            Err(e)
+        }
+    }
 }
 
 #[allow(clippy::question_mark)]
-fn deploy_pushed_refs(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> Result<()> {
+fn deploy_pushed_refs(
+    paths: &RikuPaths,
+    app: &str,
+    repo_path: Option<&str>,
+) -> std::result::Result<(), HookFailure> {
     let app = match crate::util::validate_app_name(app) {
         Ok(app) => app,
-        Err(e) => return Err(e),
+        Err(e) => return Err(e.into()),
     };
 
     if let Some(actual_repo) = repo_path {
         if let Err(e) = link_external_repo(paths, &app, actual_repo) {
-            return Err(e);
+            return Err(e.into());
         }
     }
 
@@ -154,7 +179,7 @@ fn deploy_pushed_refs(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> 
     for line in stdin.lock().lines() {
         let line = match line {
             Ok(line) => line,
-            Err(e) => return Err(anyhow!("failed to read pushed refs: {e}")),
+            Err(e) => return Err(anyhow!("failed to read pushed refs: {e}").into()),
         };
         let line = line.trim().to_string();
         if line.is_empty() {
@@ -170,22 +195,22 @@ fn deploy_pushed_refs(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> 
 
         let default = match default_ref(&repo, refname) {
             Ok(default) => default,
-            Err(e) => return Err(e),
+            Err(e) => return Err(e.into()),
         };
         if let RefPush::Skip(reason) = ref_push(refname, newrev, &default) {
-            echo(&format!("-----> Not deploying: {reason}"), "yellow");
+            display::warn(&format!("Not deploying: {reason}"));
             continue;
         }
 
         if needs_clone(&app_path) {
             if let Err(e) = clone_app(paths, &app) {
-                return Err(e);
+                return Err(e.into());
             }
         }
 
         let deltas: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
         if let Err(e) = crate::deploy::do_deploy(&app, paths, &deltas, Some(newrev)) {
-            return Err(e);
+            return Err(HookFailure::Shown(e));
         }
     }
 
@@ -279,10 +304,11 @@ fn link_external_repo(paths: &RikuPaths, app: &str, actual_repo: &str) -> Result
     }
 
     std::os::unix::fs::symlink(&resolved, &riku_repo)?;
-    echo(
-        &format!("Symlinked {} → {}", riku_repo.display(), resolved.display()),
-        "green",
-    );
+    display::detail(&format!(
+        "Linked {} to {}",
+        riku_repo.display(),
+        resolved.display()
+    ));
     Ok(())
 }
 

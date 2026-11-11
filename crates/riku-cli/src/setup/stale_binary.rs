@@ -33,7 +33,7 @@ pub(super) fn remove_stale_binary(home: &Path) -> Result<()> {
         return Err(anyhow!("failed to remove {}: {e}", path.display()));
     }
     echo(
-        "      ✓ Removed ~/.local/bin/riku, /usr/local/bin/riku replaces it",
+        "Removed ~/.local/bin/riku, /usr/local/bin/riku replaces it",
         "green",
     );
     Ok(())

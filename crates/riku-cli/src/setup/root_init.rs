@@ -1,7 +1,7 @@
 //! `sudo riku init`: everything that belongs to the deploy user is done as
 //! the deploy user, then root does only what needs root.
 //!
-//! Root first chooses the router (see [`super::router_choice`]): on a fresh
+//! Root checks the prerequisites, then chooses the router (see [`super::router_choice`]): on a fresh
 //! install before changing anything, otherwise from what the deploy user
 //! stored. It then installs the running binary as `/usr/local/bin/riku` (see
 //! [`super::binary`]) and runs `riku init --user-steps` from there as the
@@ -25,7 +25,7 @@ use std::path::Path;
 use anyhow::Result;
 
 use crate::config::router::Router;
-use crate::util::echo;
+use crate::util::display;
 use crate::util::public_key::PublicKey;
 use crate::util::ROOT_BINARY;
 
@@ -46,16 +46,8 @@ const RIKU_DIR: &str = ".riku";
 const ROUTER_ENV: &str = "RIKU_ROUTER";
 
 fn print_ssh_hint() {
-    echo("[3/4] SSH key setup...", "");
-    echo(
-        "      ℹ No deploy key added. git push needs one, add yours with:",
-        "yellow",
-    );
-    echo(
-        "        sudo riku init --ssh-key <your .pub or authorized_keys file>",
-        "yellow",
-    );
-    echo("", "");
+    display::warn("No deploy key added, git push needs one");
+    display::detail("Add yours with: sudo riku init --ssh-key <your .pub or authorized_keys file>");
 }
 
 fn run_user_steps(user: &DeployUser, keys: &[PublicKey]) -> Result<()> {
@@ -100,9 +92,10 @@ fn existing_router(user: &DeployUser) -> Result<Router> {
 }
 
 /// Run a root init: per-user steps as the deploy user, then host setup.
-/// Returns the deploy user it set up.
+/// Returns the deploy user it set up and the router.
 #[allow(clippy::question_mark)]
-pub fn root_init(options: &InitOptions) -> Result<DeployUser> {
+pub fn root_init(options: &InitOptions) -> Result<(DeployUser, Router)> {
+    check_prerequisites();
     // Read as root, before any change, so a wrong file fails the init early.
     let keys = match &options.ssh_key {
         Some(file) => read_key_file(file),
@@ -150,19 +143,10 @@ pub fn root_init(options: &InitOptions) -> Result<DeployUser> {
     // The user steps run as the deploy user and store this choice; the
     // variable reaches them through `DeployUser`'s passed environment.
     std::env::set_var(ROUTER_ENV, router.name());
-    echo(
-        &format!(
-            "-----> Initializing Riku for deploy user '{}'...",
-            user.name
-        ),
-        "",
-    );
-    echo("", "");
 
     if let Err(e) = run_user_steps(&user, &keys) {
         return Err(e);
     }
-    check_prerequisites();
     // Before the router: nginx host setup adds its worker to the group.
     if let Err(e) = setup_socket_root(&user) {
         return Err(e);
@@ -175,21 +159,19 @@ pub fn root_init(options: &InitOptions) -> Result<DeployUser> {
     }
 
     if options.no_systemd {
-        echo("[2/4] Skipping systemd setup (--no-systemd)", "yellow");
+        display::step_done("Service", "skipped (--no-systemd)");
     } else {
         if !matches!(router, Router::Plugin(_)) {
             if let Err(e) = install_router_helper(&user.name) {
                 return Err(e);
             }
         }
-        echo("[2/4] Setting up systemd service...", "");
         if let Err(e) = install_systemd_service(&router) {
             return Err(e);
         }
     }
-    echo("", "");
     if keys.is_empty() {
         print_ssh_hint();
     }
-    Ok(user)
+    Ok((user, router))
 }

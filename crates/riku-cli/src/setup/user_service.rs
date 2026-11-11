@@ -4,7 +4,7 @@ use std::process::Command;
 
 use crate::config::router::Router;
 use crate::config::RikuPaths;
-use crate::util::{echo, ROOT_BINARY};
+use crate::util::{display, ROOT_BINARY};
 
 /// Setup systemd service for Riku supervisor (user-level, no root required).
 pub fn setup_systemd_service(paths: &RikuPaths, router: &Router) -> Result<()> {
@@ -66,27 +66,23 @@ WantedBy=default.target
             service_file.display()
         ));
     }
-    echo("      ✓ Service file created", "green");
-
-    let _ = Command::new("systemctl")
-        .args(["--user", "daemon-reload"])
-        .status();
-
-    let status = Command::new("systemctl")
-        .args(["--user", "enable", "riku"])
-        .status();
-
-    if status.is_ok_and(|s| s.success()) {
-        echo("      ✓ Service enabled", "green");
+    user_systemctl(&["daemon-reload"]);
+    let mut done = vec!["user unit written"];
+    if user_systemctl(&["enable", "riku"]) {
+        done.push("enabled");
     }
-
-    let status = Command::new("systemctl")
-        .args(["--user", "start", "riku"])
-        .status();
-
-    if status.is_ok_and(|s| s.success()) {
-        echo("      ✓ Service started", "green");
+    if user_systemctl(&["start", "riku"]) {
+        done.push("started");
     }
-
+    display::step_done("Service", &done.join(", "));
     Ok(())
+}
+
+/// `systemctl --user <args>` with its chatter kept off the rail.
+fn user_systemctl(args: &[&str]) -> bool {
+    Command::new("systemctl")
+        .arg("--user")
+        .args(args)
+        .output()
+        .is_ok_and(|out| out.status.success())
 }

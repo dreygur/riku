@@ -17,10 +17,9 @@
 
 use anyhow::Result;
 use std::collections::HashMap;
-use std::fs;
 
 use crate::config::RikuPaths;
-use crate::util::{deploy_logger::DeployLogger, echo};
+use crate::util::deploy_logger::DeployLogger;
 
 // Dependency crates aliased as their former module names.
 pub(crate) use riku_config as config;
@@ -31,6 +30,7 @@ pub(crate) use riku_supervisor as supervisor;
 pub(crate) use riku_util as util;
 
 // Deployment infrastructure modules (kept in binary)
+mod app_command;
 pub mod app_stop;
 pub mod backup;
 pub mod containers;
@@ -43,7 +43,9 @@ mod live_urls;
 pub mod lock;
 #[cfg(test)]
 mod mock_engine;
+mod pipeline;
 mod procfile_deploy;
+mod progress;
 pub mod releases;
 pub mod rolling;
 pub mod router;
@@ -57,53 +59,10 @@ pub mod workers;
 pub use supervisor_ctl::spawn_app;
 pub use workers::create_workers_generic;
 
-/// Pre deploy hooks, then the container deploy and the app's `LIVE_ENV`.
-/// Copy counts of a container app change through `scale_service`, never
-/// through deploy deltas.
+/// Checks the app exists, then takes its deploy lock and opens its deploy log.
 #[allow(clippy::question_mark)]
-fn deploy_container_app(
-    app: &str,
-    paths: &RikuPaths,
-    deltas: &HashMap<String, i64>,
-    env: &HashMap<String, String>,
-    dlog: &mut DeployLogger,
-) -> Result<()> {
-    if !deltas.is_empty() {
-        return Err(anyhow::anyhow!(
-            "'{app}' runs as containers; scale it with riku ps {app} --scale <service>=<copies>"
-        ));
-    }
-    let name = match containers::AppName::try_from(app) {
-        Ok(name) => name,
-        Err(e) => return Err(e),
-    };
-    dlog.log_raw("Running pre-deploy hooks");
-    if let Err(e) = hooks::run_pre_deploy(app, &paths.app_root.join(app), paths, env) {
-        return Err(e);
-    }
-    dlog.log("Detected runtime: container");
-    echo("-----> Container app detected.", "green");
-    if let Err(e) = containers::deploy_containers(&name, paths, env) {
-        return Err(e);
-    }
-    env_setup::write_live_env(app, paths, env)
-}
-
-/// Deploy an app: sync the checkout to `newrev`, then run it as riku managed
-/// containers when it has a compose file or a Dockerfile, otherwise build it
-/// with its runtime plugin and start its Procfile processes.
-///
-/// `deltas` change Procfile process counts and are refused for container
-/// apps. Holds the app's deploy lock throughout.
-#[allow(clippy::question_mark)]
-pub fn do_deploy(
-    app: &str,
-    paths: &RikuPaths,
-    deltas: &HashMap<String, i64>,
-    newrev: Option<&str>,
-) -> Result<()> {
+fn prepare(app: &str, paths: &RikuPaths) -> Result<(std::fs::File, DeployLogger)> {
     let app_path = paths.app_root.join(app);
-
     if !app_path.exists() {
         return Err(anyhow::anyhow!(
             "App '{}' not found at {}",
@@ -111,77 +70,53 @@ pub fn do_deploy(
             app_path.display()
         ));
     }
+    let lock = match lock::acquire_for_deploy(app, paths) {
+        Ok(lock) => lock,
+        Err(e) => return Err(e),
+    };
+    match DeployLogger::new(&paths.deploy_log_file(app)) {
+        Ok(dlog) => Ok((lock, dlog)),
+        Err(e) => Err(e),
+    }
+}
 
+/// Deploy an app: sync the checkout to `newrev`, then run it as riku managed
+/// containers when it has a compose file or a Dockerfile, otherwise build it
+/// with its runtime plugin and start its Procfile processes.
+///
+/// `deltas` change Procfile process counts and are refused for container
+/// apps. Holds the app's deploy lock throughout. Progress and any failure
+/// are printed on the output rail (a failure with how to retry); the error
+/// is still returned.
+pub fn do_deploy(
+    app: &str,
+    paths: &RikuPaths,
+    deltas: &HashMap<String, i64>,
+    newrev: Option<&str>,
+) -> Result<()> {
     // Held for the rest of this function: serializes concurrent deploys of
     // the *same* app (e.g. a second git push landing mid-deploy, or a
     // dashboard-triggered redeploy racing a git push) without blocking
     // deploys of other apps. See lock.rs for what breaks without this.
-    let _deploy_lock = match lock::acquire_for_deploy(app, paths) {
-        Ok(lock) => lock,
-        Err(e) => return Err(e),
-    };
-
-    let mut dlog = match DeployLogger::new(&paths.deploy_log_file(app)) {
-        Ok(dlog) => dlog,
-        Err(e) => return Err(e),
-    };
-    dlog.log(&format!("Deploying app '{}'", app));
-
-    dlog.log_raw(&format!("Syncing repo to {}", newrev.unwrap_or("HEAD")));
-    if let Err(e) = git_ops::sync_app_repo(&app_path, newrev) {
-        return Err(e);
-    }
-
-    if let Err(e) = fs::create_dir_all(paths.log_root.join(app)) {
-        return Err(anyhow::anyhow!(
-            "cannot create the log directory of '{app}': {e}"
-        ));
-    }
-
-    let mut env = match deploy_env::load_deploy_env(app, paths, &mut dlog) {
-        Ok(env) => env,
-        Err(e) => return Err(e),
-    };
-
-    let is_container = match containers::is_container_app(&app_path, &env) {
-        Ok(is_container) => is_container,
-        Err(e) => return Err(e),
-    };
-    let runtime = if is_container {
-        if let Err(e) = deploy_env::refuse_container_processes(app, paths) {
+    let (_deploy_lock, dlog) = match prepare(app, paths) {
+        Ok(prepared) => prepared,
+        Err(e) => {
+            let reason = format!("{e:#}");
+            util::display::error(&reason);
+            util::display::mark_failure_shown(&reason);
             return Err(e);
         }
-        // Keys a former Procfile web kind left would pick the port map or
-        // uWSGI template for the containers.
-        workers::web_env::drop_route_keys(&mut env);
-        if let Err(e) = workers::web_env::clear_route_env(app, paths) {
-            return Err(e);
-        }
-        match deploy_container_app(app, paths, deltas, &env, &mut dlog) {
-            Ok(()) => containers::CONTAINER_RUNTIME.to_string(),
-            Err(e) => return Err(e),
-        }
-    } else {
-        let processes = match deploy_env::load_deploy_processes(app, paths, &mut dlog) {
-            Ok(processes) => processes,
-            Err(e) => return Err(e),
-        };
-        let deploy = procfile_deploy::deploy_procfile_app(
-            app,
-            paths,
-            deltas,
-            processes.unwrap_or_default(),
-            &mut env,
-            &mut dlog,
-        );
-        match deploy {
-            Ok(runtime) => runtime,
-            Err(e) => return Err(e),
-        }
     };
-
-    deploy_finish::finish_deploy(app, paths, &runtime, &env, &mut dlog);
-    Ok(())
+    let mut progress = progress::DeployProgress::new(app, paths, dlog);
+    match pipeline::run(app, paths, deltas, newrev, &mut progress) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let repo = paths.git_root.join(format!("{app}.git"));
+            let branch = git_ops::deploy_branch(&repo).unwrap_or_else(|| "main".to_string());
+            progress.failed(&e, &branch);
+            Err(e)
+        }
+    }
 }
 
 /// Roll an app back to a previous release by redeploying a prior commit. With
@@ -189,13 +124,14 @@ pub fn do_deploy(
 pub fn rollback(app: &str, paths: &RikuPaths, to: Option<&str>) -> Result<()> {
     let target = match to {
         Some(sha) => sha.to_string(),
-        None => releases::ReleaseLog::new(paths)
-            .previous(app)
-            .ok_or_else(|| {
-                anyhow::anyhow!("no previous release recorded for '{}' to roll back to", app)
-            })?,
+        None => match releases::ReleaseLog::new(paths).previous(app) {
+            Some(sha) => sha,
+            None => {
+                return Err(anyhow::anyhow!(
+                    "no previous release recorded for '{app}' to roll back to"
+                ))
+            }
+        },
     };
-    let short: String = target.chars().take(12).collect();
-    echo(&format!("Rolling back '{}' to {}", app, short), "green");
     do_deploy(app, paths, &HashMap::new(), Some(&target))
 }

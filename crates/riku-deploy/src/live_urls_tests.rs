@@ -79,10 +79,13 @@ fn no_domain_no_fallback_says_how_to_add_one() {
         "{lines:?}"
     );
     assert!(
-        lines.iter().any(|l| l.contains("domains")
-            && l.contains("riku.toml")
-            && l.contains("rk config set")),
+        lines.iter().any(|l| l.contains("riku.toml")
+            && l.contains("rk settings set my_app routing.domains=<domain>")),
         "{lines:?}"
+    );
+    assert!(
+        !lines.iter().any(|l| l.contains("RIKU_DOMAINS")),
+        "config set refuses RIKU_* keys: {lines:?}"
     );
 }
 

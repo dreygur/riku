@@ -138,7 +138,7 @@ pub(crate) fn read_app_env(app: &str, paths: &RikuPaths) -> Result<HashMap<Strin
 pub(crate) fn start_supervisor(paths: &RikuPaths) {
     if !ensure_supervisor_running(paths) {
         echo(
-            "Warning: Could not start supervisor. Run 'riku supervisor' manually.",
+            "Could not start the supervisor. Run 'riku supervisor' manually.",
             "yellow",
         );
     }
@@ -166,9 +166,6 @@ pub fn spawn_app(app: &str, paths: &RikuPaths) -> Result<()> {
     // Notify the supervisor to reload configurations
     // The supervisor will detect new/changed configs and spawn processes
     notify_supervisor_reload(paths);
-
-    echo("-----> Notified supervisor to spawn processes...", "green");
-
     Ok(())
 }
 

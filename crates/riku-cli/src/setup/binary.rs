@@ -20,7 +20,7 @@ use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 
-use crate::util::{echo, ROOT_BINARY};
+use crate::util::{display, echo, ROOT_BINARY};
 
 use super::deploy_user::deploy_user_name;
 use super::nginx_host::{check_write_dir, ROOT_UID};
@@ -116,18 +116,14 @@ fn install_at(source: &Path, target: &Path, owner: u32) -> Result<()> {
     if let Err(e) = check_write_dir(dir, owner) {
         return Err(e);
     }
-    echo(
-        &format!("Installing riku to '{}'...", target.display()),
-        "green",
-    );
     let replacing = target.exists();
     if let Err(e) = replace_binary(source, target) {
         return Err(e);
     }
-    echo(&format!("✓ Installed to {}", target.display()), "green");
+    display::step_done("Binary", &target.display().to_string());
     if replacing {
         echo(
-            "      A running supervisor still uses the old binary, restart it: sudo systemctl restart riku",
+            "A running supervisor still uses the old binary, restart it: sudo systemctl restart riku",
             "yellow",
         );
     }

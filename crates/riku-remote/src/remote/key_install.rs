@@ -17,6 +17,7 @@ use std::process::Command;
 use anyhow::{anyhow, Result};
 
 use super::types::{Server, SshAddress};
+use crate::util::display;
 use crate::util::public_key::{parse_public_keys, PublicKey};
 
 const DEFAULT_KEYS: [&str; 2] = [".ssh/id_ed25519.pub", ".ssh/id_rsa.pub"];
@@ -117,16 +118,24 @@ fn send_key(server: &Server, admin: &SshAddress, key_line: &str) -> Result<()> {
 pub fn install_key(server: &Server, key: &PublicKey) -> Result<()> {
     let key_line = key.to_string();
     let Some(admin) = &server.admin else {
-        println!("{}", manual_hint(&key_line, server));
+        print_manual_hint(&key_line, server);
         return Ok(());
     };
     match send_key(server, admin, &key_line) {
-        Ok(()) => Ok(()),
+        Ok(()) => {
+            display::step_done("Deploy key", "authorized");
+            Ok(())
+        }
         Err(e) => {
-            println!("{}", manual_hint(&key_line, server));
+            print_manual_hint(&key_line, server);
             Err(e)
         }
     }
+}
+
+fn print_manual_hint(key_line: &str, server: &Server) {
+    display::warn("Deploy key not authorized yet");
+    display::detail(&manual_hint(key_line, server));
 }
 
 #[cfg(test)]

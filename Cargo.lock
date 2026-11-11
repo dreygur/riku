@@ -1816,6 +1816,7 @@ dependencies = [
  "riku-args",
  "riku-bundle",
  "riku-remote",
+ "riku-util",
  "tempfile",
 ]
 

@@ -184,12 +184,30 @@ cat | RIKU_ROOT="$HOME/.riku" riku git-hook "myapp" "$REPO_PATH"
 
 ## Step 7: Access Your App
 
-The push ends with the app's URL, for example:
+The push shows one step per phase and ends with a summary that holds the
+app's URL, for example:
 
 ```
------> myapp deployed!
-       Live at http://myapp.203.0.113.10.sslip.io
+remote: ┌  Deploying myapp  54ba34f "Fix login"
+remote: │
+remote: ◇  Runtime  python
+remote: │  <build output>
+remote: ◇  Build  12.4s
+remote: ◇  Processes  web 1
+remote: ◇  Route  caddy
+remote: │
+remote: └  Deployed in 18.2s
+remote:
+remote:    App       myapp
+remote:    Commit    54ba34f  Fix login
+remote:    URL       http://myapp.203.0.113.10.sslip.io
+remote:    Workers   web 1
+remote:    Logs      rk logs myapp
 ```
+
+A failed deploy names the step that failed, repeats the last 15 lines of
+build output, and ends with `rk logs myapp --deploy` for the full log and
+the `git push` that retries it. `git push` exits non-zero.
 
 An app with no domain gets the server's fallback name, or a port of its own
 when the server has none. See [App URLs](routing.md) for the three ways an

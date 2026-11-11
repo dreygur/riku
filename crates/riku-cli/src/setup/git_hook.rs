@@ -6,7 +6,6 @@ use std::os::unix::fs::PermissionsExt;
 
 use crate::config::RikuPaths;
 use crate::git::repo::post_receive_hook;
-use crate::util::echo;
 
 /// Write the global post-receive hook script to ~/.riku/hooks/post-receive.
 pub fn create_git_hook(paths: &RikuPaths) -> Result<()> {
@@ -25,8 +24,6 @@ pub fn create_git_hook(paths: &RikuPaths) -> Result<()> {
     if let Err(e) = fs::set_permissions(&post_receive, fs::Permissions::from_mode(0o755)) {
         return Err(anyhow!("failed to chmod {}: {e}", post_receive.display()));
     }
-
-    echo("      ✓ Global git hook created", "green");
     Ok(())
 }
 

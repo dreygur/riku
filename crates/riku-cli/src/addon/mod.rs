@@ -31,23 +31,35 @@ pub fn cmd_addon_list(paths: &RikuPaths) -> Result<()> {
 }
 
 /// `riku addon create <plugin> <name>`
+#[allow(clippy::question_mark)]
 pub fn cmd_addon_create(paths: &RikuPaths, plugin: &str, name: &str) -> Result<()> {
-    let app = crate::util::validate_app_name(name)?;
-    display::info(&format!("Provisioning {plugin} instance '{app}'..."));
-    AddonService::new(paths).provision(plugin, &app)?;
-    display::success(&format!(
-        "Provisioned '{app}'. Bind it: riku addon bind {app} <app>"
-    ));
+    let app = match crate::util::validate_app_name(name) {
+        Ok(app) => app,
+        Err(e) => return Err(e),
+    };
+    display::intro(&format!("riku addon create  {plugin} {app}"));
+    if let Err(e) = AddonService::new(paths).provision(plugin, &app) {
+        return Err(e);
+    }
+    display::step_done("Provisioned", &app);
+    display::outro(&format!("{app} is ready"));
+    display::summary(&[("Bind", &format!("riku addon bind {app} <app>"))]);
     Ok(())
 }
 
 /// `riku addon bind <instance> <app>`
+#[allow(clippy::question_mark)]
 pub fn cmd_addon_bind(paths: &RikuPaths, instance: &str, app: &str) -> Result<()> {
-    let keys = AddonService::new(paths).bind(instance, app)?;
-    display::success(&format!("Bound '{instance}' to '{app}'."));
+    display::intro(&format!("riku addon bind  {instance} {app}"));
+    let keys = match AddonService::new(paths).bind(instance, app) {
+        Ok(keys) => keys,
+        Err(e) => return Err(e),
+    };
+    display::step_done("Bound", &format!("{instance} to {app}"));
     if !keys.is_empty() {
-        display::note(&format!("Injected into {app} env: {}", keys.join(", ")));
+        display::step_done("Env", &keys.join(", "));
     }
+    display::outro(&format!("{app} can use {instance}"));
     Ok(())
 }
 

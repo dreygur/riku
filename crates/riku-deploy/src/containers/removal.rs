@@ -118,11 +118,11 @@ pub fn destroy_containers(app: &AppName, paths: &RikuPaths) -> Result<()> {
     }
     echo(
         &format!(
-            "--> Removed {} containers and network {} of '{app}'. Volumes are kept.",
+            "Removed {} containers and network {} of '{app}'. Volumes are kept.",
             containers.len(),
             network.as_str()
         ),
-        "yellow",
+        "green",
     );
     Ok(())
 }

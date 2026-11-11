@@ -137,7 +137,7 @@ fn add_caddyfile_import(paths: &RikuPaths) -> Result<()> {
         return Err(e);
     }
     echo(
-        &format!("      ✓ {CADDYFILE} imports riku sites and uses the admin socket"),
+        &format!("{CADDYFILE} imports riku sites and uses the admin socket"),
         "green",
     );
     Ok(())
@@ -214,7 +214,7 @@ pub fn setup_caddy_host(paths: &RikuPaths) -> Result<()> {
     }
     echo(
         &format!(
-            "      ✓ {} ready for Caddy ({group} reads it)",
+            "{} ready for Caddy ({group} reads it)",
             paths.caddy_root.display()
         ),
         "green",

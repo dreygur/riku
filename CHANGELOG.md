@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- All riku and rk output uses one format, a rail like `npx skills add`:
+  an intro, one line per finished step, warnings and errors on the rail,
+  an outro and a summary of what to run next. Color only on a terminal and
+  never with `NO_COLOR`; `git push` output and pipes get the same
+  characters without escapes. Tables (`apps`, `ps`, `stats`), `logs` and
+  agent JSON are unchanged.
+- `git push` shows the app and commit, one step per deploy phase with its
+  duration, build output under the rail, and a summary with the URL and
+  workers. A failed deploy names the failed phase, repeats the last 15
+  lines of build output and says how to retry.
+- `riku init` checks prerequisites first, reports the tree, git hook and
+  branch as one step, drops the step numbers and ends with a summary. The
+  `sudo riku init` output reads as one sequence.
+- `riku config get|show|live` and `riku settings get|show` print raw
+  values, so `$(riku config get app KEY)` works in scripts.
+- Structured logs go to stderr at WARN level, except for the supervisor,
+  router helper and dashboard (INFO). `RUST_LOG` still overrides.
+
+### Fixed
+
+- A failed deploy could make `git push` report success: when the pusher's
+  connection dropped, or when a build wrote non-ASCII stderr over 4 KiB,
+  the git hook panicked before it recorded the failure.
+- One line of build output that was not UTF-8 stopped the output reader,
+  which killed the build with SIGPIPE and lost the rest of its output.
+- A `release` or `preflight` command that left a background child holding
+  its output blocked the deploy and its lock until that child exited.
+- `riku config get` on an app with no config printed a notice on stdout,
+  which `$(riku config get app KEY)` captured as the value. It goes to
+  stderr.
+- `riku agent deploy ..` passed the app check and ended the process with no
+  JSON answer. It now answers `APP_NOT_FOUND`.
+- The no-domain hint named `config set <app> RIKU_DOMAINS=...`, which riku
+  refuses; it now names `rk settings set <app> routing.domains=<domain>`.
+- `riku config set` printed every value it set (`Setting API_KEY=...`),
+  including secrets, and printed it even when an agent request stopped at
+  the confirmation step. It now prints only the key names, after the
+  write. `riku settings set` does the same.
+- A failing Procfile `preflight` or `release` command exited the whole
+  process: the push then exited 0 because the hook died before recording
+  the failure, and a redeploy from the dashboard stopped the dashboard.
+- A push recorded no release (the post-receive hook's `GIT_DIR` broke the
+  commit lookup), so `riku rollback` without `--to` had nothing to go
+  back to.
+- `git push` output carried raw color escape codes from log lines.
+
 ## [0.1.4-rc.2] - 2026-11-11
 
 Release candidate, published as a GitHub prerelease. Install it with

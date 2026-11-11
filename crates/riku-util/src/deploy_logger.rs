@@ -13,6 +13,8 @@ use std::path::PathBuf;
 
 use chrono::Local;
 
+use crate::display;
+
 /// A deploy logger that writes timestamped entries to a log file
 /// while also printing them to stdout (for git push streaming).
 pub struct DeployLogger {
@@ -36,25 +38,28 @@ impl DeployLogger {
         Ok(Self { log_file })
     }
 
-    /// Write an informational line to both stdout and the log file.
-    ///
-    /// stdout output uses the Heroku-style `"-----> "` prefix so it streams
-    /// back to the user's terminal via git remote output.
-    pub fn log(&mut self, msg: &str) {
-        println!("-----> {}", msg);
-        let timestamp = Local::now().format("%Y-%m-%dT%H:%M:%S%z");
-        let _ = writeln!(self.log_file, "[{}] {}", timestamp, msg);
+    /// Print a finished step (`◇  label  detail`) and log it. The terminal
+    /// output streams back to the pusher through git's `remote:` lines.
+    pub fn step(&mut self, label: &str, detail: &str) {
+        display::step_done(label, detail);
+        self.log_raw(&format!("{label} {detail}"));
+    }
+
+    /// Print a detail line under the current step and log it.
+    pub fn detail(&mut self, msg: &str) {
+        display::detail(msg);
+        self.log_raw(msg);
     }
 
     /// Write a warning to stderr and the log file.
     pub fn log_warn(&mut self, msg: &str) {
-        eprintln!(" !     {}", msg);
+        display::warn(msg);
         let _ = writeln!(self.log_file, "[WARN] {}", msg);
     }
 
     /// Write an error to stderr and the log file.
     pub fn log_error(&mut self, msg: &str) {
-        eprintln!(" !     {}", msg);
+        display::error(msg);
         let _ = writeln!(self.log_file, "[ERROR] {}", msg);
     }
 
