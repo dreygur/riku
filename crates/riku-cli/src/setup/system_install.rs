@@ -5,7 +5,7 @@
 //! a second supervisor, and a forced command in the caller's
 //! `authorized_keys`. It is refused before anything is changed.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Error, Result};
 use nix::unistd::{Uid, User};
@@ -13,24 +13,53 @@ use nix::unistd::{Uid, User};
 use super::deploy_user::deploy_user_name;
 use super::system_service::SYSTEMD_DIR;
 
-/// Why this host has a system install, or `None` when it has none. `unit`
-/// is the system `riku.service`; `deploy_uid` is the uid of the deploy
-/// account, `None` when no such account exists.
-pub(super) fn system_install(unit: &Path, deploy_uid: Option<Uid>, me: Uid) -> Option<String> {
+/// What marks this host as having a system install.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum SystemInstall {
+    /// The system `riku.service` exists, perhaps left over from an earlier
+    /// install.
+    Unit(PathBuf),
+    /// The deploy account exists and is not the caller.
+    DeployAccount(String),
+}
+
+/// What marks a system install on this host, or `None` when nothing does.
+/// `unit` is the system `riku.service`; `deploy_uid` is the uid of the
+/// deploy account, `None` when no such account exists.
+pub(super) fn system_install(
+    unit: &Path,
+    deploy_uid: Option<Uid>,
+    me: Uid,
+) -> Option<SystemInstall> {
     if unit.exists() {
-        return Some(format!("{} exists", unit.display()));
+        return Some(SystemInstall::Unit(unit.to_path_buf()));
     }
     match deploy_uid {
-        Some(uid) if uid != me => Some(format!("the deploy account {} exists", deploy_user_name())),
+        Some(uid) if uid != me => Some(SystemInstall::DeployAccount(deploy_user_name())),
         _ => None,
     }
 }
 
-pub(super) fn refusal(reason: &str) -> Error {
+/// The refusal, naming the blocker found and the two ways out: update the
+/// system install, or clear that blocker for a user only install.
+pub(super) fn refusal(found: &SystemInstall) -> Error {
+    let (reason, user_only) = match found {
+        SystemInstall::Unit(unit) => (
+            format!("{} exists", unit.display()),
+            format!(
+                "if that unit is left over and you want a user only install, remove {}",
+                unit.display()
+            ),
+        ),
+        SystemInstall::DeployAccount(name) => (
+            format!("the deploy account {name} exists"),
+            "for a user only install, set RIKU_USER to another deploy user name".to_string(),
+        ),
+    };
     anyhow!(
         "riku is already installed for the whole system here ({reason}). \
          A plain riku init would build a second install for this account. \
-         Run sudo riku init to update the system install."
+         Run sudo riku init to update the system install, or, {user_only}."
     )
 }
 
@@ -43,7 +72,7 @@ pub(super) fn refuse_beside_system_install() -> Result<()> {
         _ => None,
     };
     match system_install(&unit, deploy_uid, Uid::current()) {
-        Some(reason) => Err(refusal(&reason)),
+        Some(found) => Err(refusal(&found)),
         None => Ok(()),
     }
 }

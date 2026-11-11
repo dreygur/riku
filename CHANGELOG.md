@@ -123,9 +123,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unit running a second supervisor, an ssh key and a forced command in
   the caller's `authorized_keys`. It now refuses before changing anything
   when `/etc/systemd/system/riku.service` exists or the deploy account
-  (`RIKU_USER`, default `riku`) is another account, and names
-  `sudo riku init`. Single-user mode on a host without a system install is
-  unchanged.
+  (`RIKU_USER`, default `riku`) is another account. The refusal names the
+  blocker it found and both ways out: `sudo riku init` to update the system
+  install, or, for a user only install, removing a leftover
+  `/etc/systemd/system/riku.service` (unit) or setting `RIKU_USER` to
+  another deploy user name (account). Single-user mode on a host without a
+  system install is unchanged.
 - A failed push printed the failure twice: once from the hook as
   `remote: ■ ...`, then again without the `remote:` prefix and out of
   order (`■  The push was received, but the deploy failed: ...`). The

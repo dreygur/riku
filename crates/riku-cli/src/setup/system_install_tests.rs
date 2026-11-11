@@ -14,10 +14,10 @@ fn a_system_unit_marks_a_system_install_even_for_the_deploy_user() {
 
     let found = system_install(&unit, Some(Uid::from_raw(ME)), Uid::from_raw(ME));
 
-    let reason = found.expect("a system riku.service must count as a system install");
-    assert!(
-        reason.contains("riku.service"),
-        "the reason should name the unit, got: {reason}"
+    assert_eq!(
+        found,
+        Some(SystemInstall::Unit(unit)),
+        "a system riku.service must count as a system install"
     );
 }
 
@@ -50,10 +50,40 @@ fn single_user_mode_is_not_a_system_install() {
 }
 
 #[test]
-fn refusal_names_sudo_riku_init() {
-    let message = format!("{:#}", refusal("the system unit exists"));
+fn unit_refusal_names_the_unit_and_both_ways_out() {
+    let unit = std::path::PathBuf::from("/etc/systemd/system/riku.service");
+
+    let message = format!("{:#}", refusal(&SystemInstall::Unit(unit)));
+
+    for part in [
+        "/etc/systemd/system/riku.service exists",
+        "sudo riku init",
+        "remove /etc/systemd/system/riku.service",
+    ] {
+        assert!(message.contains(part), "missing '{part}' in: {message}");
+    }
     assert!(
-        message.contains("sudo riku init"),
-        "the refusal must say what to run instead, got: {message}"
+        !message.contains("RIKU_USER"),
+        "the account is not the blocker here: {message}"
+    );
+}
+
+#[test]
+fn account_refusal_names_the_account_and_both_ways_out() {
+    let message = format!(
+        "{:#}",
+        refusal(&SystemInstall::DeployAccount("riku".to_string()))
+    );
+
+    for part in [
+        "the deploy account riku exists",
+        "sudo riku init",
+        "set RIKU_USER to another deploy user name",
+    ] {
+        assert!(message.contains(part), "missing '{part}' in: {message}");
+    }
+    assert!(
+        !message.contains("remove /etc"),
+        "the unit is not the blocker here: {message}"
     );
 }
