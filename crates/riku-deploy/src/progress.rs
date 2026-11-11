@@ -146,8 +146,8 @@ impl DeployProgress {
                 display::detail(&line);
             }
         }
-        let previous_running = self.had_release && self.phase.keeps_previous_release();
-        display::outro(failure_outro(previous_running));
+        let previous_kept = self.had_release && self.phase.keeps_previous_release();
+        display::outro(failure_outro(previous_kept));
         display::summary(&as_pairs(&failure_summary(&self.app, branch)));
     }
 }
@@ -186,9 +186,9 @@ pub(crate) fn format_duration(took: Duration) -> String {
     format!("{}m {:02}s", whole / 60, whole % 60)
 }
 
-fn failure_outro(previous_running: bool) -> &'static str {
-    if previous_running {
-        "Deploy failed. The previous release is still running."
+fn failure_outro(previous_kept: bool) -> &'static str {
+    if previous_kept {
+        "Deploy failed. The previous release was left as it was."
     } else {
         "Deploy failed."
     }

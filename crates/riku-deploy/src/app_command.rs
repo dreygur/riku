@@ -2,6 +2,10 @@
 //! app's checkout with the worker resource limits. Their output streams to
 //! the pusher under the output rail.
 //!
+//! Each command runs in its own process group, killed once the command
+//! exits, so a background child cannot keep the deploy (and its lock) open.
+//! There is no time limit: a long migration is a legitimate release.
+//!
 //! A failure is returned, never an exit of the process: the hook must live
 //! long enough to report it to `git push`, and the dashboard runs deploys
 //! inside its own server process.
@@ -11,6 +15,8 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, Result};
+use nix::sys::signal::{killpg, Signal};
+use nix::unistd::Pid;
 
 use crate::error::DeployError;
 use crate::plugins::executor::{classify_resource_exit, exit_code_for, tee_output};
@@ -47,7 +53,8 @@ pub(crate) fn run_one_shot(
         .arg(command)
         .current_dir(app_path)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stderr(Stdio::piped())
+        .process_group(0);
     unsafe {
         cmd.pre_exec(move || limits.apply());
     }
@@ -57,7 +64,11 @@ pub(crate) fn run_one_shot(
         Err(e) => return Err(anyhow!("cannot run the {} command: {e}", kind.name())),
     };
     let (tee_handles, stderr_tail) = tee_output(&mut child, recent);
-    let status = match child.wait() {
+    let waited = child.wait();
+    // Background children the command left behind would hold the output
+    // pipes open, so the readers below would never see end of file.
+    let _ = killpg(Pid::from_raw(child.id() as i32), Signal::SIGKILL);
+    let status = match waited {
         Ok(status) => status,
         Err(e) => return Err(anyhow!("cannot wait for the {} command: {e}", kind.name())),
     };
@@ -81,3 +92,7 @@ pub(crate) fn run_one_shot(
         exit_code_for(&status)
     ))
 }
+
+#[cfg(test)]
+#[path = "app_command_tests.rs"]
+mod tests;

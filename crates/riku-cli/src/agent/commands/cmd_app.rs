@@ -40,12 +40,12 @@ fn check_app_running(paths: &RikuPaths, app: &str) -> bool {
 }
 
 pub fn cmd_agent_deploy(paths: &RikuPaths, app: &str) -> AgentResponse {
-    let app_path = paths.app_root.join(app);
-    if !app_path.exists() {
-        return AgentResponse::error("APP_NOT_FOUND", &format!("Application '{}' not found", app));
-    }
+    let app = match existing_app(app, &paths.app_root) {
+        Ok(app) => app,
+        Err(_) => return not_found(app),
+    };
 
-    match crate::apps::cmd_deploy(paths, app, None) {
+    match crate::apps::cmd_deploy(paths, &app, None) {
         Ok(_) => AgentResponse::success(json!({
             "status": "completed",
             "message": format!("Deployment completed for {}", app)
@@ -86,3 +86,7 @@ pub fn cmd_agent_destroy_confirm(
         Err(e) => AgentResponse::error("DESTROY_FAILED", &format!("Destroy failed: {}", e)),
     }
 }
+
+#[cfg(test)]
+#[path = "cmd_app_tests.rs"]
+mod tests;

@@ -36,7 +36,7 @@ pub fn cmd_config_get(paths: &RikuPaths, app: &str, key: &str) -> Result<()> {
             println!("{val}");
         }
     } else {
-        display::note(&format!("no active configuration for '{}'", app));
+        display::warn(&format!("no active configuration for '{}'", app));
     }
     Ok(())
 }

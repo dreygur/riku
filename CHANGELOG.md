@@ -29,6 +29,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A failed deploy could make `git push` report success: when the pusher's
+  connection dropped, or when a build wrote non-ASCII stderr over 4 KiB,
+  the git hook panicked before it recorded the failure.
+- One line of build output that was not UTF-8 stopped the output reader,
+  which killed the build with SIGPIPE and lost the rest of its output.
+- A `release` or `preflight` command that left a background child holding
+  its output blocked the deploy and its lock until that child exited.
+- `riku config get` on an app with no config printed a notice on stdout,
+  which `$(riku config get app KEY)` captured as the value. It goes to
+  stderr.
+- `riku agent deploy ..` passed the app check and ended the process with no
+  JSON answer. It now answers `APP_NOT_FOUND`.
+- The no-domain hint named `config set <app> RIKU_DOMAINS=...`, which riku
+  refuses; it now names `rk settings set <app> routing.domains=<domain>`.
 - `riku config set` printed every value it set (`Setting API_KEY=...`),
   including secrets, and printed it even when an agent request stopped at
   the confirmation step. It now prints only the key names, after the

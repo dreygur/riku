@@ -700,4 +700,22 @@ mod closed_pipe_tests {
         assert!(!stderr.contains("panicked"), "{stderr}");
         assert_ne!(out.status.code(), Some(101), "riku panicked:\n{stderr}");
     }
+
+    /// `$(riku config get app KEY)` must capture nothing but the value; a
+    /// notice on stdout would become the value in a script.
+    #[test]
+    fn config_get_without_config_prints_nothing_on_stdout() {
+        let home = TempDir::new().unwrap();
+        std::fs::create_dir_all(home.path().join(".riku/apps/shop")).unwrap();
+        let bin =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku");
+        let out = std::process::Command::new(bin)
+            .args(["--local", "config", "get", "shop", "KEY"])
+            .env("HOME", home.path())
+            .env_remove("RIKU_ROOT")
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(stdout, "", "stdout must hold only the value");
+    }
 }
