@@ -31,6 +31,37 @@ fn provision_writes_only_the_limits_that_are_set() {
     }
 }
 
+/// A worker cgroup dir left from an older config keeps its files. A limit
+/// the new config no longer sets must go back to unlimited, not stay.
+#[test]
+fn reprovision_resets_limits_the_new_config_dropped() {
+    let (_own, tree) = taken_over("memory cpu pids");
+    let worker = WorkerName::new("shop", "web", 1);
+    let old = CgroupLimits {
+        memory_max_bytes: Some(1024),
+        cpu_quota_us: Some(20_000),
+        cpu_period_us: 50_000,
+        pids_max: Some(16),
+    };
+    WorkerCgroup::provision(&tree, &worker, &old).unwrap();
+    let new = CgroupLimits {
+        memory_max_bytes: Some(2048),
+        cpu_period_us: 50_000,
+        ..CgroupLimits::default()
+    };
+
+    let cgroup = WorkerCgroup::provision(&tree, &worker, &new).unwrap();
+
+    for (node, want) in [
+        ("memory.max", "2048"),
+        ("cpu.max", "max 50000"),
+        ("pids.max", "max"),
+    ] {
+        let got = std::fs::read_to_string(cgroup.path.join(node)).unwrap();
+        assert_eq!(got, want, "{node}");
+    }
+}
+
 #[test]
 fn provision_refuses_a_limit_whose_controller_is_not_delegated() {
     let (own, tree) = taken_over("cpu pids");

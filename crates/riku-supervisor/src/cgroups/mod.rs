@@ -58,32 +58,84 @@ pub struct CgroupLimits {
     pub pids_max: Option<u64>,
 }
 
-/// One limit to write: the controller that owns it, its file, its value.
+/// One limit file: the controller that owns it, its file, and what to write.
 struct LimitNode {
     controller: &'static str,
     file: &'static str,
-    value: String,
+    value: NodeValue,
+}
+
+/// What a limit file gets.
+enum NodeValue {
+    /// The limit the config sets.
+    Set(String),
+    /// No limit is set: the unlimited value, written only over a file that
+    /// already exists, so a reused cgroup drops a limit an older config set.
+    Unlimited(String),
+}
+
+impl LimitNode {
+    fn new(
+        controller: &'static str,
+        file: &'static str,
+        limit: Option<String>,
+        unlimited: String,
+    ) -> LimitNode {
+        let value = match limit {
+            Some(limit) => NodeValue::Set(limit),
+            None => NodeValue::Unlimited(unlimited),
+        };
+        LimitNode {
+            controller,
+            file,
+            value,
+        }
+    }
+
+    fn is_set(&self) -> bool {
+        matches!(self.value, NodeValue::Set(_))
+    }
 }
 
 impl CgroupLimits {
-    /// The files these limits ask for. A limit left at `None` writes none.
+    /// Every limit file, with the limit or the unlimited value.
     fn nodes(&self) -> Vec<LimitNode> {
-        let memory = self.memory_max_bytes.map(|bytes| LimitNode {
-            controller: "memory",
-            file: "memory.max",
-            value: bytes.to_string(),
-        });
-        let cpu = self.cpu_quota_us.map(|quota| LimitNode {
-            controller: "cpu",
-            file: "cpu.max",
-            value: format!("{quota} {}", self.cpu_period_us),
-        });
-        let pids = self.pids_max.map(|pids| LimitNode {
-            controller: "pids",
-            file: "pids.max",
-            value: pids.to_string(),
-        });
-        [memory, cpu, pids].into_iter().flatten().collect()
+        let period = self.cpu_period_us;
+        vec![
+            LimitNode::new(
+                "memory",
+                "memory.max",
+                self.memory_max_bytes.map(|bytes| bytes.to_string()),
+                "max".to_string(),
+            ),
+            LimitNode::new(
+                "cpu",
+                "cpu.max",
+                self.cpu_quota_us.map(|quota| format!("{quota} {period}")),
+                format!("max {period}"),
+            ),
+            LimitNode::new(
+                "pids",
+                "pids.max",
+                self.pids_max.map(|pids| pids.to_string()),
+                "max".to_string(),
+            ),
+        ]
+    }
+}
+
+/// Writes `node` into the cgroup at `path`. An unset limit is written as
+/// unlimited only when its controller is delegated and the file exists:
+/// the kernel shows a controller's files only once it is enabled.
+fn apply_node(path: &Path, node: &LimitNode, missing: &[&str]) -> Result<()> {
+    match &node.value {
+        NodeValue::Set(value) => write_node(path, node.file, value),
+        NodeValue::Unlimited(value) => {
+            if missing.contains(&node.controller) || !path.join(node.file).exists() {
+                return Ok(());
+            }
+            write_node(path, node.file, value)
+        }
     }
 }
 
@@ -114,7 +166,10 @@ pub fn startup_diagnostic(err: &anyhow::Error) -> String {
 
 impl WorkerCgroup {
     /// Create (or reuse) the cgroup directory for `worker` under the
-    /// supervisor's `apps/` cgroup and write `limits` to it. Call this from
+    /// supervisor's `apps/` cgroup and write `limits` to it. A reused
+    /// directory has each limit `limits` leaves unset put back to unlimited
+    /// (on delegated controllers), so it never keeps an older config's
+    /// limit. Call this from
     /// the supervisor (parent) before spawning the worker, so the
     /// constraints already exist by the time the worker joins via
     /// `add_self`. Refuses a limit whose controller the unit's cgroup does
@@ -133,7 +188,10 @@ impl WorkerCgroup {
         }
         let nodes = limits.nodes();
         let missing = tree.missing_controllers();
-        if let Some(node) = nodes.iter().find(|n| missing.contains(&n.controller)) {
+        if let Some(node) = nodes
+            .iter()
+            .find(|n| n.is_set() && missing.contains(&n.controller))
+        {
             return Err(anyhow!(
                 "{worker} sets {}, but the {} controller is not delegated to riku",
                 node.file,
@@ -146,7 +204,7 @@ impl WorkerCgroup {
             return Err(e);
         }
         for node in &nodes {
-            if let Err(e) = write_node(&path, node.file, &node.value) {
+            if let Err(e) = apply_node(&path, node, missing) {
                 return Err(e);
             }
         }
