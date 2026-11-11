@@ -45,6 +45,21 @@ fn readonly_mask_covers_values_that_expand_a_secret() {
 }
 
 #[test]
+fn readonly_mask_covers_a_reference_to_a_secret_redefined_later() {
+    let (_tmp, paths) = shop();
+    fs::write(
+        paths.env_root.join("shop/ENV"),
+        "API_KEY=old\nCOPY=$API_KEY\nAPI_KEY=new\n",
+    )
+    .unwrap();
+
+    let got = cmd_agent_config_get(&paths, &AgentScope::Readonly, "shop", "COPY");
+
+    let value = &got.data.expect("get returned no data")["value"];
+    assert_eq!(value, "***", "the earlier secret value leaked");
+}
+
+#[test]
 fn staging_agent_sees_secret_values() {
     let (_tmp, paths) = shop();
 
