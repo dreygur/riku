@@ -99,19 +99,24 @@ riku dashboard [--bind 127.0.0.1:8088] [--token T]    # on laptop: opens browser
 
 ## Agent interface (JSON)
 
-`riku agent` prints one JSON object per call on stdout. A response with an error code exits 1; success and confirmation requests exit 0.
+`riku agent` prints one JSON object per call on stdout; progress goes to stderr. A response with an error code exits 1; success and confirmation requests exit 0.
+
+Through an agent key (forced command `riku agent --scope ...`) send only the command: `ssh riku@host ps myapp`. On the server: `riku agent ps myapp`.
 
 ```bash
-riku agent --intro                          # scope and permitted commands
-riku agent --schema                         # full JSON command schema
-riku agent ps myapp
-riku agent config:get myapp KEY
-riku agent logs myapp [web]                 # newest 100 lines per log file
-riku agent destroy myapp                    # returns confirm_token
-riku agent destroy myapp --confirm <token>  # only after a human approves
+ssh riku@host --intro                          # scope and permitted commands
+ssh riku@host --schema                         # full JSON command schema
+ssh riku@host ps myapp
+ssh riku@host logs myapp [web]                 # newest 100 lines per log file
+ssh riku@host config:get myapp KEY
+ssh riku@host config:set myapp DEBUG=1         # redeploys
+ssh riku@host config:unset myapp DEBUG
+ssh riku@host run myapp -- python manage.py migrate   # exit_code, stdout, stderr
+ssh riku@host destroy myapp                    # returns confirm_token
+ssh riku@host destroy myapp --confirm <token>  # only after a human approves
 ```
 
-Scopes: `readonly` (apps, logs, ps, config:get, config:show, stats), `staging` (adds deploy, restart), `production` (adds stop, destroy). `run` and `config:set` return `NOT_IMPLEMENTED`; use `riku run` and `riku config set`. Scope comes from the forced command in `authorized_keys`; no `--scope` means readonly. The forced-command path over ssh does not pass the client command through yet, so run `riku agent` on the server.
+Scopes: `readonly` (apps, logs, ps, config:get, config:show, stats), `staging` (adds deploy, restart, run, config:set, config:unset), `production` (adds stop, destroy). Scope and identity come only from the forced command; a request carrying `--scope` or `--agent-id` is refused. `destroy`, `stop`, and `config:set`/`config:unset` on keys containing SECRET, PASSWORD, TOKEN, _KEY or DATABASE_URL return a confirm token first; the token only works for the identical request. `run` uses no shell, caps output at 64 KiB per stream and kills the command after 300 s.
 
 ## Common Mistakes
 
@@ -120,6 +125,8 @@ Scopes: `readonly` (apps, logs, ps, config:get, config:show, stats), `staging` (
 | `riku --json ps myapp` | Only `riku agent` speaks JSON, and always does: `riku agent ps myapp` |
 | `riku agent run myapp ls -la` | Arguments starting with `-` need `--`: `riku agent run myapp -- ls -la` |
 | Treating a confirmation request as failure | It exits 0 with `confirmation_required: true`; ask the human, then pass `--confirm` |
+| Retrying config:set after `DEPLOY_FAILED` | The config was saved; fix the deploy and run `deploy`, do not set again |
+| `run myapp "cd x && make"` | No shell: `run myapp -- sh -c "cd x && make"` |
 | `riku config set myapp RIKU_DOMAINS=...` | `riku settings set myapp routing.domains=...` |
 | Expecting `destroy` to confirm | Plain `riku destroy` deletes immediately. Ask the human first |
 | Using `--local` with `rk` | `rk` has no `--local`; use `riku` on the server |

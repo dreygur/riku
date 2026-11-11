@@ -179,9 +179,23 @@ pub fn write_live_env(app: &str, paths: &RikuPaths, env: &HashMap<String, String
 /// Write updated environment variables to the app's ENV file, then trigger a redeploy.
 ///
 /// This is the service-layer entry point for config changes. CLI commands must
-/// call this instead of wiring `write_config` + `do_deploy` themselves.
+/// call this, or `write_env` then `redeploy` when they report the two steps
+/// apart, instead of wiring `write_config` + `do_deploy` themselves.
 #[allow(clippy::question_mark)]
 pub fn update_env_and_redeploy(
+    app: &str,
+    paths: &crate::config::RikuPaths,
+    env: &HashMap<String, String>,
+) -> Result<()> {
+    if let Err(e) = write_env(app, paths, env) {
+        return Err(e);
+    }
+    redeploy(app, paths)
+}
+
+/// Replaces the app's ENV file with `env`, private to the riku user.
+#[allow(clippy::question_mark)]
+pub fn write_env(
     app: &str,
     paths: &crate::config::RikuPaths,
     env: &HashMap<String, String>,
@@ -190,11 +204,12 @@ pub fn update_env_and_redeploy(
     if let Err(e) = crate::util::create_private_dir(&env_dir) {
         return Err(e);
     }
-    if let Err(e) = crate::util::write_config(&env_dir.join("ENV"), env, "=") {
-        return Err(e);
-    }
-    let deltas = HashMap::new();
-    super::do_deploy(app, paths, &deltas, None)
+    crate::util::write_config(&env_dir.join("ENV"), env, "=")
+}
+
+/// Deploys the app again so it runs with its current ENV.
+pub fn redeploy(app: &str, paths: &crate::config::RikuPaths) -> Result<()> {
+    super::do_deploy(app, paths, &HashMap::new(), None)
 }
 
 #[cfg(test)]

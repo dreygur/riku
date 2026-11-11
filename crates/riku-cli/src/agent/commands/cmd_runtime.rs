@@ -154,15 +154,6 @@ pub fn cmd_agent_stop_confirm(
     }
 }
 
-/// Not implemented: says so as an error, so an agent never believes a
-/// command ran.
-pub fn cmd_agent_run(_paths: &RikuPaths, _app: &str, _cmd: &[String]) -> AgentResponse {
-    AgentResponse::error(
-        "NOT_IMPLEMENTED",
-        "agent run is not implemented; use `riku run <app> <command>`",
-    )
-}
-
 pub fn cmd_agent_stats(paths: &RikuPaths, app: Option<&str>) -> AgentResponse {
     match app {
         Some(app_name) => {

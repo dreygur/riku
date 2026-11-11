@@ -7,9 +7,9 @@ use super::audit::{log_agent_action, open_before_mutation, AuditEntry};
 use super::auth::{check_rate_limit_now, AgentSession};
 use super::commands::{
     cmd_agent_apps, cmd_agent_config_get, cmd_agent_config_set, cmd_agent_config_show,
-    cmd_agent_deploy, cmd_agent_destroy_confirm, cmd_agent_destroy_request, cmd_agent_logs,
-    cmd_agent_ps, cmd_agent_restart, cmd_agent_run, cmd_agent_stats, cmd_agent_stop,
-    cmd_agent_stop_confirm,
+    cmd_agent_config_unset, cmd_agent_deploy, cmd_agent_destroy_confirm, cmd_agent_destroy_request,
+    cmd_agent_logs, cmd_agent_ps, cmd_agent_restart, cmd_agent_run, cmd_agent_stats,
+    cmd_agent_stop, cmd_agent_stop_confirm,
 };
 use super::quiet_stdout::with_stdout_on_stderr;
 use super::state::agent_dir;
@@ -136,7 +136,14 @@ fn run_agent_command(
             if args.is_empty() {
                 AgentResponse::error("INVALID_PARAMETERS", "Missing app name")
             } else {
-                cmd_agent_config_set(paths, &args[0], &args[1..])
+                cmd_agent_config_set(paths, &state, &args[0], &args[1..], confirm_token)
+            }
+        }
+        "config:unset" => {
+            if args.is_empty() {
+                AgentResponse::error("INVALID_PARAMETERS", "Missing app name")
+            } else {
+                cmd_agent_config_unset(paths, &state, &args[0], &args[1..], confirm_token)
             }
         }
         "config:show" => {

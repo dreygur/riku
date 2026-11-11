@@ -103,7 +103,7 @@ pub fn cmd_agent_schema() -> Result<()> {
             },
             {
                 "name": "config:set",
-                "description": "Not implemented yet: returns NOT_IMPLEMENTED. Use riku config set.",
+                "description": "Set environment variables and redeploy",
                 "parameters": {
                     "app": {
                         "type": "string",
@@ -116,9 +116,28 @@ pub fn cmd_agent_schema() -> Result<()> {
                         "description": "KEY=VALUE pairs to set"
                     }
                 },
-                "requires_confirmation": true,
+                "requires_confirmation": "when a key name contains one of confirmation_markers",
                 "permissions": ["staging", "production"],
-                "confirmation_for_keys": ["DATABASE_URL", "SECRET_KEY", "PASSWORD", "API_KEY"]
+                "confirmation_markers": ["SECRET", "PASSWORD", "TOKEN", "_KEY", "DATABASE_URL"]
+            },
+            {
+                "name": "config:unset",
+                "description": "Remove environment variables and redeploy",
+                "parameters": {
+                    "app": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Application name"
+                    },
+                    "keys": {
+                        "type": "array",
+                        "required": true,
+                        "description": "Keys to remove"
+                    }
+                },
+                "requires_confirmation": "when a key name contains one of confirmation_markers",
+                "permissions": ["staging", "production"],
+                "confirmation_markers": ["SECRET", "PASSWORD", "TOKEN", "_KEY", "DATABASE_URL"]
             },
             {
                 "name": "config:show",
@@ -198,7 +217,7 @@ pub fn cmd_agent_schema() -> Result<()> {
             },
             {
                 "name": "run",
-                "description": "Not implemented yet: returns NOT_IMPLEMENTED. Use riku run.",
+                "description": "Run a command in the app directory with its live env, without a shell. Output is capped at 64 KiB per stream and the command is killed after 300 seconds",
                 "parameters": {
                     "app": {
                         "type": "string",
@@ -206,11 +225,12 @@ pub fn cmd_agent_schema() -> Result<()> {
                         "description": "Application name"
                     },
                     "command": {
-                        "type": "string",
+                        "type": "array",
                         "required": true,
-                        "description": "Command to execute"
+                        "description": "Program and its arguments; put -- before arguments that start with -"
                     }
                 },
+                "returns": "exit_code, stdout, stderr, truncated, timed_out; a nonzero exit or timeout is COMMAND_FAILED with the same data",
                 "requires_confirmation": false,
                 "permissions": ["staging", "production"]
             },
@@ -248,8 +268,9 @@ pub fn cmd_agent_schema() -> Result<()> {
             "INVALID_TOKEN": "Confirmation token is unknown, used, expired or for another action",
             "RATE_LIMIT_EXCEEDED": "Too many requests",
             "STATE_UNAVAILABLE": "Rate limit or audit state cannot be read or written",
-            "NOT_IMPLEMENTED": "Command is listed but not available yet",
-            "DEPLOY_FAILED": "Deploy failed",
+            "COMMAND_FAILED": "agent run could not start, exited nonzero or timed out",
+            "CONFIG_FAILED": "The ENV file could not be written; nothing changed",
+            "DEPLOY_FAILED": "Deploy failed (after config:set or config:unset the config was saved)",
             "RESTART_FAILED": "Restart failed",
             "STOP_FAILED": "Stop failed",
             "DESTROY_FAILED": "Destroy failed"

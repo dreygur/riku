@@ -351,8 +351,7 @@ phase 4 come after.
   the template needs `RIKU_DOMAINS`, which it is never given. Its output
   file is now `acme-challenge.conf.disabled`, outside the `*.conf` include,
   so it stays off even once rendering works; turning it on needs a design.
-- The agent forced command `command="riku agent --scope ..."` now parses,
-  but sshd runs it with the client's request only in `SSH_ORIGINAL_COMMAND`,
-  which `riku agent` never reads, so an agent behind that key sees only the
-  help output. Reading it needs a design, and tokens from the client must
-  never override the forced command's `--scope`.
+- Done on fix/agent-cli-errors (2026-11-11): the agent forced command now
+  reads the client's request from `SSH_ORIGINAL_COMMAND`, refusing any
+  scope, identity or target option from the client. Agent `run`,
+  `config:set` and `config:unset` work.

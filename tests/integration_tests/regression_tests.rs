@@ -618,6 +618,32 @@ mod agent_state_tests {
         assert_eq!(out.status.code(), Some(1), "{stdout}");
     }
 
+    fn forced_agent(home: &TempDir, original: &str) -> std::process::Output {
+        let bin =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku");
+        std::process::Command::new(bin)
+            .args(["agent", "--scope", "readonly", "--agent-id", "ssh-test"])
+            .env("HOME", home.path())
+            .env("SSH_ORIGINAL_COMMAND", original)
+            .env_remove("RIKU_ROOT")
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first")
+    }
+
+    #[test]
+    fn forced_agent_key_runs_the_client_request_in_its_own_scope() {
+        let home = TempDir::new().unwrap();
+
+        let apps = forced_agent(&home, "riku agent apps");
+        let stdout = String::from_utf8_lossy(&apps.stdout);
+        assert!(stdout.contains("\"success\":true"), "{stdout}");
+
+        let raised = forced_agent(&home, "deploy shop --scope production");
+        let stdout = String::from_utf8_lossy(&raised.stdout);
+        assert!(stdout.contains("INVALID_PARAMETERS"), "{stdout}");
+        assert_eq!(raised.status.code(), Some(1), "{stdout}");
+    }
+
     /// Deploy progress, ours and the child processes', must go to stderr so
     /// stdout stays one JSON object an agent can parse.
     #[test]

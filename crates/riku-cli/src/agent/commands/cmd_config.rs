@@ -1,4 +1,4 @@
-/// Agent commands for configuration: config:get, config:set, config:show.
+/// Agent commands that read configuration: config:get, config:show.
 use std::collections::HashMap;
 
 use serde_json::json;
@@ -30,15 +30,6 @@ pub fn cmd_agent_config_get(paths: &RikuPaths, app: &str, key: &str) -> AgentRes
     }
 
     AgentResponse::error("KEY_NOT_FOUND", &format!("Key '{}' not found", key))
-}
-
-/// Not implemented: says so as an error, so an agent never believes the
-/// config changed.
-pub fn cmd_agent_config_set(_paths: &RikuPaths, _app: &str, _settings: &[String]) -> AgentResponse {
-    AgentResponse::error(
-        "NOT_IMPLEMENTED",
-        "agent config:set is not implemented; use `riku config set <app> KEY=VALUE`",
-    )
 }
 
 pub fn cmd_agent_config_show(paths: &RikuPaths, app: &str) -> AgentResponse {
