@@ -194,51 +194,6 @@ log_file = "/tmp/test.log"
         Ok(())
     }
 
-    /// ResourceLimits env vars parse correctly, including extreme values.
-    #[test]
-    fn test_resource_limits_from_env() -> Result<()> {
-        use std::env;
-
-        // Normal values
-        env::set_var("RIKU_MAX_MEMORY_MB", "256");
-        env::set_var("RIKU_MAX_OPEN_FILES", "512");
-        env::set_var("RIKU_MAX_PROCESSES", "32");
-        env::set_var("RIKU_MAX_CPU_SECONDS", "1800");
-
-        // Validate env vars are set correctly (simulates what ResourceLimits::from_env reads)
-        assert_eq!(env::var("RIKU_MAX_MEMORY_MB").unwrap(), "256");
-        assert_eq!(env::var("RIKU_MAX_OPEN_FILES").unwrap(), "512");
-        assert_eq!(env::var("RIKU_MAX_PROCESSES").unwrap(), "32");
-        assert_eq!(env::var("RIKU_MAX_CPU_SECONDS").unwrap(), "1800");
-
-        env::remove_var("RIKU_MAX_MEMORY_MB");
-        env::remove_var("RIKU_MAX_OPEN_FILES");
-        env::remove_var("RIKU_MAX_PROCESSES");
-        env::remove_var("RIKU_MAX_CPU_SECONDS");
-
-        // Extreme values should be strings: parsing them is the caller's responsibility
-        env::set_var("RIKU_MAX_MEMORY_MB", "999999");
-        env::set_var("RIKU_MAX_OPEN_FILES", "1000000");
-        let mem: u64 = env::var("RIKU_MAX_MEMORY_MB")
-            .unwrap()
-            .parse()
-            .expect("should parse large number");
-        assert_eq!(mem, 999999);
-
-        // Invalid (non-numeric) value: parsing should fail
-        env::set_var("RIKU_MAX_MEMORY_MB", "not_a_number");
-        let result: std::result::Result<u64, _> = env::var("RIKU_MAX_MEMORY_MB").unwrap().parse();
-        assert!(
-            result.is_err(),
-            "non-numeric limit value should fail to parse"
-        );
-
-        env::remove_var("RIKU_MAX_MEMORY_MB");
-        env::remove_var("RIKU_MAX_OPEN_FILES");
-
-        Ok(())
-    }
-
     /// Health check status transitions are correctly represented in JSON.
     #[test]
     fn test_health_check_failure_tracking() -> Result<()> {
@@ -625,39 +580,6 @@ log_file = "/tmp/test.log"
         let stored_cmd = parsed["worker"]["command"].as_str().unwrap();
         assert!(stored_cmd.starts_with("echo "), "Command prefix preserved");
         assert_eq!(stored_cmd.len(), long_cmd.len(), "Full command stored");
-
-        Ok(())
-    }
-
-    /// Environment variable limit values parse correctly.
-    #[test]
-    fn test_environment_variable_limits() -> Result<()> {
-        use std::env;
-
-        // Use test-specific var names to avoid parallel-test interference with
-        // test_resource_limits_from_env which writes the same RIKU_MAX_* vars.
-        let cases = [
-            ("RIKU_EVL_MAX_MEMORY_MB", "512", 512u64),
-            ("RIKU_EVL_MAX_OPEN_FILES", "1024", 1024u64),
-            ("RIKU_EVL_MAX_PROCESSES", "64", 64u64),
-        ];
-
-        for (var, val, expected) in &cases {
-            env::set_var(var, val);
-            let parsed: u64 = env::var(var).unwrap().parse().unwrap();
-            assert_eq!(
-                parsed, *expected,
-                "Env var {} should parse to {}",
-                var, expected
-            );
-            env::remove_var(var);
-        }
-
-        // Zero values are valid (disabling limits)
-        env::set_var("RIKU_EVL_MAX_MEMORY_MB", "0");
-        let parsed: u64 = env::var("RIKU_EVL_MAX_MEMORY_MB").unwrap().parse().unwrap();
-        assert_eq!(parsed, 0);
-        env::remove_var("RIKU_EVL_MAX_MEMORY_MB");
 
         Ok(())
     }

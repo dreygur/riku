@@ -1,35 +1,15 @@
-use super::discovery::{get_client_plugin_path, list_client_plugins};
+use super::discovery::{client_plugin_path_in, list_client_plugins_in};
 use super::execute::is_executable;
-use std::env;
 use std::fs;
 use std::io::Write;
-use std::sync::{Mutex, OnceLock};
 use tempfile::TempDir;
-
-// Mutex to ensure tests don't run in parallel when modifying HOME
-static HOME_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
-
-fn get_home_mutex() -> &'static Mutex<()> {
-    HOME_MUTEX.get_or_init(|| Mutex::new(()))
-}
 
 #[test]
 fn test_get_client_plugin_path() {
-    let _guard = get_home_mutex().lock().unwrap();
-    let original_home = env::var("HOME").ok();
+    let home = TempDir::new().unwrap();
 
-    // Set HOME for testing
-    let temp_dir = TempDir::new().unwrap();
-    env::set_var("HOME", temp_dir.path());
-
-    let path = get_client_plugin_path("test-plugin").unwrap();
+    let path = client_plugin_path_in(home.path(), "test-plugin");
     assert!(path.ends_with(".riku/client-plugins/test-plugin"));
-
-    // Restore original HOME
-    match original_home {
-        Some(home) => env::set_var("HOME", home),
-        None => env::remove_var("HOME"),
-    }
 }
 
 #[test]
@@ -60,32 +40,18 @@ fn test_is_executable() {
 
 #[test]
 fn test_list_client_plugins_empty() {
-    let _guard = get_home_mutex().lock().unwrap();
-    let original_home = env::var("HOME").ok();
+    let home = TempDir::new().unwrap();
 
-    let temp_dir = TempDir::new().unwrap();
-    env::set_var("HOME", temp_dir.path());
-
-    let plugins = list_client_plugins().unwrap();
+    let plugins = list_client_plugins_in(home.path()).unwrap();
     assert!(plugins.is_empty());
-
-    // Restore original HOME
-    match original_home {
-        Some(home) => env::set_var("HOME", home),
-        None => env::remove_var("HOME"),
-    }
 }
 
 #[test]
 fn test_list_client_plugins() {
-    let _guard = get_home_mutex().lock().unwrap();
-    let original_home = env::var("HOME").ok();
-
-    let temp_dir = TempDir::new().unwrap();
-    env::set_var("HOME", temp_dir.path());
+    let home = TempDir::new().unwrap();
 
     // Create plugins directory
-    let plugins_dir = temp_dir.path().join(".riku").join("client-plugins");
+    let plugins_dir = home.path().join(".riku").join("client-plugins");
     fs::create_dir_all(&plugins_dir).unwrap();
 
     // Create a plugin
@@ -102,12 +68,6 @@ fn test_list_client_plugins() {
         fs::set_permissions(&plugin_path, perms).unwrap();
     }
 
-    let plugins = list_client_plugins().unwrap();
+    let plugins = list_client_plugins_in(home.path()).unwrap();
     assert_eq!(plugins, vec!["test-plugin"]);
-
-    // Restore original HOME
-    match original_home {
-        Some(home) => env::set_var("HOME", home),
-        None => env::remove_var("HOME"),
-    }
 }

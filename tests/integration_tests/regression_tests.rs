@@ -394,36 +394,6 @@ max_restarts = 5
             "glob result must match the expected filename"
         );
     }
-
-    // extra: plugin timeout env var parsing
-
-    /// Regression: `RIKU_PLUGIN_TIMEOUT` must fall back to 300 s when unset or
-    /// non-numeric.  Verified at the integration level by checking the env var
-    /// plumbing independently of the executor's internal logic.
-    #[test]
-    fn plugin_timeout_env_var_plumbing() {
-        const KEY: &str = "RIKU_PLUGIN_TIMEOUT";
-        const DEFAULT: u64 = 300;
-
-        // Helper mirrors the logic in executor::plugin_timeout.
-        let read_timeout = || -> u64 {
-            std::env::var(KEY)
-                .ok()
-                .and_then(|v| v.parse::<u64>().ok())
-                .unwrap_or(DEFAULT)
-        };
-
-        std::env::remove_var(KEY);
-        assert_eq!(read_timeout(), DEFAULT, "unset var → default");
-
-        std::env::set_var(KEY, "42");
-        assert_eq!(read_timeout(), 42, "numeric value is respected");
-
-        std::env::set_var(KEY, "not-a-number");
-        assert_eq!(read_timeout(), DEFAULT, "non-numeric → default");
-
-        std::env::remove_var(KEY);
-    }
 }
 
 #[cfg(test)]

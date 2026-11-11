@@ -133,6 +133,15 @@ pub struct RikuPaths {
     pub reload_programs: ReloadPrograms,
 }
 
+/// The acme.sh install: `raw` (the `RIKU_ACME_ROOT` value) when set, else
+/// `~/.acme.sh`. Takes the value so tests never set the variable.
+fn acme_sh_root(raw: Option<String>, home: &Path) -> PathBuf {
+    match raw {
+        Some(root) => PathBuf::from(root),
+        None => home.join(".acme.sh"),
+    }
+}
+
 impl RikuPaths {
     /// Returns the deploy log file path for a given app: `{log_root}/{app}/deploy.log`.
     pub fn deploy_log_file(&self, app: &str) -> PathBuf {
@@ -160,9 +169,7 @@ impl RikuPaths {
     /// [`Self::from_dirs`] with the system nginx paths given.
     pub fn with_nginx_host(riku_root: PathBuf, home: &Path, nginx_host: NginxHostPaths) -> Self {
         let riku_script = env::current_exe().unwrap_or_else(|_| PathBuf::from("riku"));
-        let acme_sh_root = env::var("RIKU_ACME_ROOT")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| home.join(".acme.sh"));
+        let acme_sh_root = acme_sh_root(env::var("RIKU_ACME_ROOT").ok(), home);
 
         Self {
             plugin_root: riku_root.join("plugins"),

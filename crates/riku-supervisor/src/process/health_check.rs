@@ -4,7 +4,6 @@ use anyhow::Result;
 use std::time::Duration;
 
 use crate::config::HealthCheck;
-use crate::plugins::{EventBus, EventName};
 use crate::stats::{get_process_resources, HealthStatus};
 
 use super::ProcessManager;
@@ -172,7 +171,7 @@ impl ProcessManager {
                 // admin most needs to hear about (riku has given up, not
                 // just self-healed).
                 if let Some(p) = self.processes.get(id) {
-                    emit_app_failed(
+                    self.events.app_failed(
                         p.config.worker.app.clone(),
                         id.to_string(),
                         p.last_exit_code,
@@ -278,7 +277,7 @@ impl ProcessManager {
                 new_process.last_restart = std::time::Instant::now();
             }
 
-            emit_app_restarted(
+            self.events.app_restarted(
                 config.worker.app,
                 process_id.to_string(),
                 exit_code,
@@ -288,67 +287,6 @@ impl ProcessManager {
 
         Ok(())
     }
-}
-
-/// Fire the `app.restarted` lifecycle event (Plugin Protocol v1 §7.1) for a
-/// crash we just recovered from.
-///
-/// Dispatched on its own thread: `EventBus::emit` runs each subscriber
-/// synchronously with its own timeout, and this fires from the supervisor's
-/// single-threaded 1-second monitoring tick: a slow or unreachable
-/// notification target must never delay health checks for every other app.
-fn emit_app_restarted(app: String, instance: String, exit_code: Option<i32>, restart_count: u32) {
-    std::thread::spawn(move || {
-        let paths = match riku_config::RikuPaths::from_env() {
-            Ok(paths) => paths,
-            Err(e) => {
-                tracing::error!("Cannot emit app.restarted for {app}: {e}");
-                return;
-            }
-        };
-        EventBus::new(&paths).publish(
-            EventName::AppRestarted,
-            &app,
-            serde_json::json!({
-                "instance": instance,
-                "exit_code": exit_code,
-                "restart_count": restart_count,
-            }),
-        );
-    });
-}
-
-/// Fire the `app.failed` lifecycle event for a process that crashed enough
-/// times to hit `max_restarts` and is being permanently removed from
-/// supervision: the case `emit_app_restarted` never covers, since
-/// `restart_process()` (and therefore that emit call) is never reached once
-/// riku gives up.
-fn emit_app_failed(
-    app: String,
-    instance: String,
-    exit_code: Option<i32>,
-    restart_count: u32,
-    max_restarts: u32,
-) {
-    std::thread::spawn(move || {
-        let paths = match riku_config::RikuPaths::from_env() {
-            Ok(paths) => paths,
-            Err(e) => {
-                tracing::error!("Cannot emit app.failed for {app}: {e}");
-                return;
-            }
-        };
-        EventBus::new(&paths).publish(
-            EventName::AppFailed,
-            &app,
-            serde_json::json!({
-                "instance": instance,
-                "exit_code": exit_code,
-                "restart_count": restart_count,
-                "max_restarts": max_restarts,
-            }),
-        );
-    });
 }
 
 #[cfg(test)]

@@ -25,12 +25,25 @@ use super::{EventEnvelope, EventName};
 /// Delivers lifecycle events to subscribed plugins.
 pub struct EventBus<'a> {
     paths: &'a RikuPaths,
+    /// Variables every subscriber gets on top of the inherited environment
+    /// and riku's own `RIKU_*` keys.
+    subscriber_env: Vec<(String, String)>,
 }
 
 impl<'a> EventBus<'a> {
     /// Bind a bus to the plugin tree under `paths`.
     pub fn new(paths: &'a RikuPaths) -> Self {
-        Self { paths }
+        Self {
+            paths,
+            subscriber_env: Vec::new(),
+        }
+    }
+
+    /// Hand every subscriber `env` as well. Lets a caller, such as a test,
+    /// configure a subscriber without changing its own process environment.
+    pub fn with_subscriber_env(mut self, env: Vec<(String, String)>) -> Self {
+        self.subscriber_env = env;
+        self
     }
 
     /// Convenience: build an envelope and emit it.
@@ -93,6 +106,7 @@ impl<'a> EventBus<'a> {
         let mut cmd = Command::new(manifest.entry_path(bundle));
         cmd.arg("on_event")
             .current_dir(bundle)
+            .envs(self.subscriber_env.iter().map(|(key, value)| (key, value)))
             .env("RIKU_PLUGIN_API", RIKU_PLUGIN_API.to_string())
             .env("RIKU_ROOT", &self.paths.riku_root)
             .env("RIKU_PLUGIN_NAME", &manifest.name)

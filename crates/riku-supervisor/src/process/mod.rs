@@ -6,6 +6,7 @@ pub mod generation;
 pub mod health_check;
 mod health_interval;
 pub mod isolation;
+pub(crate) mod lifecycle_events;
 pub mod orchestration;
 pub mod pid_file;
 pub mod spawn;
@@ -23,6 +24,7 @@ use std::path::PathBuf;
 
 use crate::resource_limits::ResourceLimits;
 use crate::stats::StatsManager;
+use lifecycle_events::EventTarget;
 use orchestration::{new_probe_results, ProbeResults};
 
 /// Manages the lifecycle of application processes.
@@ -41,6 +43,8 @@ pub struct ProcessManager {
     /// Where each spawned process gets a `pid_file` marker. `None` writes
     /// no markers, which only tests rely on.
     pub(super) pid_dir: Option<PathBuf>,
+    /// Where crash lifecycle events go.
+    pub(super) events: EventTarget,
 }
 
 impl ProcessManager {
@@ -61,7 +65,16 @@ impl ProcessManager {
             probe_results: new_probe_results(),
             deployment_events: Vec::new(),
             pid_dir: None,
+            events: EventTarget::default(),
         })
+    }
+
+    /// Send crash lifecycle events to `events` instead of the riku tree the
+    /// environment names.
+    #[cfg(test)]
+    pub(crate) fn with_events(mut self, events: EventTarget) -> Self {
+        self.events = events;
+        self
     }
 
     /// Keep a marker per spawned process in `dir` (see `pid_file`).
