@@ -4,8 +4,10 @@
 //!
 //! Web facing kinds go through the same rolling replace a deploy uses: a new
 //! copy starts in a free slot, passes its health check and joins the router
-//! before an old one is drained, so the router never loses the kind. Other
-//! kinds have each config rewritten in place, which restarts that copy.
+//! before an old one is drained, so the router keeps the kind. A kind whose
+//! copies cannot overlap (see [`kinds_down_while_restarting`]) stops the old
+//! copy first and is down until its replacement is healthy. Other kinds have
+//! each config rewritten in place, which restarts that copy.
 
 // Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
 #![allow(clippy::question_mark)]
@@ -14,12 +16,13 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
+use riku_container::compose::ReplaceOrder;
 use riku_container::types::CopyIndex;
 use riku_supervisor::config::WorkerConfig;
 
 use super::files::write_worker_config;
 use super::web_env::{build_worker_env, is_web_facing};
-use super::web_rollout::{roll_web_kind, WebDeploy, WebRoutes};
+use super::web_rollout::{roll_web_kind, web_order, WebDeploy, WebRoutes};
 use crate::config::RikuPaths;
 use crate::rolling::RouteSink;
 
@@ -66,6 +69,24 @@ fn rewrite_copy(deploy: &WebDeploy<'_>, kind: &str, command: &str, ordinal: u32)
         Ok(_) => Ok(()),
         Err(e) => Err(e),
     }
+}
+
+/// The web facing kinds among `kinds` whose old copy is stopped before its
+/// replacement starts (a pinned `PORT`, or a shared wsgi socket), so their
+/// route is down while they restart.
+pub(crate) fn kinds_down_while_restarting<'a>(
+    kinds: impl IntoIterator<Item = &'a str>,
+    env: &HashMap<String, String>,
+) -> Result<Vec<&'a str>> {
+    let mut down = Vec::new();
+    for kind in kinds.into_iter().filter(|kind| is_web_facing(kind)) {
+        match web_order(kind, env) {
+            Ok(ReplaceOrder::StopFirst) => down.push(kind),
+            Ok(ReplaceOrder::Overlap) => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(down)
 }
 
 /// [`rewrite_running`] with the route sink web copies publish to.

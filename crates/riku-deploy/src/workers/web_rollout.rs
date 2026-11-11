@@ -69,7 +69,7 @@ impl RouteSink for WebRoutes<'_> {
 /// Copies overlap unless two of them would need the same address: a pinned
 /// `PORT` for `web`, or a shared `RIKU_NGINX_SOCKET` for a wsgi kind. Those
 /// stop the old copy before its replacement starts.
-fn web_order(kind: &str, env: &HashMap<String, String>) -> Result<ReplaceOrder> {
+pub(super) fn web_order(kind: &str, env: &HashMap<String, String>) -> Result<ReplaceOrder> {
     if kind == WEB_KIND {
         match pinned_port(env) {
             Ok(Some(_)) => return Ok(ReplaceOrder::StopFirst),

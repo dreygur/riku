@@ -3,7 +3,7 @@ use std::fs;
 
 use riku_supervisor::config::WorkerConfig;
 
-use super::rewrite_running_with;
+use super::{kinds_down_while_restarting, rewrite_running_with};
 use crate::config::RikuPaths;
 use crate::workers::create_workers_with;
 use crate::workers::mock_supervisor::{MockRoutes, MockSupervisor};
@@ -89,4 +89,30 @@ fn rewrite_gives_every_running_copy_the_new_env_and_keeps_web_routed() {
         routes.published
     );
     drop(supervisor);
+}
+
+/// A pinned `PORT` or a shared wsgi socket stops the old copy before its
+/// replacement starts, so restart must say the route goes down.
+#[test]
+fn only_stop_first_web_kinds_lose_their_route_while_restarting() {
+    let kinds = ["web", "worker", "wsgi"];
+    let pinned = HashMap::from([("PORT".to_string(), "8000".to_string())]);
+    let shared_socket = HashMap::from([(
+        "RIKU_NGINX_SOCKET".to_string(),
+        "/run/riku-sockets/app.sock".to_string(),
+    )]);
+
+    assert_eq!(
+        kinds_down_while_restarting(kinds, &HashMap::new()).unwrap(),
+        Vec::<&str>::new(),
+        "overlapping copies keep the route up"
+    );
+    assert_eq!(
+        kinds_down_while_restarting(kinds, &pinned).unwrap(),
+        ["web"]
+    );
+    assert_eq!(
+        kinds_down_while_restarting(kinds, &shared_socket).unwrap(),
+        ["wsgi"]
+    );
 }

@@ -41,7 +41,7 @@ mod web_rollout;
 
 use pinned::port_in_use;
 use plan::plan_workers;
-pub(crate) use rewrite::rewrite_running;
+pub(crate) use rewrite::{kinds_down_while_restarting, rewrite_running};
 pub use scaling::read_scaling_count;
 
 use files::{remove_stale_configs, write_worker_config};

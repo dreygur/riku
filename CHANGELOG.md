@@ -37,7 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a build, release, preflight or checkout change; each kind keeps its
   command and copy count, web facing kinds are rolled one copy at a time
   through the router as on a deploy, and restart holds the app's deploy
-  lock. A rebuild, a Procfile or routing change, or starting a stopped app
+  lock. A web kind whose copies cannot overlap (a pinned `PORT`, or a
+  shared wsgi socket) stops its old copy first, so its route is down until
+  the new one is healthy; restart prints a `▲` warning for it first. A rebuild, a Procfile or routing change, or starting a stopped app
   is `riku deploy <app>`; restart of an app with no running workers is
   refused with that pointer. `--hot` is now the same as a plain restart.
   Container apps keep their restart behavior.

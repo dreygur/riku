@@ -6,8 +6,11 @@
 //! edited ENV takes effect. Nothing is built, no release or preflight runs,
 //! and the checkout is left as it is; the runtime plugin's `env` subcommand
 //! is the only plugin call. Web facing kinds are rolled one copy at a time
-//! as on a deploy, so the router never loses them. A rebuild is
-//! `riku deploy`.
+//! as on a deploy: a new copy joins the router before an old one leaves,
+//! except for a kind whose copies cannot overlap (a pinned `PORT`, or a
+//! shared wsgi `RIKU_NGINX_SOCKET`), where the old copy stops first and the
+//! route is down until its replacement is healthy. Restart warns about such
+//! a kind before it starts. A rebuild is `riku deploy`.
 //!
 //! A single worker restart (the dashboard's button) keeps its config and
 //! advances the config file's mtime instead. The supervisor reloads a worker
@@ -18,12 +21,14 @@
 // Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
 #![allow(clippy::question_mark)]
 
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Result};
 use riku_supervisor::config::{app_worker_configs, WorkerConfig};
 
 use crate::config::RikuPaths;
+use crate::util::display;
 use crate::util::file_names::worker::WorkerName;
 use crate::{env_setup, lock, restart_env, supervisor_ctl, workers};
 
@@ -113,6 +118,22 @@ fn chosen_configs(app: &str, kind: Option<&str>, paths: &RikuPaths) -> Result<Ve
     }
 }
 
+/// `▲` for each web facing kind in `running` whose route goes down while it
+/// restarts (see [`workers::kinds_down_while_restarting`]).
+fn warn_route_down(running: &[WorkerConfig], env: &HashMap<String, String>) -> Result<()> {
+    let kinds: BTreeSet<&str> = running.iter().map(|c| c.worker.kind.as_str()).collect();
+    let down = match workers::kinds_down_while_restarting(kinds, env) {
+        Ok(down) => down,
+        Err(e) => return Err(e),
+    };
+    for kind in down {
+        display::warn(&format!(
+            "{kind} copies cannot overlap (pinned PORT or shared socket): its route is down while it restarts"
+        ));
+    }
+    Ok(())
+}
+
 /// Restart the enabled workers of `app`, or only those of process `kind`
 /// (`web`, `worker`, ...), with configs rewritten from the current ENV and
 /// riku settings, and return how many there are. An app with no enabled
@@ -150,6 +171,9 @@ fn restart_procfile_app_with(
         Err(e) => return Err(e),
     };
     if let Err(e) = require_supervisor(paths, start_supervisor) {
+        return Err(e);
+    }
+    if let Err(e) = warn_route_down(&running, &env) {
         return Err(e);
     }
     if let Err(e) = env_setup::write_live_env(app, paths, &env) {
