@@ -23,11 +23,12 @@ pub mod package_tools;
 pub mod redeploy_sites;
 pub mod router_check;
 pub mod settings_check;
+pub mod ssh_check;
 pub mod stale_paths;
 pub mod supervisor_check;
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
@@ -86,6 +87,15 @@ fn diagnosed_target(paths: &RikuPaths) -> Result<RikuPaths> {
         Ok(user) => Ok(user.riku_paths()),
         Err(e) => Err(e),
     }
+}
+
+/// The home of the user whose tree is diagnosed: the deploy user's under
+/// root, as in [`diagnosed_target`], and HOME otherwise.
+fn diagnosed_home() -> Option<PathBuf> {
+    if !running_as_root() {
+        return std::env::var_os("HOME").map(PathBuf::from);
+    }
+    DeployUser::lookup().ok().map(|user| user.home)
 }
 
 /// Redeploy the apps that have no site file in the active router's site
@@ -167,7 +177,7 @@ pub fn cmd_doctor(paths: &RikuPaths, fix: bool) -> Result<()> {
 pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     let mut checks = Vec::new();
     checks.extend(checks::dependencies());
-    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    let home = diagnosed_home();
     checks.extend(package_tools::package_tools(home.as_deref()));
     checks.push(checks::directories(paths));
     checks.extend(binary_check::binary());
@@ -186,7 +196,13 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     checks.push(container_check::container_engine(paths));
     checks.push(checks::plugins(paths));
     checks.push(checks::disk(paths));
-    checks.push(checks::ssh_access());
+    checks.push(match &home {
+        Some(home) => ssh_check::ssh_access(home),
+        None => Check::warn(
+            "ssh access",
+            "home not found, cannot locate authorized_keys",
+        ),
+    });
     checks.extend(app_env::renamed_keys(paths));
     checks.extend(own_cert_check::own_certificates(paths));
     checks

@@ -339,7 +339,9 @@ phase 4 come after.
   Also fixed: the `limits.isolation_*` settings were only applied with
   `RIKU_ISOLATION_ROOT`, whose network namespace cuts a web worker off;
   owner decision "limits alone": a limit now gives the worker its own
-  cgroup without chroot or namespaces (`config/limits.rs`).
+  cgroup without chroot or namespaces (`config/limits.rs`). And
+  `sudo riku doctor` read root's `authorized_keys` and package tool dirs
+  instead of the deploy user's (`doctor/ssh_check.rs`).
 
 - Checked 2026-11-11: the two nginx bugs once listed here
   (`RIKU_NGINX_CACHE_PREFIXES`, `RIKU_NGINX_CATCH_ALL`) are gone; #73
