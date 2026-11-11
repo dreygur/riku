@@ -42,6 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The bundled python and node plugins printed their notices with a
   `-----> ` prefix, which showed as `│  -----> ...` inside the deploy rail.
   The prefix is gone.
+- On a server with no public address (no `routing.server_ip`), the push
+  summary of a port or path mode app showed
+  `http://<this server's address>:8100`. It now shows the address the
+  server was detected to use, which may be private
+  (`http://192.168.10.121:8100`), and keeps the placeholder only when none
+  is found.
 - `riku restart --hot` on a Procfile app only rewrote the worker configs
   through their `workers-enabled` symlinks and sent no SIGHUP. A write
   through a symlink lands in `workers-available`, outside the watched

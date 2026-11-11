@@ -7,13 +7,14 @@ use std::path::Path;
 
 use crate::config::router::Router;
 use crate::config::{settings, RikuPaths};
-use crate::live_urls::{live_lines, path_lines, port_lines, Line, TlsState};
+use crate::live_urls::{live_lines, path_lines, port_lines, url_host, Line, TlsState};
 use crate::procfile_deploy::Deployed;
 use crate::progress::{DeployProgress, Outcome};
 use crate::router::app_routing::{AppRouting, RoutingMode};
 use crate::router::routing_env::{routing_env, Record};
 use crate::router::routing_state::RoutingState;
 use crate::util::display;
+use crate::util::outbound_ip::detect_outbound_ip;
 use crate::{git_ops, hooks, releases};
 
 /// The prefix of a live URL line; the summary lists the URL alone.
@@ -61,7 +62,12 @@ fn live_at(app: &str, env: &HashMap<String, String>, paths: &RikuPaths) -> Vec<L
     };
     let mut lines = live_lines(app, &routing, tls, crate::util::flag::https_only(env));
     let server = settings::load(paths).ok().map(|loaded| loaded.routing);
-    let server_ip = server.as_ref().and_then(|routing| routing.server_ip);
+    let configured = server.as_ref().and_then(|routing| routing.server_ip);
+    let needs_host = routing.port.is_some() || routing.mode == RoutingMode::Path;
+    let server_ip = match (configured, needs_host) {
+        (None, true) => url_host(None, detect_outbound_ip()),
+        _ => configured,
+    };
     if let Some(port) = routing.port {
         lines.extend(port_lines(port, server_ip));
     }

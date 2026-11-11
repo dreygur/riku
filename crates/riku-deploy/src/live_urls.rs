@@ -1,7 +1,7 @@
 //! The lines a push ends with: where the app is live, or why it has no URL
 //! and how to give it one.
 
-use std::net::Ipv4Addr;
+use std::net::{IpAddr, Ipv4Addr};
 
 use crate::router::app_routing::{AppRouting, RoutingMode};
 pub(crate) use crate::router::routing_state::TlsState;
@@ -89,6 +89,16 @@ pub(crate) fn live_lines(
         .filter(|domain| domain.as_str() != CATCH_ALL_NAME)
         .map(|domain| line(format!("Live at {scheme}://{domain}"), "green"))
         .collect()
+}
+
+/// The host for a port or path URL: the `configured` server_ip, else the
+/// IPv4 address this host was `detected` to use, which may be private.
+pub(crate) fn url_host(configured: Option<Ipv4Addr>, detected: Option<IpAddr>) -> Option<Ipv4Addr> {
+    match (configured, detected) {
+        (Some(ip), _) => Some(ip),
+        (None, Some(IpAddr::V4(ip))) => Some(ip),
+        _ => None,
+    }
 }
 
 /// The push output for an app answering on `port`. `server_ip` is the

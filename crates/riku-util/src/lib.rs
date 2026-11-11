@@ -29,6 +29,7 @@ pub mod fs;
 pub mod legacy_env;
 pub mod listening;
 pub mod nginx_validation;
+pub mod outbound_ip;
 pub mod process_util;
 pub mod procfile;
 pub mod public_key;

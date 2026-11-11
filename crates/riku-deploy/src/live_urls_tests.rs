@@ -122,6 +122,28 @@ fn port_lines_without_server_ip_say_where_to_look() {
 }
 
 #[test]
+fn url_host_falls_back_to_the_detected_address_when_none_is_configured() {
+    let public = Ipv4Addr::new(203, 0, 113, 10);
+    let private = Ipv4Addr::new(192, 168, 10, 121);
+
+    assert_eq!(
+        url_host(Some(public), Some(private.into())),
+        Some(public),
+        "server_ip from settings wins"
+    );
+    assert_eq!(
+        url_host(None, Some(private.into())),
+        Some(private),
+        "a server with no public address still shows the one it has"
+    );
+    assert_eq!(
+        url_host(None, None),
+        None,
+        "keep the placeholder when nothing is known"
+    );
+}
+
+#[test]
 fn path_mode_lists_the_path_and_warns_about_the_base_path() {
     let routed = AppRouting {
         mode: RoutingMode::Path,
