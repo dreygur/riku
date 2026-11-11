@@ -5,11 +5,13 @@
 pub mod generation;
 pub mod health_check;
 mod health_interval;
+mod health_probe;
 pub mod isolation;
 pub(crate) mod lifecycle_events;
 mod log_capture;
 pub mod orchestration;
 pub mod pid_file;
+mod restart;
 pub mod spawn;
 pub mod spawned;
 pub mod stop;
