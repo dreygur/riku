@@ -126,6 +126,7 @@ pub fn plugins(paths: &RikuPaths) -> Check {
     let count = std::fs::read_dir(&paths.plugin_root)
         .map(|rd| {
             rd.filter_map(|e| e.ok())
+                .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
                 .filter(|e| e.path().is_file())
                 .count()
         })

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `riku init` (and so `sudo riku init` after an upgrade) refreshes the
+  bundled plugins installed in the deploy user's `~/.riku/plugins/` (go,
+  node, python, ruby, rust-lang, riku-notify) to this riku's version, but
+  only copies riku wrote and nobody changed since. Installing a bundled
+  plugin now records each file's sha256 in `~/.riku/plugins/.bundled`. A
+  copy that differs from its record is left alone with a warning naming
+  `riku plugins install <name>`; copies an older riku installed have no
+  record, so they are left alone and listed with the command to refresh
+  them. A symlink, or a file the deploy user does not own, is never read or
+  replaced. Before this an upgrade kept the old plugin text, so a server
+  went on running an outdated python plugin.
+
 ### Changed
 
 - Breaking: `riku restart` (and `riku agent restart`, the dashboard and the

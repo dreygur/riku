@@ -24,6 +24,7 @@ use super::init_router::persist_router;
 use super::prerequisites::{check_prerequisites, warn_not_root};
 use super::root_init::root_init;
 use super::router_choice;
+use super::runtime_plugins::refresh_runtime_plugins;
 use super::server_ip::{ensure_routing_section, FallbackDomain, SERVER_IP_HINT};
 use super::ssh::setup_ssh_key_interactive;
 use super::stale_binary::remove_stale_binary;
@@ -236,6 +237,7 @@ fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<Router> {
     if let Err(e) = prepare_tree(paths, &router) {
         return Err(e);
     }
+    refresh_runtime_plugins(paths);
     if user_steps {
         if let Err(e) = remove_old_user_binary() {
             return Err(e);

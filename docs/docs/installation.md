@@ -330,7 +330,8 @@ cd ~/riku
 git pull
 cargo build --release
 
-# Install the new binary and rewrite units and the router helper
+# Install the new binary, rewrite units and the router helper, and refresh
+# the built-in runtime plugins you have not changed
 sudo cp target/release/riku /usr/local/bin/riku
 sudo riku init
 

@@ -295,7 +295,12 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let paths = RikuPaths::from_dirs(tmp.path().to_path_buf(), tmp.path());
         std::fs::create_dir_all(&paths.plugin_root).unwrap();
-        assert_eq!(checks::plugins(&paths).status, Status::Warn);
+        std::fs::write(paths.plugin_root.join(".bundled"), "").unwrap();
+        assert_eq!(
+            checks::plugins(&paths).status,
+            Status::Warn,
+            "the hidden bundled record counted as a plugin"
+        );
     }
 
     #[test]

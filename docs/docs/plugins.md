@@ -45,6 +45,25 @@ first-party **event-subscriber** bundle `riku-notify` (`riku install-plugins
 --plugins riku-notify`, not installed by default), see
 [Plugin Bundles](plugin-bundles.md#event-subscribers-notifiers).
 
+### Upgrading Bundled Plugins
+
+Installing a built-in plugin records the sha256 of every file it wrote in
+`~/.riku/plugins/.bundled`. On each `riku init` (including `sudo riku init`
+after an upgrade) riku compares the installed built-in plugins with that
+record:
+
+- unchanged since riku wrote it, and older than this riku's copy: rewritten,
+  shown as `◇  Runtime plugins  refreshed python, node`
+- changed by you: left alone, with a `▲` warning; `riku plugins install <name>`
+  replaces it
+- installed by a riku older than the record: left alone and listed; refresh
+  them with `riku install-plugins --plugins <names>`
+- a symlink, or not a regular file owned by the deploy user: never read or
+  replaced, and named in a warning
+
+The downloaded `java` and `clojure` plugins are not refreshed this way;
+reinstall them with `riku plugins install java` after an upgrade.
+
 ### Plugin Protocol
 
 Each runtime plugin is an executable that implements four subcommands, plus an optional fifth:
