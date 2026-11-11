@@ -42,8 +42,9 @@ fn deploy_container_app(
     progress.begin(Phase::Runtime);
     progress.done(containers::CONTAINER_RUNTIME);
     progress.begin(Phase::Processes);
-    progress.release_replacing();
-    if let Err(e) = containers::deploy_containers(&name, paths, env) {
+    let replaced =
+        containers::deploy_containers(&name, paths, env, || progress.release_replacing());
+    if let Err(e) = replaced {
         return Err(e);
     }
     if let Err(e) = env_setup::write_live_env(app, paths, env) {
@@ -139,3 +140,7 @@ pub(crate) fn run(
     deploy_finish::finish_deploy(app, paths, &deployed, &env, progress);
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "pipeline_tests.rs"]
+mod tests;

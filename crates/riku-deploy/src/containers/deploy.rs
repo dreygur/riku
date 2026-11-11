@@ -90,12 +90,17 @@ fn roll_out_app(ctx: &ContainerApp, counts: &BTreeMap<String, u32>) -> Result<()
 /// containers are healthy and routed (see [`super::retire`]). The supervisor
 /// is then signalled so it lists the new copies at once.
 ///
+/// `replacing` is called once the images and the release command are ready,
+/// right before the first copy is replaced. A failure before that call left
+/// every running copy as it was.
+///
 /// Blocks for as long as builds and health waits take, so it must not run on
 /// a tokio runtime thread.
 pub fn deploy_containers(
     app: &AppName,
     paths: &RikuPaths,
     env: &HashMap<String, String>,
+    replacing: impl FnOnce(),
 ) -> Result<()> {
     let ctx = match ContainerApp::load(app, paths, env.clone()) {
         Ok(ctx) => ctx,
@@ -109,6 +114,7 @@ pub fn deploy_containers(
         Ok(stale) => stale,
         Err(e) => return Err(e),
     };
+    replacing();
     let rolled = roll_out_app(&ctx, &counts);
     notify_supervisor_reload(paths);
     match rolled {

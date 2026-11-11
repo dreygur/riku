@@ -145,5 +145,5 @@ pub fn myapp() -> AppName {
 /// Deploy `myapp` on `server` with its saved ENV.
 pub fn deploy(server: &MockServer) -> Result<()> {
     let env = saved_env("myapp", &server.paths).unwrap();
-    deploy_containers(&myapp(), &server.paths, &env)
+    deploy_containers(&myapp(), &server.paths, &env, || {})
 }

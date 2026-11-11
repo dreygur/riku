@@ -87,8 +87,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   within 30 s.
 - A container app push that failed after its containers started being
   replaced reset the checkout to the last release under the new
-  containers. The checkout now stays at the pushed commit once anything
-  that runs it has changed, as it already did for Procfile workers.
+  containers. The checkout now stays at the pushed commit once the first
+  copy starts being replaced, as it already did for Procfile workers. A
+  failure before that (copy counts, image builds and pulls, build hooks,
+  the release command) replaced nothing, so the checkout goes back to the
+  last release and the push says the previous release still runs.
 - A push whose `LIVE_ENV` could not be written left the checkout at the
   pushed commit while the old workers kept running from it, and said the
   previous release no longer ran. Nothing has changed at that point, so
