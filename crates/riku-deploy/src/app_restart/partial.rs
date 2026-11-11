@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use riku_supervisor::config::{app_worker_configs, WorkerConfig};
 
 use super::config_file::read_config;
+use super::LiveEnv;
 use crate::config::RikuPaths;
 use crate::env_setup;
 use crate::workers::PartialRewrite;
@@ -47,20 +48,29 @@ fn listed(items: &[String]) -> String {
     }
 }
 
-/// `LIVE_ENV` describes `env` once any copy runs it, the supervisor reloads
-/// the configs already written, and the returned error names the kinds and
-/// copies on the new env and the kinds that may still run the old one.
-/// `running` is what ran before the restart.
+/// The restart that stopped part way.
+pub(super) struct Restart<'a> {
+    pub app: &'a str,
+    pub paths: &'a RikuPaths,
+    /// The env the restart was rewriting the configs to.
+    pub env: &'a HashMap<String, String>,
+    /// What ran before the restart.
+    pub running: &'a [WorkerConfig],
+    pub live_env: LiveEnv,
+}
+
+/// `LIVE_ENV` describes the new env once any copy runs it (only when the
+/// restart covered every enabled kind), the supervisor reloads the configs
+/// already written, and the returned error names the kinds and copies on
+/// the new env and the kinds that may still run the old one.
 pub(super) fn finish_partial(
-    app: &str,
-    paths: &RikuPaths,
-    env: &HashMap<String, String>,
-    running: &[WorkerConfig],
+    restart: &Restart<'_>,
     partial: PartialRewrite,
     reload_supervisor: impl Fn(&RikuPaths),
 ) -> anyhow::Error {
+    let (app, paths) = (restart.app, restart.paths);
     let copies = match partial.left_old.first() {
-        Some(failed_kind) => changed_copies(app, failed_kind, running, paths),
+        Some(failed_kind) => changed_copies(app, failed_kind, restart.running, paths),
         None => Vec::new(),
     };
     let mut error = partial.cause.context(format!(
@@ -70,8 +80,9 @@ pub(super) fn finish_partial(
         listed(&copies),
         listed(&partial.left_old)
     ));
-    if !partial.restarted.is_empty() || !copies.is_empty() {
-        if let Err(e) = env_setup::write_live_env(app, paths, env) {
+    let any_new = !partial.restarted.is_empty() || !copies.is_empty();
+    if any_new && restart.live_env == LiveEnv::Write {
+        if let Err(e) = env_setup::write_live_env(app, paths, restart.env) {
             error = error.context(format!("LIVE_ENV not written: {e:#}"));
         }
     }

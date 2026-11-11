@@ -328,6 +328,9 @@ stopped and started with the new config. An app with no running workers
 so is an ENV that still sets the removed `RIKU_AUTO_RESTART`. Naming a
 process kind (`web`, `worker`, ...) restarts only that kind's workers; a
 kind the app does not run is refused with the list of kinds it does run.
+`LIVE_ENV` (`riku config live`) is written only by a restart that covers
+every running kind; a restart of one kind leaves it as it was and says so,
+since the other kinds still run the old env.
 
 A container app replaces the copies of the named service, or of every
 service in start order, one at a time from the images they run now, without

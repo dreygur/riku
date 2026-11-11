@@ -194,26 +194,51 @@ fn restart_procfile_app_with(
     if let Err(e) = warn_route_down(&running, &env) {
         return Err(e);
     }
+    let live_env = live_env_scope(app, &chosen, paths);
     let app_path = paths.app_root.join(app);
     match workers::rewrite_running(app, &app_path, &running, &env, paths, routes) {
         Ok(()) => {}
         Err(RewriteError::Untouched(e)) => return Err(e),
         Err(RewriteError::Partial(partial)) => {
-            return Err(finish_partial(
+            let restart = partial::Restart {
                 app,
                 paths,
-                &env,
-                &running,
-                partial,
-                reload_supervisor,
-            ))
+                env: &env,
+                running: &running,
+                live_env,
+            };
+            return Err(finish_partial(&restart, partial, reload_supervisor));
         }
     }
-    if let Err(e) = env_setup::write_live_env(app, paths, &env) {
-        return Err(e);
+    match live_env {
+        LiveEnv::Write => {
+            if let Err(e) = env_setup::write_live_env(app, paths, &env) {
+                return Err(e);
+            }
+        }
+        LiveEnv::Keep => display::detail(&format!(
+            "LIVE_ENV is unchanged: only some process kinds restarted; it follows the env on a full riku restart {app}"
+        )),
     }
     reload_supervisor(paths);
     Ok(running.len())
+}
+
+/// Whether a restart of `chosen` may write `LIVE_ENV`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LiveEnv {
+    /// The restart covers every enabled worker of the app.
+    Write,
+    /// Some enabled kinds are left on their old env.
+    Keep,
+}
+
+fn live_env_scope(app: &str, chosen: &[PathBuf], paths: &RikuPaths) -> LiveEnv {
+    if chosen.len() == app_worker_configs(&paths.workers_enabled, app).len() {
+        LiveEnv::Write
+    } else {
+        LiveEnv::Keep
+    }
 }
 
 #[cfg(test)]

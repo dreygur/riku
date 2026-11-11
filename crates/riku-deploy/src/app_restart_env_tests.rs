@@ -84,6 +84,41 @@ fn restart_rewrites_configs_from_the_edited_env_without_a_build() {
     );
 }
 
+/// `riku restart myapp worker` rewrites only `worker`; `beat` keeps the old
+/// env, so `LIVE_ENV` must not claim the whole app runs the new one.
+#[test]
+fn restarting_one_kind_leaves_live_env_alone() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    let worker = deployed_app(&paths);
+    let processes = HashMap::from([
+        ("worker".to_string(), "python jobs.py".to_string()),
+        ("beat".to_string(), "python beat.py".to_string()),
+    ]);
+    let old = HashMap::from([("FLAG".to_string(), "old".to_string())]);
+    let app_path = paths.app_root.join("myapp");
+    workers::create_workers_generic("myapp", &app_path, Some(&processes), &old, &paths, None)
+        .unwrap();
+    fs::write(paths.env_root.join("myapp").join("ENV"), "FLAG=new\n").unwrap();
+
+    let restarted = restart_procfile_app_with(
+        "myapp",
+        Some("worker"),
+        &paths,
+        |_| true,
+        |_| {},
+        &mut NoRoutes,
+    );
+
+    assert_eq!(restarted.ok(), Some(1), "only the worker copy restarts");
+    let rewritten: WorkerConfig = toml::from_str(&fs::read_to_string(&worker).unwrap()).unwrap();
+    assert_eq!(rewritten.env.get("FLAG").map(String::as_str), Some("new"));
+    assert!(
+        !paths.env_root.join("myapp").join("LIVE_ENV").exists(),
+        "beat still runs FLAG=old, so LIVE_ENV must not be written"
+    );
+}
+
 #[test]
 fn restart_is_refused_while_env_holds_the_removed_auto_restart_key() {
     let tmp = tempfile::tempdir().unwrap();
