@@ -1,4 +1,26 @@
+use std::cell::RefCell;
+
 use super::*;
+
+/// A failed reload would leave systemd on the old unit text, so a restart
+/// then would run it and report "restarted (unit changed)".
+#[test]
+fn a_failed_daemon_reload_fails_init_and_restarts_nothing() {
+    let calls = RefCell::new(Vec::new());
+    let systemctl = |args: &[&str]| {
+        calls.borrow_mut().push(args.join(" "));
+        args != ["daemon-reload"]
+    };
+
+    let started = start_riku_service(UnitChange::Changed, systemctl);
+
+    assert!(started.is_err(), "a failed reload must fail init");
+    assert_eq!(
+        calls.into_inner(),
+        ["daemon-reload"],
+        "nothing after the reload may run"
+    );
+}
 
 #[test]
 fn units_follow_router() {

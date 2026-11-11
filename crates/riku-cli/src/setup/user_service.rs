@@ -12,7 +12,7 @@ use crate::config::RikuPaths;
 use crate::util::{display, ROOT_BINARY};
 
 use super::outside_supervisor::replace_outside_supervisor;
-use super::supervisor_binary::{action_for, service_main_pid, write_unit, UnitScope};
+use super::supervisor_binary::{action_for, service_main_pid, write_unit, UnitChange, UnitScope};
 
 /// Setup systemd service for Riku supervisor (user-level, no root required).
 // Project rule 16 forbids `?`, so the early return is spelled out.
@@ -36,14 +36,26 @@ pub fn setup_systemd_service(paths: &RikuPaths, router: &Router) -> Result<()> {
         Ok(change) => change,
         Err(e) => return Err(e),
     };
-    if !user_systemctl(&["daemon-reload"]) {
+    start_user_service(paths, change, user_systemctl)
+}
+
+/// Reload, enable and start or restart the user unit after `change`, and
+/// print the `Service` step. An error when `daemon-reload` fails, before
+/// anything else runs. `systemctl` runs one `systemctl --user` call and says
+/// whether it succeeded ([`user_systemctl`] outside tests).
+fn start_user_service(
+    paths: &RikuPaths,
+    change: UnitChange,
+    systemctl: impl Fn(&[&str]) -> bool,
+) -> Result<()> {
+    if !systemctl(&["daemon-reload"]) {
         return Err(anyhow::anyhow!(
             "systemctl --user daemon-reload failed, so the riku user unit was not restarted \
              with the new unit"
         ));
     }
     let mut done = vec!["user unit written"];
-    if user_systemctl(&["enable", "riku"]) {
+    if systemctl(&["enable", "riku"]) {
         done.push("enabled");
     }
     if let Err(e) = replace_outside_supervisor(paths, UnitScope::User) {
@@ -54,7 +66,7 @@ pub fn setup_systemd_service(paths: &RikuPaths, router: &Router) -> Result<()> {
         Err(e) => return Err(e),
     };
     let action = action_for(main_pid, change, Path::new("/proc"), Path::new(ROOT_BINARY));
-    if user_systemctl(&[action.verb(), "riku"]) {
+    if systemctl(&[action.verb(), "riku"]) {
         done.push(action.outcome());
     }
     display::step_done("Service", &done.join(", "));

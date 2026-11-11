@@ -86,15 +86,16 @@ pub(super) fn systemctl_ok(args: &[&str]) -> bool {
 /// [`super::supervisor_binary`]). Whether the supervisor stays up is checked
 /// by the init summary. An error when `daemon-reload` fails, since a
 /// restart would then run the old unit text, or when systemd cannot say
-/// whether the service runs.
-fn start_riku_service(unit: UnitChange) -> Result<()> {
-    if !systemctl_ok(&["daemon-reload"]) {
+/// whether the service runs. `systemctl` runs one `systemctl` call and says
+/// whether it succeeded ([`systemctl_ok`] outside tests).
+fn start_riku_service(unit: UnitChange, systemctl: impl Fn(&[&str]) -> bool) -> Result<()> {
+    if !systemctl(&["daemon-reload"]) {
         return Err(anyhow!(
             "systemctl daemon-reload failed, so riku.service was not restarted with the new unit"
         ));
     }
     let mut done = vec!["riku.service written"];
-    if systemctl_ok(&["enable", "riku"]) {
+    if systemctl(&["enable", "riku"]) {
         done.push("enabled");
     }
     let main_pid = match service_main_pid(UnitScope::System) {
@@ -102,7 +103,7 @@ fn start_riku_service(unit: UnitChange) -> Result<()> {
         Err(e) => return Err(e),
     };
     let action = action_for(main_pid, unit, Path::new("/proc"), Path::new(ROOT_BINARY));
-    if systemctl_ok(&[action.verb(), "riku"]) {
+    if systemctl(&[action.verb(), "riku"]) {
         done.push(action.outcome());
     }
     display::step_done("Service", &done.join(", "));
@@ -147,7 +148,7 @@ pub fn install_systemd_service(router: &Router) -> Result<()> {
         Err(e) => return Err(e),
     };
 
-    if let Err(e) = start_riku_service(change) {
+    if let Err(e) = start_riku_service(change, systemctl_ok) {
         return Err(e);
     }
     remove_old_watchers(systemd_dir)
