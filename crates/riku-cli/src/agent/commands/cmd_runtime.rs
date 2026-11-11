@@ -12,6 +12,15 @@ use crate::util::existing_app;
 use crate::agent::confirm;
 use crate::agent::types::AgentResponse;
 
+/// Lines `agent logs` returns from each log file, newest last.
+const LOG_LINES: usize = 100;
+
+fn last_lines(content: &str, count: usize) -> Vec<String> {
+    let all: Vec<&str> = content.lines().collect();
+    let start = all.len().saturating_sub(count);
+    all[start..].iter().map(|line| line.to_string()).collect()
+}
+
 pub fn cmd_agent_logs(paths: &RikuPaths, app: &str, process: &str) -> AgentResponse {
     let app = match existing_app(app, &paths.app_root) {
         Ok(a) => a,
@@ -38,9 +47,7 @@ pub fn cmd_agent_logs(paths: &RikuPaths, app: &str, process: &str) -> AgentRespo
                             .unwrap_or(false))
                 {
                     if let Ok(content) = fs::read_to_string(&path) {
-                        for line in content.lines().take(100) {
-                            lines.push(line.to_string());
-                        }
+                        lines.extend(last_lines(&content, LOG_LINES));
                     }
                 }
             }

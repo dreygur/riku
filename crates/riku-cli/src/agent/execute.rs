@@ -25,6 +25,10 @@ fn print_response(response: &AgentResponse) -> Result<()> {
 }
 
 /// Runs the command and prints the JSON response.
+///
+/// A response carrying an error code also returns `Err`, so the process exits
+/// nonzero and a caller can tell failure apart without parsing stdout. A
+/// confirmation request is not an error: it exits zero with its token.
 pub fn cmd_agent_execute(
     paths: &RikuPaths,
     session: &AgentSession,
@@ -32,13 +36,12 @@ pub fn cmd_agent_execute(
     args: &[String],
     confirm_token: Option<&str>,
 ) -> Result<()> {
-    print_response(&run_agent_command(
-        paths,
-        session,
-        command,
-        args,
-        confirm_token,
-    ))
+    let response = run_agent_command(paths, session, command, args, confirm_token);
+    match (print_response(&response), response.error) {
+        (Err(e), _) => Err(e),
+        (Ok(()), Some(error)) => Err(anyhow::anyhow!("agent {command} failed: {}", error.code)),
+        (Ok(()), None) => Ok(()),
+    }
 }
 
 fn run_agent_command(

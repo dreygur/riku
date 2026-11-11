@@ -599,4 +599,22 @@ mod agent_state_tests {
         assert_eq!(entry["agent"], "state-test", "{text}");
         assert_eq!(entry["action"], "apps", "{text}");
     }
+
+    #[test]
+    fn agent_error_response_exits_nonzero() {
+        let home = TempDir::new().unwrap();
+        let bin =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku");
+        let out = std::process::Command::new(bin)
+            .args(["agent", "--scope", "readonly", "deploy", "myapp"])
+            .env("HOME", home.path())
+            .env_remove("RIKU_ROOT")
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let response: serde_json::Value = serde_json::from_str(stdout.trim_end())
+            .unwrap_or_else(|e| panic!("stdout is not one JSON response ({e}):\n{stdout}"));
+        assert_eq!(response["error"]["code"], "PERMISSION_DENIED", "{stdout}");
+        assert_eq!(out.status.code(), Some(1), "{stdout}");
+    }
 }

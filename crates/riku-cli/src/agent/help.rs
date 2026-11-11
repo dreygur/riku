@@ -74,12 +74,12 @@ Response:
   {"success": true} or {"confirmation_required": true}"#
         }
         "logs" => {
-            r#"Usage: riku agent logs <app> [process] [--lines N]
+            r#"Usage: riku agent logs <app> [process]
 
-View application logs.
+View the last 100 lines of each log file of an application.
 
 Example:
-  riku agent logs myapp web --lines 100
+  riku agent logs myapp web
 
 Response:
   {"lines": ["2024-01-01 10:00:00 App started", ...]}"#
@@ -108,12 +108,16 @@ Response:
   {"success": true}"#
         }
         "stop" => {
-            r#"Usage: riku agent stop <app>
+            r#"Usage: riku agent stop <app> [--confirm <token>]
 
-Stop an application. Requires confirmation for production apps.
+Stop an application. Requires 'production' scope and human confirmation.
 
 Example:
+  # First request (gets confirmation token)
   riku agent stop myapp
+
+  # After human confirms
+  riku agent stop myapp --confirm abc123
 
 Response:
   {"confirmation_required": true, "confirm_token": "abc123"}"#
@@ -149,13 +153,16 @@ Response:
 fn print_general_help() {
     println!("AI Agent Interface for Riku");
     println!();
-    println!("Usage: riku agent [OPTIONS] [COMMAND]");
+    println!("Usage: riku agent [OPTIONS] [COMMAND] [ARGS]...");
+    println!();
+    println!("Responses are one JSON object on stdout. A response with an");
+    println!("error code exits 1.");
     println!();
     println!("Options:");
-    println!("  --intro     Show agent introduction and permissions");
-    println!("  --schema    Show full command schema (JSON)");
-    println!("  --help      Show this help or help for a command");
-    println!("  --json      Output in JSON format");
+    println!("  --intro       Show agent introduction and permissions");
+    println!("  --schema      Show full command schema (JSON)");
+    println!("  --agent-help  Show this help, or help for the named command");
+    println!("  --confirm     Confirmation token for destroy and stop");
     println!();
     println!("Commands:");
     println!("  apps        List deployed applications");
@@ -171,5 +178,5 @@ fn print_general_help() {
     println!("  run         Not implemented yet (use riku run)");
     println!("  stats       Show statistics");
     println!();
-    println!("Use 'riku agent --help <command>' for command-specific help.");
+    println!("Use 'riku agent --agent-help <command>' for command-specific help.");
 }

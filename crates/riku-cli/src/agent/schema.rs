@@ -147,12 +147,6 @@ pub fn cmd_agent_schema() -> Result<()> {
                         "required": false,
                         "description": "Process filter (default: all)",
                         "default": "*"
-                    },
-                    "lines": {
-                        "type": "integer",
-                        "required": false,
-                        "description": "Number of lines to return",
-                        "default": 100
                     }
                 },
                 "requires_confirmation": false,
@@ -242,17 +236,23 @@ pub fn cmd_agent_schema() -> Result<()> {
                 "message": "string - human-readable error message"
             },
             "confirmation_required": "boolean - true if human confirmation needed",
-            "confirm_token": "string - token to include in confirmation request",
-            "job_id": "string - for long-running operations"
+            "confirm_token": "string - pass back with --confirm after a human approves"
         },
+        "exit_status": "1 when the response has an error, 0 otherwise (a confirmation request exits 0)",
         "error_codes": {
             "APP_NOT_FOUND": "Application does not exist",
+            "KEY_NOT_FOUND": "Configuration key is not set",
             "PERMISSION_DENIED": "Agent lacks required permission",
-            "CONFIRMATION_REQUIRED": "Human confirmation needed",
-            "APP_LOCKED": "Another operation in progress on this app",
             "INVALID_COMMAND": "Unknown command",
             "INVALID_PARAMETERS": "Missing or invalid parameters",
-            "RATE_LIMIT_EXCEEDED": "Too many requests"
+            "INVALID_TOKEN": "Confirmation token is unknown, used, expired or for another action",
+            "RATE_LIMIT_EXCEEDED": "Too many requests",
+            "STATE_UNAVAILABLE": "Rate limit or audit state cannot be read or written",
+            "NOT_IMPLEMENTED": "Command is listed but not available yet",
+            "DEPLOY_FAILED": "Deploy failed",
+            "RESTART_FAILED": "Restart failed",
+            "STOP_FAILED": "Stop failed",
+            "DESTROY_FAILED": "Destroy failed"
         }
     });
 
