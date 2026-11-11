@@ -1,4 +1,8 @@
-/// System-wide (root) systemd service installation for riku.
+//! System-wide (root) systemd service installation for riku.
+
+// Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
+#![allow(clippy::question_mark)]
+
 use anyhow::{anyhow, Result};
 use std::fs;
 use std::path::Path;
