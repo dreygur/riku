@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `scripts/install.sh` printed the old `-----> ` and ` !     ` lines and
+  `error: ...`. It now uses the rail: `┌  riku install  <version>`, the
+  `Download`, `Checksum` and `Install` steps, `▲` warnings, `■` errors,
+  `└` and the next command as a summary block. Colors only on a terminal
+  and not with `NO_COLOR`. Arguments, env vars and install steps are
+  unchanged.
 - The first push to a repo named without `.git` printed
   `│  Linked <repos>/<app>.git to <repos>/<app>` above the deploy intro.
   That link is internal and is now only logged at debug level.

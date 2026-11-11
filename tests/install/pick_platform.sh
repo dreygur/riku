@@ -72,16 +72,28 @@ check Linux armv6l  32 2.36 ""   linux-armv6      ""
 check Linux aarch64 32 2.36 ""   linux-armv7      ""
 check Linux aarch64 64 2.36 ""   linux-arm64      ""
 check Linux x86_64  64 ""   ""   linux-amd64-musl ""
-check Linux aarch64 64 2.28 ""   linux-arm64-musl "older than 2.31"
+check Linux aarch64 64 2.28 ""   linux-arm64-musl "▲  glibc 2.28 is older than 2.31"
 check Linux x86_64  64 2.39 musl linux-amd64-musl ""
 check Darwin arm64  64 ""   musl macos-arm64      ""
 check Linux x86_64  64 2.31 ""   linux-amd64      ""
 check Linux aarch64 32 ""   ""   linux-armv7-musl ""
 
 # Errors print nothing on stdout, so nothing gets downloaded.
-check Linux x86_64  64 2.39 bogus "" "must be gnu or musl"
+check Linux x86_64  64 2.39 bogus "" "■  RIKU_LIBC must be gnu or musl"
 check Linux riscv64 64 2.39 ""   ""               "unsupported architecture"
 check Linux x86_64  32 2.36 ""   ""               "no 32 bit x86 build"
 check Linux aarch64 64 2.28 gnu  ""               "RIKU_LIBC=gnu" "installing the musl build"
+
+# An unknown argument fails before anything is downloaded, as one plain
+# error line: stderr is not a terminal here, so no color codes.
+out="$("$test_sh" "$script" --bogus 2>"$stderr_file")"
+status=$?
+errors="$(cat "$stderr_file")"
+if [ "$status" -ne 1 ] || [ -n "$out" ] || [ "$errors" != "■  unknown argument '--bogus'" ]; then
+  echo "FAIL --bogus: status $status, stdout '$out', stderr '$errors'"
+  failures=$((failures + 1))
+else
+  echo "ok   --bogus -> $errors"
+fi
 
 [ "$failures" -eq 0 ] || { echo "$failures case(s) failed"; exit 1; }

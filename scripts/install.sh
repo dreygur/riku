@@ -23,8 +23,50 @@ GLIBC_FLOOR_MAJOR=2
 GLIBC_FLOOR_MINOR=31
 
 say()  { printf '%s\n' "$*"; }
-err()  { printf 'error: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
+
+# Output follows riku's rail: an intro, one line per step, warnings and
+# errors on stderr, an outro and a summary block. Colors only reach a
+# terminal, and never when NO_COLOR is set to something. Both streams are
+# tested here, once: inside a command substitution stdout is a pipe.
+colour_1=""
+colour_2=""
+if [ -z "${NO_COLOR:-}" ]; then
+  if [ -t 1 ]; then colour_1=1; fi
+  if [ -t 2 ]; then colour_2=1; fi
+fi
+
+# paint FD CODE TEXT: TEXT in ANSI style CODE when FD is a terminal.
+paint() {
+  if { [ "$1" = 1 ] && [ -n "$colour_1" ]; } || { [ "$1" = 2 ] && [ -n "$colour_2" ]; }; then
+    printf '\033[%sm%s\033[0m' "$2" "$3"
+  else
+    printf '%s' "$3"
+  fi
+}
+
+# line FD CODE GLYPH [LABEL [DETAIL]]: one rail line, DETAIL dimmed.
+line() {
+  text="$(paint "$1" "$2" "$3")"
+  if [ -n "${4:-}" ]; then
+    text="$text  $4"
+  fi
+  if [ -n "${5:-}" ]; then
+    text="$text  $(paint "$1" 2 "$5")"
+  fi
+  printf '%s\n' "$text" >&"$1"
+}
+
+rail()  { line 1 90 "│" "${1:-}"; }
+intro() { line 1 90 "┌" "$(paint 1 1 "$1")" "$2"; rail; }
+step()  { line 1 32 "◇" "$1" "${2:-}"; }
+warn()  { line 2 33 "▲" "$1"; }
+err()   { line 2 31 "■" "$(paint 2 31 "$*")"; exit 1; }
+outro() { rail; line 1 90 "└" "$(paint 1 1 "$1")"; }
+
+# summary_row KEY VALUE: one line of the block after the outro. Every key
+# this script prints is four characters, so the values line up.
+summary_row() { printf '   %s   %s\n' "$(paint 1 1 "$1")" "$2"; }
 
 # The CPU name used in release assets. A 64 bit kernel can run a 32 bit
 # userland (common on Raspberry Pi OS); that userland has no arm64 libraries,
@@ -90,8 +132,7 @@ libc_suffix() {
       fi
       found="$(glibc_version)"
       if [ -n "$found" ]; then
-        printf 'glibc %s is older than %s.%s, installing the musl build\n' \
-          "$found" "$GLIBC_FLOOR_MAJOR" "$GLIBC_FLOOR_MINOR" >&2
+        warn "glibc $found is older than ${GLIBC_FLOOR_MAJOR}.${GLIBC_FLOOR_MINOR}, installing the musl build"
       fi
       say "-musl"
       ;;
@@ -130,6 +171,7 @@ main() {
     shift
   done
 
+  intro "${bin} install" "$VERSION"
   platform="$(pick_platform)"
   asset="${bin}-${platform}.tar.gz"
   sum="${bin}-${platform}.sha256"
@@ -163,12 +205,11 @@ main() {
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
 
-  say "-----> Downloading $asset ($VERSION)..."
   download "${base}/${asset}" "${tmp}/${asset}" \
     || err "download failed: ${base}/${asset}"
+  step "Download" "$asset"
 
   if download "${base}/${sum}" "${tmp}/sum" 2>/dev/null; then
-    say "-----> Verifying checksum..."
     expected="$(awk '{print $1}' "${tmp}/sum")"
     if have sha256sum; then
       actual="$(sha256sum "${tmp}/${asset}" | awk '{print $1}')"
@@ -176,16 +217,18 @@ main() {
       actual="$(shasum -a 256 "${tmp}/${asset}" | awk '{print $1}')"
     else
       actual=""
-      say " !     no sha256 tool found; skipping verification"
+      warn "no sha256 tool found; skipping verification"
     fi
     if [ -n "$actual" ] && [ "$actual" != "$expected" ]; then
       err "checksum mismatch (expected $expected, got $actual)"
     fi
+    if [ -n "$actual" ]; then
+      step "Checksum" "sha256 matches"
+    fi
   else
-    say " !     no checksum published for $asset; skipping verification"
+    warn "no checksum published for $asset; skipping verification"
   fi
 
-  say "-----> Installing to ${install_dir}/${bin}..."
   tar -xzf "${tmp}/${asset}" --no-same-owner -C "$tmp"
   if [ "$(id -u)" = "0" ]; then
     chown 0:0 "${tmp}/${bin}"
@@ -193,25 +236,24 @@ main() {
   chmod 755 "${tmp}/${bin}"
   mkdir -p "$install_dir"
   mv "${tmp}/${bin}" "${install_dir}/${bin}"
-
-  say "-----> ${bin} installed: ${install_dir}/${bin}"
+  step "Install" "${install_dir}/${bin}"
 
   case ":${PATH}:" in
     *":${install_dir}:"*) ;;
-    *) say " !     ${install_dir} is not on your PATH. Add it:"
-       say "         export PATH=\"${install_dir}:\$PATH\"" ;;
+    *) warn "${install_dir} is not on your PATH. Add it:"
+       rail "export PATH=\"${install_dir}:\$PATH\"" ;;
   esac
+
+  outro "${bin} installed"
 
   if [ "${RIKU_NO_INIT:-0}" != "1" ]; then
     say ""
     if [ "$bin" = "rk" ]; then
-      say "Next: add a server"
-      say "  ${install_dir}/rk server add myserver riku@edge.example --admin you@edge.example"
-      say "It authorizes your ssh key on the server. Then run a command on it:"
-      say "  ${install_dir}/rk -s myserver apps"
+      summary_row "Next" "${install_dir}/rk server add myserver riku@edge.example --admin you@edge.example"
+      summary_row "    " "(authorizes your ssh key on the server)"
+      summary_row "Then" "${install_dir}/rk -s myserver apps"
     else
-      say "Next: initialize the server"
-      say "  ${install_dir}/riku init"
+      summary_row "Next" "${install_dir}/riku init"
     fi
   fi
 }
