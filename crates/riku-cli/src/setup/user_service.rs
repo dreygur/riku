@@ -1,4 +1,8 @@
-/// User-level (non-root) systemd service setup for riku.
+//! User-level (non-root) systemd service setup for riku.
+
+// Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
+#![allow(clippy::question_mark)]
+
 use anyhow::Result;
 use std::path::Path;
 use std::process::Command;
@@ -75,7 +79,9 @@ WantedBy=default.target
     if user_systemctl(&["enable", "riku"]) {
         done.push("enabled");
     }
-    replace_outside_supervisor(paths, UnitScope::User);
+    if let Err(e) = replace_outside_supervisor(paths, UnitScope::User) {
+        return Err(e);
+    }
     let main_pid = service_main_pid(UnitScope::User);
     let action = action_for(main_pid, Path::new("/proc"), Path::new(ROOT_BINARY));
     if user_systemctl(&[action.verb(), "riku"]) {

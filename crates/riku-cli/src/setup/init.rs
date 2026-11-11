@@ -247,7 +247,9 @@ fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<Router> {
         // Root starts the system unit next; only this deploy user child may
         // signal the deploy user's supervisor.
         if !options.no_systemd {
-            replace_outside_supervisor(paths, UnitScope::System);
+            if let Err(e) = replace_outside_supervisor(paths, UnitScope::System) {
+                return Err(e);
+            }
         }
     } else {
         if let Err(e) = setup_user_service(paths, &router, options.no_systemd) {

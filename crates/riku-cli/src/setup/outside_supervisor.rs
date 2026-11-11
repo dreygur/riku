@@ -1,11 +1,13 @@
-//! Replacing a supervisor running outside systemd from an older binary,
-//! before init starts the `riku` unit.
+//! Stopping a supervisor running outside systemd before init starts the
+//! `riku` unit.
 //!
 //! A deploy starts a supervisor with `nohup` when none runs. Such a
 //! supervisor holds the pid file lock, so the unit's own would fail its lock
-//! on every restart while init reports it started. When it runs another
-//! binary than the installed one (see [`super::supervisor_binary`]), it is
-//! stopped here first.
+//! on every restart (`Restart=always`) while init reports it started. Any
+//! supervisor holding the lock that is not the unit's main process is
+//! stopped here first, whatever binary it runs and whether or not the unit
+//! is running. One that does not stop fails init instead of leaving the unit
+//! looping on the lock.
 //!
 //! Security: this runs as the deploy user only (a plain init, or the
 //! `init --user-steps` child of a root init), never as root, so the signal
@@ -15,60 +17,52 @@
 // Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
 #![allow(clippy::question_mark)]
 
-use std::path::Path;
 use std::time::Duration;
+
+use anyhow::{anyhow, Result};
 
 use crate::config::RikuPaths;
 use crate::deploy::supervisor_ctl::running_supervisor_pid;
 use crate::deploy::supervisor_stop::stop_supervisor;
-use crate::util::{display, ROOT_BINARY};
+use crate::util::display;
 
-use super::supervisor_binary::{runs_binary, service_main_pid, UnitScope};
+use super::supervisor_binary::{service_main_pid, UnitScope};
 
 /// How long init waits for the supervisor to stop its workers and exit.
 /// Each worker gets its own stop timeout, so this is generous.
 const STOP_WAIT: Duration = Duration::from_secs(30);
 
 /// The pid of the supervisor to stop: the one holding the lock (`locked`,
-/// always positive), when it is not the unit's `main_pid` and runs another
-/// binary than `installed`.
-fn to_replace(
-    main_pid: Option<u32>,
-    locked: Option<i32>,
-    proc_root: &Path,
-    installed: &Path,
-) -> Option<i32> {
-    let pid = match locked {
-        Some(pid) => pid,
-        None => return None,
-    };
-    let proc_pid = pid as u32;
-    if Some(proc_pid) == main_pid || runs_binary(proc_root, proc_pid, installed) {
-        return None;
+/// always positive), unless it is the unit's `main_pid`.
+fn to_replace(main_pid: Option<u32>, locked: Option<i32>) -> Option<i32> {
+    match locked {
+        Some(pid) if Some(pid as u32) != main_pid => Some(pid),
+        _ => None,
     }
-    Some(pid)
 }
 
-/// Stops a supervisor running outside the `scope` unit from an older binary,
-/// and says so on the rail. Prints nothing when there is none.
-pub(super) fn replace_outside_supervisor(paths: &RikuPaths, scope: UnitScope) {
+/// Stops a supervisor running outside the `scope` unit and says so on the
+/// rail. Prints nothing when there is none. An error when it does not stop
+/// within [`STOP_WAIT`], since the unit cannot run while it holds the lock.
+pub(super) fn replace_outside_supervisor(paths: &RikuPaths, scope: UnitScope) -> Result<()> {
     let locked = running_supervisor_pid(paths);
-    let main_pid = service_main_pid(scope);
-    let pid = match to_replace(main_pid, locked, Path::new("/proc"), Path::new(ROOT_BINARY)) {
+    let pid = match to_replace(service_main_pid(scope), locked) {
         Some(pid) => pid,
-        None => return,
+        None => return Ok(()),
     };
-    if stop_supervisor(paths, pid, STOP_WAIT) {
-        display::step_done(
-            "Supervisor",
-            &format!("stopped pid {pid}, an older binary running outside systemd"),
-        );
-    } else {
-        display::warn(&format!(
-            "the supervisor running outside systemd (pid {pid}) did not stop; \
-             the service cannot start until it does. Stop it, then run init again"
+    if !stop_supervisor(paths, pid, STOP_WAIT) {
+        return Err(anyhow!(
+            "the supervisor running outside systemd (pid {pid}) did not stop within {} s; \
+             the riku service cannot start while it holds the lock. Stop it (kill {pid}), \
+             then run init again",
+            STOP_WAIT.as_secs()
         ));
     }
+    display::step_done(
+        "Supervisor",
+        &format!("stopped pid {pid}, running outside systemd, so the service takes over"),
+    );
+    Ok(())
 }
 
 #[cfg(test)]
