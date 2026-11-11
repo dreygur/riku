@@ -16,12 +16,14 @@ use crate::plugins::runtime::{MissingRuntime, RuntimeContext, RuntimePlugin};
 use crate::progress::{DeployProgress, Phase};
 use crate::util::runtime_markers::{is_bundled_runtime, needed_runtime};
 use crate::workers::{read_scaling_count, ONE_SHOT_KINDS};
-use crate::{env_setup, hooks, workers};
+use crate::{env_setup, hooks, plugin_env, workers};
 
 /// What the runtime plugin's build left for the start step.
-struct PluginOutput {
-    env: HashMap<String, String>,
-    start_cmd: Option<String>,
+pub(crate) struct PluginOutput {
+    /// The plugin's `env` output, kept for `riku restart`.
+    pub env: HashMap<String, String>,
+    /// The plugin's `start` command, run as `web` when no process is declared.
+    pub start_cmd: Option<String>,
 }
 
 /// What a finished app deploy reports: the runtime that built it and its
@@ -115,17 +117,19 @@ fn build_with_plugin(
 }
 
 /// Post build hooks, the `release` command, then worker configs and the
-/// processes themselves.
+/// processes themselves. `LIVE_ENV` and the stored plugin env are written
+/// just before the processes change, so a restart later sees what they run.
 pub(crate) fn release_and_start(
     app: &str,
     paths: &RikuPaths,
     runtime: &str,
     workers: &HashMap<String, String>,
-    start_cmd: Option<&str>,
+    plugin: &PluginOutput,
     env: &HashMap<String, String>,
     progress: &mut DeployProgress,
 ) -> Result<String> {
     let app_path = paths.app_root.join(app);
+    let start_cmd = plugin.start_cmd.as_deref();
     progress.log.log_raw("Running post-build hooks");
     if let Err(e) = hooks::run_post_build(app, &app_path, paths, Some(runtime), env) {
         return Err(e);
@@ -142,6 +146,9 @@ pub(crate) fn release_and_start(
         return Err(e);
     }
     if let Err(e) = env_setup::write_live_env(app, paths, env) {
+        return Err(e);
+    }
+    if let Err(e) = plugin_env::save(app, paths, &plugin.env) {
         return Err(e);
     }
     progress.processes_changing();
@@ -235,17 +242,8 @@ pub(crate) fn deploy_procfile_app(
         ));
     }
     progress.done_timed("");
-    env.extend(output.env);
-    let start_cmd = output.start_cmd.as_deref();
-    match release_and_start(
-        app,
-        paths,
-        &plugin.name,
-        &declared,
-        start_cmd,
-        env,
-        progress,
-    ) {
+    env.extend(output.env.clone());
+    match release_and_start(app, paths, &plugin.name, &declared, &output, env, progress) {
         Ok(workers) => Ok(Deployed {
             runtime: plugin.name,
             workers,

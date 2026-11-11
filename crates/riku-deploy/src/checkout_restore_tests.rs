@@ -100,7 +100,10 @@ fn live_env_write_failure_resets_the_checkout_and_keeps_the_old_release() {
         &paths,
         "test",
         &workers,
-        None,
+        &crate::procfile_deploy::PluginOutput {
+            env: HashMap::new(),
+            start_cmd: None,
+        },
         &HashMap::new(),
         &mut progress,
     );

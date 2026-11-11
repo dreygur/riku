@@ -67,6 +67,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fails, `LIVE_ENV` follows the kinds now on the new env, the supervisor
   reloads, and the error names which kinds run the new env and which may
   still run the old one.
+- `riku restart` ran the runtime plugin's `env` without a build, so a
+  plugin whose env depends on its build output could hand the workers
+  wrong values. A deploy now keeps the plugin's env in
+  `~/.riku/envs/<app>/PLUGIN_ENV` (`0600`) and restart uses it without
+  running the plugin. An app deployed by an older riku has none; restart
+  then runs the plugin's `env` as before and says so, until the next
+  deploy.
 - A push whose `LIVE_ENV` could not be written left the checkout at the
   pushed commit while the old workers kept running from it, and said the
   previous release no longer ran. Nothing has changed at that point, so

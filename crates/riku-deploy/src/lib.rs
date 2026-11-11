@@ -48,6 +48,7 @@ pub mod lock;
 #[cfg(test)]
 mod mock_engine;
 mod pipeline;
+mod plugin_env;
 mod procfile_deploy;
 mod progress;
 pub mod releases;
