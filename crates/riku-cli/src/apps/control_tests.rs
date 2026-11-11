@@ -53,16 +53,16 @@ fn modified(config: &PathBuf) -> SystemTime {
 }
 
 /// A stand-in supervisor: a process recorded in `supervisor.pid` that a
-/// SIGHUP ends.
-fn fake_supervisor(paths: &RikuPaths) -> std::process::Child {
+/// SIGHUP ends, with the file locked as a real supervisor keeps it. The lock
+/// lasts as long as the returned file.
+fn fake_supervisor(paths: &RikuPaths) -> (std::process::Child, fs::File) {
     let child = Command::new("sleep").arg("30").spawn().unwrap();
     fs::create_dir_all(&paths.riku_root).unwrap();
-    fs::write(
-        paths.riku_root.join("supervisor.pid"),
-        child.id().to_string(),
-    )
-    .unwrap();
-    child
+    let pid_file = paths.riku_root.join("supervisor.pid");
+    fs::write(&pid_file, child.id().to_string()).unwrap();
+    let lock = fs::File::open(&pid_file).unwrap();
+    lock.lock().unwrap();
+    (child, lock)
 }
 
 #[test]
@@ -70,7 +70,7 @@ fn restart_of_a_procfile_app_restarts_its_workers_without_a_build() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());
     let config = deployed_worker(&paths, "web");
-    let mut supervisor = fake_supervisor(&paths);
+    let (mut supervisor, _lock) = fake_supervisor(&paths);
     let before = modified(&config);
 
     let restarted = cmd_restart(&paths, "shop", None);
@@ -122,7 +122,7 @@ fn restart_of_one_process_kind_leaves_the_other_kinds_running() {
     let worker = deployed_worker(&paths, "worker");
     let web_before = modified(&web);
     let worker_before = modified(&worker);
-    let mut supervisor = fake_supervisor(&paths);
+    let (mut supervisor, _lock) = fake_supervisor(&paths);
 
     let restarted = cmd_restart(&paths, "shop", Some("worker"));
 

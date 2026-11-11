@@ -1,4 +1,5 @@
 use super::*;
+use crate::fake_supervisor::FakeSupervisor;
 use std::fs;
 use std::os::unix::process::ExitStatusExt;
 use std::time::{Duration, SystemTime};
@@ -18,22 +19,6 @@ fn seed_worker(paths: &RikuPaths, app: &str, kind: &str, ordinal: u32) {
     std::os::unix::fs::symlink(&available, paths.workers_enabled.join(&filename)).unwrap();
 }
 
-/// A stand-in supervisor: a process recorded in `supervisor.pid` that a
-/// SIGHUP ends.
-fn fake_supervisor(paths: &RikuPaths) -> std::process::Child {
-    let child = std::process::Command::new("sleep")
-        .arg("30")
-        .spawn()
-        .unwrap();
-    fs::create_dir_all(&paths.riku_root).unwrap();
-    fs::write(
-        paths.riku_root.join("supervisor.pid"),
-        child.id().to_string(),
-    )
-    .unwrap();
-    child
-}
-
 fn age_an_hour(config: &std::path::Path) -> SystemTime {
     let hour_ago = SystemTime::now() - Duration::from_secs(3600);
     let file = fs::File::options().write(true).open(config).unwrap();
@@ -51,11 +36,11 @@ fn restart_touches_only_that_worker_and_signals_the_supervisor() {
     let sibling = paths.workers_available.join("myapp@web.1.toml");
     let target_before = age_an_hour(&target);
     let sibling_before = age_an_hour(&sibling);
-    let mut supervisor = fake_supervisor(&paths);
+    let mut supervisor = FakeSupervisor::start(&paths);
 
     let restarted = restart_worker("myapp", &paths, "web", 2);
 
-    let status = supervisor.wait().unwrap();
+    let status = supervisor.child.wait().unwrap();
     assert!(restarted.is_ok(), "restart failed: {restarted:?}");
     let target_after = fs::metadata(&target).unwrap().modified().unwrap();
     assert!(

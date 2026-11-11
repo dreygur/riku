@@ -26,17 +26,43 @@ fn read_supervisor_pid(paths: &RikuPaths) -> Option<i32> {
     }
 }
 
-/// Return true if a process with the given PID exists (sending signal 0).
-pub(crate) fn pid_is_alive(pid: i32) -> bool {
-    nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None).is_ok()
+/// Whether some process holds the lock on `supervisor.pid`. A running
+/// supervisor keeps an exclusive `flock` on it for its whole life (see
+/// riku-supervisor `create_pid_file_with_lock`), so an unlocked file is left
+/// over from a dead one, whatever pid it names: that pid may since belong to
+/// an unrelated process.
+///
+/// The probe takes a shared lock for an instant, so two probes never block
+/// each other; a supervisor starting in that instant fails its own lock.
+fn pid_file_locked(paths: &RikuPaths) -> bool {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let opened = std::fs::File::options()
+        .read(true)
+        .custom_flags(nix::libc::O_NOFOLLOW)
+        .open(paths.riku_root.join("supervisor.pid"));
+    let file = match opened {
+        Ok(file) => file,
+        Err(_) => return false,
+    };
+    matches!(
+        file.try_lock_shared(),
+        Err(std::fs::TryLockError::WouldBlock)
+    )
 }
 
-/// Return true when the supervisor PID file holds a live process id.
-pub(crate) fn supervisor_is_running(paths: &RikuPaths) -> bool {
-    match read_supervisor_pid(paths) {
-        Some(pid) => pid_is_alive(pid),
-        None => false,
+/// The pid of the running supervisor: the pid file must be locked and hold
+/// a positive pid.
+fn running_supervisor_pid(paths: &RikuPaths) -> Option<i32> {
+    if !pid_file_locked(paths) {
+        return None;
     }
+    read_supervisor_pid(paths)
+}
+
+/// Return true when a supervisor holds its pid file lock.
+pub(crate) fn supervisor_is_running(paths: &RikuPaths) -> bool {
+    running_supervisor_pid(paths).is_some()
 }
 
 /// `installed` if it exists, else `current` (this process's executable),
@@ -67,18 +93,17 @@ pub(crate) fn resolve_riku_bin() -> Option<String> {
     resolve_from(Path::new(ROOT_BINARY), std::env::current_exe().ok())
 }
 
-/// Check if supervisor is running (via PID file) and start it if not.
+/// Start the supervisor unless one holds its pid file lock, and return
+/// whether one runs afterwards.
+///
+/// A stale pid file is left in place: the new supervisor rewrites it under
+/// its lock, and removing it here could unlink the file a supervisor that is
+/// starting right now has already opened.
 pub(crate) fn ensure_supervisor_running(paths: &RikuPaths) -> bool {
-    // Check PID file first: reliable and does not match unrelated processes.
-    if let Some(pid) = read_supervisor_pid(paths) {
-        if pid_is_alive(pid) {
-            return true;
-        }
-        // Stale PID file: supervisor died without cleaning up. Remove it.
-        let _ = std::fs::remove_file(paths.riku_root.join("supervisor.pid"));
+    if supervisor_is_running(paths) {
+        return true;
     }
 
-    // Supervisor is not running, try to start it.
     let Some(riku_bin) = resolve_riku_bin() else {
         tracing::error!(
             "cannot start the supervisor: no {} and the running binary's path is unknown",
@@ -102,10 +127,8 @@ pub(crate) fn ensure_supervisor_running(paths: &RikuPaths) -> bool {
         // Poll PID file for up to 3 seconds instead of a blind sleep.
         for _ in 0..30 {
             std::thread::sleep(std::time::Duration::from_millis(100));
-            if let Some(pid) = read_supervisor_pid(paths) {
-                if pid_is_alive(pid) {
-                    return true;
-                }
+            if supervisor_is_running(paths) {
+                return true;
             }
         }
     }
@@ -114,18 +137,17 @@ pub(crate) fn ensure_supervisor_running(paths: &RikuPaths) -> bool {
 }
 
 /// Notify the supervisor to reload configurations by sending SIGHUP to the
-/// PID recorded in the PID file. Only signals our own supervisor process.
+/// PID recorded in the PID file, only while a supervisor holds that file's
+/// lock, so a pid reused by another process is never signalled.
 ///
 /// The same signal makes the supervisor list containers at once, so
 /// container deploys, scales and restarts send it after starting copies.
 pub(crate) fn notify_supervisor_reload(paths: &RikuPaths) {
-    if let Some(pid) = read_supervisor_pid(paths) {
-        if pid_is_alive(pid) {
-            let _ = nix::sys::signal::kill(
-                nix::unistd::Pid::from_raw(pid),
-                nix::sys::signal::Signal::SIGHUP,
-            );
-        }
+    if let Some(pid) = running_supervisor_pid(paths) {
+        let _ = nix::sys::signal::kill(
+            nix::unistd::Pid::from_raw(pid),
+            nix::sys::signal::Signal::SIGHUP,
+        );
     }
 }
 

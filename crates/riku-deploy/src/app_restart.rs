@@ -34,14 +34,29 @@ fn bump_mtime(config: &Path) -> Result<()> {
 
 /// Restart the workers whose configs are `configs` (enabled entries or the
 /// files they point at). Starts the supervisor when it is not running,
-/// which starts them too.
+/// which starts them too. An error when no supervisor runs afterwards.
 pub fn restart_configs(configs: &[PathBuf], paths: &RikuPaths) -> Result<()> {
+    restart_configs_with(configs, paths, supervisor_ctl::ensure_supervisor_running)
+}
+
+/// [`restart_configs`] with the way a missing supervisor is started given,
+/// so a test never launches one.
+fn restart_configs_with(
+    configs: &[PathBuf],
+    paths: &RikuPaths,
+    start_supervisor: impl Fn(&RikuPaths) -> bool,
+) -> Result<()> {
     for config in configs {
         if let Err(e) = bump_mtime(config) {
             return Err(e);
         }
     }
-    supervisor_ctl::start_supervisor(paths);
+    if !supervisor_ctl::supervisor_is_running(paths) && !start_supervisor(paths) {
+        return Err(anyhow!(
+            "the supervisor is not running and could not be started, so nothing restarted; \
+             see riku doctor"
+        ));
+    }
     supervisor_ctl::notify_supervisor_reload(paths);
     Ok(())
 }
@@ -95,3 +110,7 @@ pub fn restart_procfile_app(app: &str, kind: Option<&str>, paths: &RikuPaths) ->
         Err(e) => Err(e),
     }
 }
+
+#[cfg(test)]
+#[path = "app_restart_tests.rs"]
+mod tests;

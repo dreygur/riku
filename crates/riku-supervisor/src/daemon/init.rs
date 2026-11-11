@@ -79,41 +79,50 @@ impl Supervisor {
     ///
     /// Returns Ok(File) with the locked file handle (lock is held until File is dropped).
     /// Returns Err if another supervisor is already running.
+    ///
+    /// The file is emptied only once the lock is held: a second supervisor
+    /// that fails the lock must not wipe the running one's pid, which
+    /// `riku restart` and deploys read to signal it.
     pub(super) fn create_pid_file_with_lock(&self, pid: u32) -> Result<fs::File> {
         use std::fs::OpenOptions;
         use std::io::Write;
 
-        // Create or open PID file
-        let mut file = OpenOptions::new()
+        let opened = OpenOptions::new()
             .create(true)
+            .truncate(false)
             .write(true)
-            .truncate(true)
-            .open(&self.pid_file)?;
-
-        // Try to acquire exclusive lock (non-blocking)
-        #[cfg(unix)]
-        {
-            use nix::libc;
-            use std::os::unix::io::AsRawFd;
-
-            // Use libc::flock directly (portable across Unix systems)
-            let fd = file.as_raw_fd();
-            let result = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
-
-            if result != 0 {
+            .open(&self.pid_file);
+        let mut file = match opened {
+            Ok(file) => file,
+            Err(e) => {
                 return Err(anyhow::anyhow!(
-                    "Failed to lock PID file (another supervisor running?): {}",
-                    std::io::Error::last_os_error()
-                ));
+                    "cannot open {}: {e}",
+                    self.pid_file.display()
+                ))
             }
-
-            // Lock is held until file descriptor is closed (when File is dropped)
+        };
+        // Held until the file is dropped, so for the supervisor's whole life.
+        if let Err(e) = file.try_lock() {
+            return Err(anyhow::anyhow!(
+                "Failed to lock PID file (another supervisor running?): {e}"
+            ));
         }
-
-        // Write PID to file
-        writeln!(file, "{}", pid)?;
-        file.flush()?;
-
+        if let Err(e) = file.set_len(0) {
+            return Err(anyhow::anyhow!(
+                "cannot empty {}: {e}",
+                self.pid_file.display()
+            ));
+        }
+        if let Err(e) = writeln!(file, "{pid}").and_then(|()| file.flush()) {
+            return Err(anyhow::anyhow!(
+                "cannot write {}: {e}",
+                self.pid_file.display()
+            ));
+        }
         Ok(file)
     }
 }
+
+#[cfg(test)]
+#[path = "init_tests.rs"]
+mod tests;

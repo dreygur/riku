@@ -38,6 +38,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `riku restart` (and a single worker restart from the dashboard) said
+  `Restarted N worker(s)` when the supervisor was not running and could not
+  be started, and it trusted any live process whose pid sat in a stale
+  `supervisor.pid`, so it could send that unrelated process a SIGHUP. The
+  supervisor's lock on its pid file is now what says it runs; signals go
+  only to a pid in a locked file, and a restart with no supervisor running
+  after the start attempt fails with an error instead.
+- A second supervisor start (for example `riku supervisor` by hand next to
+  the systemd one) emptied the running supervisor's `supervisor.pid` before
+  it failed the lock, so later deploys and restarts could not signal the
+  running one. The file is now emptied only after the lock is won.
 - A `supervisor.pid` holding `0` or a negative number was trusted, so the
   reload signal after a deploy or restart could go to riku's own process
   group (`0`) or to every process the deploy user may signal (`-1`). Only

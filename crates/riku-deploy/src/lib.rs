@@ -39,6 +39,8 @@ pub mod containers;
 mod deploy_env;
 mod deploy_finish;
 pub mod env_setup;
+#[cfg(test)]
+mod fake_supervisor;
 pub mod git_ops;
 pub mod hooks;
 mod live_urls;

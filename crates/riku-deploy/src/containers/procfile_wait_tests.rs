@@ -11,9 +11,14 @@ use crate::supervisor::process::pid_file::{worker_pid_dir, WorkerPidFile};
 
 const LIMIT: Duration = Duration::from_secs(3);
 
-fn write_supervisor_pid(paths: &RikuPaths) {
+/// A running supervisor as the wait sees one: its pid file, locked. The
+/// lock lasts as long as the returned file.
+fn write_supervisor_pid(paths: &RikuPaths) -> fs::File {
     let path = paths.riku_root.join("supervisor.pid");
-    fs::write(path, std::process::id().to_string()).unwrap();
+    fs::write(&path, std::process::id().to_string()).unwrap();
+    let lock = fs::File::open(&path).unwrap();
+    lock.lock().unwrap();
+    lock
 }
 
 fn procfile_server() -> (tempfile::TempDir, MockServer, ProcfileWorkers) {
@@ -48,7 +53,7 @@ fn no_running_supervisor_means_nothing_to_wait_for() {
 #[test]
 fn returns_as_soon_as_the_supervisor_reaps_the_worker() {
     let (_tmp, server, workers) = procfile_server();
-    write_supervisor_pid(&server.paths);
+    let _supervisor = write_supervisor_pid(&server.paths);
     let (mut child, marker) = running_worker(&server.paths);
     let reaper = thread::spawn(move || {
         thread::sleep(Duration::from_millis(300));
@@ -72,7 +77,7 @@ fn returns_as_soon_as_the_supervisor_reaps_the_worker() {
 #[test]
 fn live_worker_times_out_with_the_app_named() {
     let (_tmp, server, workers) = procfile_server();
-    write_supervisor_pid(&server.paths);
+    let _supervisor = write_supervisor_pid(&server.paths);
     let (mut child, _marker) = running_worker(&server.paths);
 
     let outcome = workers.wait_stopped_within(&server.paths, Duration::from_millis(300));
