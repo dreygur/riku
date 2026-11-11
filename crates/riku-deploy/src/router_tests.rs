@@ -67,19 +67,25 @@ fn enable_worker(paths: &RikuPaths, kind: &str, copy: u32, pairs: &[(&str, &str)
     std::fs::write(file, toml::to_string(&config).unwrap()).unwrap();
 }
 
+/// A static site has no web copy but nginx serves its files, so it keeps a
+/// route to its default backend. A worker only app serves nothing and gets
+/// no route at all.
 #[test]
-fn worker_only_and_static_apps_keep_their_default_backend() {
+fn only_a_static_app_without_web_copies_is_routed() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = paths_with_workers(&tmp);
     enable_worker(&paths, "worker", 1, &[]);
     let socket = Backend::Unix(paths.socket_root.join("shop.sock"));
-
-    let worker_only = routed_backends(&Router::Nginx, "shop", &env(&[]), &paths, None).unwrap();
     let static_env = env(&[("RIKU_NGINX_STATIC", "true")]);
+
     let static_site = routed_backends(&Router::Nginx, "shop", &static_env, &paths, None).unwrap();
 
-    assert_eq!(worker_only, vec![socket.clone()]);
     assert_eq!(static_site, vec![socket]);
+    assert!(has_route("shop", &static_env, &paths).unwrap());
+    assert!(
+        !has_route("shop", &env(&[]), &paths).unwrap(),
+        "a worker only app must get no route"
+    );
 }
 
 #[test]
@@ -99,7 +105,7 @@ fn web_copies_replace_the_default_backend() {
 }
 
 #[test]
-fn caddy_deploys_a_worker_only_app_to_the_port_from_its_env() {
+fn caddy_publishes_no_site_for_a_worker_only_app() {
     let tmp = tempfile::tempdir().unwrap();
     let mut paths = paths_with_workers(&tmp);
     std::fs::write(&paths.router_file, "caddy").unwrap();
@@ -114,6 +120,8 @@ fn caddy_deploys_a_worker_only_app_to_the_port_from_its_env() {
 
     configure("shop", tmp.path(), &e, &paths, None).unwrap();
 
-    let site = std::fs::read_to_string(paths.caddy_root.join("shop.caddy")).unwrap();
-    assert!(site.contains("reverse_proxy 127.0.0.1:5001"), "{site}");
+    assert!(
+        !paths.caddy_root.join("shop.caddy").exists(),
+        "nothing of a worker only app answers HTTP, so it gets no site"
+    );
 }

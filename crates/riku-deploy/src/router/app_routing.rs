@@ -30,6 +30,13 @@ const PORT_KEY: &str = "RIKU_ROUTING_PORT";
 const WSGI_KEY: &str = "RIKU_NGINX_WSGI";
 const STATIC_KEY: &str = "RIKU_NGINX_STATIC";
 
+/// Whether the router serves the app's own files: `RIKU_NGINX_STATIC` set,
+/// the key nginx's static template and riku-nginx `publish_static` check
+/// (`routing.static = false` leaves it out).
+pub(crate) fn serves_static_site(env: &HashMap<String, String>) -> bool {
+    env.contains_key(STATIC_KEY)
+}
+
 /// How one app is reached.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppRouting {
@@ -201,7 +208,7 @@ pub fn resolve(
             Err(why) => routing.fallback_skipped = why,
         }
     }
-    let serves_a_port = !env.contains_key(WSGI_KEY) && !env.contains_key(STATIC_KEY);
+    let serves_a_port = !env.contains_key(WSGI_KEY) && !serves_static_site(env);
     let implicit_port = routing.domains.is_empty() && !plugin_router && serves_a_port;
     routing.mode = match mode_set {
         Some(mode) => mode,

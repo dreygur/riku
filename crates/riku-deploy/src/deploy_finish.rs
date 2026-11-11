@@ -51,8 +51,24 @@ fn routed(
     Ok((routing, tls))
 }
 
-/// Where the app is live, as `live_urls` words it.
-fn live_at(app: &str, env: &HashMap<String, String>, paths: &RikuPaths) -> Vec<Line> {
+/// Where the app is live, as `live_urls` words it. Nothing for a Procfile
+/// app without a route (see `router::has_route`).
+fn live_at(
+    app: &str,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+    container: bool,
+) -> Vec<Line> {
+    if !container {
+        match crate::router::has_route(app, env, paths) {
+            Ok(true) => {}
+            Ok(false) => return Vec::new(),
+            Err(e) => {
+                display::warn(&format!("Cannot tell where the app is live: {e:#}"));
+                return Vec::new();
+            }
+        }
+    }
     let (routing, tls) = match routed(app, env, paths) {
         Ok(found) => found,
         Err(e) => {
@@ -104,7 +120,8 @@ pub(crate) fn finish_deploy(
     progress.log.log_raw("Running post-deploy hooks");
     let _ = hooks::run_post_deploy(app, &app_path, paths, Some(&deployed.runtime), env);
     record_release(app, &app_path, paths);
-    let urls = urls_after_notes(live_at(app, env, paths));
+    let container = deployed.runtime == crate::containers::CONTAINER_RUNTIME;
+    let urls = urls_after_notes(live_at(app, env, paths, container));
     let commit = git_ops::head_commit(&app_path);
     progress.succeeded(&Outcome {
         commit: commit.as_ref(),
@@ -112,3 +129,7 @@ pub(crate) fn finish_deploy(
         workers: &deployed.workers,
     });
 }
+
+#[cfg(test)]
+#[path = "deploy_finish_tests.rs"]
+mod tests;

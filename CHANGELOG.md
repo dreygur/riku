@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- An app with no web facing process (a Procfile with only `worker:`) and
+  no static site (`RIKU_NGINX_STATIC`) gets no route: the deploy takes it
+  off the router (removing a route an earlier deploy left), records no
+  port, and the push summary shows no URL. It used to be routed to a
+  default backend nothing listened on, and the summary showed that URL.
+  A static site without processes keeps its route.
 - Breaking: `riku restart` (and `riku agent restart`, the dashboard and the
   control API restart) on a Procfile app restarts the running workers from
   the current build and never rebuilds. It used to stop the app and deploy

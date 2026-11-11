@@ -85,8 +85,8 @@ fn backends_for(router: &Router, backends: Vec<Backend>) -> Vec<Backend> {
 }
 
 /// A container app (`engine` given) routes to its running routed copies; a
-/// Procfile app to its web copies, or to its old default backend when it has
-/// none.
+/// Procfile app to its web copies, or, a static site with none, to its
+/// default backend.
 #[allow(clippy::question_mark)]
 fn routed_backends(
     active: &Router,
@@ -111,9 +111,27 @@ fn routed_backends(
     }
 }
 
+/// Whether a Procfile app gets a route: it runs a web facing copy, or the
+/// router serves its static files. A worker only app answers no HTTP.
+pub(crate) fn has_route(
+    app: &str,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+) -> Result<bool> {
+    if app_routing::serves_static_site(env) {
+        return Ok(true);
+    }
+    match web_copies(app, paths) {
+        Ok(copies) => Ok(!copies.is_empty()),
+        Err(e) => Err(anyhow!("cannot route '{app}': {e}")),
+    }
+}
+
 /// Configure the active router so `app` is reachable, with a backend for
 /// every web copy it has today, and return once the router confirmed the new
-/// config. `engine` is `Some` for a container app.
+/// config. `engine` is `Some` for a container app. A Procfile app with no
+/// route (see [`has_route`]) is taken off the router instead, which also
+/// forgets its recorded port.
 #[allow(clippy::question_mark)]
 pub fn configure(
     app: &str,
@@ -122,6 +140,13 @@ pub fn configure(
     paths: &RikuPaths,
     engine: Option<&Engine>,
 ) -> Result<()> {
+    if engine.is_none() {
+        match has_route(app, env, paths) {
+            Ok(true) => {}
+            Ok(false) => return remove(app, paths),
+            Err(e) => return Err(e),
+        }
+    }
     let active = match Router::load(paths) {
         Ok(router) => router,
         Err(e) => return Err(e),
