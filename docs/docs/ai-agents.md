@@ -30,9 +30,15 @@ The agent sends only the command:
 ssh riku@server apps
 ssh riku@server ps myapp
 ssh riku@server run myapp -- ls -la   # put -- before arguments that start with -
-ssh riku@server --intro               # scope, permitted commands, version
-ssh riku@server --agent-help deploy
+ssh riku@server agent --intro         # scope, permitted commands, version
+ssh riku@server agent --agent-help deploy
+ssh riku@server 'config:set myapp "MSG=hello world"'
 ```
+
+Start a request that begins with an option with the word `agent`: the local
+ssh reads options after the host name too, so `ssh riku@server --intro` fails
+before it reaches the server. ssh joins its arguments with spaces, so a value
+that holds spaces needs quotes inside the remote command, as in the last line.
 
 A leading `riku` or `riku agent` is ignored. The request may hold only the
 command, its arguments, `--confirm <token>`, `--intro`, `--schema`,

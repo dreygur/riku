@@ -17,9 +17,6 @@ use super::route_build::build_route;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::backend::Backend;
-use crate::util::echo;
-
-const DOMAINS_KEY: &str = "RIKU_DOMAINS";
 
 /// Have the router helper write `app`'s Caddy site and reload Caddy, or take
 /// the site out when the app sets no domain. Returns once Caddy accepted the
@@ -38,13 +35,7 @@ pub(super) fn apply_caddy_site(
     };
     let route = match build_route(&name, env, backends, paths, &Router::Caddy) {
         Ok(Some(route)) => route,
-        Ok(None) => {
-            echo(
-                &format!("-----> No {DOMAINS_KEY} set, app is not routed. Set one with: riku config set {app} {DOMAINS_KEY}=<domain>"),
-                "yellow",
-            );
-            return remove_caddy_site(send, app).map(|_| ());
-        }
+        Ok(None) => return remove_caddy_site(send, app).map(|_| ()),
         Err(e) => return Err(e),
     };
     let request = Request::Apply {

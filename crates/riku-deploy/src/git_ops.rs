@@ -75,17 +75,24 @@ pub fn deploy_branch(repo: &Path) -> Option<String> {
     (!branch.is_empty()).then_some(branch)
 }
 
-/// Fetch from origin (best-effort; logs a warning on failure).
+/// Fetch from origin (best-effort). git's own stderr is captured so a failure
+/// shows as one warning on the output rail instead of raw `fatal:` lines.
 pub fn git_fetch(app_path: &Path) {
-    let result = Command::new("git")
+    let output = Command::new("git")
         .args(["fetch", "--quiet", "origin"])
         .current_dir(app_path)
         .env_remove("GIT_DIR")
         .env_remove("GIT_WORK_TREE")
-        .status();
+        .output();
 
-    if let Err(e) = result {
-        echo(&format!("git fetch failed: {}", e), "yellow");
+    match output {
+        Ok(out) if out.status.success() => {}
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let reason = stderr.lines().next().unwrap_or("no message");
+            echo(&format!("git fetch failed: {reason}"), "yellow");
+        }
+        Err(e) => echo(&format!("git fetch failed: {e}"), "yellow"),
     }
 }
 

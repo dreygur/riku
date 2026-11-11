@@ -84,9 +84,10 @@ Also: `riku addon` (databases, caches), `riku plugins` (bundles, marketplaces), 
 
 ## Agent interface (JSON)
 
-Through an agent key send only the command (`ssh riku@host ps myapp`); on the server use `riku agent ps myapp`. Each call prints one JSON object; an error exits 1. Start with `--intro` (your scope and commands) and `--schema` (every command and error code).
+Through an agent key send only the command (`ssh riku@host ps myapp`); on the server use `riku agent ps myapp`. Each call prints one JSON object; an error exits 1. Start with `ssh riku@host agent --intro` (your scope and commands) and `agent --schema` (every command and error code); a bare `ssh riku@host --intro` is eaten by the local ssh.
 
 ```bash
+ssh riku@host 'config:set myapp "MSG=hello world"'   # quote values with spaces inside the remote command
 ssh riku@host config:set myapp DEBUG=1         # redeploys
 ssh riku@host run myapp -- python manage.py migrate
 ssh riku@host destroy myapp                    # returns confirm_token

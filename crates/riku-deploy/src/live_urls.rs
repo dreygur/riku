@@ -51,7 +51,7 @@ fn no_domain_lines(app: &str, routing: &AppRouting) -> Vec<Line> {
         .collect();
     lines.push(line(
         format!(
-            "No domain set: add domains under [routing] in riku.toml, or run rk config set {app} RIKU_DOMAINS=<domain>"
+            "No domain set: add domains under [routing] in riku.toml, or run rk settings set {app} routing.domains=<domain>"
         ),
         "",
     ));
