@@ -144,7 +144,7 @@ fn warn_route_down(running: &[WorkerConfig], env: &HashMap<String, String>) -> R
 /// workers (never deployed, or stopped) is an error that names
 /// `riku deploy`. Holds the app's deploy lock throughout. `LIVE_ENV` is
 /// written once every config was rewritten, or, when the rewrite stopped
-/// part way, once any kind runs the new env (`app_restart/partial.rs`).
+/// part way, once any copy runs the new env (`app_restart/partial.rs`).
 pub fn restart_procfile_app(app: &str, kind: Option<&str>, paths: &RikuPaths) -> Result<usize> {
     let app_path = paths.app_root.join(app);
     let mut routes = workers::app_routes(app, &app_path, paths);
@@ -199,7 +199,14 @@ fn restart_procfile_app_with(
         Ok(()) => {}
         Err(RewriteError::Untouched(e)) => return Err(e),
         Err(RewriteError::Partial(partial)) => {
-            return Err(finish_partial(app, paths, &env, partial, reload_supervisor))
+            return Err(finish_partial(
+                app,
+                paths,
+                &env,
+                &running,
+                partial,
+                reload_supervisor,
+            ))
         }
     }
     if let Err(e) = env_setup::write_live_env(app, paths, &env) {
