@@ -17,13 +17,13 @@
 // Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
 #![allow(clippy::question_mark)]
 
+use std::path::Path;
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 
 use crate::config::RikuPaths;
-use crate::deploy::supervisor_ctl::running_supervisor_pid;
-use crate::deploy::supervisor_stop::stop_supervisor;
+use crate::deploy::supervisor_stop::{seen_supervisor, stop_supervisor};
 use crate::util::display;
 
 use super::supervisor_binary::{service_main_pid, UnitScope};
@@ -45,12 +45,16 @@ fn to_replace(main_pid: Option<u32>, locked: Option<i32>) -> Option<i32> {
 /// rail. Prints nothing when there is none. An error when it does not stop
 /// within [`STOP_WAIT`], since the unit cannot run while it holds the lock.
 pub(super) fn replace_outside_supervisor(paths: &RikuPaths, scope: UnitScope) -> Result<()> {
-    let locked = running_supervisor_pid(paths);
-    let pid = match to_replace(service_main_pid(scope), locked) {
+    let proc_root = Path::new("/proc");
+    let seen = match seen_supervisor(paths, proc_root) {
+        Some(seen) => seen,
+        None => return Ok(()),
+    };
+    let pid = match to_replace(service_main_pid(scope), Some(seen.pid)) {
         Some(pid) => pid,
         None => return Ok(()),
     };
-    if !stop_supervisor(paths, pid, STOP_WAIT) {
+    if !stop_supervisor(paths, &seen, proc_root, STOP_WAIT) {
         return Err(anyhow!(
             "the supervisor running outside systemd (pid {pid}) did not stop within {} s; \
              the riku service cannot start while it holds the lock. Stop it (kill {pid}), \
