@@ -5,6 +5,7 @@ use std::net::{IpAddr, Ipv4Addr};
 
 use crate::router::app_routing::{AppRouting, RoutingMode};
 pub(crate) use crate::router::routing_state::TlsState;
+use crate::util::outbound_ip::public_v4;
 
 /// nginx's "any host" name, which is not a URL.
 const CATCH_ALL_NAME: &str = "_";
@@ -101,15 +102,23 @@ pub(crate) fn url_host(configured: Option<Ipv4Addr>, detected: Option<IpAddr>) -
     }
 }
 
+/// The host of a port or path URL, and the label after the URL: ` (LAN)`
+/// for an address the internet cannot reach, so a pusher elsewhere knows
+/// the link only works on the server's network.
+fn host_and_label(server_ip: Option<Ipv4Addr>) -> (String, &'static str) {
+    match server_ip {
+        Some(ip) if public_v4(IpAddr::V4(ip)).is_some() => (ip.to_string(), ""),
+        Some(ip) => (ip.to_string(), " (LAN)"),
+        None => ("<this server's address>".to_string(), ""),
+    }
+}
+
 /// The push output for an app answering on `port`. `server_ip` is the
 /// address from settings.toml, when known.
 pub(crate) fn port_lines(port: u16, server_ip: Option<Ipv4Addr>) -> Vec<Line> {
-    let host = match server_ip {
-        Some(ip) => ip.to_string(),
-        None => "<this server's address>".to_string(),
-    };
+    let (host, label) = host_and_label(server_ip);
     vec![
-        line(format!("Live at http://{host}:{port}"), "green"),
+        line(format!("Live at http://{host}:{port}{label}"), "green"),
         line(
             format!("Open port {port} in the server's firewall if it is closed"),
             "",
@@ -123,12 +132,12 @@ pub(crate) fn port_lines(port: u16, server_ip: Option<Ipv4Addr>) -> Vec<Line> {
 
 /// The push output for a path mode app on the shared port.
 pub(crate) fn path_lines(app: &str, shared_port: u16, server_ip: Option<Ipv4Addr>) -> Vec<Line> {
-    let host = match server_ip {
-        Some(ip) => ip.to_string(),
-        None => "<this server's address>".to_string(),
-    };
+    let (host, label) = host_and_label(server_ip);
     vec![
-        line(format!("Live at http://{host}:{shared_port}/{app}/"), "green"),
+        line(
+            format!("Live at http://{host}:{shared_port}/{app}/{label}"),
+            "green",
+        ),
         line(
             format!("The app must handle the base path /{app}: requests reach it without the prefix, which is sent as X-Forwarded-Prefix"),
             "yellow",

@@ -115,6 +115,20 @@ fn port_lines_name_the_url_and_the_firewall() {
 }
 
 #[test]
+fn a_private_address_is_labelled_lan() {
+    let lan = Some(Ipv4Addr::new(192, 168, 10, 121));
+
+    assert_eq!(
+        texts(port_lines(8100, lan))[0],
+        "Live at http://192.168.10.121:8100 (LAN)"
+    );
+    assert_eq!(
+        texts(path_lines("shop", 8080, lan))[0],
+        "Live at http://192.168.10.121:8080/shop/ (LAN)"
+    );
+}
+
+#[test]
 fn port_lines_without_server_ip_say_where_to_look() {
     let lines = texts(port_lines(8100, None));
 

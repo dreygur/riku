@@ -11,28 +11,7 @@ use anyhow::Result;
 
 use crate::config::{settings, RikuPaths};
 use crate::util::outbound_ip::detect_outbound_ip;
-
-fn shared_address_space(ip: Ipv4Addr) -> bool {
-    let [first, second, ..] = ip.octets();
-    first == 100 && (64..128).contains(&second)
-}
-
-/// `ip` when it is an IPv4 address reachable from the internet.
-pub fn public_v4(ip: IpAddr) -> Option<Ipv4Addr> {
-    let IpAddr::V4(v4) = ip else {
-        return None;
-    };
-    let local = v4.is_private()
-        || v4.is_loopback()
-        || v4.is_link_local()
-        || v4.is_unspecified()
-        || v4.is_broadcast()
-        || shared_address_space(v4);
-    if local {
-        return None;
-    }
-    Some(v4)
-}
+pub use crate::util::outbound_ip::public_v4;
 
 /// Whether the fallback domain came out on when init wrote `[routing]`.
 #[derive(Debug, Clone, PartialEq, Eq)]

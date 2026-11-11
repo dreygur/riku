@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The push summary showed a port or path mode URL on a private address
+  (the detected LAN address when `routing.server_ip` is not set) like any
+  other URL. It is still shown, now as `http://192.168.10.121:8100 (LAN)`,
+  so it is clear the link only works on the server's network. A public
+  address has no label.
 - `scripts/install.sh` installed the download unverified, as root, when
   fetching its `.sha256` failed for any reason (a network error included)
   or no sha256 tool was found, with only a warning. It now stops before
