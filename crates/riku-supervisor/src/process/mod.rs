@@ -14,6 +14,7 @@ pub mod spawned;
 pub mod stop;
 #[cfg(test)]
 pub(crate) mod test_support;
+mod worker_cgroup;
 
 pub use generation::{AppGeneration, GenerationStatus};
 pub use spawned::SpawnedProcess;
@@ -22,6 +23,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::cgroups::CgroupTree;
 use crate::resource_limits::ResourceLimits;
 use crate::stats::StatsManager;
 use lifecycle_events::EventTarget;
@@ -45,6 +47,9 @@ pub struct ProcessManager {
     pub(super) pid_dir: Option<PathBuf>,
     /// Where crash lifecycle events go.
     pub(super) events: EventTarget,
+    /// The cgroup the supervisor took over at startup. `None` when it is
+    /// not delegated, and then isolated workers refuse to start.
+    cgroup_tree: Option<CgroupTree>,
 }
 
 impl ProcessManager {
@@ -66,6 +71,7 @@ impl ProcessManager {
             deployment_events: Vec::new(),
             pid_dir: None,
             events: EventTarget::default(),
+            cgroup_tree: None,
         })
     }
 

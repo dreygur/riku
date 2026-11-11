@@ -13,7 +13,7 @@ Both run the root owned `/usr/local/bin/riku`. Both start on boot. Without root,
 
 ## Supervisor Service
 
-The generated `/etc/systemd/system/riku.service` is hardened and limited. The parts that matter:
+The generated `/etc/systemd/system/riku.service` is hardened. The parts that matter:
 
 ```ini
 [Service]
@@ -21,12 +21,13 @@ Type=simple
 User=riku
 ExecStart=/usr/local/bin/riku supervisor
 Restart=always
+Delegate=yes
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-MemoryMax=512M
-CPUQuota=50%
 ```
+
+The unit sets no memory or CPU cap of its own. Every app runs inside the supervisor's cgroup, so a cap there would be shared by all apps together. Per app limits come from the worker's `isolation` settings instead. `Delegate=yes` hands the unit's cgroup to the supervisor, which gives each isolated worker its own cgroup under it.
 
 `ReadWritePaths` lists `~/.riku`, `/run/riku-sockets`, `/var/lib/riku/acme` and `/var/lib/riku/static`. Everything else on disk is read only to the supervisor and the apps it starts.
 

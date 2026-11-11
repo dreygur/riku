@@ -10,7 +10,6 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::cgroups::{CgroupLimits, WorkerCgroup};
 use crate::config::WorkerConfig;
 
 use super::isolation::NamespaceConfig;
@@ -67,20 +66,9 @@ impl ProcessManager {
         // Provision the worker's cgroup (if isolation is enabled) before
         // spawning, so the constraints already exist when the worker joins
         // it from within pre_exec.
-        let cgroup: Option<WorkerCgroup> = match &config.options.isolation {
-            Some(opts) => {
-                let limits = CgroupLimits {
-                    memory_max_bytes: opts.max_memory_bytes,
-                    cpu_quota_us: opts.cpu_quota_us,
-                    cpu_period_us: opts.cpu_period_us,
-                    pids_max: opts.max_pids,
-                };
-                match WorkerCgroup::provision(&process_id, &limits) {
-                    Ok(cgroup) => Some(cgroup),
-                    Err(e) => return Err(e),
-                }
-            }
-            None => None,
+        let cgroup = match self.worker_cgroup(config) {
+            Ok(cgroup) => cgroup,
+            Err(e) => return Err(e),
         };
         let cgroup_for_child = cgroup.clone();
 
