@@ -41,6 +41,10 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=riku
 
+# Hands the unit's cgroup to the supervisor, which gives each isolated
+# worker its own cgroup with memory, cpu and pids limits inside it.
+Delegate=yes
+
 # Security hardening
 NoNewPrivileges=true
 ProtectSystem=strict

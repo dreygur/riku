@@ -60,6 +60,10 @@ phase 4 come after.
 
 ### Done
 
+- cgroup v2 delegation fix on `fix/cgroup-delegation` (2026-11-12): riku
+  units say `Delegate=yes`, the supervisor takes over its own cgroup from
+  `/proc/self/cgroup` instead of `/sys/fs/cgroup/riku/apps`. Not merged,
+  not yet checked on a real systemd host.
 - Unused plugin mechanisms removed on `chore/remove-unused-plugin-parts`
   (2026-11-11): filters, UI panels, event gate mode and the supervisor's
   `GET /plugins` client plugin listing. Not merged yet.

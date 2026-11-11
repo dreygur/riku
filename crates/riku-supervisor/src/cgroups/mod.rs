@@ -1,23 +1,33 @@
 //! cgroups v2 resource constraints for spawned worker processes.
 //!
-//! Provisions one cgroup per worker under `/sys/fs/cgroup/riku/apps/<id>/`
-//! and writes `memory.max` / `cpu.max` to the unified (v2) control group
-//! filesystem before the worker starts running, so it is constrained from
-//! its very first instruction. Requires cgroup v2 to be mounted at
-//! `/sys/fs/cgroup` and write access to it (root, or a delegated subtree).
+//! Provisions one cgroup per isolated worker under the supervisor's own
+//! delegated cgroup (see [`tree`]) and writes `memory.max`, `cpu.max` and
+//! `pids.max` before the worker starts running, so it is constrained from
+//! its very first instruction.
+//!
+//! Security model: only the supervisor, running as the deploy user, writes
+//! here, and only inside the subtree systemd delegated to its unit. Nothing
+//! runs as root, and nothing outside that subtree is touched. A worker's
+//! cgroup directory is named after its [`WorkerName`], which is checked to
+//! be a well formed `<app>@<kind>.<n>` before it becomes a path, so a
+//! config cannot point a cgroup outside `apps/`.
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
+use riku_util::file_names::worker::WorkerName;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
+pub mod tree;
+
+pub use tree::{take_over_own, CgroupTree};
+
 #[cfg(test)]
 mod tests;
 
-const CGROUP_ROOT: &str = "/sys/fs/cgroup/riku/apps";
 /// How long a killed cgroup gets to empty before its removal is tried.
 const KILL_SETTLE: Duration = Duration::from_secs(1);
 
@@ -64,64 +74,58 @@ pub struct WorkerCgroup {
     path: PathBuf,
 }
 
-/// Verify the cgroup v2 root riku provisions worker cgroups under actually
-/// exists and is writable, by creating and removing a throwaway probe
-/// directory under it: the same `create_dir_all` + write pattern
-/// `provision` uses for real workers.
-///
-/// Call this once at supervisor startup so an unmounted cgroup v2
-/// filesystem, or a riku user without write access to its delegated
-/// subtree, surfaces as one clear warning at boot instead of a deploy-time
-/// error deep inside `spawn_process` the first time someone enables
-/// isolation on a worker.
-pub fn verify_root_writable() -> Result<()> {
-    let probe = Path::new(CGROUP_ROOT).join(".riku-startup-probe");
-    fs::create_dir_all(&probe)
-        .with_context(|| format!("cgroup v2 root not writable: {}", probe.display()))?;
-    fs::remove_dir(&probe).ok();
-    Ok(())
-}
-
-/// Render a structured, human-readable startup diagnostic for a
-/// `verify_root_writable` failure: what failed, why it matters, and how to
-/// fix it. Used instead of a one-line warning so operators running in
-/// production don't have to go spelunking in `spawn_process` source to
-/// understand the failure the first time a worker requests isolation.
+/// Render a structured startup diagnostic for a failed [`take_over_own`]:
+/// what failed, why it matters, and how to fix it, so the operator sees it
+/// at boot instead of the first time a worker asks for isolation.
 pub fn startup_diagnostic(err: &anyhow::Error) -> String {
     format!(
         "riku startup diagnostic\n\
          \x20 component : cgroup v2 resource isolation\n\
-         \x20 check     : write access to {root}\n\
+         \x20 check     : write access to the supervisor's own cgroup (from /proc/self/cgroup)\n\
          \x20 status    : FAILED\n\
-         \x20 detail    : {err}\n\
-         \x20 impact    : any worker with `isolation` enabled in its config will fail to\n\
-         \x20             start the moment it's deployed, the failure surfaces deep in\n\
-         \x20             spawn_process, not here, unless this check catches it first\n\
-         \x20 remedy    : mount cgroup v2 at /sys/fs/cgroup (most modern distros do this by\n\
-         \x20             default) and ensure the riku user has write access to {root},\n\
-         \x20             e.g. by delegating that subtree to it (systemd cgroup delegation\n\
-         \x20             or `chown -R` if running riku as a dedicated user)",
-        root = CGROUP_ROOT,
-        err = err,
+         \x20 detail    : {err:#}\n\
+         \x20 impact    : any worker with `isolation` enabled in its config refuses to start\n\
+         \x20 remedy    : add Delegate=yes to the riku unit (re-run riku init to rewrite it)\n\
+         \x20             and restart it; cgroup v2 must be mounted at {mount}",
+        mount = tree::CGROUP_MOUNT,
     )
 }
 
 impl WorkerCgroup {
-    /// Create (or reuse) the cgroup directory for `process_id` under the
-    /// riku cgroup root and write `limits` to it. Call this from the
-    /// supervisor (parent) before spawning the worker, so the constraints
-    /// already exist by the time the worker joins via `add_self`.
-    pub fn provision(process_id: &str, limits: &CgroupLimits) -> Result<Self> {
-        let path = Path::new(CGROUP_ROOT).join(process_id);
-        fs::create_dir_all(&path)
-            .with_context(|| format!("creating cgroup directory {}", path.display()))?;
+    /// Create (or reuse) the cgroup directory for `worker` under the
+    /// supervisor's `apps/` cgroup and write `limits` to it. Call this from
+    /// the supervisor (parent) before spawning the worker, so the
+    /// constraints already exist by the time the worker joins via
+    /// `add_self`.
+    #[allow(clippy::question_mark)]
+    pub fn provision(
+        tree: &CgroupTree,
+        worker: &WorkerName,
+        limits: &CgroupLimits,
+    ) -> Result<Self> {
+        let dir_name = worker.to_string();
+        if WorkerName::parse(&dir_name).as_ref() != Some(worker) {
+            return Err(anyhow!(
+                "refusing a cgroup for malformed worker name {dir_name:?}"
+            ));
+        }
+        let path = tree.apps_dir().join(dir_name);
+        if let Err(e) = tree::create_cgroup(&path) {
+            return Err(e);
+        }
 
         if let Some(bytes) = limits.memory_max_bytes {
-            write_node(&path, "memory.max", &bytes.to_string())?;
+            if let Err(e) = write_node(&path, "memory.max", &bytes.to_string()) {
+                return Err(e);
+            }
         }
-        write_node(&path, "cpu.max", &limits.cpu_max_value())?;
+        if let Err(e) = write_node(&path, "cpu.max", &limits.cpu_max_value()) {
+            return Err(e);
+        }
         if let Some(pids) = limits.pids_max {
-            write_node(&path, "pids.max", &pids.to_string())?;
+            if let Err(e) = write_node(&path, "pids.max", &pids.to_string()) {
+                return Err(e);
+            }
         }
 
         Ok(WorkerCgroup { path })

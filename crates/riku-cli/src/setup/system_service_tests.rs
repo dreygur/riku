@@ -20,6 +20,15 @@ fn units_follow_router() {
 }
 
 #[test]
+fn unit_delegates_its_cgroup_to_the_supervisor() {
+    let unit = render_system_unit(&Router::Nginx, "deploy", "/home/deploy", "/usr/bin/riku");
+    assert!(
+        unit.contains("\nDelegate=yes\n"),
+        "without Delegate=yes isolated workers cannot get a cgroup: {unit}"
+    );
+}
+
+#[test]
 fn directories_outside_the_home_stay_writable() {
     let unit = render_system_unit(&Router::Nginx, "deploy", "/home/deploy", "/usr/bin/riku");
     assert!(
