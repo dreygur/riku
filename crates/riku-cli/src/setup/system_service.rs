@@ -56,10 +56,6 @@ PrivateTmp=true
 # The leading - keeps the unit starting when a directory is missing.
 ReadWritePaths={deploy_home}/.riku -{socket_root} -{acme_webroot} -{static_root}
 
-# Resource limits
-MemoryMax=512M
-CPUQuota=50%
-
 [Install]
 WantedBy=multi-user.target
 "#,
