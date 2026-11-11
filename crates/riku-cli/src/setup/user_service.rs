@@ -71,8 +71,14 @@ WantedBy=default.target
     if user_systemctl(&["enable", "riku"]) {
         done.push("enabled");
     }
-    if user_systemctl(&["start", "riku"]) {
-        done.push("started");
+    // Restart a running supervisor so an upgraded binary takes over.
+    let running = user_systemctl(&["is-active", "--quiet", "riku"]);
+    let (verb, outcome) = match running {
+        true => ("restart", "restarted"),
+        false => ("start", "started"),
+    };
+    if user_systemctl(&[verb, "riku"]) {
+        done.push(outcome);
     }
     display::step_done("Service", &done.join(", "));
     Ok(())

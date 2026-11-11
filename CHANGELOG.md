@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `sudo riku init` on an upgrade left the old supervisor running: it ran
+  `systemctl start`, which does nothing for a running service. A running
+  supervisor is now restarted, so the new binary takes over (its workers
+  restart with it).
 - A plain (not root) `riku init` on a host where root already installed
   riku built a second install for the caller: its own `~/.riku`, a user
   unit running a second supervisor, an ssh key and a forced command in

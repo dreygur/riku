@@ -84,16 +84,22 @@ pub(super) fn systemctl_ok(args: &[&str]) -> bool {
 }
 
 /// Reload, enable and start `riku.service`, then print one step saying
-/// which of those worked. Whether the supervisor stays up is checked by the
-/// init summary.
+/// which of those worked. A supervisor that already runs is restarted, so an
+/// upgrade takes effect: `start` leaves the old binary running. Whether the
+/// supervisor stays up is checked by the init summary.
 fn start_riku_service() {
     let _ = systemctl_ok(&["daemon-reload"]);
     let mut done = vec!["riku.service written"];
     if systemctl_ok(&["enable", "riku"]) {
         done.push("enabled");
     }
-    if systemctl_ok(&["start", "riku"]) {
-        done.push("started");
+    let running = systemctl_ok(&["is-active", "--quiet", "riku"]);
+    let (verb, outcome) = match running {
+        true => ("restart", "restarted"),
+        false => ("start", "started"),
+    };
+    if systemctl_ok(&[verb, "riku"]) {
+        done.push(outcome);
     }
     display::step_done("Service", &done.join(", "));
 }
