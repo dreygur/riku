@@ -84,15 +84,16 @@ pub enum Commands {
         #[arg()]
         command: Option<String>,
 
-        /// Arguments for the command
-        #[arg(last = true)]
+        /// Arguments for the command. Put `--` before any that start with `-`
+        #[arg()]
         args: Vec<String>,
 
         /// Confirmation token for destructive actions
         #[arg(long)]
         confirm: Option<String>,
 
-        /// Output in JSON format
+        /// Accepted so existing forced commands keep working. Agent output
+        /// is always JSON
         #[arg(long)]
         json: bool,
     },

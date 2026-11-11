@@ -42,6 +42,7 @@ pub mod stats;
 pub use certs_cmd::{cmd_certs_set, cmd_certs_show, cmd_certs_unset};
 pub use config::{
     cmd_config_get, cmd_config_live, cmd_config_set, cmd_config_show, cmd_config_unset,
+    config_after_set, config_after_unset,
 };
 pub use control::{cmd_restart, cmd_run, cmd_stop, cmd_supervisor};
 pub use create::cmd_apps_create;

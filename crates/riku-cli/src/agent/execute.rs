@@ -7,10 +7,11 @@ use super::audit::{log_agent_action, open_before_mutation, AuditEntry};
 use super::auth::{check_rate_limit_now, AgentSession};
 use super::commands::{
     cmd_agent_apps, cmd_agent_config_get, cmd_agent_config_set, cmd_agent_config_show,
-    cmd_agent_deploy, cmd_agent_destroy_confirm, cmd_agent_destroy_request, cmd_agent_logs,
-    cmd_agent_ps, cmd_agent_restart, cmd_agent_run, cmd_agent_stats, cmd_agent_stop,
-    cmd_agent_stop_confirm,
+    cmd_agent_config_unset, cmd_agent_deploy, cmd_agent_destroy_confirm, cmd_agent_destroy_request,
+    cmd_agent_logs, cmd_agent_ps, cmd_agent_restart, cmd_agent_run, cmd_agent_stats,
+    cmd_agent_stop, cmd_agent_stop_confirm,
 };
+use super::quiet_stdout::with_stdout_on_stderr;
 use super::state::agent_dir;
 use super::types::AgentResponse;
 
@@ -25,6 +26,12 @@ fn print_response(response: &AgentResponse) -> Result<()> {
 }
 
 /// Runs the command and prints the JSON response.
+///
+/// A response carrying an error code also returns `Err`, so the process exits
+/// nonzero and a caller can tell failure apart without parsing stdout. A
+/// confirmation request is not an error: it exits zero with its token.
+// Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
+#[allow(clippy::question_mark)]
 pub fn cmd_agent_execute(
     paths: &RikuPaths,
     session: &AgentSession,
@@ -32,13 +39,16 @@ pub fn cmd_agent_execute(
     args: &[String],
     confirm_token: Option<&str>,
 ) -> Result<()> {
-    print_response(&run_agent_command(
-        paths,
-        session,
-        command,
-        args,
-        confirm_token,
-    ))
+    let run = || run_agent_command(paths, session, command, args, confirm_token);
+    let response = match with_stdout_on_stderr(run) {
+        Ok(response) => response,
+        Err(e) => return Err(e),
+    };
+    match (print_response(&response), response.error) {
+        (Err(e), _) => Err(e),
+        (Ok(()), Some(error)) => Err(anyhow::anyhow!("agent {command} failed: {}", error.code)),
+        (Ok(()), None) => Ok(()),
+    }
 }
 
 fn run_agent_command(
@@ -119,21 +129,28 @@ fn run_agent_command(
             if args.len() < 2 {
                 AgentResponse::error("INVALID_PARAMETERS", "Missing app name or key")
             } else {
-                cmd_agent_config_get(paths, &args[0], &args[1])
+                cmd_agent_config_get(paths, scope, &args[0], &args[1])
             }
         }
         "config:set" => {
             if args.is_empty() {
                 AgentResponse::error("INVALID_PARAMETERS", "Missing app name")
             } else {
-                cmd_agent_config_set(paths, &args[0], &args[1..])
+                cmd_agent_config_set(paths, &state, &args[0], &args[1..], confirm_token)
+            }
+        }
+        "config:unset" => {
+            if args.is_empty() {
+                AgentResponse::error("INVALID_PARAMETERS", "Missing app name")
+            } else {
+                cmd_agent_config_unset(paths, &state, &args[0], &args[1..], confirm_token)
             }
         }
         "config:show" => {
             if args.is_empty() {
                 AgentResponse::error("INVALID_PARAMETERS", "Missing app name")
             } else {
-                cmd_agent_config_show(paths, &args[0])
+                cmd_agent_config_show(paths, scope, &args[0])
             }
         }
         "logs" => {
@@ -175,7 +192,7 @@ fn run_agent_command(
             if args.len() < 2 {
                 AgentResponse::error("INVALID_PARAMETERS", "Missing app name or command")
             } else {
-                cmd_agent_run(paths, &args[0], &args[1..])
+                cmd_agent_run(paths, &state, &args[0], &args[1..], confirm_token)
             }
         }
         "stats" => {

@@ -1,510 +1,90 @@
 # AI Agent Interface
 
-Riku provides a secure SSH-based interface for AI agents (Claude, Cursor, Copilot, etc.) to perform deployment and management tasks.
+`riku agent` is a JSON interface for AI agents. Each call prints one JSON
+object on stdout, checks the agent's scope, rate limits it and writes an
+audit log entry. A response with an error code exits 1; every other response,
+a confirmation request included, exits 0. `riku agent --schema` lists every
+command, parameter and error code.
 
----
+## Setting up a key
 
-## Overview
-
-AI agents can connect to your Riku server via SSH and execute commands just like a human would. The interface is:
-
-- **Secure** - Uses existing SSH authentication
-- **Scoped** - Per-agent permissions via SSH keys
-- **Audited** - All AI actions are logged
-- **Structured** - JSON output for reliable parsing
-
----
-
-## Quick Start
-
-### 1. Generate SSH Key for AI Agent
+Give each agent its own key with a forced command in `~/.ssh/authorized_keys`:
 
 ```bash
-# Create a dedicated SSH key for your AI agent
-ssh-keygen -t ed25519 -C "cursor-agent@my-laptop" -f ~/.ssh/riku-cursor
+command="riku agent --scope readonly --agent-id monitor",no-port-forwarding,no-pty ssh-ed25519 AAAA... monitor
+command="riku agent --scope staging --agent-id cursor",no-port-forwarding,no-pty ssh-ed25519 BBBB... cursor
 ```
 
-### 2. Add Key to Riku Server
+The forced command holds only `riku agent` with `--scope`, `--agent-id` and
+optionally `--json` (accepted, output is always JSON). Without `--scope` the
+key is read only. A forced command that names a command itself always runs
+that command and ignores the request. Never use a bare `riku` forced command
+for an agent: it gives the client the whole CLI. Never allow `RIKU_*`
+variables through sshd `AcceptEnv`.
+
+## Calling it
+
+The agent sends only the command:
 
 ```bash
-# Copy public key to server
-cat ~/.ssh/riku-cursor.pub | ssh riku@edge.example \
-  "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+ssh riku@server apps
+ssh riku@server ps myapp
+ssh riku@server run myapp -- ls -la   # put -- before arguments that start with -
+ssh riku@server --intro               # scope, permitted commands, version
+ssh riku@server --agent-help deploy
 ```
 
-### 3. Set Permissions
+A leading `riku` or `riku agent` is ignored. The request may hold only the
+command, its arguments, `--confirm <token>`, `--intro`, `--schema`,
+`--agent-help` and `--json`. Any other option, `--scope` and `--agent-id`
+included, is refused with `INVALID_PARAMETERS`. On the server the same calls
+run as `riku agent ps myapp`.
 
-Edit `~/.ssh/authorized_keys` on the server to add restrictions:
+## Scopes and commands
+
+| Scope | Adds | Rate limit |
+|-------|------|------------|
+| `readonly` | `apps`, `logs`, `ps`, `config:get`, `config:show`, `stats` | 60/min |
+| `staging` | `deploy`, `restart`, `config:set`, `config:unset` | 30/min |
+| `production` | `stop`, `destroy`, `run` | 20/min |
+
+- `config:get` and `config:show`: a readonly agent sees secret-looking values,
+  and values that reference another variable, as `***`.
+- `config:set` and `config:unset` redeploy. If the redeploy fails the error is
+  `DEPLOY_FAILED` and the config is already saved.
+- `logs` returns the last 100 lines of each log file.
+- `run` executes as the riku user, so it can do anything riku can. It uses no
+  shell, gets only PATH, HOME and the app's live env, caps each output stream
+  at 64 KiB and is killed after 300 seconds. It returns `exit_code`, `stdout`,
+  `stderr`, `truncated` and `timed_out`; a nonzero exit is `COMMAND_FAILED`
+  with the same data.
+
+## Confirmation
+
+`destroy`, `stop` and `run` always ask first. `config:set` and `config:unset`
+ask when a key they change has a name containing `SECRET`, `PASS`, `PWD`,
+`TOKEN`, `_KEY`, `AUTH`, `CREDENTIAL`, `PRIVATE` or `DATABASE_URL`. The match
+is by name only, so a password inside `REDIS_URL` does not ask.
 
 ```bash
-# Restrict AI agent to specific commands and scope
-command="riku agent --scope staging",no-port-forwarding,no-pty ssh-ed25519 AAAA... cursor-agent@my-laptop
+ssh riku@server destroy myapp
+# {"success": false, "confirmation_required": true, "confirm_token": "9f2c...", ...}
+ssh riku@server destroy myapp --confirm 9f2c...   # after the human approves
 ```
 
-### 4. Test Connection
+A token works once, for the same action and app, within 5 minutes. A `run`,
+`config:set` or `config:unset` token also only works for the exact same
+command or values. The token goes back to the agent that asked: riku cannot
+tell whether a human saw the request.
+
+## Audit log
+
+Every call is logged to `~/.riku/state/agent/audit.log`, one JSON object per
+line with `time`, `agent`, `action`, `app` and `status`. Commands that change
+something are refused with `STATE_UNAVAILABLE` if the log cannot be opened.
+The state directory is private to the riku user, so read it with an admin
+login:
 
-This step does not work yet. With a forced command, sshd ignores the
-command the client sends and puts it in `SSH_ORIGINAL_COMMAND`, which
-`riku agent` does not read, so the agent only gets the help output. This is
-tracked in the roadmap.
-
-A key whose forced command has no `--scope` is read only. The scope comes
-from that key's own `--scope`, never from another line in `authorized_keys`
-or from the environment. The name in the audit log comes from `--agent-id`
-in the same forced command. Never allow `RIKU_*` variables through sshd
-`AcceptEnv`.
-
-The forced command of an agent key must start with `riku agent`. A bare
-`riku` forced command gives the client full access and lets it choose
-everything. The agent keeps its rate limit counters and audit log in
-`~/.riku/state/agent/`, readable only by the riku user.
-
----
-
-## SSH Key Setup
-
-### authorized_keys Format
-
-Each line in `~/.ssh/authorized_keys` can include restrictions before the key:
-
-```
-command="riku agent --scope SCOPE",no-port-forwarding,no-pty,no-X11-forwarding ssh-ed25519 AAAA... comment
-```
-
-### Example authorized_keys Entries
-
-```bash
-# Read-only AI agent (monitoring, logs, config:get)
-command="riku agent --scope readonly",no-port-forwarding,no-pty ssh-ed25519 AAAA... monitoring-agent
-
-# Staging deployment AI agent (can deploy to staging)
-command="riku agent --scope staging",no-port-forwarding,no-pty ssh-ed25519 BBBB... cursor-staging
-
-# Production AI agent (full access, use with caution)
-command="riku agent --scope production",no-port-forwarding ssh-ed25519 CCCC... claude-production
-```
-
-### SSH Key Options Explained
-
-| Option | Purpose |
-|--------|---------|
-| `command="..."` | Restrict to specific command with scope |
-| `no-port-forwarding` | Prevent SSH tunneling |
-| `no-pty` | No interactive shell (required for automation) |
-| `no-X11-forwarding` | Disable X11 forwarding |
-| `from="IP"` | Only allow from specific IP addresses |
-
-**Recommended minimum configuration:**
-```bash
-command="riku agent --scope staging",no-port-forwarding,no-pty,no-X11-forwarding ssh-ed25519 ...
-```
-
----
-
-## Authentication & Permissions
-
-### SSH Key Scopes
-
-Configure permissions in `~/.ssh/authorized_keys`:
-
-| Scope | Permissions |
-|-------|-------------|
-| `readonly` | `apps`, `logs`, `ps`, `config get`, `config show`, `stats` |
-| `staging` | All readonly + `deploy`, `restart`, `run`, `config set`, `config unset` |
-| `production` | Full access including `destroy`, `stop` |
-
----
-
-## Command Reference
-
-### Get Started
-
-```bash
-# Introduction (shows permissions and hints)
-ssh riku@server "riku agent --intro"
-
-# Full command schema (JSON)
-ssh riku@server "riku agent --schema"
-
-# Help for specific command
-ssh riku@server "riku agent --help deploy"
-```
-
-### Available Commands
-
-| Command | Description | Confirmation Required |
-|---------|-------------|----------------------|
-| `apps` | List deployed applications | No |
-| `deploy <app>` | Deploy an application | No |
-| `destroy <app>` | Permanently remove an application | Yes |
-| `config:get <app> <key>` | Get a configuration value | No |
-| `config:set <app> KEY=value` | Set configuration values | Yes (critical keys) |
-| `config:show <app>` | Show all configuration | No |
-| `logs <app> [process]` | View application logs | No |
-| `ps <app>` | Show process status | No |
-| `restart <app> [process]` | Restart an application | No |
-| `stop <app> [process]` | Stop an application | Yes (production) |
-| `run <app> <command>` | Run command in app context | No |
-
----
-
-## JSON Output Mode
-
-AI agents should use `--json` flag for structured, parseable output:
-
-```bash
-# Plain text (human-readable)
-ssh riku@server "riku ps myapp"
-# Output: web: 2/2 running
-
-# JSON (AI agent mode)
-ssh riku@server "riku --json ps myapp"
-# Output: {"processes": {"web": {"running": 2, "desired": 2}}}
-```
-
-### Response Format
-
-All JSON responses follow this structure:
-
-**Success:**
-```json
-{
-  "success": true,
-  "data": {
-    "processes": {
-      "web": {"running": 2, "desired": 2}
-    }
-  },
-  "message": "Command executed successfully",
-  "confirmation_required": false,
-  "job_id": null
-}
-```
-
-**Error:**
-```json
-{
-  "success": false,
-  "error": {
-    "code": "APP_NOT_FOUND",
-    "message": "Application 'myapp' not found"
-  }
-}
-```
-
-**Confirmation Required:**
-```json
-{
-  "success": false,
-  "confirmation_required": true,
-  "action": "destroy",
-  "app": "myapp",
-  "risk": "high",
-  "message": "This will permanently delete myapp and all its data",
-  "confirm_token": "abc123xyz"
-}
-```
-
----
-
-## Confirmation Flow
-
-Destructive operations require human confirmation:
-
-### Operations Requiring Confirmation
-
-| Action | When |
-|--------|------|
-| `destroy` | Always |
-| `stop` | Production apps |
-| `config:set` | Critical keys (DATABASE_URL, SECRET_KEY) |
-| `deploy` | Production (optional, configurable) |
-
-### Example Flow
-
-```bash
-# AI attempts to destroy app
-ssh riku@server "riku --json destroy myapp"
-
-# Server responds with confirmation required
-{
-  "confirmation_required": true,
-  "confirm_token": "abc123xyz",
-  "message": "Type 'yes' to confirm deletion of myapp"
-}
-
-# AI asks human, human confirms
-# AI sends confirmation
-ssh riku@server "riku --json destroy myapp --confirm abc123xyz"
-```
-
----
-
-## Example Workflows
-
-### Deploy Application
-
-```bash
-# Check current apps
-ssh riku@server "riku --json apps"
-
-# Deploy application
-ssh riku@server "riku --json deploy myapp"
-
-# Check deployment status
-ssh riku@server "riku --json ps myapp"
-
-# View logs
-ssh riku@server "riku --json logs myapp"
-```
-
-### Update Configuration
-
-```bash
-# Get current config
-ssh riku@server "riku --json config:get myapp DATABASE_URL"
-
-# Set new config (may require confirmation)
-ssh riku@server "riku --json config:set myapp DATABASE_URL=postgres://new-host/db"
-
-# If confirmation required, response includes confirm_token
-# AI asks human, then sends:
-ssh riku@server "riku --json config:set myapp DATABASE_URL=... --confirm <token>"
-```
-
-### Monitor Application
-
-```bash
-# Check process status
-ssh riku@server "riku --json ps myapp"
-
-# Stream logs (last 100 lines)
-ssh riku@server "riku --json logs myapp --lines 100"
-
-# Get configuration
-ssh riku@server "riku --json config:show myapp"
-```
-
-### Multi-Step Operation
-
-```bash
-# 1. Check current state
-STATE=$(ssh riku@server "riku --json ps myapp")
-
-# 2. Stop app (requires confirmation for production)
-ssh riku@server "riku --json stop myapp"
-
-# 3. Update config
-ssh riku@server "riku --json config:set myapp NEW_RELIC_KEY=xyz"
-
-# 4. Restart app
-ssh riku@server "riku --json restart myapp"
-
-# 5. Verify healthy
-ssh riku@server "riku --json ps myapp"
-```
-
----
-
-## Job IDs for Long Operations
-
-Long-running operations return a job ID:
-
-```bash
-# Start deployment
-ssh riku@server "riku --json deploy myapp"
-# Response: {"job_id": "deploy-123", "status": "running"}
-
-# Check job status
-ssh riku@server "riku --json job-status deploy-123"
-# Response: {"job_id": "deploy-123", "status": "completed"}
-```
-
-**Operations that return job IDs:**
-- `deploy` - Full application deployment
-- `destroy` - App removal with cleanup
-- Large `config:set` operations
-
----
-
-## Error Handling
-
-### Common Error Codes
-
-| Code | Meaning |
-|------|---------|
-| `APP_NOT_FOUND` | Application doesn't exist |
-| `PERMISSION_DENIED` | Agent lacks required permission |
-| `CONFIRMATION_REQUIRED` | Human confirmation needed |
-| `APP_LOCKED` | Another operation in progress |
-| `INVALID_COMMAND` | Unknown command |
-| `INVALID_PARAMETERS` | Missing or invalid parameters |
-
-### Handling Errors
-
-```python
-# Pseudocode for AI agent
-result = ssh_run("riku --json deploy myapp")
-
-if not result["success"]:
-    error = result["error"]
-    
-    if error["code"] == "APP_NOT_FOUND":
-        # App doesn't exist, create it first
-        ssh_run("riku --json create myapp")
-        
-    elif error["code"] == "CONFIRMATION_REQUIRED":
-        # Ask human for confirmation
-        token = result["confirm_token"]
-        if human_confirms():
-            ssh_run(f"riku --json deploy myapp --confirm {token}")
-            
-    elif error["code"] == "APP_LOCKED":
-        # Wait and retry
-        sleep(5)
-        retry()
-```
-
----
-
-## Audit Logging
-
-All AI agent actions are logged to `~/.riku/state/agent/audit.log`, one JSON
-object per line with the fields `time`, `agent`, `action`, `app` and `status`.
-Control characters in a client supplied value are escaped, so an entry cannot
-be split or forged.
-
-```
-{"time":"2026-02-23T14:30:00+00:00","agent":"cursor-agent@laptop","action":"deploy","app":"myapp","status":"success"}
-{"time":"2026-02-23T14:33:00+00:00","agent":"claude-agent@workstation","action":"logs","app":"myapp","status":"success"}
-```
-
-Commands that change something (deploy, restart, run, config changes, stop,
-destroy) open the audit log before they run and are refused with
-`STATE_UNAVAILABLE` if it cannot be opened. Read only commands still run if
-the log cannot be written.
-
-**View audit logs:** read the file on the server with an admin login. The
-forced command of the riku user cannot run `tail`. Each line is one JSON
-object, so `jq` works on it.
 ```bash
 ssh admin@server 'tail -n 50 ~riku/.riku/state/agent/audit.log'
 ```
-
----
-
-## Rate Limiting
-
-AI agents are rate-limited to prevent abuse:
-
-| Scope | Rate Limit |
-|-------|------------|
-| `readonly` | 60 commands/minute |
-| `staging` | 30 commands/minute |
-| `production` | 20 commands/minute |
-
-Exceeding rate limit returns:
-```json
-{
-  "success": false,
-  "error": {
-    "code": "RATE_LIMIT_EXCEEDED",
-    "message": "Too many requests. Try again in 30 seconds"
-  }
-}
-```
-
----
-
-## Best Practices
-
-### For AI Agent Developers
-
-1. **Cache the schema** - Fetch `--schema` once, cache locally
-2. **Use JSON mode** - Always use `--json` for parseable output
-3. **Handle confirmations** - Implement confirmation flow for destructive actions
-4. **Check permissions** - Use `--intro` to know your limits
-5. **Respect rate limits** - Add delays between commands
-6. **Log your actions** - Keep local audit trail
-
-### For Server Administrators
-
-1. **Use scoped keys** - Give AI agents minimum required permissions
-2. **Review audit logs** - Regularly check AI agent actions
-3. **Rotate keys** - Change AI agent SSH keys periodically
-4. **Monitor rate limits** - Adjust if legitimate agents hit limits
-5. **Test in staging** - Verify AI agent behavior before production
-
----
-
-## Security Considerations
-
-### SSH Key Security
-
-- Generate dedicated keys for each AI agent
-- Never share AI agent keys between systems
-- Rotate keys periodically
-- Revoke keys immediately if compromised
-
-### Permission Scoping
-
-- Start with `readonly` scope
-- Grant additional permissions only as needed
-- Use `no-port-forwarding,no-pty` restrictions
-- Consider IP-based restrictions with `from="IP"`
-
-### Audit & Monitoring
-
-- Review audit logs regularly
-- Set up alerts for destructive actions
-- Monitor rate limit violations
-- Track failed authentication attempts
-
----
-
-## Troubleshooting
-
-### Permission Denied
-
-```bash
-# Check your permissions
-ssh riku@server "riku agent --intro"
-
-# Verify authorized_keys entry
-ssh riku@server "cat ~/.ssh/authorized_keys"
-```
-
-### Command Not Found
-
-```bash
-# Get full schema
-ssh riku@server "riku agent --schema"
-
-# Check command help
-ssh riku@server "riku agent --help <command>"
-```
-
-### Confirmation Not Working
-
-```bash
-# Confirmations expire after 5 minutes
-# Request a new confirmation token
-ssh riku@server "riku --json destroy myapp"
-# Use the new confirm_token immediately
-```
-
-### Rate Limited
-
-```bash
-# Wait and retry
-sleep 30
-ssh riku@server "riku --json ps myapp"
-```
-
----
-
-## See Also
-
-- [CLI Reference](cli.md) - All Riku commands
-- [Environment Variables](env.md) - Configuration options
-- [Plugin System](plugins.md) - Extending Riku

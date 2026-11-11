@@ -23,6 +23,25 @@ fn agent_accepts_the_scope_of_a_forced_command() {
     }
 }
 
+fn agent_args(argv: &[&str]) -> (Vec<String>, Option<String>) {
+    match Cli::try_parse_from(argv) {
+        Ok(Cli {
+            command: Commands::Agent { args, confirm, .. },
+            ..
+        }) => (args, confirm),
+        other => panic!("expected the agent command from {argv:?}, got {other:?}"),
+    }
+}
+
+#[test]
+fn agent_command_arguments_need_no_separator() {
+    let plain = agent_args(&["riku", "agent", "destroy", "myapp", "--confirm", "tok"]);
+    assert_eq!(plain, (vec!["myapp".to_string()], Some("tok".to_string())));
+
+    let separated = agent_args(&["riku", "agent", "run", "myapp", "--", "ls", "-la"]);
+    assert_eq!(separated.0, ["myapp", "ls", "-la"]);
+}
+
 fn destroy_force(argv: &[&str]) -> bool {
     match Cli::try_parse_from(argv) {
         Ok(Cli {

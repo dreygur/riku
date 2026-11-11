@@ -26,6 +26,16 @@ fn malformed_setting_fails_and_keeps_env() {
 }
 
 #[test]
+fn each_argument_is_one_setting_so_values_keep_their_spaces() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = app_with_env(tmp.path());
+
+    let env = config_after_set(&paths, "shop", &["MSG=hello world".to_string()]).unwrap();
+
+    assert_eq!(env.get("MSG").map(String::as_str), Some("hello world"));
+}
+
+#[test]
 fn newline_in_value_fails() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = app_with_env(tmp.path());

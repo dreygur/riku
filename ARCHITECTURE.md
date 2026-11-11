@@ -59,7 +59,7 @@ it directly (for lifecycle hook dispatch and events), which only
 makes sense if it sits below them in the dependency graph. A Provider
 label would mean those three services depend on something above them.
 
-See `API.md` for the per-crate module map.
+See `docs/CODEMAP.md` for the per-crate module map.
 
 ## Component Architecture
 
@@ -492,10 +492,7 @@ manual/browser-driven verification of dashboard and plugin changes.
 
 ## Future Extensions
 
-See `ROADMAP.md` for the maintained, prioritized list. At a glance: a
-one-line installer and `riku quickstart` (solo-dev DX), stateful-app addons
-beyond Postgres, a marketplace/distribution model for third-party plugins,
-a WASM sandbox for untrusted plugin authors, and green/blue deployments.
+See `docs/superpowers/ROADMAP.md` for what is next.
 
 ## Implementation Notes
 

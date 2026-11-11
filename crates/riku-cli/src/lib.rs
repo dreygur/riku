@@ -25,6 +25,7 @@ pub mod plugins;
 pub mod router_helper;
 pub mod scp;
 pub mod setup;
+mod ssh_agent;
 pub mod ssh_command;
 
 pub use riku_args::cli::{require_app, Cli, Commands};

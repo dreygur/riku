@@ -27,13 +27,14 @@ Response:
         "deploy" => {
             r#"Usage: riku agent deploy <app>
 
-Deploy an application. Requires 'staging' or 'production' scope.
+Deploy an application and wait for the deploy to finish.
+Requires 'staging' or 'production' scope.
 
 Example:
   riku agent deploy myapp
 
 Response:
-  {"success": true, "job_id": "deploy-123"}"#
+  {"success": true, "data": {"status": "completed", "message": "..."}}"#
         }
         "destroy" => {
             r#"Usage: riku agent destroy <app> --confirm <token>
@@ -63,23 +64,35 @@ Response:
   {"value": "postgres://localhost/db"}"#
         }
         "config:set" => {
-            r#"Usage: riku agent config:set <app> KEY=value [KEY2=value2 ...]
+            r#"Usage: riku agent config:set <app> KEY=value [KEY2=value2 ...] [--confirm <token>]
 
-Set configuration values. Critical keys require confirmation.
+Set configuration values and redeploy. Changing a key whose name contains
+SECRET, PASS, PWD, TOKEN, _KEY, AUTH, CREDENTIAL, PRIVATE or DATABASE_URL
+needs human confirmation; the token only works for the exact same request.
 
 Example:
   riku agent config:set myapp DEBUG=true
 
 Response:
-  {"success": true} or {"confirmation_required": true}"#
+  {"success": true, "data": {"keys": ["DEBUG"], "redeployed": true}}
+  or {"confirmation_required": true, "confirm_token": "..."}"#
         }
-        "logs" => {
-            r#"Usage: riku agent logs <app> [process] [--lines N]
+        "config:unset" => {
+            r#"Usage: riku agent config:unset <app> KEY [KEY2 ...] [--confirm <token>]
 
-View application logs.
+Remove configuration values and redeploy. Secret-looking keys need human
+confirmation, as for config:set.
 
 Example:
-  riku agent logs myapp web --lines 100
+  riku agent config:unset myapp DEBUG"#
+        }
+        "logs" => {
+            r#"Usage: riku agent logs <app> [process]
+
+View the last 100 lines of each log file of an application.
+
+Example:
+  riku agent logs myapp web
 
 Response:
   {"lines": ["2024-01-01 10:00:00 App started", ...]}"#
@@ -108,26 +121,36 @@ Response:
   {"success": true}"#
         }
         "stop" => {
-            r#"Usage: riku agent stop <app>
+            r#"Usage: riku agent stop <app> [--confirm <token>]
 
-Stop an application. Requires confirmation for production apps.
+Stop an application. Requires 'production' scope and human confirmation.
 
 Example:
+  # First request (gets confirmation token)
   riku agent stop myapp
+
+  # After human confirms
+  riku agent stop myapp --confirm abc123
 
 Response:
   {"confirmation_required": true, "confirm_token": "abc123"}"#
         }
         "run" => {
-            r#"Usage: riku agent run <app> <command>
+            r#"Usage: riku agent run <app> [--] <command>... [--confirm <token>]
 
-Run a command in the application context.
+Run a command in the app directory with PATH, HOME and the app's live env,
+without a shell. It runs as the riku user, so it needs 'production' scope
+and human confirmation every time; the token only works for the exact same
+command. Each output stream is capped at 64 KiB; the command is killed
+after 300s. Put -- before arguments that start with -.
 
 Example:
   riku agent run myapp python manage.py migrate
+  riku agent run myapp --confirm <token> -- python manage.py migrate
 
 Response:
-  {"output": "Migrations applied", "exit_code": 0}"#
+  {"success": true, "data": {"exit_code": 0, "stdout": "...", "stderr": "",
+   "truncated": false, "timed_out": false}}"#
         }
         "stats" => {
             r#"Usage: riku agent stats [app]
@@ -149,27 +172,31 @@ Response:
 fn print_general_help() {
     println!("AI Agent Interface for Riku");
     println!();
-    println!("Usage: riku agent [OPTIONS] [COMMAND]");
+    println!("Usage: riku agent [OPTIONS] [COMMAND] [ARGS]...");
+    println!();
+    println!("Responses are one JSON object on stdout. A response with an");
+    println!("error code exits 1.");
     println!();
     println!("Options:");
-    println!("  --intro     Show agent introduction and permissions");
-    println!("  --schema    Show full command schema (JSON)");
-    println!("  --help      Show this help or help for a command");
-    println!("  --json      Output in JSON format");
+    println!("  --intro       Show agent introduction and permissions");
+    println!("  --schema      Show full command schema (JSON)");
+    println!("  --agent-help  Show this help, or help for the named command");
+    println!("  --confirm     Confirmation token from an earlier request");
     println!();
     println!("Commands:");
-    println!("  apps        List deployed applications");
-    println!("  deploy      Deploy an application");
-    println!("  destroy     Remove an application");
-    println!("  config:get  Get configuration value");
-    println!("  config:set  Not implemented yet (use riku config set)");
-    println!("  config:show Show all configuration");
-    println!("  logs        View application logs");
-    println!("  ps          Show process status");
-    println!("  restart     Restart an application");
-    println!("  stop        Stop an application");
-    println!("  run         Not implemented yet (use riku run)");
-    println!("  stats       Show statistics");
+    println!("  apps          List deployed applications");
+    println!("  deploy        Deploy an application");
+    println!("  destroy       Remove an application");
+    println!("  config:get    Get configuration value");
+    println!("  config:set    Set configuration values and redeploy");
+    println!("  config:unset  Remove configuration values and redeploy");
+    println!("  config:show   Show all configuration");
+    println!("  logs          View application logs");
+    println!("  ps            Show process status");
+    println!("  restart       Restart an application");
+    println!("  stop          Stop an application");
+    println!("  run           Run a command in the app context");
+    println!("  stats         Show statistics");
     println!();
-    println!("Use 'riku agent --help <command>' for command-specific help.");
+    println!("Use 'riku agent --agent-help <command>' for command-specific help.");
 }

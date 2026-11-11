@@ -1,6 +1,7 @@
 /// Agent commands for runtime operations: logs, ps, restart, stop, run, stats.
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 use riku_supervisor::config::app_worker_configs;
@@ -11,6 +12,34 @@ use crate::util::existing_app;
 
 use crate::agent::confirm;
 use crate::agent::types::AgentResponse;
+
+/// Lines `agent logs` returns from each log file, newest last.
+const LOG_LINES: usize = 100;
+
+/// Streams the file so memory stays at `count` lines however large the log
+/// grows. Bytes that are not UTF-8 are replaced rather than dropping the file.
+fn last_lines(path: &Path, count: usize) -> Vec<String> {
+    let file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(_) => return Vec::new(),
+    };
+    let mut reader = BufReader::new(file);
+    let mut kept: VecDeque<String> = VecDeque::with_capacity(count);
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        match reader.read_until(b'\n', &mut line) {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+        }
+        if kept.len() == count {
+            kept.pop_front();
+        }
+        let text = String::from_utf8_lossy(&line);
+        kept.push_back(text.trim_end_matches(['\n', '\r']).to_string());
+    }
+    kept.into()
+}
 
 pub fn cmd_agent_logs(paths: &RikuPaths, app: &str, process: &str) -> AgentResponse {
     let app = match existing_app(app, &paths.app_root) {
@@ -37,11 +66,7 @@ pub fn cmd_agent_logs(paths: &RikuPaths, app: &str, process: &str) -> AgentRespo
                             .map(|s| s.to_string_lossy().contains(process))
                             .unwrap_or(false))
                 {
-                    if let Ok(content) = fs::read_to_string(&path) {
-                        for line in content.lines().take(100) {
-                            lines.push(line.to_string());
-                        }
-                    }
+                    lines.extend(last_lines(&path, LOG_LINES));
                 }
             }
         }
@@ -127,15 +152,6 @@ pub fn cmd_agent_stop_confirm(
         })),
         Err(e) => AgentResponse::error("STOP_FAILED", &format!("Stop failed: {}", e)),
     }
-}
-
-/// Not implemented: says so as an error, so an agent never believes a
-/// command ran.
-pub fn cmd_agent_run(_paths: &RikuPaths, _app: &str, _cmd: &[String]) -> AgentResponse {
-    AgentResponse::error(
-        "NOT_IMPLEMENTED",
-        "agent run is not implemented; use `riku run <app> <command>`",
-    )
 }
 
 pub fn cmd_agent_stats(paths: &RikuPaths, app: Option<&str>) -> AgentResponse {

@@ -20,7 +20,9 @@ workflow, then `v0.1.4`. The Next.js dashboard, the framework design and
 phase 4 come after.
 
 - Each project has a design in `docs/superpowers/specs/` (owner approved) and
-  a plan in `docs/superpowers/plans/`, written just before it runs.
+  a plan in `docs/superpowers/plans/`, written just before it runs. Specs
+  and plans of finished work are deleted (2026-11-11); the paths named
+  below are in git history (`git log --all -- docs/superpowers/plans`).
 - Plans run with superpowers:subagent-driven-development, cut for tokens
   (owner, 2026-11-07):
   - No review after each task. One whole branch review at the end, then
@@ -351,8 +353,7 @@ phase 4 come after.
   the template needs `RIKU_DOMAINS`, which it is never given. Its output
   file is now `acme-challenge.conf.disabled`, outside the `*.conf` include,
   so it stays off even once rendering works; turning it on needs a design.
-- The agent forced command `command="riku agent --scope ..."` now parses,
-  but sshd runs it with the client's request only in `SSH_ORIGINAL_COMMAND`,
-  which `riku agent` never reads, so an agent behind that key sees only the
-  help output. Reading it needs a design, and tokens from the client must
-  never override the forced command's `--scope`.
+- Done on fix/agent-cli-errors (2026-11-11): the agent forced command now
+  reads the client's request from `SSH_ORIGINAL_COMMAND`, refusing any
+  scope, identity or target option from the client. Agent `run`,
+  `config:set` and `config:unset` work.

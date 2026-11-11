@@ -19,7 +19,7 @@ pub fn cmd_agent_intro(_paths: &RikuPaths, session: &AgentSession) -> Result<()>
         "agent_id": agent_id,
         "permissions": match scope {
             AgentScope::Readonly => vec!["apps", "logs", "ps", "config:get", "config:show", "stats"],
-            AgentScope::Staging => vec!["apps", "logs", "ps", "config:get", "config:show", "stats", "deploy", "restart", "run", "config:set", "config:unset"],
+            AgentScope::Staging => vec!["apps", "logs", "ps", "config:get", "config:show", "stats", "deploy", "restart", "config:set", "config:unset"],
             AgentScope::Production => vec!["apps", "logs", "ps", "config:get", "config:show", "stats", "deploy", "destroy", "restart", "stop", "run", "config:set", "config:unset"],
         },
         "scope": match scope {
@@ -103,7 +103,7 @@ pub fn cmd_agent_schema() -> Result<()> {
             },
             {
                 "name": "config:set",
-                "description": "Not implemented yet: returns NOT_IMPLEMENTED. Use riku config set.",
+                "description": "Set environment variables and redeploy",
                 "parameters": {
                     "app": {
                         "type": "string",
@@ -116,9 +116,28 @@ pub fn cmd_agent_schema() -> Result<()> {
                         "description": "KEY=VALUE pairs to set"
                     }
                 },
-                "requires_confirmation": true,
+                "requires_confirmation": "when a key name contains one of confirmation_markers",
                 "permissions": ["staging", "production"],
-                "confirmation_for_keys": ["DATABASE_URL", "SECRET_KEY", "PASSWORD", "API_KEY"]
+                "confirmation_markers": ["SECRET", "PASS", "PWD", "TOKEN", "_KEY", "AUTH", "CREDENTIAL", "PRIVATE", "DATABASE_URL"]
+            },
+            {
+                "name": "config:unset",
+                "description": "Remove environment variables and redeploy",
+                "parameters": {
+                    "app": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Application name"
+                    },
+                    "keys": {
+                        "type": "array",
+                        "required": true,
+                        "description": "Keys to remove"
+                    }
+                },
+                "requires_confirmation": "when a key name contains one of confirmation_markers",
+                "permissions": ["staging", "production"],
+                "confirmation_markers": ["SECRET", "PASS", "PWD", "TOKEN", "_KEY", "AUTH", "CREDENTIAL", "PRIVATE", "DATABASE_URL"]
             },
             {
                 "name": "config:show",
@@ -147,12 +166,6 @@ pub fn cmd_agent_schema() -> Result<()> {
                         "required": false,
                         "description": "Process filter (default: all)",
                         "default": "*"
-                    },
-                    "lines": {
-                        "type": "integer",
-                        "required": false,
-                        "description": "Number of lines to return",
-                        "default": 100
                     }
                 },
                 "requires_confirmation": false,
@@ -204,7 +217,7 @@ pub fn cmd_agent_schema() -> Result<()> {
             },
             {
                 "name": "run",
-                "description": "Not implemented yet: returns NOT_IMPLEMENTED. Use riku run.",
+                "description": "Run a command in the app directory with its live env, without a shell. Output is capped at 64 KiB per stream and the command is killed after 300 seconds",
                 "parameters": {
                     "app": {
                         "type": "string",
@@ -212,13 +225,14 @@ pub fn cmd_agent_schema() -> Result<()> {
                         "description": "Application name"
                     },
                     "command": {
-                        "type": "string",
+                        "type": "array",
                         "required": true,
-                        "description": "Command to execute"
+                        "description": "Program and its arguments; put -- before arguments that start with -"
                     }
                 },
-                "requires_confirmation": false,
-                "permissions": ["staging", "production"]
+                "returns": "exit_code, stdout, stderr, truncated, timed_out; a nonzero exit or timeout is COMMAND_FAILED with the same data",
+                "requires_confirmation": true,
+                "permissions": ["production"]
             },
             {
                 "name": "stats",
@@ -242,17 +256,24 @@ pub fn cmd_agent_schema() -> Result<()> {
                 "message": "string - human-readable error message"
             },
             "confirmation_required": "boolean - true if human confirmation needed",
-            "confirm_token": "string - token to include in confirmation request",
-            "job_id": "string - for long-running operations"
+            "confirm_token": "string - pass back with --confirm after a human approves"
         },
+        "exit_status": "1 when the response has an error, 0 otherwise (a confirmation request exits 0)",
         "error_codes": {
             "APP_NOT_FOUND": "Application does not exist",
+            "KEY_NOT_FOUND": "Configuration key is not set",
             "PERMISSION_DENIED": "Agent lacks required permission",
-            "CONFIRMATION_REQUIRED": "Human confirmation needed",
-            "APP_LOCKED": "Another operation in progress on this app",
             "INVALID_COMMAND": "Unknown command",
             "INVALID_PARAMETERS": "Missing or invalid parameters",
-            "RATE_LIMIT_EXCEEDED": "Too many requests"
+            "INVALID_TOKEN": "Confirmation token is unknown, used, expired or for another action",
+            "RATE_LIMIT_EXCEEDED": "Too many requests",
+            "STATE_UNAVAILABLE": "Rate limit or audit state cannot be read or written",
+            "COMMAND_FAILED": "agent run could not start, exited nonzero or timed out",
+            "CONFIG_FAILED": "The ENV file could not be written; nothing changed",
+            "DEPLOY_FAILED": "Deploy failed (after config:set or config:unset the config was saved)",
+            "RESTART_FAILED": "Restart failed",
+            "STOP_FAILED": "Stop failed",
+            "DESTROY_FAILED": "Destroy failed"
         }
     });
 

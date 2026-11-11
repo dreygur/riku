@@ -1,6 +1,37 @@
 use super::*;
 
 #[test]
+fn issuing_removes_expired_records_and_keeps_live_ones() {
+    let tmp = tempfile::tempdir().unwrap();
+    let old = issue_at(tmp.path(), "stop", "shop", 100).unwrap();
+    let late = 100 + TOKEN_TTL_SECS + 1;
+    let fresh = issue_at(tmp.path(), "stop", "shop", late - 1).unwrap();
+
+    issue_at(tmp.path(), "stop", "shop", late).unwrap();
+
+    assert!(
+        !record_path(tmp.path(), &old).exists(),
+        "expired record kept"
+    );
+    assert!(
+        record_path(tmp.path(), &fresh).exists(),
+        "live record removed"
+    );
+}
+
+#[test]
+fn bound_action_differs_when_any_word_changes() {
+    let words = |list: &[&str]| list.iter().map(|w| w.to_string()).collect::<Vec<_>>();
+    let base = bound_action("run", &words(&["ls", "-la"]));
+    assert_ne!(base, bound_action("run", &words(&["ls", "-lah"])));
+    assert_ne!(
+        base,
+        bound_action("run", &words(&["ls -la"])),
+        "word split ignored"
+    );
+}
+
+#[test]
 fn issued_token_works_once() {
     let tmp = tempfile::tempdir().unwrap();
     let token = issue_at(tmp.path(), "stop", "shop", 100).unwrap();

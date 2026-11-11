@@ -1,3 +1,6 @@
+// Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
+#![allow(clippy::question_mark)]
+
 use anyhow::Result;
 use std::collections::HashMap;
 use std::fs;
@@ -42,17 +45,33 @@ pub fn cmd_config_get(paths: &RikuPaths, app: &str, key: &str) -> Result<()> {
 
 /// Set config values (KEY=VALUE pairs), write config, trigger deploy.
 pub fn cmd_config_set(paths: &RikuPaths, app: &str, settings: &[String]) -> Result<()> {
-    let app = exit_if_invalid(app, &paths.app_root)?;
+    let app = match exit_if_invalid(app, &paths.app_root) {
+        Ok(app) => app,
+        Err(e) => return Err(e),
+    };
+    let env = match config_after_set(paths, &app, settings) {
+        Ok(env) => env,
+        Err(e) => return Err(e),
+    };
+    crate::deploy::env_setup::update_env_and_redeploy(&app, paths, &env)
+}
 
-    let config_file = paths.env_root.join(&app).join("ENV");
+/// The app's ENV with `settings` applied, without writing it. Each argument
+/// is one `KEY=VALUE` pair taken as is, so a value may hold spaces; the
+/// caller's shell or the ssh split already removed any quoting. Refuses riku
+/// settings, malformed pairs and newlines. `app` must already be validated.
+pub fn config_after_set(
+    paths: &RikuPaths,
+    app: &str,
+    settings: &[String],
+) -> Result<HashMap<String, String>> {
+    let config_file = paths.env_root.join(app).join("ENV");
     let mut env = HashMap::new();
-    parse_settings(&config_file, &mut env)?;
+    if let Err(e) = parse_settings(&config_file, &mut env) {
+        return Err(e);
+    }
 
-    // Join all settings and split them shell-style
-    let joined = settings.join(" ");
-    let parts = shell_split(&joined);
-
-    for s in &parts {
+    for s in settings {
         if let Some(eq_pos) = s.find('=') {
             let k = s[..eq_pos].trim().to_string();
             let v = s[eq_pos + 1..].trim().to_string();
@@ -74,25 +93,41 @@ pub fn cmd_config_set(paths: &RikuPaths, app: &str, settings: &[String]) -> Resu
             anyhow::bail!("malformed setting '{}': expected KEY=VALUE", s);
         }
     }
-    crate::deploy::env_setup::update_env_and_redeploy(&app, paths, &env)?;
-    Ok(())
+    Ok(env)
 }
 
 /// Unset config values, write config, trigger deploy.
 pub fn cmd_config_unset(paths: &RikuPaths, app: &str, keys: &[String]) -> Result<()> {
-    let app = exit_if_invalid(app, &paths.app_root)?;
+    let app = match exit_if_invalid(app, &paths.app_root) {
+        Ok(app) => app,
+        Err(e) => return Err(e),
+    };
+    let env = match config_after_unset(paths, &app, keys) {
+        Ok(env) => env,
+        Err(e) => return Err(e),
+    };
+    crate::deploy::env_setup::update_env_and_redeploy(&app, paths, &env)
+}
 
-    let config_file = paths.env_root.join(&app).join("ENV");
+/// The app's ENV without `keys`, without writing it. `app` must already be
+/// validated.
+pub fn config_after_unset(
+    paths: &RikuPaths,
+    app: &str,
+    keys: &[String],
+) -> Result<HashMap<String, String>> {
+    let config_file = paths.env_root.join(app).join("ENV");
     let mut env = HashMap::new();
-    parse_settings(&config_file, &mut env)?;
+    if let Err(e) = parse_settings(&config_file, &mut env) {
+        return Err(e);
+    }
 
     for s in keys {
         if env.remove(s).is_some() {
             display::note(&format!("Unsetting {} for '{}'", s, app));
         }
     }
-    crate::deploy::env_setup::update_env_and_redeploy(&app, paths, &env)?;
-    Ok(())
+    Ok(env)
 }
 
 /// Show live running configuration (LIVE_ENV file).

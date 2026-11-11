@@ -15,22 +15,21 @@ fn missing_app_answers_json_instead_of_exiting() {
 }
 
 #[test]
-fn agent_run_and_config_set_say_they_are_not_implemented() {
+fn logs_returns_the_newest_hundred_lines() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());
     fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+    fs::create_dir_all(paths.log_root.join("shop")).unwrap();
+    let body: String = (1..=150).map(|n| format!("line {n}\n")).collect();
+    fs::write(paths.log_root.join("shop").join("web.1.log"), body).unwrap();
 
-    let run = cmd_agent_run(&paths, "shop", &["ls".to_string()]);
-    let set = super::super::cmd_config::cmd_agent_config_set(&paths, "shop", &["A=1".to_string()]);
+    let resp = cmd_agent_logs(&paths, "shop", "*");
 
-    for (name, resp) in [("run", run), ("config:set", set)] {
-        assert!(
-            !resp.success,
-            "{name} reported success without doing anything"
-        );
-        let code = resp.error.map(|e| e.code);
-        assert_eq!(code.as_deref(), Some("NOT_IMPLEMENTED"), "{name}");
-    }
+    let data = resp.data.expect("logs returned no data");
+    let lines = data["lines"].as_array().expect("lines is not an array");
+    assert_eq!(lines.len(), 100);
+    assert_eq!(lines.first().unwrap(), "line 51", "oldest kept line");
+    assert_eq!(lines.last().unwrap(), "line 150", "newest line");
 }
 
 #[test]

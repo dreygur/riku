@@ -599,4 +599,69 @@ mod agent_state_tests {
         assert_eq!(entry["agent"], "state-test", "{text}");
         assert_eq!(entry["action"], "apps", "{text}");
     }
+
+    #[test]
+    fn agent_error_response_exits_nonzero() {
+        let home = TempDir::new().unwrap();
+        let bin =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku");
+        let out = std::process::Command::new(bin)
+            .args(["agent", "--scope", "readonly", "deploy", "myapp"])
+            .env("HOME", home.path())
+            .env_remove("RIKU_ROOT")
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let response: serde_json::Value = serde_json::from_str(stdout.trim_end())
+            .unwrap_or_else(|e| panic!("stdout is not one JSON response ({e}):\n{stdout}"));
+        assert_eq!(response["error"]["code"], "PERMISSION_DENIED", "{stdout}");
+        assert_eq!(out.status.code(), Some(1), "{stdout}");
+    }
+
+    fn forced_agent(home: &TempDir, original: &str) -> std::process::Output {
+        let bin =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku");
+        std::process::Command::new(bin)
+            .args(["agent", "--scope", "readonly", "--agent-id", "ssh-test"])
+            .env("HOME", home.path())
+            .env("SSH_ORIGINAL_COMMAND", original)
+            .env_remove("RIKU_ROOT")
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first")
+    }
+
+    #[test]
+    fn forced_agent_key_runs_the_client_request_in_its_own_scope() {
+        let home = TempDir::new().unwrap();
+
+        let apps = forced_agent(&home, "riku agent apps");
+        let stdout = String::from_utf8_lossy(&apps.stdout);
+        assert!(stdout.contains("\"success\":true"), "{stdout}");
+
+        let raised = forced_agent(&home, "deploy shop --scope production");
+        let stdout = String::from_utf8_lossy(&raised.stdout);
+        assert!(stdout.contains("INVALID_PARAMETERS"), "{stdout}");
+        assert_eq!(raised.status.code(), Some(1), "{stdout}");
+    }
+
+    /// Deploy progress, ours and the child processes', must go to stderr so
+    /// stdout stays one JSON object an agent can parse.
+    #[test]
+    fn agent_deploy_keeps_progress_off_stdout() {
+        let home = TempDir::new().unwrap();
+        std::fs::create_dir_all(home.path().join(".riku/apps/shop")).unwrap();
+        let bin =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riku");
+        let out = std::process::Command::new(bin)
+            .args(["agent", "--scope", "staging", "deploy", "shop"])
+            .env("HOME", home.path())
+            .env_remove("RIKU_ROOT")
+            .output()
+            .expect("failed to execute riku binary: run `cargo build` first");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let response: Result<serde_json::Value, _> = serde_json::from_str(stdout.trim_end());
+        assert!(response.is_ok(), "stdout is not one JSON object:\n{stdout}");
+        assert!(stderr.contains("Deploying app 'shop'"), "{stderr}");
+    }
 }
