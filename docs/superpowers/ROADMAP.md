@@ -319,6 +319,17 @@ phase 4 come after.
 
 ## Known open problems, outside the plans
 
+- Server test of 0.1.4-rc.3 (2026-11-11), fixed on `fix/server-test-bugs`,
+  not pushed: restart after a failed push took the app down (checkout reset
+  to the last release, restart never builds), plain init beside a system
+  install, the doubled push failure, init and plugin output, the port URL
+  placeholder. Open, found on the way and not fixed: the dashboard's per
+  worker restart (`worker_control::restart_worker`) only swaps the enabled
+  symlink, which leaves the followed mtime unchanged, so the supervisor
+  likely ignores it (not reproduced); with `RIKU_AUTO_RESTART=false` the
+  only way to start a new build is `riku stop` then `riku deploy`; the
+  first push prints `Linked <repo> to <repo>` above the deploy intro.
+
 - Checked 2026-11-11: the two nginx bugs once listed here
   (`RIKU_NGINX_CACHE_PREFIXES`, `RIKU_NGINX_CATCH_ALL`) are gone; #73
   removed both features and a deploy that sets either key is refused
