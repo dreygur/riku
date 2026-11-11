@@ -37,6 +37,42 @@ pub use riku_util::spawn::{output_retrying_etxtbsy, spawn_retrying_etxtbsy};
 /// full build log: this isn't meant to replace the live-streamed output.
 const STDERR_TAIL_CAP: usize = 4096;
 
+/// Longest line handed on whole; a longer run without a newline is split, so
+/// one endless line cannot grow a buffer without bound.
+const MAX_LINE_BYTES: usize = 64 * 1024;
+
+/// Calls `on_line` for every line `source` writes until end of file. Bytes
+/// that are not UTF-8 are replaced rather than ending the read: a reader
+/// that stopped early would close the pipe and kill the child with SIGPIPE.
+fn for_each_line(source: impl Read, mut on_line: impl FnMut(&str)) {
+    let mut reader = BufReader::new(source.take(u64::MAX));
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        let limit = (MAX_LINE_BYTES + 1) as u64;
+        reader.get_mut().set_limit(limit);
+        match reader.read_until(b'\n', &mut line) {
+            Ok(0) | Err(_) => return,
+            Ok(_) => {}
+        }
+        let text = String::from_utf8_lossy(&line);
+        on_line(text.trim_end_matches(['\n', '\r']));
+    }
+}
+
+/// Keeps the last `STDERR_TAIL_CAP` bytes of `buf`, cutting on a character
+/// boundary so multi-byte text never splits.
+fn trim_tail(buf: &mut String) {
+    if buf.len() <= STDERR_TAIL_CAP {
+        return;
+    }
+    let mut cut = buf.len() - STDERR_TAIL_CAP;
+    while !buf.is_char_boundary(cut) {
+        cut += 1;
+    }
+    buf.drain(..cut);
+}
+
 /// Spawn background threads that mirror `child`'s stdout/stderr to this
 /// process's own stdout/stderr line by line, each under the output rail
 /// (`│  line`), so whoever watches `riku deploy` or `git push` sees it live.
@@ -60,10 +96,10 @@ pub fn tee_output(
     if let Some(stdout) = child.stdout.take() {
         let recent = recent.clone();
         handles.push(std::thread::spawn(move || {
-            for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-                display::detail(&line);
-                recent.push(&line);
-            }
+            for_each_line(stdout, |line| {
+                display::detail(line);
+                recent.push(line);
+            });
         }));
     }
 
@@ -71,17 +107,17 @@ pub fn tee_output(
         let tail = Arc::clone(&tail);
         let recent = recent.clone();
         handles.push(std::thread::spawn(move || {
-            for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-                display::detail_err(&line);
-                recent.push(&line);
-                let mut buf = tail.lock().unwrap();
-                buf.push_str(&line);
+            for_each_line(stderr, |line| {
+                display::detail_err(line);
+                recent.push(line);
+                let mut buf = match tail.lock() {
+                    Ok(buf) => buf,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
+                buf.push_str(line);
                 buf.push('\n');
-                if buf.len() > STDERR_TAIL_CAP {
-                    let excess = buf.len() - STDERR_TAIL_CAP;
-                    buf.drain(..excess);
-                }
-            }
+                trim_tail(&mut buf);
+            });
         }));
     }
 
@@ -120,13 +156,10 @@ pub fn stream_stderr(
     child: &mut Child,
     on_line: impl Fn(&str) + Send + 'static,
 ) -> Option<JoinHandle<()>> {
-    child.stderr.take().map(|err| {
-        std::thread::spawn(move || {
-            for line in BufReader::new(err).lines().map_while(Result::ok) {
-                on_line(&line);
-            }
-        })
-    })
+    child
+        .stderr
+        .take()
+        .map(|err| std::thread::spawn(move || for_each_line(err, on_line)))
 }
 
 /// Classify a finished child's exit as resource exhaustion, distinguishing
@@ -242,14 +275,14 @@ fn terminate_process_tree(pid: u32) {
 /// Emit captured stdout as INFO and stderr as WARN via tracing.
 pub(super) fn emit_plugin_output(child: &mut std::process::Child, plugin_name: &str) {
     if let Some(stdout) = child.stdout.take() {
-        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-            tracing::info!(plugin = plugin_name, "{}", line);
-        }
+        for_each_line(stdout, |line| {
+            tracing::info!(plugin = plugin_name, "{}", line)
+        });
     }
     if let Some(stderr) = child.stderr.take() {
-        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-            tracing::warn!(plugin = plugin_name, "{}", line);
-        }
+        for_each_line(stderr, |line| {
+            tracing::warn!(plugin = plugin_name, "{}", line)
+        });
     }
 }
 

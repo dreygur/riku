@@ -256,7 +256,10 @@ pub fn build_with_limits(
         anyhow::bail!("Build timed out for plugin '{}'", plugin.name);
     }
     if !status.success() {
-        let tail = stderr_tail.lock().unwrap().clone();
+        let tail = stderr_tail
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
         if let Some(cause) = super::executor::classify_resource_exit(&status, &tail) {
             return Err(crate::error::DeployError::resource_exhausted(
                 "build",
