@@ -34,6 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Atomic file writes (ENV files, worker configs, plugin records and the
+  rest) opened their temp file `.<name>.tmp-<pid>` with create and
+  truncate, so a symlink planted at that name was followed and the write
+  landed on its target, and two threads writing the same file shared one
+  temp file (one rename then failed). The temp file is now created
+  exclusively with `O_NOFOLLOW` under a name unique to each call, a taken
+  name is skipped, and the temp file is removed when the rename fails.
 - `scripts/install.sh` printed the old `-----> ` and ` !     ` lines and
   `error: ...`. It now uses the rail: `┌  riku install  <version>`, the
   `Download`, `Checksum` and `Install` steps, `▲` warnings, `■` errors,

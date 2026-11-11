@@ -25,7 +25,7 @@ Component package located at `crates/riku-util/src`.
 - `is_on` [flag.rs:is_on] (fn)
 - `https_only` [flag.rs:https_only] (fn)
 - `https_only_warning` [flag.rs:https_only_warning] (fn)
-- `write_atomic` [fs.rs:write_atomic] (fn)
+- `write_atomic` [fs/atomic.rs:write_atomic] (fn)
 - `copy_dir_recursive` [fs.rs:copy_dir_recursive] (fn)
 - `count_files` [fs.rs:count_files] (fn)
 - `RENAMED_KEYS` [legacy_env.rs:RENAMED_KEYS] (const)
@@ -77,6 +77,7 @@ Component package located at `crates/riku-util/src`.
 - [deploy_logger.rs] Mutates local filesystem (creates/modifies/removes files)
 - [env.rs] Mutates local filesystem (creates/modifies/removes files)
 - [fs.rs] Mutates local filesystem (creates/modifies/removes files)
+- [fs/atomic.rs] Creates temp files exclusively with `O_NOFOLLOW`, renames them over the destination
 - [process_util.rs] Performs network I/O or binds socket
 - [ssh_keys.rs] Mutates local filesystem (creates/modifies/removes files)
 - [ssh_keys.rs] Reads `HOME` from the process environment
