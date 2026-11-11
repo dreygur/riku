@@ -14,7 +14,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 
-use crate::util::echo;
+use crate::util::display;
 
 const STALE_BINARY: &str = ".local/bin/riku";
 
@@ -32,10 +32,7 @@ pub(super) fn remove_stale_binary(home: &Path) -> Result<()> {
     if let Err(e) = fs::remove_file(&path) {
         return Err(anyhow!("failed to remove {}: {e}", path.display()));
     }
-    echo(
-        "Removed ~/.local/bin/riku, /usr/local/bin/riku replaces it",
-        "green",
-    );
+    display::step_done("Old binary", "removed ~/.local/bin/riku");
     Ok(())
 }
 

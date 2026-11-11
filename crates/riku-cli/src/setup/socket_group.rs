@@ -19,8 +19,8 @@ use anyhow::{anyhow, Result};
 use nix::unistd::Group;
 
 use crate::config::{SOCKET_GROUP, SOCKET_ROOT};
-use crate::util::echo;
 use crate::util::socket_dir::{self, SOCKET_DIR_MODE};
+use crate::util::{display, echo};
 
 use super::caddy_host::run;
 use super::deploy_user::DeployUser;
@@ -130,10 +130,7 @@ pub(super) fn setup_socket_root(user: &DeployUser) -> Result<()> {
     if let Err(e) = keep_after_reboot(&user.name) {
         return Err(e);
     }
-    echo(
-        &format!("{SOCKET_ROOT} holds app sockets ({SOCKET_GROUP} only)"),
-        "green",
-    );
+    display::step_done("Sockets", &format!("{SOCKET_ROOT}, group {SOCKET_GROUP}"));
     Ok(())
 }
 

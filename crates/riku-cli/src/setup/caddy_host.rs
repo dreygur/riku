@@ -28,7 +28,7 @@ use nix::unistd::{Group, User};
 use crate::caddy::{has_import, import_line, SYSTEM_CADDYFILE as CADDYFILE};
 use crate::config::RikuPaths;
 use crate::util::socket_dir;
-use crate::util::{echo, write_atomic};
+use crate::util::{display, write_atomic};
 
 use super::caddy_admin::move_admin_to_socket;
 use super::host_cleanup::clear_foreign_entries;
@@ -136,9 +136,9 @@ fn add_caddyfile_import(paths: &RikuPaths) -> Result<()> {
     if let Err(e) = write_atomic(Path::new(CADDYFILE), updated.as_bytes()) {
         return Err(e);
     }
-    echo(
-        &format!("{CADDYFILE} imports riku sites and uses the admin socket"),
-        "green",
+    display::step_done(
+        "Caddyfile",
+        &format!("{CADDYFILE} imports riku sites, admin socket"),
     );
     Ok(())
 }
@@ -212,12 +212,9 @@ pub fn setup_caddy_host(paths: &RikuPaths) -> Result<()> {
     if let Err(e) = add_caddyfile_import(paths) {
         return Err(e);
     }
-    echo(
-        &format!(
-            "{} ready for Caddy ({group} reads it)",
-            paths.caddy_root.display()
-        ),
-        "green",
+    display::step_done(
+        "Router files",
+        &format!("{}, group {group}", paths.caddy_root.display()),
     );
     move_admin_to_socket(&group)
 }

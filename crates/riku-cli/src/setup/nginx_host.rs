@@ -83,9 +83,9 @@ fn install_include(paths: &RikuPaths, root_uid: u32) -> Result<bool> {
 
 fn load_riku_sites(paths: &RikuPaths) -> Result<()> {
     match install_include(paths, ROOT_UID) {
-        Ok(true) => echo(
+        Ok(true) => crate::util::display::step_done(
+            "Nginx include",
             &format!("{} loads riku sites", paths.nginx_include_file.display()),
-            "green",
         ),
         Ok(false) => {}
         Err(e) => return Err(e),

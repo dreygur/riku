@@ -19,7 +19,7 @@ use anyhow::{anyhow, Result};
 use nix::unistd::User;
 
 use crate::config::SOCKET_GROUP;
-use crate::util::echo;
+use crate::util::display;
 
 use super::socket_group::{add_to_socket_group, is_account_name};
 
@@ -92,9 +92,9 @@ pub(super) fn grant_nginx_sockets() -> Result<()> {
     if let Err(e) = add_to_socket_group(&worker) {
         return Err(e);
     }
-    echo(
-        &format!("nginx ({worker}) can reach the app sockets through {SOCKET_GROUP}"),
-        "green",
+    display::step_done(
+        "Nginx sockets",
+        &format!("{worker} reads them through {SOCKET_GROUP}"),
     );
     Ok(())
 }

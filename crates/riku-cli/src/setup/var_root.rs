@@ -26,7 +26,7 @@ use nix::sys::stat::{fchmod, fstat, mkdirat, Mode};
 use nix::unistd::{fchown, Gid, Uid};
 
 use crate::config::{ACME_WEBROOT, SOCKET_GROUP, STATIC_ROOT, VAR_ROOT};
-use crate::util::echo;
+use crate::util::display;
 use crate::util::socket_dir;
 
 use super::deploy_user::DeployUser;
@@ -134,9 +134,9 @@ pub(super) fn setup_var_root(user: &DeployUser) -> Result<()> {
     if let Err(e) = prepare_challenge_dir(Path::new(ACME_WEBROOT)) {
         return Err(e);
     }
-    echo(
-        &format!("{ACME_WEBROOT} and {STATIC_ROOT} ready ({SOCKET_GROUP} reads them)"),
-        "green",
+    display::step_done(
+        "Shared files",
+        &format!("{ACME_WEBROOT}, {STATIC_ROOT}, group {SOCKET_GROUP}"),
     );
     Ok(())
 }

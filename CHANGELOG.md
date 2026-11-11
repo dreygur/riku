@@ -33,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `remote: ■ ...`, then again without the `remote:` prefix and out of
   order (`■  The push was received, but the deploy failed: ...`). The
   second line is gone; `git push` still exits non-zero.
+- `riku init` output: ssh-keygen runs quietly, so its randomart no longer
+  breaks the rail, and the new key is one `SSH key` step; the key prompts
+  sit on the rail; `Prerequisites` lists git and each router found (or
+  `no router`); the root steps read `Label  detail` (`Sockets`,
+  `Shared files`, `Router files`, `Caddyfile`, `Caddy`, `Router helper`,
+  `Nginx include`, `Nginx sockets`, `Old binary`) instead of sentences.
 - `riku restart --hot` on a Procfile app only rewrote the worker configs
   through their `workers-enabled` symlinks and sent no SIGHUP. A write
   through a symlink lands in `workers-available`, outside the watched

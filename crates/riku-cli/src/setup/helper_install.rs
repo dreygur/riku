@@ -17,7 +17,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 
 use crate::config::SYSTEMD_RUNTIME_DIR;
-use crate::util::{echo, ROOT_BINARY};
+use crate::util::{display, echo, ROOT_BINARY};
 
 use super::socket_group::is_account_name;
 use super::system_service::{systemctl_ok, SYSTEMD_DIR};
@@ -88,7 +88,7 @@ fn enable_and_restart(systemd_dir: &Path, deploy_user: &str) -> Result<()> {
             "{UNIT_NAME} is not running. See: journalctl -u {UNIT_NAME} -n 20"
         ));
     }
-    echo("Started the router helper", "green");
+    display::step_done("Router helper", "started");
     Ok(())
 }
 

@@ -5,6 +5,8 @@ use std::process::Command;
 use crate::config::router::Router;
 use crate::util::display;
 
+use super::router_choice::installed_routers;
+
 /// The router's display name, `None` for a plugin router.
 fn router_label(router: &Router) -> Option<&'static str> {
     match router {
@@ -24,13 +26,33 @@ pub fn warn_not_root(router: &Router) {
     display::detail(&format!("sudo riku init also sets up {extra}"));
 }
 
-/// Report missing git. The router binary is checked when init chooses the
-/// router (see [`super::router_choice`]).
+/// The tools the prerequisites step found: git, then each installed router,
+/// or `no router`.
+fn found_tools(git: bool, routers: &[Router]) -> String {
+    let mut found: Vec<&str> = Vec::new();
+    if git {
+        found.push("git");
+    }
+    if routers.is_empty() {
+        found.push("no router");
+    }
+    found.extend(routers.iter().map(Router::name));
+    found.join(", ")
+}
+
+/// Report git and the routers installed on this host, or missing git. Which
+/// router to use, and what to do without one, is settled when init chooses
+/// it (see [`super::router_choice`]).
 pub fn check_prerequisites() {
+    let routers = installed_routers();
     if Command::new("git").arg("--version").output().is_ok() {
-        display::step_done("Prerequisites", "git");
+        display::step_done("Prerequisites", &found_tools(true, &routers));
         return;
     }
     display::warn("Missing git");
     display::detail("Install it with: apt install git");
 }
+
+#[cfg(test)]
+#[path = "prerequisites_tests.rs"]
+mod tests;

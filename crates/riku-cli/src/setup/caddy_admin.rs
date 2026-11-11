@@ -19,7 +19,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use nix::unistd::User;
 
-use crate::util::{echo, socket_dir, write_atomic};
+use crate::util::{display, socket_dir, write_atomic};
 
 use super::caddy_host::CADDY_USER;
 use super::system_service::{systemctl_ok, SYSTEMD_DIR};
@@ -85,7 +85,7 @@ pub(super) fn move_admin_to_socket(group: &str) -> Result<()> {
             "caddy did not create {ADMIN_SOCKET}. See: journalctl -u caddy -n 20"
         ));
     }
-    echo("Caddy restarted on the admin socket", "green");
+    display::step_done("Caddy", &format!("restarted, admin on {ADMIN_SOCKET}"));
     Ok(())
 }
 
