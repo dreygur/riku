@@ -1,6 +1,8 @@
 //! Whether the active router keeps a site file of `app`'s own, so `riku
 //! doctor --fix` redeploys only apps whose site is really missing.
 
+use std::collections::HashMap;
+
 use anyhow::Result;
 
 use super::app_routing::{AppRouting, RoutingMode};
@@ -22,6 +24,24 @@ fn site_for(routing: &AppRouting, active: &Router) -> bool {
     }
 }
 
+/// A Procfile app the deploy takes off the router (see
+/// [`super::has_route`]). Container apps route through their engine.
+fn procfile_app_without_route(
+    app: &str,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+) -> Result<bool> {
+    match crate::containers::is_container_app(&paths.app_root.join(app), env) {
+        Ok(true) => return Ok(false),
+        Ok(false) => {}
+        Err(e) => return Err(e),
+    }
+    match super::has_route(app, env, paths) {
+        Ok(routed) => Ok(!routed),
+        Err(e) => Err(e),
+    }
+}
+
 /// Whether `app` should have a site file under the active router. Reads the
 /// app's ENV and routing state; changes nothing.
 #[allow(clippy::question_mark)]
@@ -34,6 +54,11 @@ pub fn site_expected(app: &str, paths: &RikuPaths) -> Result<bool> {
         Ok(env) => env,
         Err(e) => return Err(e),
     };
+    match procfile_app_without_route(app, &env, paths) {
+        Ok(true) => return Ok(false),
+        Ok(false) => {}
+        Err(e) => return Err(e),
+    }
     match routing_env(app, &env, paths, &active, Record::Peek) {
         Ok((_, routing)) => Ok(site_for(&routing, &active)),
         Err(e) => Err(e),

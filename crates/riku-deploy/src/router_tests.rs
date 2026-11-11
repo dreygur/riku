@@ -98,6 +98,10 @@ fn web_copies_replace_the_default_backend() {
 
     let backends = routed_backends(&Router::Nginx, "shop", &e, &paths, None).unwrap();
 
+    assert!(
+        has_route("shop", &e, &paths).unwrap(),
+        "a web app is routed"
+    );
     assert_eq!(
         backends,
         vec![Backend::loopback(5001), Backend::loopback(5002)]
