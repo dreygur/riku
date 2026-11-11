@@ -329,10 +329,8 @@ phase 4 come after.
   rewrites the worker configs and `spawn_app` sends SIGHUP, so the new
   build runs either way; the flag only skips stopping non web workers
   first (and leaves a non web kind dropped from the Procfile running).
-  Docs corrected. A real "write now, apply on `riku restart`" mode needs a
-  pending config generation (web kinds roll inside the deploy, the
-  checkout is replaced in place, the supervisor loads whatever is enabled
-  on start); not designed. Also fixed: the first push no longer prints
+  Owner decision 2026-11-11: the flag is removed; deploys always stop
+  non web kinds first and stop kinds no longer declared. Also fixed: the first push no longer prints
   `Linked <repo> to <repo>` above the deploy intro (debug log only).
 
 - Checked 2026-11-11: the two nginx bugs once listed here

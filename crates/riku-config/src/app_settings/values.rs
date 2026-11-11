@@ -97,7 +97,7 @@ pub fn check(key: &Key, value: &toml::Value, source: Source) -> Result<Value, St
             Some(n) if n >= 0 => Ok(Value::Int(n as u64)),
             _ => Err(wrong_type(key, "a whole number, 0 or more")),
         },
-        Kind::Flag | Kind::Bool => match value.as_bool() {
+        Kind::Flag => match value.as_bool() {
             Some(b) => Ok(Value::Bool(b)),
             None => Err(wrong_type(key, "true or false")),
         },
@@ -138,7 +138,7 @@ pub fn parse_text(key: &Key, text: &str) -> Option<toml::Value> {
             Ok(n) => Some(toml::Value::Integer(n)),
             Err(_) => None,
         },
-        Kind::Flag | Kind::Bool => match text.trim() {
+        Kind::Flag => match text.trim() {
             "true" => Some(toml::Value::Boolean(true)),
             "false" => Some(toml::Value::Boolean(false)),
             _ => None,

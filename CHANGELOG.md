@@ -81,6 +81,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the old processes kept running the previous build. The checkout now goes
   back to the last recorded release. A failed first deploy leaves it alone.
 
+### Removed
+
+- Breaking: `workers.auto_restart` / `RIKU_AUTO_RESTART`. Every deploy
+  already ran the new build with the flag off; it only kept non-web
+  workers from being stopped first, and kept a process kind removed from
+  the Procfile running until `riku stop`. Deploys now always stop such a
+  kind. `workers.auto_restart` in riku.toml is refused with a message
+  saying to delete the line; `RIKU_AUTO_RESTART` in an ENV is ignored.
+
 ## [0.1.4-rc.3] - 2026-11-11
 
 Release candidate, published as a GitHub prerelease. Install it with

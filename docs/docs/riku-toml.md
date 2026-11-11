@@ -54,7 +54,6 @@ from the app's ENV file.
 | `workers.timeout` | whole number | `RIKU_WORKER_TIMEOUT` |
 | `workers.grace_period` | whole number | `RIKU_WORKER_GRACE_PERIOD` |
 | `workers.max_restarts` | whole number | `RIKU_MAX_RESTARTS` |
-| `workers.auto_restart` | bool | `RIKU_AUTO_RESTART` |
 | `health.url` | string | `RIKU_HEALTH_CHECK_URL` |
 | `health.interval` | whole number | `RIKU_HEALTH_CHECK_INTERVAL` |
 | `health.timeout` | whole number | `RIKU_HEALTH_CHECK_TIMEOUT` |

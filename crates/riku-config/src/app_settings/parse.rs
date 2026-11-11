@@ -26,7 +26,13 @@ fn checked(
     let path = format!("{section}.{name}");
     let key = match keys::find(&path) {
         Some(key) => key,
-        None => return Err(Problem::at(section, name, format!("unknown key {path}"))),
+        None => {
+            let message = match keys::removed(&path) {
+                Some(why) => why.to_string(),
+                None => format!("unknown key {path}"),
+            };
+            return Err(Problem::at(section, name, message));
+        }
     };
     if source == Source::Repo && key.scope == Scope::ServerOnly {
         return Err(Problem::at(

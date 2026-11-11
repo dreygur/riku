@@ -239,7 +239,7 @@ fn test_create_workers_generic_skips_comment_lines() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_auto_restart_false_skips_removal_of_existing_configs() -> anyhow::Result<()> {
+fn a_kind_dropped_from_the_procfile_stops_even_with_the_old_flag_set() -> anyhow::Result<()> {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
     let app_path = tmp.path().join("app");
@@ -247,13 +247,12 @@ fn test_auto_restart_false_skips_removal_of_existing_configs() -> anyhow::Result
     fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
     fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
 
-    let existing = paths.workers_enabled.join("myapp@web.1.toml");
-    fs::write(&existing, "[worker]\n")?;
-
+    let dropped = paths.workers_enabled.join("myapp@cleaner.1.toml");
+    fs::write(&dropped, "[worker]\n")?;
     fs::write(app_path.join("Procfile"), "worker: echo hello\n")?;
+    // An ENV left over from before the flag was removed changes nothing.
+    let env = HashMap::from([("RIKU_AUTO_RESTART".to_string(), "false".to_string())]);
 
-    let mut env = HashMap::new();
-    env.insert("RIKU_AUTO_RESTART".to_string(), "false".to_string());
     create_workers_generic(
         "myapp",
         &app_path,
@@ -264,14 +263,14 @@ fn test_auto_restart_false_skips_removal_of_existing_configs() -> anyhow::Result
     )?;
 
     assert!(
-        existing.exists(),
-        "existing config should be preserved when RIKU_AUTO_RESTART=false"
+        !dropped.exists(),
+        "a process kind no longer declared must stop"
     );
     Ok(())
 }
 
 #[test]
-fn scale_down_removes_surplus_copies_with_auto_restart_off() -> anyhow::Result<()> {
+fn scale_down_removes_surplus_copies() -> anyhow::Result<()> {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
     let app_path = tmp.path().join("app");
@@ -279,8 +278,7 @@ fn scale_down_removes_surplus_copies_with_auto_restart_off() -> anyhow::Result<(
     fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
     fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
     fs::write(app_path.join("Procfile"), "worker: echo hello\n")?;
-    let mut env = HashMap::new();
-    env.insert("RIKU_AUTO_RESTART".to_string(), "false".to_string());
+    let env = HashMap::new();
 
     fs::write(paths.env_root.join("myapp/SCALING"), "worker=3\n")?;
     create_workers_generic(

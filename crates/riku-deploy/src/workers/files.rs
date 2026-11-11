@@ -35,38 +35,6 @@ pub(super) fn remove_stale_configs(app: &str, paths: &RikuPaths) {
     }
 }
 
-/// Remove the enabled configs of non web kinds whose copy number is above
-/// the kind's entry in `counts`, so a scale down takes effect even when
-/// `RIKU_AUTO_RESTART` keeps the other copies running. Kinds missing from
-/// `counts` are left alone.
-pub(super) fn remove_surplus_configs(app: &str, paths: &RikuPaths, counts: &HashMap<String, u32>) {
-    let surplus = app_worker_configs(&paths.workers_enabled, app)
-        .into_iter()
-        .filter(|entry| is_surplus(entry, counts));
-    for entry in surplus {
-        if let Err(e) = fs::remove_file(&entry) {
-            tracing::warn!("Could not remove surplus worker config {:?}: {}", entry, e);
-        }
-    }
-}
-
-fn is_surplus(path: &Path, counts: &HashMap<String, u32>) -> bool {
-    let name = match path
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-        .and_then(WorkerName::parse)
-    {
-        Some(name) => name,
-        None => return false,
-    };
-    if is_web_facing(&name.kind) {
-        return false;
-    }
-    counts
-        .get(&name.kind)
-        .is_some_and(|count| name.ordinal > *count)
-}
-
 /// Write a single worker TOML config to `workers_available`, symlink it into
 /// `workers_enabled`, and return the config written.
 pub(super) fn write_worker_config(

@@ -35,8 +35,8 @@ fn maps_domains_and_https_to_env() {
 }
 
 #[test]
-fn false_flag_is_omitted_but_auto_restart_false_is_kept() {
-    let settings = repo("[routing]\nstatic = false\n[workers]\nauto_restart = false\n").unwrap();
+fn false_flag_is_omitted() {
+    let settings = repo("[routing]\nstatic = false\n").unwrap();
 
     let env = settings.env();
 
@@ -44,9 +44,15 @@ fn false_flag_is_omitted_but_auto_restart_false_is_kept() {
         !env.contains_key("RIKU_NGINX_STATIC"),
         "a false flag must not be present"
     );
-    assert_eq!(
-        env.get("RIKU_AUTO_RESTART").map(String::as_str),
-        Some("false")
+}
+
+#[test]
+fn removed_auto_restart_key_says_it_was_removed() {
+    let message = err(repo("[workers]\nauto_restart = false\n"));
+
+    assert!(
+        message.contains("workers.auto_restart was removed"),
+        "{message}"
     );
 }
 

@@ -39,18 +39,11 @@ mod web_rollout;
 
 pub use scaling::read_scaling_count;
 
-use files::{remove_stale_configs, remove_surplus_configs, write_worker_config};
+use files::{remove_stale_configs, write_worker_config};
 use pinned::{check_pinned_port_with, port_in_use};
 use socket::check_custom_socket;
 use web_env::{build_worker_env, clear_route_env, is_web_facing};
 use web_rollout::{roll_web_kind, stop_web_kind, WebDeploy, WebRoutes};
-
-/// Returns true when `RIKU_AUTO_RESTART` is not explicitly disabled.
-fn should_restart(env: &HashMap<String, String>) -> bool {
-    env.get("RIKU_AUTO_RESTART")
-        .map(|v| v.to_lowercase() != "false" && v != "0" && v != "no")
-        .unwrap_or(true)
-}
 
 /// Writes `count` configs for a kind no router fronts. Its old copies were
 /// removed first (see `remove_stale_configs`), so this is stop first.
@@ -141,9 +134,7 @@ pub(crate) fn create_workers_probed(
     if let Err(e) = check_custom_socket(app, env, paths) {
         return Err(e);
     }
-    if should_restart(env) {
-        remove_stale_configs(app, paths);
-    }
+    remove_stale_configs(app, paths);
 
     let entries = match (processes, start_cmd) {
         (Some(declared), _) if !declared.is_empty() => declared.clone(),
@@ -180,7 +171,6 @@ pub(crate) fn create_workers_probed(
             Err(e) => return Err(e),
         };
     }
-    remove_surplus_configs(app, paths, &counts);
 
     for (kind, command) in processes {
         let effective_cmd = if command.is_empty() {
@@ -208,8 +198,8 @@ pub(crate) fn create_workers_probed(
 /// free slot, must pass its health check, and joins the router before an old
 /// copy is drained and stopped. A pinned `PORT` or shared socket stops the
 /// old copy first instead. Other kinds have their configs rewritten, stop
-/// first, unless `RIKU_AUTO_RESTART` is off. Copies above the scale count are
-/// removed either way. Needs the supervisor running.
+/// first, and kinds no longer declared stop. Copies above the scale count are
+/// removed. Needs the supervisor running.
 ///
 /// `start_cmd` is an optional fallback command supplied by the runtime plugin
 /// via its `start` subcommand. It fills an entry with an empty command, and

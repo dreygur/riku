@@ -66,23 +66,13 @@ override an app sets in its ENV.
 
 ## Runtime Settings
 
-### Auto Restart
+### Worker replacement on deploy
 
-```bash
-RIKU_AUTO_RESTART=true
-```
-
-- **Default:** `true`
-- **Description:** Stop non web workers before a deploy rewrites their configs
-- **Values:** `true` | `false`
-
-Every deploy rewrites the app's worker configs and signals the supervisor,
-so the workers run the new build either way. With `true` the non web
-workers are stopped first and started from the new configs. With `false`
-their configs are replaced in place and the supervisor restarts each one as
-a changed config (a worker with a health check is replaced by a checked
-canary), and a non web kind that left the Procfile keeps running until
-`riku stop <app>`. Web facing kinds are always replaced one copy at a time.
+Every successful deploy runs the new build: web facing kinds are replaced
+one copy at a time, other kinds are stopped and started from the new
+configs, and a kind that left the Procfile stops. `RIKU_AUTO_RESTART` was
+removed; an ENV that still sets it is ignored, and `workers.auto_restart` in
+riku.toml is refused with a message.
 
 ---
 

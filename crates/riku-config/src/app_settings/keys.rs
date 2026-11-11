@@ -15,8 +15,6 @@ pub enum Kind {
     /// A bool whose reader checks presence or an on value: `true` renders
     /// `"true"`, `false` leaves the key out.
     Flag,
-    /// A bool whose reader needs an explicit `"false"` (it defaults to on).
-    Bool,
 }
 
 /// Which file may set a key.
@@ -124,7 +122,6 @@ pub const KEYS: &[Key] = &[
         Kind::Int,
     ),
     key("workers", "max_restarts", "RIKU_MAX_RESTARTS", Kind::Int),
-    key("workers", "auto_restart", "RIKU_AUTO_RESTART", Kind::Bool),
     key("health", "url", "RIKU_HEALTH_CHECK_URL", Kind::Text),
     key(
         "health",
@@ -191,6 +188,21 @@ impl Key {
 }
 
 /// The key at `section.name`.
+/// Keys that existed once, with what to tell someone who still sets one.
+const REMOVED: [(&str, &str); 1] = [(
+    "workers.auto_restart",
+    "workers.auto_restart was removed: every deploy replaces non-web processes and stops \
+     process kinds no longer declared; delete the line",
+)];
+
+/// Why `path` is refused when it names a removed key.
+pub fn removed(path: &str) -> Option<&'static str> {
+    REMOVED
+        .iter()
+        .find(|(key, _)| *key == path)
+        .map(|(_, why)| *why)
+}
+
 pub fn find(path: &str) -> Option<&'static Key> {
     match path.split_once('.') {
         Some((section, name)) => KEYS.iter().find(|k| k.section == section && k.name == name),

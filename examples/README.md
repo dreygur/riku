@@ -49,7 +49,6 @@ RIKU_DOMAINS=example.com
 RIKU_HTTPS_ONLY=true
 
 # Worker settings
-RIKU_AUTO_RESTART=true
 RIKU_BIND_ADDRESS=127.0.0.1
 
 # Node.js specific
