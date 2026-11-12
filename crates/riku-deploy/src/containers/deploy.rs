@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Result;
 use riku_container::compose::{check_scale, ComposeProject, ServiceDef};
+use riku_container::types::ServiceName;
 
 use super::app::{read_scaling, wanted};
 use super::context::ContainerApp;
@@ -30,9 +31,8 @@ fn check_counts(project: &ComposeProject, counts: &BTreeMap<String, u32>) -> Res
     Ok(())
 }
 
-/// Pre build hooks, image pulls and builds, post build hooks, then the
-/// Procfile `release` command, in the new image, when there is one.
-fn build_images(ctx: &ContainerApp, recent: &OutputTail) -> Result<()> {
+/// Pre build hooks, image pulls and builds, then post build hooks.
+fn build_images(ctx: &ContainerApp) -> Result<()> {
     let app = ctx.app.as_str();
     let runtime = Some(CONTAINER_RUNTIME);
     if let Err(e) = crate::hooks::run_pre_build(app, &ctx.app_path, ctx.paths, runtime, &ctx.env) {
@@ -41,14 +41,19 @@ fn build_images(ctx: &ContainerApp, recent: &OutputTail) -> Result<()> {
     if let Err(e) = prepare_images(&ctx.engine, ctx.app, &ctx.project, &ctx.container_env) {
         return Err(e);
     }
-    if let Err(e) = crate::hooks::run_post_build(app, &ctx.app_path, ctx.paths, runtime, &ctx.env) {
-        return Err(e);
-    }
-    run_release(ctx, recent)
+    crate::hooks::run_post_build(app, &ctx.app_path, ctx.paths, runtime, &ctx.env)
 }
 
-/// Copy counts checked, images ready and the release command run.
-fn prepare(ctx: &ContainerApp, recent: &OutputTail) -> Result<BTreeMap<String, u32>> {
+/// What the rollout works from once images and the release are done.
+struct Prepared {
+    counts: BTreeMap<String, u32>,
+    /// Services started for the release command, already at the new spec.
+    started: Vec<ServiceName>,
+}
+
+/// Copy counts checked, images ready and the Procfile `release` command run
+/// in the new image, when there is one.
+fn prepare(ctx: &ContainerApp, recent: &OutputTail) -> Result<Prepared> {
     let counts = match read_scaling(ctx.app.as_str(), ctx.paths) {
         Ok(counts) => counts,
         Err(e) => return Err(e),
@@ -56,16 +61,26 @@ fn prepare(ctx: &ContainerApp, recent: &OutputTail) -> Result<BTreeMap<String, u
     if let Err(e) = check_counts(&ctx.project, &counts) {
         return Err(e);
     }
-    match build_images(ctx, recent) {
-        Ok(()) => Ok(counts),
+    if let Err(e) = build_images(ctx) {
+        return Err(e);
+    }
+    match run_release(ctx, &counts, recent) {
+        Ok(started) => Ok(Prepared { counts, started }),
         Err(e) => Err(e),
     }
 }
 
-/// Replace every service's copies, remove containers of dropped services,
-/// and take an app with no routed port off the router.
-fn roll_out_app(ctx: &ContainerApp, counts: &BTreeMap<String, u32>) -> Result<()> {
-    let services: Vec<&ServiceDef> = ctx.project.services.iter().collect();
+/// Replace the copies of every service the release did not just start,
+/// remove containers of dropped services, and take an app with no routed
+/// port off the router.
+fn roll_out_app(ctx: &ContainerApp, prepared: &Prepared) -> Result<()> {
+    let counts = &prepared.counts;
+    let services: Vec<&ServiceDef> = ctx
+        .project
+        .services
+        .iter()
+        .filter(|s| !prepared.started.contains(&s.name))
+        .collect();
     if let Err(e) = roll_out(ctx, counts, &services) {
         return Err(e);
     }
@@ -91,6 +106,8 @@ fn roll_out_app(ctx: &ContainerApp, counts: &BTreeMap<String, u32>) -> Result<()
 /// containers are healthy and routed (see [`super::retire`]). The supervisor
 /// is then signalled so it lists the new copies at once.
 ///
+/// Before the release command runs, the services its service depends on are
+/// started when none of their copies is up; those are not replaced again.
 /// `replacing` is called once the images and the release command are ready,
 /// right before the first copy is replaced. A failure before that call left
 /// every running copy as it was. The release command's output goes on the
@@ -109,16 +126,20 @@ pub fn deploy_containers(
         Ok(ctx) => ctx,
         Err(e) => return Err(e),
     };
-    let counts = match prepare(&ctx, recent) {
-        Ok(counts) => counts,
-        Err(e) => return Err(e),
+    let prepared = match prepare(&ctx, recent) {
+        Ok(prepared) => prepared,
+        Err(e) => {
+            // The release may have started services it depends on.
+            notify_supervisor_reload(paths);
+            return Err(e);
+        }
     };
     let stale = match ProcfileWorkers::load(app.as_str(), paths) {
         Ok(stale) => stale,
         Err(e) => return Err(e),
     };
     replacing();
-    let rolled = roll_out_app(&ctx, &counts);
+    let rolled = roll_out_app(&ctx, &prepared);
     notify_supervisor_reload(paths);
     match rolled {
         Ok(()) => retire_procfile_workers(&ctx, stale),

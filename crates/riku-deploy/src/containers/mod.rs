@@ -28,6 +28,7 @@ mod mock_workers;
 mod ports;
 mod procfile_workers;
 mod release;
+mod release_deps;
 mod removal;
 mod retire;
 #[cfg(test)]

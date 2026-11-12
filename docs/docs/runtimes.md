@@ -521,7 +521,12 @@ A container app's Procfile is read only for its `release` line. That command
 runs once per deploy, after the images are ready and before any copy is
 replaced, in a one-off container from the new image of the routed service
 (or else the first built service), with the app's env, network and mounts.
-Its stdout and stderr print on the push output. A nonzero exit stops the
+Before it runs, the services that service depends on (`depends_on`, followed
+through their own `depends_on`) are started when none of their copies is
+up, so a migration can reach its database on a first deploy. A dependency
+that already runs is left alone for the release, and a service started for
+it is not replaced again by the same deploy. The release still runs before
+any routed copy is replaced. Its stdout and stderr print on the push output. A nonzero exit stops the
 deploy, and the last lines of output go to `riku logs <app> --deploy`.
 
 App env values are passed to every container, except `RIKU_*` keys, which

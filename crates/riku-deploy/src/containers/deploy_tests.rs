@@ -117,6 +117,54 @@ fn failing_release_aborts_before_rollout() {
 }
 
 #[test]
+fn first_deploy_starts_the_release_dependencies_before_the_release() {
+    let tmp = tempfile::tempdir().unwrap();
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
+    with_release(&server);
+
+    deploy(&server).unwrap();
+
+    let calls = server.calls();
+    let db_ready = position(&calls, |l| l == "ready myapp.db.1");
+    let release_run = position(&calls, |l| {
+        l.starts_with("run") && l.contains("myapp-release")
+    });
+    assert!(
+        db_ready < release_run,
+        "the release ran before db was up: {calls:#?}"
+    );
+    let db_runs = calls
+        .iter()
+        .filter(|l| l.starts_with("run") && l.contains("myapp.db."))
+        .count();
+    assert_eq!(db_runs, 1, "db started twice on one deploy: {calls:#?}");
+    assert_eq!(server.containers(), ["myapp.db.1", "myapp.web.1"]);
+}
+
+#[test]
+fn redeploy_leaves_a_running_release_dependency_alone_for_the_release() {
+    let tmp = tempfile::tempdir().unwrap();
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
+    with_release(&server);
+    deploy(&server).unwrap();
+    let before = server.calls().len();
+
+    deploy(&server).unwrap();
+
+    let calls = server.calls()[before..].to_vec();
+    let release_run = position(&calls, |l| {
+        l.starts_with("run") && l.contains("myapp-release")
+    });
+    let touched_db = calls[..release_run]
+        .iter()
+        .any(|l| l.starts_with("stop") || (l.starts_with("run") && l.contains("myapp.db.")));
+    assert!(
+        !touched_db,
+        "db was stopped or started again before the release: {calls:#?}"
+    );
+}
+
+#[test]
 fn failing_release_output_reaches_the_rail_tail_from_both_streams() {
     let tmp = tempfile::tempdir().unwrap();
     let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);

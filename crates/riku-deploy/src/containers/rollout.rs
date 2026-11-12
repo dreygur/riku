@@ -36,7 +36,7 @@ fn container_ids(ctx: &ContainerApp, service: &ServiceDef) -> Result<Vec<Contain
 /// Blocks until every copy of each `service_healthy` dependency of `service`
 /// passes the engine's health check. A dependency copy that exited or turned
 /// unhealthy fails at once, so the dependent never starts against it.
-fn wait_for_dependencies(ctx: &ContainerApp, service: &ServiceDef) -> Result<()> {
+pub(super) fn wait_for_dependencies(ctx: &ContainerApp, service: &ServiceDef) -> Result<()> {
     let healthy_deps = service
         .depends_on
         .iter()

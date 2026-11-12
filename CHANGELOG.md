@@ -88,6 +88,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failed deploy also writes the last 15 lines of build or command output to
   the deploy log before the error, so `riku logs <app> --deploy` shows the
   reason; the deploy log held no command output before.
+- A container app's first deploy ran the `release` command before any
+  service existed, so a release that talks to a sibling service (a
+  migration against the compose postgres or redis) always failed. The
+  services the release's service depends on, followed through
+  `depends_on`, now start first when none of their copies is up; one that
+  already runs is left alone, and one started for the release is not
+  replaced again by that deploy.
 - `riku ps <app> --scale web=2` for a kind `SCALING` did not list yet (an
   app whose first deploy failed) started 3 copies: the count was added to
   the default of one. A kind missing from `SCALING` now starts from 0.
