@@ -444,6 +444,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `open_port` (`null` when unset), so a router helper from before port
   mode refuses every route. Run `sudo riku init` after installing a new
   binary so the helper matches.
+- The docs no longer claim compatibility with Piku: the Piku migration
+  steps, the shared layout and plugin claims and the Piku comparisons are
+  gone. The example apps no longer carry Piku names (the Django example's
+  package is `djangoapp`).
 
 ## [0.1.4-rc.3] - 2026-11-11
 

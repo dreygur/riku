@@ -194,7 +194,7 @@ mod tests {
 ### Configuration
 
 - Use the `RikuPaths` struct for all path resolution
-- Follow the same directory structure as the original Piku
+- Keep riku's files under the `~/.riku/` layout in `ARCHITECTURE.md`
 - Maintain backward compatibility with existing configurations
 
 ## Adding New Runtime Support

@@ -1,6 +1,6 @@
 ---
 name: riku
-description: Use when deploying, configuring, inspecting or debugging apps on a riku server (git push micro-PaaS, Piku port), when a repo has a riku git remote, riku.toml or Procfile, or when running riku, rk or "riku agent" commands over ssh.
+description: Use when deploying, configuring, inspecting or debugging apps on a riku server (git push micro-PaaS), when a repo has a riku git remote, riku.toml or Procfile, or when running riku, rk or "riku agent" commands over ssh.
 ---
 
 # Riku

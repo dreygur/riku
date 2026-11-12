@@ -4,29 +4,20 @@
 
 **Q: Why Riku?**
 
-**A:** Riku is a complete Rust port of the original [Piku](https://github.com/piku/piku) micro-PaaS. The name honors the original project while signifying our independent implementation in Rust.
+**A:** Riku is a micro-PaaS written in Rust: `git push` to a small server and your app runs, Heroku style, from one binary.
 
 **Q: Why Rust?**
 
-**A:** Rust provides several advantages over the original Python implementation:
-- **Single binary deployment** - No Python runtime dependencies
+**A:** Rust gives Riku:
+- **Single binary deployment** - No interpreter or runtime dependencies
 - **Memory safety** - No garbage collection, no runtime errors
 - **Performance** - Compiled code runs faster with lower memory footprint
 - **Type safety** - Catch errors at compile time instead of runtime
 - **Low resource usage** - Ideal for small VPS and edge deployments
 
-**Q: Is Riku compatible with Piku?**
+**Q: What runs my app processes?**
 
-**A:** Yes. Riku maintains compatibility with Piku's:
-- Directory structure (`~/.riku/` instead of `~/.piku/`)
-- Environment variable format
-- Procfile syntax
-- Plugin system
-- Git-based deployment workflow
-
-**Q: Does Riku use uWSGI?**
-
-**A:** No. Riku implements its own process supervisor in Rust, replacing uWSGI Emperor. This gives us:
+**A:** Riku's own process supervisor, written in Rust. This gives us:
 - Better control over process lifecycle
 - Native health checking
 - Built-in log rotation
@@ -50,7 +41,7 @@
 
 **Q: How do I deploy an app?**
 
-**A:** Just like Heroku or Piku:
+**A:** Just like Heroku:
 ```bash
 git remote add riku riku@edge.example:myapp
 git push riku main
@@ -172,29 +163,6 @@ cron: 0 2 * * * /path/to/script.sh
 **Q: Does Riku support zero-downtime deployments?**
 
 **A:** For a worker with a health check, yes: a deploy or `riku restart myapp` starts the new copy next to the old one and swaps it in once it passes its probe. A worker without a health check is stopped and started again, with a brief gap. Container apps are replaced one copy at a time. `riku restart` never rebuilds; `riku deploy` does.
-
-## Migration from Piku
-
-**Q: How do I migrate from Piku to Riku?**
-
-**A:** 
-1. Install Riku alongside Piku
-2. Riku uses `~/.riku/` instead of `~/.piku/`
-3. Copy your apps: `cp -r ~/.piku/apps/* ~/.riku/apps/`
-4. Copy your env files: `cp -r ~/.piku/envs/* ~/.riku/envs/`
-5. Update git remotes to point to Riku
-6. Test each app and migrate gradually
-
-**Q: Are Piku plugins compatible with Riku?**
-
-**A:** Yes. Shell-based plugins work with both. Place them in `~/.riku/plugins/`.
-
-**Q: What about uWSGI configuration?**
-
-**A:** Riku doesn't use uWSGI. Replace uWSGI-specific env vars with Riku equivalents:
-- `UWSGI_PROCESSES` → Use the `SCALING` file or `riku ps myapp --scale web=2`
-- `UWSGI_MAX_REQUESTS` → Not needed (handled by supervisor)
-- `UWSGI_*` → See [docs/docs/env.md](env.md) for the full variable reference
 
 ## Performance
 

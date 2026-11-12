@@ -1,6 +1,6 @@
 # Process Supervisor
 
-Riku includes a custom process supervisor written in Rust that manages application processes. It replaces uWSGI Emperor from the original Piku.
+Riku includes a custom process supervisor written in Rust that manages application processes.
 
 ---
 

@@ -2,7 +2,7 @@
 
 This is a simple Riku app to demonstrate deploying a Postgres-backed Django app.
 
-During the `release` worker phase this app creates a Postgres database, as well as running the Django `collectstatic` and `migrate` tasks. The `release` worker will use the domain name (`RIKU_DOMAINS`) for the database name and the Django app assumes this in [settings.py](pikudjango/settings.py), so make sure you set the config variable to specify a domain name. See below for instructions.
+During the `release` worker phase this app creates a Postgres database, as well as running the Django `collectstatic` and `migrate` tasks. The `release` worker will use the domain name (`RIKU_DOMAINS`) for the database name and the Django app assumes this in [settings.py](djangoapp/settings.py), so make sure you set the config variable to specify a domain name. See below for instructions.
 
 This example uses Django 6.1, which needs Python 3.12 or newer. The Python
 runtime plugin builds the app with whatever `python3` the server provides, so on

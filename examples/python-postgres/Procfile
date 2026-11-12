@@ -1,2 +1,2 @@
 release: ./bin/provision-database
-wsgi: pikudjango.wsgi:application
+wsgi: djangoapp.wsgi:application

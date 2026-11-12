@@ -2,18 +2,17 @@
 
 ## Overview
 
-Riku is a complete Rust port of the Piku micro-PaaS, designed to provide
-Heroku-like git push deployments to small servers without Docker. This
+Riku is a micro-PaaS written in Rust, designed to provide Heroku-like git
+push deployments to small servers without Docker. This
 document outlines the architecture, design decisions, and implementation
 details of the Riku system.
 
 ## Goals
 
 1. **Performance**: Efficient Rust implementation, no interpreted runtime
-2. **Compatibility**: Maintain full compatibility with existing Piku workflows
-3. **Reliability**: Improve stability and error handling
-4. **Maintainability**: Clean layering, no language-specific code in core
-5. **Extensibility**: A real plugin system, not just new runtimes, but
+2. **Reliability**: Stable processes and clear error handling
+3. **Maintainability**: Clean layering, no language-specific code in core
+4. **Extensibility**: A real plugin system, not just new runtimes, but
    addons, routers, and event subscribers
 
 ## High-Level Architecture
@@ -79,7 +78,7 @@ Repository layer: pure path/env resolution, no business logic:
 
 - **Path Resolution**: `RikuPaths::from_env()` resolves every on-disk
   directory from `$RIKU_ROOT`/`$HOME`
-- **Directory Structure**: maintains compatibility with Piku's layout
+- **Directory Structure**: everything under `~/.riku/` (see below)
 - **Default Values**: sensible defaults for every path field
 
 ### 3. Deployment Engine (`riku-deploy`)
@@ -461,7 +460,7 @@ fd/leak monitor, chaos signal tests, resource limit audit) and
 There is also a separate `tests/demo/` podman-compose sandbox used for
 manual/browser-driven verification of dashboard and plugin changes.
 
-## Deployment Compatibility
+## On-Disk Layout
 
 ### Directory Structure
 
@@ -507,5 +506,4 @@ See `docs/superpowers/ROADMAP.md` for what is next.
 - **Plugin Manifests**: `toml` + `serde`
 
 This architecture provides a solid foundation for a high-performance,
-reliable, extensible micro-PaaS while maintaining full compatibility with
-the existing Piku ecosystem.
+reliable, extensible micro-PaaS.

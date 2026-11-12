@@ -57,6 +57,6 @@ RIKU_NGINX_STATIC_PATHS=/static:static
 # RIKU_DOMAINS=example.com
 
 # Django settings
-# DJANGO_SETTINGS_MODULE=pikudjango.settings
+# DJANGO_SETTINGS_MODULE=djangoapp.settings
 # SECRET_KEY=your-secret-key-here
 # DEBUG=false

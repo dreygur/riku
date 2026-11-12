@@ -86,15 +86,12 @@ Create a markdown file in `benches/results/` with your findings.
 
 ### Binary Size
 - Riku: 8.2 MB
-- Piku (Python): ~25 MB (with dependencies)
 
 ### Memory Usage (Idle)
 - Riku supervisor: 18 MB
-- Piku processes: ~45 MB
 
 ### Startup Time
 - Riku CLI: 12 ms
-- Piku CLI: 450 ms
 
 ## Notes
 [Your observations and findings]

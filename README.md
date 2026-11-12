@@ -24,9 +24,7 @@ laptop, a Raspberry Pi. You `git push`, Riku detects the language, builds it, ru
 it under a supervisor, and wires up nginx. That's it. No control plane, no cluster,
 no container runtime to babysit.
 
-It's a Rust reimplementation of [Piku](https://github.com/piku/piku), keeping that
-project's directory layout and workflow while shipping as a single binary. The
-musl builds are fully static; the glibc builds need glibc 2.31 or newer. On the
+It ships as a single binary. The musl builds are fully static; the glibc builds need glibc 2.31 or newer. On the
 server riku also needs git, nginx or Caddy, and openssl.
 
 ```bash

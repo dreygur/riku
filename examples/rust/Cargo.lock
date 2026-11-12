@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "piku-rust"
+name = "riku-rust-example"
 version = "0.1.0"

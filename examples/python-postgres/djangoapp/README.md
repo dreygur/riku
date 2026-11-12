@@ -1,4 +1,4 @@
-# pikudjango
+# djangoapp
 
 The Django project package for the [python-postgres example](../README.md).
 
