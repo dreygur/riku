@@ -178,12 +178,28 @@ pub(crate) fn release_and_start(
     if let Err(e) = crate::spawn_app(app, paths) {
         return Err(e);
     }
-    let router = match Router::load(paths) {
-        Ok(router) => router.name().to_string(),
-        Err(_) => String::new(),
-    };
-    progress.done(&router);
+    if let Some(router) = route_step(app, env, paths) {
+        progress.done(&router);
+    }
     Ok(counts)
+}
+
+/// The detail of the `Route` step, the active router's name, or `None` for
+/// an app the router left out (see `router::has_route`). Like a Procfile
+/// without `release`, an app with no route prints no step at all.
+///
+/// When `has_route` fails here the step prints as it did before the check:
+/// the router was already configured, so the step must not fail the deploy.
+fn route_step(app: &str, env: &HashMap<String, String>, paths: &RikuPaths) -> Option<String> {
+    match crate::router::has_route(app, env, paths) {
+        Ok(false) => return None,
+        Ok(true) => {}
+        Err(e) => tracing::warn!("cannot tell whether '{app}' has a route: {e:#}"),
+    }
+    match Router::load(paths) {
+        Ok(router) => Some(router.name().to_string()),
+        Err(_) => Some(String::new()),
+    }
 }
 
 /// Build and start a Procfile app from its process list (riku.toml or
