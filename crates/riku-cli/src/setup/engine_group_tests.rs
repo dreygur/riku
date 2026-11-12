@@ -31,12 +31,25 @@ fn says_nothing_for_another_engine_or_a_socket_already_reachable_or_missing() {
     for (kind, access) in [
         (EngineKind::Other, refused(Some("docker"))),
         (EngineKind::Docker, SocketAccess::Reachable),
-        (EngineKind::Docker, SocketAccess::Missing),
+        (EngineKind::Other, SocketAccess::Missing),
     ] {
         assert_eq!(
             step(kind, &access, true),
             Step::Nothing,
             "{kind:?} {access:?}"
+        );
+    }
+}
+
+/// Docker is installed but its daemon is not running, so there is no socket
+/// to judge: init says so instead of staying silent.
+#[test]
+fn docker_without_a_socket_says_it_is_not_running() {
+    for tty in [true, false] {
+        assert_eq!(
+            step(EngineKind::Docker, &SocketAccess::Missing, tty),
+            Step::NotRunning,
+            "tty {tty}"
         );
     }
 }

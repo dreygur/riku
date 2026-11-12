@@ -66,6 +66,8 @@ pub(super) enum Step {
     Ask(String),
     /// Print the choices `riku doctor` prints and change nothing.
     Explain,
+    /// Docker is installed but its daemon is not running.
+    NotRunning,
 }
 
 pub(super) fn engine_kind(binary_name: &str) -> EngineKind {
@@ -83,6 +85,7 @@ pub(super) fn step(kind: EngineKind, access: &SocketAccess, tty: bool) -> Step {
             Step::Ask(group.clone())
         }
         (EngineKind::Docker, SocketAccess::Refused { .. }) => Step::Explain,
+        (EngineKind::Docker, SocketAccess::Missing) => Step::NotRunning,
         _ => Step::Nothing,
     }
 }
@@ -213,6 +216,9 @@ pub(super) fn offer_engine_group(user: &DeployUser, no_systemd: bool) {
     match step(kind, &socket_access(user), interactive()) {
         Step::Nothing => {}
         Step::Explain => display::warn(SOCKET_CHOICE),
+        Step::NotRunning => display::warn(
+            "docker is installed but not running; start it, then rerun riku init to set up access",
+        ),
         Step::Ask(group) => {
             if ask(&group, &user.name) {
                 join(&group, user, no_systemd);
