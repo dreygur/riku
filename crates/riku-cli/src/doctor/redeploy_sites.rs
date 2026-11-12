@@ -10,14 +10,25 @@ use std::path::Path;
 use anyhow::{anyhow, Result};
 
 use super::Check;
+use crate::util::fs::{presence, Presence};
 
 const NAME: &str = "router sites";
 
-fn unrouted_apps(riku_root: &Path, site_root: &Path, extension: &str) -> Result<Vec<String>> {
+/// The apps without a site file, or `Unreadable` when this user cannot see
+/// into the site root: the deploy user under Caddy, whose `/etc/riku/caddy`
+/// is closed to it.
+enum Unrouted {
+    Apps(Vec<String>),
+    Unreadable,
+}
+
+fn unrouted_apps(riku_root: &Path, site_root: &Path, extension: &str) -> Result<Unrouted> {
     let apps_root = riku_root.join("apps");
     let entries = match fs::read_dir(&apps_root) {
         Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(Unrouted::Apps(Vec::new()))
+        }
         Err(e) => return Err(anyhow!("cannot read {}: {e}", apps_root.display())),
     };
     let mut apps = Vec::new();
@@ -34,12 +45,14 @@ fn unrouted_apps(riku_root: &Path, site_root: &Path, extension: &str) -> Result<
         {
             continue;
         }
-        if !site_root.join(format!("{app}.{extension}")).exists() {
-            apps.push(app);
+        match presence(&site_root.join(format!("{app}.{extension}"))) {
+            Presence::Present => {}
+            Presence::Missing => apps.push(app),
+            Presence::Unknown => return Ok(Unrouted::Unreadable),
         }
     }
     apps.sort();
-    Ok(apps)
+    Ok(Unrouted::Apps(apps))
 }
 
 /// Redeploy every app that has a checkout under `<riku_root>/apps` and no
@@ -47,6 +60,8 @@ fn unrouted_apps(riku_root: &Path, site_root: &Path, extension: &str) -> Result<
 /// per app. Nothing is reported when every app has its site file.
 /// `wants_site` leaves out apps the router keeps no site for (path mode, a
 /// Caddy app with no domain), which would otherwise redeploy on every run.
+/// A site root this user cannot read redeploys nothing and warns: every app
+/// would look unrouted, and redeploying them all restarts every app.
 pub fn redeploy_unrouted_sites(
     riku_root: &Path,
     site_root: &Path,
@@ -55,7 +70,16 @@ pub fn redeploy_unrouted_sites(
     mut redeploy: impl FnMut(&str) -> Result<()>,
 ) -> Vec<Check> {
     let apps = match unrouted_apps(riku_root, site_root, extension) {
-        Ok(apps) => apps,
+        Ok(Unrouted::Apps(apps)) => apps,
+        Ok(Unrouted::Unreadable) => {
+            return vec![Check::warn(
+                NAME,
+                format!(
+                    "{} is not readable by this user, so missing sites are unknown and nothing was redeployed. Redeploy an app whose site is gone with `riku deploy <app>`",
+                    site_root.display()
+                ),
+            )]
+        }
         Err(e) => return vec![Check::fail(NAME, e.to_string())],
     };
     apps.iter()

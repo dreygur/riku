@@ -76,3 +76,38 @@ fn an_app_meant_to_have_no_site_is_not_redeployed_on_every_run() {
     );
     assert_eq!(checks.len(), 1);
 }
+
+#[test]
+fn nothing_is_redeployed_when_the_site_root_is_unreadable() {
+    use std::os::unix::fs::PermissionsExt;
+    if nix::unistd::Uid::effective().is_root() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let riku_root = tmp.path().join("riku");
+    let site_root = tmp.path().join("etc/caddy");
+    fs::create_dir_all(&site_root).unwrap();
+    fs::create_dir_all(riku_root.join("apps").join("shop")).unwrap();
+    fs::write(site_root.join("shop.caddy"), "").unwrap();
+    fs::set_permissions(&site_root, fs::Permissions::from_mode(0o000)).unwrap();
+    let mut seen = Vec::new();
+
+    let checks = redeploy_unrouted_sites(
+        &riku_root,
+        &site_root,
+        "caddy",
+        |_| true,
+        |app| {
+            seen.push(app.to_string());
+            Ok(())
+        },
+    );
+
+    fs::set_permissions(&site_root, fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(
+        seen.is_empty(),
+        "redeployed {seen:?} without knowing their site is missing"
+    );
+    assert_eq!(checks.len(), 1);
+    assert_eq!(checks[0].status, Status::Warn, "{}", checks[0].detail);
+}

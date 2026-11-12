@@ -31,6 +31,11 @@ test("an unknown router's error is escaped inside the title attribute", () => {
   assertNoRawMarkup(routeHtml({ router: "plugin", name: EVIL }));
 });
 
+test("a caddy site the deploy user cannot see reads as unknown, not off", () => {
+  assert.ok(routeHtml({ router: "caddy", site: null, site_known: false }).includes("unknown"));
+  assert.ok(routeHtml({ router: "caddy", site: null, site_known: true }).includes("off"));
+});
+
 test("the crash alert escapes the worker name in its data-worker attribute", () => {
   const ws = [{ kind: EVIL, ordinal: 1, status: "crashed" }];
   assertNoRawMarkup(alertHtml(ws, ws.map((w) => stateOf(w.status)), 1));

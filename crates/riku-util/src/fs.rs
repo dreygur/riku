@@ -38,6 +38,26 @@ pub fn restrict_to_owner(path: &Path) -> Result<()> {
     }
 }
 
+/// Whether a file exists, as far as the current user can tell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Presence {
+    Present,
+    Missing,
+    /// A directory on the way cannot be searched by this user, as with the
+    /// root-owned `/etc/riku/caddy` seen by the deploy user.
+    Unknown,
+}
+
+/// Like [`Path::exists`], but a permission error is [`Presence::Unknown`]
+/// instead of a file that is not there.
+pub fn presence(path: &Path) -> Presence {
+    match fs::metadata(path) {
+        Ok(_) => Presence::Present,
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => Presence::Unknown,
+        Err(_) => Presence::Missing,
+    }
+}
+
 const PRIVATE_FILE_MODE: u32 = 0o600;
 const PRIVATE_DIR_MODE: u32 = 0o700;
 

@@ -235,8 +235,33 @@ fn dump_state_reports_caddy_site() {
     let route = serde_json::to_value(build_app_entry(app, &paths, &HashMap::new()).route).unwrap();
     assert_eq!(
         route,
-        serde_json::json!({ "router": "caddy", "site": site.display().to_string() }),
+        serde_json::json!({ "router": "caddy", "site": site.display().to_string(), "site_known": true }),
         "caddy route should carry the site path and no nginx fields"
+    );
+}
+
+#[test]
+fn caddy_site_is_unknown_not_missing_when_the_site_root_is_unreadable() {
+    use std::os::unix::fs::PermissionsExt;
+    if nix::unistd::Uid::effective().is_root() {
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let app = "shop";
+    fs::create_dir_all(paths.env_root.join(app)).unwrap();
+    fs::write(&paths.router_file, "caddy\n").unwrap();
+    fs::create_dir_all(&paths.caddy_root).unwrap();
+    fs::write(paths.caddy_root.join("shop.caddy"), "# riku app: shop\n").unwrap();
+    fs::set_permissions(&paths.caddy_root, fs::Permissions::from_mode(0o000)).unwrap();
+
+    let route = serde_json::to_value(build_app_entry(app, &paths, &HashMap::new()).route).unwrap();
+
+    fs::set_permissions(&paths.caddy_root, fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(
+        route,
+        serde_json::json!({ "router": "caddy", "site": null, "site_known": false }),
+        "a root-only site root must read as unknown, not as no site"
     );
 }
 

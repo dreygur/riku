@@ -5,6 +5,7 @@ use serde::Serialize;
 
 use crate::config::router::Router;
 use crate::config::RikuPaths;
+use crate::util::fs::{presence, Presence};
 
 /// How an app is routed, tagged by router so each carries only its own
 /// fields.
@@ -16,8 +17,13 @@ pub enum RouteState {
         enabled: bool,
     },
     Caddy {
-        /// The site file path, `None` when the app has no site.
+        /// The site file path, `None` when the app has no site or when
+        /// `site_known` is false.
         site: Option<String>,
+        /// False when this user cannot search the site root. The root
+        /// owned `/etc/riku/caddy` is closed to the deploy user, so there
+        /// `site` says nothing either way.
+        site_known: bool,
     },
     Plugin {
         name: String,
@@ -38,16 +44,29 @@ fn nginx_state(app: &str, paths: &RikuPaths) -> RouteState {
     }
 }
 
+fn caddy_state(app: &str, paths: &RikuPaths) -> RouteState {
+    let site = crate::caddy::site_path(app, paths);
+    match presence(&site) {
+        Presence::Present => RouteState::Caddy {
+            site: Some(site.display().to_string()),
+            site_known: true,
+        },
+        Presence::Missing => RouteState::Caddy {
+            site: None,
+            site_known: true,
+        },
+        Presence::Unknown => RouteState::Caddy {
+            site: None,
+            site_known: false,
+        },
+    }
+}
+
 /// `app`'s route under the host router.
 pub(super) fn route_state(app: &str, paths: &RikuPaths) -> RouteState {
     match Router::load(paths) {
         Ok(Router::Nginx) => nginx_state(app, paths),
-        Ok(Router::Caddy) => {
-            let site = crate::caddy::site_path(app, paths);
-            RouteState::Caddy {
-                site: site.exists().then(|| site.display().to_string()),
-            }
-        }
+        Ok(Router::Caddy) => caddy_state(app, paths),
         Ok(Router::Plugin(name)) => RouteState::Plugin { name },
         Err(e) => RouteState::Unknown {
             error: e.to_string(),

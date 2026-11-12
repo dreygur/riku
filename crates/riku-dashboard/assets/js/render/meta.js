@@ -24,6 +24,7 @@ export function routeHtml(route) {
     return r.config_exists ? routeTag("nginx", "staged", "c-warn") : routeTag("nginx", "off", "c-dim");
   }
   if (r.router === "caddy") {
+    if (r.site_known === false) { return routeTag("caddy", "unknown", "c-dim"); }
     return r.site ? routeTag("caddy", "configured", "c-ok") : routeTag("caddy", "off", "c-dim");
   }
   if (r.router === "plugin") { return routeTag(r.name, "plugin", "c-dim"); }

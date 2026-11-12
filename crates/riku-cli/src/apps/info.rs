@@ -7,6 +7,7 @@ use std::process::Command;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::display;
+use crate::util::fs::{presence, Presence};
 
 /// Print where the host router keeps this app's config.
 fn print_route(paths: &RikuPaths, app: &str) {
@@ -19,8 +20,16 @@ fn print_route(paths: &RikuPaths, app: &str) {
         }
         Ok(Router::Caddy) => {
             let site = crate::caddy::site_path(app, paths);
-            if site.exists() {
-                display::kv("Caddy Site:", &site.display().to_string());
+            match presence(&site) {
+                Presence::Present => display::kv("Caddy Site:", &site.display().to_string()),
+                Presence::Missing => {}
+                Presence::Unknown => display::kv(
+                    "Caddy Site:",
+                    &format!(
+                        "unknown, {} is not readable by this user",
+                        paths.caddy_root.display()
+                    ),
+                ),
             }
         }
         Ok(Router::Plugin(name)) => display::kv("Router:", &format!("plugin {name}")),

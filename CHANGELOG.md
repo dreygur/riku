@@ -52,6 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Under Caddy, the dashboard and `riku apps info` showed every app as
+  having no site, because the deploy user cannot read the root owned
+  `/etc/riku/caddy`. They now say the site is unknown. For the same reason
+  `riku doctor --fix` as the deploy user redeployed every Caddy app with a
+  domain or port on each run; it now redeploys nothing there and warns.
 - `sudo riku init` without `--ssh-key` warned "No deploy key added" on a
   server that already had deploy keys. It now reports how many are
   authorized and warns only when there are none.
