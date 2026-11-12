@@ -113,6 +113,27 @@ fn released_says_whether_any_deploy_recorded_a_release() {
     assert!(released(&paths), "a recorded release counts");
 }
 
+/// The dashboard shows one scale control per kind the scale API takes: the
+/// long running kinds of SCALING (a kind scaled to 0 included) and of the
+/// workers, never a one shot or cron kind, and no `web` the app lacks.
+#[test]
+fn process_kinds_are_the_scalable_kinds_of_scaling_and_workers() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let app = "limittest";
+    fs::create_dir_all(paths.app_root.join(app)).unwrap();
+    fs::create_dir_all(paths.env_root.join(app)).unwrap();
+    fs::write(
+        paths.env_root.join(app).join("SCALING"),
+        "release=1\ncron1=1\nworker=1\nmailer=0\n",
+    )
+    .unwrap();
+
+    let entry = build_app_entry(app, &paths, &HashMap::new());
+
+    assert_eq!(entry.process_kinds, vec!["mailer", "worker"]);
+}
+
 /// The router helper writes `/etc/riku/nginx/<app>.conf`; a config left in
 /// the deploy user's own `nginx_root` is not one nginx loads.
 #[test]

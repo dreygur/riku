@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { esc, uptimeText } from "../format.js";
+import { kindSteppersHtml } from "../render/apps.js";
 import { serviceControlsHtml } from "../render/containers.js";
 import { alertHtml, healthBadge, lockedControls, routeHtml } from "../render/meta.js";
 import { emptyHtml, pushHost } from "../render/panels.js";
@@ -32,6 +33,13 @@ test("the memory bar measures against the worker's limit, and against the app pe
   assert.ok(limited.includes('aria-label="50% of memory limit"'), limited);
   const open = workerRow({ kind: "web", ordinal: 1, memory_bytes: 64 * mib, memory_limit_bytes: null }, 64 * mib);
   assert.ok(open.includes('aria-label="memory"'), open);
+});
+
+test("a worker only app gets a worker stepper and no web one, kind names escaped", () => {
+  const html = kindSteppersHtml("app-1", ["worker"]);
+  assert.ok(html.includes("worker processes") && html.includes('data-scale="worker"'), html);
+  assert.ok(!html.toLowerCase().includes("web"), html);
+  assertNoRawMarkup(kindSteppersHtml("app-1", [EVIL]));
 });
 
 test("an unknown router's error is escaped inside the title attribute", () => {

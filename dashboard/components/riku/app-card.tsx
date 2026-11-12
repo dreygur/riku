@@ -227,6 +227,7 @@ export function AppCard({ app, onChanged }: { app: AppState; onChanged: () => vo
               {isPending("redeploy") ? "redeploying…" : "redeploy"}
             </Button>
 
+            {app.process_kinds.includes("web") && (
             <span className="ml-1 inline-flex items-center gap-1.5">
               <span className="text-[10px] tracking-wider text-muted-foreground uppercase">
                 scale web
@@ -248,6 +249,7 @@ export function AppCard({ app, onChanged }: { app: AppState; onChanged: () => vo
                 {isPending("scale") ? "scaling…" : "set"}
               </Button>
             </span>
+            )}
 
             <span className="flex-1" />
 

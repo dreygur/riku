@@ -23,6 +23,12 @@ const WEB_KIND: &str = "web";
 /// restart them every time they exit.
 pub(crate) const ONE_SHOT_KINDS: [&str; 2] = ["release", "preflight"];
 
+/// Whether `kind` runs as long lived copies that scaling counts: not a one
+/// shot command and not a cron entry.
+pub fn is_scalable_kind(kind: &str) -> bool {
+    !ONE_SHOT_KINDS.contains(&kind) && !kind.starts_with("cron")
+}
+
 mod copies;
 mod files;
 #[cfg(test)]

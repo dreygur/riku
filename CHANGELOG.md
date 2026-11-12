@@ -85,6 +85,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   carries `released`, and such an app shows "Never deployed" with only
   Logs and Redeploy open. On a stopped app, Stop app and scaling are
   disabled until a worker is up again.
+- The dashboard showed a "Web processes" stepper on every Procfile app,
+  a worker only app included, and sent `web` to the scale API. `/api/state`
+  now carries `process_kinds`, and the embedded dashboard shows one stepper
+  per kind and sends only those kinds. The Next.js card shows its web
+  control only when the app has a `web` kind.
 - Under Caddy, the dashboard and `riku apps info` showed every app as
   having no site, because the deploy user cannot read the root owned
   `/etc/riku/caddy`. They now say the site is unknown. For the same reason

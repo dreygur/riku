@@ -24,6 +24,7 @@ use anyhow::Result;
 use crate::config::RikuPaths;
 
 mod builder;
+mod kinds;
 mod route;
 mod supervisor_files;
 mod types;

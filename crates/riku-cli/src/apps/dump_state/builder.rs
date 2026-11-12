@@ -11,6 +11,7 @@ use crate::config::RikuPaths;
 use crate::deploy::lock;
 use crate::deploy::releases::ReleaseLog;
 
+use super::kinds::process_kinds;
 use super::route::route_state;
 use super::supervisor_files::{load_app_stats, supervisor_uptime, unix_timestamp_now};
 use super::types::{AppStateEntry, EngineInfo, LockState, StateDump, UnitKind, WorkerStateEntry};
@@ -130,6 +131,12 @@ pub fn build_app_entry(
             .collect(),
         None => Vec::new(),
     };
+    let containers = workers.iter().any(|w| w.unit == UnitKind::Container);
+    let process_kinds = if containers {
+        Vec::new()
+    } else {
+        process_kinds(paths, app, &workers)
+    };
 
     AppStateEntry {
         app: app.to_string(),
@@ -142,6 +149,7 @@ pub fn build_app_entry(
         route: route_state(app, paths),
         workers,
         released: !ReleaseLog::new(paths).list(app).is_empty(),
+        process_kinds,
         config_error,
     }
 }

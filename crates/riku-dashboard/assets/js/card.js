@@ -4,7 +4,7 @@
 import { wire } from "./card-events.js";
 import { num } from "./format.js";
 import { loadReleases, renderReleases } from "./releases.js";
-import { cardHtml } from "./render/apps.js";
+import { cardHtml, kindSteppersHtml } from "./render/apps.js";
 import { serviceControlsHtml } from "./render/containers.js";
 import { alertHtml, healthBadge, lockedControls, metaHtml } from "./render/meta.js";
 import { stateOf, workerRow } from "./render/workers.js";
@@ -21,7 +21,10 @@ export function createCard(app) {
   el.setAttribute("aria-labelledby", id);
   el.innerHTML = cardHtml(id, app);
   /** @type {Card} */
-  const c = { app, id, el, data: null, releases: [], webNow: 0, scaleVal: null, scaleLocked: false, wasBusy: false, svcScale: {} };
+  const c = {
+    app, id, el, data: null, releases: [], kindNow: new Map(), kindScale: new Map(), kindsKey: "",
+    scaleLocked: false, wasBusy: false, svcScale: {},
+  };
   wire(c);
   loadReleases(c);
   return c;
@@ -38,8 +41,18 @@ function renderControls(c, ws) {
     renderReleases(c);
     return;
   }
-  c.webNow = ws.filter((w) => w.kind === "web").length;
-  if (c.scaleVal === c.webNow) { c.scaleVal = null; }
+  const kinds = (c.data && c.data.process_kinds) || [];
+  c.kindNow = new Map(kinds.map((kind) => [kind, ws.filter((w) => w.kind === kind).length]));
+  for (const [kind, n] of c.kindScale) {
+    if (!c.kindNow.has(kind) || c.kindNow.get(kind) === n) { c.kindScale.delete(kind); }
+  }
+  const key = kinds.join("\n");
+  if (key !== c.kindsKey) {
+    c.kindsKey = key;
+    controls.querySelector("[data-kinds]").innerHTML = kindSteppersHtml(c.id, kinds);
+  }
+  /** @type {HTMLElement} */ (controls.querySelector("[data-scale-ctl]")).hidden = !kinds.length;
+  /** @type {HTMLElement} */ (controls.querySelector("[data-scale-sep]")).hidden = !kinds.length;
   syncScale(c);
 }
 

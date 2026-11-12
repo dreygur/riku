@@ -47,6 +47,7 @@
  * @property {Route} [route]
  * @property {string} [deploy_lock] "held" while a deploy runs
  * @property {boolean} [released] false while no deploy has recorded a release
+ * @property {string[]} [process_kinds] kinds the scale API takes, empty for a container app
  */
 
 /**
@@ -68,8 +69,9 @@
  * @property {HTMLElement} el
  * @property {App | null} data last /api/state entry for the app
  * @property {Release[]} releases newest first
- * @property {number} webNow web workers running now
- * @property {number | null} scaleVal pending web scale, null when unchanged
+ * @property {Map<string, number>} kindNow copies of each process kind now
+ * @property {Map<string, number>} kindScale pending counts, only for kinds that differ from now
+ * @property {string} kindsKey the process kinds the steppers were drawn for
  * @property {boolean} scaleLocked scaling is off: a deploy runs, or no worker is up
  * @property {boolean} wasBusy
  * @property {Record<string, number>} svcScale pending copies per container service

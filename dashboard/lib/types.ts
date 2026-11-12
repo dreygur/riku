@@ -37,6 +37,8 @@ export interface AppState {
   workers: Worker[];
   /** False while no deploy of the app has recorded a release. */
   released: boolean;
+  /** Process kinds the scale API takes; empty for a container app. */
+  process_kinds: string[];
 }
 
 export interface RikuState {

@@ -15,7 +15,7 @@ use crate::config::RikuPaths;
 use crate::plugins::runtime::{MissingRuntime, RuntimeContext, RuntimePlugin};
 use crate::progress::{DeployProgress, Phase};
 use crate::util::runtime_markers::{is_bundled_runtime, needed_runtime};
-use crate::workers::{read_scaling_count, ONE_SHOT_KINDS};
+use crate::workers::{is_scalable_kind, read_scaling_count};
 use crate::{env_setup, hooks, plugin_env, workers};
 
 /// What the runtime plugin's build left for the start step.
@@ -37,7 +37,7 @@ pub(crate) struct Deployed {
 fn process_counts(app: &str, paths: &RikuPaths, declared: &HashMap<String, String>) -> String {
     let mut kinds: Vec<&String> = declared
         .keys()
-        .filter(|kind| !ONE_SHOT_KINDS.contains(&kind.as_str()) && !kind.starts_with("cron"))
+        .filter(|kind| is_scalable_kind(kind))
         .collect();
     kinds.sort();
     kinds

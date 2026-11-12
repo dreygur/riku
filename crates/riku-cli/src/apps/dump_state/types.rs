@@ -55,6 +55,10 @@ pub struct AppStateEntry {
     /// Whether any deploy of the app recorded a release. False for an app
     /// that was created but whose deploys all failed.
     pub released: bool,
+    /// Process kinds the scale API takes for this Procfile app, sorted: the
+    /// long running kinds in `SCALING` and in `workers`. Empty for a
+    /// container app, whose services are its workers' kinds.
+    pub process_kinds: Vec<String>,
     /// Why the app's config (riku.toml or ENV) could not be read; `routing`
     /// is then empty. Left out of the JSON when the config is fine.
     #[serde(skip_serializing_if = "Option::is_none")]
