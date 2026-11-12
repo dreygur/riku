@@ -77,7 +77,14 @@ pub fn deploy_branch(repo: &Path) -> Option<String> {
 
 /// Fetch from origin (best-effort). git's own stderr is captured so a failure
 /// shows as one warning on the output rail instead of raw `fatal:` lines.
+///
+/// A checkout without `.git` is skipped: `riku deploy --from` copies a plain
+/// directory, which has nothing to fetch into. Without the check, git would
+/// also walk up and fetch into whatever repo holds the app root.
 pub fn git_fetch(app_path: &Path) {
+    if !app_path.join(".git").exists() {
+        return;
+    }
     let output = Command::new("git")
         .args(["fetch", "--quiet", "origin"])
         .current_dir(app_path)

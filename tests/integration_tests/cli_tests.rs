@@ -506,6 +506,32 @@ mod warning_lines {
             ],
         );
     }
+
+    /// `--from` copies a plain directory, so the checkout has no git repo
+    /// to fetch into and the deploy must not warn that a fetch failed.
+    #[test]
+    fn deploy_from_a_plain_directory_does_not_try_a_git_fetch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let source = tmp.path().join("src");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("Procfile"), "worker: true\n").unwrap();
+        std::fs::create_dir_all(tmp.path().join(".riku/apps/plain")).unwrap();
+
+        let out = riku(
+            tmp.path(),
+            &["deploy", "plain", "--from", source.to_str().unwrap()],
+        );
+
+        let output = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            !output.contains("git fetch"),
+            "deploy of a plain directory tried a git fetch:\n{output}"
+        );
+    }
 }
 
 mod apps_info {

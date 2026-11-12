@@ -64,6 +64,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it was a real directory, the one `riku apps create` and a push to
   `<app>.git` make. It removed only a symlink there. It now removes that
   directory too; a symlink is still removed without following it.
+- `riku deploy <app> --from <dir>` with a plain directory, which `--from`
+  accepts, warned `git fetch failed`: the copy has no git repo to fetch
+  into. The fetch is now skipped for a checkout without `.git`.
 - `riku apps info` listed `RIKU_NODE_VERSION` from the merged env, so it
   showed an ENV value the node plugin never gets. It now shows a
   `Runtime Version:` line only for riku.toml `[runtime] version`, read
