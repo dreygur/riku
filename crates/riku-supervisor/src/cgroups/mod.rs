@@ -53,10 +53,11 @@ pub fn startup_diagnostic(err: &anyhow::Error) -> String {
          \x20 component : cgroup v2 resource isolation\n\
          \x20 check     : write access to the supervisor's own cgroup (from /proc/self/cgroup)\n\
          \x20 status    : FAILED\n\
-         \x20 detail    : {err:#}\n\
+         \x20 detail    : {detail:#}\n\
          \x20 impact    : any worker that sets a resource limit or a sandbox refuses to start\n\
          \x20 remedy    : add Delegate=yes to the riku unit (re-run riku init to rewrite it)\n\
          \x20             and restart it; cgroup v2 must be mounted at {mount}",
+        detail = err,
         mount = tree::CGROUP_MOUNT,
     )
 }
