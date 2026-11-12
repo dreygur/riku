@@ -31,6 +31,15 @@ fn usage_reads_memory_current_and_cpu_usage_usec() {
     );
 }
 
+#[test]
+fn memory_max_is_the_limit_or_none_when_unlimited() {
+    let (_limited, limited) = cgroup_with(&[("memory.max", "268435456\n")]);
+    let (_open, unlimited) = cgroup_with(&[("memory.max", "max\n")]);
+
+    assert_eq!(limited.memory_max(), Some(268_435_456));
+    assert_eq!(unlimited.memory_max(), None);
+}
+
 /// Without the memory controller the cgroup has no `memory.current`; the
 /// caller then sums the process tree instead.
 #[test]

@@ -16,6 +16,8 @@ export interface Worker {
   status: ProcStatus;
   restart_count: number;
   memory_bytes: number;
+  /** Cgroup `memory.max` or the configured limit; `null` when there is none. */
+  memory_limit_bytes: number | null;
   cpu_time_ms: number;
 }
 

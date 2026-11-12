@@ -101,11 +101,17 @@ impl StatsManager {
         }
     }
 
-    /// Update resource usage for a process.
-    pub fn update_resource_usage(&mut self, process_id: &str, usage: ResourceUsage) {
+    /// Update resource usage and the memory limit for a process.
+    pub fn update_resource_usage(
+        &mut self,
+        process_id: &str,
+        usage: ResourceUsage,
+        memory_limit_bytes: Option<u64>,
+    ) {
         if let Some(stats) = self.stats.get_mut(process_id) {
             stats.cpu_time_ms = usage.cpu_time_ms;
             stats.memory_bytes = usage.memory_bytes;
+            stats.memory_limit_bytes = memory_limit_bytes;
         }
     }
 

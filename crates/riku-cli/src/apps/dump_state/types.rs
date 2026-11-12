@@ -68,6 +68,9 @@ pub struct WorkerStateEntry {
     pub status: ProcessStatus,
     pub restart_count: u32,
     pub memory_bytes: u64,
+    /// The worker's memory limit (cgroup `memory.max` or the configured
+    /// limit); `null` when it has none, and always for a container.
+    pub memory_limit_bytes: Option<u64>,
     pub cpu_time_ms: u64,
     pub unit: UnitKind,
     pub container_id: Option<String>,

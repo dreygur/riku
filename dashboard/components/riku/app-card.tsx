@@ -108,7 +108,8 @@ export function AppCard({ app, onChanged }: { app: AppState; onChanged: () => vo
             ) : (
               workers.map((w) => {
                 const m = statusMeta(w.status);
-                const pct = Math.min(100, ((w.memory_bytes || 0) / MEM_CEIL) * 100);
+                const ceil = w.memory_limit_bytes || MEM_CEIL;
+                const pct = Math.min(100, ((w.memory_bytes || 0) / ceil) * 100);
                 // Only a worker that's actually down (not mid-transition) can be
                 // usefully restarted or deleted on its own: a config file is
                 // guaranteed to still exist for it (the API hides stopped rows

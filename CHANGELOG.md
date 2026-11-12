@@ -56,6 +56,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   showed about 2 MB and no CPU time. A worker with a cgroup now reports
   the cgroup's `memory.current` and `cpu.stat` usage; one without sums its
   whole process tree from `/proc`.
+- `/api/state` never sent a worker's memory limit, so the dashboard's
+  memory bar was relative to the app's biggest worker (always full for a
+  single worker). Each worker now carries `memory_limit_bytes`: its cgroup
+  `memory.max`, else the configured limit, `null` without one.
 - Under Caddy, the dashboard and `riku apps info` showed every app as
   having no site, because the deploy user cannot read the root owned
   `/etc/riku/caddy`. They now say the site is unknown. For the same reason

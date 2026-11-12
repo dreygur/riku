@@ -34,6 +34,10 @@ pub struct ProcessStats {
     pub last_restart_at: Option<DateTime<Utc>>,
     pub cpu_time_ms: u64,
     pub memory_bytes: u64,
+    /// The worker's memory limit: its cgroup `memory.max`, else the limit
+    /// its config sets. `None` when it has none.
+    #[serde(default)]
+    pub memory_limit_bytes: Option<u64>,
     pub requests_total: u64,
     pub requests_per_second: f64,
     /// Facts reported by the container engine (None for Procfile processes).
@@ -57,6 +61,7 @@ impl Default for ProcessStats {
             last_restart_at: None,
             cpu_time_ms: 0,
             memory_bytes: 0,
+            memory_limit_bytes: None,
             requests_total: 0,
             requests_per_second: 0.0,
             container: None,

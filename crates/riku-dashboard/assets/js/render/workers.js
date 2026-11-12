@@ -53,9 +53,9 @@ function peakMeter(used, peak) {
 }
 
 /**
- * /api/state sends no memory limit today (RIKU_MAX_MEMORY_MB is unset by
- * default, so most workers have none). Without one the bar is relative to
- * the app's largest worker and carries no warn or crit level.
+ * memory_limit_bytes is the worker's cgroup memory.max or configured limit,
+ * null when it has none. Without one the bar is relative to the app's
+ * largest worker and carries no warn or crit level.
  * @param {import("../state.js").Worker} w
  * @param {number} peak
  */

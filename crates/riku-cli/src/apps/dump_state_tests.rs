@@ -350,7 +350,8 @@ fn process_row_unchanged() {
             "processes":[{{"process_id":"{app}-web-1","app":"{app}","kind":"web","ordinal":1,
             "pid":4242,"status":"running","started_at":null,"last_health_check":null,
             "health_check_status":"unknown","restart_count":0,"last_restart_at":null,
-            "cpu_time_ms":200,"memory_bytes":1000,"requests_total":0,"requests_per_second":0.0}}],
+            "cpu_time_ms":200,"memory_bytes":1000,"memory_limit_bytes":268435456,
+            "requests_total":0,"requests_per_second":0.0}}],
             "last_updated":"2026-11-02T00:00:00Z"}}]"#,
         app = app
     );
@@ -376,6 +377,7 @@ fn process_row_unchanged() {
         "status": "running",
         "restart_count": 0,
         "memory_bytes": 1000,
+        "memory_limit_bytes": 268435456,
         "cpu_time_ms": 200,
         "unit": "process",
         "container_id": null,

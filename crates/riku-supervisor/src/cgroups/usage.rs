@@ -28,6 +28,15 @@ impl WorkerCgroup {
             _ => None,
         }
     }
+
+    /// The `memory.max` limit in bytes; `None` when it is `max` (no limit)
+    /// or cannot be read.
+    pub fn memory_max(&self) -> Option<u64> {
+        match fs::read_to_string(self.path.join("memory.max")) {
+            Ok(text) => text.trim().parse().ok(),
+            Err(_) => None,
+        }
+    }
 }
 
 #[cfg(test)]

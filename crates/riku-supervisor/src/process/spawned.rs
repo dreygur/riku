@@ -94,6 +94,21 @@ impl SpawnedProcess {
         }
     }
 
+    /// The memory limit the worker runs under: its cgroup `memory.max`,
+    /// else the limit its config sets.
+    pub fn memory_limit(&self) -> Option<u64> {
+        let configured = self
+            .config
+            .options
+            .limits
+            .as_ref()
+            .and_then(|limits| limits.max_memory_bytes);
+        match &self.cgroup {
+            Some(cgroup) => cgroup.memory_max().or(configured),
+            None => configured,
+        }
+    }
+
     /// Check if the process is still running.
     pub fn is_running(&mut self) -> bool {
         match self.child.try_wait() {

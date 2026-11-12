@@ -96,7 +96,8 @@ impl ProcessManager {
             let pid = process.pid_as_u32();
             let usage =
                 process.resource_usage(|| procs.get_or_init(ProcessTable::read).tree_usage(pid));
-            self.stats.update_resource_usage(process_id, usage);
+            self.stats
+                .update_resource_usage(process_id, usage, process.memory_limit());
 
             // Collect health check configs for later
             if let Some(health_config) = &process.health_check_config {

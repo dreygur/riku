@@ -12,7 +12,7 @@
  * @property {string} [status]
  * @property {number} [pid]
  * @property {number} [memory_bytes]
- * @property {number} [memory_limit_bytes]
+ * @property {number | null} [memory_limit_bytes] cgroup memory.max or the configured limit, null when none
  * @property {number} [cpu_time_ms]
  * @property {number} [restart_count]
  * @property {string} [unit] "container" for container services

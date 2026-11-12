@@ -26,6 +26,14 @@ test("worker rows escape the worker name and container image, text and title ali
   assert.ok(html.includes(esc(EVIL)));
 });
 
+test("the memory bar measures against the worker's limit, and against the app peak without one", () => {
+  const mib = 1024 * 1024;
+  const limited = workerRow({ kind: "web", ordinal: 1, memory_bytes: 64 * mib, memory_limit_bytes: 128 * mib }, 64 * mib);
+  assert.ok(limited.includes('aria-label="50% of memory limit"'), limited);
+  const open = workerRow({ kind: "web", ordinal: 1, memory_bytes: 64 * mib, memory_limit_bytes: null }, 64 * mib);
+  assert.ok(open.includes('aria-label="memory"'), open);
+});
+
 test("an unknown router's error is escaped inside the title attribute", () => {
   assertNoRawMarkup(routeHtml({ router: "?", error: EVIL }));
   assertNoRawMarkup(routeHtml({ router: "plugin", name: EVIL }));
