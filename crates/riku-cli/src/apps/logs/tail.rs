@@ -9,7 +9,10 @@ use std::thread;
 use std::time::Duration;
 
 use anyhow::Result;
+use chrono::Local;
 use colored::Colorize;
+
+use crate::util::log_stamp::split_stamp;
 
 const CATCH_UP_LINES: usize = 20;
 const TAIL_POLL_INTERVAL: Duration = Duration::from_secs(1);
@@ -160,9 +163,24 @@ fn remove_deleted(active: &mut Vec<String>, files: &mut Vec<fs::File>, inodes: &
     }
 }
 
-fn print_prefixed(prefix: &str, col_width: usize, line: &str) {
-    println!(
-        "{}",
-        format!("{:<width$} | {}", prefix, line, width = col_width).white()
-    );
+/// Width of the `HH:MM:SS` capture time, kept as blanks for a line with no
+/// stamp so the columns stay aligned.
+const CLOCK_WIDTH: usize = 8;
+
+/// `line` behind its local capture time (see `riku_util::log_stamp`) and
+/// the worker prefix padded to `col_width`.
+fn prefixed(prefix: &str, col_width: usize, line: &str) -> String {
+    let (clock, text) = match split_stamp(line) {
+        Some((at, text)) => (at.with_timezone(&Local).format("%H:%M:%S").to_string(), text),
+        None => (" ".repeat(CLOCK_WIDTH), line),
+    };
+    format!("{clock} {prefix:<col_width$} | {text}")
 }
+
+fn print_prefixed(prefix: &str, col_width: usize, line: &str) {
+    println!("{}", prefixed(prefix, col_width, line).white());
+}
+
+#[cfg(test)]
+#[path = "tail_tests.rs"]
+mod tests;

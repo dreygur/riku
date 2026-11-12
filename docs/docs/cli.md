@@ -297,6 +297,15 @@ riku logs myapp worker
 
 Logs are stored in `~/.riku/logs/<app>/` and automatically rotated at 10MB.
 
+The supervisor writes each line behind the time it captured it, in UTC to
+the second (`2026-11-12T08:14:03Z listening on :37139`); a container line
+carries the engine's time for it. `riku logs` shows that time in the
+server's local time before the worker name:
+
+```
+14:14:03 web.1 | listening on :37139
+```
+
 Without a process, every `*.log` file of the app is followed except
 `deploy.log` (use `--deploy` for that one). With a process or service name,
 its `<name>.<n>.log` files are followed, one per copy. A name with no log

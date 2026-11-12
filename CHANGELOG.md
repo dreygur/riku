@@ -90,6 +90,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now carries `process_kinds`, and the embedded dashboard shows one stepper
   per kind and sends only those kinds. The Next.js card shows its web
   control only when the app has a `web` kind.
+- Worker log lines carried no time (`web.1 | listening on :37139`). The
+  supervisor now writes each captured line behind its capture time in UTC
+  (`2026-11-12T08:14:03Z listening on :37139`), and container lines behind
+  the engine's time. `riku logs` shows it as local `HH:MM:SS` before the
+  worker name.
 - Under Caddy, the dashboard and `riku apps info` showed every app as
   having no site, because the deploy user cannot read the root owned
   `/etc/riku/caddy`. They now say the site is unknown. For the same reason

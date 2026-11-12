@@ -5,6 +5,10 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::time::{Duration, Instant};
 
+use chrono::Utc;
+
+use crate::util::log_stamp::stamp_line;
+
 /// How often (at most) to `stat()` the log path to check for external
 /// rotation, throttled by wall-clock time rather than line count so the
 /// check cost stays constant regardless of how chatty the worker's stdout
@@ -74,8 +78,8 @@ fn reopen_if_rotated(log_path: &std::path::Path, file: &mut File, stream_name: &
 }
 
 /// Read `reader` line by line, appending each line to `file` (opened on
-/// `log_path`), staying correct across two different kinds of external log
-/// rotation:
+/// `log_path`) behind its capture time (`riku_util::log_stamp`), staying
+/// correct across two different kinds of external log rotation:
 ///
 /// - **copytruncate** (same inode, file truncated to 0 in place): already
 ///   handled for free: `file` was opened with `O_APPEND`, so the kernel
@@ -113,7 +117,7 @@ pub(super) fn run_log_capture_thread(
             reopen_if_rotated(log_path, &mut file, stream_name);
         }
 
-        let _ = writeln!(file, "{}", line);
+        let _ = writeln!(file, "{}", stamp_line(Utc::now(), &line));
         let _ = file.flush();
     }
 

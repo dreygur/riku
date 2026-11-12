@@ -6,7 +6,8 @@
 //! many lines carry it. Engines include lines stamped exactly at a `--since`
 //! bound, so those lines come back on the next call and the cursor skips the
 //! ones already written. Lines from stdout and stderr are merged in
-//! timestamp order. A line whose timestamp does not parse is dropped.
+//! timestamp order. A line whose timestamp does not parse is dropped. Each
+//! line is written behind its engine time, as `riku_util::log_stamp` reads.
 //!
 //! Security model: a container controls its labels and its output. The app,
 //! service and copy labels are validated when the listing is parsed, the log
@@ -27,6 +28,7 @@ use riku_container::engine::{
 };
 
 use super::listing::{is_running, Known};
+use crate::util::log_stamp::stamp_line;
 
 /// Where a container seen for the first time starts in its log history.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -270,7 +272,7 @@ impl LogPuller {
         };
         let text: String = lines
             .iter()
-            .map(|line| format!("{}\n", line.text))
+            .map(|line| format!("{}\n", stamp_line(line.at, line.text)))
             .collect();
         match file.write_all(text.as_bytes()) {
             Ok(()) => Ok(()),

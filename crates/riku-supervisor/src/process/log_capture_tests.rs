@@ -103,6 +103,34 @@ fn test_reopen_if_rotated_keeps_old_handle_when_path_missing() {
 
 // run_log_capture_thread
 
+/// Each captured line carries the time the supervisor read it, so
+/// `riku logs` and the dashboard can show when it was written.
+#[test]
+fn each_captured_line_starts_with_its_capture_time() {
+    let tmp = TempDir::new().unwrap();
+    let log_path = tmp.path().join("web.1.log");
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .unwrap();
+    let before = chrono::Utc::now() - chrono::Duration::seconds(1);
+
+    run_log_capture_thread(&b"listening on :37139\nready\n"[..], &log_path, file, "stdout");
+
+    let written = fs::read_to_string(&log_path).unwrap();
+    let lines: Vec<_> = written
+        .lines()
+        .map(|line| riku_util::log_stamp::split_stamp(line).expect("a stamped line"))
+        .collect();
+    assert_eq!(
+        lines.iter().map(|(_, text)| *text).collect::<Vec<_>>(),
+        ["listening on :37139", "ready"],
+        "{written}"
+    );
+    assert!(lines.iter().all(|(at, _)| *at >= before), "{written}");
+}
+
 /// A `Read` impl that yields one chunk, then blocks (via a channel
 /// recv) until the test signals it to yield EOF: long enough to let
 /// the test perform an external rotation while the capture loop is
