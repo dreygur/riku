@@ -11,8 +11,8 @@
 //! question.
 //!
 //! Security: the group is the one that owns the socket, as the system
-//! resolves its gid, never a name riku assumes. It reaches `usermod` only
-//! through [`add_to_group`], which refuses anything but a plain name, with a
+//! resolves its gid, never a name riku assumes. It reaches the group tool
+//! only through [`add_to_group`], which refuses anything but a plain name, with a
 //! fixed argv and no shell. The engine program comes from the deploy
 //! user's `engine.program`, read as that user, or the fixed list on root's
 //! `PATH`, and is only looked up, never run.
@@ -29,7 +29,7 @@ use crate::util::display;
 use super::deploy_user::DeployUser;
 use super::init_router::deploy_settings;
 use super::router_choice::interactive;
-use super::socket_group::{add_to_group, is_account_name, usermod_args};
+use super::socket_group::{add_to_group, is_account_name};
 use super::supervisor_binary::{service_main_pid, UnitScope};
 use super::system_service::systemctl_ok;
 
@@ -194,12 +194,9 @@ fn restart_supervisor(group: &str, no_systemd: bool) {
 }
 
 fn join(group: &str, user: &DeployUser, no_systemd: bool) {
+    // The error names the command to run by hand, or the NixOS lines.
     if let Err(e) = add_to_group(group, &user.name) {
         display::warn(&format!("{e:#}"));
-        display::detail(&format!(
-            "Run it yourself: usermod {}",
-            usermod_args(group, &user.name).join(" ")
-        ));
         return;
     }
     display::step_done("Container engine", &format!("{} joined {group}", user.name));

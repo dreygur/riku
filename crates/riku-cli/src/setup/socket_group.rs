@@ -8,8 +8,9 @@
 //!
 //! Security: root writes only into root-owned paths here (`/run`,
 //! `/etc/tmpfiles.d`), never into the deploy user's home. An account name
-//! reaches `usermod` or the tmpfiles line only after it is checked to be a
-//! plain account name, and commands run with a fixed argv and no shell.
+//! reaches the group tools ([`super::accounts`]) or the tmpfiles line only
+//! after it is checked to be a plain account name, and commands run with a
+//! fixed argv and no shell.
 
 use std::fs;
 use std::io::ErrorKind;
@@ -22,7 +23,7 @@ use crate::config::{SOCKET_GROUP, SOCKET_ROOT};
 use crate::util::display;
 use crate::util::socket_dir::{self, SOCKET_DIR_MODE};
 
-use super::caddy_host::run;
+use super::accounts;
 use super::deploy_user::DeployUser;
 use super::nginx_host::{check_write_dir, ROOT_UID};
 
@@ -48,15 +49,9 @@ pub(super) fn tmpfiles_line(user: &str) -> String {
 fn ensure_group() -> Result<()> {
     match Group::from_name(SOCKET_GROUP) {
         Ok(Some(_)) => Ok(()),
-        Ok(None) => run("groupadd", &["--system", SOCKET_GROUP]),
+        Ok(None) => accounts::create_group(SOCKET_GROUP),
         Err(e) => Err(anyhow!("failed to look up group {SOCKET_GROUP}: {e}")),
     }
-}
-
-/// The `usermod` arguments that add `account` to `group`, keeping its other
-/// groups.
-pub(super) fn usermod_args<'a>(group: &'a str, account: &'a str) -> [&'a str; 3] {
-    ["-aG", group, account]
 }
 
 /// Add `account` to `group`, which must exist. Both must be plain names.
@@ -66,7 +61,7 @@ pub(super) fn add_to_group(group: &str, account: &str) -> Result<()> {
             "refusing to add {account:?} to {group:?}: not a plain account or group name"
         ));
     }
-    run("usermod", &usermod_args(group, account))
+    accounts::add_to_group(account, group)
 }
 
 /// Add `account` to the socket group. The group must exist.

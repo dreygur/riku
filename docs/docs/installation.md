@@ -98,6 +98,16 @@ curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.s
 - **Storage**: 50 MB for Riku + app dependencies
 - **OS**: Linux (Debian/Ubuntu/RHEL/Arch)
 
+### Supported distros
+
+`sudo riku init` creates the deploy user and its groups with the tools the host has:
+
+- Debian, Ubuntu, Fedora, RHEL, Arch and openSUSE: shadow-utils (`useradd`, `groupadd`, `usermod`).
+- Alpine: BusyBox (`adduser`, `addgroup`, `chpasswd`) when shadow-utils is not installed. The deploy user's login shell is `/bin/bash`, so install bash first (`apk add bash`).
+- NixOS: riku changes no users or groups. Init prints the `configuration.nix` lines to add (the deploy user, its group, `riku-sockets` and the extra groups it needs) and stops; run `nixos-rebuild switch`, then `sudo riku init` again.
+
+With neither tool set, init stops and names what to install.
+
 ### Required Software
 - **Rust** (for building from source)
 - **Git** (for deployments)

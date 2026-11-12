@@ -1,5 +1,6 @@
 //! Setup commands: server initialization, binary installation, systemd, and SSH key management.
 
+mod accounts;
 pub mod binary;
 mod caddy_admin;
 mod caddy_host;

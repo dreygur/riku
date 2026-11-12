@@ -43,6 +43,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unresolved group change nothing and print the two choices `riku doctor`
   prints. Other engines and a reachable socket get no question. Doctor and
   the container deploy error are unchanged.
+- `sudo riku init` creates users and groups beyond shadow-utils. It uses
+  `useradd`, `groupadd` and `usermod` when all three are on `PATH`, as
+  before; else BusyBox (Alpine): `addgroup -S`, `adduser -S -D -h -s -G`
+  and `chpasswd -e` to set the same unmatchable `*` password, since
+  BusyBox leaves a locked `!` that OpenSSH refuses even for a key, and
+  `addgroup <user> <group>` for membership. On NixOS (`/etc/NIXOS`, or
+  `ID=nixos` in `/etc/os-release`) it changes no users or groups: it
+  prints the `configuration.nix` lines and stops until the operator
+  rebuilds and runs init again. With neither tool set it stops naming
+  what to install. A failed group add names the command to run by hand.
 
 ### Changed
 

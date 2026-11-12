@@ -1,20 +1,18 @@
 //! Creates the deploy account when a root `riku init` finds it missing.
 //!
 //! Security: the name comes from `RIKU_USER` in root's environment and goes
-//! to `useradd` as argv, so it is checked against the portable login name
-//! shape first. A leading `-` would otherwise read as an option.
-
-use std::process::Command;
+//! to `useradd` or `adduser` as argv (see [`super::accounts`]), so it is
+//! checked against the portable login name shape first. A leading `-` would
+//! otherwise read as an option.
 
 use anyhow::{anyhow, Result};
 use nix::unistd::User;
 
 use crate::util::display;
 
+use super::accounts;
+
 const MAX_NAME_LEN: usize = 32;
-/// An unmatchable password hash. `useradd` leaves `!` (locked), and OpenSSH
-/// refuses every auth method for a locked account, pubkey included.
-const NO_PASSWORD: &str = "*";
 const LOGIN_SHELL: &str = "/bin/bash";
 
 /// A login name `useradd` accepts on every distro: lowercase letter or `_`
@@ -41,25 +39,6 @@ impl TryFrom<String> for AccountName {
     }
 }
 
-fn create_account(name: &AccountName) -> Result<()> {
-    let output = Command::new("useradd")
-        .args(["--create-home", "--user-group", "--shell", LOGIN_SHELL])
-        .args(["--password", NO_PASSWORD, "--", name.as_str()])
-        .output();
-    let output = match output {
-        Ok(output) => output,
-        Err(e) => return Err(anyhow!("failed to run useradd: {e}")),
-    };
-    if !output.status.success() {
-        return Err(anyhow!(
-            "useradd {} failed: {}",
-            name.as_str(),
-            String::from_utf8_lossy(&output.stderr).trim()
-        ));
-    }
-    Ok(())
-}
-
 /// Create the deploy account `name` unless it already exists.
 #[allow(clippy::question_mark)]
 pub fn ensure_account(name: &str) -> Result<()> {
@@ -72,7 +51,7 @@ pub fn ensure_account(name: &str) -> Result<()> {
         Ok(name) => name,
         Err(e) => return Err(e),
     };
-    if let Err(e) = create_account(&name) {
+    if let Err(e) = accounts::create_user(name.as_str(), LOGIN_SHELL) {
         return Err(e);
     }
     display::step_done("Deploy user", &format!("{} created", name.as_str()));

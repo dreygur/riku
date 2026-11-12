@@ -104,8 +104,3 @@ fn the_question_names_the_group_and_what_it_grants() {
     assert!(question.contains("root-equivalent"), "{question}");
     assert!(question.ends_with("[y/N] "), "{question}");
 }
-
-#[test]
-fn the_group_is_added_with_usermod_append() {
-    assert_eq!(usermod_args("docker", "riku"), ["-aG", "docker", "riku"]);
-}

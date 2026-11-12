@@ -36,9 +36,10 @@ podman. Deploys and doctor change neither the group nor the socket.
 the deploy user cannot open its socket: `Add riku to the docker group so
 it can run container apps? This gives the riku user root-equivalent access
 on this host. [y/N]`. The group it names is the one that owns the socket.
-Only `y` or `yes` adds the deploy user (with `usermod -aG`) and restarts a
-running supervisor so it gets the group; if `usermod` fails, init prints
-the command to run and goes on. Any other answer, no terminal, a socket
+Only `y` or `yes` adds the deploy user (with `usermod -aG`, or BusyBox
+`addgroup`) and restarts a running supervisor so it gets the group; if
+that fails, init prints the command to run and goes on. On NixOS it prints
+the `extraGroups` line for configuration.nix instead. Any other answer, no terminal, a socket
 owned by root's group, or a group riku cannot resolve changes nothing and
 prints the two choices above. Podman and other engines, and a socket the
 deploy user already opens, get no question.
