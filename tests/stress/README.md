@@ -37,43 +37,8 @@ writing, not assumed):
   `Procfile`, `riku.toml` (intent-only, see warnings in the file),
   `start-supervisor.env` (the real, functional limit mechanism).
 - `run_all.sh`: runs everything above in order, writes a summary log.
-- `container/`: full containerized integration suite: builds a real
-  target server image (sshd, nginx, the compiled `riku` binary, bundled
-  runtime plugins), deploys a mock app via real `git push` over SSH, and
-  drives concurrent HTTP load against it. See `container/` below.
 
-## Containerized integration suite (`container/`)
-
-Verifies the full real-world path end to end: SSH-gated git push deploy
-→ runtime plugin detection/build → supervisor spawn → nginx vhost
-generation/reload → live HTTP traffic: against an actual container, not
-mocks. Works with either Docker or Podman (auto-detected).
-
-```bash
-./tests/stress/container/run_container_test.sh
-```
-
-**Latest verified run (2026-06-18): PASS.** 14,530/14,530 requests
-succeeded (0 502/504s) under 80 concurrent workers for 30s; supervisor
-stayed alive; zero zombie processes. Latency: p50 19.7ms, p95 423.6ms,
-p99 1236.7ms.
-
-Files:
-- `container/Dockerfile`: Ubuntu 24.04 target server image.
-- `container/entrypoint.sh`: imports bootstrap SSH key, runs
-  `riku init --no-systemd`, starts sshd/nginx/`riku supervisor`.
-- `container/test_web_app/`: mock app deployed during the test.
-- `container/user_traffic_simulation.sh`: host-side git push + load test
-  (prefers `wrk`/`k6`, falls back to a parallel curl loop).
-- `container/run_container_test.sh`: orchestrator: build binary → build
-  image → provision SSH keypair → run container → drive traffic →
-  collect logs → verdict.
-
-Getting this suite green found one real product bug, since fixed: the
-first-push bare-repo init bug in `src/cli/git/receive_pack.rs` (see the git
-history for that fix).
-
-## Running (non-containerized suite)
+## Running
 
 ```bash
 # normal lifecycle/leak/chaos tests

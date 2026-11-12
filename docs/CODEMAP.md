@@ -178,8 +178,8 @@ Rendered only by riku-nginx. Embedded at compile time with `include_str!` and re
 - Unit tests sit beside the code in `*_tests.rs` siblings, not here.
 - `tests/deploy-smoke/`: `test-all.sh`, `quick-test.sh <app> <runtime>`; deploy a generated app against a real riku. `tests/run-all-tests.sh` runs unit, integration and deploy tests.
 - `tests/e2e/cases/NN-*.sh` plus `lib.sh`: shell e2e cases, run inside the Docker image (`docker/Dockerfile.test`, `docker/test-entrypoint.sh`; locally `scripts/run-docker-tests.sh`). Each case gets its own temp `RIKU_ROOT`.
-- `tests/stress/`: shell audit suite for the supervisor (`run_all.sh`, lifecycle, leak, chaos, resource limit scripts, `container/`, `dashboard/`, `bad_tenant_app/`); not part of `cargo test`.
-- `tests/demo/`: long-running sandbox container with 5 demo apps (`run_demo.sh`, `stop_demo.sh`, `compose.yml`); for humans, not CI.
+- `tests/stress/`: shell audit suite for the supervisor (`run_all.sh`, lifecycle, leak, chaos, resource limit scripts, `dashboard/`, `bad_tenant_app/`); not part of `cargo test`.
+- `tests/demo/`: long-running sandbox container with 5 demo apps (`run_demo.sh`, `stop_demo.sh`, `compose.yml`); the entrypoint runs root `riku init --no-systemd`, then starts the router helper, nginx and the supervisor by hand; for humans, not CI.
 - Run: `cargo test` (all), `cargo test --test integration_tests`, `cargo test --test stress_tests`, `cargo test -p <crate>`.
 
 ## Release and CI

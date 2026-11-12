@@ -439,26 +439,11 @@ dispatch code, not mocks (see recent additions to `riku-plugins`,
 - Configuration updates
 - Error condition handling
 
-### Containerized Production Integration Suite
+### Stress and Demo
 
-`tests/stress/container/run_container_test.sh` builds a real
-target server image (Ubuntu 24.04, sshd, nginx, the compiled `riku`
-binary, bundled runtime plugins), provisions a throwaway SSH keypair,
-boots the container, performs an actual `git push` deploy of a mock app
-over SSH, then drives concurrent HTTP load against the nginx-proxied
-app and collects a structured pass/fail verdict (502/504 count, zombie
-process check, supervisor liveness). It runs with either Docker or
-Podman: the script detects whichever is on `PATH` and uses it
-transparently, no flags needed:
-
-```bash
-./tests/stress/container/run_container_test.sh
-```
-
-See `tests/stress/README.md` for the full suite (lifecycle stress,
-fd/leak monitor, chaos signal tests, resource limit audit) and
-`tests/stress/container/` for this containerized suite specifically.
-There is also a separate `tests/demo/` podman-compose sandbox used for
+See `tests/stress/README.md` for the supervisor stress suite (lifecycle
+stress, fd/leak monitor, chaos signal tests, resource limit audit).
+There is also a separate `tests/demo/` compose sandbox used for
 manual/browser-driven verification of dashboard and plugin changes.
 
 ## On-Disk Layout

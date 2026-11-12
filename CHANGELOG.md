@@ -436,8 +436,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/etc/riku/caddy`, does not remove `~/.local/bin/riku`, and does not
   disable the old `riku-nginx.path` watcher units. The router directories
   are kept root owned on every init and checked by the router helper
-  instead (see Added). The demo and stress images no longer build the old
-  `sites-enabled` layout.
+  instead (see Added).
+- The `tests/stress/container` image and its scripts. It no longer built
+  against the current layout. The demo image in `tests/demo` now runs the
+  root `riku init --no-systemd`, starts the router helper, nginx and the
+  supervisor itself, authorizes bootstrap keys through `--ssh-key`, and no
+  longer includes `~/.riku/nginx` from its nginx site.
 - Breaking: worker configs written before limits and the sandbox were
   split. cgroup limits kept beside `root_dir` in `[options.isolation]`
   are ignored; only `[options.limits]` sets them. Removing an app's
