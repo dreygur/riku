@@ -72,6 +72,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   panicked a debug build and could set the worker cgroup's `memory.max` to
   a tiny value in a release build. Such a value now sets no memory limit,
   the same as a value that is not a number.
+- A cron job took its env from whichever of the app's worker configs
+  sorted first, so a web copy's config sorting before the cron one gave
+  the job that copy's `PORT` and socket variables. Cron jobs now use the
+  app's cron worker config, and fall back to the first config only when
+  there is none. riku's own config names put `cron` before every web
+  facing kind, so this needed an older or hand placed config to happen.
 - The Procfile `release` and `preflight` commands ran with riku's own env
   only, so a migration could not see the app's settings such as
   `DATABASE_URL`. They now get the app env, the same one the workers get.

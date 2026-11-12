@@ -103,18 +103,25 @@ impl Supervisor {
         Ok(())
     }
 
-    /// Return the working directory and environment variables for an app by
-    /// reading the first matching worker config file from workers-enabled/.
+    /// Return the working directory and environment variables for an app's
+    /// cron jobs, from its cron worker config in workers-enabled/.
+    ///
+    /// A web copy's config also holds its PORT and socket variables, so it is
+    /// used only when the app has no readable cron config, and then the
+    /// first readable config in name order is.
     pub(super) fn get_app_context(&self, app: &str) -> (Option<String>, HashMap<String, String>) {
-        for path in app_worker_configs(&self.config_dir, app) {
-            let Ok(content) = fs::read_to_string(&path) else {
-                continue;
-            };
-            if let Ok(cfg) = toml::from_str::<WorkerConfig>(&content) {
-                return (Some(cfg.options.working_dir), cfg.env);
-            }
+        let configs: Vec<WorkerConfig> = app_worker_configs(&self.config_dir, app)
+            .iter()
+            .filter_map(|path| fs::read_to_string(path).ok())
+            .filter_map(|content| toml::from_str::<WorkerConfig>(&content).ok())
+            .collect();
+        let cron = configs
+            .iter()
+            .position(|cfg| cfg.worker.kind.starts_with("cron"));
+        match configs.into_iter().nth(cron.unwrap_or(0)) {
+            Some(cfg) => (Some(cfg.options.working_dir), cfg.env),
+            None => (None, HashMap::new()),
         }
-        (None, HashMap::new())
     }
 
     /// Schedule an app's cron jobs, given as `(kind, command)` in a stable
