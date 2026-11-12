@@ -22,7 +22,7 @@ Component package located at `crates/riku-cli/src/git`.
 - [hook.rs] Mutates local filesystem (creates/modifies/removes files)
 - [receive_pack.rs] Spawns external child processes via `std::process::Command`
 - [receive_pack.rs] Mutates local filesystem (creates/modifies/removes files)
-- [link_repo.rs] Links `repos/<app>.git` to the pushed repo, only inside `repos/`
+- [hook_repo.rs] `app_repo`: the app's one repo `repos/<app>.git`, for a push to `<app>` or `<app>.git`; `check_hook_repo` refuses a hook run for any other repo
 
 ## Verification
 - Run: `cargo test -p riku-cli`

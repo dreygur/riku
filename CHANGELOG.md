@@ -60,6 +60,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Breaking: an app has one repo, `~/.riku/repos/<app>.git`. A push to
+  `riku@host:<app>` wrote `repos/<app>`, and the hook linked
+  `repos/<app>.git` to it, so `riku apps create <app>` (which makes
+  `repos/<app>.git`) followed by a push to `<app>` failed: the hook
+  refused to replace the real directory with a link. A push to either
+  spelling now writes `repos/<app>.git`, the hook clones from it and
+  makes no link, and `riku git-hook` refuses any other repo path. A
+  `repos/<app>` left by an earlier push is no longer read; destroy still
+  removes it.
 - A path mode app (`routing.mode = "path"`) that set `RIKU_NGINX_SOCKET`
   was not refused by name: path mode never built the per app route that
   refuses the key, and the default backend still read it, so the deploy

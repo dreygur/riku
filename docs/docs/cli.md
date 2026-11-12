@@ -263,7 +263,7 @@ riku destroy myapp
 This deletes:
 - Application code in `~/.riku/apps/<app>/`
 - Environment variables in `~/.riku/envs/<app>/`
-- Git repository in `~/.riku/repos/<app>/`
+- Git repository in `~/.riku/repos/<app>.git/`
 - Logs in `~/.riku/logs/<app>/`
 - Nginx configuration
 - Worker configurations

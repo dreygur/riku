@@ -4,7 +4,7 @@
 //! way sshd would and talks the pack protocol over its stdin and stdout.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use tempfile::TempDir;
 
@@ -20,7 +20,7 @@ fn git(dir: &Path, args: &[&str]) -> Output {
         .expect("git runs")
 }
 
-fn committed_app(root: &Path) -> std::path::PathBuf {
+fn committed_app(root: &Path) -> PathBuf {
     let work = root.join("work");
     fs::create_dir_all(&work).unwrap();
     git(&work, &["init", "--quiet"]);
@@ -50,17 +50,26 @@ fn push_to_riku(work: &Path, root: &Path, app: &str) -> Output {
         .expect("git push runs")
 }
 
+/// The app's one repository, `repos/<app>.git`.
+fn app_repo(root: &Path, app: &str) -> PathBuf {
+    root.join("riku/repos").join(format!("{app}.git"))
+}
+
 /// The bare repository with the hook riku would install, which names
 /// `/usr/local/bin/riku`, pointed at the binary under test instead.
 fn repo_with_hook(root: &Path, app: &str) {
-    let riku = env!("CARGO_BIN_EXE_riku");
-    let repo = root.join("riku/repos").join(app);
+    let repo = app_repo(root, app);
     let init = Command::new("git")
         .args(["init", "--quiet", "--bare"])
         .arg(&repo)
         .output()
         .expect("git init runs");
     assert!(init.status.success(), "git init: {init:?}");
+    hook_under_test(&repo);
+}
+
+fn hook_under_test(repo: &Path) {
+    let riku = env!("CARGO_BIN_EXE_riku");
     let hook = repo.join("hooks/post-receive");
     fs::create_dir_all(hook.parent().unwrap()).unwrap();
     fs::write(
@@ -72,6 +81,85 @@ fn repo_with_hook(root: &Path, app: &str) {
     )
     .unwrap();
     fs::set_permissions(&hook, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+}
+
+fn rev(dir: &Path, name: &str) -> String {
+    let out = git(dir, &["rev-parse", "--verify", "-q", name]);
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+/// The hook cloned the pushed commit into `apps/<app>` and ran the deploy.
+/// No router is set up here, so the deploy itself is refused later on.
+fn assert_deployed(root: &Path, app: &str, work: &Path, out: &Output) {
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let checkout = root.join("riku/apps").join(app);
+    assert_eq!(
+        rev(&checkout, "HEAD"),
+        rev(work, "HEAD"),
+        "the hook must clone the pushed commit into {}, stderr:\n{stderr}",
+        checkout.display()
+    );
+    assert!(
+        stderr.contains("┌"),
+        "the hook must start the deploy, stderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn a_first_push_to_app_dot_git_deploys() {
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join("home")).unwrap();
+    let work = committed_app(tmp.path());
+    repo_with_hook(tmp.path(), "dotgit");
+
+    let out = push_to_riku(&work, tmp.path(), "dotgit.git");
+
+    assert_deployed(tmp.path(), "dotgit", &work, &out);
+}
+
+#[test]
+fn apps_create_then_a_push_to_the_bare_name_deploys() {
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join("home")).unwrap();
+    let work = committed_app(tmp.path());
+    let create = Command::new(env!("CARGO_BIN_EXE_riku"))
+        .args(["apps", "create", "made"])
+        .env("HOME", tmp.path().join("home"))
+        .env("RIKU_ROOT", tmp.path().join("riku"))
+        .env("XDG_CONFIG_HOME", tmp.path().join("config"))
+        .output()
+        .expect("riku runs");
+    assert!(create.status.success(), "apps create: {create:?}");
+    hook_under_test(&app_repo(tmp.path(), "made"));
+
+    let out = push_to_riku(&work, tmp.path(), "made");
+
+    assert_deployed(tmp.path(), "made", &work, &out);
+}
+
+#[test]
+fn both_spellings_of_an_app_push_to_one_repository() {
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join("home")).unwrap();
+    let work = committed_app(tmp.path());
+    repo_with_hook(tmp.path(), "twice");
+
+    push_to_riku(&work, tmp.path(), "twice");
+    git(
+        &work,
+        &["commit", "--quiet", "--allow-empty", "-m", "second"],
+    );
+    push_to_riku(&work, tmp.path(), "twice.git");
+
+    assert_eq!(
+        rev(&app_repo(tmp.path(), "twice"), "refs/heads/main"),
+        rev(&work, "HEAD"),
+        "the second push must land in the repository the first one wrote"
+    );
+    assert!(
+        !tmp.path().join("riku/repos/twice").exists(),
+        "no second repository may appear for the bare name"
+    );
 }
 
 #[test]

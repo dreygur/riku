@@ -1,13 +1,14 @@
 //! Git receive-pack and upload-pack command handlers.
 //!
 //! Security: the repository path comes from the SSH command line. It is
-//! reduced to a validated app name plus an optional `.git` before it is
-//! joined under `repos/`, and git runs with an argument vector, no shell.
+//! reduced to a validated app name, and the app's one repo
+//! `repos/<app>.git` is used whichever spelling was pushed; git runs with an
+//! argument vector, no shell.
 
 use anyhow::{anyhow, Result};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::NamedTempFile;
 
@@ -15,22 +16,19 @@ use crate::config::RikuPaths;
 use crate::util::display;
 use crate::util::validation::{validate_app_name, REPO_SUFFIX};
 
+use super::hook_repo::app_repo;
 use super::push_status::{deploy_result, DeployResult, STATUS_ENV};
 use super::repo::post_receive_hook;
 
-/// The directory under `repos/` a pushed path names. `riku@host:shop` and
-/// `riku@host:shop.git` both deploy app `shop`, from the repositories
-/// `repos/shop` and `repos/shop.git`. App names cannot end in
-/// `.git`, so only one suffix is taken off. A trailing `/`, which git
-/// accepts in a remote path, goes first.
-fn repo_dir_name(requested: &str) -> Result<String> {
+/// The app's repo a pushed path names. `riku@host:shop` and
+/// `riku@host:shop.git` both name `repos/shop.git`, the one repo of app
+/// `shop`. App names cannot end in `.git`, so only one suffix is taken off.
+/// A trailing `/`, which git accepts in a remote path, goes first.
+fn requested_repo(paths: &RikuPaths, requested: &str) -> Result<PathBuf> {
     let requested = requested.trim_end_matches('/');
-    let (app, suffix) = match requested.strip_suffix(REPO_SUFFIX) {
-        Some(app) => (app, REPO_SUFFIX),
-        None => (requested, ""),
-    };
+    let app = requested.strip_suffix(REPO_SUFFIX).unwrap_or(requested);
     match validate_app_name(app) {
-        Ok(app) => Ok(format!("{app}{suffix}")),
+        Ok(app) => Ok(app_repo(paths, &app)),
         Err(e) => Err(e),
     }
 }
@@ -61,12 +59,10 @@ fn install_post_receive_hook(hook_path: &std::path::Path) -> Result<()> {
 /// then delegates to git-receive-pack directly.
 #[allow(clippy::question_mark)]
 pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
-    let repo = match repo_dir_name(app) {
+    let riku_repo = match requested_repo(paths, app) {
         Ok(repo) => repo,
         Err(e) => return Err(e),
     };
-
-    let riku_repo = paths.git_root.join(&repo);
 
     // Check for an actual bare-repo marker (HEAD), not just the directory's
     // existence. `git init --bare` always creates the target directory
@@ -82,8 +78,7 @@ pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
             .arg("init")
             .arg("--quiet")
             .arg("--bare")
-            .arg(&repo)
-            .current_dir(&paths.git_root)
+            .arg(&riku_repo)
             .status();
         match status {
             Ok(status) if status.success() => {}
@@ -138,15 +133,12 @@ fn push_outcome(receive_pack: Option<i32>, status_file: &Path) -> (i32, Option<S
 /// Handle git upload-pack for an app.
 #[allow(clippy::question_mark)]
 pub fn cmd_git_upload_pack(paths: &RikuPaths, app: &str) -> Result<()> {
-    let repo = match repo_dir_name(app) {
+    let repo = match requested_repo(paths, app) {
         Ok(repo) => repo,
         Err(e) => return Err(e),
     };
 
-    let status = match Command::new("git-upload-pack")
-        .arg(paths.git_root.join(&repo))
-        .status()
-    {
+    let status = match Command::new("git-upload-pack").arg(&repo).status() {
         Ok(status) => status,
         Err(e) => return Err(anyhow!("cannot run git-upload-pack: {e}")),
     };

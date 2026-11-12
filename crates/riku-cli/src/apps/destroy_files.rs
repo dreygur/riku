@@ -34,10 +34,10 @@ fn remove_file(path: &Path) -> Result<()> {
     }
 }
 
-/// `repos/<app>.git`: the repo `riku apps create` and a push to `<app>.git`
-/// make, or the symlink the hook made for a push to `repos/<app>`. A link is
-/// removed, never followed, so its target survives. `repos/<app>` is removed
-/// with the other app directories.
+/// `repos/<app>.git`: the app's one repo, which `riku apps create` and a
+/// push to either `<app>` or `<app>.git` make. A symlink there is removed,
+/// never followed, so its target survives. `repos/<app>` is removed with the
+/// other app directories.
 fn remove_dot_git_repo(paths: &RikuPaths, app: &str) -> Result<()> {
     let repo = paths.git_root.join(format!("{app}.git"));
     match fs::symlink_metadata(&repo) {

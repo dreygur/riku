@@ -9,7 +9,7 @@ use std::process::Command;
 use crate::config::RikuPaths;
 use crate::util::display;
 
-use super::link_repo::link_external_repo;
+use super::hook_repo::{app_repo, check_hook_repo};
 
 /// Whether `app_path` still needs its first clone. Only a missing checkout
 /// counts: an app without a Procfile is still a checkout, and cloning into
@@ -19,7 +19,7 @@ fn needs_clone(app_path: &Path) -> bool {
 }
 
 fn clone_app(paths: &RikuPaths, app: &str) -> Result<()> {
-    let repo_path = paths.git_root.join(app);
+    let repo_path = app_repo(paths, app);
     let app_path = paths.app_root.join(app);
     let data_path = paths.data_root.join(app);
 
@@ -116,15 +116,6 @@ fn ref_push(refname: &str, newrev: &str, default: &str) -> RefPush {
     RefPush::Deploy
 }
 
-/// The bare repo of `app`: the hook passes its own path; otherwise the
-/// standard location.
-fn repo_dir(paths: &RikuPaths, app: &str, repo_path: Option<&str>) -> std::path::PathBuf {
-    match repo_path {
-        Some(path) => std::path::PathBuf::from(path),
-        None => paths.git_root.join(format!("{app}.git")),
-    }
-}
-
 /// Why a hook run failed.
 enum HookFailure {
     /// The deploy failed and already printed its failure block.
@@ -168,14 +159,14 @@ fn deploy_pushed_refs(
         Err(e) => return Err(e.into()),
     };
 
-    if let Some(actual_repo) = repo_path {
-        if let Err(e) = link_external_repo(paths, &app, actual_repo) {
+    if let Some(hook_repo) = repo_path {
+        if let Err(e) = check_hook_repo(paths, &app, hook_repo) {
             return Err(e.into());
         }
     }
 
     let app_path = paths.app_root.join(&app);
-    let repo = repo_dir(paths, &app, repo_path);
+    let repo = app_repo(paths, &app);
 
     let stdin = io::stdin();
     for line in stdin.lock().lines() {

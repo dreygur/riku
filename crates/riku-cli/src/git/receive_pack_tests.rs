@@ -32,12 +32,19 @@ fn an_unreadable_deploy_result_fails_the_push_and_says_why() {
 }
 
 #[test]
-fn a_push_to_app_dot_git_still_reaches_its_repository() {
-    assert_eq!(repo_dir_name("shop").unwrap(), "shop");
-    assert_eq!(repo_dir_name("shop.git").unwrap(), "shop.git");
-    assert_eq!(repo_dir_name("shop.git/").unwrap(), "shop.git");
+fn every_spelling_of_an_app_names_its_one_repository() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::from_dirs(dir.path().to_path_buf(), Path::new("/home/test"));
+    let repo = paths.git_root.join("shop.git");
+    for spelling in ["shop", "shop.git", "shop.git/", "shop/"] {
+        assert_eq!(
+            requested_repo(&paths, spelling).unwrap(),
+            repo,
+            "{spelling}"
+        );
+    }
     assert!(
-        repo_dir_name("shop.git.git").is_err(),
+        requested_repo(&paths, "shop.git.git").is_err(),
         "only one .git comes off, and app shop.git is refused"
     );
 }
