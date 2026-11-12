@@ -33,13 +33,19 @@ fn check_counts(project: &ComposeProject, counts: &BTreeMap<String, u32>) -> Res
 }
 
 /// Pre build hooks, image pulls and builds, then post build hooks.
-fn build_images(ctx: &ContainerApp) -> Result<()> {
+fn build_images(ctx: &ContainerApp, recent: &OutputTail) -> Result<()> {
     let app = ctx.app.as_str();
     let runtime = Some(CONTAINER_RUNTIME);
     if let Err(e) = crate::hooks::run_pre_build(app, &ctx.app_path, ctx.paths, runtime, &ctx.env) {
         return Err(e);
     }
-    if let Err(e) = prepare_images(&ctx.engine, ctx.app, &ctx.project, &ctx.container_env) {
+    if let Err(e) = prepare_images(
+        &ctx.engine,
+        ctx.app,
+        &ctx.project,
+        &ctx.container_env,
+        recent,
+    ) {
         return Err(e);
     }
     crate::hooks::run_post_build(app, &ctx.app_path, ctx.paths, runtime, &ctx.env)
@@ -62,7 +68,7 @@ fn prepare(ctx: &ContainerApp, recent: &OutputTail) -> Result<Prepared> {
     if let Err(e) = check_counts(&ctx.project, &counts) {
         return Err(e);
     }
-    if let Err(e) = build_images(ctx) {
+    if let Err(e) = build_images(ctx, recent) {
         return Err(e);
     }
     match run_release(ctx, &counts, recent) {

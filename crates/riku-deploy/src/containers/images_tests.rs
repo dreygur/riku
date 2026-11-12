@@ -49,7 +49,14 @@ fn pulls_image_services_and_builds_the_rest() {
     let (engine, log) = mock_engine(dir.path(), "");
     let app = AppName::try_from("myapp").unwrap();
 
-    prepare_images(&engine, &app, &project, &BTreeMap::new()).unwrap();
+    prepare_images(
+        &engine,
+        &app,
+        &project,
+        &BTreeMap::new(),
+        &OutputTail::default(),
+    )
+    .unwrap();
 
     let lines = logged(&log);
     assert!(lines.contains(&"pull postgres:16".to_string()), "{lines:?}");
@@ -81,7 +88,7 @@ fn token_only_reaches_login_on_stdin() {
         ("RIKU_GHCR_TOKEN", "s3cret"),
     ]);
 
-    prepare_images(&engine, &app, &project, &env).unwrap();
+    prepare_images(&engine, &app, &project, &env, &OutputTail::default()).unwrap();
 
     let lines = logged(&log);
     assert!(
@@ -109,7 +116,7 @@ fn half_configured_registry_login_is_an_error() {
     let app = AppName::try_from("myapp").unwrap();
     let env = env_of(&[("RIKU_GHCR_TOKEN", "s3cret")]);
 
-    let err = prepare_images(&engine, &app, &project, &env).unwrap_err();
+    let err = prepare_images(&engine, &app, &project, &env, &OutputTail::default()).unwrap_err();
 
     assert!(format!("{err:#}").contains("RIKU_GHCR_USERNAME"), "{err:#}");
 }

@@ -13,6 +13,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use riku_config::settings::EngineSettings;
+use riku_util::display::OutputTail;
 
 use super::env_file::write_env_file;
 use super::run_args::{run_args, whole_seconds_up};
@@ -110,17 +111,18 @@ impl Engine {
         }
     }
 
-    /// Pull `image` from its registry, streaming the engine's output and
-    /// stopping it at the pull limit.
-    pub fn pull(&self, image: &str) -> Result<()> {
+    /// Pull `image` from its registry, putting the engine's output on the
+    /// rail and its last lines in `recent`, and stopping it at the pull limit.
+    pub fn pull(&self, image: &str, recent: &OutputTail) -> Result<()> {
         match check_positional("image", image) {
             Ok(()) => {}
             Err(e) => return Err(e),
         }
-        self.run_streamed(
+        self.run_teed(
             &args_of(["pull", image]),
             image,
             self.settings().pull_timeout,
+            recent,
         )
     }
 }

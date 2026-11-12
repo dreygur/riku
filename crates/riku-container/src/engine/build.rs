@@ -11,6 +11,7 @@ use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{anyhow, Result};
+use riku_util::display::OutputTail;
 
 use super::env_file::is_valid_name;
 use super::Engine;
@@ -82,14 +83,15 @@ fn build_args(spec: &BuildSpec) -> Result<Vec<OsString>> {
 }
 
 impl Engine {
-    /// Build an image from `spec.context`, streaming the engine's output and
-    /// stopping it at the build limit.
-    pub fn build(&self, spec: &BuildSpec) -> Result<()> {
+    /// Build an image from `spec.context`, putting the engine's output on the
+    /// rail and its last lines in `recent`, and stopping it at the build
+    /// limit.
+    pub fn build(&self, spec: &BuildSpec, recent: &OutputTail) -> Result<()> {
         let args = match build_args(spec) {
             Ok(args) => args,
             Err(e) => return Err(anyhow!("cannot build {}: {e}", spec.tag)),
         };
-        self.run_streamed(&args, &spec.tag, self.settings().build_timeout)
+        self.run_teed(&args, &spec.tag, self.settings().build_timeout, recent)
     }
 }
 

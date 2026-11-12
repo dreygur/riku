@@ -20,6 +20,7 @@ use riku_container::types::ServiceName;
 use sha2::{Digest, Sha256};
 
 use super::AppName;
+use crate::util::display::OutputTail;
 
 const GHCR_REGISTRY: &str = "ghcr.io";
 const GHCR_USERNAME: &str = "RIKU_GHCR_USERNAME";
@@ -67,10 +68,15 @@ pub(super) fn pull_image(
     if let Err(e) = login_if_configured(engine, env) {
         return Err(e);
     }
-    engine.pull(image)
+    engine.pull(image, &OutputTail::default())
 }
 
-fn prepare_service(engine: &Engine, app: &AppName, service: &ServiceDef) -> Result<()> {
+fn prepare_service(
+    engine: &Engine,
+    app: &AppName,
+    service: &ServiceDef,
+    recent: &OutputTail,
+) -> Result<()> {
     if let Some(build) = &service.build {
         let spec = BuildSpec {
             context: build.context.clone(),
@@ -79,10 +85,10 @@ fn prepare_service(engine: &Engine, app: &AppName, service: &ServiceDef) -> Resu
             args: build.args.clone(),
             platform: None,
         };
-        return engine.build(&spec);
+        return engine.build(&spec, recent);
     }
     match &service.image {
-        Some(image) => engine.pull(image),
+        Some(image) => engine.pull(image, recent),
         None => Err(anyhow!(
             "service '{}' has neither image nor build",
             service.name
@@ -92,17 +98,19 @@ fn prepare_service(engine: &Engine, app: &AppName, service: &ServiceDef) -> Resu
 
 /// Log in to the registry when credentials are set, pull the `image`
 /// services and build the `build` services. A service with both is built.
+/// The engine's output goes on the rail and its last lines into `recent`.
 pub fn prepare_images(
     engine: &Engine,
     app: &AppName,
     project: &ComposeProject,
     env: &BTreeMap<String, String>,
+    recent: &OutputTail,
 ) -> Result<()> {
     if let Err(e) = login_if_configured(engine, env) {
         return Err(e);
     }
     for service in &project.services {
-        if let Err(e) = prepare_service(engine, app, service) {
+        if let Err(e) = prepare_service(engine, app, service, recent) {
             return Err(anyhow!("service '{}': {e}", service.name));
         }
     }

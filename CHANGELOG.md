@@ -110,6 +110,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the compose `build` services and from the images the app's containers
   ran; pulled images stay, since other apps may share them. A refused
   removal is a warning.
+- A container deploy printed the engine's build and pull output as raw
+  lines (`Step 2/4 : WORKDIR /app`) between the rail lines. Build and pull
+  output now goes on the rail (`│  ...`) like runtime plugin build output,
+  stderr included, and its last lines reach the deploy log on a failure.
 - `riku ps <app> --scale web=2` for a kind `SCALING` did not list yet (an
   app whose first deploy failed) started 3 copies: the count was added to
   the default of one. A kind missing from `SCALING` now starts from 0.
