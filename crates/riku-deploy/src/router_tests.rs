@@ -128,6 +128,34 @@ fn caddy_check_refuses_static_paths_before_a_copy_starts() {
     );
 }
 
+/// Path mode never builds a per app route, so it must refuse the key itself,
+/// before the routing state or the helper sees the app.
+#[test]
+fn path_mode_app_that_names_its_socket_is_refused() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = paths_with_workers(&tmp);
+    let e = env(&[
+        ("RIKU_NGINX_STATIC", "true"),
+        ("RIKU_ROUTING_MODE", "path"),
+        ("RIKU_NGINX_SOCKET", "/srv/s.sock"),
+    ]);
+    let backends = [Backend::Unix("/srv/s.sock".into())];
+
+    let configured = configure("shop", tmp.path(), &e, &paths, None).unwrap_err();
+    let applied = apply("shop", tmp.path(), &e, &paths, &backends).unwrap_err();
+
+    for err in [configured, applied] {
+        assert!(
+            format!("{err:#}").contains("RIKU_NGINX_SOCKET cannot be set by an app"),
+            "{err:#}"
+        );
+    }
+    assert!(
+        previous_entry("shop", &paths).is_none(),
+        "a refused app must not be recorded in path mode"
+    );
+}
+
 #[test]
 fn caddy_publishes_no_site_for_a_worker_only_app() {
     let tmp = tempfile::tempdir().unwrap();

@@ -38,20 +38,10 @@ pub(crate) fn upstream_name(app: &str) -> String {
     format!("riku_{hex}")
 }
 
-/// The app's unix socket: `RIKU_NGINX_SOCKET`, else `<socket_root>/<app>.sock`.
-pub(crate) fn socket_path(
-    app: &str,
-    env: &HashMap<String, String>,
-    paths: &crate::config::RikuPaths,
-) -> String {
-    match env.get("RIKU_NGINX_SOCKET") {
-        Some(socket) => socket.clone(),
-        None => paths
-            .socket_root
-            .join(format!("{app}.sock"))
-            .to_string_lossy()
-            .to_string(),
-    }
+/// The app's unix socket, `<socket_root>/<app>.sock`. An app cannot name its
+/// own: the deploy refuses `RIKU_NGINX_SOCKET` before any backend is chosen.
+fn socket_path(app: &str, paths: &crate::config::RikuPaths) -> PathBuf {
+    paths.socket_root.join(format!("{app}.sock"))
 }
 
 /// The address the app listens on: `RIKU_BIND_ADDRESS`, default `127.0.0.1`.
@@ -105,9 +95,7 @@ pub fn default_backends(
             Err(e) => Err(e),
         };
     }
-    Ok(vec![Backend::Unix(PathBuf::from(socket_path(
-        app, env, paths,
-    )))])
+    Ok(vec![Backend::Unix(socket_path(app, paths))])
 }
 
 #[cfg(test)]

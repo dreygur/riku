@@ -60,6 +60,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A path mode app (`routing.mode = "path"`) that set `RIKU_NGINX_SOCKET`
+  was not refused by name: path mode never built the per app route that
+  refuses the key, and the default backend still read it, so the deploy
+  failed only at the path site's socket check, after its own site had
+  been removed. Every route now refuses the key before a backend is
+  chosen or the helper is asked anything, in every routing mode, and the
+  default backend is always `/run/riku-sockets/<app>.sock`.
 - The embedded dashboard showed "no domain" for an app reachable on a
   port, such as a port mode app at `http://192.168.10.121:8102`, and
   `/api/state` did not say where any app is live. `/api/state` now carries

@@ -35,10 +35,6 @@ fn default_backend_follows_portmap_and_socket() {
         default_backends("myapp", &HashMap::new(), &paths).unwrap(),
         vec![Backend::Unix(paths.socket_root.join("myapp.sock"))]
     );
-    assert_eq!(
-        backends(&[("RIKU_NGINX_SOCKET", "/srv/riku/custom.sock")]).unwrap(),
-        vec![Backend::Unix(PathBuf::from("/srv/riku/custom.sock"))]
-    );
 }
 
 #[test]

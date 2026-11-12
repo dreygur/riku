@@ -126,6 +126,16 @@ pub(crate) fn has_route(
     }
 }
 
+/// Refuse an app ENV key that names a path the helper picks. Path mode never
+/// builds a per app route, and the default backend would read the key, so
+/// every router entry point checks it before a backend is chosen.
+fn refuse_named_socket(app: &str, env: &HashMap<String, String>) -> Result<()> {
+    match refused_key(env) {
+        Some(reason) => Err(anyhow!("cannot route '{app}': {reason}")),
+        None => Ok(()),
+    }
+}
+
 /// Configure the active router so `app` is reachable, with a backend for
 /// every web copy it has today, and return once the router confirmed the new
 /// config. `engine` is `Some` for a container app. A Procfile app with no
@@ -145,6 +155,9 @@ pub fn configure(
             Ok(false) => return remove(app, paths),
             Err(e) => return Err(e),
         }
+    }
+    if let Err(e) = refuse_named_socket(app, env) {
+        return Err(e);
     }
     let active = match Router::load(paths) {
         Ok(router) => router,
@@ -168,6 +181,9 @@ pub fn apply(
     paths: &RikuPaths,
     backends: &[Backend],
 ) -> Result<()> {
+    if let Err(e) = refuse_named_socket(app, env) {
+        return Err(e);
+    }
     let active = match Router::load(paths) {
         Ok(router) => router,
         Err(e) => return Err(e),
