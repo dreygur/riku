@@ -80,6 +80,9 @@ pub fn cmd_apps_info(paths: &RikuPaths, app: &str) -> Result<()> {
     if let Err(e) = print_env_summary(paths, &app) {
         return Err(e);
     }
+    if let Err(e) = print_runtime_version(paths, &app) {
+        return Err(e);
+    }
     if let Err(e) = print_scaling(paths, &app) {
         return Err(e);
     }
@@ -126,10 +129,31 @@ fn print_env_summary(paths: &RikuPaths, app: &str) -> Result<()> {
         return Ok(());
     }
     field("Env Variables:", &format!("{} configured", env.len()));
-    for key in ["RIKU_DOMAINS", "RIKU_NODE_VERSION", "PORT"] {
+    for key in ["RIKU_DOMAINS", "PORT"] {
         if let Some(val) = env.get(key) {
             field(&format!("  {}:", key), val);
         }
+    }
+    Ok(())
+}
+
+/// The runtime version the deploy hands the runtime plugin: only riku.toml
+/// `[runtime] version`, read the way the deploy reads it. A
+/// `RIKU_<NAME>_VERSION` ENV line is a plain app variable, so it is not
+/// shown here.
+#[allow(clippy::question_mark)]
+fn print_runtime_version(paths: &RikuPaths, app: &str) -> Result<()> {
+    let versions = match crate::config::app_config::runtime_versions(paths, app) {
+        Ok(versions) => versions,
+        Err(e) => return Err(e),
+    };
+    let mut versions: Vec<_> = versions.into_iter().collect();
+    versions.sort();
+    for (key, version) in versions {
+        field(
+            "Runtime Version:",
+            &format!("{version} ({key} from riku.toml)"),
+        );
     }
     Ok(())
 }

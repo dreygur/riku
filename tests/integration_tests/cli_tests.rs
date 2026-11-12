@@ -437,7 +437,7 @@ mod warning_lines {
     use std::path::Path;
     use std::process::{Command, Output, Stdio};
 
-    fn riku(root: &Path, args: &[&str]) -> Output {
+    pub(super) fn riku(root: &Path, args: &[&str]) -> Output {
         Command::new(env!("CARGO_BIN_EXE_riku"))
             .arg("--local")
             .args(args)
@@ -504,6 +504,70 @@ mod warning_lines {
                 "▲  source is not a git repository.",
                 "│  Consider initializing git: git init",
             ],
+        );
+    }
+}
+
+mod apps_info {
+    use super::warning_lines::riku;
+
+    /// The version riku hands the runtime plugin comes from riku.toml; an
+    /// ENV line of the same name is a plain app variable and must not be
+    /// shown as the version.
+    fn add_app(root: &std::path::Path, app: &str, riku_toml: Option<&str>) {
+        let riku_root = root.join(".riku");
+        let app_dir = riku_root.join("apps").join(app);
+        std::fs::create_dir_all(&app_dir).unwrap();
+        if let Some(text) = riku_toml {
+            std::fs::write(app_dir.join("riku.toml"), text).unwrap();
+        }
+        let env_dir = riku_root.join("envs").join(app);
+        std::fs::create_dir_all(&env_dir).unwrap();
+        std::fs::write(env_dir.join("ENV"), "RIKU_NODE_VERSION=99\n").unwrap();
+    }
+
+    fn version_lines(root: &std::path::Path, app: &str) -> (Vec<String>, String) {
+        let out = riku(root, &["apps", "info", app]);
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        let lines = stdout
+            .lines()
+            .filter(|line| line.to_lowercase().contains("version"))
+            .map(str::to_string)
+            .collect();
+        (lines, stdout)
+    }
+
+    #[test]
+    fn shows_the_runtime_version_from_riku_toml_not_env() {
+        let tmp = tempfile::tempdir().unwrap();
+        add_app(tmp.path(), "envonly", None);
+        add_app(
+            tmp.path(),
+            "shop",
+            Some("[runtime]\nname = \"node\"\nversion = \"22\"\n"),
+        );
+
+        let (lines, stdout) = version_lines(tmp.path(), "envonly");
+        assert!(
+            lines.is_empty(),
+            "an ENV version the plugin never gets is shown:\n{stdout}"
+        );
+
+        let (lines, stdout) = version_lines(tmp.path(), "shop");
+        assert_eq!(lines.len(), 1, "expected one version line in:\n{stdout}");
+        let words: Vec<&str> = lines[0].split_whitespace().collect();
+        assert_eq!(
+            words,
+            [
+                "│",
+                "Runtime",
+                "Version:",
+                "22",
+                "(RIKU_NODE_VERSION",
+                "from",
+                "riku.toml)"
+            ],
+            "info output:\n{stdout}"
         );
     }
 }

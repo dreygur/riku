@@ -64,6 +64,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it was a real directory, the one `riku apps create` and a push to
   `<app>.git` make. It removed only a symlink there. It now removes that
   directory too; a symlink is still removed without following it.
+- `riku apps info` listed `RIKU_NODE_VERSION` from the merged env, so it
+  showed an ENV value the node plugin never gets. It now shows a
+  `Runtime Version:` line only for riku.toml `[runtime] version`, read
+  the way the deploy reads it, naming the key the plugin gets.
 - Three more tests passed without checking anything. The security test
   for server name injection only checked that a directory existed; it now
   parses domain lists with the route's parser and renders the accepted
