@@ -15,7 +15,7 @@ use crate::config::RikuPaths;
 use crate::rolling::RouteSink;
 use crate::util::display;
 
-pub(crate) use super::scaling::apply_scaling_deltas;
+pub(crate) use super::scaling::record_scaling_deltas;
 
 /// The process kind a runtime plugin's start command runs as.
 const WEB_KIND: &str = "web";

@@ -148,3 +148,72 @@ fn test_scaling_up_does_not_remove_symlinks() {
         "Scaling up should never remove existing configs"
     );
 }
+
+/// A Procfile app checkout that no runtime plugin builds, so its deploy
+/// fails at the Runtime step, after the scale was applied.
+fn unbuildable_app(paths: &RikuPaths) {
+    let checkout = paths.app_root.join("myapp");
+    fs::create_dir_all(&checkout).unwrap();
+    fs::write(checkout.join("Procfile"), "web: run\nworker: run\n").unwrap();
+    for args in [
+        &["init", "-q"][..],
+        &["add", "."][..],
+        &["commit", "-q", "-m", "c"][..],
+    ] {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&checkout)
+            .args(["-c", "user.email=t@example.com", "-c", "user.name=t"])
+            .args(args)
+            .env_remove("GIT_DIR")
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+    }
+}
+
+#[test]
+fn a_failed_scale_deploy_leaves_scaling_and_the_running_copies_alone() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    unbuildable_app(&paths);
+    let scaling = paths.env_root.join("myapp").join("SCALING");
+    fs::create_dir_all(scaling.parent().unwrap()).unwrap();
+    fs::write(&scaling, "web=2\nworker=1\n").unwrap();
+    let second_web = paths.workers_enabled.join("myapp@web.2.toml");
+    fs::write(&second_web, "[worker]\n").unwrap();
+
+    for (kind, delta) in [("worker", 2i64), ("web", -1)] {
+        let deltas = HashMap::from([(kind.to_string(), delta)]);
+        let deployed = crate::do_deploy("myapp", &paths, &deltas, None);
+
+        assert!(deployed.is_err(), "no runtime builds the app");
+        assert_eq!(
+            fs::read_to_string(&scaling).unwrap(),
+            "web=2\nworker=1\n",
+            "a failed deploy of {kind} {delta:+} must not record the new count"
+        );
+        assert!(
+            second_web.exists(),
+            "a failed deploy of {kind} {delta:+} stopped a running copy"
+        );
+    }
+}
+
+#[test]
+fn a_failed_first_scale_deploy_leaves_no_scaling_file() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    unbuildable_app(&paths);
+    let deltas = HashMap::from([("worker".to_string(), 2i64)]);
+
+    let deployed = crate::do_deploy("myapp", &paths, &deltas, None);
+
+    assert!(deployed.is_err(), "no runtime builds the app");
+    let scaling = paths.env_root.join("myapp").join("SCALING");
+    assert!(
+        !scaling.exists(),
+        "a failed deploy wrote {}",
+        scaling.display()
+    );
+}

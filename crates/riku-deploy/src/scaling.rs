@@ -3,6 +3,8 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::fs;
+use std::io::ErrorKind;
+use std::path::PathBuf;
 
 use crate::config::RikuPaths;
 use crate::util::display;
@@ -48,16 +50,51 @@ fn remove_scaled_down(app: &str, kind: &str, from: u32, to: u32, paths: &RikuPat
     Ok(())
 }
 
-/// Apply scaling deltas to the SCALING file and return the new worker counts.
-/// Also removes symlinks for workers that have been scaled down.
+fn scaling_path(app: &str, paths: &RikuPaths) -> PathBuf {
+    paths.env_root.join(app).join("SCALING")
+}
+
+/// An app's SCALING file as a deploy found it, `None` when it had none, so a
+/// failed deploy can put it back.
+pub(crate) struct ScalingBefore(Option<String>);
+
+impl ScalingBefore {
+    pub(crate) fn read(app: &str, paths: &RikuPaths) -> Result<Self> {
+        let path = scaling_path(app, paths);
+        match fs::read_to_string(&path) {
+            Ok(text) => Ok(Self(Some(text))),
+            Err(e) if e.kind() == ErrorKind::NotFound => Ok(Self(None)),
+            Err(e) => Err(anyhow!("cannot read {}: {e}", path.display())),
+        }
+    }
+
+    /// Write the SCALING file back as it was, or remove one the deploy made.
+    pub(crate) fn restore(self, app: &str, paths: &RikuPaths) -> Result<()> {
+        let path = scaling_path(app, paths);
+        let restored = match self.0 {
+            Some(text) => fs::write(&path, text),
+            None => match fs::remove_file(&path) {
+                Err(e) if e.kind() == ErrorKind::NotFound => Ok(()),
+                other => other,
+            },
+        };
+        match restored {
+            Ok(()) => Ok(()),
+            Err(e) => Err(anyhow!("cannot restore {}: {e}", path.display())),
+        }
+    }
+}
+
+/// Apply scaling deltas to the SCALING file and return the old and the new
+/// worker counts.
 #[allow(clippy::question_mark)]
-pub(crate) fn apply_scaling_deltas(
+fn write_scaled_counts(
     app: &str,
     paths: &RikuPaths,
     deltas: &HashMap<String, i64>,
     workers: &HashMap<String, String>,
-) -> Result<HashMap<String, u32>> {
-    let scaling_path = paths.env_root.join(app).join("SCALING");
+) -> Result<(HashMap<String, u32>, HashMap<String, u32>)> {
+    let scaling_path = scaling_path(app, paths);
     let mut worker_counts = match read_counts(&scaling_path) {
         Ok(counts) => counts,
         Err(e) => return Err(e),
@@ -94,7 +131,34 @@ pub(crate) fn apply_scaling_deltas(
     if let Err(e) = fs::write(&scaling_path, &scaling_content) {
         return Err(anyhow!("cannot write {}: {e}", scaling_path.display()));
     }
+    Ok((worker_counts, new_counts))
+}
 
+/// Record the counts a deploy starts with `deltas` applied. Copies above a
+/// lowered count keep running: the deploy drains and stops them itself once
+/// the build passed, so a failed deploy leaves them serving.
+pub(crate) fn record_scaling_deltas(
+    app: &str,
+    paths: &RikuPaths,
+    deltas: &HashMap<String, i64>,
+    workers: &HashMap<String, String>,
+) -> Result<()> {
+    write_scaled_counts(app, paths, deltas, workers).map(|_| ())
+}
+
+/// Apply scaling deltas to the SCALING file and return the new worker counts.
+/// Also removes symlinks for workers that have been scaled down.
+#[allow(clippy::question_mark)]
+pub(crate) fn apply_scaling_deltas(
+    app: &str,
+    paths: &RikuPaths,
+    deltas: &HashMap<String, i64>,
+    workers: &HashMap<String, String>,
+) -> Result<HashMap<String, u32>> {
+    let (worker_counts, new_counts) = match write_scaled_counts(app, paths, deltas, workers) {
+        Ok(counts) => counts,
+        Err(e) => return Err(e),
+    };
     for (kind, new_count) in &new_counts {
         let old_count = *worker_counts.get(kind).unwrap_or(&1);
         if *new_count < old_count {

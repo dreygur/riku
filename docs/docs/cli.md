@@ -483,7 +483,10 @@ Scale worker processes.
 riku ps myapp --scale web=4 worker=2
 ```
 
-This creates/updates the `SCALING` file and triggers a restart.
+This records the counts in `~/.riku/envs/<app>/SCALING` and redeploys the
+app. A negative or malformed count fails before anything changes. When the
+redeploy fails before any worker changed, `SCALING` is put back as it was,
+and copies above a lowered count keep running.
 
 For a container app, each named compose service grows or shrinks without a
 rebuild and without restarting the copies it keeps, and the count is

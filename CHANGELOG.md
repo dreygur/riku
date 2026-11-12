@@ -60,6 +60,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `riku ps <app> --scale` with a negative or malformed count printed an
+  error and exited 0; it now fails before anything changes. A scale
+  deploy that failed still recorded the new count in `SCALING`, so the
+  next push started that many copies, and a lowered count stopped the
+  copies above it before the build, without draining them from the
+  router. `SCALING` is now put back when a deploy fails before any worker
+  config changed (the rule the checkout already follows), and copies
+  above a lowered count are drained and stopped by the worker rollout.
 - Breaking: an app has one repo, `~/.riku/repos/<app>.git`. A push to
   `riku@host:<app>` wrote `repos/<app>`, and the hook linked
   `repos/<app>.git` to it, so `riku apps create <app>` (which makes

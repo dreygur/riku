@@ -235,7 +235,7 @@ pub(crate) fn deploy_procfile_app(
     progress: &mut DeployProgress,
 ) -> Result<Deployed> {
     let app_path = paths.app_root.join(app);
-    if let Err(e) = workers::apply_scaling_deltas(app, paths, deltas, &workers) {
+    if let Err(e) = workers::record_scaling_deltas(app, paths, deltas, &workers) {
         return Err(e);
     }
     // Worker creation gets the full list: a list holding only one shot

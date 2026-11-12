@@ -118,7 +118,17 @@ pub fn do_deploy(
         }
     };
     let mut progress = progress::DeployProgress::new(app, paths, dlog);
-    match pipeline::run(app, paths, deltas, newrev, &mut progress) {
+    let outcome = match scaling::ScalingBefore::read(app, paths) {
+        Ok(before) => match pipeline::run(app, paths, deltas, newrev, &mut progress) {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                restore_scaling(app, paths, &mut progress, before);
+                Err(e)
+            }
+        },
+        Err(e) => Err(e),
+    };
+    match outcome {
         Ok(()) => Ok(()),
         Err(e) => {
             restore_checkout(app, paths, &mut progress);
@@ -152,6 +162,28 @@ fn restore_checkout(app: &str, paths: &RikuPaths, progress: &mut progress::Deplo
             progress.log.log_raw(&format!("[WARN] {reason}"));
             util::display::warn(&reason);
         }
+    }
+}
+
+/// After a failed deploy, put the SCALING file back as the deploy found it,
+/// by the same rule as the checkout: once worker configs or containers
+/// started changing they run the new counts, so the file keeps them.
+fn restore_scaling(
+    app: &str,
+    paths: &RikuPaths,
+    progress: &mut progress::DeployProgress,
+    before: scaling::ScalingBefore,
+) {
+    if progress.release_replaced() {
+        progress
+            .log
+            .log_raw("SCALING kept: worker configs or containers already changed");
+        return;
+    }
+    if let Err(e) = before.restore(app, paths) {
+        let reason = format!("could not put SCALING back: {e:#}");
+        progress.log.log_raw(&format!("[WARN] {reason}"));
+        util::display::warn(&reason);
     }
 }
 
