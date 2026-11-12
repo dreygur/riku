@@ -4,6 +4,7 @@ use chrono::Utc;
 use std::collections::HashMap;
 use std::time::Instant;
 
+use super::resources::ResourceUsage;
 use super::types::{HealthStatus, ProcessStats, ProcessStatus};
 
 /// Statistics manager for tracking all process metrics.
@@ -101,10 +102,10 @@ impl StatsManager {
     }
 
     /// Update resource usage for a process.
-    pub fn update_resource_usage(&mut self, process_id: &str, cpu_ms: u64, memory_bytes: u64) {
+    pub fn update_resource_usage(&mut self, process_id: &str, usage: ResourceUsage) {
         if let Some(stats) = self.stats.get_mut(process_id) {
-            stats.cpu_time_ms = cpu_ms;
-            stats.memory_bytes = memory_bytes;
+            stats.cpu_time_ms = usage.cpu_time_ms;
+            stats.memory_bytes = usage.memory_bytes;
         }
     }
 

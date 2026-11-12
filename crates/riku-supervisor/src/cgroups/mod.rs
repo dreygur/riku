@@ -24,6 +24,7 @@ use std::time::{Duration, Instant};
 
 mod limits;
 pub mod tree;
+mod usage;
 
 use limits::apply_node;
 pub use limits::CgroupLimits;

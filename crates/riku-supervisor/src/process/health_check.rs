@@ -1,9 +1,10 @@
 //! Health check and process monitoring for the ProcessManager.
 
 use anyhow::Result;
+use std::cell::OnceCell;
 
 use crate::config::HealthCheck;
-use crate::stats::{get_process_resources, HealthStatus};
+use crate::stats::{HealthStatus, ProcessTable};
 
 use super::ProcessManager;
 
@@ -32,6 +33,7 @@ impl ProcessManager {
             .filter(|g| g.status == super::generation::GenerationStatus::Probing)
             .map(|g| g.temp_key.clone())
             .collect();
+        let procs = OnceCell::new();
 
         for (process_id, process) in self.processes.iter_mut() {
             if probing_keys.contains(process_id) {
@@ -91,10 +93,10 @@ impl ProcessManager {
             // Process is running - update stats
             self.stats.mark_running(process_id, process.pid_as_u32());
 
-            // Update resource usage
-            if let Some((cpu_ms, memory)) = get_process_resources(process.pid_as_u32()) {
-                self.stats.update_resource_usage(process_id, cpu_ms, memory);
-            }
+            let pid = process.pid_as_u32();
+            let usage =
+                process.resource_usage(|| procs.get_or_init(ProcessTable::read).tree_usage(pid));
+            self.stats.update_resource_usage(process_id, usage);
 
             // Collect health check configs for later
             if let Some(health_config) = &process.health_check_config {

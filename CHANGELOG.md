@@ -52,6 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Worker memory and CPU counted only the `sh -c` wrapper, so every app
+  showed about 2 MB and no CPU time. A worker with a cgroup now reports
+  the cgroup's `memory.current` and `cpu.stat` usage; one without sums its
+  whole process tree from `/proc`.
 - Under Caddy, the dashboard and `riku apps info` showed every app as
   having no site, because the deploy user cannot read the root owned
   `/etc/riku/caddy`. They now say the site is unknown. For the same reason

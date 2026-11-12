@@ -10,6 +10,7 @@ use std::process::Child;
 
 use crate::cgroups::WorkerCgroup;
 use crate::config::{HealthCheck, WorkerConfig};
+use crate::stats::ResourceUsage;
 
 use super::pid_file::WorkerPidFile;
 
@@ -82,6 +83,15 @@ impl SpawnedProcess {
     /// if isolation isn't enabled for this worker.
     pub fn oom_kill_count(&self) -> Option<u64> {
         self.cgroup.as_ref().and_then(|c| c.oom_kill_count())
+    }
+
+    /// CPU time and memory of the whole worker: its cgroup when it has one,
+    /// otherwise its process tree in `procs`.
+    pub fn resource_usage(&self, procs: impl FnOnce() -> ResourceUsage) -> ResourceUsage {
+        match self.cgroup.as_ref().and_then(WorkerCgroup::usage) {
+            Some(usage) => usage,
+            None => procs(),
+        }
     }
 
     /// Check if the process is still running.
