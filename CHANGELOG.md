@@ -60,6 +60,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `riku ps <app> --scale web=2` for a kind `SCALING` did not list yet (an
+  app whose first deploy failed) started 3 copies: the count was added to
+  the default of one. A kind missing from `SCALING` now starts from 0.
+  The failed deploy rollback above made this reachable, since a failed
+  first deploy no longer leaves a `SCALING` file behind.
 - Four more security tests and three smoke tests checked nothing. The ENV
   tests wrote a file and read it back; they now read it through riku's
   app env loader and check that shell syntax stays literal text and that

@@ -95,21 +95,22 @@ fn write_scaled_counts(
     workers: &HashMap<String, String>,
 ) -> Result<(HashMap<String, u32>, HashMap<String, u32>)> {
     let scaling_path = scaling_path(app, paths);
-    let mut worker_counts = match read_counts(&scaling_path) {
+    let in_file = match read_counts(&scaling_path) {
         Ok(counts) => counts,
         Err(e) => return Err(e),
     };
 
     // Default to 1 for any worker types not in SCALING
+    let mut worker_counts = in_file.clone();
     for kind in workers.keys() {
         worker_counts.entry(kind.clone()).or_insert(1);
     }
 
     let mut new_counts: HashMap<String, u32> = worker_counts.clone();
     for (kind, delta) in deltas {
-        // Use 0 as the baseline for kinds not yet in the SCALING file so that
-        // "web=2" on a fresh app gives exactly 2 workers (not 1+2=3).
-        let current = *worker_counts.get(kind).unwrap_or(&0);
+        // A kind not in the SCALING file starts from 0, declared or not:
+        // `riku ps --scale web=2` sends 2 for it, which must give 2 copies.
+        let current = *in_file.get(kind).unwrap_or(&0);
         let new_count = if *delta < 0 {
             current.saturating_sub((-delta) as u32)
         } else {

@@ -16,22 +16,21 @@ fn make_workers(kinds: &[&str]) -> HashMap<String, String> {
         .collect()
 }
 
+/// `riku ps --scale web=2` sends the count itself as the delta for a kind
+/// SCALING does not list, so a declared kind missing from the file must
+/// start from 0, not from its default of one copy.
 #[test]
-fn test_scaling_up_from_zero_creates_scaling_file() {
+fn a_kind_missing_from_scaling_is_scaled_to_the_count_asked_for() {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
     fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
 
-    // No existing SCALING file.  Workers map contains "web", so the
-    // `or_insert(1)` default kicks in → baseline = 1, delta = 2 → final = 3.
     let deltas: HashMap<String, i64> = [("web".to_string(), 2i64)].into_iter().collect();
-    let workers = make_workers(&["web"]);
+    let workers = make_workers(&["web", "worker"]);
 
     let counts = apply_scaling_deltas("myapp", &paths, &deltas, &workers).unwrap();
-    assert_eq!(
-        counts["web"], 3,
-        "baseline 1 (or_insert default) + delta 2 = 3"
-    );
+    assert_eq!(counts["web"], 2, "web=2 asked for, {counts:?}");
+    assert_eq!(counts["worker"], 1, "an unscaled kind keeps one copy");
 
     let scaling_path = paths.env_root.join("myapp").join("SCALING");
     assert!(scaling_path.exists(), "SCALING file should be written");
