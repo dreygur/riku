@@ -25,6 +25,7 @@ use std::path::Path;
 use anyhow::Result;
 
 use crate::config::router::Router;
+use crate::doctor::ssh_check::{riku_key_count, Reader};
 use crate::util::display;
 use crate::util::public_key::PublicKey;
 use crate::util::ROOT_BINARY;
@@ -45,9 +46,20 @@ use super::var_root::setup_var_root;
 const RIKU_DIR: &str = ".riku";
 const ROUTER_ENV: &str = "RIKU_ROUTER";
 
-fn print_ssh_hint() {
-    display::warn("No deploy key added, git push needs one");
-    display::detail("Add yours with: sudo riku init --ssh-key <your .pub or authorized_keys file>");
+/// Without `--ssh-key`, names the deploy keys an earlier init authorized, and
+/// warns only when there are none, or they cannot be read.
+fn report_existing_keys(home: &Path) {
+    match riku_key_count(home, Reader::Root) {
+        Ok(count) if count > 0 => {
+            display::step_done("Deploy keys", &format!("{count} already authorized"));
+        }
+        _ => {
+            display::warn("No deploy key added, git push needs one");
+            display::detail(
+                "Add yours with: sudo riku init --ssh-key <your .pub or authorized_keys file>",
+            );
+        }
+    }
 }
 
 fn run_user_steps(user: &DeployUser, keys: &[PublicKey], no_systemd: bool) -> Result<()> {
@@ -174,7 +186,7 @@ pub fn root_init(options: &InitOptions) -> Result<(DeployUser, Router)> {
         }
     }
     if keys.is_empty() {
-        print_ssh_hint();
+        report_existing_keys(&user.home);
     }
     Ok((user, router))
 }

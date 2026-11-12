@@ -52,6 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `sudo riku init` without `--ssh-key` warned "No deploy key added" on a
+  server that already had deploy keys. It now reports how many are
+  authorized and warns only when there are none.
 - `riku run` ran its command with no resource limits at all. It now runs
   under the server wide `RIKU_MAX_*` limits with the app's own
   `limits.max_*` values put over them, the same as the app's workers. A

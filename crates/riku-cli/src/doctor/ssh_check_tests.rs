@@ -24,6 +24,32 @@ fn counts_the_riku_keys_of_the_home_it_is_given() {
     assert!(check.detail.starts_with("2 riku"), "{}", check.detail);
 }
 
+/// `riku init` without `--ssh-key` reports the keys already there instead of
+/// warning that none were added.
+#[test]
+fn riku_key_count_sees_keys_a_previous_init_added() {
+    let home = home_with_keys(
+        "command=\"FINGERPRINT=SHA256:a riku\" ssh-ed25519 AAAA one\n\
+         ssh-ed25519 AAAA someone-else\n",
+    );
+
+    let count = riku_key_count(home.path(), Reader::Root);
+
+    assert_eq!(count.ok(), Some(1));
+}
+
+#[test]
+fn riku_key_count_fails_without_authorized_keys() {
+    let home = tempfile::tempdir().unwrap();
+
+    let count = riku_key_count(home.path(), Reader::Root);
+
+    assert_eq!(
+        count.map_err(|e| e.kind()).err(),
+        Some(io::ErrorKind::NotFound)
+    );
+}
+
 /// Root reading the deploy user's keys must not follow a `.ssh` the deploy
 /// user pointed at someone else's directory.
 #[test]

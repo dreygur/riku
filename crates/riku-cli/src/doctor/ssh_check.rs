@@ -46,19 +46,33 @@ impl Reader {
     }
 }
 
-/// Count the riku deploy keys in the `authorized_keys` of the user whose
-/// home is `home`.
-pub fn ssh_access(home: &Path, reader: Reader) -> Check {
+/// The number of riku deploy keys in the `authorized_keys` of the user whose
+/// home is `home`. A missing file is a `NotFound` error.
+pub fn riku_key_count(home: &Path, reader: Reader) -> io::Result<usize> {
     let path = authorized_keys_path(home);
     if reader == Reader::Root {
         if let Some(ssh_dir) = path.parent() {
             if let Err(e) = real_directory(ssh_dir) {
-                return Check::warn(NAME, format!("could not read {}: {e}", path.display()));
+                return Err(e);
             }
         }
     }
     let text = match read_regular_file(&path) {
         Ok(text) => text,
+        Err(e) => return Err(e),
+    };
+    Ok(text
+        .lines()
+        .filter(|line| line.contains(RIKU_KEY_MARKER))
+        .count())
+}
+
+/// Count the riku deploy keys in the `authorized_keys` of the user whose
+/// home is `home`.
+pub fn ssh_access(home: &Path, reader: Reader) -> Check {
+    let path = authorized_keys_path(home);
+    let keys = match riku_key_count(home, reader) {
+        Ok(keys) => keys,
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             return Check::warn(
                 NAME,
@@ -67,10 +81,6 @@ pub fn ssh_access(home: &Path, reader: Reader) -> Check {
         }
         Err(e) => return Check::warn(NAME, format!("could not read {}: {e}", path.display())),
     };
-    let keys = text
-        .lines()
-        .filter(|line| line.contains(RIKU_KEY_MARKER))
-        .count();
     if keys > 0 {
         Check::ok(NAME, format!("{keys} riku deploy key(s) authorized"))
     } else {
