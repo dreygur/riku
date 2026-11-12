@@ -1,6 +1,8 @@
 # Environment Variables
 
-Riku uses environment variables to configure application behavior, nginx, and the supervisor. Variables are stored in `~/.riku/envs/<app>/ENV`.
+An app's environment variables are stored in `~/.riku/envs/<app>/ENV` and handed to its processes.
+
+riku's own per app settings (domains, HTTPS, static files, worker timeouts, limits and the rest of the [riku.toml](riku-toml.md) table) are not read from ENV. Set them in the repo's `riku.toml` or with `riku settings set`. A table key such as `RIKU_DOMAINS` written into ENV by hand is ignored. The settings below show the `riku settings` form where one applies.
 
 ## Setting Environment Variables
 
@@ -59,7 +61,7 @@ riku config set myapp PORT=3000
 ### Bind Address
 
 ```bash
-RIKU_BIND_ADDRESS=127.0.0.1
+riku settings set myapp routing.bind_address=127.0.0.1
 ```
 
 - **Default:** `127.0.0.1`
@@ -69,7 +71,7 @@ RIKU_BIND_ADDRESS=127.0.0.1
 ### Server Name
 
 ```bash
-RIKU_DOMAINS=example.com
+riku settings set myapp routing.domains=example.com
 ```
 
 - **Default:** (none)
@@ -84,7 +86,7 @@ riku settings set myapp routing.domains=myapp.example.com
 ### Force HTTPS
 
 ```bash
-RIKU_HTTPS_ONLY=true
+riku settings set myapp routing.https_only=true
 ```
 
 - **Default:** `false`
@@ -98,7 +100,7 @@ RIKU_HTTPS_ONLY=true
 ### Worker Timeout
 
 ```bash
-RIKU_WORKER_TIMEOUT=3600
+riku settings set myapp workers.timeout=3600
 ```
 
 - **Default:** `3600` (1 hour)
@@ -108,7 +110,7 @@ RIKU_WORKER_TIMEOUT=3600
 ### Grace Period
 
 ```bash
-RIKU_WORKER_GRACE_PERIOD=60
+riku settings set myapp workers.grace_period=60
 ```
 
 - **Default:** `60` seconds
@@ -118,7 +120,7 @@ RIKU_WORKER_GRACE_PERIOD=60
 ### Max Restarts
 
 ```bash
-RIKU_MAX_RESTARTS=10
+riku settings set myapp workers.max_restarts=10
 ```
 
 - **Default:** `10`
@@ -142,7 +144,7 @@ RIKU_WORKER_PROCESSES=web=2,worker=1
 ### Static Paths
 
 ```bash
-RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static
+riku settings set myapp routing.static_paths=/static:public,/assets:static
 ```
 
 - **Default:** (none)
@@ -152,10 +154,10 @@ RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static
 **Example:**
 ```bash
 # Serve /static/* from ./public directory
-RIKU_NGINX_STATIC_PATHS=/static:public
+riku settings set myapp routing.static_paths=/static:public
 
 # Multiple paths
-RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static,/images:img
+riku settings set myapp routing.static_paths=/static:public,/assets:static,/images:img
 ```
 
 ### Refused Keys
@@ -165,7 +167,7 @@ A deploy fails, naming the key, when the app's ENV sets `RIKU_NGINX_SOCKET`: the
 ### Allow Git Folders
 
 ```bash
-RIKU_NGINX_ALLOW_GIT_FOLDERS=false
+riku settings set myapp routing.allow_git_folders=false
 ```
 
 - **Default:** `false`
@@ -241,19 +243,19 @@ Setting it selects the container runtime even when the repo also has a `package.
 ### GHCR Username
 
 ```bash
-RIKU_GHCR_USERNAME=your-username
+riku settings set myapp secrets.ghcr_username=your-username
 ```
 
 - **Default:** (none)
 - **Description:** Username for `docker login ghcr.io`, run before pulling a compose app's images
 - **Values:** Any GitHub username
 
-Required together with `RIKU_GHCR_TOKEN` only for private GHCR images; omit both for public images. Setting only one of the two fails the deploy.
+Required together with `secrets.ghcr_token` only for private GHCR images; omit both for public images. Setting only one of the two fails the deploy.
 
 ### GHCR Token
 
 ```bash
-RIKU_GHCR_TOKEN=ghp_xxxxxxxxxxxx
+riku settings set myapp secrets.ghcr_token=ghp_xxxxxxxxxxxx
 ```
 
 - **Default:** (none)
@@ -268,7 +270,7 @@ riku settings set myapp secrets.ghcr_username=octocat secrets.ghcr_token=ghp_xxx
 ### Watched Services
 
 ```bash
-RIKU_WATCH_SERVICES=web,worker
+riku settings set myapp containers.watch_services=web,worker
 ```
 
 - **Default:** (none, auto-update disabled)
@@ -317,21 +319,22 @@ LOG_ROTATION_SIZE=10485760
 Example `~/.riku/envs/myapp/ENV`:
 
 ```bash
-# Application settings
 DATABASE_URL=postgres://localhost/myapp_prod
 SECRET_KEY=supersecret123
 DEBUG=false
+```
 
-# Domain and HTTPS
-RIKU_DOMAINS=myapp.example.com
-RIKU_HTTPS_ONLY=true
+and the riku settings beside it, in the repo's `riku.toml`:
 
-# Worker settings
-RIKU_WORKER_TIMEOUT=3600
-RIKU_WORKER_GRACE_PERIOD=60
+```toml
+[routing]
+domains = ["myapp.example.com"]
+https_only = true
+static_paths = ["/static:public", "/assets:static"]
 
-# Static files
-RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static
+[workers]
+timeout = 3600
+grace_period = 60
 ```
 
 ---
@@ -392,4 +395,4 @@ API_URL=${BASE_URL}/api
 
 ### Nginx Config Not Updated
 
-The router config is rebuilt on deploy. After changing routing variables (`RIKU_DOMAINS`, `RIKU_HTTPS_ONLY`, static paths), deploy again. If the deploy fails, the message comes from the router helper.
+The router config is rebuilt on deploy. After changing routing settings in `riku.toml`, push again; `riku settings set` redeploys by itself. If the deploy fails, the message comes from the router helper.

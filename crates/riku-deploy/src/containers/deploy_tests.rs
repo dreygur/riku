@@ -1,6 +1,6 @@
-use crate::containers::mock_state::{deploy, mock_server, MockServer, DB_AND_WEB};
+use crate::containers::mock_state::{deploy, mock_server_with_domain, MockServer, DB_AND_WEB};
 
-const ENV: &str = "RIKU_DOMAINS=myapp.example.com\n";
+const DOMAIN: &str = "myapp.example.com";
 
 fn position(calls: &[String], wanted: impl Fn(&str) -> bool) -> usize {
     calls
@@ -12,7 +12,7 @@ fn position(calls: &[String], wanted: impl Fn(&str) -> bool) -> usize {
 #[test]
 fn deploy_starts_services_in_order() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
     server.mark("slow", "db");
 
     deploy(&server).unwrap();
@@ -32,7 +32,7 @@ fn deploy_starts_services_in_order() {
 #[test]
 fn redeploy_keeps_old_copy_on_failure() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
     deploy(&server).unwrap();
     let site_before = server.site("myapp");
     assert!(site_before.contains("reverse_proxy"), "{site_before}");
@@ -62,7 +62,7 @@ fn with_release(server: &MockServer) {
 #[test]
 fn release_runs_in_new_image_before_rollout() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
     with_release(&server);
 
     deploy(&server).unwrap();
@@ -92,7 +92,7 @@ fn release_runs_in_new_image_before_rollout() {
 #[test]
 fn failing_release_aborts_before_rollout() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
     with_release(&server);
     deploy(&server).unwrap();
     std::fs::write(server.state.join("release-exits"), "").unwrap();
@@ -116,7 +116,7 @@ fn failing_release_aborts_before_rollout() {
 #[test]
 fn broken_settings_fail_the_deploy() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
     std::fs::write(
         &server.paths.settings_file,
         "[engine]\ncall_timeout = \"soon\"\n",

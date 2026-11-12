@@ -76,7 +76,7 @@ pub(crate) fn detect_runtime(
                 "No runtime plugin matched '{app}'. `routing.static` is set, but riku serves static files only next to a runtime: the app still needs a runtime plugin and a process. See the Static Sites section of the runtimes docs."
             )),
             _ => Err(anyhow!(
-                "No runtime plugin matched '{app}'. Run 'riku install-plugins' or set RIKU_RUNTIME=<name> in the app env."
+                "No runtime plugin matched '{app}'. Run 'riku install-plugins' or set runtime.name in riku.toml (or with riku settings set)."
             )),
         },
         Err(e) => match e.downcast_ref::<MissingRuntime>() {

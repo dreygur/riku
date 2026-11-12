@@ -48,9 +48,9 @@ cat > Procfile <<EOF
 web: $(if [ "$RUNTIME" = "static" ]; then echo "static: ."; else echo "$RUNTIME start"; fi)
 EOF
 
-cat > ENV <<EOF
-RIKU_BIND_ADDRESS=127.0.0.1
-RIKU_DOMAINS=${APP_NAME}.example.com
+cat > riku.toml <<EOF
+[routing]
+domains = ["${APP_NAME}.example.com"]
 EOF
 
 cat > SCALING <<EOF

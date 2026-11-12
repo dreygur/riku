@@ -387,6 +387,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   settings, rewrote stale forced commands and hooks, and added `[routing]`;
   there is nothing left for it to migrate. The doctor checks for the old
   files and for renamed or riku keys in app ENV files are gone with it.
+- Breaking: riku settings in an app's ENV file. riku reads its per app
+  settings only from `riku.toml` and the server override (`riku
+  settings`). A settings key such as `RIKU_DOMAINS`, `RIKU_HTTPS_ONLY` or
+  `RIKU_MAX_MEMORY_MB` written into ENV by hand is ignored without a
+  warning, and stays out of `LIVE_ENV`. Before, it sat between the two
+  `riku.toml` files and a deploy warned about it. Runtime version keys
+  (`RIKU_NODE_VERSION` and the like) and every other ENV line are
+  unchanged.
 
 ## [0.1.4-rc.3] - 2026-11-11
 

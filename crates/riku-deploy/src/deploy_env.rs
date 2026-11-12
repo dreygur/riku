@@ -11,12 +11,7 @@ use anyhow::{anyhow, Result};
 use crate::config::app_config::{self, AppEnv};
 use crate::config::app_settings::{AppSettings, Source};
 use crate::config::RikuPaths;
-use crate::util::{deploy_logger::DeployLogger, echo};
-
-fn warn(hint: &str, dlog: &mut DeployLogger) {
-    echo(hint, "yellow");
-    dlog.log_raw(&format!("[WARN] {hint}"));
-}
+use crate::util::deploy_logger::DeployLogger;
 
 fn warn_about(loaded: &AppEnv, dlog: &mut DeployLogger) {
     let warnings = crate::util::validate_env_vars(&loaded.env);
@@ -24,20 +19,11 @@ fn warn_about(loaded: &AppEnv, dlog: &mut DeployLogger) {
     for w in &warnings {
         dlog.log_warn(w);
     }
-    if !loaded.legacy_keys.is_empty() {
-        warn(
-            &format!(
-                "ENV holds riku settings ({}); run riku doctor --fix to move them into riku settings",
-                loaded.legacy_keys.join(", ")
-            ),
-            dlog,
-        );
-    }
 }
 
 /// The app's merged env from `app_config::load_env` (repo riku.toml, ENV,
-/// server override). Invalid values and riku settings in ENV are reported on the
-/// terminal and in the deploy log, but do not stop the deploy; an invalid
+/// server override). Invalid values are reported on the terminal and in the
+/// deploy log, but do not stop the deploy; an invalid
 /// riku.toml or ENV file does.
 ///
 /// Every deploy, container apps included, tightens the env dir to `0700`

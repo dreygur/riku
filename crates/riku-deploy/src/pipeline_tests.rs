@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::deploy_container_app;
-use crate::containers::mock_state::{deploy, mock_server, DB_AND_WEB};
+use crate::containers::mock_state::{deploy, mock_server_with_domain, DB_AND_WEB};
 use crate::mock_engine::socket_refusing_engine;
 use crate::progress::DeployProgress;
 use crate::releases::ReleaseLog;
@@ -63,12 +63,7 @@ fn container_deploy_stops_first_when_the_engine_socket_is_refused() {
 #[test]
 fn container_prepare_failure_keeps_the_previous_release() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(
-        tmp.path(),
-        "myapp",
-        DB_AND_WEB,
-        "RIKU_DOMAINS=myapp.example.com\n",
-    );
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     let app_path = server.paths.app_root.join("myapp");
     std::fs::write(app_path.join("Procfile"), "release: echo migrate\n").unwrap();
     deploy(&server).unwrap();

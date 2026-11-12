@@ -96,15 +96,15 @@ RIKU_ROOT         riku root (~/.riku)
 
 ### Detection Order
 
-1. If `RIKU_RUNTIME=<name>` is set in the app ENV → use that plugin, skip detection
+1. If `runtime.name` is set in riku.toml or with `riku settings set` → use that plugin, skip detection
 2. Otherwise → run `detect` on all non-`riku-*` plugins sorted alphabetically; first exit 0 wins
 3. If no plugin matches, the deploy fails. When the app's files call for a
    shipped runtime that is not installed (`package.json` for node,
-   `requirements.txt` for python, and so on), or `RIKU_RUNTIME` names one, the
+   `requirements.txt` for python, and so on), or `runtime.name` names one, the
    error names it: `app 'myapp' needs the node plugin. Install it with: rk
    plugins install node (on the server: riku plugins install node), then push
    again.` Otherwise it says `No runtime plugin matched` and suggests
-   `RIKU_RUNTIME=<name>`.
+   setting `runtime.name`.
 
 ### Writing a Custom Runtime Plugin
 

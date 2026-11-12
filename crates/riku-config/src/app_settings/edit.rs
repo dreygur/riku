@@ -1,11 +1,8 @@
-//! Changing a server override and moving legacy ENV keys into one:
-//! `set`, `unset`, `get`, `entries`, `to_toml`, `from_env`.
-
-use std::collections::HashMap;
+//! Changing a server override: `set`, `unset`, `get`, `entries`, `to_toml`.
 
 use anyhow::{anyhow, Result};
 
-use super::keys::{self, EnvName, KEYS};
+use super::keys::{self, KEYS};
 use super::values::{self, Value};
 use super::{AppSettings, Source};
 
@@ -17,14 +14,6 @@ fn display(value: &Value) -> String {
         Value::Int(n) => n.to_string(),
         Value::Bool(b) => b.to_string(),
         Value::List(items) => items.join(","),
-    }
-}
-
-/// `text` checked as a server value of `key`, or `None` when it is not one.
-fn server_value(key: &keys::Key, text: &str) -> Option<Value> {
-    match values::parse_text(key, text) {
-        Some(raw) => values::check(key, &raw, Source::Server).ok(),
-        None => None,
     }
 }
 
@@ -108,34 +97,5 @@ impl AppSettings {
             Ok(text) => Ok(text),
             Err(e) => Err(anyhow!("failed to encode riku.toml: {e}")),
         }
-    }
-
-    /// Server settings for the table keys found in `env`, and the env keys
-    /// taken. A value that does not fit its key is left out. A runtime
-    /// version key is taken only when `RIKU_RUNTIME` names that runtime.
-    pub fn from_env(env: &HashMap<String, String>) -> (AppSettings, Vec<String>) {
-        let mut settings = AppSettings::default();
-        let mut moved = Vec::new();
-        for key in KEYS {
-            let name = match key.env {
-                EnvName::Fixed(name) => name,
-                EnvName::RuntimeVersion => continue,
-            };
-            let parsed = env.get(name).and_then(|text| server_value(key, text));
-            if let Some(value) = parsed {
-                settings.put(key, value);
-                moved.push(name.to_string());
-            }
-        }
-        if let (Some(runtime), Some(key)) = (settings.runtime_name(), keys::find("runtime.version"))
-        {
-            let name = keys::runtime_version_env(&runtime);
-            if let Some(value) = env.get(&name).and_then(|text| server_value(key, text)) {
-                settings.put(key, value);
-                moved.push(name);
-            }
-        }
-        moved.sort();
-        (settings, moved)
     }
 }

@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::Path;
 
 use super::*;
@@ -223,32 +222,6 @@ fn no_process_sections_means_none() {
         .unwrap()
         .processes()
         .is_none());
-}
-
-#[test]
-fn from_env_round_trips_table_keys_only() {
-    let mut env = HashMap::new();
-    env.insert(
-        "RIKU_DOMAINS".to_string(),
-        "a.example,b.example".to_string(),
-    );
-    env.insert("RIKU_WORKER_TIMEOUT".to_string(), "60".to_string());
-    env.insert("RIKU_RUNTIME".to_string(), "node".to_string());
-    env.insert("RIKU_NODE_VERSION".to_string(), "22".to_string());
-    env.insert("DATABASE_URL".to_string(), "postgres://x".to_string());
-
-    let (settings, moved) = AppSettings::from_env(&env);
-    let back = server(&settings.to_toml().unwrap()).unwrap().env();
-
-    assert_eq!(back.get("RIKU_DOMAINS"), env.get("RIKU_DOMAINS"));
-    assert_eq!(
-        back.get("RIKU_WORKER_TIMEOUT"),
-        env.get("RIKU_WORKER_TIMEOUT")
-    );
-    assert_eq!(back.get("RIKU_NODE_VERSION"), env.get("RIKU_NODE_VERSION"));
-    assert!(!back.contains_key("DATABASE_URL"));
-    assert!(!moved.contains(&"DATABASE_URL".to_string()));
-    assert_eq!(moved.len(), 4, "moved: {moved:?}");
 }
 
 #[test]

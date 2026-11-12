@@ -89,8 +89,8 @@ mod tests {
         let paths = RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
         std::fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
         std::fs::write(
-            paths.env_root.join("myapp").join("ENV"),
-            "RIKU_WATCH_SERVICES=web, worker\nOTHER=1\n",
+            paths.app_settings_override("myapp"),
+            "[containers]\nwatch_services = [\"web\", \"worker\"]\n",
         )
         .unwrap();
 

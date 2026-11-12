@@ -31,14 +31,17 @@ release = "node migrate.js"
 backup = "0 2 * * * ./scripts/backup.sh"
 ```
 
-An app without a `riku.toml` deploys as before, from its Procfile and ENV.
+An app without a `riku.toml` deploys from its Procfile and ENV with every
+setting at its default.
 
 ## Keys
 
-Keys are `section.name`. Each maps to the `RIKU_*` variable riku used to read
-from the app's ENV file.
+Keys are `section.name`. Each one reaches the app's processes as the `RIKU_*`
+env var in the last column. riku reads these settings only from `riku.toml`
+and the server override: the same `RIKU_*` name written into the app's ENV
+file is ignored.
 
-| Key | Type | Replaces |
+| Key | Type | Env var |
 | --- | --- | --- |
 | `routing.domains` | list of strings | `RIKU_DOMAINS` |
 | `routing.https_only` | bool | `RIKU_HTTPS_ONLY` |
@@ -102,7 +105,7 @@ set it, and `riku config set` refuses `RIKU_ISOLATION_ROOT` like every other
 key in the table above. The value must be an absolute path other than `/`,
 with no `..` part, made only of letters, digits and `. - _ /`. The
 supervisor refuses to start a sandboxed worker whose root breaks that rule
-(a `RIKU_ISOLATION_ROOT` left in an older ENV file included) or is not an
+or is not an
 existing directory. It starts the worker inside a `pivot_root` to
 that directory, which must hold everything the worker needs, with its own
 PID, mount and network namespaces. The network namespace leaves the worker
@@ -159,9 +162,7 @@ override may set every key but cannot declare processes.
 For each key, later wins:
 
 1. `riku.toml` in the app repo
-2. the same `RIKU_*` variable still in the app's ENV file (from older
-   versions; deploys warn about it)
-3. the server override (`riku settings`)
+2. the server override (`riku settings`)
 
-`riku config set` now refuses these `RIKU_*` keys and names the `riku
-settings` key to use instead.
+`riku config set` refuses these `RIKU_*` keys and names the `riku settings`
+key to use instead.

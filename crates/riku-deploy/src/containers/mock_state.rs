@@ -138,6 +138,18 @@ pub fn mock_server(root: &Path, app: &str, compose: &str, env: &str) -> MockServ
     MockServer { paths, state, log }
 }
 
+/// [`mock_server`] with no ENV and `domain` as the app's `routing.domains`
+/// in its server override.
+pub fn mock_server_with_domain(root: &Path, app: &str, compose: &str, domain: &str) -> MockServer {
+    let server = mock_server(root, app, compose, "");
+    fs::write(
+        server.paths.app_settings_override(app),
+        format!("[routing]\ndomains = [\"{domain}\"]\n"),
+    )
+    .unwrap();
+    server
+}
+
 pub fn myapp() -> AppName {
     AppName::try_from("myapp").unwrap()
 }

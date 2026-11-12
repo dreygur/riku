@@ -6,9 +6,13 @@
 //!
 //! ```text
 //!   <app_root>/<app>/riku.toml      repo file (from the checkout)
-//!   <env_root>/<app>/ENV            app env; table keys there are legacy
+//!   <env_root>/<app>/ENV            app env vars
 //!   <env_root>/<app>/riku.toml      server override (riku settings)
 //! ```
+//!
+//! riku reads its settings only from the two `riku.toml` files. An ENV line
+//! whose key is a settings table key (`RIKU_DOMAINS` and the like) is
+//! dropped, so it can neither set nor override a setting.
 //!
 //! Processes come from the repo `riku.toml` `[processes]`/`[cron]`, else the
 //! Procfile, never both. Readers that only need env call [`load_env`], so a
@@ -34,9 +38,6 @@ const CRON_KIND: &str = "cron";
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AppEnv {
     pub env: HashMap<String, String>,
-    /// Table keys still set in the ENV file; callers that log warn once that
-    /// `riku doctor --fix` moves them.
-    pub legacy_keys: Vec<String>,
 }
 
 fn settings_env(file: &Path, source: Source) -> Result<HashMap<String, String>> {
@@ -63,13 +64,11 @@ pub fn load_env(paths: &RikuPaths, app: &str) -> Result<AppEnv> {
         Ok(env) => env,
         Err(e) => return Err(e),
     };
-    let mut legacy_keys: Vec<String> = env_file
-        .keys()
-        .filter(|key| keys::is_table_env_key(key))
-        .cloned()
-        .collect();
-    legacy_keys.sort();
-    env.extend(env_file);
+    env.extend(
+        env_file
+            .into_iter()
+            .filter(|(key, _)| !keys::is_table_env_key(key)),
+    );
 
     match AppSettings::load(&paths.app_settings_override(app), Source::Server) {
         Ok(Some(server)) => {
@@ -81,7 +80,7 @@ pub fn load_env(paths: &RikuPaths, app: &str) -> Result<AppEnv> {
         Ok(None) => {}
         Err(e) => return Err(e),
     }
-    Ok(AppEnv { env, legacy_keys })
+    Ok(AppEnv { env })
 }
 
 fn procfile_path(paths: &RikuPaths, app: &str) -> PathBuf {

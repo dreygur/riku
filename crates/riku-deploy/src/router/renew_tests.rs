@@ -12,8 +12,8 @@ fn paths_with_app(app: &str) -> (tempfile::TempDir, RikuPaths) {
     fs::create_dir_all(paths.app_root.join(app)).unwrap();
     fs::create_dir_all(paths.env_root.join(app)).unwrap();
     fs::write(
-        paths.env_root.join(app).join("ENV"),
-        "RIKU_DOMAINS=myapp.example\n",
+        paths.app_settings_override(app),
+        "[routing]\ndomains = [\"myapp.example\"]\n",
     )
     .unwrap();
     (tmp, paths)

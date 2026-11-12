@@ -1,7 +1,9 @@
 use riku_container::types::CopyIndex;
 
 use super::*;
-use crate::containers::mock_state::{deploy, mock_server, myapp, DB_AND_WEB};
+use crate::containers::mock_state::{
+    deploy, mock_server, mock_server_with_domain, myapp, DB_AND_WEB,
+};
 use crate::containers::{destroy_containers, restart_copy, RestartOutcome};
 
 fn service(name: &str) -> ServiceName {
@@ -147,8 +149,7 @@ fn destroy_containers_refuses_when_deploy_in_progress() {
 #[test]
 fn restart_copy_clears_route_when_restart_fails() {
     let tmp = tempfile::tempdir().unwrap();
-    let env = "RIKU_DOMAINS=myapp.example.com\n";
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, env);
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     deploy(&server).unwrap();
     let site = server.site("myapp");
     assert!(

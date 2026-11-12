@@ -1,14 +1,14 @@
 use std::fs;
 
-use crate::containers::mock_state::{deploy, mock_server, DB_AND_WEB};
+use crate::containers::mock_state::{deploy, mock_server_with_domain, DB_AND_WEB};
 use crate::containers::mock_workers::procfile_workers;
 
-const ENV: &str = "RIKU_DOMAINS=myapp.example.com\n";
+const DOMAIN: &str = "myapp.example.com";
 
 #[test]
 fn switching_a_procfile_app_retires_its_workers() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
     let _workers = procfile_workers(&server);
 
     let outcome = deploy(&server);
@@ -47,7 +47,7 @@ fn switching_a_procfile_app_retires_its_workers() {
 #[test]
 fn switch_drops_procfile_kinds_compose_does_not_have_from_scaling() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
     let _workers = procfile_workers(&server);
     let scaling = server.paths.env_root.join("myapp").join("SCALING");
     fs::create_dir_all(scaling.parent().unwrap()).unwrap();
@@ -62,7 +62,7 @@ fn switch_drops_procfile_kinds_compose_does_not_have_from_scaling() {
 #[test]
 fn failed_rollout_keeps_procfile_workers() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
     let _workers = procfile_workers(&server);
     server.mark("exits", "web");
 

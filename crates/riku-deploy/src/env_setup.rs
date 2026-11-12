@@ -4,7 +4,16 @@ use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::fs;
 
+use crate::config::app_settings::keys::is_table_env_key;
 use crate::config::RikuPaths;
+
+/// Whether an ENV line sets a riku settings key. riku reads settings only
+/// from riku.toml, so such a line must not reach `LIVE_ENV`, where
+/// `riku run` would take its `RIKU_MAX_*` limits from it.
+fn names_a_setting(line: &str) -> bool {
+    line.split_once('=')
+        .is_some_and(|(key, _)| is_table_env_key(key.trim()))
+}
 
 /// Write `LIVE_ENV` file with resolved environment variables for the app.
 ///
@@ -36,7 +45,7 @@ pub fn write_live_env(app: &str, paths: &RikuPaths, env: &HashMap<String, String
         };
         for line in env_content.lines() {
             let line = line.trim();
-            if !line.is_empty() && !line.starts_with('#') {
+            if !line.is_empty() && !line.starts_with('#') && !names_a_setting(line) {
                 content.push_str(&format!("{}\n", line));
             }
         }

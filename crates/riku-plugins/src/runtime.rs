@@ -16,8 +16,8 @@
 //!
 //! ## Detection resolution
 //!
-//! 1. If `RIKU_RUNTIME=<name>` is set in the app ENV, that plugin is used directly
-//!    (error if not found).
+//! 1. If the app env has `RIKU_RUNTIME=<name>` (the `runtime.name` setting),
+//!    that plugin is used directly (error if not found).
 //! 2. Otherwise plugins sorted alphabetically are tried in order; first
 //!    `detect` exit-0 wins. If multiple match, first alphabetically wins.
 
