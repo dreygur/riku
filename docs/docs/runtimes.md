@@ -539,8 +539,9 @@ through their own `depends_on`) are started when none of their copies is
 up, so a migration can reach its database on a first deploy. A dependency
 that already runs is left alone for the release, and a service started for
 it is not replaced again by the same deploy. The release still runs before
-any routed copy is replaced. Its stdout and stderr print on the push output. A nonzero exit stops the
-deploy, and the last lines of output go to `riku logs <app> --deploy`.
+any routed copy is replaced. Its stdout and stderr print on the push
+output. A nonzero exit stops the deploy, and the last lines of output go
+to `riku logs <app> --deploy`.
 
 The app env (everything `riku config set` stores, minus `RIKU_*` keys,
 which configure riku itself) goes to a service when riku builds it (a
@@ -570,8 +571,9 @@ the app env, even when it runs in a pulled image.
 riku built for the app (`localhost/riku-<hash>`, one per `build` service),
 and keeps the volumes and pulled images such as `redis:7-alpine`, which
 other apps may use. An image the engine refuses to remove is a warning
-naming the `image rm` command to run by hand. When the engine does not answer, destroy refuses and removes
-nothing, since the containers would keep running with no app behind them.
+naming the `image rm` command to run by hand. When the engine does not
+answer, destroy refuses and removes nothing, since the containers would
+keep running with no app behind them.
 `riku destroy <app> --force` removes riku's files and route anyway and warns
 that the containers may still run.
 
@@ -627,9 +629,9 @@ riku ps myapp --scale web=3
 This grows or shrinks the service at once, without a rebuild, without
 restarting the copies it keeps and without touching any other service, then
 records the count in `SCALING` and prints what it did, such as
-`Started 1 copy of web, 3 running`. A later deploy keeps that count. New copies take
-the lowest free numbers; shrinking stops the highest numbers first, each
-taken off the router before it stops.
+`Started 1 copy of web, 3 running`. A later deploy keeps that count. New
+copies take the lowest free numbers; shrinking stops the highest numbers
+first, each taken off the router before it stops.
 
 One copy always works. More than one is refused, before anything changes,
 for a service that:
@@ -706,11 +708,11 @@ stopped sending it new requests by then.
 
 A service that mounts writable storage never scales and always stops first,
 since two copies must not write the same data. It is down on every deploy
-that changes it and every `riku restart` that includes it, from the moment the old copy
-stops until the new one is healthy: up to 120 seconds with a compose
-healthcheck. Services that depend on it with `service_healthy` wait for it.
-Use `riku restart <app> <service>` to restart only the services that need
-it.
+that changes it and every `riku restart` that includes it, from the moment
+the old copy stops until the new one is healthy: up to 120 seconds with a
+compose healthcheck. Services that depend on it with `service_healthy`
+wait for it. Use `riku restart <app> <service>` to restart only the
+services that need it.
 
 ### Restarting and stopping one service
 
@@ -733,10 +735,10 @@ according to its compose `restart` policy (`no` when unset; `unless-stopped`
 for the service riku makes from a Dockerfile), with a delay of 1, 2, 4 and so
 on up to 60 seconds between attempts, and not while a deploy of that app
 holds its lock. A copy that `riku stop` or a scale down removed is never
-started again by the supervisor, whatever its policy. A copy's restart count starts at 0 again when a
-deploy or `riku restart` replaces it. Each copy's output goes to
-`~/.riku/logs/<app>/<service>.<n>.log`, which `riku logs <app> <service>`
-follows.
+started again by the supervisor, whatever its policy. A copy's restart
+count starts at 0 again when a deploy or `riku restart` replaces it. Each
+copy's output goes to `~/.riku/logs/<app>/<service>.<n>.log`, which
+`riku logs <app> <service>` follows.
 
 ### Switching an app to containers
 
