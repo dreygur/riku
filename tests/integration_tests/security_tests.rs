@@ -183,75 +183,99 @@ mod tests {
 
     // --- ENV file security ---
 
+    /// The paths riku reads for app `testapp`, with `ENV` holding `content`.
+    fn app_with_env(tmp: &TempDir, content: &[u8]) -> riku::config::RikuPaths {
+        let paths = riku::config::RikuPaths::for_tests(tmp.path());
+        let env_dir = paths.env_root.join("testapp");
+        fs::create_dir_all(&env_dir).unwrap();
+        fs::write(env_dir.join("ENV"), content).unwrap();
+        paths
+    }
+
+    /// Shell syntax in an ENV value reaches the app as text: riku's reader
+    /// never runs it, and only `$VAR` and `${VAR}` of earlier lines expand.
     #[test]
-    fn test_env_file_with_special_characters() -> Result<()> {
-        let (_temp_dir, riku_root) = setup_riku_env()?;
+    fn test_env_file_with_special_characters() {
+        let tmp = TempDir::new().unwrap();
+        let paths = app_with_env(
+            &tmp,
+            b"SUB=$(touch pwned); echo `id` | sh\nQUOTED=\"a b\" 'c'\nEQ=a=b;c\nBASE=/srv\nPATHS=${BASE}/x:$BASE/y\n",
+        );
 
-        // Create an ENV file with potentially dangerous values
-        let env_dir = riku_root.join("envs").join("testapp");
-        fs::create_dir_all(&env_dir)?;
+        let env = riku::config::app_config::load_env(&paths, "testapp")
+            .expect("the ENV file parses")
+            .env;
 
-        let env_content = "PORT=8080\nHOST=localhost\nSAFE_KEY=normal_value\n";
-        fs::write(env_dir.join("ENV"), env_content)?;
-
-        // Verify the file was written correctly
-        let content = fs::read_to_string(env_dir.join("ENV"))?;
-        assert!(content.contains("PORT=8080"));
-        assert!(content.contains("SAFE_KEY=normal_value"));
-
-        Ok(())
+        let expected = [
+            ("SUB", "$(touch pwned); echo `id` | sh"),
+            ("QUOTED", "\"a b\" 'c'"),
+            ("EQ", "a=b;c"),
+            ("PATHS", "/srv/x:/srv/y"),
+        ];
+        for (key, value) in expected {
+            assert_eq!(env.get(key).map(String::as_str), Some(value), "{key}");
+        }
+        assert!(
+            !tmp.path().join("pwned").exists(),
+            "reading ENV ran a command"
+        );
     }
 
     #[test]
-    fn test_env_file_null_bytes_in_value() -> Result<()> {
-        let (_temp_dir, riku_root) = setup_riku_env()?;
+    fn test_env_file_null_bytes_in_value() {
+        let tmp = TempDir::new().unwrap();
+        let paths = app_with_env(&tmp, b"KEY=hello\x00world\x07\tend\n");
 
-        let env_dir = riku_root.join("envs").join("testapp");
-        fs::create_dir_all(&env_dir)?;
+        let env = riku::config::app_config::load_env(&paths, "testapp")
+            .expect("the ENV file parses")
+            .env;
 
-        // Write ENV with null bytes embedded
-        fs::write(env_dir.join("ENV"), b"KEY=hello\x00world\n")?;
-
-        // Read back and verify null bytes are present in raw file
-        let content = fs::read(env_dir.join("ENV"))?;
-        assert!(
-            content.contains(&0u8),
-            "Raw file should contain null byte for test validity"
+        assert_eq!(
+            env.get("KEY").map(String::as_str),
+            Some("helloworld\tend"),
+            "NUL and other control characters must be dropped, tab kept"
         );
-
-        Ok(())
     }
 
     // --- Symlink safety ---
 
+    /// An app's ACME certificate link that points outside riku's tree and
+    /// acme.sh's is unlinked by destroy, and its target is left alone.
     #[test]
-    fn test_symlink_cannot_escape_riku_root() -> Result<()> {
-        let (_temp_dir, riku_root) = setup_riku_env()?;
+    fn test_symlink_cannot_escape_riku_root() {
+        use std::os::unix::fs::PermissionsExt;
 
-        // Create a directory outside riku tree
-        let external_dir = _temp_dir.path().join("external_data");
-        fs::create_dir(&external_dir)?;
-        fs::write(external_dir.join("important.txt"), "do not delete")?;
+        let tmp = TempDir::new().unwrap();
+        let mut paths = riku::config::RikuPaths::for_tests(&tmp.path().join("server"));
+        fs::create_dir_all(paths.app_root.join("evilapp")).unwrap();
+        riku::config::router::save(&paths, &riku::config::router::Router::Caddy).unwrap();
+        paths.reload_programs.caddy = tmp.path().join("mock_caddy");
+        fs::write(&paths.reload_programs.caddy, "#!/bin/sh\nexit 0\n").unwrap();
+        fs::set_permissions(
+            &paths.reload_programs.caddy,
+            fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+        riku_route::serve_caddy_for_tests(&mut paths);
 
-        // Create a symlink inside acme-www pointing outside
-        let acme_link = riku_root.join("acme-www").join("evilapp");
-        std::os::unix::fs::symlink(&external_dir, &acme_link)?;
+        let external = tmp.path().join("external_data");
+        fs::create_dir(&external).unwrap();
+        fs::write(external.join("important.txt"), "do not delete").unwrap();
+        fs::create_dir_all(&paths.acme_cert_links).unwrap();
+        let link = paths.acme_cert_links.join("evilapp");
+        std::os::unix::fs::symlink(&external, &link).unwrap();
 
-        // Verify symlink exists
-        assert!(acme_link.exists());
+        riku::cli::apps::cmd_destroy(&paths, "evilapp", riku::cli::apps::DestroyMode::Safe)
+            .expect("destroy succeeds");
 
-        // Resolve the symlink and check it escapes riku root
-        let resolved = fs::canonicalize(&acme_link)?;
-        let riku_root_resolved = fs::canonicalize(&riku_root)?;
         assert!(
-            !resolved.starts_with(&riku_root_resolved),
-            "Symlink should point outside riku root for this test"
+            external.join("important.txt").exists(),
+            "destroy deleted a directory outside riku's tree through the link"
         );
-
-        // Verify external data is intact (nothing should have deleted it)
-        assert!(external_dir.join("important.txt").exists());
-
-        Ok(())
+        assert!(
+            fs::symlink_metadata(&link).is_err(),
+            "the link itself must go with the app"
+        );
     }
 
     // --- Nginx config security ---
@@ -350,30 +374,6 @@ mod tests {
                 "static location {location:?} rendered: {static_path:?}"
             );
         }
-    }
-
-    #[test]
-    fn test_nginx_template_injection_prevention() -> Result<()> {
-        // Test common nginx injection attempts
-        let injection_attempts = vec![
-            "example.com; proxy_pass http://evil.com;",
-            "example.com{server_name evil.com;}",
-            "example.com\nproxy_pass http://evil.com;",
-            "example.com`rm -rf /`",
-            "example.com$malicious_var",
-        ];
-
-        for attempt in injection_attempts {
-            // Each attempt contains at least one dangerous character
-            let dangerous_chars: &[char] = &[';', '{', '}', '\n', '\r', '`', '$', '\\'];
-            assert!(
-                attempt.chars().any(|c| dangerous_chars.contains(&c)),
-                "Injection attempt '{}' should contain dangerous chars",
-                attempt
-            );
-        }
-
-        Ok(())
     }
 
     // --- Worker config injection ---

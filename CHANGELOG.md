@@ -60,6 +60,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Four more security tests and three smoke tests checked nothing. The ENV
+  tests wrote a file and read it back; they now read it through riku's
+  app env loader and check that shell syntax stays literal text and that
+  NUL and other control characters are dropped. The symlink test made a
+  link and checked it pointed out; it now destroys an app whose ACME
+  certificate link points outside riku's tree and checks the target
+  survives. The nginx template injection test only checked its own
+  strings and is removed: `nginx_site_refuses_values_that_could_inject_a_directive`
+  renders those characters. The smoke script's Python, static and Go
+  tests only wrote sample apps and are removed with their app templates;
+  the static one used a `static:` Procfile kind riku no longer has.
 - The examples shipped `ENV` and `SCALING` files (`examples/`, `golang`,
   `nodejs-wisp`, `python-postgres`, `rust`), and the docs told users to
   commit a `SCALING` file and push. riku reads neither from the repo,

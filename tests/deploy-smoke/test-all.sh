@@ -73,65 +73,6 @@ EOF
 web: node server.js
 EOF
             ;;
-        python)
-            cat > requirements.txt <<'EOF'
-flask>=2.0.0
-EOF
-            cat > app.py <<'EOF'
-import os
-from flask import Flask
-app = Flask(__name__)
-port = int(os.environ.get('PORT', 5000))
-
-@app.route('/')
-def hello():
-    return f"Hello from Python on port {port}\n"
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=port)
-EOF
-            cat > Procfile <<'EOF'
-web: python app.py
-EOF
-            ;;
-        static)
-            mkdir -p public
-            cat > public/index.html <<'EOF'
-<!DOCTYPE html>
-<html>
-<head><title>Static Test</title></head>
-<body><h1>Hello from Static Site</h1></body>
-</html>
-EOF
-            cat > Procfile <<'EOF'
-static: .
-EOF
-            ;;
-        go)
-            cat > main.go <<'EOF'
-package main
-
-import (
-    "fmt"
-    "net/http"
-    "os"
-)
-
-func main() {
-    port := os.Getenv("PORT")
-    if port == "" {
-        port = "8080"
-    }
-    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        fmt.Fprintf(w, "Hello from Go on port %s\n", port)
-    })
-    http.ListenAndServe(":"+port, nil)
-}
-EOF
-            cat > Procfile <<'EOF'
-web: go run main.go
-EOF
-            ;;
     esac
     
     log_info "Created $runtime app: $app_dir"
@@ -248,9 +189,9 @@ create_riku_app() {
 
 # `riku ps APP --scale worker=2` must record the count and write a worker
 # config per copy. The app runs `sleep` through a stub runtime plugin, so no
-# toolchain is needed. Without a router helper the deploy then stops at the
-# Route step, after the worker configs are written, so its exit status is
-# not checked; `riku stop` cleans up either way.
+# toolchain is needed. No supervisor runs under the test root, so the
+# deploy's exit status after the worker configs are written is not checked;
+# `riku stop` cleans up either way.
 test_scaling() {
     local app="scale-app"
     local src="$TEST_DIR/$app-src"
@@ -306,20 +247,8 @@ run_tests() {
     create_test_app "node-app" "node"
     test_node_version "$TEST_DIR/node-app"
 
-    # Test 3: Python app
-    log_info "=== Test 3: Python App ==="
-    create_test_app "python-app" "python"
-
-    # Test 4: Static site
-    log_info "=== Test 4: Static Site ==="
-    create_test_app "static-app" "static"
-
-    # Test 5: Go app
-    log_info "=== Test 5: Go App ==="
-    create_test_app "go-app" "go"
-
-    # Test 6: Scaling, which does not depend on the runtime.
-    log_info "=== Test 6: Scaling ==="
+    # Test 3: Scaling, which does not depend on the runtime.
+    log_info "=== Test 3: Scaling ==="
     test_scaling
 
     # Summary
