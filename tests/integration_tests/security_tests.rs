@@ -323,12 +323,14 @@ mod tests {
 
         for ch in [';', '{', '}', '#', '\n', '\r', '`', '$', '\\', '"', '\''] {
             let value = format!("myapp.example.com{ch}return 200 pwned");
-            let domain = render_static_site(&[value.clone()], &[]);
+            let domain = render_static_site(std::slice::from_ref(&value), &[]);
             assert!(domain.is_err(), "domain {value:?} rendered: {domain:?}");
 
             let location = format!("/static{ch}return 200 pwned");
-            let static_path =
-                render_static_site(&["myapp.example.com".to_string()], &[location.clone()]);
+            let static_path = render_static_site(
+                &["myapp.example.com".to_string()],
+                std::slice::from_ref(&location),
+            );
             assert!(
                 static_path.is_err(),
                 "static location {location:?} rendered: {static_path:?}"
