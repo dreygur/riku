@@ -602,8 +602,10 @@ line each. A service without a line runs one copy.
 riku ps myapp --scale web=3
 ```
 
-This grows or shrinks the service without a rebuild and without restarting
-the copies it keeps, then records the count in `SCALING`. New copies take
+This grows or shrinks the service at once, without a rebuild, without
+restarting the copies it keeps and without touching any other service, then
+records the count in `SCALING` and prints what it did, such as
+`Started 1 copy of web, 3 running`. A later deploy keeps that count. New copies take
 the lowest free numbers; shrinking stops the highest numbers first, each
 taken off the router before it stops.
 

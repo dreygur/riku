@@ -18,7 +18,7 @@ use super::removal::{app_containers, remove_containers};
 use super::rollout::roll_out;
 use super::AppName;
 use crate::config::RikuPaths;
-use crate::rolling::scale_to;
+use crate::rolling::{scale_to, CopyRuntime};
 use crate::supervisor_ctl::notify_supervisor_reload;
 use crate::util::display;
 
@@ -162,8 +162,33 @@ pub fn stop_service(app: &AppName, paths: &RikuPaths, service: Option<&ServiceNa
     reclassify(&ctx.engine, stop_locked(&ctx, paths, service))
 }
 
+fn copies_of(n: usize) -> String {
+    if n == 1 {
+        "1 copy".to_string()
+    } else {
+        format!("{n} copies")
+    }
+}
+
+/// The line a scale prints: what it started or stopped, and how many copies
+/// run now.
+pub(super) fn scale_summary(service: &ServiceName, before: usize, after: usize) -> String {
+    match before.cmp(&after) {
+        std::cmp::Ordering::Less => format!(
+            "Started {} of {service}, {after} running",
+            copies_of(after - before)
+        ),
+        std::cmp::Ordering::Greater => format!(
+            "Stopped {} of {service}, {after} running",
+            copies_of(before - after)
+        ),
+        std::cmp::Ordering::Equal => format!("{service} already runs {}", copies_of(after)),
+    }
+}
+
 /// Grow or shrink `service` to `copies` without restarting the copies it
-/// keeps, and record the count in `SCALING` for later deploys.
+/// keeps or touching any other service, record the count in `SCALING` for
+/// later deploys, and print what it started or stopped.
 ///
 /// Refused before anything changes when the service cannot run that many
 /// copies, such as a storage service above 1.
@@ -185,13 +210,21 @@ pub fn scale_service(
         return Err(e);
     }
     let mut runtime = ctx.runtime(def);
+    let before = match runtime.live() {
+        Ok(live) => live.len(),
+        Err(e) => return Err(e.context(format!("service '{service}'"))),
+    };
     let mut routes = ctx.routes(service);
     let scaled = scale_to(&mut runtime, &mut routes, copies);
     notify_supervisor_reload(paths);
     if let Err(e) = scaled {
         return Err(e.context(format!("service '{service}'")));
     }
-    write_scaling(app.as_str(), paths, service, copies)
+    if let Err(e) = write_scaling(app.as_str(), paths, service, copies) {
+        return Err(e);
+    }
+    display::step_done(&scale_summary(service, before, copies as usize), "");
+    Ok(())
 }
 
 #[cfg(test)]

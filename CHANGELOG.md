@@ -114,6 +114,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lines (`Step 2/4 : WORKDIR /app`) between the rail lines. Build and pull
   output now goes on the rail (`│  ...`) like runtime plugin build output,
   stderr included, and its last lines reach the deploy log on a failure.
+- `riku ps <app> --scale worker=2` on a container app printed only
+  `Scaling 'worker' to 2`, so it was unclear whether anything started. It
+  did start or stop the copies; it now also says so, for example
+  `Started 1 copy of worker, 2 running`.
 - `riku ps <app> --scale web=2` for a kind `SCALING` did not list yet (an
   app whose first deploy failed) started 3 copies: the count was added to
   the default of one. A kind missing from `SCALING` now starts from 0.
