@@ -26,10 +26,9 @@ pub(crate) fn copy_source(checkout: &Path, source: &str, dest: &Path) -> Result<
     let path = checkout.join(source);
     if let Err(e) = path.symlink_metadata() {
         if e.kind() == ErrorKind::NotFound {
-            crate::util::echo(
-                &format!("-----> Static directory '{source}' not found, serving it empty"),
-                "yellow",
-            );
+            crate::util::display::warn(&format!(
+                "Static directory '{source}' not found, serving it empty"
+            ));
             return make_dir(dest);
         }
         return Err(anyhow!("cannot inspect {}: {e}", path.display()));

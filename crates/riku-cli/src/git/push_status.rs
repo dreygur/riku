@@ -16,7 +16,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::Path;
 
-use crate::util::echo;
+use crate::util::display;
 
 /// Names the status file of the push a hook runs for.
 pub(crate) const STATUS_ENV: &str = "RIKU_PUSH_STATUS_FILE";
@@ -37,10 +37,9 @@ pub(crate) fn record_deploy_failure(err: &anyhow::Error) {
         None => return,
     };
     if let Err(e) = write_failure(Path::new(&status_file), err) {
-        echo(
-            &format!("cannot report the failed deploy to the push, it may exit 0: {e}"),
-            "yellow",
-        );
+        display::warn(&format!(
+            "cannot report the failed deploy to the push, it may exit 0: {e}"
+        ));
     }
 }
 

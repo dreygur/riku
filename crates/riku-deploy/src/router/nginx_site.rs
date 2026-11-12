@@ -23,7 +23,7 @@ use super::routing_state::TlsState;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::backend::Backend;
-use crate::util::echo;
+use crate::util::display;
 use crate::util::flag::https_only;
 
 /// The backend a check renders with: the route gate never connects to it.
@@ -174,10 +174,9 @@ pub(super) fn apply_nginx_site(
         }
         if let Some(domain) = fallback_domain {
             if fallback_certificate(app, domain, paths) != TlsState::Issued {
-                echo(
-                    &format!("-----> HTTPS for {domain} is not available yet; the app answers on plain HTTP"),
-                    "yellow",
-                );
+                display::warn(&format!(
+                    "HTTPS for {domain} is not available yet; the app answers on plain HTTP"
+                ));
                 return Ok(());
             }
         }

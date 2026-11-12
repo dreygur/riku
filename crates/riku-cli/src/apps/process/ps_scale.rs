@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::apps::control_target::{control_target, ControlTarget};
 use crate::config::RikuPaths;
 use crate::deploy::containers::{scale_service, AppName, ServiceName};
-use crate::util::{echo, exit_if_invalid, parse_settings};
+use crate::util::{display, exit_if_invalid, parse_settings};
 
 #[allow(clippy::question_mark)]
 fn service_count(setting: &str) -> Result<(ServiceName, u32)> {
@@ -38,7 +38,7 @@ fn scale_containers(paths: &RikuPaths, app: &AppName, settings: &[String]) -> Re
         Err(e) => return Err(e),
     };
     for (service, copies) in &wanted {
-        echo(&format!("-----> Scaling '{service}' to {copies}"), "green");
+        display::step_done(&format!("Scaling '{service}' to {copies}"), "");
         if let Err(e) = scale_service(app, paths, service, *copies) {
             return Err(e);
         }
@@ -64,7 +64,7 @@ fn scale_procfile(paths: &RikuPaths, app: &str, settings: &[String]) -> Result<(
             match v_str.parse::<i64>() {
                 Ok(c) => {
                     if c < 0 {
-                        echo(&format!("cannot scale type '{}' below 0", k), "red");
+                        display::error(&format!("cannot scale type '{}' below 0", k));
                         return Ok(());
                     }
                     if let Some(current) = worker_count.get(&k) {
@@ -73,25 +73,25 @@ fn scale_procfile(paths: &RikuPaths, app: &str, settings: &[String]) -> Result<(
                                 deltas.insert(k, c - current_val);
                             }
                             Err(_) => {
-                                echo(&format!("malformed setting '{}'", s), "red");
+                                display::error(&format!("malformed setting '{}'", s));
                                 return Ok(());
                             }
                         }
                     } else {
-                        echo(
+                        display::step_done(
                             &format!("Adding new worker type '{}' with count {}", k, c),
-                            "green",
+                            "",
                         );
                         deltas.insert(k, c);
                     }
                 }
                 Err(_) => {
-                    echo(&format!("malformed setting '{}'", s), "red");
+                    display::error(&format!("malformed setting '{}'", s));
                     return Ok(());
                 }
             }
         } else {
-            echo(&format!("malformed setting '{}'", s), "red");
+            display::error(&format!("malformed setting '{}'", s));
             return Ok(());
         }
     }

@@ -19,7 +19,7 @@ use riku_container::types::{labels, ContainerName, CopyIndex};
 
 use super::context::ContainerApp;
 use super::copy_spec;
-use crate::util::{echo, parse_procfile};
+use crate::util::{display, parse_procfile};
 
 /// The routed service, or else the first service riku builds.
 fn release_service<'a>(ctx: &'a ContainerApp<'a>) -> Result<&'a ServiceDef> {
@@ -147,6 +147,6 @@ pub(super) fn run_release(ctx: &ContainerApp) -> Result<()> {
             spec.network.as_str()
         ));
     }
-    echo("-----> Running release command", "green");
+    display::step_done("Running release command", "");
     run_to_exit(ctx, &spec)
 }

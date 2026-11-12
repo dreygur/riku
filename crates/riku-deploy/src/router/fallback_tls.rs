@@ -9,7 +9,7 @@ use anyhow::Result;
 
 use crate::config::RikuPaths;
 use crate::router::routing_state::{with_routing_lock, Entry, RoutingState, TlsState};
-use crate::util::echo;
+use crate::util::display;
 
 const RETRY_AFTER_SECS: u64 = 3600;
 const PAIR_SUFFIXES: [&str; 3] = ["key", "crt", "fullchain.crt"];
@@ -69,10 +69,7 @@ pub(super) fn fallback_certificate_with(
         Ok(true) => TlsState::Issued,
         Ok(false) => TlsState::FailedAt(at),
         Err(e) => {
-            echo(
-                &format!("-----> Certificate for {domain} failed: {e:#}"),
-                "yellow",
-            );
+            display::warn(&format!("Certificate for {domain} failed: {e:#}"));
             TlsState::FailedAt(at)
         }
     };

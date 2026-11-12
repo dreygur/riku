@@ -16,7 +16,7 @@ use super::context::saved_env;
 use super::engine_open::open_engine;
 use super::AppName;
 use crate::config::RikuPaths;
-use crate::util::echo;
+use crate::util::display;
 
 /// The service's own stop grace, or the default for a container whose
 /// service is no longer in `project` (or when there is no project).
@@ -76,13 +76,10 @@ pub(crate) fn remove_dropped(engine: &Engine, app: &str, project: &ComposeProjec
     if dropped.is_empty() {
         return Ok(());
     }
-    echo(
-        &format!(
-            "-----> Removing {} containers of services no longer in the compose file",
-            dropped.len()
-        ),
-        "yellow",
-    );
+    display::warn(&format!(
+        "Removing {} containers of services no longer in the compose file",
+        dropped.len()
+    ));
     remove_containers(engine, Some(project), &dropped)
 }
 
@@ -116,13 +113,13 @@ pub fn destroy_containers(app: &AppName, paths: &RikuPaths) -> Result<()> {
     if let Err(e) = engine.remove_network(network.as_str()) {
         return Err(anyhow!("cannot remove network {}: {e}", network.as_str()));
     }
-    echo(
+    display::step_done(
         &format!(
             "Removed {} containers and network {} of '{app}'. Volumes are kept.",
             containers.len(),
             network.as_str()
         ),
-        "green",
+        "",
     );
     Ok(())
 }

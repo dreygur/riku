@@ -56,11 +56,8 @@ pub fn warn_about_app_nginx_configs(app: &str, app_path: &Path) {
             continue;
         }
         tracing::warn!("app '{app}' ships {name}, which riku ignores");
-        crate::util::echo(
-            &format!(
-                "-----> Ignoring {name}: custom nginx configs are not supported, using the generated config"
-            ),
-            "yellow",
-        );
+        crate::util::display::warn(&format!(
+            "Ignoring {name}: custom nginx configs are not supported, using the generated config"
+        ));
     }
 }

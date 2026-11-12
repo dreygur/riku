@@ -19,8 +19,8 @@ use anyhow::{anyhow, Result};
 use nix::unistd::Group;
 
 use crate::config::{SOCKET_GROUP, SOCKET_ROOT};
+use crate::util::display;
 use crate::util::socket_dir::{self, SOCKET_DIR_MODE};
-use crate::util::{display, echo};
 
 use super::caddy_host::run;
 use super::deploy_user::DeployUser;
@@ -96,14 +96,11 @@ fn keep_after_reboot(user: &str) -> Result<()> {
     if has_tmpfiles() {
         return write_tmpfiles_entry(&tmpfiles_line(user));
     }
-    echo(
-        &format!(
-            "systemd-tmpfiles not found, so {SOCKET_ROOT} is gone after a reboot. \
+    display::warn(&format!(
+        "systemd-tmpfiles not found, so {SOCKET_ROOT} is gone after a reboot. \
              The supervisor recreates it only if it can write /run; otherwise re-run \
              sudo riku init after each boot"
-        ),
-        "yellow",
-    );
+    ));
     Ok(())
 }
 

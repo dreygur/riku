@@ -12,7 +12,7 @@ use std::process::Command;
 use tempfile::NamedTempFile;
 
 use crate::config::RikuPaths;
-use crate::util::echo;
+use crate::util::display;
 use crate::util::validation::{validate_app_name, REPO_SUFFIX};
 
 use super::push_status::{deploy_result, DeployResult, STATUS_ENV};
@@ -91,7 +91,7 @@ pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
             .status();
         match status {
             Ok(status) if status.success() => {}
-            Ok(_) => echo("git init failed.", "red"),
+            Ok(_) => display::error("git init failed."),
             Err(e) => return Err(anyhow!("cannot run git init: {e}")),
         }
     }
@@ -118,7 +118,7 @@ pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
     let (code, message) = push_outcome(status.code(), status_file.path());
     drop(status_file);
     if let Some(message) = message {
-        echo(&message, "red");
+        display::error(&message);
     }
     std::process::exit(code);
 }

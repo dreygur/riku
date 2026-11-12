@@ -9,7 +9,7 @@ use std::path::Path;
 
 use crate::config::RikuPaths;
 use crate::supervisor_pid;
-use crate::util::{echo, ROOT_BINARY};
+use crate::util::{display, ROOT_BINARY};
 
 /// Whether some process holds the lock on `supervisor.pid`. A running
 /// supervisor keeps an exclusive `flock` on it for its whole life (see
@@ -134,10 +134,7 @@ pub(crate) fn read_app_env(app: &str, paths: &RikuPaths) -> Result<HashMap<Strin
 /// not be started.
 pub(crate) fn start_supervisor(paths: &RikuPaths) {
     if !ensure_supervisor_running(paths) {
-        echo(
-            "Could not start the supervisor. Run 'riku supervisor' manually.",
-            "yellow",
-        );
+        display::warn("Could not start the supervisor. Run 'riku supervisor' manually.");
     }
 }
 

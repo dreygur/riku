@@ -5,7 +5,7 @@ use std::fs;
 use anyhow::Result;
 
 use crate::config::RikuPaths;
-use crate::util::echo;
+use crate::util::display;
 
 #[allow(clippy::question_mark)]
 pub(super) fn show_desired_scale_verbose(paths: &RikuPaths, app: &str) -> Result<()> {
@@ -40,10 +40,7 @@ pub(super) fn show_desired_scale_verbose(paths: &RikuPaths, app: &str) -> Result
         }
     }
 
-    echo(
-        &format!("No processes configured for app '{app}'."),
-        "yellow",
-    );
+    display::warn(&format!("No processes configured for app '{app}'."));
     Ok(())
 }
 
@@ -80,9 +77,6 @@ pub(super) fn show_scaling_compact(paths: &RikuPaths, app: &str) -> Result<()> {
         }
     }
 
-    echo(
-        &format!("No running processes found for app '{app}'."),
-        "yellow",
-    );
+    display::warn(&format!("No running processes found for app '{app}'."));
     Ok(())
 }

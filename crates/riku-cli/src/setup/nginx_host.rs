@@ -22,7 +22,7 @@ use anyhow::{anyhow, Result};
 
 use crate::config::{NginxHostPaths, RikuPaths, CERT_ROOT, NGINX_SITE_ROOT};
 use crate::nginx::{include_file_contents, needs_catch_all, write_include_file};
-use crate::util::echo;
+use crate::util::display;
 
 use super::deploy_user::DeployUser;
 use super::nginx_worker::grant_nginx_sockets;
@@ -47,10 +47,7 @@ fn wants_catch_all(paths: &RikuPaths) -> bool {
             &paths.nginx_include_file,
         ),
         _ => {
-            echo(
-                "nginx -T failed, so no catch-all server was added for unknown hosts",
-                "yellow",
-            );
+            display::warn("nginx -T failed, so no catch-all server was added for unknown hosts");
             false
         }
     }
@@ -152,7 +149,7 @@ pub fn setup_nginx_host(user: &DeployUser) -> Result<()> {
         ));
     };
     if !dir.is_dir() {
-        echo(&missing_dir_warning(&paths, dir), "yellow");
+        display::warn(&missing_dir_warning(&paths, dir));
         return Ok(());
     }
     if let Err(e) = check_write_dir(dir, ROOT_UID) {

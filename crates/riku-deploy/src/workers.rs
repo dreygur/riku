@@ -13,7 +13,7 @@ use std::path::Path;
 
 use crate::config::RikuPaths;
 use crate::rolling::RouteSink;
-use crate::util::echo;
+use crate::util::display;
 
 pub(crate) use super::scaling::apply_scaling_deltas;
 
@@ -117,10 +117,7 @@ pub(crate) fn create_workers_probed(
     let plan = match plan {
         Some(plan) => plan,
         None => {
-            echo(
-                "-----> No processes declared, skipping process creation",
-                "yellow",
-            );
+            display::warn("No processes declared, skipping process creation");
             return Ok(());
         }
     };

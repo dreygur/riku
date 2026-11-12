@@ -6,7 +6,7 @@ use super::control_target::{control_target, ControlTarget};
 use super::destroy::DestroyMode;
 use crate::config::RikuPaths;
 use crate::deploy::containers::{destroy_containers, EngineUnreachable};
-use crate::util::echo;
+use crate::util::display;
 
 /// Stop and remove a container app's copies and network while its compose
 /// file can still be read. Unlike plugin cleanup, a failure stops destroy:
@@ -37,10 +37,9 @@ pub(super) fn container_cleanup(paths: &RikuPaths, app: &str, mode: DestroyMode)
              use --force to remove riku's files anyway"
         ))),
         DestroyMode::Force => {
-            echo(
-                &format!("Containers of '{app}' may still be running, remove them by hand"),
-                "yellow",
-            );
+            display::warn(&format!(
+                "Containers of '{app}' may still be running, remove them by hand"
+            ));
             Ok(())
         }
     }

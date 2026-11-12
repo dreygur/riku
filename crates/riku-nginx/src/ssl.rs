@@ -29,7 +29,7 @@ fn generate_self_signed_certificate(
     key_path: &std::path::Path,
     crt_path: &std::path::Path,
 ) -> Result<bool> {
-    crate::util::echo("-----> Generating self-signed SSL certificate", "yellow");
+    crate::util::display::warn("Generating self-signed SSL certificate");
 
     let subject = format!(
         "/C=US/ST=NA/L=NA/O=Riku/OU=Self-Signed/CN={}",
@@ -56,9 +56,9 @@ fn generate_self_signed_certificate(
 
     match result {
         Ok(output) if output.status.success() => {
-            crate::util::echo(
-                &format!("-----> Generated self-signed certificate for '{}'", app),
-                "green",
+            crate::util::display::step_done(
+                &format!("Generated self-signed certificate for '{}'", app),
+                "",
             );
             Ok(true)
         }

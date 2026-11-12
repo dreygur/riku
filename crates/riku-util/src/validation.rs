@@ -12,7 +12,7 @@ use std::fs;
 use std::path::Path;
 use std::process;
 
-use super::display::echo;
+use super::display;
 
 /// Verify that a resolved (canonicalized) path stays within an expected root directory.
 /// Returns Ok(()) if the path is within bounds, Err otherwise.
@@ -101,31 +101,27 @@ pub fn existing_app(app: &str, app_root: &Path) -> Result<String> {
 pub fn exit_if_invalid(app: &str, app_root: &Path) -> Result<String> {
     let app = sanitize_app_name(app);
     if app.is_empty() {
-        echo(&format!("invalid app name '{}'.", app), "red");
-        echo(
+        display::error(&format!("invalid app name '{}'.", app));
+        display::warn(
             "App names must contain only alphanumeric characters, dots, underscores, and hyphens.",
-            "yellow",
         );
-        echo(
-            "Path traversal sequences (..) and a trailing .git are not allowed.",
-            "yellow",
-        );
+        display::warn("Path traversal sequences (..) and a trailing .git are not allowed.");
         process::exit(1);
     }
     if !app_root.join(&app).exists() {
-        echo(&format!("app '{}' not found.", app), "red");
-        echo("", "");
-        echo("To deploy a new app:", "yellow");
-        echo("  Option 1: Create app and push via git", "yellow");
-        echo("    riku apps create myapp", "yellow");
-        echo("    git remote add riku riku@server:myapp", "yellow");
-        echo("    git push riku main", "yellow");
-        echo("", "");
-        echo("  Option 2: Deploy from local folder", "yellow");
-        echo("    riku deploy myapp --from ./path/to/app", "yellow");
-        echo("", "");
-        echo("Or list existing apps:", "yellow");
-        echo("  riku apps", "yellow");
+        display::error(&format!("app '{}' not found.", app));
+        display::detail("");
+        display::warn("To deploy a new app:");
+        display::detail_err("  Option 1: Create app and push via git");
+        display::detail_err("    riku apps create myapp");
+        display::detail_err("    git remote add riku riku@server:myapp");
+        display::detail_err("    git push riku main");
+        display::detail("");
+        display::detail_err("  Option 2: Deploy from local folder");
+        display::detail_err("    riku deploy myapp --from ./path/to/app");
+        display::detail("");
+        display::warn("Or list existing apps:");
+        display::detail_err("  riku apps");
         process::exit(1);
     }
     Ok(app)

@@ -7,7 +7,7 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::config::RikuPaths;
-use crate::util::{echo, ROOT_BINARY};
+use crate::util::{display, ROOT_BINARY};
 
 /// The post-receive hook every repo gets. It runs [`ROOT_BINARY`] and never
 /// searches `PATH` or the home directory. The app is the repo directory
@@ -52,7 +52,9 @@ pub fn ensure_repo_symlink(paths: &RikuPaths, app: &str) -> Result<()> {
                     }
                 }
                 // Remove the old symlink
-                fs::remove_file(&riku_repo)?;
+                if let Err(e) = fs::remove_file(&riku_repo) {
+                    return Err(remove_failed(&riku_repo, e));
+                }
             } else if meta.file_type().is_dir() {
                 // Refuse to remove a real directory: that would destroy data.
                 return Err(anyhow::anyhow!(
@@ -61,18 +63,26 @@ pub fn ensure_repo_symlink(paths: &RikuPaths, app: &str) -> Result<()> {
                 ));
             } else {
                 // Regular file at the repo path: remove it.
-                fs::remove_file(&riku_repo)?;
+                if let Err(e) = fs::remove_file(&riku_repo) {
+                    return Err(remove_failed(&riku_repo, e));
+                }
             }
         }
         // Create symlink: ~/.riku/repos/app.git → ~/app.git
-        std::os::unix::fs::symlink(&user_repo, &riku_repo)?;
-        echo(
+        if let Err(e) = std::os::unix::fs::symlink(&user_repo, &riku_repo) {
+            return Err(anyhow::anyhow!(
+                "cannot link {} to {}: {e}",
+                riku_repo.display(),
+                user_repo.display()
+            ));
+        }
+        display::step_done(
             &format!(
                 "Symlinked {} → {}",
                 riku_repo.display(),
                 user_repo.display()
             ),
-            "green",
+            "",
         );
     }
     // If user repo doesn't exist, riku will create it at ~/.riku/repos/app.git
@@ -80,18 +90,34 @@ pub fn ensure_repo_symlink(paths: &RikuPaths, app: &str) -> Result<()> {
     Ok(())
 }
 
+fn remove_failed(path: &Path, e: std::io::Error) -> anyhow::Error {
+    anyhow::anyhow!("cannot remove {}: {e}", path.display())
+}
+
 /// Set up post-receive hook in a bare repo for auto-deploy.
 pub fn setup_post_receive_hook(repo_path: &Path, _app: &str) -> Result<()> {
     let hooks_dir = repo_path.join("hooks");
-    fs::create_dir_all(&hooks_dir)?;
+    if let Err(e) = fs::create_dir_all(&hooks_dir) {
+        return Err(anyhow::anyhow!(
+            "cannot create {}: {e}",
+            hooks_dir.display()
+        ));
+    }
 
     let hook_path = hooks_dir.join("post-receive");
-    fs::write(&hook_path, post_receive_hook())?;
-    fs::set_permissions(&hook_path, PermissionsExt::from_mode(0o755))?;
+    if let Err(e) = fs::write(&hook_path, post_receive_hook()) {
+        return Err(anyhow::anyhow!("cannot write {}: {e}", hook_path.display()));
+    }
+    if let Err(e) = fs::set_permissions(&hook_path, PermissionsExt::from_mode(0o755)) {
+        return Err(anyhow::anyhow!(
+            "cannot make {} executable: {e}",
+            hook_path.display()
+        ));
+    }
 
-    echo(
+    display::step_done(
         &format!("Created post-receive hook in {}", repo_path.display()),
-        "green",
+        "",
     );
     Ok(())
 }
@@ -159,7 +185,7 @@ pub fn extract_bare_repo_to_app(bare_repo: &Path, app: &str, paths: &RikuPaths) 
         (_, Err(e)) => return Err(anyhow::anyhow!("tar failed to run: {e}")),
     }
 
-    echo("Extracted files from bare repo", "green");
+    display::step_done("Extracted files from bare repo", "");
     Ok(())
 }
 

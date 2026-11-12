@@ -10,7 +10,7 @@ use super::app::wanted;
 use super::context::ContainerApp;
 use crate::rolling::health::{wait_healthy, HealthTarget};
 use crate::rolling::{replace_all, CopyHandle, CopyRuntime};
-use crate::util::echo;
+use crate::util::display;
 
 fn copies_word(n: u32) -> &'static str {
     if n == 1 {
@@ -72,13 +72,9 @@ fn wait_for_dependencies(ctx: &ContainerApp, service: &ServiceDef) -> Result<()>
 }
 
 fn roll_service(ctx: &ContainerApp, service: &ServiceDef, want: u32) -> Result<()> {
-    echo(
-        &format!(
-            "-----> Starting {} ({want} {})",
-            service.name,
-            copies_word(want)
-        ),
-        "green",
+    display::step_done(
+        &format!("Starting {} ({want} {})", service.name, copies_word(want)),
+        "",
     );
     let mut runtime = ctx.runtime(service);
     let mut routes = ctx.routes(&service.name);

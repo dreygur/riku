@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use super::display::echo;
+use super::display;
 use super::process_util::validate_node_version;
 
 /// Validate environment variables and return warnings/errors.
@@ -30,7 +30,7 @@ pub fn validate_env_vars(env: &HashMap<String, String>) -> Vec<String> {
 /// Print environment variable validation warnings.
 pub fn print_env_warnings(warnings: &[String]) {
     for warning in warnings {
-        echo(warning, "yellow");
+        display::warn(warning);
     }
 }
 

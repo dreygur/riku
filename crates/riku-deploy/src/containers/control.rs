@@ -20,7 +20,7 @@ use super::AppName;
 use crate::config::RikuPaths;
 use crate::rolling::scale_to;
 use crate::supervisor_ctl::notify_supervisor_reload;
-use crate::util::echo;
+use crate::util::display;
 
 /// Whether the deployed app `app` runs as riku containers.
 pub fn runs_containers(app: &str, paths: &RikuPaths) -> Result<bool> {
@@ -141,9 +141,9 @@ fn stop_locked(ctx: &ContainerApp, paths: &RikuPaths, service: Option<&ServiceNa
     if let Err(e) = remove_containers(&ctx.engine, Some(&ctx.project), &targets) {
         return Err(e);
     }
-    echo(
-        &format!("-----> Stopped {} containers of '{app}'", targets.len()),
-        "green",
+    display::step_done(
+        &format!("Stopped {} containers of '{app}'", targets.len()),
+        "",
     );
     Ok(())
 }
