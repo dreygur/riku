@@ -34,10 +34,11 @@ fn nginx_include_fails_until_installed() {
 }
 
 #[test]
-fn unreadable_router_file_fails() {
+fn invalid_settings_file_fails_the_router_check() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());
-    fs::create_dir_all(&paths.router_file).unwrap();
+    fs::create_dir_all(&paths.riku_root).unwrap();
+    fs::write(&paths.settings_file, "[router]\nnmae = \"caddy\"\n").unwrap();
 
     let checks = router(&paths);
     assert_eq!(checks.len(), 1);

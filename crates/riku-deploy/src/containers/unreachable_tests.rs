@@ -14,11 +14,8 @@ fn service(name: &str) -> ServiceName {
 fn server_without_engine() -> (tempfile::TempDir, MockServer) {
     let tmp = tempfile::tempdir().unwrap();
     let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
-    fs::write(
-        &server.paths.container_engine_file,
-        tmp.path().join("no-such-engine").display().to_string(),
-    )
-    .unwrap();
+    let engine = tmp.path().join("no-such-engine").display().to_string();
+    crate::config::settings::save_key(&server.paths, "engine", "program", Some(&engine)).unwrap();
     (tmp, server)
 }
 

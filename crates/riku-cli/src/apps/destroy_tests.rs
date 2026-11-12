@@ -98,11 +98,8 @@ fn container_app_without_engine(root: &Path) -> RikuPaths {
     fs::create_dir_all(paths.env_root.join("shop")).unwrap();
     fs::write(paths.env_root.join("shop").join("ENV"), "").unwrap();
     fs::create_dir_all(&paths.riku_root).unwrap();
-    fs::write(
-        &paths.container_engine_file,
-        root.join("no-such-engine").display().to_string(),
-    )
-    .unwrap();
+    let engine = root.join("no-such-engine").display().to_string();
+    crate::config::settings::save_key(&paths, "engine", "program", Some(&engine)).unwrap();
     paths
 }
 

@@ -45,7 +45,13 @@ fn container_deploy_stops_first_when_the_engine_socket_is_refused() {
         assert!(out.status.success(), "git {args:?}: {out:?}");
     }
     let engine = socket_refusing_engine(tmp.path());
-    std::fs::write(&paths.container_engine_file, engine.display().to_string()).unwrap();
+    crate::config::settings::save_key(
+        &paths,
+        "engine",
+        "program",
+        Some(&engine.display().to_string()),
+    )
+    .unwrap();
 
     let err = crate::do_deploy("shop", &paths, &HashMap::new(), None).unwrap_err();
 

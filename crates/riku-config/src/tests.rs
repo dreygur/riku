@@ -92,8 +92,7 @@ fn root_dirs_reject_relative_or_climbing_paths() {
 
 #[test]
 fn nginx_host_paths_default_to_the_system_nginx_directories() {
-    let p = NginxHostPaths::resolve(None, None);
-    assert_eq!(p.sites_enabled, Path::new(DEFAULT_NGINX_SITES_ENABLED));
+    let p = NginxHostPaths::resolve(None);
     assert_eq!(
         p.include_file,
         Path::new("/etc/nginx/conf.d/riku.conf"),
@@ -105,10 +104,9 @@ fn nginx_host_paths_default_to_the_system_nginx_directories() {
 #[test]
 fn for_tests_keeps_nginx_host_paths_inside_the_test_root() {
     let p = RikuPaths::for_tests(Path::new("/tmp/riku-case"));
-    for path in [&p.nginx_sites_enabled, &p.nginx_include_file] {
-        assert!(
-            path.starts_with("/tmp/riku-case"),
-            "a test must never touch the machine's real nginx: {path:?}"
-        );
-    }
+    assert!(
+        p.nginx_include_file.starts_with("/tmp/riku-case"),
+        "a test must never touch the machine's real nginx: {:?}",
+        p.nginx_include_file
+    );
 }

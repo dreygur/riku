@@ -71,7 +71,10 @@ fn set_refuses_a_key_that_does_not_match_and_writes_nothing() {
 fn set_reports_domains_the_certificate_does_not_cover_but_still_installs() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = paths_with_app(&tmp);
-    set_domains(&paths, &["edge.example", "www.shop.example", "other.example"]);
+    set_domains(
+        &paths,
+        &["edge.example", "www.shop.example", "other.example"],
+    );
 
     let outcome =
         install_bundle(&paths, "myapp", &bundle(VALID_CERT, VALID_KEY), |_| Ok(())).unwrap();

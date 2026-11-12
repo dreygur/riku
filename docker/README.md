@@ -9,7 +9,7 @@ locally.
 
 ## Invariants
 - [test-entrypoint.sh] Runs under `set -euo pipefail`
-- [test-entrypoint.sh] Each case gets its own temp `RIKU_ROOT`, with `RIKU_NGINX_SITES_ENABLED` pointed inside it. nginx sites are the helper's, in `/etc/riku/nginx`, and each case destroys or leaves its own app
+- [test-entrypoint.sh] Each case gets its own temp `RIKU_ROOT`. nginx sites are the helper's, in `/etc/riku/nginx`, and each case destroys or leaves its own app
 
 ## Verification
 - Run: `docker build -f docker/Dockerfile.test -t riku-e2e:ci . && docker run --rm riku-e2e:ci`

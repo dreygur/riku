@@ -9,7 +9,7 @@ use anyhow::{anyhow, Result};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EngineSettings {
     /// Engine name such as `podman`, or an absolute path. `None` means the
-    /// legacy `CONTAINER_ENGINE` file decides, else the engine is detected.
+    /// engine is detected.
     /// Validated where it becomes a program to run, not here.
     pub program: Option<String>,
     /// Limit for a single quick engine call such as `ps`, `inspect` or `rm`.

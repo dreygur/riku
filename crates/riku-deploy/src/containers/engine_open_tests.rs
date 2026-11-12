@@ -28,11 +28,13 @@ fn open_engine_applies_server_settings() {
     let paths = RikuPaths::for_tests(tmp.path());
     fs::create_dir_all(&paths.riku_root).unwrap();
     fs::write(
-        &paths.container_engine_file,
-        tmp.path().join("engine").display().to_string(),
+        &paths.settings_file,
+        format!(
+            "[engine]\nprogram = \"{}\"\ncall_timeout = \"5s\"\n",
+            tmp.path().join("engine").display()
+        ),
     )
     .unwrap();
-    fs::write(&paths.settings_file, "[engine]\ncall_timeout = \"5s\"\n").unwrap();
 
     assert_eq!(
         open_engine(&paths).unwrap().settings().call_timeout,
@@ -47,9 +49,11 @@ fn open_engine_fails_when_engine_binary_missing() {
     let paths = RikuPaths::for_tests(tmp.path());
     fs::create_dir_all(&paths.riku_root).unwrap();
     let no_engine = tmp.path().join("no-such-engine");
-    fs::write(
-        &paths.container_engine_file,
-        no_engine.display().to_string(),
+    crate::config::settings::save_key(
+        &paths,
+        "engine",
+        "program",
+        Some(&no_engine.display().to_string()),
     )
     .unwrap();
 
@@ -75,7 +79,13 @@ fn a_socket_permission_error_names_both_choices() {
     let paths = RikuPaths::for_tests(tmp.path());
     fs::create_dir_all(&paths.riku_root).unwrap();
     let program = socket_refusing_engine(tmp.path());
-    fs::write(&paths.container_engine_file, program.display().to_string()).unwrap();
+    crate::config::settings::save_key(
+        &paths,
+        "engine",
+        "program",
+        Some(&program.display().to_string()),
+    )
+    .unwrap();
 
     let err = match open_engine(&paths) {
         Ok(_) => panic!("open_engine succeeded with the socket refused"),

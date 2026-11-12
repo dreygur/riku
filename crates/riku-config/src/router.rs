@@ -1,21 +1,13 @@
-//! Host router choice: `[router] name` in `settings.toml`, else the legacy
-//! `<riku root>/ROUTER` file that older versions wrote.
+//! Host router choice: `[router] name` in `settings.toml`.
 //!
 //! The router is a host singleton. It lives in a file instead of the
 //! `RIKU_ROUTER` env var because git push deploys run through the ssh
 //! `command=` key and the post-receive hook, which carry no riku env.
 //! `riku init` writes it; every other riku process only reads it.
 
-use std::fs;
-use std::io::ErrorKind;
-use std::path::Path;
-
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 use crate::{settings, RikuPaths};
-
-/// File name of the host router choice, directly under the riku root.
-pub const ROUTER_FILE: &str = "ROUTER";
 
 const NGINX: &str = "nginx";
 const CADDY: &str = "caddy";
@@ -31,36 +23,20 @@ pub enum Router {
     Plugin(String),
 }
 
-fn legacy_router(file: &Path) -> Result<Option<Router>> {
-    match fs::read_to_string(file) {
-        Ok(name) => Ok(Some(Router::from(name.as_str()))),
-        Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(anyhow!(
-            "failed to read router file {}: {e}",
-            file.display()
-        )),
-    }
-}
-
-/// The router stored for this host: settings.toml `[router] name`, else the
-/// legacy `ROUTER` file; `None` when neither is set. Init uses this to tell a
-/// stored choice from the nginx default.
-#[allow(clippy::question_mark)]
+/// The router stored for this host in settings.toml `[router] name`, or
+/// `None` when it is not set. Init uses this to tell a stored choice from the
+/// nginx default.
 pub fn stored(paths: &RikuPaths) -> Result<Option<Router>> {
-    let settings = match settings::load(paths) {
-        Ok(settings) => settings,
-        Err(e) => return Err(e),
-    };
-    match settings.router {
-        Some(name) => Ok(Some(Router::from(name.as_str()))),
-        None => legacy_router(&paths.router_file),
+    match settings::load(paths) {
+        Ok(settings) => Ok(settings.router.map(|name| Router::from(name.as_str()))),
+        Err(e) => Err(e),
     }
 }
 
 impl Router {
-    /// Read the host router: settings.toml first, then the legacy `ROUTER`
-    /// file, else nginx. An invalid settings file or an unreadable `ROUTER`
-    /// file is an error, so a broken file never silently becomes nginx.
+    /// Read the host router from settings.toml, else nginx. An invalid
+    /// settings file is an error, so a broken file never silently becomes
+    /// nginx.
     pub fn load(paths: &RikuPaths) -> Result<Router> {
         match stored(paths) {
             Ok(router) => Ok(router.unwrap_or(Router::Nginx)),
@@ -68,7 +44,7 @@ impl Router {
         }
     }
 
-    /// The name written to the `ROUTER` file.
+    /// The name stored in settings.toml.
     pub fn name(&self) -> &str {
         match self {
             Router::Nginx => NGINX,

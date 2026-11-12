@@ -4,8 +4,8 @@
 //! The file is always written by the user whose tree it lives in: a plain
 //! init writes its own, and a root init hands that step to the deploy user.
 //!
-//! Security: root reads the deploy user's `settings.toml` and legacy `ROUTER`
-//! file only through [`DeployUser`], as that user. Root opening a path in
+//! Security: root reads the deploy user's `settings.toml` only through
+//! [`DeployUser`], as that user. Root opening a path in
 //! that tree would follow any symlink the deploy user planted there.
 
 use std::fs;
@@ -54,27 +54,17 @@ fn read_as_deploy_user(user: &DeployUser, file: &Path) -> Result<Option<String>>
     }
 }
 
-/// The deploy user's stored router, read as that user, in the order
-/// [`router::stored`] uses: settings.toml, then the legacy `ROUTER` file,
-/// else `None`.
-#[allow(clippy::question_mark)]
+/// The deploy user's stored router from settings.toml, read as that user, as
+/// [`router::stored`] reads it; `None` when it is not set.
 pub fn deploy_router(user: &DeployUser) -> Result<Option<Router>> {
     let paths = user.riku_paths();
-    let raw_settings = match read_as_deploy_user(user, &paths.settings_file) {
-        Ok(raw) => raw,
+    let raw = match read_as_deploy_user(user, &paths.settings_file) {
+        Ok(Some(raw)) => raw,
+        Ok(None) => return Ok(None),
         Err(e) => return Err(e),
     };
-    if let Some(raw) = raw_settings {
-        let parsed = match settings::parse(&raw, &paths.settings_file) {
-            Ok(parsed) => parsed,
-            Err(e) => return Err(e),
-        };
-        if let Some(name) = parsed.router {
-            return Ok(Some(Router::from(name.as_str())));
-        }
-    }
-    match read_as_deploy_user(user, &paths.router_file) {
-        Ok(name) => Ok(name.map(|name| Router::from(name.as_str()))),
+    match settings::parse(&raw, &paths.settings_file) {
+        Ok(parsed) => Ok(parsed.router.map(|name| Router::from(name.as_str()))),
         Err(e) => Err(e),
     }
 }

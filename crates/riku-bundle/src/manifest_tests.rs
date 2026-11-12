@@ -74,5 +74,8 @@ fn refuses_any_event_mode_but_observe() {
     let err = PluginManifest::from_toml_str(&toml)
         .expect_err("only observe mode may install")
         .to_string();
-    assert!(err.contains("only supported mode is \"observe\""), "got: {err}");
+    assert!(
+        err.contains("only supported mode is \"observe\""),
+        "got: {err}"
+    );
 }

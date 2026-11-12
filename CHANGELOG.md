@@ -395,6 +395,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `riku.toml` files and a deploy warned about it. Runtime version keys
   (`RIKU_NODE_VERSION` and the like) and every other ENV line are
   unchanged.
+- Breaking: the `~/.riku/ROUTER` and `~/.riku/CONTAINER_ENGINE` files.
+  The router and the engine come only from `[router] name` and
+  `[engine] program` in settings.toml; a leftover file is not read. Engine
+  errors now name `engine.program` instead of `CONTAINER_ENGINE`. The
+  unused `RIKU_NGINX_SITES_ENABLED` override is gone too.
 
 ## [0.1.4-rc.3] - 2026-11-11
 

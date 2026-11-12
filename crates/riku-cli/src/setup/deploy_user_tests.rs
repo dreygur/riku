@@ -17,10 +17,10 @@ fn current_user(home: &Path) -> DeployUser {
 fn file_reads_run_through_the_user() {
     let tmp = tempfile::tempdir().unwrap();
     let user = current_user(tmp.path());
-    let router = tmp.path().join("ROUTER");
+    let settings = tmp.path().join("settings.toml");
 
-    std::fs::write(&router, "caddy\n").unwrap();
-    assert_eq!(user.read_file(&router).unwrap(), "caddy\n");
+    std::fs::write(&settings, "[router]\n").unwrap();
+    assert_eq!(user.read_file(&settings).unwrap(), "[router]\n");
 
     let err = user.read_file(&tmp.path().join("missing")).unwrap_err();
     assert!(

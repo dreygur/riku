@@ -298,7 +298,7 @@ fn dump_state_reports_caddy_site() {
     let paths = make_paths(&tmp);
     let app = "shop";
     fs::create_dir_all(paths.env_root.join(app)).unwrap();
-    fs::write(&paths.router_file, "caddy\n").unwrap();
+    crate::config::settings::save_key(&paths, "router", "name", Some("caddy")).unwrap();
     fs::create_dir_all(&paths.caddy_root).unwrap();
     let site = paths.caddy_root.join("shop.caddy");
     fs::write(&site, "# riku app: shop\n").unwrap();
@@ -321,7 +321,7 @@ fn caddy_site_is_unknown_not_missing_when_the_site_root_is_unreadable() {
     let paths = make_paths(&tmp);
     let app = "shop";
     fs::create_dir_all(paths.env_root.join(app)).unwrap();
-    fs::write(&paths.router_file, "caddy\n").unwrap();
+    crate::config::settings::save_key(&paths, "router", "name", Some("caddy")).unwrap();
     fs::create_dir_all(&paths.caddy_root).unwrap();
     fs::write(paths.caddy_root.join("shop.caddy"), "# riku app: shop\n").unwrap();
     fs::set_permissions(&paths.caddy_root, fs::Permissions::from_mode(0o000)).unwrap();
@@ -463,7 +463,7 @@ fn process_row_unchanged() {
 fn engine_missing_is_null() {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
-    fs::write(&paths.container_engine_file, "missing-engine\n").unwrap();
+    crate::config::settings::save_key(&paths, "engine", "program", Some("missing-engine")).unwrap();
     let dump = build_state_dump(&paths).unwrap();
     assert_eq!(dump.engine, None);
 
@@ -487,11 +487,8 @@ fn engine_present_reports_info() {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&engine_bin, fs::Permissions::from_mode(0o755)).unwrap();
     }
-    fs::write(
-        &paths.container_engine_file,
-        engine_bin.display().to_string(),
-    )
-    .unwrap();
+    let engine = engine_bin.display().to_string();
+    crate::config::settings::save_key(&paths, "engine", "program", Some(&engine)).unwrap();
 
     let dump = build_state_dump(&paths).unwrap();
     assert_eq!(

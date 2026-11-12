@@ -114,7 +114,7 @@ fn web_copies_replace_the_default_backend() {
 fn caddy_check_refuses_static_paths_before_a_copy_starts() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = paths_with_workers(&tmp);
-    std::fs::write(&paths.router_file, "caddy").unwrap();
+    crate::config::settings::save_key(&paths, "router", "name", Some("caddy")).unwrap();
     let e = env(&[
         ("RIKU_DOMAINS", "shop.example.com"),
         ("RIKU_NGINX_STATIC_PATHS", "/assets/:public"),
@@ -132,7 +132,7 @@ fn caddy_check_refuses_static_paths_before_a_copy_starts() {
 fn caddy_publishes_no_site_for_a_worker_only_app() {
     let tmp = tempfile::tempdir().unwrap();
     let mut paths = paths_with_workers(&tmp);
-    std::fs::write(&paths.router_file, "caddy").unwrap();
+    crate::config::settings::save_key(&paths, "router", "name", Some("caddy")).unwrap();
     std::fs::create_dir_all(&paths.caddy_root).unwrap();
     let ok = tmp.path().join("mock_caddy");
     std::fs::write(&ok, "#!/bin/sh\nexit 0\n").unwrap();

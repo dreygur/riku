@@ -32,10 +32,8 @@ operator's: add the deploy user to the `docker` group, which is
 root-equivalent on the host, or use a rootless engine such as rootless
 podman. riku changes neither the group nor the socket.
 
-Older versions kept these in `ROUTER` and `CONTAINER_ENGINE` files in the
-riku root. Those files are still read when the key is not set here. An
-invalid settings.toml makes every router lookup fail with the file's error,
-rather than quietly falling back to nginx.
+An invalid settings.toml makes every router lookup fail with the file's
+error, rather than quietly falling back to nginx.
 
 ## Routing
 

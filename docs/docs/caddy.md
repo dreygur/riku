@@ -2,7 +2,7 @@
 
 Riku can route apps through Caddy instead of nginx. Caddy gets certificates for every app domain on its own, so there is no ACME setup on the riku side. nginx stays the default.
 
-The router is a host setting, not a per-app one. It lives in `~/.riku/ROUTER` under the deploy user's home: `nginx`, `caddy`, or the name of a router plugin. A missing file means nginx.
+The router is a host setting, not a per-app one. It lives in `[router] name` of `~/.riku/settings.toml` under the deploy user's home: `nginx`, `caddy`, or the name of a router plugin. When it is not set, the router is nginx.
 
 ---
 
@@ -15,7 +15,7 @@ sudo apt install caddy
 sudo RIKU_ROUTER=caddy riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
-`RIKU_ROUTER` is read only by `riku init`. Deploys, the supervisor and `riku doctor` read the `ROUTER` file. Running `riku init` again without `RIKU_ROUTER` keeps the current choice.
+`RIKU_ROUTER` is read only by `riku init`. Deploys, the supervisor and `riku doctor` read settings.toml. Running `riku init` again without `RIKU_ROUTER` keeps the current choice.
 
 Root init creates the deploy user when it does not exist: `riku`, or the name in `RIKU_USER`.
 
@@ -23,7 +23,7 @@ Root init creates the deploy user when it does not exist: `riku`, or the name in
 
 Under Caddy, a root `riku init`:
 
-- writes `caddy` to `/home/riku/.riku/ROUTER`
+- sets `[router] name = "caddy"` in `/home/riku/.riku/settings.toml`
 - creates `/etc/riku` (root owned, `0755`) and `/etc/riku/caddy`, owned by root, group set to the `caddy` user's primary group, mode `2750`
 - appends one line to `/etc/caddy/Caddyfile`, once:
   ```

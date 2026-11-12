@@ -12,7 +12,6 @@ use std::path::{Path, PathBuf};
 
 pub mod app_config;
 pub mod app_settings;
-pub mod container_engine;
 mod host_paths;
 pub mod nginx_host;
 pub mod own_cert;
@@ -28,7 +27,7 @@ pub use host_paths::{
     ACME_WEBROOT, CADDY_SITE_ROOT, CERT_ROOT, NGINX_SITE_ROOT, ROUTER_SOCKET, SOCKET_GROUP,
     SOCKET_ROOT, STATIC_ROOT, SYSTEMD_RUNTIME_DIR, VAR_ROOT,
 };
-pub use nginx_host::{NginxHostPaths, DEFAULT_NGINX_INCLUDE_FILE, DEFAULT_NGINX_SITES_ENABLED};
+pub use nginx_host::{NginxHostPaths, DEFAULT_NGINX_INCLUDE_FILE};
 pub use reload_programs::ReloadPrograms;
 
 /// Default worker timeout in seconds (2 hours).
@@ -61,11 +60,8 @@ pub struct RikuPaths {
     pub caddy_root: PathBuf,
     /// The router helper's socket, [`ROUTER_SOCKET`] outside tests.
     pub router_socket: PathBuf,
-    /// Holds the host router name. See [`router::Router::load`].
-    pub router_file: PathBuf,
-    /// Holds the container engine choice. See [`container_engine::load`].
-    pub container_engine_file: PathBuf,
-    /// Holds the server wide settings. See [`settings::load`].
+    /// Holds the server wide settings, the router and engine choice
+    /// included. See [`settings::load`].
     pub settings_file: PathBuf,
     pub cache_root: PathBuf,
     pub workers_root: PathBuf,
@@ -83,11 +79,6 @@ pub struct RikuPaths {
     /// Published static files, `<static_root>/<app>`. [`STATIC_ROOT`]
     /// outside tests, not taken from the environment either.
     pub static_root: PathBuf,
-    /// Where older riku versions symlinked each app config
-    /// (`/etc/nginx/sites-enabled`). riku no longer writes here: a root
-    /// `riku init` removes the links that point into `nginx_root` and
-    /// `riku doctor` reports any left. See [`NginxHostPaths`] for overrides.
-    pub nginx_sites_enabled: PathBuf,
     /// The root-owned file that makes nginx load `nginx_root/*.conf`
     /// (`/etc/nginx/conf.d/riku.conf`). Only a root `riku init` writes it.
     /// See [`NginxHostPaths`] for overrides.
@@ -145,8 +136,6 @@ impl RikuPaths {
             socket_root: PathBuf::from(SOCKET_ROOT),
             caddy_root: PathBuf::from(CADDY_SITE_ROOT),
             router_socket: PathBuf::from(ROUTER_SOCKET),
-            router_file: riku_root.join(router::ROUTER_FILE),
-            container_engine_file: riku_root.join(container_engine::ENGINE_FILE),
             settings_file: riku_root.join(settings::SETTINGS_FILE),
             cache_root: riku_root.join("cache"),
             workers_root: riku_root.join("workers"),
@@ -158,7 +147,6 @@ impl RikuPaths {
             riku_root,
             riku_script,
             acme_sh_root,
-            nginx_sites_enabled: nginx_host.sites_enabled,
             nginx_include_file: nginx_host.include_file,
             reload_programs: ReloadPrograms::default(),
         }
@@ -191,7 +179,6 @@ impl RikuPaths {
     /// and the static root, `root/static`. Tests create the ones they use.
     pub fn for_tests(root: &Path) -> Self {
         let nginx_host = NginxHostPaths {
-            sites_enabled: root.join("nginx-sites-enabled"),
             include_file: root.join("nginx-conf.d").join("riku.conf"),
         };
         let mut paths = Self::with_nginx_host(root.join(".riku"), root, nginx_host);

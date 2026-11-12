@@ -119,12 +119,9 @@ pub fn mock_server(root: &Path, app: &str, compose: &str, env: &str) -> MockServ
     let (_engine, log) = mock_engine(root, &prelude);
     let mut paths = RikuPaths::for_tests(root);
     fs::create_dir_all(&paths.riku_root).unwrap();
-    fs::write(
-        &paths.container_engine_file,
-        root.join("engine").display().to_string(),
-    )
-    .unwrap();
-    fs::write(&paths.router_file, "caddy").unwrap();
+    let engine = root.join("engine").display().to_string();
+    crate::config::settings::save_key(&paths, "engine", "program", Some(&engine)).unwrap();
+    crate::config::settings::save_key(&paths, "router", "name", Some("caddy")).unwrap();
     fs::create_dir_all(&paths.caddy_root).unwrap();
     let caddy = root.join("mock_caddy");
     executable(&caddy, "#!/bin/sh\nexit 0\n");

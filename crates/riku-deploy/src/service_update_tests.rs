@@ -120,11 +120,8 @@ fn built_service_is_skipped_before_lock_and_engine() {
     deploy(&server).unwrap();
 
     let _lock = crate::lock::acquire("myapp", &server.paths).unwrap();
-    std::fs::write(
-        &server.paths.container_engine_file,
-        tmp.path().join("no-such-engine").display().to_string(),
-    )
-    .unwrap();
+    let engine = tmp.path().join("no-such-engine").display().to_string();
+    crate::config::settings::save_key(&server.paths, "engine", "program", Some(&engine)).unwrap();
 
     let start = std::time::Instant::now();
     let res = pull_service("myapp", &server.paths, "web");

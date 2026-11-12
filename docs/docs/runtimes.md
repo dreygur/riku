@@ -435,10 +435,11 @@ async fn main() -> std::io::Result<()> {
 Riku runs an app as containers when it has a compose file (`compose.yaml`,
 `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`, checked in that
 order) or a `Containerfile` or `Dockerfile` at the app root, and
-`RIKU_RUNTIME` is unset or `container`. Set `RIKU_RUNTIME` to another runtime
+`runtime.name` is unset or `container`. Set `runtime.name` to another runtime
 to keep deploying such a repo with that runtime instead.
 
-Riku drives the engine named in `~/.riku/CONTAINER_ENGINE`, or else the
+Riku drives the engine named by `[engine] program` in
+[settings.toml](settings.md), or else the
 first of `docker`, `podman`, `nerdctl` and `finch` found on `PATH`, in that
 order. Docker must be version 23 or newer (or an engine with a compatible
 CLI), since riku reads engine output with `--format json`. Riku reads the
