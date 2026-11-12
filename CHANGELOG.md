@@ -67,6 +67,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   build. Such a value is
   now ignored like one that is not a number, so the limit stays at the
   server wide value or the default.
+- The same overflow hit `limits.isolation_max_memory_mb`
+  (`RIKU_ISOLATION_MAX_MEMORY_MB`): a value too large to count in bytes
+  panicked a debug build and could set the worker cgroup's `memory.max` to
+  a tiny value in a release build. Such a value now sets no memory limit,
+  the same as a value that is not a number.
 - The Procfile `release` and `preflight` commands ran with riku's own env
   only, so a migration could not see the app's settings such as
   `DATABASE_URL`. They now get the app env, the same one the workers get.

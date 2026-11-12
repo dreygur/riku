@@ -210,6 +210,21 @@ fn memory_limit_without_isolation_root_gets_a_cgroup_and_no_sandbox() {
 }
 
 #[test]
+fn memory_limit_too_large_for_bytes_is_ignored_like_a_non_number() {
+    let too_large = (u64::MAX / (1024 * 1024) + 1).to_string();
+    let config = config_from_env(&[
+        ("RIKU_ISOLATION_MAX_MEMORY_MB", too_large.as_str()),
+        ("RIKU_ISOLATION_MAX_PIDS", "64"),
+    ]);
+
+    let limits = config.options.limits.expect("the pids limit is set");
+    assert_eq!(
+        limits.max_memory_bytes, None,
+        "{too_large} MB does not fit in u64 bytes and must not wrap to a small memory.max"
+    );
+}
+
+#[test]
 fn isolation_root_turns_on_the_sandbox_and_keeps_the_limits() {
     let config = config_from_env(&[
         ("RIKU_ISOLATION_ROOT", "/srv/jail"),

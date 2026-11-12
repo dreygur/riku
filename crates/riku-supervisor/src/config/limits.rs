@@ -37,11 +37,12 @@ fn default_cpu_period_us() -> u64 {
 impl WorkerLimits {
     /// The limits `env` sets, or `None` when it sets no memory, CPU quota
     /// or pids limit. A CPU period alone limits nothing, so it asks for no
-    /// cgroup.
+    /// cgroup. A memory value that is not a number, or too large to count in
+    /// bytes, sets no memory limit.
     pub(super) fn from_env(env: &HashMap<String, String>) -> Option<Self> {
         let limits = WorkerLimits {
             max_memory_bytes: parse_env_opt!(env, "RIKU_ISOLATION_MAX_MEMORY_MB", u64)
-                .map(|mb| mb * 1024 * 1024),
+                .and_then(|mb| mb.checked_mul(1024 * 1024)),
             cpu_quota_us: parse_env_opt!(env, "RIKU_ISOLATION_CPU_QUOTA_US", u64),
             cpu_period_us: parse_env_or!(
                 env,
