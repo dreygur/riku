@@ -13,7 +13,7 @@ use crate::config::{ACME_WEBROOT, SOCKET_ROOT, STATIC_ROOT};
 use crate::util::{display, ROOT_BINARY};
 
 use super::deploy_user::{deploy_user_name, passwd_home, running_as_root};
-use super::router_units::{remove_stale_units, unit_ordering, STALE_UNITS};
+use super::router_units::unit_ordering;
 use super::supervisor_binary::{action_for, service_main_pid, write_unit, UnitChange, UnitScope};
 
 pub const SYSTEMD_DIR: &str = "/etc/systemd/system";
@@ -110,24 +110,6 @@ fn start_riku_service(unit: UnitChange, systemctl: impl Fn(&[&str]) -> bool) -> 
     Ok(())
 }
 
-/// Stop and delete the reload watcher units an earlier init installed.
-/// On a host that never had them the disable calls fail and are ignored.
-fn remove_old_watchers(systemd_dir: &Path) -> Result<()> {
-    for unit in STALE_UNITS {
-        let _ = systemctl_ok(&["disable", "--now", unit]);
-    }
-    let removed = match remove_stale_units(systemd_dir) {
-        Ok(removed) => removed,
-        Err(e) => return Err(anyhow!("{e}")),
-    };
-    if !removed {
-        return Ok(());
-    }
-    let _ = systemctl_ok(&["daemon-reload"]);
-    display::detail("Removed the old nginx reload watcher");
-    Ok(())
-}
-
 /// Install systemd service files for riku daemon (system-wide, requires root).
 #[allow(clippy::question_mark)]
 pub fn install_systemd_service(router: &Router) -> Result<()> {
@@ -148,10 +130,7 @@ pub fn install_systemd_service(router: &Router) -> Result<()> {
         Err(e) => return Err(e),
     };
 
-    if let Err(e) = start_riku_service(change, systemctl_ok) {
-        return Err(e);
-    }
-    remove_old_watchers(systemd_dir)
+    start_riku_service(change, systemctl_ok)
 }
 
 #[cfg(test)]

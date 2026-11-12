@@ -419,6 +419,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of getting that name. `riku init` adds `[routing]` on every run
   where it is missing, and `riku doctor` prints an ok `routing` line
   saying which applies instead of warning about the missing section.
+- `riku init` no longer cleans up after older installs: it does not move
+  deploy writable files out of `/etc/nginx/sites-enabled` and
+  `/etc/nginx/conf.d`, does not delete foreign entries in
+  `/etc/riku/caddy`, does not remove `~/.local/bin/riku`, and does not
+  disable the old `riku-nginx.path` watcher units. The router directories
+  are kept root owned on every init and checked by the router helper
+  instead (see Added). The demo and stress images no longer build the old
+  `sites-enabled` layout.
 
 ## [0.1.4-rc.3] - 2026-11-11
 

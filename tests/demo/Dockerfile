@@ -8,8 +8,7 @@
 #
 # This is NOT the automated test target (see ../stress/container/ for that):
 # this one stays running after boot so a human can poke at it. It reuses
-# that target's sshd_config, sudoers/nginx-wrapper plumbing rather than
-# duplicating them.
+# that target's sshd_config rather than duplicating it.
 FROM ubuntu:24.04
 # See ../stress/container/Dockerfile for why 24.04: matches the glibc
 # version of whatever host built the riku binary being COPYed in.
@@ -72,21 +71,8 @@ RUN chmod 755 /usr/local/bin/riku
 COPY tests/demo/nginx-site.conf /etc/nginx/sites-available/riku.conf
 RUN rm -f /etc/nginx/sites-enabled/default \
     && ln -sf /etc/nginx/sites-available/riku.conf /etc/nginx/sites-enabled/riku.conf \
-    && mkdir -p /home/riku/.riku/nginx \
-    && chown -R riku:riku /home/riku/.riku \
-    && touch /home/riku/.riku/nginx/.keep
-
-# riku (running as the unprivileged riku user) needs to write per-app
-# symlinks into /etc/nginx/sites-enabled/ and reload nginx, see
-# ../stress/container/Dockerfile for the full rationale, reused verbatim
-# here.
-RUN chgrp riku /etc/nginx/sites-enabled \
-    && chmod g+w /etc/nginx/sites-enabled
-COPY tests/stress/container/sudoers-riku-nginx /etc/sudoers.d/riku-nginx
-RUN chmod 440 /etc/sudoers.d/riku-nginx \
-    && visudo -cf /etc/sudoers.d/riku-nginx
-COPY tests/stress/container/nginx-wrapper.sh /usr/local/bin/nginx
-RUN chmod 755 /usr/local/bin/nginx
+    && mkdir -p /home/riku/.riku \
+    && chown -R riku:riku /home/riku/.riku
 
 # Runtime plugins baked into the image (no network egress to
 # raw.githubusercontent.com required at boot): same reasoning as the

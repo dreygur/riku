@@ -3,11 +3,8 @@
 //! The router helper writes every site config into `/etc/riku/nginx` and
 //! never under `/etc/nginx`. Setup creates that root owned directory, installs
 //! the one root-owned file that loads it, `/etc/nginx/conf.d/riku.conf`
-//! (replacing an older include of the deploy user's own nginx directory), and
-//! puts the nginx worker user in the `riku-sockets` group (see
-//! [`super::nginx_worker`]). Older versions left links into the deploy home
-//! and deploy owned files in `sites-enabled` and `conf.d`; every entry root
-//! does not own is removed (see [`super::host_cleanup`]).
+//! and puts the nginx worker user in the `riku-sockets` group (see
+//! [`super::nginx_worker`]).
 //!
 //! Security: the include file's text is a constant (see
 //! [`crate::nginx::include_line`]), and it is written only into a directory
@@ -17,6 +14,7 @@
 
 use std::fs;
 use std::io::ErrorKind;
+use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -27,13 +25,13 @@ use crate::nginx::{include_file_contents, needs_catch_all, write_include_file};
 use crate::util::echo;
 
 use super::deploy_user::DeployUser;
-use super::host_cleanup::{
-    check_removed_base, clear_deploy_owned_router_files, is_trusted_file, removed_dir_now,
-};
 use super::nginx_worker::grant_nginx_sockets;
 use super::router_dirs::{secure_cert_dirs, secure_dir};
 
-const SITES_ENABLED: &str = "/etc/nginx/sites-enabled";
+/// A regular file owned by `root_uid` that no one else can write.
+fn is_trusted_file(meta: &fs::Metadata, root_uid: u32) -> bool {
+    meta.is_file() && meta.uid() == root_uid && meta.mode() & 0o022 == 0
+}
 
 /// Whether the include file should carry riku's catch-all server, from what
 /// `nginx -T` shows. When nginx cannot dump its config the answer is no, so
@@ -153,14 +151,6 @@ pub fn setup_nginx_host(user: &DeployUser) -> Result<()> {
             file.display()
         ));
     };
-    let swept = [Path::new(SITES_ENABLED), dir];
-    let removed = removed_dir_now();
-    if let Err(e) = check_removed_base(&removed, ROOT_UID) {
-        return Err(e);
-    }
-    if let Err(e) = clear_deploy_owned_router_files(&swept, ROOT_UID, &removed) {
-        return Err(e);
-    }
     if !dir.is_dir() {
         echo(&missing_dir_warning(&paths, dir), "yellow");
         return Ok(());

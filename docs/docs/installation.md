@@ -26,12 +26,10 @@ After running `sudo riku init`, the binary is installed to `/usr/local/bin/riku`
 
 `sudo riku init` also installs and starts `riku-router-helper.service`, a small root service on `/run/riku-router.sock`. It writes the nginx or Caddy site of each app (`/etc/riku/nginx`, `/etc/riku/caddy`, certificates in `/etc/riku/certs`) and reloads the router. See [Nginx](nginx.md#the-router-helper).
 
-### Upgrading an existing host
+### Upgrading riku
 
 1. Install the new binary: the installer above, or `sudo cp riku /usr/local/bin/riku` from the release tarball.
-2. Run `sudo riku init`. It installs the router helper, rewrites the units and restarts the supervisor when it runs an older binary or the unit text changed. Its `Service` line says whether it did.
-
-`sudo riku init` does not delete what an older version left in `/etc/nginx/sites-enabled` and `/etc/nginx/conf.d` that the deploy user could write. It moves those files and links to `/etc/riku/removed/<unix time>/` (root only, mode `0700`), as links, and prints where each one went. Put one back if you wanted it. It does delete the old deploy owned `*.caddy` files in `/etc/riku/caddy`, which `riku doctor --fix` renders again.
+2. Run `sudo riku init`. It rewrites the units and the router helper, sets the owner and mode of the router directories again, and restarts the supervisor when it runs another binary or the unit text changed. Its `Service` line says whether it did.
 
 ## The rk laptop client
 
@@ -334,8 +332,6 @@ cargo build --release
 sudo cp target/release/riku /usr/local/bin/riku
 sudo riku init
 ```
-
-`sudo riku init` also removes the deploy user's old `~/.local/bin/riku`, which would otherwise shadow `/usr/local/bin/riku`.
 
 ## Uninstalling
 

@@ -67,24 +67,8 @@ RUN chmod 755 /usr/local/bin/riku
 COPY tests/production_audit/container/riku-nginx.conf /etc/nginx/sites-available/riku.conf
 RUN rm -f /etc/nginx/sites-enabled/default \
     && ln -sf /etc/nginx/sites-available/riku.conf /etc/nginx/sites-enabled/riku.conf \
-    && mkdir -p /home/riku/.riku/nginx \
-    && chown -R riku:riku /home/riku/.riku \
-    && touch /home/riku/.riku/nginx/.keep
-
-# Riku (running as the unprivileged riku user) needs to (a) write a
-# per-app symlink into /etc/nginx/sites-enabled/ and (b) signal the
-# root-owned nginx master to reload (src/nginx/template.rs
-# install_nginx_symlink()). Neither works for a non-root user out of the
-# box. Fix (a) with group write access; fix (b) with a narrowly-scoped
-# passwordless sudo rule plus a PATH-shadowing wrapper, since riku calls
-# the bare `nginx` binary directly with no sudo of its own.
-RUN chgrp riku /etc/nginx/sites-enabled \
-    && chmod g+w /etc/nginx/sites-enabled
-COPY tests/production_audit/container/sudoers-riku-nginx /etc/sudoers.d/riku-nginx
-RUN chmod 440 /etc/sudoers.d/riku-nginx \
-    && visudo -cf /etc/sudoers.d/riku-nginx
-COPY tests/production_audit/container/nginx-wrapper.sh /usr/local/bin/nginx
-RUN chmod 755 /usr/local/bin/nginx
+    && mkdir -p /home/riku/.riku \
+    && chown -R riku:riku /home/riku/.riku
 
 # Bundle the repo's runtime plugins directly into the image rather than
 # relying on `riku install-plugins`, which fetches each script over HTTPS

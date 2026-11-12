@@ -28,7 +28,6 @@ use super::router_choice;
 use super::runtime_plugins::refresh_runtime_plugins;
 use super::server_ip::{ensure_routing_section, FallbackDomain, SERVER_IP_HINT};
 use super::ssh::setup_ssh_key_interactive;
-use super::stale_binary::remove_stale_binary;
 use super::supervisor_binary::UnitScope;
 use super::system_install::refuse_beside_system_install;
 use super::systemd::setup_systemd_service;
@@ -91,13 +90,6 @@ fn print_fallback(fallback: &FallbackDomain) {
             display::warn("Fallback domain off");
             display::detail(&format!("{why}. {SERVER_IP_HINT}"));
         }
-    }
-}
-
-fn remove_old_user_binary() -> Result<()> {
-    match env::var("HOME") {
-        Ok(home) => remove_stale_binary(&PathBuf::from(home)),
-        Err(_) => Err(anyhow!("HOME is not set")),
     }
 }
 
@@ -241,9 +233,6 @@ fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<Router> {
     }
     refresh_runtime_plugins(paths);
     if user_steps {
-        if let Err(e) = remove_old_user_binary() {
-            return Err(e);
-        }
         // Root starts the system unit next; only this deploy user child may
         // signal the deploy user's supervisor.
         if !options.no_systemd {

@@ -62,9 +62,6 @@ Files:
 - `container/Dockerfile`: Ubuntu 24.04 target server image.
 - `container/entrypoint.sh`: imports bootstrap SSH key, runs
   `riku init --no-systemd`, starts sshd/nginx/`riku supervisor`.
-- `container/sudoers-riku-nginx`, `container/nginx-wrapper.sh`, scoped
-  passwordless-sudo path letting the unprivileged deploy user reload the
-  root-owned nginx master (see `ARCHITECTURE.md` Security Model).
 - `container/test_web_app/`: mock app deployed during the test.
 - `container/user_traffic_simulation.sh`: host-side git push + load test
   (prefers `wrk`/`k6`, falls back to a parallel curl loop).
