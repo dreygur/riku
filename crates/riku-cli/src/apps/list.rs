@@ -1,10 +1,25 @@
 use anyhow::Result;
 use colored::Colorize;
 use riku_supervisor::config::app_worker_configs;
+use riku_supervisor::stats::{AppStats, ProcessStatus};
 use std::fs;
 
+use super::process::helpers::load_stats;
 use crate::config::RikuPaths;
 use crate::util::display;
+
+/// How many of `app`'s containers the supervisor last saw running. A
+/// container app has no worker configs, so this is what makes it count as
+/// running.
+fn running_containers(stats: Option<&[AppStats]>, app: &str) -> usize {
+    stats
+        .unwrap_or_default()
+        .iter()
+        .filter(|entry| entry.app == app)
+        .flat_map(|entry| &entry.processes)
+        .filter(|p| p.container.is_some() && p.status == ProcessStatus::Running)
+        .count()
+}
 
 /// How to push an app from the laptop. The server cannot know the name the
 /// laptop reaches it by, so `<host>` stays for the developer to fill in.
@@ -46,8 +61,10 @@ pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
     let mut rows: Vec<Vec<String>> = Vec::new();
     let mut total_workers = 0;
 
+    let stats = load_stats(paths);
     for a in &apps {
-        let worker_count = app_worker_configs(&paths.workers_enabled, a).len();
+        let worker_count = app_worker_configs(&paths.workers_enabled, a).len()
+            + running_containers(stats.as_deref(), a);
         let status = if worker_count > 0 {
             "running"
         } else {
@@ -78,3 +95,7 @@ pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "list_tests.rs"]
+mod tests;

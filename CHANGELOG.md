@@ -120,6 +120,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lines (`Step 2/4 : WORKDIR /app`) between the rail lines. Build and pull
   output now goes on the rail (`│  ...`) like runtime plugin build output,
   stderr included, and its last lines reach the deploy log on a failure.
+- `riku apps` listed a running container app as `stopped 0`: it counted
+  only Procfile worker configs. It now adds the app's containers the
+  supervisor last saw running, so a compose app with four copies reads
+  `running 4`.
 - `riku ps <app> --scale worker=2` on a container app printed only
   `Scaling 'worker' to 2`, so it was unclear whether anything started. It
   did start or stop the copies; it now also says so, for example
