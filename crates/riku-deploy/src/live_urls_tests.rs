@@ -9,7 +9,6 @@ fn routing(domains: &[&str], fallback: bool) -> AppRouting {
         fallback,
         port: None,
         mode: RoutingMode::Domain,
-        legacy: false,
         fallback_skipped: None,
     }
 }
@@ -174,21 +173,6 @@ fn path_mode_lists_the_path_and_warns_about_the_base_path() {
     assert_eq!(lines[0], "Live at http://203.0.113.10:8080/shop/");
     assert!(
         lines.iter().any(|l| l.contains("base path /shop")),
-        "{lines:?}"
-    );
-}
-
-#[test]
-fn legacy_server_points_at_init() {
-    let routed = AppRouting {
-        legacy: true,
-        ..routing(&[], false)
-    };
-
-    let lines = texts(live_lines("myapp", &routed, None, false));
-
-    assert!(
-        lines.iter().any(|l| l.contains("sudo riku init")),
         "{lines:?}"
     );
 }

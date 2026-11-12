@@ -2,7 +2,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 
 use super::*;
-use crate::containers::mock_state::{mock_server, myapp, MockServer, DB_AND_WEB};
+use crate::containers::mock_state::{mock_server_with_domain, myapp, MockServer, DB_AND_WEB};
 
 fn service(name: &str) -> ServiceName {
     ServiceName::try_from(name).unwrap()
@@ -13,7 +13,7 @@ fn service(name: &str) -> ServiceName {
 /// acquisitions on one lock file are racy.
 fn server_without_engine() -> (tempfile::TempDir, MockServer) {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     let engine = tmp.path().join("no-such-engine").display().to_string();
     crate::config::settings::save_key(&server.paths, "engine", "program", Some(&engine)).unwrap();
     (tmp, server)
@@ -21,7 +21,7 @@ fn server_without_engine() -> (tempfile::TempDir, MockServer) {
 
 fn server_with_dying_engine() -> (tempfile::TempDir, MockServer) {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     let marker = tmp.path().join("engine-died");
     let script = format!(
         "#!/bin/sh\n\
@@ -123,7 +123,7 @@ fn restart_reports_unreachable_when_the_engine_dies_after_open() {
 #[test]
 fn stop_of_unknown_service_is_not_engine_unreachable() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     let app = myapp();
     let unknown = service("unknown");
     let err = match stop_service(&app, &server.paths, Some(&unknown)) {

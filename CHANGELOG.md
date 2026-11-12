@@ -400,6 +400,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `[engine] program` in settings.toml; a leftover file is not read. Engine
   errors now name `engine.program` instead of `CONTAINER_ENGINE`. The
   unused `RIKU_NGINX_SITES_ENABLED` override is gone too.
+- Breaking: the legacy routing mode. A settings.toml without `[routing]`
+  now means the defaults (no fallback domain, shared port 8080, ports
+  8100-8199), so an app without a domain is in port mode there, and
+  `routing.mode` and `routing.port` work. It used to route every app as
+  before routing modes existed, under nginx with a made up
+  `<app>.example.com` name. An nginx uWSGI or static site with no domain
+  and no fallback domain now fails its deploy, naming `routing.domains`,
+  instead of getting that name. `riku init` adds `[routing]` on every run
+  where it is missing, and `riku doctor` prints an ok `routing` line
+  saying which applies instead of warning about the missing section.
 
 ## [0.1.4-rc.3] - 2026-11-11
 

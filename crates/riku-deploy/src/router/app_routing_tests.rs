@@ -97,24 +97,17 @@ fn fallback_skipped_for_app_name_not_a_dns_label() {
 }
 
 #[test]
-fn no_routing_section_resolves_legacy() {
+fn no_routing_section_uses_the_defaults() {
     let routed = resolve_fresh(&env(&[]), &RoutingSettings::default()).unwrap();
 
-    assert!(routed.legacy);
-    assert_eq!(routed.port, None);
-    assert!(routed.domains.is_empty());
-}
-
-#[test]
-fn mode_without_routing_section_is_refused() {
-    let message = resolve_fresh(
-        &env(&[("RIKU_ROUTING_MODE", "port")]),
-        &RoutingSettings::default(),
-    )
-    .unwrap_err()
-    .to_string();
-
-    assert!(message.contains("sudo riku init"), "{message}");
+    assert_eq!(routed.mode, RoutingMode::Port, "{routed:?}");
+    assert!(routed.domains.is_empty(), "{routed:?}");
+    assert!(
+        routed
+            .port
+            .is_some_and(|port| (8100..=8199).contains(&port)),
+        "port from the default range: {routed:?}"
+    );
 }
 
 #[test]

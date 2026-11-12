@@ -1,8 +1,8 @@
 # Server settings
 
 Server wide settings live in `~/.riku/settings.toml` (under `$RIKU_ROOT` when
-that is set). The file is optional. Without it every setting has the default
-shown below, so an existing server behaves as before.
+that is set). The file is optional. Without it, or without one of its
+sections, every setting has the default shown below.
 
 ```toml
 [router]
@@ -56,8 +56,9 @@ port_range = "8100-8199"
 | `routing.shared_port` | `8080` | The port path mode apps share. |
 | `routing.port_range` | `"8100-8199"` | Where riku picks a port for a port mode app that sets none. |
 
-Without the section the server routes as older versions did, and the
-riku.toml keys `routing.mode` and `routing.port` are refused.
+Without the section every key has the default in the table: no fallback
+domain, so an app without a domain is in port mode. `riku doctor` prints a
+`routing` line saying which applies.
 
 ## Engine time limits
 

@@ -1,9 +1,7 @@
 use riku_container::types::CopyIndex;
 
 use super::*;
-use crate::containers::mock_state::{
-    deploy, mock_server, mock_server_with_domain, myapp, DB_AND_WEB,
-};
+use crate::containers::mock_state::{deploy, mock_server_with_domain, myapp, DB_AND_WEB};
 use crate::containers::{destroy_containers, restart_copy, RestartOutcome};
 
 fn service(name: &str) -> ServiceName {
@@ -13,7 +11,7 @@ fn service(name: &str) -> ServiceName {
 #[test]
 fn scale_refuses_storage_service() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
 
     let err = scale_service(&myapp(), &server.paths, &service("db"), 2).unwrap_err();
 
@@ -32,7 +30,7 @@ fn scale_refuses_storage_service() {
 #[test]
 fn restart_copy_reports_busy() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     let _deploy = crate::lock::acquire("myapp", &server.paths).unwrap();
     let copy = CopyIndex::new(1).unwrap();
 
@@ -49,7 +47,7 @@ fn restart_copy_reports_busy() {
 #[test]
 fn restart_copy_replaces_a_crashed_copy() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     deploy(&server).unwrap();
     server.crash("myapp.web.1");
     let before = server.calls().len();
@@ -76,7 +74,7 @@ fn restart_copy_replaces_a_crashed_copy() {
 #[test]
 fn restart_copy_leaves_a_user_stopped_service_stopped() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     deploy(&server).unwrap();
     stop_service(&myapp(), &server.paths, Some(&service("web"))).unwrap();
     let after_stop = server.calls().len();
@@ -101,7 +99,7 @@ fn restart_copy_leaves_a_user_stopped_service_stopped() {
 #[test]
 fn destroy_keeps_volumes() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     deploy(&server).unwrap();
     let before = server.calls().len();
 
@@ -124,7 +122,7 @@ fn destroy_keeps_volumes() {
 #[test]
 fn destroy_containers_refuses_when_deploy_in_progress() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     deploy(&server).unwrap();
     let before = server.calls().len();
     let _lock = crate::lock::acquire("myapp", &server.paths).unwrap();
@@ -190,7 +188,7 @@ fn restart_copy_clears_route_when_restart_fails() {
 #[test]
 fn restart_service_refuses_when_dependency_has_no_running_copies() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     deploy(&server).unwrap();
 
     stop_service(&myapp(), &server.paths, Some(&service("db"))).unwrap();
@@ -218,7 +216,7 @@ fn restart_service_refuses_when_dependency_has_no_running_copies() {
 #[test]
 fn stop_service_stops_dropped_services_first() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     deploy(&server).unwrap();
 
     let only_db = "

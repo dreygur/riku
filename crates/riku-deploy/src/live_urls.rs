@@ -56,12 +56,6 @@ fn no_domain_lines(app: &str, routing: &AppRouting) -> Vec<Line> {
         ),
         "",
     ));
-    if routing.legacy {
-        lines.push(line(
-            "Run sudo riku init on the server to give apps without a domain a URL".to_string(),
-            "",
-        ));
-    }
     lines
 }
 

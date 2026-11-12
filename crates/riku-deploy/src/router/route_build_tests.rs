@@ -209,13 +209,30 @@ fn only_the_apps_own_sockets_are_accepted() {
 
     let route = build(
         &tmp,
-        &[("RIKU_NGINX_STATIC", "public")],
+        &[
+            ("RIKU_DOMAINS", "myapp.example"),
+            ("RIKU_NGINX_STATIC", "public"),
+        ],
         &[Backend::Unix(paths.socket_root.join("myapp.sock"))],
     )
     .unwrap();
     assert_eq!(route.backends, vec![RouteBackend::UnixDefault]);
-    assert_eq!(route.domains, vec!["myapp.example.com".to_string()]);
     assert_eq!(route.kind, SiteKind::Static);
+}
+
+#[test]
+fn an_nginx_route_with_no_domain_and_no_port_is_refused() {
+    let tmp = TempDir::new().unwrap();
+
+    let err = build(
+        &tmp,
+        &[("RIKU_NGINX_STATIC", "public")],
+        &[Backend::loopback(5001)],
+    )
+    .unwrap_err()
+    .to_string();
+
+    assert!(err.contains("no domain to route"), "{err}");
 }
 
 #[test]

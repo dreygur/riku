@@ -2,9 +2,10 @@
 //! how the app is reached: its domains (its own or the fallback), the port
 //! it answers on and its mode.
 //!
+//! A server without a `[routing]` section uses the `RoutingSettings`
+//! defaults: no fallback domain, so a domainless app is in port mode.
+//!
 //! The rules, in order:
-//! - No `[routing]` section: the app routes exactly as before this existed
-//!   (`legacy`), and `routing.mode` or `routing.port` are refused.
 //! - `mode = "path"` takes no domains and no port.
 //! - An app with no domain gets the fallback domain, unless it asked for
 //!   port mode; with no fallback it falls into port mode.
@@ -26,7 +27,7 @@ const DOMAINS_KEY: &str = "RIKU_DOMAINS";
 const MODE_KEY: &str = "RIKU_ROUTING_MODE";
 const PORT_KEY: &str = "RIKU_ROUTING_PORT";
 /// uWSGI and static sites have no port mode listener, so a domainless one
-/// stays in domain mode and routes as it did before port mode existed.
+/// stays in domain mode.
 const WSGI_KEY: &str = "RIKU_NGINX_WSGI";
 const STATIC_KEY: &str = "RIKU_NGINX_STATIC";
 
@@ -48,8 +49,6 @@ pub struct AppRouting {
     /// The port the app answers on for any host name, besides its domains.
     pub port: Option<u16>,
     pub mode: RoutingMode,
-    /// True on a server with no `[routing]` section.
-    pub legacy: bool,
     /// Why an app without a domain got no fallback domain, for the push.
     pub fallback_skipped: Option<String>,
 }
@@ -95,7 +94,6 @@ fn routed(domains: Vec<String>, mode: RoutingMode) -> AppRouting {
         fallback: false,
         port: None,
         mode,
-        legacy: false,
         fallback_skipped: None,
     }
 }
@@ -164,17 +162,6 @@ pub fn resolve(
             Ok(pair) => pair,
             Err(e) => return Err(e),
         };
-    if !settings.present {
-        if mode_set.is_some() || port_set.is_some() {
-            return Err(anyhow!(
-                "routing.mode and routing.port need a [routing] section in settings.toml; run sudo riku init on the server"
-            ));
-        }
-        return Ok(AppRouting {
-            legacy: true,
-            ..routed(domains, RoutingMode::Domain)
-        });
-    }
     if plugin_router
         && (port_set.is_some() || matches!(mode_set, Some(RoutingMode::Port | RoutingMode::Path)))
     {

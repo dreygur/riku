@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::containers::mock_state::{deploy, mock_server, DB_AND_WEB};
+use crate::containers::mock_state::{deploy, mock_server_with_domain, DB_AND_WEB};
 use crate::service_update::pull_service;
 
 const COMPOSE: &str = "
@@ -14,7 +14,7 @@ services:
 #[test]
 fn same_digest_does_nothing() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     deploy(&server).unwrap();
 
     let start_calls = server.calls().len();
@@ -48,7 +48,7 @@ fn same_digest_does_nothing() {
 #[test]
 fn new_digest_replaces_service() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     deploy(&server).unwrap();
 
     let start_calls = server.calls().len();
@@ -100,7 +100,7 @@ fn new_digest_replaces_service() {
 #[test]
 fn built_service_is_skipped_without_pull() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", COMPOSE, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", COMPOSE, "myapp.example.com");
     deploy(&server).unwrap();
 
     let start = server.calls().len();
@@ -116,7 +116,7 @@ fn built_service_is_skipped_without_pull() {
 #[test]
 fn built_service_is_skipped_before_lock_and_engine() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", COMPOSE, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", COMPOSE, "myapp.example.com");
     deploy(&server).unwrap();
 
     let _lock = crate::lock::acquire("myapp", &server.paths).unwrap();

@@ -67,6 +67,10 @@ fn make_paths(tmp: &TempDir) -> RikuPaths {
         fs::create_dir_all(dir).expect("create riku dir");
     }
     router::save(&paths, &Router::Caddy).expect("write router file");
+    // A fallback domain keeps a domainless app out of port mode, whose
+    // listener check would find nothing behind the mock Caddy.
+    riku::config::settings::save_key(&paths, "routing", "fallback_domain", Some("{app}.example"))
+        .expect("set the fallback domain");
     paths.reload_programs.caddy = tmp.path().join("mock_caddy");
     fs::write(&paths.reload_programs.caddy, "#!/bin/sh\nexit 0\n").expect("write mock caddy");
     fs::set_permissions(

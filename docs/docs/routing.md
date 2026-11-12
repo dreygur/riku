@@ -90,7 +90,7 @@ no `domains` or `port`, and is not available for uWSGI or container apps.
 
 ## Servers without a [routing] section
 
-A server upgraded from an older riku has no `[routing]` section, and routes
-exactly as before: no fallback domain, no port mode and no new listeners.
-`routing.mode` and `routing.port` are refused there. Run
-`sudo riku init` to add the section.
+A settings.toml without `[routing]` means the defaults: no fallback domain,
+`shared_port = 8080` and `port_range = "8100-8199"`. An app without a domain
+of its own is then in port mode. `riku init` adds the section whenever it is
+missing, and `riku doctor` prints a `routing` line saying which applies.

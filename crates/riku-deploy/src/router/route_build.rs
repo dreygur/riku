@@ -46,14 +46,17 @@ fn refused_key(env: &HashMap<String, String>) -> Option<String> {
 }
 
 /// What nginx's generator would serve: the listed names, `_` as the catch
-/// all name, none for a port mode app, and `<app>.example.com` for an app
-/// with neither (a server without `[routing]`, routed as before).
+/// all name, or none for a port mode app. An app with neither is an error;
+/// after routing that is a uWSGI or static site, which has no port mode.
 pub(super) fn nginx_domains(app: &AppName, env: &HashMap<String, String>) -> Result<Vec<String>> {
     let Some(raw) = env.get("RIKU_DOMAINS") else {
         if env.contains_key("RIKU_ROUTING_PORT") {
             return Ok(Vec::new());
         }
-        return Ok(vec![format!("{app}.example.com")]);
+        return Err(anyhow!(
+            "'{app}' has no domain to route: set routing.domains, or \
+             routing.fallback_domain in settings.toml"
+        ));
     };
     raw.split(|c: char| c == ',' || c.is_whitespace())
         .filter(|entry| !entry.is_empty())
@@ -230,7 +233,7 @@ fn nginx_route(
 ///
 /// `None` means a Caddy app that sets no domain: it is not routed, and the
 /// caller removes its site as `configure_caddy` does today. nginx always gets
-/// a route, with `<app>.example.com` when `RIKU_DOMAINS` is unset.
+/// a route; see [`nginx_domains`] for an app with no domain and no port.
 ///
 /// An ENV key that names a path the helper picks (`RIKU_NGINX_SOCKET`)
 /// fails the build, naming the key.

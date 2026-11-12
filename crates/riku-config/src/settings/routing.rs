@@ -95,6 +95,11 @@ impl TryFrom<&str> for FallbackPattern {
 }
 
 impl FallbackPattern {
+    /// The pattern as written, placeholders included.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
     /// Whether the pattern needs a server IP to expand.
     pub fn needs_ip(&self) -> bool {
         self.0.contains(IP_PLACEHOLDER)

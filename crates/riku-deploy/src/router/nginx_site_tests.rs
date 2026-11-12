@@ -49,7 +49,6 @@ fn own_domains() -> AppRouting {
         fallback: false,
         port: None,
         mode: RoutingMode::Domain,
-        legacy: true,
         fallback_skipped: None,
     }
 }
@@ -184,7 +183,6 @@ fn failed_fallback_certificate_serves_http_and_says_so() {
     let routing = AppRouting {
         domains: vec!["myapp.203.0.113.10.example".to_string()],
         fallback: true,
-        legacy: false,
         ..own_domains()
     };
 
@@ -234,7 +232,6 @@ fn fallback_with_a_pair_carries_the_fullchain() {
     let routing = AppRouting {
         domains: vec!["myapp.203.0.113.10.example".to_string()],
         fallback: true,
-        legacy: false,
         ..own_domains()
     };
 
@@ -289,7 +286,8 @@ fn check_asks_the_helper_for_its_status() {
         version: "0.1.2".to_string(),
     };
 
-    check_nginx_site(mock_helper(status, &seen), "myapp", &env(&[]), &paths).unwrap();
+    let env = env(&[("RIKU_DOMAINS", "myapp.example")]);
+    check_nginx_site(mock_helper(status, &seen), "myapp", &env, &paths).unwrap();
 
     assert_eq!(seen.borrow().as_slice(), [Request::Status {}]);
 }

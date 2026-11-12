@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use super::*;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
-use crate::router::routing_state::RoutingState;
+use crate::router::routing_state::{RoutingMode, RoutingState};
 
 const ROUTING: &str =
     "[routing]\nfallback_domain = \"{app}.{ip}.example\"\nserver_ip = \"203.0.113.10\"\n";
@@ -50,15 +50,18 @@ fn fallback_overlay_sets_domains_and_drops_https_only() {
 }
 
 #[test]
-fn no_routing_section_keeps_todays_env() {
+fn no_routing_section_puts_a_domainless_app_in_port_mode() {
     let (_tmp, paths) = paths_with(Some("[router]\nname = \"nginx\"\n"));
-    let original = env(&[("RIKU_HTTPS_ONLY", "true")]);
 
     let (routed_env, routing) =
-        routing_env("myapp", &original, &paths, &Router::Nginx, Record::Save).unwrap();
+        routing_env("myapp", &env(&[]), &paths, &Router::Nginx, Record::Save).unwrap();
 
-    assert!(routing.legacy);
-    assert_eq!(routed_env, original);
+    assert_eq!(routing.mode, RoutingMode::Port, "{routing:?}");
+    assert_eq!(
+        routed_env.get("RIKU_ROUTING_PORT"),
+        routing.port.map(|port| port.to_string()).as_ref(),
+        "the picked port reaches the route: {routed_env:?}"
+    );
 }
 
 #[test]
