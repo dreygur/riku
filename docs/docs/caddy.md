@@ -96,7 +96,7 @@ Caddy only proxies HTTP over TCP. Under Caddy, a deploy fails with `Caddy proxie
 - runs a uWSGI socket process (`wsgi:`, `jwsgi:`, `rwsgi:` or `php:` in the `Procfile`), or
 - is a static site (`RIKU_NGINX_STATIC`).
 
-Run a `web:` process that listens on `$PORT` instead. nginx specific keys (`RIKU_NGINX_ALLOW_GIT_FOLDERS`, custom `nginx.conf` files) have no effect under Caddy. `RIKU_NGINX_SOCKET` fails a deploy under either router.
+Run a `web:` process that listens on `$PORT` instead. nginx specific keys (`RIKU_NGINX_ALLOW_GIT_FOLDERS`, custom `nginx.conf` files) have no effect under Caddy. `RIKU_NGINX_SOCKET` fails a deploy or restart under either router.
 
 ---
 

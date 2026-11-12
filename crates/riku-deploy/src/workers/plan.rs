@@ -1,5 +1,6 @@
 //! Everything a deploy checks before it touches a worker config: the pinned
-//! port and custom socket rules, the process list and each kind's copy count.
+//! port rule, the refused app socket, the process list and each kind's copy
+//! count.
 //! A deploy refused here leaves every running worker as it was.
 
 // Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
@@ -10,7 +11,8 @@ use std::collections::HashMap;
 use anyhow::Result;
 
 use super::pinned::check_pinned_port_with;
-use super::socket::check_custom_socket;
+use super::socket::refuse_app_socket;
+use super::web_env::is_web_facing;
 use super::{read_scaling_count, ONE_SHOT_KINDS, WEB_KIND};
 use crate::config::RikuPaths;
 
@@ -45,14 +47,16 @@ pub(super) fn plan_workers(
     if let Err(e) = check_pinned_port_with(app, env, paths, in_use) {
         return Err(e);
     }
-    if let Err(e) = check_custom_socket(app, env, paths) {
-        return Err(e);
-    }
     let entries = match (processes, start_cmd) {
         (Some(declared), _) if !declared.is_empty() => declared.clone(),
         (_, Some(cmd)) => HashMap::from([(WEB_KIND.to_string(), cmd.to_string())]),
         (_, None) => return Ok(None),
     };
+    if entries.keys().any(|kind| is_web_facing(kind)) {
+        if let Err(e) = refuse_app_socket(env) {
+            return Err(e);
+        }
+    }
     let mut kinds = Vec::new();
     for (kind, command) in &entries {
         if ONE_SHOT_KINDS.contains(&kind.as_str()) {

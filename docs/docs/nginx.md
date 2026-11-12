@@ -93,7 +93,7 @@ missing source is published as an empty directory. `sudo riku init` creates
 
 The route does not do caching, Cloudflare allow lists, Content-Security-Policy headers, SPA catch-all, a snippet include file, or extra listen addresses. An app that needs caching or a CSP sets the header itself.
 
-`RIKU_NGINX_SOCKET` fails a deploy, naming the key: the router helper picks socket paths itself.
+`RIKU_NGINX_SOCKET` fails a deploy or `riku restart` of an app with a web facing process, naming the key, before any worker changes: the router helper picks socket paths itself, and each uWSGI copy listens on its own socket in `/run/riku-sockets`.
 
 ---
 

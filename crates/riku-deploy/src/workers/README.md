@@ -11,7 +11,7 @@ Component package located at `crates/riku-deploy/src/workers`.
 - `pinned_port` [ports.rs:pinned_port] (fn)
 - `free_loopback_port` [ports.rs:free_loopback_port] (fn)
 - `unused_port` [ports.rs:unused_port] (fn)
-- `check_custom_socket` [socket.rs:check_custom_socket] (fn)
+- `refuse_app_socket` [socket.rs:refuse_app_socket] (fn)
 - `is_wsgi_kind` [web_env.rs:is_wsgi_kind] (fn)
 - `is_web_facing` [web_env.rs:is_web_facing] (fn)
 - `build_worker_env` [web_env.rs:build_worker_env] (fn)

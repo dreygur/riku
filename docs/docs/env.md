@@ -152,7 +152,7 @@ riku settings set myapp routing.static_paths=/static:public,/assets:static,/imag
 
 ### Refused Keys
 
-A deploy fails, naming the key, when the app's ENV sets `RIKU_NGINX_SOCKET`: the router helper picks socket paths itself.
+A deploy or `riku restart` of an app with a web facing process fails, naming the key, before any worker changes, when the app's ENV sets `RIKU_NGINX_SOCKET`: the router helper picks socket paths itself, and no copy listens on a path the app chose.
 
 ### Allow Git Folders
 

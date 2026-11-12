@@ -63,6 +63,7 @@ use reload::{record_outcome, reload_router_plugin};
 pub use remove::remove;
 pub use renew::renew;
 pub use route_build::build_route;
+pub(crate) use route_build::refused_key;
 use routing_env::{routing_env, Record};
 use routing_state::{restore, RoutingMode};
 

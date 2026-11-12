@@ -7,10 +7,11 @@
 //! and the checkout is left as it is; the runtime plugin's `env` subcommand
 //! is the only plugin call. Web facing kinds are rolled one copy at a time
 //! as on a deploy: a new copy joins the router before an old one leaves,
-//! except for a kind whose copies cannot overlap (a pinned `PORT`, or a
-//! shared wsgi `RIKU_NGINX_SOCKET`), where the old copy stops first and the
-//! route is down until its replacement is healthy. Restart warns about such
-//! a kind before it starts. A rebuild is `riku deploy`.
+//! except for a `web` kind with a pinned `PORT`, whose copies cannot
+//! overlap: the old copy stops first and the route is down until its
+//! replacement is healthy. Restart warns about such a kind before it starts.
+//! An app ENV that sets `RIKU_NGINX_SOCKET` is refused before any change.
+//! A rebuild is `riku deploy`.
 //!
 //! A single worker restart (the dashboard's button) keeps its config and
 //! advances the config file's mtime instead. The supervisor reloads a worker

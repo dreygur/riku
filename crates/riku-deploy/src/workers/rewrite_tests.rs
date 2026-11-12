@@ -173,16 +173,12 @@ fn an_unconfirmed_publish_leaves_exactly_the_wanted_copies() {
     drop(supervisor);
 }
 
-/// A pinned `PORT` or a shared wsgi socket stops the old copy before its
-/// replacement starts, so restart must say the route goes down.
+/// A pinned `PORT` stops the old copy before its replacement starts, so
+/// restart must say the route goes down.
 #[test]
 fn only_stop_first_web_kinds_lose_their_route_while_restarting() {
     let kinds = ["web", "worker", "wsgi"];
     let pinned = HashMap::from([("PORT".to_string(), "8000".to_string())]);
-    let shared_socket = HashMap::from([(
-        "RIKU_NGINX_SOCKET".to_string(),
-        "/run/riku-sockets/app.sock".to_string(),
-    )]);
 
     assert_eq!(
         kinds_down_while_restarting(kinds, &HashMap::new()).unwrap(),
@@ -192,9 +188,5 @@ fn only_stop_first_web_kinds_lose_their_route_while_restarting() {
     assert_eq!(
         kinds_down_while_restarting(kinds, &pinned).unwrap(),
         ["web"]
-    );
-    assert_eq!(
-        kinds_down_while_restarting(kinds, &shared_socket).unwrap(),
-        ["wsgi"]
     );
 }

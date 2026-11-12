@@ -5,11 +5,12 @@
 
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use riku_container::types::CopyIndex;
 
 use super::ports::{free_loopback_port, pinned_port, unused_port};
+use super::socket::refuse_app_socket;
 use crate::config::RikuPaths;
 
 const UWSGI_PROCESSES: &str = "4";
@@ -27,28 +28,10 @@ pub(crate) fn is_web_facing(kind: &str) -> bool {
     kind == "web" || is_wsgi_kind(kind)
 }
 
-/// The unix socket a copy listens on: `RIKU_NGINX_SOCKET` when the app sets
-/// one (such an app runs a single copy, see `check_custom_socket`), else a
-/// socket of its own per copy.
-fn listen_socket(
-    app: &str,
-    copy: CopyIndex,
-    env: &HashMap<String, String>,
-    paths: &RikuPaths,
-) -> PathBuf {
-    match env.get("RIKU_NGINX_SOCKET") {
-        Some(socket) => PathBuf::from(socket),
-        None => crate::router::copy_socket(paths, app, copy),
-    }
-}
-
 /// The socket directory must exist before uWSGI binds in it. Root init makes
 /// it; this only matters after a reboot on a host without systemd-tmpfiles,
-/// and in tests. A `RIKU_NGINX_SOCKET` lives wherever the app put it.
-fn ensure_socket_root(env: &HashMap<String, String>, paths: &RikuPaths) -> Result<()> {
-    if env.contains_key("RIKU_NGINX_SOCKET") {
-        return Ok(());
-    }
+/// and in tests.
+fn ensure_socket_root(paths: &RikuPaths) -> Result<()> {
     crate::util::socket_dir::ensure_exists(&paths.socket_root, crate::config::SOCKET_GROUP)
 }
 
@@ -180,7 +163,9 @@ pub(crate) fn clear_route_env(app: &str, paths: &RikuPaths) -> Result<()> {
 /// Build the environment map for a single worker instance.
 ///
 /// Web-facing processes get PORT/SOCKET injected; wsgi variants get uwsgi vars.
-/// Also persists routing settings back to the app's ENV file.
+/// Also persists routing settings back to the app's ENV file. A web facing
+/// copy is refused when the app names its own socket (see
+/// [`super::socket`]).
 #[allow(clippy::question_mark)]
 pub(super) fn build_worker_env(
     app: &str,
@@ -195,11 +180,14 @@ pub(super) fn build_worker_env(
     if !is_web_facing(kind) {
         return Ok(env);
     }
+    if let Err(e) = refuse_app_socket(base_env) {
+        return Err(e);
+    }
 
-    let socket_path = listen_socket(app, copy, base_env, paths);
+    let socket_path = crate::router::copy_socket(paths, app, copy);
 
     if is_wsgi_kind(kind) {
-        if let Err(e) = ensure_socket_root(base_env, paths) {
+        if let Err(e) = ensure_socket_root(paths) {
             return Err(e);
         }
         configure_wsgi_env(&socket_path, &mut env);

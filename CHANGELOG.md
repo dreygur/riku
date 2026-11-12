@@ -60,6 +60,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Security: a web facing worker listened on the socket an app named with
+  `RIKU_NGINX_SOCKET`, while the route build refused that key. Under nginx
+  the route check stopped the deploy or restart before a copy started,
+  but under Caddy or a router plugin nothing did, so a wsgi copy bound
+  uWSGI wherever the app said. The worker env now applies the route's own
+  refusal for every router: a deploy or restart of an app with a web
+  facing kind fails before any worker config changes, and every copy
+  listens on its own socket in `/run/riku-sockets`. A worker only app is
+  not affected.
 - Three tests passed without checking anything. The deploy smoke script's
   env and nginx tests only wrote a file; they now run the built riku and
   check that `riku config set` refuses each worker and routing setting,

@@ -38,7 +38,9 @@ fn route_error(app: &AppName, cause: anyhow::Error) -> anyhow::Error {
 }
 
 /// The reason an ENV key set by the app fails the deploy, if one does.
-fn refused_key(env: &HashMap<String, String>) -> Option<String> {
+/// Worker env building applies the same rule, so no copy listens where
+/// the route will not point.
+pub(crate) fn refused_key(env: &HashMap<String, String>) -> Option<String> {
     REFUSED_KEYS
         .iter()
         .find(|(key, _)| env.contains_key(*key))

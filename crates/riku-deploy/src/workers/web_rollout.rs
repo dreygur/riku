@@ -11,7 +11,6 @@ use riku_util::backend::Backend;
 
 use super::ports::pinned_port;
 use super::process_runtime::ProcessRuntime;
-use super::web_env::is_wsgi_kind;
 use super::WEB_KIND;
 use crate::config::RikuPaths;
 use crate::rolling::{replace_all, CopyRuntime, RouteSink};
@@ -67,8 +66,8 @@ impl RouteSink for WebRoutes<'_> {
 }
 
 /// Copies overlap unless two of them would need the same address: a pinned
-/// `PORT` for `web`, or a shared `RIKU_NGINX_SOCKET` for a wsgi kind. Those
-/// stop the old copy before its replacement starts.
+/// `PORT` for `web`, which stops the old copy before its replacement starts.
+/// Every wsgi copy has a socket of its own.
 pub(super) fn web_order(kind: &str, env: &HashMap<String, String>) -> Result<ReplaceOrder> {
     if kind == WEB_KIND {
         match pinned_port(env) {
@@ -76,9 +75,6 @@ pub(super) fn web_order(kind: &str, env: &HashMap<String, String>) -> Result<Rep
             Ok(None) => {}
             Err(e) => return Err(e),
         }
-    }
-    if is_wsgi_kind(kind) && env.contains_key("RIKU_NGINX_SOCKET") {
-        return Ok(ReplaceOrder::StopFirst);
     }
     Ok(ReplaceOrder::Overlap)
 }

@@ -16,6 +16,7 @@ use riku_container::types::CopyIndex;
 use riku_supervisor::config::WorkerConfig;
 
 use super::files::{install_worker_config, render_worker_config, RenderedConfig};
+use super::socket::refuse_app_socket;
 use super::web_env::{build_worker_env, is_web_facing};
 use super::web_rollout::{roll_web_kind, web_order, WebDeploy};
 use crate::rolling::RouteSink;
@@ -99,6 +100,9 @@ fn plan_kind<'a>(
     found: RunningKind<'a>,
 ) -> Result<KindPlan<'a>> {
     if is_web_facing(kind) {
+        if let Err(e) = refuse_app_socket(deploy.env) {
+            return Err(e);
+        }
         if let Err(e) = web_order(kind, deploy.env) {
             return Err(e);
         }
