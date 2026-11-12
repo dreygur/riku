@@ -58,6 +58,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   long `riku run` job is therefore bound by the CPU time (3600 s by
   default) and file size (1 GB by default) limits; raise them for the app
   with `riku settings set <app> limits.max_cpu_seconds=...`.
+- A `RIKU_MAX_MEMORY_MB` or `RIKU_MAX_FILE_SIZE_MB` value (or the matching
+  `limits.max_*_mb` setting) too large to count in bytes panicked a debug
+  build and wrapped to a wrong limit, as low as 0 bytes, in a release
+  build. Such a value is
+  now ignored like one that is not a number, so the limit stays at the
+  server wide value or the default.
 - The Procfile `release` and `preflight` commands ran with riku's own env
   only, so a migration could not see the app's settings such as
   `DATABASE_URL`. They now get the app env, the same one the workers get.

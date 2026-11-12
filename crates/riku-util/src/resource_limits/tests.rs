@@ -93,6 +93,26 @@ fn app_env_without_limit_keys_keeps_the_server_limits() {
 }
 
 #[test]
+fn megabyte_values_too_large_for_bytes_keep_the_base_limit() {
+    let huge = u64::MAX.to_string();
+    let env = app_env(&[
+        ("RIKU_MAX_MEMORY_MB", huge.as_str()),
+        ("RIKU_MAX_FILE_SIZE_MB", huge.as_str()),
+    ]);
+
+    let limits = server_limits().with_app_env(&env);
+
+    assert_eq!(
+        (limits.max_memory_bytes, limits.max_file_size_bytes),
+        (
+            server_limits().max_memory_bytes,
+            server_limits().max_file_size_bytes
+        ),
+        "a value whose byte count overflows u64 must be ignored like an unparsable one"
+    );
+}
+
+#[test]
 fn memory_stays_unset_when_not_configured() {
     let limits = ResourceLimits::from_lookup(|_| None);
 

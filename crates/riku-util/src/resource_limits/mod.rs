@@ -19,6 +19,13 @@ fn env_u64(key: &str) -> Option<u64> {
     env::var(key).ok().and_then(|v| v.parse::<u64>().ok())
 }
 
+/// `key` read through `lookup` as megabytes, with its size in bytes. `None`
+/// when unset, unparsable, or too large for a `u64` byte count, so all three
+/// keep the limit already in place.
+fn megabytes(lookup: impl Fn(&str) -> Option<u64>, key: &str) -> Option<(u64, u64)> {
+    lookup(key).and_then(|mb| mb.checked_mul(1024 * 1024).map(|bytes| (mb, bytes)))
+}
+
 // rlim_t is 32 bits on 32-bit Linux (armv7); a value too large for it means
 // no limit, which is what RLIM_INFINITY (all bits set) says.
 #[allow(clippy::useless_conversion, clippy::unnecessary_fallible_conversions)]
@@ -157,8 +164,8 @@ impl ResourceLimits {
     fn overlay(self, lookup: impl Fn(&str) -> Option<u64>) -> Self {
         let mut limits = self;
 
-        if let Some(mb) = lookup("RIKU_MAX_MEMORY_MB") {
-            limits.max_memory_bytes = Some(mb * 1024 * 1024);
+        if let Some((mb, bytes)) = megabytes(&lookup, "RIKU_MAX_MEMORY_MB") {
+            limits.max_memory_bytes = Some(bytes);
             tracing::info!("Resource limit: max_memory = {} MB", mb);
         }
 
@@ -181,8 +188,8 @@ impl ResourceLimits {
         }
 
         // File size limit in MB
-        if let Some(mb) = lookup("RIKU_MAX_FILE_SIZE_MB") {
-            limits.max_file_size_bytes = Some(mb * 1024 * 1024);
+        if let Some((mb, bytes)) = megabytes(&lookup, "RIKU_MAX_FILE_SIZE_MB") {
+            limits.max_file_size_bytes = Some(bytes);
             tracing::info!("Resource limit: max_file_size = {} MB", mb);
         }
 
