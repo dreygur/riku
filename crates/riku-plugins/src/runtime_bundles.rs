@@ -42,7 +42,7 @@ fn runtime_bundles(plugin_root: &Path) -> Vec<RuntimePlugin> {
 }
 
 /// Add the runtime bundles under `plugin_root` to `plugins`. On a name clash
-/// the plain file plugin wins, so an existing install behaves as before.
+/// the plain file plugin wins, with a warning.
 pub(crate) fn add_runtime_bundles(plugins: &mut Vec<RuntimePlugin>, plugin_root: &Path) {
     for bundle in runtime_bundles(plugin_root) {
         if let Some(file) = plugins.iter().find(|p| p.name == bundle.name) {

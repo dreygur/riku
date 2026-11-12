@@ -100,7 +100,6 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
             command,
             args,
             confirm,
-            json: _,
         } => {
             let session = AgentSession::from_flags(scope.as_deref(), agent_id.as_deref());
             let mode = agent_mode((intro, schema, agent_help), command, args, confirm);

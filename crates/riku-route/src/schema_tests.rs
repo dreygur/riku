@@ -26,19 +26,3 @@ fn tls_key_stays_out_of_debug_output() {
 
     assert!(!format!("{tls:?}").contains("secret-key-text"));
 }
-
-#[test]
-fn route_without_open_port_serializes_without_the_field() {
-    let route = parse(
-        r#"{"domains":["myapp.example"],"https":"also_plain_http","backends":[],"tls":null}"#,
-    )
-    .unwrap();
-
-    let json = serde_json::to_string(&route).unwrap();
-
-    assert_eq!(route.open_port, None);
-    assert!(
-        !json.contains("open_port"),
-        "an older helper refuses the field: {json}"
-    );
-}

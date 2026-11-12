@@ -7,7 +7,7 @@ fn words(text: &str) -> Vec<String> {
 #[test]
 fn forced_command_with_only_scope_and_identity_takes_a_request() {
     assert!(is_bare_agent(&words(
-        "riku agent --scope staging --agent-id cursor --json"
+        "riku agent --scope staging --agent-id cursor"
     )));
     assert!(!is_bare_agent(&words("riku agent --scope staging apps")));
     assert!(!is_bare_agent(&words("riku ps")));
@@ -15,7 +15,7 @@ fn forced_command_with_only_scope_and_identity_takes_a_request() {
 
 #[test]
 fn client_request_keeps_command_arguments_and_confirm_token() {
-    let request = client_request(words("agent destroy shop --confirm abc --json"));
+    let request = client_request(words("agent destroy shop --confirm abc"));
     assert_eq!(request.unwrap(), words("destroy shop --confirm abc"));
 }
 

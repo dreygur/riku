@@ -37,8 +37,8 @@ case "$CMD" in
       esac
     fi
     # Prefer nub: a single Rust binary that reads npm/pnpm/bun lockfiles
-    # directly (https://nubjs.com). Fall back to npm so servers that have
-    # not installed nub yet still deploy.
+    # directly (https://nubjs.com). Fall back to npm on a server without
+    # nub.
     if command -v nub >/dev/null 2>&1; then
       has_lock=0
       for lock in package-lock.json pnpm-lock.yaml lock.yaml bun.lock; do

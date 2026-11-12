@@ -71,13 +71,13 @@ fn leaves_a_modified_copy_alone_and_names_it() {
 }
 
 #[test]
-fn leaves_a_copy_without_a_record_alone_and_lists_it() {
+fn treats_a_copy_without_a_record_as_modified() {
     let tmp = tempfile::tempdir().unwrap();
     fs::write(tmp.path().join("go"), OLD_PYTHON).unwrap();
 
     let report = refresh_bundled(tmp.path()).unwrap();
 
-    assert_eq!(report.unrecorded, ["go"], "{report:?}");
+    assert_eq!(report.modified, ["go"], "{report:?}");
     assert_eq!(fs::read(tmp.path().join("go")).unwrap(), OLD_PYTHON);
 }
 

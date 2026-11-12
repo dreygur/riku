@@ -54,10 +54,8 @@ record:
 
 - unchanged since riku wrote it, and older than this riku's copy: rewritten,
   shown as `◇  Runtime plugins  refreshed python, node`
-- changed by you: left alone, with a `▲` warning; `riku plugins install <name>`
-  replaces it
-- installed by a riku older than the record: left alone and listed; refresh
-  them with `riku install-plugins --plugins <names>`
+- changed by you, or with no record of riku writing it: left alone, with a
+  `▲` warning; `riku plugins install <name>` replaces it
 - a symlink, or not a regular file owned by the deploy user: never read or
   replaced, and named in a warning
 

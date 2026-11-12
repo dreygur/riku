@@ -26,16 +26,6 @@ fn print_report(report: &RefreshReport) {
     for (name, why) in &report.refused {
         display::warn(&format!("{name} plugin left alone: {why}"));
     }
-    if !report.unrecorded.is_empty() {
-        display::warn(&format!(
-            "Not refreshed, installed by an older riku: {}",
-            report.unrecorded.join(", ")
-        ));
-        display::detail(&format!(
-            "To refresh them: riku install-plugins --plugins {}",
-            report.unrecorded.join(",")
-        ));
-    }
 }
 
 /// The downloaded plugins (java, clojure) installed in `plugin_root`.

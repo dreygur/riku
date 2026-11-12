@@ -91,11 +91,6 @@ pub enum Commands {
         /// Confirmation token for destructive actions
         #[arg(long)]
         confirm: Option<String>,
-
-        /// Accepted so existing forced commands keep working. Agent output
-        /// is always JSON
-        #[arg(long)]
-        json: bool,
     },
 
     /// Manage app configuration

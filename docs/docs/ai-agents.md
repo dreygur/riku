@@ -15,9 +15,8 @@ command="riku agent --scope readonly --agent-id monitor",no-port-forwarding,no-p
 command="riku agent --scope staging --agent-id cursor",no-port-forwarding,no-pty ssh-ed25519 BBBB... cursor
 ```
 
-The forced command holds only `riku agent` with `--scope`, `--agent-id` and
-optionally `--json` (accepted, output is always JSON). Without `--scope` the
-key is read only. A forced command that names a command itself always runs
+The forced command holds only `riku agent` with `--scope` and `--agent-id`.
+Without `--scope` the key is read only. A forced command that names a command itself always runs
 that command and ignores the request. Never use a bare `riku` forced command
 for an agent: it gives the client the whole CLI. Never allow `RIKU_*`
 variables through sshd `AcceptEnv`.
@@ -41,8 +40,8 @@ before it reaches the server. ssh joins its arguments with spaces, so a value
 that holds spaces needs quotes inside the remote command, as in the last line.
 
 A leading `riku` or `riku agent` is ignored. The request may hold only the
-command, its arguments, `--confirm <token>`, `--intro`, `--schema`,
-`--agent-help` and `--json`. Any other option, `--scope` and `--agent-id`
+command, its arguments, `--confirm <token>`, `--intro`, `--schema` and
+`--agent-help`. Any other option, `--scope` and `--agent-id`
 included, is refused with `INVALID_PARAMETERS`. On the server the same calls
 run as `riku agent ps myapp`.
 

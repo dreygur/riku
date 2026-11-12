@@ -464,7 +464,7 @@ mod agent_scope_tests {
         fs::create_dir_all(home.path().join(".ssh")).unwrap();
         fs::write(
             home.path().join(".ssh/authorized_keys"),
-            "command=\"riku agent --scope production --json\",no-pty ssh-ed25519 AAAA other-key\n",
+            "command=\"riku agent --scope production\",no-pty ssh-ed25519 AAAA other-key\n",
         )
         .unwrap();
         home

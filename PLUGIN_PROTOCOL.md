@@ -209,10 +209,8 @@ behind it during a rolling deploy.
 deploy before the plugin is called.
 
 Owns its config directory. Env: `RIKU_APP` (for `configure`/`unconfigure`),
-`RIKU_ROOT`. `unconfigure` was added within API v1; the kernel treats a
-non-zero exit as "not implemented" and falls back to a plain `reload`, so older
-routers keep working. This holds for any protocol version, so an old plugin can
-still be unconfigured.
+`RIKU_ROOT`. `unconfigure` is best effort: the kernel treats a non-zero exit
+as "not implemented" and falls back to a plain `reload`.
 
 ## 7. Event bus _(new)_
 

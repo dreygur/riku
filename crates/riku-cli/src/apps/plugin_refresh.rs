@@ -2,8 +2,8 @@
 //!
 //! A copy riku wrote and nobody changed since (its hash matches the bundled
 //! record) is rewritten with this riku's version. A copy that differs from
-//! the record, or has no record because an older riku installed it, is left
-//! alone and reported, so an upgrade never discards a user's edit.
+//! the record, or has no record at all, counts as changed by the user: it
+//! is left alone and reported, so an upgrade never discards a user's edit.
 //!
 //! Security: files are read through [`super::owned_file`], so only regular
 //! files owned by the effective user, under directories it owns, are ever
@@ -30,7 +30,7 @@ enum FileState {
         recorded: bool,
     },
     Refused(String),
-    Unrecorded,
+    /// Differs from the record, or has none.
     Modified,
     Outdated,
     Current,
@@ -41,7 +41,6 @@ enum PluginState {
     NotInstalled,
     Refused(String),
     Modified,
-    Unrecorded,
     Outdated,
     Current,
 }
@@ -61,16 +60,16 @@ fn file_state(root: &Path, record: &BundledRecord, file: &EmbeddedFile) -> Resul
     };
     let on_disk = sha256_hex(&bytes);
     Ok(match recorded {
-        None => FileState::Unrecorded,
+        None => FileState::Modified,
         Some(hash) if hash != on_disk => FileState::Modified,
         Some(_) if on_disk != sha256_hex(file.bytes) => FileState::Outdated,
         Some(_) => FileState::Current,
     })
 }
 
-/// The plugin's state from its files'. A refusal wins over an edit, an edit
-/// over a missing record, so a plugin is rewritten only when every file is
-/// riku's own, unchanged copy (or one this riku adds).
+/// The plugin's state from its files'. A refusal wins over an edit, so a
+/// plugin is rewritten only when every file is riku's own, unchanged copy
+/// (or one this riku adds).
 fn plugin_state(states: &[FileState]) -> PluginState {
     if states
         .iter()
@@ -91,8 +90,6 @@ fn plugin_state(states: &[FileState]) -> PluginState {
         )
     }) {
         PluginState::Modified
-    } else if any(|state| matches!(state, FileState::Unrecorded)) {
-        PluginState::Unrecorded
     } else if any(|state| {
         matches!(
             state,
@@ -125,10 +122,9 @@ fn inspect_plugin(
 pub struct RefreshReport {
     /// Rewritten with this riku's version.
     pub refreshed: Vec<&'static str>,
-    /// Changed since riku wrote them; left alone.
+    /// Changed since riku wrote them, or with no record of riku writing
+    /// them; left alone.
     pub modified: Vec<&'static str>,
-    /// Installed by a riku that kept no record; left alone.
-    pub unrecorded: Vec<&'static str>,
     /// Not a regular file the user owns (a symlink, say), with why; left alone.
     pub refused: Vec<(&'static str, String)>,
 }
@@ -150,7 +146,6 @@ pub fn refresh_bundled(plugin_root: &Path) -> Result<RefreshReport> {
             PluginState::NotInstalled | PluginState::Current => {}
             PluginState::Refused(why) => report.refused.push((plugin.name, why)),
             PluginState::Modified => report.modified.push(plugin.name),
-            PluginState::Unrecorded => report.unrecorded.push(plugin.name),
             PluginState::Outdated => {
                 if let Err(e) = write_out(plugin, plugin_root) {
                     return Err(e);

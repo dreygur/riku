@@ -14,12 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   node, python, ruby, rust-lang, riku-notify) to this riku's version, but
   only copies riku wrote and nobody changed since. Installing a bundled
   plugin now records each file's sha256 in `~/.riku/plugins/.bundled`. A
-  copy that differs from its record is left alone with a warning naming
-  `riku plugins install <name>`; copies an older riku installed have no
-  record, so they are left alone and listed with the command to refresh
-  them. A symlink, or a file the deploy user does not own, is never read or
-  replaced. Before this an upgrade kept the old plugin text, so a server
-  went on running an outdated python plugin.
+  copy that differs from its record, or has no record, is left alone with
+  a warning naming `riku plugins install <name>`. A symlink, or a file the
+  deploy user does not own, is never read or replaced. Before this an
+  upgrade kept the old plugin text, so a server went on running an
+  outdated python plugin.
 - The router directories stay root's on every run, not only at creation.
   `sudo riku init` sets `/etc/riku/nginx` to root and `0755`,
   `/etc/riku/certs` and each app directory in it to root and `0700`, and
@@ -432,6 +431,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are ignored; only `[options.limits]` sets them. Removing an app's
   workers deletes only its `.toml` worker configs; a leftover `.ini` file
   (never run by the supervisor) stays where it is.
+- Breaking: `riku agent --json`. Agent output is always JSON, and the flag
+  is now an unknown option: a forced command that carries it fails to
+  parse, and a client request with it is refused with
+  `INVALID_PARAMETERS`. Drop `--json` from agent keys in
+  `authorized_keys`.
+- Breaking: a bundled plugin with no sha256 record in
+  `~/.riku/plugins/.bundled` counts as changed by you. `riku init` leaves
+  it alone with the same warning as an edited copy, naming `riku plugins
+  install <name>`, instead of its own list.
+- Breaking: the route riku sends the router helper always carries
+  `open_port` (`null` when unset), so a router helper from before port
+  mode refuses every route. Run `sudo riku init` after installing a new
+  binary so the helper matches.
 
 ## [0.1.4-rc.3] - 2026-11-11
 

@@ -44,7 +44,7 @@ pub(crate) struct BundledRecord {
 
 impl BundledRecord {
     /// Lines that are not `<path> <hash>` are skipped: they cannot match a
-    /// file, so the plugin reads as unrecorded and is left alone.
+    /// file, so the plugin reads as changed and is left alone.
     fn parse(text: &str) -> Self {
         let hashes = text
             .lines()
