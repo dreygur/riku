@@ -336,7 +336,7 @@ pub enum Commands {
         token: Option<String>,
     },
 
-    /// Manage addon instances (managed resources: databases, caches, …)
+    /// Manage addon instances (managed resources such as databases and caches)
     #[command(
         subcommand,
         after_help = "Examples:\n  riku addon list\n  riku addon create postgres db1\n  riku addon bind db1 myapp"
@@ -406,7 +406,7 @@ pub enum Commands {
     )]
     Plugin(PluginCmd),
 
-    /// Install/list/remove manifest-based plugin bundles (addons, notifiers, …)
+    /// Install/list/remove manifest-based plugin bundles (addons, notifiers and more)
     #[command(
         subcommand,
         after_help = "Examples:\n  riku plugins install ./examples/plugins/postgres\n  riku plugins list\n  riku plugins remove postgres"

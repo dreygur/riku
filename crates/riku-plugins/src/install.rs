@@ -66,7 +66,7 @@ impl<'a> PluginInstaller<'a> {
         if let Some(url) = git_url(source) {
             return self.install_from_git(&url, source, git_ref);
         }
-        bail!("source '{source}' is not a local directory or a git URL (try ./path or https://…/repo.git)");
+        bail!("source '{source}' is not a local directory or a git URL (try ./path or https://host/owner/repo.git)");
     }
 
     fn install_from_git(
