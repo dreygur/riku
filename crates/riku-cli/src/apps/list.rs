@@ -10,8 +10,8 @@ use crate::util::display;
 /// laptop reaches it by, so `<host>` stays for the developer to fill in.
 pub(super) fn print_first_deploy_hint() {
     display::warn("From your app's git repo on your laptop:");
-    display::warn("  rk server add <name> riku@<host> --admin <login>@<host>");
-    display::warn("  git push riku main");
+    display::detail_err("rk server add <name> riku@<host> --admin <login>@<host>");
+    display::detail_err("git push riku main");
 }
 
 /// List apps, marking running ones with '*'.

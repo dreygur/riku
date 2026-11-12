@@ -431,6 +431,83 @@ release: python migrate.py
     }
 }
 
+/// Multi line warnings put their follow up lines on the rail, on the same
+/// stream as the `▲` line, instead of an indented second `▲`.
+mod warning_lines {
+    use std::path::Path;
+    use std::process::{Command, Output, Stdio};
+
+    fn riku(root: &Path, args: &[&str]) -> Output {
+        Command::new(env!("CARGO_BIN_EXE_riku"))
+            .arg("--local")
+            .args(args)
+            .env("RIKU_ROOT", root.join(".riku"))
+            .env("HOME", root)
+            .env("XDG_CONFIG_HOME", root)
+            .env_remove("SSH_ORIGINAL_COMMAND")
+            .current_dir(root)
+            .stdin(Stdio::null())
+            .output()
+            .unwrap()
+    }
+
+    fn stderr_lines(out: &Output) -> Vec<String> {
+        String::from_utf8_lossy(&out.stderr)
+            .lines()
+            .map(str::to_string)
+            .collect()
+    }
+
+    fn assert_follows(lines: &[String], expected: &[&str]) {
+        let start = lines.iter().position(|line| line == expected[0]);
+        let found = start.map(|i| &lines[i..(i + expected.len()).min(lines.len())]);
+        assert_eq!(
+            found.map(|run| run.iter().map(String::as_str).collect::<Vec<_>>()),
+            Some(expected.to_vec()),
+            "stderr was:\n{}",
+            lines.join("\n")
+        );
+    }
+
+    #[test]
+    fn first_deploy_hint_lists_its_commands_on_the_rail() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        let out = riku(tmp.path(), &["apps"]);
+
+        assert_follows(
+            &stderr_lines(&out),
+            &[
+                "▲  From your app's git repo on your laptop:",
+                "│  rk server add <name> riku@<host> --admin <login>@<host>",
+                "│  git push riku main",
+            ],
+        );
+    }
+
+    #[test]
+    fn deploy_from_a_plain_directory_hints_git_init_on_the_rail() {
+        let tmp = tempfile::tempdir().unwrap();
+        let source = tmp.path().join("src");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("Procfile"), "worker: true\n").unwrap();
+        std::fs::create_dir_all(tmp.path().join(".riku/apps/plain")).unwrap();
+
+        let out = riku(
+            tmp.path(),
+            &["deploy", "plain", "--from", source.to_str().unwrap()],
+        );
+
+        assert_follows(
+            &stderr_lines(&out),
+            &[
+                "▲  source is not a git repository.",
+                "│  Consider initializing git: git init",
+            ],
+        );
+    }
+}
+
 mod server_cmd {
     use std::path::Path;
     use std::process::{Command, Output, Stdio};

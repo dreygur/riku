@@ -60,6 +60,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The first deploy hint (`riku apps`, `riku apps create`) and the
+  `riku deploy --from` git hint printed their follow up lines as
+  `▲    ...`; they are now `│` lines under the warning, on the same stream.
 - Security: a web facing worker listened on the socket an app named with
   `RIKU_NGINX_SOCKET`, while the route build refused that key. Under nginx
   the route check stopped the deploy or restart before a copy started,

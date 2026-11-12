@@ -72,7 +72,7 @@ fn deploy_from_path(paths: &RikuPaths, app: &str, source: &str) -> Result<()> {
     let git_dir = source_path.join(".git");
     if !git_dir.exists() {
         display::warn("source is not a git repository.");
-        display::warn("  Consider initializing git: git init");
+        display::detail_err("Consider initializing git: git init");
     }
 
     let app_dir = paths.app_root.join(app);
