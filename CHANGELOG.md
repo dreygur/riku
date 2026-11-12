@@ -65,6 +65,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/etc/riku/nginx`, so every nginx app showed "off". Both now check
   `/etc/riku/nginx/<app>.conf`, and say unknown when the user cannot
   read that directory (`config_known` in `/api/state`).
+- The ruby plugin's build printed "skipping gem install" and succeeded
+  when bundler was missing, then the app crashed on `bundle exec`. The
+  build now fails with one line saying bundler is not installed.
 - Under Caddy, the dashboard and `riku apps info` showed every app as
   having no site, because the deploy user cannot read the root owned
   `/etc/riku/caddy`. They now say the site is unknown. For the same reason

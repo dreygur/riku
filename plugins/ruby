@@ -14,11 +14,11 @@ case "$CMD" in
 
   build)
     cd "$APP_PATH"
-    if command -v bundle >/dev/null 2>&1; then
-      bundle install --without development test
-    else
-      echo "bundler not found: skipping gem install" >&2
+    if ! command -v bundle >/dev/null 2>&1; then
+      echo "Bundler is not installed on this server (bundle not found). Install Ruby and bundler, then push again." >&2
+      exit 1
     fi
+    bundle install --without development test
     ;;
 
   env)

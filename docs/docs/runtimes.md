@@ -160,7 +160,9 @@ app.listen(port, '0.0.0.0', () => {
 
 ### Detection
 
-Riku detects Ruby apps by the presence of `Gemfile`.
+Riku detects Ruby apps by the presence of `Gemfile`. The build runs
+`bundle install`; without bundler on the server it stops with
+`Bundler is not installed on this server (bundle not found)`.
 
 ### Gemfile
 

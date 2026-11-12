@@ -231,7 +231,7 @@ fn a_server_without_npm_or_nub_fails_the_build_saying_node_is_missing() {
 }
 
 #[test]
-fn python_and_go_builds_without_their_toolchain_say_it_is_missing() {
+fn python_go_and_ruby_builds_without_their_toolchain_say_it_is_missing() {
     for (plugin, marker, wanted) in [
         (
             "python",
@@ -239,6 +239,11 @@ fn python_and_go_builds_without_their_toolchain_say_it_is_missing() {
             "Python is not installed on this server",
         ),
         ("go", "go.mod", "Go is not installed on this server"),
+        (
+            "ruby",
+            "Gemfile",
+            "Bundler is not installed on this server",
+        ),
     ] {
         let tmp = tempfile::tempdir().unwrap();
         let bin = tmp.path().join("bin");
