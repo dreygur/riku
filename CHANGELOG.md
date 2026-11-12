@@ -120,6 +120,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lines (`Step 2/4 : WORKDIR /app`) between the rail lines. Build and pull
   output now goes on the rail (`│  ...`) like runtime plugin build output,
   stderr included, and its last lines reach the deploy log on a failure.
+- A container whose app ran as PID 1 (`python app.py`) ignored `SIGTERM`,
+  so each replaced copy waited the full 30 second grace before it was
+  killed and a `riku config set` took a minute. Containers now run under
+  the engine's init (`--init`), which passes the stop signal on, and the
+  default `stop_grace_period` is 10 seconds. A service sets `init: false`
+  (now an accepted compose key) to run without it; `stop_grace_period`
+  still overrides the grace. The init flag is part of the `riku.spec`
+  fingerprint, so every container is replaced once on the next deploy.
 - `riku apps` listed a running container app as `stopped 0`: it counted
   only Procfile worker configs. It now adds the app's containers the
   supervisor last saw running, so a compose app with four copies reads

@@ -684,9 +684,15 @@ copy first.
 ### Stopping a copy: the SIGTERM contract
 
 Riku stops a container with its compose `stop_signal` (default `SIGTERM`)
-and kills it once `stop_grace_period` (default 30 seconds, rounded up to a
+and kills it once `stop_grace_period` (default 10 seconds, rounded up to a
 whole second) has passed. A Procfile copy gets `SIGTERM` from the supervisor,
 then `SIGKILL` after the worker grace period (30 seconds).
+
+Every container runs under the engine's init (`--init`) as PID 1, which
+passes the stop signal on to the app and reaps its zombie processes. An app
+that runs as PID 1 itself, such as a `python app.py` command, would get no
+default signal handling from the kernel and ignore `SIGTERM` until killed.
+Set `init: false` on a service whose image brings its own init.
 
 An app should, on `SIGTERM`, finish the requests it is serving and exit
 within the grace period. For an overlapping service the router has already

@@ -61,6 +61,7 @@ fn build_service(ctx: &ServiceContext, name: &str, value: &Value) -> Result<Serv
         labels: BTreeMap::new(),
         working_dir: None,
         user: None,
+        init: true,
     };
     for step in STEPS {
         if let Err(e) = step(ctx, fields, &mut service) {

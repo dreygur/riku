@@ -221,6 +221,7 @@ fn bare_spec(
         stop_signal: service.stop_signal.clone(),
         stop_grace: service.stop_grace,
         healthcheck: service.healthcheck.clone(),
+        init: service.init,
     })
 }
 

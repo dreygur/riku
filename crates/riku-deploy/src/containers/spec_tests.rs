@@ -169,6 +169,14 @@ fn a_pulled_routed_web_gets_the_app_env_and_redis_does_not() {
 }
 
 #[test]
+fn copies_run_under_the_engine_init_with_a_ten_second_grace_by_default() {
+    let spec = built_and_pulled_spec("redis");
+
+    assert!(spec.init);
+    assert_eq!(spec.stop_grace, std::time::Duration::from_secs(10));
+}
+
+#[test]
 fn a_built_service_gets_the_app_env_without_riku_settings() {
     let spec = built_and_pulled_spec("web");
 

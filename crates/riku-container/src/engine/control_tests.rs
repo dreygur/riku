@@ -46,7 +46,7 @@ fn stop_passes_grace_seconds() {
     assert_eq!(
         logged(&log),
         [
-            format!("stop -t 30 {ID}"),
+            format!("stop -t 10 {ID}"),
             format!("stop -t 5 {ID}"),
             format!("stop -t 1 {ID}")
         ]

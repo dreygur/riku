@@ -14,7 +14,7 @@ use super::ports::{host_ip_for, parse_ports};
 use super::scalar::string_map;
 use super::service_env::parse_environment;
 use super::volumes::parse_volumes;
-use super::Mapping;
+use super::{Mapping, Value};
 use crate::types::labels;
 use anyhow::{bail, Result};
 
@@ -102,7 +102,14 @@ fn apply_process(_: &ServiceContext, fields: &Mapping, service: &mut ServiceDef)
             Err(e) => return Err(e),
         };
     }
-    Ok(())
+    match fields.get("init") {
+        None => Ok(()),
+        Some(Value::Bool(init)) => {
+            service.init = *init;
+            Ok(())
+        }
+        Some(other) => bail!("init {other} must be true or false"),
+    }
 }
 
 fn apply_lifecycle(_: &ServiceContext, fields: &Mapping, service: &mut ServiceDef) -> Result<()> {
