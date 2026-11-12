@@ -128,6 +128,36 @@ fn caddy_check_refuses_static_paths_before_a_copy_starts() {
     );
 }
 
+/// A worker only app that was never routed has nothing to take off the
+/// router, so its deploy must not need the router helper. One with a route
+/// recorded still goes through the helper, and fails when it is missing.
+#[test]
+fn a_worker_only_app_needs_the_helper_only_to_drop_a_recorded_route() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut paths = paths_with_workers(&tmp);
+    paths.router_socket = tmp.path().join("no-helper.sock");
+    enable_worker(&paths, "worker", 1, &[]);
+
+    configure("shop", tmp.path(), &env(&[]), &paths, None).unwrap();
+
+    routing_state::with_routing_lock(&paths, |state| {
+        state.set_entry(
+            "shop",
+            routing_state::Entry {
+                mode: RoutingMode::Domain,
+                port: None,
+                picked: false,
+                tls: None,
+                cert_for: None,
+            },
+        );
+        Ok(())
+    })
+    .unwrap();
+    let err = configure("shop", tmp.path(), &env(&[]), &paths, None).unwrap_err();
+    assert!(format!("{err:#}").contains("router helper"), "{err:#}");
+}
+
 /// Path mode never builds a per app route, so it must refuse the key itself,
 /// before the routing state or the helper sees the app.
 #[test]

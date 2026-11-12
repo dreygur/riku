@@ -126,6 +126,21 @@ pub(crate) fn has_route(
     }
 }
 
+/// Take an app with no route off the router. An app the routing state has no
+/// entry for was never routed (every apply records one), so there is nothing
+/// to remove and the router helper is not asked. An unreadable state counts
+/// as an entry, so a route is never left behind on a guess.
+fn unroute(app: &str, paths: &RikuPaths) -> Result<()> {
+    let recorded = match routing_state::RoutingState::load(paths) {
+        Ok(state) => state.entry(app).is_some(),
+        Err(_) => true,
+    };
+    if !recorded {
+        return Ok(());
+    }
+    remove(app, paths)
+}
+
 /// Refuse an app ENV key that names a path the helper picks. Path mode never
 /// builds a per app route, and the default backend would read the key, so
 /// every router entry point checks it before a backend is chosen.
@@ -140,7 +155,8 @@ fn refuse_named_socket(app: &str, env: &HashMap<String, String>) -> Result<()> {
 /// every web copy it has today, and return once the router confirmed the new
 /// config. `engine` is `Some` for a container app. A Procfile app with no
 /// route (see [`has_route`]) is taken off the router instead, which also
-/// forgets its recorded port.
+/// forgets its recorded port; one that was never routed needs no router
+/// helper.
 #[allow(clippy::question_mark)]
 pub fn configure(
     app: &str,
@@ -152,7 +168,7 @@ pub fn configure(
     if engine.is_none() {
         match has_route(app, env, paths) {
             Ok(true) => {}
-            Ok(false) => return remove(app, paths),
+            Ok(false) => return unroute(app, paths),
             Err(e) => return Err(e),
         }
     }

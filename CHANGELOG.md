@@ -60,6 +60,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A worker only app failed its deploy on a server without the router
+  helper: taking it off the router always asked the helper. An app the
+  routing state has no entry for was never routed, so the deploy now
+  skips the removal and needs no helper. An app with a recorded route
+  still goes through the helper and fails clearly when it is missing.
 - `riku destroy --force` of an app whose `riku.toml` is invalid deleted
   nothing: the container step read the config first and stopped destroy.
   `--force` now skips that step with a warning naming the config error
