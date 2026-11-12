@@ -30,6 +30,22 @@ pub fn mock_engine(dir: &Path, behaviour: &str) -> (Engine, PathBuf) {
     (Engine::open(binary).unwrap(), log)
 }
 
+/// An engine program that answers the probe but whose daemon socket refuses
+/// this user, as docker does for a user outside the docker group.
+pub fn socket_refusing_engine(dir: &Path) -> PathBuf {
+    let program = dir.join("docker");
+    fs::write(
+        &program,
+        "#!/bin/sh\n\
+         case \"$2\" in --help) exit 0;; esac\n\
+         echo 'permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock' >&2\n\
+         exit 1\n",
+    )
+    .unwrap();
+    fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
+    program
+}
+
 pub fn logged(log: &Path) -> Vec<String> {
     fs::read_to_string(log)
         .unwrap_or_default()

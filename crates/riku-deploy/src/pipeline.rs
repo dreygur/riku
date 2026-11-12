@@ -102,6 +102,11 @@ pub(crate) fn run(
     };
 
     let deployed = if is_container {
+        // An engine this user cannot reach fails here, before any hook runs
+        // or the env changes, with the reason and what the operator can do.
+        if let Err(e) = containers::open_engine(paths) {
+            return Err(e);
+        }
         if let Err(e) = deploy_env::refuse_container_processes(app, paths) {
             return Err(e);
         }

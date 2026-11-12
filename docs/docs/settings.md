@@ -25,6 +25,13 @@ Per app settings live in [riku.toml](riku-toml.md), not here.
 | `router.name` | `nginx` | The router that exposes apps: `nginx`, `caddy`, or the name of a router plugin. `riku init` writes it from `RIKU_ROUTER`. |
 | `engine.program` | detected | The container engine: a name such as `podman`, or an absolute path. |
 
+riku runs the engine as the deploy user. A rootful docker refuses that user
+its socket (`permission denied ... docker.sock`), and `riku doctor` and a
+container deploy then say so and stop. Two ways out, and the choice is the
+operator's: add the deploy user to the `docker` group, which is
+root-equivalent on the host, or use a rootless engine such as rootless
+podman. riku changes neither the group nor the socket.
+
 Older versions kept these in `ROUTER` and `CONTAINER_ENGINE` files in the
 riku root. Those files are still read when the key is not set here. An
 invalid settings.toml makes every router lookup fail with the file's error,

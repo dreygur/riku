@@ -75,6 +75,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   holding its port, after the client disconnected: sshd sends no SIGHUP
   without a pty. A dashboard whose stdin is a pipe or socket now stops when
   stdin closes or its parent goes away.
+- When the deploy user may not open the engine socket
+  (`permission denied ... docker.sock`), `riku doctor` and a container
+  deploy now say so and name the two choices: add the deploy user to the
+  docker group (root-equivalent) or use rootless podman. A container
+  deploy checks the engine before it runs any hook or changes the env.
 - Under Caddy, the dashboard and `riku apps info` showed every app as
   having no site, because the deploy user cannot read the root owned
   `/etc/riku/caddy`. They now say the site is unknown. For the same reason

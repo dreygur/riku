@@ -23,9 +23,33 @@ impl EngineUnreachable {
     }
 }
 
+/// What riku says when the engine refused its socket. Adding the deploy user
+/// to the docker group is the operator's call, since that group is root on
+/// the host, so riku names both ways out and takes neither.
+const SOCKET_CHOICE: &str = "The deploy user cannot open the engine's socket. Choose one: \
+     add the deploy user to the docker group, which is root-equivalent on this host, \
+     or use a rootless engine such as rootless podman (engine.program in settings.toml). \
+     riku changes neither the group nor the socket.";
+
+impl EngineUnreachable {
+    /// Whether the engine failed because this user may not open its socket.
+    fn socket_refused(&self) -> bool {
+        let reason = self.reason.to_lowercase();
+        reason.contains("permission denied") && reason.contains("socket")
+    }
+}
+
 impl std::fmt::Display for EngineUnreachable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "container engine unreachable: {}", self.reason)
+        if self.socket_refused() {
+            write!(
+                f,
+                "container engine unreachable: {}. {SOCKET_CHOICE}",
+                self.reason
+            )
+        } else {
+            write!(f, "container engine unreachable: {}", self.reason)
+        }
     }
 }
 
