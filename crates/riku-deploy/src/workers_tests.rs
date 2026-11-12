@@ -240,7 +240,7 @@ fn test_create_workers_generic_skips_comment_lines() -> anyhow::Result<()> {
 }
 
 #[test]
-fn a_kind_dropped_from_the_procfile_stops_even_with_the_old_flag_set() -> anyhow::Result<()> {
+fn a_kind_dropped_from_the_procfile_stops() -> anyhow::Result<()> {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
     let app_path = tmp.path().join("app");
@@ -251,8 +251,7 @@ fn a_kind_dropped_from_the_procfile_stops_even_with_the_old_flag_set() -> anyhow
     let dropped = paths.workers_enabled.join("myapp@cleaner.1.toml");
     fs::write(&dropped, "[worker]\n")?;
     fs::write(app_path.join("Procfile"), "worker: echo hello\n")?;
-    // An ENV left over from before the flag was removed changes nothing.
-    let env = HashMap::from([("RIKU_AUTO_RESTART".to_string(), "false".to_string())]);
+    let env = HashMap::new();
 
     create_workers_generic(
         "myapp",
@@ -362,7 +361,7 @@ fn dropping_the_web_line_lets_a_static_app_get_the_static_template() -> anyhow::
 
     let saved = fs::read_to_string(&env_file)?;
     assert!(
-        !saved.contains("RIKU_NGINX_PORTMAP") && !saved.contains("RIKU_NGINX_EXTERNAL_PORT"),
+        !saved.contains("RIKU_NGINX_PORTMAP"),
         "routing keys of the old web line survived:\n{saved}"
     );
     assert!(saved.contains("RIKU_NGINX_STATIC=true"), "{saved}");

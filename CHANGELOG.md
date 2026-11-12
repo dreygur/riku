@@ -367,10 +367,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already ran the new build with the flag off; it only kept non-web
   workers from being stopped first, and kept a process kind removed from
   the Procfile running until `riku stop`. Deploys now always stop such a
-  kind. Both forms block the deploy until removed: `workers.auto_restart`
-  in riku.toml is refused with a message saying to delete the line, and an
-  app ENV that sets `RIKU_AUTO_RESTART` (any value) is refused with a
-  message naming `riku config unset <app> RIKU_AUTO_RESTART`.
+  kind. `workers.auto_restart` in riku.toml is an unknown key, and
+  `RIKU_AUTO_RESTART` in an app ENV is only an env var for the app.
+- Breaking: riku keeps no backward compatibility. Old env key names
+  (`NGINX_SERVER_NAME`, `NODE_VERSION`, `BIND_ADDRESS` and the rest of the
+  pre `RIKU_` names) get no hint at deploy or in `riku doctor`. The
+  nginx keys the route never supported (`RIKU_NGINX_CACHE_*`,
+  `RIKU_NGINX_CSP`, `RIKU_NGINX_CATCH_ALL`, `RIKU_NGINX_INCLUDE_FILE`,
+  `RIKU_NGINX_CLOUDFLARE_ACL`, the listen address keys, `RIKU_DISABLE_IPV6`)
+  no longer fail a deploy; they are plain env vars. A deploy no longer
+  deletes `RIKU_UPSTREAM_PORT`, `UWSGI_SOCKET` or `RIKU_NGINX_EXTERNAL_PORT`
+  from an app ENV, the `UWSGI_*` "deprecated" warnings are gone, and a
+  plugin manifest with `events.mode = "gate"` gets the same refusal as any
+  other mode that is not `observe`. `RIKU_NGINX_SOCKET` still fails a
+  deploy.
 
 ## [0.1.4-rc.3] - 2026-11-11
 

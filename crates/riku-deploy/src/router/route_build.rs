@@ -32,23 +32,6 @@ use crate::util::route_plan::HttpsPolicy;
 
 pub(super) const CATCH_ALL_NAME: &str = "_";
 const REFUSED_KEYS: [(&str, &str); 1] = [("RIKU_NGINX_SOCKET", "the helper picks socket paths")];
-const REMOVED_KEYS: [&str; 15] = [
-    "RIKU_NGINX_CLOUDFLARE_ACL",
-    "RIKU_NGINX_CACHE_PATH",
-    "RIKU_NGINX_CACHE_PREFIXES",
-    "RIKU_NGINX_CACHE_SIZE",
-    "RIKU_NGINX_CACHE_TIME",
-    "RIKU_NGINX_CACHE_EXPIRY",
-    "RIKU_NGINX_CACHE_REDIRECTS",
-    "RIKU_NGINX_CACHE_ANY",
-    "RIKU_NGINX_CACHE_CONTROL",
-    "RIKU_NGINX_CATCH_ALL",
-    "RIKU_NGINX_CSP",
-    "RIKU_NGINX_INCLUDE_FILE",
-    "RIKU_NGINX_IPV4_ADDRESS",
-    "RIKU_NGINX_IPV6_ADDRESS",
-    "RIKU_DISABLE_IPV6",
-];
 
 fn route_error(app: &AppName, cause: anyhow::Error) -> anyhow::Error {
     anyhow!("cannot build the route of '{app}': {cause}")
@@ -56,15 +39,10 @@ fn route_error(app: &AppName, cause: anyhow::Error) -> anyhow::Error {
 
 /// The reason an ENV key set by the app fails the deploy, if one does.
 fn refused_key(env: &HashMap<String, String>) -> Option<String> {
-    if let Some(key) = REMOVED_KEYS.iter().find(|key| env.contains_key(**key)) {
-        return Some(format!(
-            "{key} is no longer supported, the core route dropped it"
-        ));
-    }
     REFUSED_KEYS
         .iter()
         .find(|(key, _)| env.contains_key(*key))
-        .map(|(key, why)| format!("{key} is no longer supported, {why}"))
+        .map(|(key, why)| format!("{key} cannot be set by an app, {why}"))
 }
 
 /// What nginx's generator would serve: the listed names, `_` as the catch
@@ -254,9 +232,8 @@ fn nginx_route(
 /// caller removes its site as `configure_caddy` does today. nginx always gets
 /// a route, with `<app>.example.com` when `RIKU_DOMAINS` is unset.
 ///
-/// An ENV key the core route dropped (Cloudflare ACL, proxy cache, catch
-/// all, CSP, the include file, listen addresses) or one that names a path the
-/// helper picks (`RIKU_NGINX_SOCKET`) fails the build, naming the key.
+/// An ENV key that names a path the helper picks (`RIKU_NGINX_SOCKET`)
+/// fails the build, naming the key.
 /// `RIKU_NGINX_DOCUMENT_ROOT` and the sources in `RIKU_NGINX_STATIC_PATHS`
 /// only steer what a deploy publishes, not the route. A certificate and key
 /// found in `nginx_root` ride along when the app is `https_only`, and, for

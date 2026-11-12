@@ -14,7 +14,7 @@ use crate::config::RikuPaths;
 
 /// Build `app`'s nginx route and ask the helper whether it answers, leaving
 /// the live config alone. A deterministic failure, such as an ENV key the
-/// core route dropped, or a helper that is not running, then
+/// route refuses, or a helper that is not running, then
 /// fails the deploy before any copy starts. `nginx -t` runs in the helper
 /// when the site is applied. For Caddy only a setting it would drop, such
 /// as `routing.static_paths`, is refused; router plugins have nothing to

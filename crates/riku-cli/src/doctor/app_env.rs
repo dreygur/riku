@@ -9,7 +9,6 @@ use std::path::Path;
 
 use crate::config::app_settings::keys::is_table_env_key;
 use crate::config::RikuPaths;
-use crate::util::legacy_env::legacy_keys;
 
 use super::Check;
 
@@ -24,15 +23,14 @@ fn app_warnings(app_dir: &Path) -> Vec<Check> {
 
     let mut riku_keys: Vec<&String> = env.keys().filter(|key| is_table_env_key(key)).collect();
     riku_keys.sort();
-    legacy_keys(&env)
+    riku_keys
         .into_iter()
-        .map(|(old, replacement)| Check::warn(NAME, format!("{app}: {}", replacement.hint(old))))
-        .chain(riku_keys.into_iter().map(|key| {
+        .map(|key| {
             Check::warn(
                 NAME,
                 format!("{app}: {key} is a riku setting in ENV; `riku doctor --fix` moves it"),
             )
-        }))
+        })
         .collect()
 }
 

@@ -48,9 +48,7 @@ pub struct EventSubscription {
     pub subscribe: Vec<String>,
     /// Only `"observe"` is accepted, and it is the default when omitted:
     /// delivery is fire-and-forget and a subscriber failure is logged, never
-    /// fatal. Kept as a field so that a manifest written for the removed
-    /// `"gate"` mode is refused by [`PluginManifest::validate`] with a hint
-    /// instead of installing as something else.
+    /// fatal. Any other value is refused by [`PluginManifest::validate`].
     #[serde(default)]
     pub mode: Option<String>,
     /// Delivery order among subscribers of the same event, lower runs
@@ -165,12 +163,6 @@ impl PluginManifest {
 
         match self.events.mode.as_deref() {
             None | Some("observe") => {}
-            Some("gate") => bail!(
-                "plugin '{}' sets events.mode = \"gate\", which is no longer supported; \
-                 event subscribers only observe. To block a deploy, install a \
-                 riku-pre-deploy hook that exits non-zero",
-                self.name
-            ),
             Some(other) => bail!(
                 "plugin '{}' sets events.mode = \"{other}\"; the only supported mode is \"observe\"",
                 self.name

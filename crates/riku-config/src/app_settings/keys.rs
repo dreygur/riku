@@ -194,21 +194,6 @@ impl Key {
 }
 
 /// The key at `section.name`.
-/// Keys that existed once, with what to tell someone who still sets one.
-const REMOVED: [(&str, &str); 1] = [(
-    "workers.auto_restart",
-    "workers.auto_restart was removed: every deploy replaces non-web processes and stops \
-     process kinds no longer declared; delete the line",
-)];
-
-/// Why `path` is refused when it names a removed key.
-pub fn removed(path: &str) -> Option<&'static str> {
-    REMOVED
-        .iter()
-        .find(|(key, _)| *key == path)
-        .map(|(_, why)| *why)
-}
-
 pub fn find(path: &str) -> Option<&'static Key> {
     match path.split_once('.') {
         Some((section, name)) => KEYS.iter().find(|k| k.section == section && k.name == name),

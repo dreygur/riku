@@ -67,12 +67,12 @@ fn entry_path_joins_under_bundle() {
 }
 
 #[test]
-fn refuses_gate_mode_and_points_at_the_pre_deploy_hook() {
+fn refuses_any_event_mode_but_observe() {
     let toml = format!(
         "name=\"n\"\nversion=\"1\"\ntype=\"hook\"\napi={RIKU_PLUGIN_API}\nentry=\"x\"\n[events]\nsubscribe=[\"deploy.started\"]\nmode=\"gate\"\n"
     );
     let err = PluginManifest::from_toml_str(&toml)
-        .expect_err("a gate manifest must not install")
+        .expect_err("only observe mode may install")
         .to_string();
-    assert!(err.contains("riku-pre-deploy"), "got: {err}");
+    assert!(err.contains("only supported mode is \"observe\""), "got: {err}");
 }

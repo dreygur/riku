@@ -11,7 +11,6 @@
 //! - [`nginx_validation`]: warnings for nginx related env vars
 //! - [`procfile`]: Procfile parsing and cron validation
 //! - [`env`]: KEY=VALUE file parsing, variable expansion
-//! - [`legacy_env`]: env keys renamed to the `RIKU_` prefix
 //! - [`authorized_keys`]: migration of old deploy key forced commands
 //! - [`ssh_keys`]: SSH authorized_keys management
 //! - [`process_util`]: free-port allocation, Node version validation
@@ -26,7 +25,6 @@ pub mod env;
 pub mod file_names;
 pub mod flag;
 pub mod fs;
-pub mod legacy_env;
 pub mod listening;
 pub mod log_stamp;
 pub mod nginx_validation;

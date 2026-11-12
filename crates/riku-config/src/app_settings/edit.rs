@@ -47,12 +47,7 @@ impl AppSettings {
     pub fn set(&mut self, path: &str, text: &str) -> Result<()> {
         let key = match keys::find(path) {
             Some(key) => key,
-            None => {
-                return Err(match keys::removed(path) {
-                    Some(why) => anyhow!("{why}"),
-                    None => anyhow!("unknown key {path}"),
-                })
-            }
+            None => return Err(anyhow!("unknown key {path}")),
         };
         let raw = match values::parse_text(key, text) {
             Some(raw) => raw,

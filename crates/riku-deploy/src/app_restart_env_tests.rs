@@ -119,39 +119,6 @@ fn restarting_one_kind_leaves_live_env_alone() {
     );
 }
 
-#[test]
-fn restart_is_refused_while_env_holds_the_removed_auto_restart_key() {
-    let tmp = tempfile::tempdir().unwrap();
-    let paths = RikuPaths::for_tests(tmp.path());
-    let config = deployed_app(&paths);
-    let before = fs::read_to_string(&config).unwrap();
-    fs::write(
-        paths.env_root.join("myapp").join("ENV"),
-        "RIKU_AUTO_RESTART=false\n",
-    )
-    .unwrap();
-    let _supervisor = FakeSupervisor::start(&paths);
-
-    let restarted = restart_procfile_app_with(
-        "myapp",
-        None,
-        &paths,
-        |_| false,
-        supervisor_ctl::notify_supervisor_reload,
-        &mut NoRoutes,
-    );
-
-    assert!(
-        restarted.is_err(),
-        "the removed key must refuse the restart"
-    );
-    assert_eq!(
-        fs::read_to_string(&config).unwrap(),
-        before,
-        "config unchanged"
-    );
-}
-
 /// A router helper that is down fails the restart before anything is
 /// written: no worker config, and no `LIVE_ENV` describing an env the
 /// workers do not run with.

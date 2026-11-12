@@ -105,7 +105,7 @@ A bundle with an `[events]` block is invoked with `on_event` and the event JSON
 on stdin for each subscribed lifecycle event (`deploy.requested`,
 `build.finished`, `deploy.finished`, `app.restarted`, `app.failed`, …).
 Delivery is fire-and-forget (`observe` mode, the only mode): a subscriber
-cannot veto anything, and a manifest with `mode = "gate"` is refused on
+cannot veto anything, and a manifest with any other `mode` is refused on
 install. To block a deploy, install a `riku-pre-deploy` lifecycle hook that
 exits non-zero.
 

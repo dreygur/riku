@@ -47,16 +47,6 @@ fn false_flag_is_omitted() {
 }
 
 #[test]
-fn removed_auto_restart_key_says_it_was_removed() {
-    let message = err(repo("[workers]\nauto_restart = false\n"));
-
-    assert!(
-        message.contains("workers.auto_restart was removed"),
-        "{message}"
-    );
-}
-
-#[test]
 fn refuses_unknown_key_with_line_and_without_value() {
     let message = err(repo("[routing]\n\ndomain = \"secret-value.example\"\n"));
 

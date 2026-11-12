@@ -101,12 +101,6 @@ curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.s
 sudo riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
-Upgrading a host that runs an older riku: install the new binary the same way, run
-`sudo riku init` again, then `riku doctor --fix` as the deploy user to redeploy apps and
-rewrite stale keys and hooks. Init restarts the supervisor itself when it runs the old
-binary or the unit changed. Apps that set a removed key (see [`docs/docs/nginx.md`](docs/docs/nginx.md#removed-keys))
-fail to deploy until you unset it.
-
 ### The rk laptop client
 
 `rk` is a separate binary for your laptop (Linux or macOS) that runs riku

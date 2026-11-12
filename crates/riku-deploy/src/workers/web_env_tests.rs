@@ -33,29 +33,11 @@ fn switching_web_kind_drops_old_route_keys() {
 
     build_worker_env("shop", "wsgi", copy_one(), &base, &[], &paths).unwrap();
     let after_wsgi = persisted(&paths);
-    for key in ["RIKU_NGINX_PORTMAP", "RIKU_NGINX_EXTERNAL_PORT"] {
-        assert!(
-            !after_wsgi.contains_key(key),
-            "{key} left after web to wsgi: {after_wsgi:?}"
-        );
-    }
-    assert!(after_wsgi.contains_key("RIKU_NGINX_WSGI"), "{after_wsgi:?}");
-}
-
-#[test]
-fn stale_external_port_key_is_dropped() {
-    let tmp = TempDir::new().unwrap();
-    let paths = RikuPaths::for_tests(tmp.path());
-    let base = HashMap::from([("RIKU_NGINX_EXTERNAL_PORT".to_string(), "8080".to_string())]);
-
-    let env = build_worker_env("shop", "web", copy_one(), &base, &[], &paths).unwrap();
-
-    assert!(!env.contains_key("RIKU_NGINX_EXTERNAL_PORT"), "{env:?}");
     assert!(
-        !persisted(&paths).contains_key("RIKU_NGINX_EXTERNAL_PORT"),
-        "{:?}",
-        persisted(&paths)
+        !after_wsgi.contains_key("RIKU_NGINX_PORTMAP"),
+        "port map left after web to wsgi: {after_wsgi:?}"
     );
+    assert!(after_wsgi.contains_key("RIKU_NGINX_WSGI"), "{after_wsgi:?}");
 }
 
 #[test]

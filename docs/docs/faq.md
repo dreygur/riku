@@ -82,7 +82,7 @@ Or create an `ENV` file in `~/.riku/envs/myapp/ENV`.
 
 **Q: Can I use custom nginx configuration?**
 
-**A:** No. An `nginx.conf`, `nginx.custom.conf`, `nginx.custom` or `.nginx.conf` in your app directory is not supported: riku ignores it, prints a warning at deploy, and uses the generated config. There is no snippet file either, and `RIKU_NGINX_INCLUDE_FILE` fails a deploy. The route covers domains, backends, TLS, static files and the HTTP mode. Set headers and caching in the app.
+**A:** No. An `nginx.conf`, `nginx.custom.conf`, `nginx.custom` or `.nginx.conf` in your app directory is not supported: riku ignores it, prints a warning at deploy, and uses the generated config. There is no snippet file either. The route covers domains, backends, TLS, static files and the HTTP mode. Set headers and caching in the app.
 
 **Q: Can I store my bare git repo in a custom location?**
 
@@ -160,7 +160,7 @@ Then obtain SSL certificates (ACME support is built-in).
 
 **Q: Can I use Riku with Cloudflare?**
 
-**A:** Yes, as a plain proxy in front of your domain. Riku has no Cloudflare IP allow list: `RIKU_NGINX_CLOUDFLARE_ACL` fails a deploy. If you want to limit direct access to the origin, do it in a firewall.
+**A:** Yes, as a plain proxy in front of your domain. Riku has no Cloudflare IP allow list. If you want to limit direct access to the origin, do it in a firewall.
 
 **Q: How do I add custom cron jobs?**
 

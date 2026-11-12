@@ -119,7 +119,7 @@ fn route_the_gate_refuses_never_reaches_the_helper() {
     let seen = RefCell::new(Vec::new());
     let env = env(&[
         ("RIKU_DOMAINS", "myapp.example"),
-        ("RIKU_NGINX_CACHE_PATH", "/etc"),
+        ("RIKU_NGINX_SOCKET", "/etc/x.sock"),
     ]);
 
     let err = apply(
@@ -131,7 +131,7 @@ fn route_the_gate_refuses_never_reaches_the_helper() {
     .unwrap_err()
     .to_string();
 
-    assert!(err.contains("RIKU_NGINX_CACHE_PATH"), "{err}");
+    assert!(err.contains("RIKU_NGINX_SOCKET"), "{err}");
     assert!(seen.borrow().is_empty(), "the helper was asked anyway");
 }
 

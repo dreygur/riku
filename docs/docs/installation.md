@@ -34,8 +34,6 @@ After running `sudo riku init`, the binary is installed to `/usr/local/bin/riku`
 
 `sudo riku init` does not delete what an older version left in `/etc/nginx/sites-enabled` and `/etc/nginx/conf.d` that the deploy user could write. It moves those files and links to `/etc/riku/removed/<unix time>/` (root only, mode `0700`), as links, and prints where each one went. Put one back if you wanted it. It does delete the old deploy owned `*.caddy` files in `/etc/riku/caddy`, which `riku doctor --fix` renders again.
 
-An app that sets a key the core route dropped (see [Removed keys](nginx.md#removed-keys)) fails its deploy and names the key. Unset it with `riku config unset`.
-
 ## The rk laptop client
 
 `rk` is a separate binary for your laptop (Linux or macOS). It runs riku commands on your servers over ssh and never runs server code. The server still needs the full `riku` from the steps above.

@@ -167,20 +167,19 @@ fn a_certificate_without_its_key_is_an_error() {
 }
 
 #[test]
-fn removed_and_path_keys_fail_the_deploy_naming_the_key() {
+fn socket_path_key_fails_the_deploy_naming_the_key() {
     let tmp = TempDir::new().unwrap();
-    for key in ["RIKU_NGINX_CSP", "RIKU_NGINX_SOCKET"] {
-        for router in [Router::Nginx, Router::Caddy] {
-            let err = build_for(
-                &tmp,
-                &router,
-                &[("RIKU_DOMAINS", "myapp.example"), (key, "x")],
-                &[Backend::loopback(5001)],
-            )
-            .unwrap_err();
+    let key = "RIKU_NGINX_SOCKET";
+    for router in [Router::Nginx, Router::Caddy] {
+        let err = build_for(
+            &tmp,
+            &router,
+            &[("RIKU_DOMAINS", "myapp.example"), (key, "x")],
+            &[Backend::loopback(5001)],
+        )
+        .unwrap_err();
 
-            assert!(err.to_string().contains(key), "{key}: {err}");
-        }
+        assert!(err.to_string().contains(key), "{router:?}: {err}");
     }
 }
 

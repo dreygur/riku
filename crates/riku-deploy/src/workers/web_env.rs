@@ -14,12 +14,6 @@ use crate::config::RikuPaths;
 
 const UWSGI_PROCESSES: &str = "4";
 const UWSGI_THREADS: &str = "4";
-/// The nginx only listen port, replaced by riku.toml `routing.port`; dropped
-/// wherever it is found.
-const REMOVED_LISTEN_KEY: &str = "RIKU_NGINX_EXTERNAL_PORT";
-
-/// Keys older riku versions persisted for the one address of the last copy.
-const LEGACY_ADDRESS_KEYS: [&str; 3] = ["RIKU_UPSTREAM_PORT", "UWSGI_SOCKET", REMOVED_LISTEN_KEY];
 /// The keys a web facing kind persists to pick the router's template.
 const ROUTE_KEYS: [&str; 2] = ["RIKU_NGINX_PORTMAP", "RIKU_NGINX_WSGI"];
 
@@ -102,7 +96,6 @@ fn configure_web_env(
     env.insert("PORT".to_string(), port.to_string());
     env.insert("RIKU_NGINX_PORTMAP".to_string(), "true".to_string());
     env.insert("RIKU_UPSTREAM_PORT".to_string(), port.to_string());
-    env.remove(REMOVED_LISTEN_KEY);
     env.insert(
         "SOCKET".to_string(),
         socket_path.to_string_lossy().to_string(),
@@ -118,11 +111,8 @@ fn configure_web_env(
 ///
 /// Neither mode persists a port or socket: with several copies there is no
 /// single value to keep, and the router reads each copy's address from its
-/// worker config. The old single address keys are dropped when found.
+/// worker config.
 fn apply_route_keys(kind: &str, persisted: &mut HashMap<String, String>) {
-    for key in LEGACY_ADDRESS_KEYS {
-        persisted.remove(key);
-    }
     if is_wsgi_kind(kind) {
         persisted.remove("RIKU_NGINX_PORTMAP");
         persisted.insert("RIKU_NGINX_WSGI".to_string(), "true".to_string());
@@ -137,8 +127,8 @@ fn apply_route_keys(kind: &str, persisted: &mut HashMap<String, String>) {
 /// Returns whether any key was there.
 pub(crate) fn drop_route_keys(persisted: &mut HashMap<String, String>) -> bool {
     let before = persisted.len();
-    for key in ROUTE_KEYS.iter().chain(LEGACY_ADDRESS_KEYS.iter()) {
-        persisted.remove(*key);
+    for key in ROUTE_KEYS {
+        persisted.remove(key);
     }
     persisted.len() != before
 }

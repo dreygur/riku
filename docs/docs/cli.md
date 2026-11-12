@@ -336,8 +336,7 @@ kind keeps its command and its number of copies. Web facing kinds are
 replaced one copy at a time as on a deploy: a new copy starts, passes its
 health check and joins the router before an old one stops. Other kinds are
 stopped and started with the new config. An app with no running workers
-(never deployed, or stopped) is refused with a pointer to `riku deploy`, and
-so is an ENV that still sets the removed `RIKU_AUTO_RESTART`. Naming a
+(never deployed, or stopped) is refused with a pointer to `riku deploy`. Naming a
 process kind (`web`, `worker`, ...) restarts only that kind's workers; a
 kind the app does not run is refused with the list of kinds it does run.
 `LIVE_ENV` (`riku config live`) is written only by a restart that covers

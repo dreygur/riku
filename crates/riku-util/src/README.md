@@ -29,8 +29,6 @@ Component package located at `crates/riku-util/src`.
 - `copy_dir_recursive` [fs.rs:copy_dir_recursive] (fn)
 - `count_files` [fs.rs:count_files] (fn)
 - `presence` [fs.rs:presence] (fn)
-- `RENAMED_KEYS` [legacy_env.rs:RENAMED_KEYS] (const)
-- `legacy_keys` [legacy_env.rs:legacy_keys] (fn)
 - `authorized_keys` [lib.rs:authorized_keys] (module)
 - `backend` [lib.rs:backend] (module)
 - `cron` [lib.rs:cron] (module)

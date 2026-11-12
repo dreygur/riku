@@ -31,38 +31,8 @@ API_URL=$BASE_URL/api
 
 ---
 
-## Renamed in 0.1.2
-
-Every variable riku reads now starts with `RIKU_`. The old names are no longer
-read. `riku deploy` and `riku doctor` print a hint for each old name still set
-in an app ENV.
-
-| Old name | New name |
-|----------|----------|
-| `NGINX_SERVER_NAME` | `RIKU_DOMAINS` |
-| `NGINX_HTTPS_ONLY` | `RIKU_HTTPS_ONLY` |
-| `NGINX_INTERNAL_PORT` | `RIKU_UPSTREAM_PORT` |
-| `BIND_ADDRESS` | `RIKU_BIND_ADDRESS` |
-| `ACME_ROOT` | `RIKU_ACME_ROOT` |
-| `NODE_VERSION` | `RIKU_NODE_VERSION` |
-| `PYTHON_VERSION` | `RIKU_PYTHON_VERSION` |
-| `RUNTIME` | `RIKU_RUNTIME` |
-| `GHCR_USERNAME` | `RIKU_GHCR_USERNAME` |
-| `GHCR_TOKEN` | `RIKU_GHCR_TOKEN` |
-| `NGINX_<NAME>` (static, ...) | `RIKU_NGINX_<NAME>` |
-
-`ACME_EMAIL`, `ACME_ROOT_CA` and `PYTHON_PACKAGE_MANAGER` (and their `RIKU_`
-names) were never read and are retired: certificates come from Let's Encrypt
-without an account email, and Python apps build with uv or pip. Deploys and
-`riku doctor` say to remove them.
-
-Unchanged: `PORT`, `PATH`, `HOME`, `COMPOSE_FILE`, the `UWSGI_*` options
-(uWSGI reads them from its own environment), and names that already start
-with `RIKU_`.
-
-Lifecycle hooks now get the detected runtime as `RIKU_DETECTED_RUNTIME`
-(it was `RIKU_RUNTIME`), so it never collides with the `RIKU_RUNTIME`
-override an app sets in its ENV.
+Lifecycle hooks get the detected runtime as `RIKU_DETECTED_RUNTIME`, so it
+never collides with the `RIKU_RUNTIME` override.
 
 ## Runtime Settings
 
@@ -70,10 +40,7 @@ override an app sets in its ENV.
 
 Every successful deploy runs the new build: web facing kinds are replaced
 one copy at a time, other kinds are stopped and started from the new
-configs, and a kind that left the Procfile stops. `RIKU_AUTO_RESTART` was
-removed. A deploy is refused until it is gone: an ENV that still sets it
-(any value) names `riku config unset <app> RIKU_AUTO_RESTART`, and
-`workers.auto_restart` in riku.toml says to delete the line.
+configs, and a kind that left the Procfile stops.
 
 ---
 
@@ -191,11 +158,9 @@ RIKU_NGINX_STATIC_PATHS=/static:public
 RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static,/images:img
 ```
 
-### Removed Keys
+### Refused Keys
 
-A deploy fails, naming the key, when the app's ENV sets any of these. The core route dropped them. See [Nginx](nginx.md#removed-keys).
-
-`RIKU_NGINX_CLOUDFLARE_ACL`, `RIKU_NGINX_CACHE_PATH`, `RIKU_NGINX_CACHE_PREFIXES`, `RIKU_NGINX_CACHE_SIZE`, `RIKU_NGINX_CACHE_TIME`, `RIKU_NGINX_CACHE_EXPIRY`, `RIKU_NGINX_CACHE_REDIRECTS`, `RIKU_NGINX_CACHE_ANY`, `RIKU_NGINX_CACHE_CONTROL`, `RIKU_NGINX_CATCH_ALL`, `RIKU_NGINX_CSP`, `RIKU_NGINX_INCLUDE_FILE`, `RIKU_NGINX_IPV4_ADDRESS`, `RIKU_NGINX_IPV6_ADDRESS`, `RIKU_DISABLE_IPV6`, `RIKU_NGINX_SOCKET`
+A deploy fails, naming the key, when the app's ENV sets `RIKU_NGINX_SOCKET`: the router helper picks socket paths itself.
 
 ### Allow Git Folders
 
