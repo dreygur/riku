@@ -9,6 +9,11 @@ TEST_DIR="$(mktemp -d)"
 PASSED=0
 FAILED=0
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# The settings tests drive a built riku against a throwaway RIKU_ROOT.
+RIKU_BIN="${RIKU_BIN:-$REPO_ROOT/target/release/riku}"
+RIKU_TEST_ROOT="$TEST_DIR/riku-root"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -132,22 +137,57 @@ EOF
     log_info "Created $runtime app: $app_dir"
 }
 
+# riku with the test root, never forwarded to a registered server.
+riku_local() {
+    RIKU_ROOT="$RIKU_TEST_ROOT" "$RIKU_BIN" --local "$@"
+}
+
+# Succeeds when `riku config set APP KEY=1` is refused with a pointer to
+# the riku settings key PATH and no KEY line reached the app's ENV.
+setting_refused_in_env() {
+    local app="$1" key="$2" path="$3"
+    local output
+    if output=$(riku_local config set "$app" "$key=1" 2>&1); then
+        log_error "config set accepted the riku setting $key"
+        return 1
+    fi
+    if [[ "$output" != *"riku settings set $app $path="* ]]; then
+        log_error "refusing $key did not name $path: $output"
+        return 1
+    fi
+    if grep -q "^$key=" "$RIKU_TEST_ROOT/envs/$app/ENV" 2>/dev/null; then
+        log_error "$key reached the ENV of $app"
+        return 1
+    fi
+}
+
+# Each "KEY PATH" pair must be refused by setting_refused_in_env.
+check_settings_refused() {
+    local app="$1" label="$2"
+    shift 2
+    local pair failed=0
+    for pair in "$@"; do
+        # shellcheck disable=SC2086 # "KEY PATH" splits into two arguments.
+        setting_refused_in_env "$app" $pair || failed=1
+    done
+    if [ "$failed" -eq 0 ]; then
+        log_info "✓ $label stay out of ENV"
+        PASSED=$((PASSED + 1))
+    else
+        FAILED=$((FAILED + 1))
+    fi
+}
+
+# Worker and bind address settings come only from riku.toml or
+# `riku settings`, so `riku config set` must refuse them.
 test_env_vars() {
-    local app_dir="$1"
-    local test_name="$2"
-
-    log_info "Testing environment variables for: $test_name"
-
-    # Test basic env vars
-    cat > "$app_dir/ENV" <<'EOF'
-RIKU_BIND_ADDRESS=127.0.0.1
-RIKU_WORKER_TIMEOUT=3600
-RIKU_WORKER_GRACE_PERIOD=60
-RIKU_MAX_RESTARTS=10
-EOF
-
-    log_info "✓ Environment variables test passed for: $test_name"
-    PASSED=$((PASSED + 1))
+    local app="$1"
+    log_info "Testing that worker settings are refused as env vars for: $app"
+    check_settings_refused "$app" "Worker settings" \
+        "RIKU_BIND_ADDRESS routing.bind_address" \
+        "RIKU_WORKER_TIMEOUT workers.timeout" \
+        "RIKU_WORKER_GRACE_PERIOD workers.grace_period" \
+        "RIKU_MAX_RESTARTS workers.max_restarts"
 }
 
 test_node_version() {
@@ -164,20 +204,29 @@ EOF
     PASSED=$((PASSED + 1))
 }
 
+# The nginx route reads domains, HTTPS and static paths only from riku.toml
+# or `riku settings`, so `riku config set` must refuse their env keys.
 test_nginx_vars() {
-    local app_dir="$1"
+    local app="$1"
+    log_info "Testing that routing settings are refused as env vars for: $app"
+    check_settings_refused "$app" "Routing settings" \
+        "RIKU_DOMAINS routing.domains" \
+        "RIKU_HTTPS_ONLY routing.https_only" \
+        "RIKU_NGINX_STATIC_PATHS routing.static_paths" \
+        "RIKU_NGINX_ALLOW_GIT_FOLDERS routing.allow_git_folders"
+}
 
-    log_info "Testing NGINX_* env vars"
-
-    cat >> "$app_dir/ENV" <<'EOF'
-RIKU_DOMAINS=test.example.com
-RIKU_HTTPS_ONLY=false
-RIKU_NGINX_STATIC_PATHS=/static:public/static
-RIKU_NGINX_ALLOW_GIT_FOLDERS=false
-EOF
-
-    log_info "✓ NGINX_* env vars test passed"
-    PASSED=$((PASSED + 1))
+# A riku app in the test root for the settings tests.
+create_riku_app() {
+    local app="$1"
+    if [ ! -x "$RIKU_BIN" ]; then
+        log_error "riku binary not found at $RIKU_BIN; run cargo build --release or set RIKU_BIN"
+        exit 1
+    fi
+    if ! riku_local apps create "$app" >/dev/null 2>&1; then
+        log_error "riku apps create $app failed"
+        exit 1
+    fi
 }
 
 test_scaling() {
@@ -198,33 +247,32 @@ run_tests() {
     log_info "Starting Riku deployment tests..."
     log_info "Test directory: $TEST_DIR"
     
-    # Test 1: Node.js app
-    log_info "=== Test 1: Node.js App ==="
+    # Test 1: riku settings in ENV. The refusal does not depend on the
+    # runtime, so one app covers it.
+    log_info "=== Test 1: Settings stay out of ENV ==="
+    create_riku_app "settings-app"
+    test_env_vars "settings-app"
+    test_nginx_vars "settings-app"
+
+    # Test 2: Node.js app
+    log_info "=== Test 2: Node.js App ==="
     create_test_app "node-app" "node"
-    test_env_vars "$TEST_DIR/node-app" "Node.js"
     test_node_version "$TEST_DIR/node-app"
-    test_nginx_vars "$TEST_DIR/node-app"
     test_scaling "$TEST_DIR/node-app"
-    
-    # Test 2: Python app
-    log_info "=== Test 2: Python App ==="
+
+    # Test 3: Python app
+    log_info "=== Test 3: Python App ==="
     create_test_app "python-app" "python"
-    test_env_vars "$TEST_DIR/python-app" "Python"
-    test_nginx_vars "$TEST_DIR/python-app"
     test_scaling "$TEST_DIR/python-app"
-    
-    # Test 3: Static site
-    log_info "=== Test 3: Static Site ==="
+
+    # Test 4: Static site
+    log_info "=== Test 4: Static Site ==="
     create_test_app "static-app" "static"
-    test_env_vars "$TEST_DIR/static-app" "Static"
-    test_nginx_vars "$TEST_DIR/static-app"
-    
-    # Test 4: Go app
-    log_info "=== Test 4: Go App ==="
+
+    # Test 5: Go app
+    log_info "=== Test 5: Go App ==="
     create_test_app "go-app" "go"
-    test_env_vars "$TEST_DIR/go-app" "Go"
-    test_nginx_vars "$TEST_DIR/go-app"
-    
+
     # Summary
     echo ""
     log_info "================================"

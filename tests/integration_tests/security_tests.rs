@@ -280,41 +280,60 @@ mod tests {
         Ok(())
     }
 
+    /// Renders a static site, the shape that needs no backend, through the
+    /// same renderer the router helper runs.
+    fn render_static_site(domains: &[String], static_locations: &[String]) -> Result<String> {
+        use riku::nginx::{render_route_site, RouteSite, SiteFiles, SiteShape};
+
+        let files = SiteFiles {
+            certificate: PathBuf::from("/etc/riku/certs/myapp/fullchain.pem"),
+            certificate_key: PathBuf::from("/etc/riku/certs/myapp/key.pem"),
+            acme_root: PathBuf::from("/var/lib/riku/acme"),
+            static_root: PathBuf::from("/var/lib/riku/static"),
+        };
+        render_route_site(&RouteSite {
+            app: "myapp",
+            domains,
+            shape: SiteShape::Static,
+            https_only: false,
+            also_tls: false,
+            open_port: None,
+            port: 80,
+            backends: &[],
+            static_locations,
+            allow_git_folders: false,
+            ipv6: false,
+            files: &files,
+        })
+    }
+
     #[test]
-    fn test_nginx_value_sanitization_dangerous_chars() -> Result<()> {
-        // Test that dangerous characters are rejected in nginx values
-        let dangerous_chars = vec![';', '{', '}', '\n', '\r', '`', '$', '\\', '"', '\''];
+    fn nginx_site_refuses_values_that_could_inject_a_directive() {
+        let clean = render_static_site(&["myapp.example.com".to_string()], &[])
+            .expect("a clean domain renders");
+        let server_name = clean
+            .lines()
+            .map(str::trim)
+            .find(|line| line.starts_with("server_name"));
+        assert_eq!(
+            server_name.map(|line| line.split_whitespace().collect::<Vec<_>>()),
+            Some(vec!["server_name", "myapp.example.com;"]),
+            "clean site:\n{clean}"
+        );
 
-        for ch in dangerous_chars {
-            let value = format!("safe_value{}injection", ch);
+        for ch in [';', '{', '}', '#', '\n', '\r', '`', '$', '\\', '"', '\''] {
+            let value = format!("myapp.example.com{ch}return 200 pwned");
+            let domain = render_static_site(&[value.clone()], &[]);
+            assert!(domain.is_err(), "domain {value:?} rendered: {domain:?}");
 
-            // Verify the value contains the dangerous character
+            let location = format!("/static{ch}return 200 pwned");
+            let static_path =
+                render_static_site(&["myapp.example.com".to_string()], &[location.clone()]);
             assert!(
-                value.chars().any(|c| c == ch),
-                "Test value should contain dangerous char '{}'",
-                ch
+                static_path.is_err(),
+                "static location {location:?} rendered: {static_path:?}"
             );
         }
-
-        // Clean values should pass
-        let clean_values = vec![
-            "example.com",
-            "my-app.com",
-            "192.168.1.1",
-            "app_name",
-            "value-with-dashes",
-        ];
-
-        for value in clean_values {
-            let dangerous_chars: &[char] = &[';', '{', '}', '\n', '\r', '`', '$', '\\', '"', '\''];
-            assert!(
-                !value.chars().any(|c| dangerous_chars.contains(&c)),
-                "Clean value '{}' should not contain dangerous chars",
-                value
-            );
-        }
-
-        Ok(())
     }
 
     #[test]

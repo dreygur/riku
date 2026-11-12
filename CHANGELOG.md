@@ -60,6 +60,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Three tests passed without checking anything. The deploy smoke script's
+  env and nginx tests only wrote a file; they now run the built riku and
+  check that `riku config set` refuses each worker and routing setting,
+  names its `riku settings` key and leaves ENV untouched. The nginx value
+  sanitization test only checked its own input; it now renders a site
+  through the router helper's renderer and checks that every directive
+  breaking character is refused in a domain and a static path.
 - The docs no longer list `RIKU_WORKER_PROCESSES`, `LOG_LEVEL` or
   `LOG_ROTATION_SIZE`: nothing reads them. Scale with `riku ps --scale`
   or the SCALING file; log rotation sizes are fixed.
