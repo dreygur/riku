@@ -64,8 +64,6 @@ sudo riku init
 
 Init restarts the services itself. The router helper is always restarted. The supervisor is restarted when it runs another binary than `/usr/local/bin/riku` or when the text of `riku.service` changed, and left running otherwise. The `Service` line of the init output says which happened.
 
-Then, as the deploy user, run `riku doctor --fix` to redeploy apps that were routed by an older version.
-
 ---
 
 ## Uninstall

@@ -38,7 +38,7 @@ pub fn get_plugin_command(command: &Commands) -> Option<String> {
         Commands::Quickstart { .. } => None,
         Commands::Backup { .. } => None,
         Commands::Restore { .. } => None,
-        Commands::Doctor { .. } => None,
+        Commands::Doctor => None,
         Commands::Settings(_) => None,
         Commands::Certs(_) => None,
         Commands::Dashboard { .. } => None,

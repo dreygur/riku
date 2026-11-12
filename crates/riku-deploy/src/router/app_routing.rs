@@ -167,7 +167,7 @@ pub fn resolve(
     if !settings.present {
         if mode_set.is_some() || port_set.is_some() {
             return Err(anyhow!(
-                "routing.mode and routing.port need a [routing] section in settings.toml; run riku doctor --fix on the server"
+                "routing.mode and routing.port need a [routing] section in settings.toml; run sudo riku init on the server"
             ));
         }
         return Ok(AppRouting {

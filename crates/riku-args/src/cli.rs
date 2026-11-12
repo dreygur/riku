@@ -316,12 +316,8 @@ pub enum Commands {
     },
 
     /// Diagnose the Riku installation (deps, dirs, systemd, nginx, disk, SSH)
-    #[command(after_help = "Examples:\n  riku doctor\n  sudo riku doctor\n  riku doctor --fix")]
-    Doctor {
-        /// Redeploy apps whose nginx config exists only in the old ~/.riku/nginx
-        #[arg(long)]
-        fix: bool,
-    },
+    #[command(after_help = "Examples:\n  riku doctor\n  sudo riku doctor")]
+    Doctor,
 
     /// Serve the read-only web dashboard (embedded, single binary)
     #[command(

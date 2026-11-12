@@ -3,30 +3,22 @@
 //! Solo devs have no ops team, so the tool *is* the ops team: `doctor` runs a
 //! battery of **read-only** health checks across dependencies, the `~/.riku`
 //! directory layout, the systemd supervisor service, the host router, the
-//! container engine, runtime plugins, disk headroom, SSH deploy access, and
-//! renamed app ENV keys, then prints a summary.
+//! container engine, runtime plugins, disk headroom, SSH deploy access and
+//! own certificates, then prints a summary.
 //!
 //! Exit code: `0` when nothing failed (warnings allowed), `1` when any check
 //! has [`Status::Fail`], so it composes in CI and provisioning scripts.
 
-pub mod app_env;
 pub mod binary_check;
 pub mod checks;
 pub mod container_check;
-mod fix_steps;
 pub mod helper_check;
-mod migrate_check;
-mod migrate_env;
-pub mod migrate_settings;
-mod mode_write;
 pub mod own_cert_check;
 pub mod package_tools;
-pub mod redeploy_sites;
 mod report;
 pub mod router_check;
 pub mod settings_check;
 pub mod ssh_check;
-pub mod stale_paths;
 pub mod supervisor_check;
 
 use std::path::{Path, PathBuf};
@@ -37,7 +29,6 @@ use crate::config::RikuPaths;
 use crate::setup::deploy_user::{running_as_root, DeployUser};
 use crate::util::display;
 
-use fix_steps::{fix_launch_paths, redeploy_old_sites};
 use report::{render, summarize_and_exit};
 
 /// Outcome of a single diagnostic check.
@@ -102,23 +93,15 @@ fn diagnosed_home() -> Option<PathBuf> {
 }
 
 /// Run every diagnostic, render the report, and exit non-zero on any failure.
-/// With `fix`, apps missing from the router's site root are redeployed
-/// and stale launch paths rewritten first, so the checks see the result.
 #[allow(clippy::question_mark)]
-pub fn cmd_doctor(paths: &RikuPaths, fix: bool) -> Result<()> {
+pub fn cmd_doctor(paths: &RikuPaths) -> Result<()> {
     let paths = match diagnosed_target(paths) {
         Ok(paths) => paths,
         Err(e) => return Err(e),
     };
     display::intro(&format!("riku doctor  {}", paths.riku_root.display()));
 
-    let mut checks = Vec::new();
-    if fix {
-        checks.extend(redeploy_old_sites(&paths));
-        checks.extend(migrate_settings::migrate_settings(&paths));
-        checks.extend(fix_launch_paths(&paths));
-    }
-    checks.extend(collect(&paths));
+    let checks = collect(&paths);
     render(&checks);
     summarize_and_exit(&checks);
 
@@ -144,7 +127,6 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     checks.push(helper_check::router_helper(paths));
     checks.extend(router_check::router(paths));
     checks.push(settings_check::settings_file(paths));
-    checks.extend(settings_check::legacy_files(paths));
     checks.extend(settings_check::routing_section(paths));
     checks.push(container_check::container_engine(paths));
     checks.push(checks::plugins(paths));
@@ -156,7 +138,6 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
             "home not found, cannot locate authorized_keys",
         ),
     });
-    checks.extend(app_env::renamed_keys(paths));
     checks.extend(own_cert_check::own_certificates(paths));
     checks
 }

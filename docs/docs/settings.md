@@ -40,7 +40,7 @@ rather than quietly falling back to nginx.
 ## Routing
 
 How an app without a domain of its own gets a URL. `riku init` writes this
-section on a new server; `riku doctor --fix` adds it to an older one. See
+section when it is missing. See
 [App URLs](routing.md) for what each mode does.
 
 ```toml
@@ -88,23 +88,5 @@ The error names the key and the file.
 `riku doctor` parses the file and fails with that error when it is invalid.
 It reports `defaults` when the file does not exist.
 
-When riku changes a key itself (`riku init`, `riku doctor --fix`) it rewrites
-the file from its parsed form: every key is kept, comments are not.
-
-## Migrating
-
-`riku doctor --fix`, run as the deploy user, moves the old homes into the new
-ones:
-
-- the `ROUTER` and `CONTAINER_ENGINE` files into `router.name` and
-  `engine.program` (a key already set here wins), then removes the files;
-- each app's `RIKU_*` keys from its ENV file into its server override
-  (`riku settings`). A key moves only when the override gives back exactly
-  the value it had, so the app runs with the same settings; a key whose value
-  would change (for example `RIKU_HTTPS_ONLY=1`, which is not `true` or
-  `false`) stays in ENV with a warning. ENV is first copied to `ENV.bak`, and
-  every other line is kept as it was.
-
-Running it again changes nothing. Downgrading riku after the migration is not
-supported: older versions refuse the new settings.toml sections and no longer
-find the keys that moved out of ENV.
+When `riku init` changes a key itself it rewrites the file from its parsed
+form: every key is kept, comments are not.

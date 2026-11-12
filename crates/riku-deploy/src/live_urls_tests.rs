@@ -179,7 +179,7 @@ fn path_mode_lists_the_path_and_warns_about_the_base_path() {
 }
 
 #[test]
-fn legacy_server_points_at_doctor_fix() {
+fn legacy_server_points_at_init() {
     let routed = AppRouting {
         legacy: true,
         ..routing(&[], false)
@@ -188,7 +188,7 @@ fn legacy_server_points_at_doctor_fix() {
     let lines = texts(live_lines("myapp", &routed, None, false));
 
     assert!(
-        lines.iter().any(|l| l.contains("riku doctor --fix")),
+        lines.iter().any(|l| l.contains("sudo riku init")),
         "{lines:?}"
     );
 }

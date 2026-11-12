@@ -114,7 +114,7 @@ fn mode_without_routing_section_is_refused() {
     .unwrap_err()
     .to_string();
 
-    assert!(message.contains("riku doctor --fix"), "{message}");
+    assert!(message.contains("sudo riku init"), "{message}");
 }
 
 #[test]

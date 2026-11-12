@@ -381,6 +381,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin manifest with `events.mode = "gate"` gets the same refusal as any
   other mode that is not `observe`. `RIKU_NGINX_SOCKET` still fails a
   deploy.
+- Breaking: `riku doctor --fix`. Doctor only reports now. The fix mode
+  redeployed apps missing a site file, moved the `ROUTER` and
+  `CONTAINER_ENGINE` files and the riku keys in app ENV files into
+  settings, rewrote stale forced commands and hooks, and added `[routing]`;
+  there is nothing left for it to migrate. The doctor checks for the old
+  files and for renamed or riku keys in app ENV files are gone with it.
 
 ## [0.1.4-rc.3] - 2026-11-11
 

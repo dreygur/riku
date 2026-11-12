@@ -4,7 +4,6 @@
 Component package located at `crates/riku-cli/src/doctor`.
 
 ## Interface
-- `renamed_keys` [app_env.rs:renamed_keys] (fn)
 - `dependencies` [checks.rs:dependencies] (fn)
 - `directories` [checks.rs:directories] (fn)
 - `binary` [checks.rs:binary] (fn)

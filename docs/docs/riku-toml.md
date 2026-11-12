@@ -164,5 +164,4 @@ For each key, later wins:
 3. the server override (`riku settings`)
 
 `riku config set` now refuses these `RIKU_*` keys and names the `riku
-settings` key to use instead. `riku doctor --fix` moves existing ones out of
-ENV into the server override; see [Server settings](settings.md#migrating).
+settings` key to use instead.

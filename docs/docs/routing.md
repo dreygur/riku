@@ -93,4 +93,4 @@ no `domains` or `port`, and is not available for uWSGI or container apps.
 A server upgraded from an older riku has no `[routing]` section, and routes
 exactly as before: no fallback domain, no port mode and no new listeners.
 `routing.mode` and `routing.port` are refused there. Run
-`riku doctor --fix` to add the section.
+`sudo riku init` to add the section.
