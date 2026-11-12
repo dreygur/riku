@@ -76,6 +76,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   renders those characters. The smoke script's Python, static and Go
   tests only wrote sample apps and are removed with their app templates;
   the static one used a `static:` Procfile kind riku no longer has.
+- Three more security tests checked only their own logic. The app
+  directory traversal test now runs `riku apps create` with each
+  traversing name and checks it is refused before anything is created.
+  The plugin directory test now checks that `plugin_exists` refuses
+  `../evil` while an executable sits there. The plugin name test is
+  removed: `validate_plugin_name`'s own tests in `riku-plugins` cover the
+  same names.
 - `riku apps create` ignored the exit status of `git init`, and a push
   to an app without a repo printed "git init failed." and went on to
   install the hook and run `git-receive-pack` on a directory that was not

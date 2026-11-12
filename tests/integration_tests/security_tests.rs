@@ -40,12 +40,14 @@ mod tests {
 
     // --- App directory traversal protection ---
 
+    /// `riku apps create` refuses a name that would leave `apps/` or `repos/`
+    /// before it creates anything, so no directory appears anywhere.
     #[test]
-    fn test_app_directory_no_traversal() -> Result<()> {
-        let (_temp_dir, riku_root) = setup_riku_env()?;
+    fn apps_create_refuses_a_traversing_name_and_creates_nothing() {
+        let tmp = TempDir::new().unwrap();
+        let paths = riku::config::RikuPaths::for_tests(tmp.path());
 
-        // Apply the same sanitization logic used by the codebase
-        let malicious_names = vec![
+        for name in [
             "../etc",
             "..",
             "app/../secret",
@@ -54,131 +56,42 @@ mod tests {
             ".",
             "/",
             "../../../etc/passwd",
-        ];
-
-        for name in malicious_names {
-            let stripped = name.trim_start_matches('/');
-            let sanitized: String = stripped
-                .chars()
-                .filter(|c| c.is_alphanumeric() || *c == '.' || *c == '_' || *c == '-')
-                .collect::<String>()
-                .trim_end()
-                .to_string();
-
-            // Verify the sanitization rejects these names (returns empty)
-            let is_rejected = sanitized.contains("..")
-                || sanitized.is_empty()
-                || sanitized.trim_matches('.').is_empty();
-
+        ] {
             assert!(
-                is_rejected,
-                "Malicious app name '{}' (sanitized: '{}') should be rejected",
-                name, sanitized
+                riku::cli::apps::cmd_apps_create(&paths, name).is_err(),
+                "apps create accepted the app name {name:?}"
             );
-
-            // Ensure we can't create directories with these names
-            if !sanitized.is_empty() && !is_rejected {
-                let app_dir = riku_root.join("apps").join(&sanitized);
-                // This would only execute for non-rejected names
-                assert!(!app_dir.to_str().unwrap().contains(".."));
-            }
         }
 
-        // Verify valid names pass sanitization
-        let valid_names = vec!["my-app", "app.v2", "test_app", "app123"];
-        for name in valid_names {
-            let sanitized: String = name
-                .chars()
-                .filter(|c| c.is_alphanumeric() || *c == '.' || *c == '_' || *c == '-')
-                .collect();
-            let is_rejected = sanitized.contains("..")
-                || sanitized.is_empty()
-                || sanitized.trim_matches('.').is_empty();
-
-            assert!(
-                !is_rejected,
-                "Valid app name '{}' should pass sanitization",
-                name
-            );
-
-            // Verify we can create directories safely
-            let app_dir = riku_root.join("apps").join(&sanitized);
-            fs::create_dir_all(&app_dir)?;
-            assert!(app_dir.exists());
-        }
-
-        Ok(())
+        let created: Vec<_> = fs::read_dir(tmp.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+        assert!(created.is_empty(), "refused names created {created:?}");
     }
 
     // --- Plugin path traversal protection ---
 
+    /// An executable outside the plugin directory is not a plugin, even when
+    /// a `..` name reaches it.
     #[test]
-    fn test_plugin_directory_traversal_protection() -> Result<()> {
-        let (_temp_dir, riku_root) = setup_riku_env()?;
+    fn a_plugin_name_cannot_reach_an_executable_outside_the_plugin_directory() {
+        let tmp = TempDir::new().unwrap();
+        let paths = riku::config::RikuPaths::for_tests(tmp.path());
+        fs::create_dir_all(&paths.plugin_root).unwrap();
+        let outside = paths.plugin_root.join("../evil");
+        fs::write(&outside, "#!/bin/sh\n").unwrap();
+        fs::set_permissions(
+            &outside,
+            std::os::unix::fs::PermissionsExt::from_mode(0o755),
+        )
+        .unwrap();
 
-        // Create a file outside the plugin directory
-        let secret_file = _temp_dir.path().join("secret.txt");
-        fs::write(&secret_file, "secret data")?;
-
-        // Verify that traversal paths resolve outside plugin_root
-        let plugin_root = riku_root.join("plugins");
-        let traversal_path = plugin_root.join("../../secret.txt");
-
-        // The traversal path should resolve to the secret file
-        if let Ok(resolved) = fs::canonicalize(&traversal_path) {
-            let plugin_root_resolved = fs::canonicalize(&plugin_root)?;
-            assert!(
-                !resolved.starts_with(&plugin_root_resolved),
-                "Path traversal should escape plugin root"
-            );
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_plugin_name_validation() -> Result<()> {
-        let (_temp_dir, riku_root) = setup_riku_env()?;
-
-        // Malicious plugin names that should be rejected
-        let malicious_names = vec![
-            "../../../etc/passwd",
-            "../../bin/sh",
-            "../secret",
-            "..",
-            "plugin/subdir",
-            "plugin\\subdir",
-            "",
-        ];
-
-        for name in malicious_names {
-            // The validation should reject these names
-            let has_slash = name.contains('/') || name.contains('\\');
-            let has_dots = name.contains("..");
-            let is_empty = name.is_empty();
-
-            assert!(
-                has_slash || has_dots || is_empty,
-                "Malicious plugin name '{}' should fail validation criteria",
-                name
-            );
-
-            // Verify we can't access files outside plugin root via these names
-            if !is_empty {
-                let plugin_path = riku_root.join("plugins").join(name);
-                // If the path contains traversal, it should resolve outside plugins
-                if has_dots {
-                    let _plugin_root = riku_root.join("plugins");
-                    // Don't actually create these paths, just verify the logic
-                    assert!(
-                        plugin_path.to_str().unwrap().contains("..") || has_slash,
-                        "Path should contain dangerous sequences"
-                    );
-                }
-            }
-        }
-
-        Ok(())
+        assert!(
+            !riku::plugins::plugin_exists("../evil", &paths),
+            "plugin_exists followed ../evil out of {}",
+            paths.plugin_root.display()
+        );
     }
 
     // --- ENV file security ---
