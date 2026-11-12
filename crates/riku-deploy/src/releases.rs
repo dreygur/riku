@@ -58,6 +58,17 @@ impl<'a> ReleaseLog<'a> {
         Ok(())
     }
 
+    /// Delete the app's history, for `riku destroy`, so a new app of the same
+    /// name starts with none. A missing history is not an error.
+    pub fn forget(&self, app: &str) -> Result<()> {
+        let path = self.file(app);
+        match std::fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(anyhow::anyhow!("cannot remove {}: {e}", path.display())),
+        }
+    }
+
     /// History, oldest first (the current release is last).
     pub fn list(&self, app: &str) -> Vec<Release> {
         let Ok(text) = std::fs::read_to_string(self.file(app)) else {

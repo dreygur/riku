@@ -78,6 +78,29 @@ fn destroy_removes_the_published_static_files() {
 }
 
 #[test]
+fn destroy_removes_the_release_history_and_keeps_other_apps() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut paths = RikuPaths::for_tests(tmp.path());
+    use_mock_caddy(&mut paths);
+    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+    let releases = crate::deploy::releases::ReleaseLog::new(&paths);
+    releases.record("shop", "cbb93790").unwrap();
+    releases.record("shop-api", "a1f9f2d1").unwrap();
+
+    cmd_destroy(&paths, "shop", DestroyMode::Safe).unwrap();
+
+    assert!(
+        releases.list("shop").is_empty(),
+        "the release history survived destroy, so a new app of that name shows old releases"
+    );
+    assert_eq!(
+        releases.list("shop-api").len(),
+        1,
+        "another app lost its history"
+    );
+}
+
+#[test]
 fn destroy_deletes_the_app_dir_last_so_a_failure_can_be_retried() {
     let tmp = tempfile::tempdir().unwrap();
     let mut paths = RikuPaths::for_tests(tmp.path());

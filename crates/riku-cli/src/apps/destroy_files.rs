@@ -90,7 +90,8 @@ fn remove_acme_certs(paths: &RikuPaths, app: &str) -> Result<()> {
 }
 
 /// Delete worker configs, `repos/<app>.git`, the env, git and log directories,
-/// the ACME certs and the published static files, then `apps/<app>` last.
+/// the ACME certs, the published static files and the release history, then
+/// `apps/<app>` last.
 #[allow(clippy::question_mark)]
 pub(super) fn remove_app_files(paths: &RikuPaths, app: &str) -> Result<()> {
     if let Err(e) = remove_worker_configs(paths, app) {
@@ -108,6 +109,9 @@ pub(super) fn remove_app_files(paths: &RikuPaths, app: &str) -> Result<()> {
         return Err(e);
     }
     if let Err(e) = remove_static(app, paths) {
+        return Err(e);
+    }
+    if let Err(e) = crate::deploy::releases::ReleaseLog::new(paths).forget(app) {
         return Err(e);
     }
     remove_dir_if_present(&paths.app_root.join(app))

@@ -134,6 +134,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (now an accepted compose key) to run without it; `stop_grace_period`
   still overrides the grace. The init flag is part of the `riku.spec`
   fingerprint, so every container is replaced once on the next deploy.
+- `riku destroy` left the app's release history
+  (`~/.riku/releases/<app>.log`), so a new app of the same name offered the
+  old app's commits in `riku rollback` and the dashboard's release picker.
+  Destroy now removes it.
 - `riku apps` listed a running container app as `stopped 0`: it counted
   only Procfile worker configs. It now adds the app's containers the
   supervisor last saw running, so a compose app with four copies reads
