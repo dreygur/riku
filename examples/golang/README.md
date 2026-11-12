@@ -24,7 +24,6 @@ git push riku main
 - `server.go` - Main application code
 - `go.mod` - Go module definition
 - `Procfile` - Process definition for Riku
-- `SCALING` - Worker scaling configuration
 
 ## Configuration
 
@@ -40,10 +39,10 @@ https_only = true
 
 ### Scaling
 
-Edit `SCALING` to scale workers:
+`web` runs one copy. Scale it on the server, which redeploys the app:
 
 ```bash
-web=2
+riku ps my-go-app --scale web=2
 ```
 
 ## Local Development

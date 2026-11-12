@@ -210,27 +210,12 @@ Environment variables for the process. Inherited from `~/.riku/envs/<app>/ENV`.
 
 ## Scaling
 
-### Using SCALING File
-
-Create a `SCALING` file in your app root:
-
-```
-web=2
-worker=4
-```
-
-Commit and push:
-
-```bash
-git add SCALING && git commit -m "scale up"
-git push riku main
-```
-
-### Using CLI
-
 ```bash
 riku ps myapp --scale web=4 worker=2
 ```
+
+The counts are kept in `~/.riku/envs/<app>/SCALING`. A `SCALING` file in
+the app's repo is not read.
 
 ---
 

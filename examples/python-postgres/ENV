@@ -1,8 +1,0 @@
-# App environment variables for the Django example.
-# Set them with: riku config set pypostgres KEY=value
-# riku settings (domains, HTTPS, static files) are in riku.toml or
-# riku settings set; see README.md.
-
-# DJANGO_SETTINGS_MODULE=djangoapp.settings
-# SECRET_KEY=your-secret-key-here
-# DEBUG=false

@@ -1,5 +1,0 @@
-# App environment variables for the Rust example.
-# Set them with: riku config set <app> KEY=value
-
-# TCP port for your app (auto-assigned if not set)
-PORT=4000

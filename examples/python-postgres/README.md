@@ -37,6 +37,12 @@ riku settings set pypostgres routing.domains=your_domain_name.com routing.https_
 (`routing.static_paths`). That setting is nginx only: under Caddy the deploy
 stops and names it, so remove it there and serve the files from Django.
 
+The Django process is the `wsgi` kind and runs one copy. Run more with:
+
+```bash
+riku ps pypostgres --scale wsgi=4
+```
+
 You can also create a superuser and set a password like this:
 
 ```bash

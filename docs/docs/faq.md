@@ -49,18 +49,12 @@ git push riku main
 
 **Q: How do I scale my app?**
 
-**A:** Use the `SCALING` file:
-```bash
-echo "web=4" > SCALING
-echo "worker=2" >> SCALING
-git add SCALING && git commit -m "scale"
-git push riku main
-```
-
-Or use the CLI:
+**A:** Use the CLI, which records the counts on the server and redeploys:
 ```bash
 riku ps myapp --scale web=4 worker=2
 ```
+
+A `SCALING` file committed to the app's repo is not read.
 
 **Q: How do I set environment variables?**
 

@@ -78,19 +78,11 @@ curl -X POST http://localhost:3000/echo \
 
 ### Scaling
 
-Create a `SCALING` file to run multiple instances:
-
-```
-web=4
-```
-
-Then commit and push:
+Run more instances from the server, which redeploys the app (a `SCALING`
+file in the repo is not read):
 
 ```bash
-echo "web=4" > SCALING
-git add SCALING
-git commit -m "Scale to 4 workers"
-git push riku main
+riku ps <app> --scale web=4
 ```
 
 ## Project Structure

@@ -1,9 +1,0 @@
-# App environment variables, one KEY=value per line.
-# Set them on the server with: riku config set <app> KEY=value
-#
-# riku's own settings (domains, HTTPS, static files, workers, the runtime
-# version) are not read from ENV. They go in riku.toml; see riku.toml in
-# this directory.
-
-# DATABASE_URL=postgres://localhost/myapp
-# SECRET_KEY=change-me

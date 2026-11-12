@@ -497,13 +497,8 @@ storage, or publishes a port other than the routed HTTP one, cannot run more
 than one copy, and a count of 0 is refused. See
 [Scaling](runtimes.md#scaling).
 
-**Alternative:** Create a `SCALING` file directly:
-```bash
-echo "web=4" > SCALING
-echo "worker=2" >> SCALING
-git add SCALING && git commit -m "scale up"
-git push riku main
-```
+A `SCALING` file committed to the app's repo is not read: riku reads only
+`~/.riku/envs/<app>/SCALING`, which this command writes.
 
 ---
 

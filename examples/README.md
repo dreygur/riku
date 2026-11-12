@@ -39,14 +39,14 @@ git push riku main
 
 ## Configuration Files
 
-### ENV File
+### App Environment
 
-The `ENV` file lists your app's own environment variables. Set them on the
-server with `riku config set <app> KEY=value`:
+riku reads an app's environment only from the server
+(`~/.riku/envs/<app>/ENV`), never from a file in the repo. Set your app's own
+variables with `riku config set`:
 
 ```bash
-DATABASE_URL=postgres://localhost/myapp
-SECRET_KEY=change-me
+riku config set myapp DATABASE_URL=postgres://localhost/myapp SECRET_KEY=change-me
 ```
 
 See `../docs/docs/env.md` for the variables riku sets for your app.
@@ -69,16 +69,13 @@ version = "22"
 
 See `riku.toml` in this directory and `../docs/docs/riku-toml.md` for every key.
 
-### SCALING File
+### Scaling
 
-Control how many worker processes run:
+Each process kind runs one copy until you scale it. A `SCALING` file in the
+repo is not read; scale on the server, which redeploys the app:
 
 ```bash
-# Scale web workers
-web=2
-
-# Scale background workers
-worker=1
+riku ps myapp --scale web=2 worker=1
 ```
 
 ### Procfile

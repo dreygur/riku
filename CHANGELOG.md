@@ -60,6 +60,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The examples shipped `ENV` and `SCALING` files (`examples/`, `golang`,
+  `nodejs-wisp`, `python-postgres`, `rust`), and the docs told users to
+  commit a `SCALING` file and push. riku reads neither from the repo,
+  only `~/.riku/envs/<app>/`. The files are removed; the READMEs, the
+  FAQ, the quick start, the supervisor and CLI docs now give `riku
+  config set` and `riku ps --scale` lines instead.
 - A worker only app failed its deploy on a server without the router
   helper: taking it off the router always asked the helper. An app the
   routing state has no entry for was never routed, so the deploy now

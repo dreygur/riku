@@ -253,7 +253,7 @@ The full rules are in [Remote Servers](cli.md#remote-servers).
 | Task | Command |
 |------|---------|
 | View logs | `riku logs myapp` |
-| Scale workers | `echo "web=4" > SCALING && git push riku main` |
+| Scale workers | `riku ps myapp --scale web=4` |
 | Set env vars | `riku config set myapp KEY=value` |
 | Restart app | `riku restart myapp` |
 | Stop app | `riku stop myapp` |
