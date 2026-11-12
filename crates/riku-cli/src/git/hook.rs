@@ -116,6 +116,44 @@ fn ref_push(refname: &str, newrev: &str, default: &str) -> RefPush {
     RefPush::Deploy
 }
 
+/// One `<oldrev> <newrev> <refname>` line the hook read.
+struct PushedRef<'a> {
+    oldrev: &'a str,
+    newrev: &'a str,
+    refname: &'a str,
+}
+
+/// Put the pushed branch back where it was, so the repo names what still
+/// runs and pushing the same commit again retries the deploy instead of
+/// answering "Everything up-to-date". The update is a compare and swap
+/// from `newrev`: a branch a later push already moved is left alone, as is
+/// one this cannot reset, and nothing is printed either way. A branch the
+/// push created is deleted the same way.
+fn roll_back(repo: &Path, pushed: &PushedRef) {
+    let created = pushed.oldrev.chars().all(|c| c == ZERO_SHA_CHAR);
+    let args = if created {
+        vec!["update-ref", "-d", pushed.refname, pushed.newrev]
+    } else {
+        vec!["update-ref", pushed.refname, pushed.oldrev, pushed.newrev]
+    };
+    if let Err(e) = git_in(repo, &args) {
+        tracing::warn!("cannot roll back {}: {e}", pushed.refname);
+    }
+}
+
+/// Run `deploy` for `pushed`, rolling the branch back when it fails.
+fn deploy_or_roll_back(
+    repo: &Path,
+    pushed: &PushedRef,
+    deploy: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    let deployed = deploy();
+    if deployed.is_err() {
+        roll_back(repo, pushed);
+    }
+    deployed
+}
+
 /// Why a hook run failed.
 enum HookFailure {
     /// The deploy failed and already printed its failure block.
@@ -183,8 +221,12 @@ fn deploy_pushed_refs(
         if parts.len() < 3 {
             continue;
         }
-        let newrev = parts[1];
-        let refname = parts[2];
+        let pushed = PushedRef {
+            oldrev: parts[0],
+            newrev: parts[1],
+            refname: parts[2],
+        };
+        let (newrev, refname) = (pushed.newrev, pushed.refname);
 
         let default = match default_ref(&repo, refname) {
             Ok(default) => default,
@@ -196,13 +238,16 @@ fn deploy_pushed_refs(
         }
 
         if needs_clone(&app_path) {
-            if let Err(e) = clone_app(paths, &app) {
+            if let Err(e) = deploy_or_roll_back(&repo, &pushed, || clone_app(paths, &app)) {
                 return Err(e.into());
             }
         }
 
         let deltas: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
-        if let Err(e) = crate::deploy::do_deploy(&app, paths, &deltas, Some(newrev)) {
+        let deployed = deploy_or_roll_back(&repo, &pushed, || {
+            crate::deploy::do_deploy(&app, paths, &deltas, Some(newrev))
+        });
+        if let Err(e) = deployed {
             return Err(HookFailure::Shown(e));
         }
     }

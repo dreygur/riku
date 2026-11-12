@@ -134,6 +134,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (now an accepted compose key) to run without it; `stop_grace_period`
   still overrides the grace. The init flag is part of the `riku.spec`
   fingerprint, so every container is replaced once on the next deploy.
+- A failed deploy left the server's branch at the failed commit: git
+  updates the branch before the post-receive hook deploys, so the retry
+  the outro suggests, `git push riku <branch>`, answered "Everything
+  up-to-date" and deployed nothing, for Procfile and container apps
+  alike. The hook now moves the branch back to where it was with a
+  compare and swap from the pushed commit, or deletes it after a failed
+  first push, so the same push retries. A branch another push moved in
+  the meantime is left alone.
 - `riku destroy` left the app's release history
   (`~/.riku/releases/<app>.log`), so a new app of the same name offered the
   old app's commits in `riku rollback` and the dashboard's release picker.

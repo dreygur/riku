@@ -151,9 +151,15 @@ fn both_spellings_of_an_app_push_to_one_repository() {
     );
     push_to_riku(&work, tmp.path(), "twice.git");
 
-    assert_eq!(
-        rev(&app_repo(tmp.path(), "twice"), "refs/heads/main"),
-        rev(&work, "HEAD"),
+    // Both deploys fail here (no router), so the branch is rolled back; the
+    // pushed commit must still be in the one repository.
+    let head = rev(&work, "HEAD");
+    let has_commit = git(
+        &app_repo(tmp.path(), "twice"),
+        &["cat-file", "-e", &format!("{head}^{{commit}}")],
+    );
+    assert!(
+        has_commit.status.success(),
         "the second push must land in the repository the first one wrote"
     );
     assert!(
@@ -187,6 +193,29 @@ fn a_push_whose_deploy_fails_exits_non_zero_and_shows_the_failure_once() {
     assert!(
         failure_lines[0].starts_with("remote:"),
         "the failure comes from the hook through git's sideband, stderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn a_failed_push_leaves_no_branch_so_pushing_again_retries_the_deploy() {
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join("home")).unwrap();
+    let work = committed_app(tmp.path());
+    repo_with_hook(tmp.path(), "retry");
+
+    // No router is set up, so the deploy fails after git took the branch.
+    push_to_riku(&work, tmp.path(), "retry");
+
+    assert_eq!(
+        rev(&app_repo(tmp.path(), "retry"), "refs/heads/main"),
+        "",
+        "the failed first push left its branch on the server"
+    );
+    let again = push_to_riku(&work, tmp.path(), "retry");
+    let stderr = String::from_utf8_lossy(&again.stderr);
+    assert!(
+        !stderr.contains("Everything up-to-date") && stderr.contains("┌"),
+        "pushing the same commit again did not retry the deploy, stderr:\n{stderr}"
     );
 }
 

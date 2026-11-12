@@ -184,7 +184,11 @@ remote:    Logs      rk logs myapp
 
 A failed deploy names the step that failed under the build output it
 streamed, and ends with `rk logs myapp --deploy` for the full log and
-the `git push` that retries it. `git push` exits non-zero.
+the `git push` that retries it. `git push` exits non-zero, and the server
+puts its branch back where it was (or removes it after a failed first
+push), so the same `git push` deploys the commit again instead of
+answering "Everything up-to-date". Git still prints the branch update
+line, since the server takes the commits before it deploys them.
 
 An app with no domain gets the server's fallback name, or a port of its own
 when the server has none. See [App URLs](routing.md) for the three ways an

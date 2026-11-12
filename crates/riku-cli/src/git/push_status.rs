@@ -5,8 +5,10 @@
 //! status file and names it in [`STATUS_ENV`] for git-receive-pack, whose
 //! hooks inherit the environment. `riku git-hook` writes its error into that
 //! file, and once git-receive-pack returns the push exits non-zero when the
-//! file is not empty. The refs are already updated by then: the push fails,
-//! but the commits are on the server.
+//! file is not empty. Git updated the refs before the hook ran, so the hook
+//! also puts the deploy branch back where it was (see `hook::roll_back`):
+//! the commits stay on the server, but pushing them again retries the
+//! deploy.
 //!
 //! Security: the hook writes only to a file that already exists and never
 //! creates one, and the path comes from the environment of a process that
