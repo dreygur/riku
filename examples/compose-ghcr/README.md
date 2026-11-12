@@ -55,11 +55,11 @@ If the image is private, set credentials **before** the push so the first
 build can log in and pull:
 
 ```bash
-riku config set compose-demo RIKU_GHCR_USERNAME=$RIKU_GHCR_USERNAME RIKU_GHCR_TOKEN=$RIKU_GHCR_TOKEN
+riku settings set compose-demo secrets.ghcr_username=$RIKU_GHCR_USERNAME secrets.ghcr_token=$RIKU_GHCR_TOKEN
 ```
 
 Confirm it's up by requesting the app through the router, at the domain you set
-with `riku config set compose-demo RIKU_DOMAINS=<your-domain>`:
+with `riku settings set compose-demo routing.domains=<your-domain>`:
 
 ```bash
 curl http://<your-domain>
@@ -69,7 +69,7 @@ curl http://<your-domain>
 ## 4. Turn on auto-update
 
 ```bash
-riku config set compose-demo RIKU_WATCH_SERVICES=web
+riku settings set compose-demo containers.watch_services=web
 ```
 
 The supervisor now re-checks this service's image every 60 seconds.

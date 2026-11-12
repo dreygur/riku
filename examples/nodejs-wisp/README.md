@@ -20,10 +20,10 @@ git commit -a -m "initial commit"
 git push riku main
 ```
 
-Then you can set up an SSL cert and connect a domain by setting config variables like this:
+Then you can set up an SSL cert and connect a domain with riku settings like this:
 
 ```bash
-riku config set wispchat RIKU_DOMAINS=your_server RIKU_HTTPS_ONLY=1
+riku settings set wispchat routing.domains=your_server routing.https_only=true
 ```
 
 Then visit the site `your_server` and you will see a simple websocket chat application.

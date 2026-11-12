@@ -21,7 +21,7 @@ cat > "$src/server.js" << 'EOF'
 require('http').createServer((req,res)=>res.end('ok')).listen(process.env.PORT||5000);
 EOF
 
-RIKU_SKIP_BUILD=1 push_app "$APP" "$src"
+push_app "$APP" "$src"
 
 # Confirm the app was deployed before destroying
 assert_dir_exists "$RIKU_ROOT/apps/${APP}"

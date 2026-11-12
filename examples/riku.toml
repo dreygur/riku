@@ -1,0 +1,21 @@
+# riku settings for an app. Commit this file next to your code; riku reads
+# it from the checkout on every deploy. Uncomment what you need. See
+# docs/docs/riku-toml.md for every key.
+
+# [routing]
+# domains = ["example.com"]
+# https_only = true
+# static_paths = ["/static:public/static", "/assets:assets"]
+# allow_git_folders = false
+
+# [runtime]
+# name = "node"
+# version = "22"
+
+# [workers]
+# timeout = 7200
+# grace_period = 30
+# max_restarts = 5
+
+# routing.bind_address and the limits.* keys are server only:
+#   riku settings set <app> routing.bind_address=127.0.0.1

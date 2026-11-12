@@ -27,11 +27,15 @@ git commit -a -m "initial commit"
 git push riku main
 ```
 
-Then you can connect a domain, set up an SSL cert, and create a database by setting the `RIKU_DOMAINS` config variable:
+Then you can connect a domain, set up an SSL cert, and create a database by setting `routing.domains`, which reaches the app as `RIKU_DOMAINS`:
 
 ```bash
-riku config set pypostgres RIKU_DOMAINS=your_domain_name.com RIKU_HTTPS_ONLY=1
+riku settings set pypostgres routing.domains=your_domain_name.com routing.https_only=true
 ```
+
+`riku.toml` serves the files `collectstatic` writes to `static/` at `/static`
+(`routing.static_paths`). That setting is nginx only: under Caddy the deploy
+stops and names it, so remove it there and serve the files from Django.
 
 You can also create a superuser and set a password like this:
 

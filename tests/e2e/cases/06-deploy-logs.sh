@@ -23,8 +23,7 @@ cat > "$src/server.js" << 'EOF'
 require('http').createServer((req, res) => res.end('ok')).listen(process.env.PORT || 5000);
 EOF
 
-# Skip npm install: we only care about logging, not the actual build
-RIKU_SKIP_BUILD=1 push_app "$APP" "$src"
+push_app "$APP" "$src"
 
 # The deploy log must exist after a successful push.
 assert_file_exists "$RIKU_ROOT/logs/${APP}/deploy.log"

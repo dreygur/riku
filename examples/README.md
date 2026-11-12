@@ -41,21 +41,33 @@ git push riku main
 
 ### ENV File
 
-The `ENV` file contains environment variables for your app:
+The `ENV` file lists your app's own environment variables. Set them on the
+server with `riku config set <app> KEY=value`:
 
 ```bash
-# Basic configuration
-RIKU_DOMAINS=example.com
-RIKU_HTTPS_ONLY=true
-
-# Worker settings
-RIKU_BIND_ADDRESS=127.0.0.1
-
-# Node.js specific
-RIKU_NODE_VERSION=18.17.0
+DATABASE_URL=postgres://localhost/myapp
+SECRET_KEY=change-me
 ```
 
-See `../docs/docs/env.md` for the complete list of environment variables.
+See `../docs/docs/env.md` for the variables riku sets for your app.
+
+### riku.toml
+
+riku's own settings (domains, HTTPS, static files, workers, the runtime and
+its version) are not read from `ENV`. Commit them in a `riku.toml` next to
+your code, or set them with `riku settings set`:
+
+```toml
+[routing]
+domains = ["example.com"]
+https_only = true
+
+[runtime]
+name = "node"
+version = "22"
+```
+
+See `riku.toml` in this directory and `../docs/docs/riku-toml.md` for every key.
 
 ### SCALING File
 

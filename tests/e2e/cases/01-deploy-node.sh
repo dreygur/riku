@@ -23,8 +23,9 @@ const http = require('http');
 http.createServer((req, res) => res.end('ok')).listen(process.env.PORT || 5000);
 EOF
 
-# Skip npm install: we only care about worker config creation
-RIKU_SKIP_BUILD=1 push_app "$APP" "$src"
+# The node plugin builds it; package.json has no dependencies, so npm
+# installs nothing.
+push_app "$APP" "$src"
 
 # The worker config is written to workers-available as {app}-{kind}-{ordinal}.toml
 # and symlinked into workers-enabled.

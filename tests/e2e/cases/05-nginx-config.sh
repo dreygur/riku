@@ -20,7 +20,7 @@ cat > "$src/package.json" << 'EOF'
 {"name":"testapp","version":"1.0.0","private":true}
 EOF
 
-RIKU_SKIP_BUILD=1 push_app "$APP" "$src"
+push_app "$APP" "$src"
 
 # The router helper installs the site as root in /etc/riku/nginx/{app}.conf
 SITE="/etc/riku/nginx/${APP}.conf"

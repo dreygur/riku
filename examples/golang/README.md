@@ -24,24 +24,18 @@ git push riku main
 - `server.go` - Main application code
 - `go.mod` - Go module definition
 - `Procfile` - Process definition for Riku
-- `ENV` - Environment variables
 - `SCALING` - Worker scaling configuration
 
 ## Configuration
 
-### Environment Variables
+### Settings
 
-Edit `ENV` to configure your app:
+A domain and HTTPS are riku settings. Add a `riku.toml` next to `server.go`:
 
-```bash
-# Domain name
-RIKU_DOMAINS=example.com
-
-# Enable HTTPS
-RIKU_HTTPS_ONLY=true
-
-# Worker settings
-RIKU_BIND_ADDRESS=127.0.0.1
+```toml
+[routing]
+domains = ["example.com"]
+https_only = true
 ```
 
 ### Scaling

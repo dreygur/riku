@@ -24,9 +24,11 @@ pub fn validate_node_version(version: &str) -> Result<(), String> {
         return Err("RIKU_NODE_VERSION cannot be empty".to_string());
     }
 
-    // Accepts "18", "18.17.0", "18.x", "18.17.0-nightly". The value is only
-    // format-checked to warn on typos: no runtime reads it (docs/docs/env.md),
-    // so an npm-style wildcard segment must not draw a warning.
+    // Accepts "18", "18.17.0", "18.x", "18.17.0-nightly". The value comes
+    // from riku.toml `[runtime] version`; the node plugin's build compares it
+    // with the server's node and fails on a mismatch, stripping a trailing
+    // ".x" first. This check only warns on a typo, so an npm-style wildcard
+    // segment must not draw a warning.
     let version_regex = Regex::new(r"^\d+(\.(\d+|[xX*]))*(-[\w.]+)?$").unwrap();
     if !version_regex.is_match(version) {
         return Err(format!(

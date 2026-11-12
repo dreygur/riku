@@ -71,6 +71,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   files; they now deploy with the built riku and check that the node
   plugin refuses a mismatched `[runtime] version` and that `riku ps
   --scale worker=2` writes two worker configs.
+- The examples set riku settings in `ENV` files and with `riku config
+  set`, which riku no longer reads or accepts. Their settings now sit in
+  a `riku.toml` (`examples/riku.toml` lists the tables;
+  `examples/python-postgres/riku.toml` keeps its `routing.static_paths`)
+  or in `riku settings set` commands. `RIKU_BIND_ADDRESS=127.0.0.1` (the
+  default, and server only) and the version and nginx keys nothing reads
+  are dropped; the golang and nodejs-wisp `ENV` files held nothing else
+  and are removed.
+- The e2e cases set `RIKU_SKIP_BUILD`, which nothing reads; it is gone,
+  and the comments that claimed the build was skipped now say it runs.
+- The `validate_node_version` comment said no runtime reads the node
+  version. The node plugin's build compares `[runtime] version` with the
+  server's node and fails on a mismatch.
 - `tests/deploy-smoke/quick-test.sh` is removed. It wrote a sample app and
   printed push instructions, deploying nothing, and CI ran it as a test.
 - The first deploy hint (`riku apps`, `riku apps create`) and the

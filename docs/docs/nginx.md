@@ -245,8 +245,9 @@ Static files not found or wrong path.
 # Check the published copy nginx serves
 ls -la /var/lib/riku/static/myapp/
 
-# Verify RIKU_NGINX_STATIC_PATHS
-riku config get myapp RIKU_NGINX_STATIC_PATHS
+# Verify routing.static_paths: the repo's riku.toml, then the server override
+grep static_paths ~/.riku/apps/myapp/riku.toml
+riku settings get myapp routing.static_paths
 ```
 
 #### SSL Certificate Errors

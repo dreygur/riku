@@ -22,11 +22,11 @@ cat > "$src/package.json" << 'EOF'
 {"name":"testapp","version":"1.0.0","private":true}
 EOF
 
-RIKU_SKIP_BUILD=1 push_app "$APP" "$src"
+push_app "$APP" "$src"
 
 # Now set a config key via CLI.
 # CLI syntax (from src/cli/cmds.rs): riku config set APP KEY=VALUE
-RIKU_ROOT="$RIKU_ROOT" RIKU_SKIP_BUILD=1 riku config set "$APP" MYAPP_SECRET=hello
+RIKU_ROOT="$RIKU_ROOT" riku config set "$APP" MYAPP_SECRET=hello
 
 # The ENV file lives at $RIKU_ROOT/envs/$APP/ENV
 assert_file_exists "$RIKU_ROOT/envs/${APP}/ENV"
