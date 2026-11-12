@@ -12,7 +12,10 @@
 //!
 //! riku reads its settings only from the two `riku.toml` files. An ENV line
 //! whose key is a settings table key (`RIKU_DOMAINS` and the like) is
-//! dropped, so it can neither set nor override a setting.
+//! dropped, so it can neither set nor override a setting. A
+//! `RIKU_<NAME>_VERSION` line stays an app env var, but cannot override the
+//! version riku.toml sets, and [`runtime_plugin_env`] keeps it from the
+//! runtime plugin.
 //!
 //! Processes come from the repo `riku.toml` `[processes]`/`[cron]`, else the
 //! Procfile, never both. Readers that only need env call [`load_env`], so a
@@ -40,14 +43,6 @@ pub struct AppEnv {
     pub env: HashMap<String, String>,
 }
 
-fn settings_env(file: &Path, source: Source) -> Result<HashMap<String, String>> {
-    match AppSettings::load(file, source) {
-        Ok(Some(settings)) => Ok(settings.env()),
-        Ok(None) => Ok(HashMap::new()),
-        Err(e) => Err(e),
-    }
-}
-
 fn env_file_map(file: &Path) -> Result<HashMap<String, String>> {
     let mut env = HashMap::new();
     riku_util::parse_settings(file, &mut env)
@@ -56,10 +51,11 @@ fn env_file_map(file: &Path) -> Result<HashMap<String, String>> {
 /// The merged env of `app`.
 #[allow(clippy::question_mark)]
 pub fn load_env(paths: &RikuPaths, app: &str) -> Result<AppEnv> {
-    let mut env = match settings_env(&paths.app_settings_repo(app), Source::Repo) {
-        Ok(env) => env,
+    let repo = match AppSettings::load(&paths.app_settings_repo(app), Source::Repo) {
+        Ok(repo) => repo,
         Err(e) => return Err(e),
     };
+    let mut env = repo.as_ref().map(AppSettings::env).unwrap_or_default();
     let env_file = match env_file_map(&paths.env_root.join(app).join(ENV_FILE)) {
         Ok(env) => env,
         Err(e) => return Err(e),
@@ -69,6 +65,11 @@ pub fn load_env(paths: &RikuPaths, app: &str) -> Result<AppEnv> {
             .into_iter()
             .filter(|(key, _)| !keys::is_table_env_key(key)),
     );
+    // An ENV line named like the runtime version is an app env var; it must
+    // not override the version riku.toml sets.
+    if let Some((key, version)) = repo.as_ref().and_then(AppSettings::runtime_version) {
+        env.insert(key, version);
+    }
 
     match AppSettings::load(&paths.app_settings_override(app), Source::Server) {
         Ok(Some(server)) => {
@@ -81,6 +82,41 @@ pub fn load_env(paths: &RikuPaths, app: &str) -> Result<AppEnv> {
         Err(e) => return Err(e),
     }
     Ok(AppEnv { env })
+}
+
+/// The `RIKU_<NAME>_VERSION` keys `[runtime] version` sets in the repo
+/// `riku.toml` and the server override; the override wins.
+#[allow(clippy::question_mark)]
+pub fn runtime_versions(paths: &RikuPaths, app: &str) -> Result<HashMap<String, String>> {
+    let mut versions = HashMap::new();
+    for (file, source) in [
+        (paths.app_settings_repo(app), Source::Repo),
+        (paths.app_settings_override(app), Source::Server),
+    ] {
+        match AppSettings::load(&file, source) {
+            Ok(Some(settings)) => versions.extend(settings.runtime_version()),
+            Ok(None) => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(versions)
+}
+
+/// `env` as the runtime plugin `runtime` gets it. The plugin reads its
+/// version from `RIKU_<NAME>_VERSION`, which riku sets only from `versions`
+/// (see [`runtime_versions`]); an ENV line of that name is left out.
+pub fn runtime_plugin_env(
+    env: &HashMap<String, String>,
+    versions: &HashMap<String, String>,
+    runtime: &str,
+) -> HashMap<String, String> {
+    let key = keys::runtime_version_env(runtime);
+    let mut plugin_env = env.clone();
+    plugin_env.remove(&key);
+    if let Some(version) = versions.get(&key) {
+        plugin_env.insert(key, version.clone());
+    }
+    plugin_env
 }
 
 fn procfile_path(paths: &RikuPaths, app: &str) -> PathBuf {

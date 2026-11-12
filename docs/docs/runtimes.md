@@ -131,12 +131,20 @@ how to install nub. `riku doctor` warns
 while nub is missing. With neither nub nor npm on the server, the build stops
 with `Node.js is not installed on this server (npm not found)`.
 
-### Environment Variables
+### Node Version
 
-```bash
-RIKU_NODE_VERSION=18.17.0
-PORT=3000
+Pin the node the build must match in `riku.toml`:
+
+```toml
+[runtime]
+name = "node"
+version = "18.17.0"
 ```
+
+The plugin gets it as `RIKU_NODE_VERSION`, set only from `[runtime]
+version`. A `RIKU_NODE_VERSION` line in the app's ENV is an env var for the
+app and does not pick the version. See [Environment Variables](env.md) for
+what the version accepts.
 
 ### Example server.js
 
@@ -184,7 +192,6 @@ web: bundle exec puma -p $PORT
 ### Environment Variables
 
 ```bash
-RUBY_VERSION=3.2.0
 PORT=3000
 ```
 
@@ -258,7 +265,6 @@ go build -o server .
 ### Environment Variables
 
 ```bash
-GO_VERSION=1.21
 PORT=8080
 ```
 
@@ -321,7 +327,6 @@ web: java -jar build/libs/myapp-1.0.0.jar
 ### Environment Variables
 
 ```bash
-JAVA_VERSION=17
 PORT=8080
 ```
 
@@ -401,7 +406,6 @@ cargo build --release
 ### Environment Variables
 
 ```bash
-RUST_VERSION=1.70.0
 PORT=8080
 ```
 

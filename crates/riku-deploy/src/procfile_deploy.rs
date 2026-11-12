@@ -88,6 +88,22 @@ pub(crate) fn detect_runtime(
     }
 }
 
+/// The env the runtime plugin `runtime` runs with: `env` with its version
+/// key taken only from riku.toml `[runtime] version`.
+pub(crate) fn runtime_env_for(
+    app: &str,
+    paths: &RikuPaths,
+    env: &HashMap<String, String>,
+    runtime: &str,
+) -> Result<HashMap<String, String>> {
+    match crate::config::app_config::runtime_versions(paths, app) {
+        Ok(versions) => Ok(crate::config::app_config::runtime_plugin_env(
+            env, &versions, runtime,
+        )),
+        Err(e) => Err(e),
+    }
+}
+
 /// Pre build hooks, then the plugin's build, env and start subcommands.
 fn build_with_plugin(
     plugin: &RuntimePlugin,
@@ -248,13 +264,17 @@ pub(crate) fn deploy_procfile_app(
         Err(e) => return Err(e),
     };
     progress.done(&plugin.name);
+    let plugin_run_env = match runtime_env_for(app, paths, env, &plugin.name) {
+        Ok(plugin_run_env) => plugin_run_env,
+        Err(e) => return Err(e),
+    };
     let env_path = paths.env_root.join(app);
     let ctx = RuntimeContext {
         app,
         app_path: &app_path,
         env_path: &env_path,
         riku_root: &paths.riku_root,
-        app_env: env,
+        app_env: &plugin_run_env,
     };
     progress.begin(Phase::Build);
     let output = match build_with_plugin(&plugin, &ctx, paths, progress) {

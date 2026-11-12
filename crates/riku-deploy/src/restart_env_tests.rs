@@ -73,6 +73,58 @@ fn restart_reruns_the_plugin_when_env_changed_since_the_deploy() {
     );
 }
 
+/// Reports the version the plugin was given as `SEEN`.
+const VERSION_PLUGIN: &str = r#"#!/bin/sh
+case "$1" in
+  detect) exit 0 ;;
+  env)    echo "SEEN=${RIKU_FAKE_VERSION:-none}" ;;
+esac
+"#;
+
+fn app_with_version_plugin(paths: &RikuPaths) {
+    app_with_plugin(paths);
+    fs::write(paths.plugin_root.join("fake"), VERSION_PLUGIN).unwrap();
+}
+
+/// `RIKU_FAKE_VERSION` in ENV is an env var for the app, not the runtime
+/// version: the plugin gets the version only from riku.toml.
+#[test]
+fn the_plugin_takes_its_version_from_riku_toml_and_not_from_env() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    app_with_version_plugin(&paths);
+    let env_file = paths.env_root.join("myapp").join("ENV");
+    fs::write(&env_file, "RIKU_FAKE_VERSION=from-env\n").unwrap();
+
+    let env = worker_env("myapp", &paths).unwrap();
+    assert_eq!(
+        env.get("SEEN").map(String::as_str),
+        Some("none"),
+        "the ENV line reached the plugin as its version"
+    );
+    assert_eq!(
+        env.get("RIKU_FAKE_VERSION").map(String::as_str),
+        Some("from-env"),
+        "the ENV line is still an env var for the app"
+    );
+
+    fs::write(
+        paths.app_root.join("myapp").join("riku.toml"),
+        "[runtime]\nname = \"fake\"\nversion = \"1.2\"\n",
+    )
+    .unwrap();
+    // A changed riku.toml in the checkout is not part of the stored digest.
+    fs::remove_file(paths.env_root.join("myapp").join("PLUGIN_ENV")).unwrap();
+
+    let env = worker_env("myapp", &paths).unwrap();
+    assert_eq!(env.get("SEEN").map(String::as_str), Some("1.2"));
+    assert_eq!(
+        env.get("RIKU_FAKE_VERSION").map(String::as_str),
+        Some("1.2"),
+        "riku.toml's version wins over the ENV line"
+    );
+}
+
 #[test]
 fn an_app_without_a_stored_plugin_env_runs_the_plugin() {
     let tmp = tempfile::tempdir().unwrap();

@@ -172,8 +172,11 @@ Setting this to `true` exposes your git history publicly.
 
 ### Node Version
 
-```bash
-RIKU_NODE_VERSION=18.17.0
+```toml
+# riku.toml
+[runtime]
+name = "node"
+version = "18.17.0"
 ```
 
 - **Default:** (none, uses whatever `node` is on `$PATH`)
@@ -181,8 +184,10 @@ RIKU_NODE_VERSION=18.17.0
 - **Description:** the node riku builds with must match. `18` and `18.x`
   match any 18 release, `18.17` any 18.17 patch, `18.17.0` only that one.
   Riku uses the server's `node` and does not install another version, so on
-  a mismatch the build fails and names both versions. Set it in riku.toml
-  as `[runtime] version`.
+  a mismatch the build fails and names both versions. The plugin gets it as
+  `RIKU_NODE_VERSION`, set only from `[runtime] version`: a
+  `RIKU_NODE_VERSION` line in ENV is an app env var and does not pick the
+  version.
 - **Values:** Any valid Node.js version
 
 ### Node Package Manager
@@ -198,13 +203,20 @@ setting to configure. Commit a lockfile to pin your dependency versions. See
 
 ### Python Version
 
-```bash
-RIKU_PYTHON_VERSION=3.11.4
+```toml
+# riku.toml
+[runtime]
+name = "python"
+version = "3.11"
 ```
 
-- **Default:** `"3"` (system Python 3)
-- **Description:** Python version to use (passed to `python3 -m venv`)
-- **Values:** Any valid Python 3.x version
+- **Default:** (none: uv's default Python, or `python3` with pip)
+- **Description:** the Python the venv is made with. uv fetches it when it
+  is missing; pip needs `python<version>` on the server. A venv made for
+  another version is made again. The plugin gets it as
+  `RIKU_PYTHON_VERSION`, set only from `[runtime] version`; an ENV line of
+  that name is an app env var.
+- **Values:** A Python 3 version such as `3.11` or `3.11.4`
 
 ### Package Manager
 

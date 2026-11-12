@@ -13,8 +13,14 @@ use crate::config::app_settings::{AppSettings, Source};
 use crate::config::RikuPaths;
 use crate::util::deploy_logger::DeployLogger;
 
-fn warn_about(loaded: &AppEnv, dlog: &mut DeployLogger) {
-    let warnings = crate::util::validate_env_vars(&loaded.env);
+/// The runtime whose version `validate_env_vars` checks.
+const NODE_RUNTIME: &str = "node";
+
+/// The node version is checked as the node plugin gets it, from riku.toml
+/// only: an ENV line of that name is an app env var riku does not read.
+fn warn_about(loaded: &AppEnv, versions: &HashMap<String, String>, dlog: &mut DeployLogger) {
+    let checked = app_config::runtime_plugin_env(&loaded.env, versions, NODE_RUNTIME);
+    let warnings = crate::util::validate_env_vars(&checked);
     crate::util::print_env_warnings(&warnings);
     for w in &warnings {
         dlog.log_warn(w);
@@ -48,7 +54,11 @@ pub(crate) fn load_deploy_env(
         Ok(loaded) => loaded,
         Err(e) => return Err(e),
     };
-    warn_about(&loaded, dlog);
+    let versions = match app_config::runtime_versions(paths, app) {
+        Ok(versions) => versions,
+        Err(e) => return Err(e),
+    };
+    warn_about(&loaded, &versions, dlog);
     Ok(loaded.env)
 }
 

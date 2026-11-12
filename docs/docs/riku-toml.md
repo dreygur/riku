@@ -75,6 +75,12 @@ file is ignored.
 | `secrets.ghcr_username` | string, server only | `RIKU_GHCR_USERNAME` |
 | `secrets.ghcr_token` | string, server only | `RIKU_GHCR_TOKEN` |
 
+The runtime version follows the same rule. The runtime plugin and riku take
+it only from `[runtime] version`. A `RIKU_NODE_VERSION` (or any
+`RIKU_<NAME>_VERSION`) line in the app's ENV is an ordinary env var for the
+app: the plugin never sees it, and when `riku.toml` sets the version the
+app sees that value instead.
+
 The `limits.max_*` keys are the app's rlimits. Each one set replaces the
 server wide value of the same `RIKU_MAX_*` variable for the app's workers,
 cron jobs, builds and `preflight` and `release` commands; one left unset

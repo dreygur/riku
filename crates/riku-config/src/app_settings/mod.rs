@@ -83,6 +83,17 @@ impl AppSettings {
         }
     }
 
+    /// The `RIKU_<NAME>_VERSION` key and the version `[runtime] version`
+    /// sets, when it is set.
+    pub fn runtime_version(&self) -> Option<(String, String)> {
+        match (self.runtime_name(), self.value_of("runtime.version")) {
+            (Some(name), Some(Value::Text(version))) => {
+                Some((keys::runtime_version_env(&name), version.clone()))
+            }
+            _ => None,
+        }
+    }
+
     fn put(&mut self, key: &'static Key, value: Value) {
         self.values
             .retain(|(existing, _)| !std::ptr::eq(*existing, key));

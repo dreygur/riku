@@ -12,9 +12,10 @@ VENV_PATH="$APP_PATH/.venv"
 # which a git push deploy does not have on PATH.
 PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
-# RIKU_PYTHON_VERSION (riku.toml [runtime] version, or the app's ENV) picks
-# the interpreter: uv fetches it when it is missing, pip needs python<version>
-# installed. A venv made for another version is made again.
+# RIKU_PYTHON_VERSION (riku.toml [runtime] version; riku never passes an ENV
+# line of that name) picks the interpreter: uv fetches it when it is
+# missing, pip needs python<version> installed. A venv made for another
+# version is made again.
 PYTHON_VERSION="${RIKU_PYTHON_VERSION:-}"
 VERSION_MARK="$VENV_PATH/.riku-python-version"
 UV_PYTHON=()

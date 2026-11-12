@@ -439,9 +439,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   settings`). A settings key such as `RIKU_DOMAINS`, `RIKU_HTTPS_ONLY` or
   `RIKU_MAX_MEMORY_MB` written into ENV by hand is ignored without a
   warning, and stays out of `LIVE_ENV`. Before, it sat between the two
-  `riku.toml` files and a deploy warned about it. Runtime version keys
-  (`RIKU_NODE_VERSION` and the like) and every other ENV line are
-  unchanged.
+  `riku.toml` files and a deploy warned about it. A runtime version key
+  (`RIKU_NODE_VERSION` and the like) in ENV no longer picks the version:
+  the runtime plugin gets its `RIKU_<NAME>_VERSION` only from `[runtime]
+  version`, which also wins over the ENV line in the app's env. The ENV
+  line stays an env var for the app. Every other ENV line is unchanged.
 - Breaking: the `~/.riku/ROUTER` and `~/.riku/CONTAINER_ENGINE` files.
   The router and the engine come only from `[router] name` and
   `[engine] program` in settings.toml; a leftover file is not read. Engine
