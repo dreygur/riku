@@ -34,8 +34,10 @@ mod market;
 mod mutations;
 mod routes;
 mod service_mutations;
+mod session;
 mod system;
 
+use std::future::IntoFuture;
 use std::net::{IpAddr, SocketAddr};
 
 use anyhow::{anyhow, Result};
@@ -122,7 +124,21 @@ async fn serve(addr: SocketAddr, state: DashboardState) -> Result<()> {
         Err(e) => return Err(anyhow!("reading the address bound for {addr}: {e}")),
     }
     let app = routes::router(state);
-    match axum::serve(listener, app).await {
+    let server = axum::serve(listener, app).into_future();
+    let Some(session_end) = session::watch() else {
+        return served(server.await);
+    };
+    tokio::select! {
+        outcome = server => served(outcome),
+        () = session_end.notified() => {
+            tracing::info!("the session that started the dashboard ended, stopping");
+            Ok(())
+        }
+    }
+}
+
+fn served(outcome: std::io::Result<()>) -> Result<()> {
+    match outcome {
         Ok(()) => Ok(()),
         Err(e) => Err(anyhow!("serving dashboard: {e}")),
     }

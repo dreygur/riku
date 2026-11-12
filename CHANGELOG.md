@@ -71,6 +71,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Under Caddy, `routing.static_paths` was dropped without a word. The
   deploy now stops before any copy starts, saying the setting is nginx
   only.
+- `ssh riku@host dashboard ...` without a tty kept the dashboard running,
+  holding its port, after the client disconnected: sshd sends no SIGHUP
+  without a pty. A dashboard whose stdin is a pipe or socket now stops when
+  stdin closes or its parent goes away.
 - Under Caddy, the dashboard and `riku apps info` showed every app as
   having no site, because the deploy user cannot read the root owned
   `/etc/riku/caddy`. They now say the site is unknown. For the same reason

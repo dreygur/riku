@@ -37,7 +37,10 @@ ssh -t -L 8088:127.0.0.1:8088 admin@edge.example sudo -u riku -H riku dashboard
 ```
 
 `admin` is any account on the server that may forward ports and run `sudo -u
-riku`. The dashboard stops when the ssh session ends.
+riku`. The dashboard stops when the ssh session ends. With `-t` the session's
+hangup stops it; without a tty, a dashboard whose stdin is a pipe or a socket
+stops once stdin closes or its parent process goes away. A dashboard with
+any other stdin, such as `/dev/null` under systemd, keeps running.
 
 ### Options
 
