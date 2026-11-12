@@ -58,6 +58,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   long `riku run` job is therefore bound by the CPU time (3600 s by
   default) and file size (1 GB by default) limits; raise them for the app
   with `riku settings set <app> limits.max_cpu_seconds=...`.
+- `riku agent run` also ran its command with no resource limits. It now
+  runs under the same limits as `riku run`. Its 300 s timeout, output caps
+  and exit handling are unchanged.
 - A `RIKU_MAX_MEMORY_MB` or `RIKU_MAX_FILE_SIZE_MB` value (or the matching
   `limits.max_*_mb` setting) too large to count in bytes panicked a debug
   build and wrapped to a wrong limit, as low as 0 bytes, in a release
