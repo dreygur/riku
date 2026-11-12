@@ -40,8 +40,9 @@ impl OneShot {
     }
 }
 
-/// Run `command` with `sh -c` in `app_path`, under the server limits with
-/// the `limits.max_*` values in `app_env` put over them. A command stopped by
+/// Run `command` with `sh -c` in `app_path`, with `app_env` put over riku's
+/// own env, under the server limits with the `limits.max_*` values in
+/// `app_env` put over them. A command stopped by
 /// a resource limit gets the structured diagnostic instead of a bare exit
 /// code.
 pub(crate) fn run_one_shot(
@@ -55,6 +56,7 @@ pub(crate) fn run_one_shot(
     let mut cmd = Command::new("sh");
     cmd.arg("-c")
         .arg(command)
+        .envs(app_env)
         .current_dir(app_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

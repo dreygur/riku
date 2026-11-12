@@ -52,6 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Procfile `release` and `preflight` commands ran with riku's own env
+  only, so a migration could not see the app's settings such as
+  `DATABASE_URL`. They now get the app env, the same one the workers get.
 - The per app `limits.max_*` settings (`riku settings set <app>
   limits.max_open_files=...` and the other four) were stored but never
   applied: every worker, cron job, build and `preflight`/`release` command

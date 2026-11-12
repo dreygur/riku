@@ -43,3 +43,29 @@ fn release_runs_under_the_open_files_limit_its_app_sets() {
     let written = std::fs::read_to_string(dir.path().join("nofile")).unwrap();
     assert_eq!(written.trim(), "200");
 }
+
+/// A release migration needs the app's own settings, such as its database
+/// URL, the same env its workers get.
+#[test]
+fn release_sees_the_app_env() {
+    let dir = tempfile::tempdir().unwrap();
+    let app_env = HashMap::from([(
+        "DATABASE_URL".to_string(),
+        "postgres://db.internal/shop".to_string(),
+    )]);
+
+    let result = run_one_shot(
+        OneShot::Release,
+        "printf %s \"$DATABASE_URL\" > seen",
+        dir.path(),
+        &app_env,
+        &OutputTail::default(),
+    );
+
+    assert!(result.is_ok(), "{result:?}");
+    let seen = std::fs::read_to_string(dir.path().join("seen")).unwrap();
+    assert_eq!(
+        seen, "postgres://db.internal/shop",
+        "release did not get the app env"
+    );
+}
