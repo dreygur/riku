@@ -57,6 +57,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/etc/riku/caddy`. They now say the site is unknown. For the same reason
   `riku doctor --fix` as the deploy user redeployed every Caddy app with a
   domain or port on each run; it now redeploys nothing there and warns.
+- The runtimes docs said riku deploys a static site when no runtime
+  matches. It does not: static files are served only next to a runtime,
+  `routing.static = true` is the switch, and only nginx serves them. The
+  docs now say so, and a deploy of an app with `routing.static` set and no
+  matching runtime says static files need a runtime.
 - `sudo riku init` without `--ssh-key` warned "No deploy key added" on a
   server that already had deploy keys. It now reports how many are
   authorized and warns only when there are none.

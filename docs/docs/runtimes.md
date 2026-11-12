@@ -726,19 +726,24 @@ variable reference.
 
 ## Static Sites
 
-### Detection
-
-Riku detects static sites when no runtime is detected but nginx can serve files directly.
-
-### Configuration
+`routing.static = true` is the switch. With it set, nginx serves the app's
+document root (`routing.document_root`, `public` by default) itself instead
+of proxying to the app. `routing.static_paths` adds more `location:directory`
+mappings, and works with or without `static = true`.
 
 ```toml
 # riku.toml
 [routing]
-static_paths = ["/:public"]
+static = true
 ```
 
-### Directory Structure
+Static files are served only next to a runtime. Riku has no runtime-less
+static deploy: the app must still match a runtime plugin, and it must declare
+a process or use a runtime whose `start` gives a command. A repo with only
+`public/index.html` and no runtime fails with `No runtime plugin matched`.
+
+Static files need the nginx router. Under Caddy the router helper refuses
+the route of an app with `static = true`, and `static_paths` is ignored.
 
 ```
 myapp/
@@ -746,7 +751,8 @@ myapp/
 │   ├── index.html
 │   ├── css/
 │   └── js/
-└── Procfile  (optional, can be empty)
+├── package.json
+└── Procfile
 ```
 
 ---

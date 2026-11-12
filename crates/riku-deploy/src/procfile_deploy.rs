@@ -72,6 +72,9 @@ pub(crate) fn detect_runtime(
             Some(name) if !plugins.iter().any(|p| p.name == name) => {
                 Err(install_hint(app, name))
             }
+            _ if crate::router::app_routing::serves_static_site(env) => Err(anyhow!(
+                "No runtime plugin matched '{app}'. `routing.static` is set, but riku serves static files only next to a runtime: the app still needs a runtime plugin and a process. See the Static Sites section of the runtimes docs."
+            )),
             _ => Err(anyhow!(
                 "No runtime plugin matched '{app}'. Run 'riku install-plugins' or set RIKU_RUNTIME=<name> in the app env."
             )),

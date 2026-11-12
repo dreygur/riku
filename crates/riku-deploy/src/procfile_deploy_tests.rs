@@ -35,6 +35,23 @@ fn missing_bundled_plugin_names_the_install_command() {
     );
 }
 
+#[test]
+fn a_static_site_with_no_runtime_says_static_files_need_one() {
+    let tmp = TempDir::new().unwrap();
+    let app_path = tmp.path().join("docs");
+    fs::create_dir_all(app_path.join("public")).unwrap();
+    fs::write(app_path.join("public").join("index.html"), "hi").unwrap();
+    let env = HashMap::from([("RIKU_NGINX_STATIC".to_string(), "true".to_string())]);
+
+    let err = detect_runtime("docs", &app_path, &paths_without_plugins(&tmp), &env).unwrap_err();
+
+    assert!(
+        err.to_string()
+            .contains("riku serves static files only next to a runtime"),
+        "got: {err}"
+    );
+}
+
 fn enable_worker(paths: &RikuPaths, app: &str, kind: &str) {
     fs::create_dir_all(&paths.workers_enabled).unwrap();
     let config = crate::supervisor::config::create_worker_config(
