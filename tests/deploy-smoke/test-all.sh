@@ -1,10 +1,9 @@
 #!/bin/bash
 # Test deployment scripts for Riku
-# Usage: ./tests/deploy-smoke/test-all.sh [remote]
+# Usage: ./tests/deploy-smoke/test-all.sh
 
 set -e
 
-REMOTE="${1:-}"
 TEST_DIR="$(mktemp -d)"
 PASSED=0
 FAILED=0

@@ -76,6 +76,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   renders those characters. The smoke script's Python, static and Go
   tests only wrote sample apps and are removed with their app templates;
   the static one used a `static:` Procfile kind riku no longer has.
+- `tests/deploy-smoke/test-all.sh` took a `[remote]` argument it never
+  read. The script only drives a local riku against a throwaway
+  `RIKU_ROOT`, so the argument and its usage text are removed.
 - The examples shipped `ENV` and `SCALING` files (`examples/`, `golang`,
   `nodejs-wisp`, `python-postgres`, `rust`), and the docs told users to
   commit a `SCALING` file and push. riku reads neither from the repo,
