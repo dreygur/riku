@@ -247,6 +247,52 @@ fn directory_of_another_uid_is_refused() {
 }
 
 #[test]
+fn remove_refuses_a_site_root_others_can_write() {
+    let host = Host::new();
+    let myapp = app("myapp");
+    apply_nginx(&host.roots, &myapp, &route("myapp.example"));
+    fs::set_permissions(&host.roots.site_root, fs::Permissions::from_mode(0o775)).unwrap();
+
+    let (stage, error) = failure(remove_nginx(&host.roots, &myapp));
+
+    assert_eq!(stage, Stage::Render);
+    assert!(
+        error.contains(&host.roots.site_root.display().to_string()) && error.contains("755"),
+        "the error names the dir and the expected mode: {error}"
+    );
+    assert!(host.roots.site_file(&myapp).exists(), "a file was removed");
+    assert_eq!(
+        host.calls().matches("-s reload").count(),
+        1,
+        "nginx reloaded"
+    );
+}
+
+#[test]
+fn a_cert_root_others_can_write_stops_any_reload() {
+    let host = Host::new();
+    let myapp = app("myapp");
+    apply_nginx(&host.roots, &myapp, &https_route("myapp.example"));
+    fs::set_permissions(&host.roots.cert_root, fs::Permissions::from_mode(0o770)).unwrap();
+
+    let (_, error) = failure(apply_nginx(
+        &host.roots,
+        &app("other"),
+        &route("other.example"),
+    ));
+
+    assert!(
+        error.contains(&host.roots.cert_root.display().to_string()) && error.contains("700"),
+        "{error}"
+    );
+    assert_eq!(
+        host.calls().matches("-s reload").count(),
+        1,
+        "nginx reloaded"
+    );
+}
+
+#[test]
 fn route_the_gate_refuses_is_never_written() {
     let host = Host::new();
     let mut sent = route("myapp.example");

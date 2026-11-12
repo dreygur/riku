@@ -33,8 +33,12 @@ use crate::util::{display, write_atomic};
 use super::caddy_admin::move_admin_to_socket;
 use super::host_cleanup::clear_foreign_entries;
 use super::nginx_host::{check_write_dir, ROOT_UID};
+use super::router_dirs::secure_cert_dirs;
 
 pub(super) const CADDY_USER: &str = "caddy";
+/// The site root's own certificate dir; riku-route `caddy_certs.rs`
+/// `CERT_DIR` names the same one.
+const CERTS_DIR: &str = "certs";
 
 /// `current` with `line` appended on its own line, or `None` when that
 /// exact line is already there.
@@ -206,6 +210,11 @@ pub fn setup_caddy_host(paths: &RikuPaths) -> Result<()> {
         Err(e) => return Err(e),
     };
     if let Err(e) = prepare_site_root(&paths.caddy_root, ROOT_UID, Some(ROOT_UID), &group) {
+        return Err(e);
+    }
+    let certs = paths.caddy_root.join(CERTS_DIR);
+    let gid = socket_dir::group_id(&group);
+    if let Err(e) = secure_cert_dirs(&certs, ROOT_UID, gid, socket_dir::SOCKET_DIR_MODE) {
         return Err(e);
     }
     if let Err(e) = clear_foreign_entries(&paths.caddy_root, ROOT_UID) {

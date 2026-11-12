@@ -17,6 +17,7 @@ pub mod own_cert_check;
 pub mod package_tools;
 mod report;
 pub mod router_check;
+pub mod router_dirs_check;
 pub mod settings_check;
 pub mod ssh_check;
 pub mod supervisor_check;
@@ -25,9 +26,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use crate::config::RikuPaths;
+use crate::config::{RikuPaths, CERT_ROOT, NGINX_SITE_ROOT};
 use crate::setup::deploy_user::{running_as_root, DeployUser};
 use crate::util::display;
+use crate::util::write_dir::ROOT_UID;
 
 use report::{render, summarize_and_exit};
 
@@ -126,6 +128,15 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     ));
     checks.push(helper_check::router_helper(paths));
     checks.extend(router_check::router(paths));
+    checks.extend(router_dirs_check::router_dirs(
+        &[
+            PathBuf::from(NGINX_SITE_ROOT),
+            PathBuf::from(CERT_ROOT),
+            paths.caddy_root.clone(),
+            paths.caddy_root.join("certs"),
+        ],
+        ROOT_UID,
+    ));
     checks.push(settings_check::settings_file(paths));
     checks.extend(settings_check::routing(paths));
     checks.push(container_check::container_engine(paths));

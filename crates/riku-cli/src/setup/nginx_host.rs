@@ -17,13 +17,12 @@
 
 use std::fs;
 use std::io::ErrorKind;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, Result};
 
-use crate::config::{NginxHostPaths, RikuPaths, NGINX_SITE_ROOT};
+use crate::config::{NginxHostPaths, RikuPaths, CERT_ROOT, NGINX_SITE_ROOT};
 use crate::nginx::{include_file_contents, needs_catch_all, write_include_file};
 use crate::util::echo;
 
@@ -32,6 +31,7 @@ use super::host_cleanup::{
     check_removed_base, clear_deploy_owned_router_files, is_trusted_file, removed_dir_now,
 };
 use super::nginx_worker::grant_nginx_sockets;
+use super::router_dirs::{secure_cert_dirs, secure_dir};
 
 const SITES_ENABLED: &str = "/etc/nginx/sites-enabled";
 
@@ -107,8 +107,14 @@ fn missing_dir_warning(paths: &RikuPaths, dir: &Path) -> String {
     )
 }
 
-/// Create `site_root` (`/etc/riku/nginx`) as a `0755` directory owned by
-/// `owner` inside a parent that only `owner` can write.
+/// The mode of `/etc/riku/nginx`: root writes, nginx workers read.
+const SITE_ROOT_MODE: u32 = 0o755;
+/// The mode of `/etc/riku/certs` and each app directory in it: root only.
+const CERT_DIR_MODE: u32 = 0o700;
+
+/// Create `site_root` (`/etc/riku/nginx`) inside a parent that only `owner`
+/// can write, and give it owner `owner` and mode `0755` whether or not it
+/// existed.
 fn prepare_site_root(site_root: &Path, owner: u32) -> Result<()> {
     let Some(parent) = site_root.parent() else {
         return Err(anyhow!("{} has no parent directory", site_root.display()));
@@ -120,15 +126,11 @@ fn prepare_site_root(site_root: &Path, owner: u32) -> Result<()> {
         return Err(anyhow!("{e}"));
     }
     match fs::create_dir(site_root) {
-        Ok(()) => {
-            if let Err(e) = fs::set_permissions(site_root, fs::Permissions::from_mode(0o755)) {
-                return Err(anyhow!("failed to chmod {}: {e}", site_root.display()));
-            }
-        }
+        Ok(()) => {}
         Err(e) if e.kind() == ErrorKind::AlreadyExists => {}
         Err(e) => return Err(anyhow!("failed to create {}: {e}", site_root.display())),
     }
-    check_write_dir(site_root, owner)
+    secure_dir(site_root, owner, None, SITE_ROOT_MODE)
 }
 
 /// Make the system nginx load riku's sites. Root only. A host without the
@@ -167,6 +169,9 @@ pub fn setup_nginx_host(user: &DeployUser) -> Result<()> {
         return Err(e);
     }
     if let Err(e) = prepare_site_root(Path::new(NGINX_SITE_ROOT), ROOT_UID) {
+        return Err(e);
+    }
+    if let Err(e) = secure_cert_dirs(Path::new(CERT_ROOT), ROOT_UID, None, CERT_DIR_MODE) {
         return Err(e);
     }
     if let Err(e) = load_riku_sites(&paths) {

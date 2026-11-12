@@ -30,7 +30,8 @@ use crate::port_wait::wait_for_port;
 use crate::protocol::{Reply, Stage};
 use crate::schema::{Route, Tls};
 use crate::site_files::{
-    ensure_dir, install, Planned, Snapshot, PRIVATE_DIR, PRIVATE_FILE, PUBLIC_DIR, PUBLIC_FILE,
+    check_router_dir, ensure_dir, install, Planned, Snapshot, PRIVATE_DIR, PRIVATE_FILE,
+    PUBLIC_DIR, PUBLIC_FILE,
 };
 
 fn plan(
@@ -102,6 +103,16 @@ pub(crate) fn commit(
     open_port: Option<u16>,
     probe: impl Fn() -> BTreeSet<u16>,
 ) -> Reply {
+    let guarded = [
+        (&roots.site_root, PUBLIC_DIR),
+        (&roots.cert_root, PRIVATE_DIR),
+    ];
+    if let Err(e) = guarded
+        .iter()
+        .try_for_each(|(dir, mode)| check_router_dir(dir, roots.owner_uid, *mode))
+    {
+        return failed(Stage::Render, e);
+    }
     let snapshot = match Snapshot::take(planned) {
         Ok(snapshot) => snapshot,
         Err(e) => return failed(Stage::Render, e),

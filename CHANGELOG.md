@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   them. A symlink, or a file the deploy user does not own, is never read or
   replaced. Before this an upgrade kept the old plugin text, so a server
   went on running an outdated python plugin.
+- The router directories stay root's on every run, not only at creation.
+  `sudo riku init` sets `/etc/riku/nginx` to root and `0755`,
+  `/etc/riku/certs` and each app directory in it to root and `0700`, and
+  `/etc/riku/caddy` and its `certs` directories to root, group `caddy`,
+  `2750`; a symlink in place of one is refused. The router helper refuses
+  to write a site or reload while its site root or certificate root is not
+  root owned or is writable by anyone else, naming the directory and the
+  mode it expects, and `riku doctor` prints each directory's owner and mode
+  and fails on one root does not own alone.
 - `riku init` names the installed downloaded plugins (java, clojure) in
   one `▲` line with `riku install-plugins --plugins <names>`, since init
   does not download them and an upgrade otherwise kept the old release's

@@ -20,6 +20,7 @@ mod outside_supervisor;
 mod prerequisites;
 mod root_init;
 mod router_choice;
+mod router_dirs;
 mod router_units;
 mod runtime_plugins;
 pub(crate) mod server_ip;
