@@ -21,6 +21,7 @@ export function routeHtml(route) {
   const r = route || {};
   if (r.router === "nginx") {
     if (r.enabled) { return routeTag("nginx", "live", "c-ok"); }
+    if (r.config_known === false) { return routeTag("nginx", "unknown", "c-dim"); }
     return r.config_exists ? routeTag("nginx", "staged", "c-warn") : routeTag("nginx", "off", "c-dim");
   }
   if (r.router === "caddy") {

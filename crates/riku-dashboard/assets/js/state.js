@@ -23,7 +23,8 @@
  */
 
 /**
- * Tagged by `router`: nginx carries enabled/config_exists, caddy the site
+ * Tagged by `router`: nginx carries enabled/config_exists and config_known
+ * (false when the user cannot read /etc/riku/nginx), caddy the site
  * file path (null without one) and site_known (false when the deploy user
  * cannot read the site root, so a null site means nothing), plugin its name,
  * and unknown the error from reading the ROUTER file.
@@ -31,6 +32,7 @@
  * @property {string} [router]
  * @property {boolean} [enabled]
  * @property {boolean} [config_exists]
+ * @property {boolean} [config_known]
  * @property {string | null} [site]
  * @property {boolean} [site_known]
  * @property {string} [name]

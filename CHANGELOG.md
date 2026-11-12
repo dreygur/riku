@@ -60,6 +60,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   memory bar was relative to the app's biggest worker (always full for a
   single worker). Each worker now carries `memory_limit_bytes`: its cgroup
   `memory.max`, else the configured limit, `null` without one.
+- Under nginx, the dashboard and `riku apps info` looked for an app's
+  config in `~/.riku/nginx`, but the router helper writes it to
+  `/etc/riku/nginx`, so every nginx app showed "off". Both now check
+  `/etc/riku/nginx/<app>.conf`, and say unknown when the user cannot
+  read that directory (`config_known` in `/api/state`).
 - Under Caddy, the dashboard and `riku apps info` showed every app as
   having no site, because the deploy user cannot read the root owned
   `/etc/riku/caddy`. They now say the site is unknown. For the same reason

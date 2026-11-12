@@ -97,22 +97,50 @@ fn test_build_app_entry_reports_lock_state() {
     assert!(matches!(held_entry.deploy_lock, LockState::Held));
 }
 
+/// The router helper writes `/etc/riku/nginx/<app>.conf`; a config left in
+/// the deploy user's own `nginx_root` is not one nginx loads.
 #[test]
-fn test_build_app_entry_nginx_state() {
+fn nginx_state_reads_the_site_the_helper_writes() {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
-    let app = "webapp";
-    fs::create_dir_all(paths.app_root.join(app)).unwrap();
-    fs::create_dir_all(paths.env_root.join(app)).unwrap();
+    let site_root = tmp.path().join("etc-riku-nginx");
+    fs::create_dir_all(&site_root).unwrap();
+    let state = || serde_json::to_value(route::nginx_site_state(&site_root.join("webapp.conf"), &paths)).unwrap();
 
-    let route = |paths: &RikuPaths| {
-        serde_json::to_value(build_app_entry(app, paths, &HashMap::new()).route).unwrap()
-    };
-    assert_eq!(route(&paths)["config_exists"], false);
+    fs::write(paths.nginx_root.join("webapp.conf"), "# stray").unwrap();
+    assert_eq!(state()["config_exists"], false, "{}", state());
+    assert_eq!(state()["config_known"], true);
 
-    fs::write(paths.nginx_root.join(format!("{}.conf", app)), "# conf").unwrap();
-    assert_eq!(route(&paths)["router"], "nginx");
-    assert_eq!(route(&paths)["config_exists"], true);
+    fs::write(site_root.join("webapp.conf"), "# conf").unwrap();
+    assert_eq!(state()["router"], "nginx");
+    assert_eq!(state()["config_exists"], true, "{}", state());
+}
+
+/// Like a Caddy site, a site root this user cannot search says nothing
+/// about the config, so it reads as unknown, not missing.
+#[test]
+fn nginx_state_is_unknown_when_the_site_root_is_closed() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let site_root = tmp.path().join("closed");
+    fs::create_dir_all(&site_root).unwrap();
+    fs::set_permissions(&site_root, fs::Permissions::from_mode(0o000)).unwrap();
+
+    let state = route::nginx_site_state(&site_root.join("webapp.conf"), &paths);
+    fs::set_permissions(&site_root, fs::Permissions::from_mode(0o755)).unwrap();
+
+    if nix::unistd::Uid::effective().is_root() {
+        return; // root searches any directory, so there is nothing to observe
+    }
+    assert_eq!(
+        state,
+        route::RouteState::Nginx {
+            config_exists: false,
+            config_known: false,
+            enabled: false,
+        }
+    );
 }
 
 #[test]

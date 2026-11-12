@@ -13,9 +13,17 @@ use crate::util::fs::{presence, Presence};
 fn print_route(paths: &RikuPaths, app: &str) {
     match Router::load(paths) {
         Ok(Router::Nginx) => {
-            let nginx_conf = paths.nginx_root.join(format!("{app}.conf"));
-            if nginx_conf.exists() {
-                display::kv("Nginx Config:", &nginx_conf.display().to_string());
+            let site = crate::nginx::site_path(app);
+            match presence(&site) {
+                Presence::Present => display::kv("Nginx Config:", &site.display().to_string()),
+                Presence::Missing => {}
+                Presence::Unknown => display::kv(
+                    "Nginx Config:",
+                    &format!(
+                        "unknown, {} is not readable by this user",
+                        crate::config::NGINX_SITE_ROOT
+                    ),
+                ),
             }
         }
         Ok(Router::Caddy) => {

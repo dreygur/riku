@@ -10,6 +10,7 @@
 //! reaches the directive, and nginx loads no file from the deploy user's tree.
 
 use std::fs;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Result};
 
@@ -44,6 +45,12 @@ pub fn write_include_file(paths: &RikuPaths, catch_all: bool) -> Result<()> {
         Ok(()) => Ok(()),
         Err(e) => Err(anyhow!("cannot write {}: {e}", file.display())),
     }
+}
+
+/// The site config the router helper writes for `app`:
+/// `/etc/riku/nginx/<app>.conf`. `app` must already be validated.
+pub fn site_path(app: &str) -> PathBuf {
+    Path::new(NGINX_SITE_ROOT).join(format!("{app}.conf"))
 }
 
 /// Whether the include file exists and loads [`NGINX_SITE_ROOT`].

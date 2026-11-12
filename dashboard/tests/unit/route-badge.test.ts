@@ -3,10 +3,15 @@ import { routeBadge } from "@/lib/types";
 
 describe("routeBadge", () => {
   it("names the router and whether it serves the app", () => {
-    expect(routeBadge({ router: "nginx", config_exists: true, enabled: false })).toEqual({
+    expect(
+      routeBadge({ router: "nginx", config_exists: true, config_known: true, enabled: false }),
+    ).toEqual({
       label: "nginx staged",
       live: false,
     });
+    expect(
+      routeBadge({ router: "nginx", config_exists: false, config_known: false, enabled: false }),
+    ).toEqual({ label: "nginx unknown", live: false });
     expect(routeBadge({ router: "caddy", site: "/home/deploy/.riku/caddy/shop.caddy" })).toEqual({
       label: "caddy live",
       live: true,

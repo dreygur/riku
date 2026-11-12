@@ -42,6 +42,8 @@ test("an unknown router's error is escaped inside the title attribute", () => {
 test("a caddy site the deploy user cannot see reads as unknown, not off", () => {
   assert.ok(routeHtml({ router: "caddy", site: null, site_known: false }).includes("unknown"));
   assert.ok(routeHtml({ router: "caddy", site: null, site_known: true }).includes("off"));
+  assert.ok(routeHtml({ router: "nginx", config_exists: false, config_known: false, enabled: false }).includes("unknown"));
+  assert.ok(routeHtml({ router: "nginx", config_exists: false, config_known: true, enabled: false }).includes("off"));
 });
 
 test("the crash alert escapes the worker name in its data-worker attribute", () => {

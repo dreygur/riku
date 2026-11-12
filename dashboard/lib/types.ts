@@ -23,7 +23,8 @@ export interface Worker {
 
 // Mirrors `RouteState` in crates/riku-cli/src/apps/dump_state/route.rs.
 export type RouteState =
-  | { router: "nginx"; config_exists: boolean; enabled: boolean }
+  // config_known is false when the user cannot read /etc/riku/nginx.
+  | { router: "nginx"; config_exists: boolean; config_known: boolean; enabled: boolean }
   | { router: "caddy"; site: string | null }
   | { router: "plugin"; name: string }
   | { router: "unknown"; error: string };
@@ -102,7 +103,7 @@ export function routeBadge(route: RouteState): { label: string; live: boolean } 
   switch (route.router) {
     case "nginx":
       return {
-        label: `nginx ${route.enabled ? "live" : route.config_exists ? "staged" : "off"}`,
+        label: `nginx ${route.enabled ? "live" : !route.config_known ? "unknown" : route.config_exists ? "staged" : "off"}`,
         live: route.enabled,
       };
     case "caddy":
