@@ -142,7 +142,13 @@ fn nginx_state_reads_the_site_the_helper_writes() {
     let paths = make_paths(&tmp);
     let site_root = tmp.path().join("etc-riku-nginx");
     fs::create_dir_all(&site_root).unwrap();
-    let state = || serde_json::to_value(route::nginx_site_state(&site_root.join("webapp.conf"), &paths)).unwrap();
+    let state = || {
+        serde_json::to_value(route::nginx_site_state(
+            &site_root.join("webapp.conf"),
+            &paths,
+        ))
+        .unwrap()
+    };
 
     fs::write(paths.nginx_root.join("webapp.conf"), "# stray").unwrap();
     assert_eq!(state()["config_exists"], false, "{}", state());

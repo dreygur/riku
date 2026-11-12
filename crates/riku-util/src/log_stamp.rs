@@ -20,6 +20,7 @@ pub fn stamp_line(at: DateTime<Utc>, text: &str) -> String {
 
 /// The time a log line carries and the text after it, or `None` for a line
 /// with no stamp, such as a `[WARN]` line of the deploy log.
+#[allow(clippy::question_mark)]
 pub fn split_stamp(line: &str) -> Option<(DateTime<Utc>, &str)> {
     if let Some(rest) = line.strip_prefix('[') {
         let (stamp, text) = match rest.split_once("] ") {

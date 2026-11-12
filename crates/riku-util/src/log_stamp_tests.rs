@@ -11,7 +11,10 @@ fn a_stamped_line_splits_back_into_its_time_and_text() {
     let line = stamp_line(at(8, 14, 3), "listening on :37139");
 
     assert_eq!(line, "2026-11-12T08:14:03Z listening on :37139");
-    assert_eq!(split_stamp(&line), Some((at(8, 14, 3), "listening on :37139")));
+    assert_eq!(
+        split_stamp(&line),
+        Some((at(8, 14, 3), "listening on :37139"))
+    );
 }
 
 /// deploy.log keeps its own `[<local time with offset>]` prefix.

@@ -13,7 +13,10 @@ fn a_pipe_or_socket_on_stdin_is_a_session_to_follow() {
     let (socket, _peer) = UnixStream::pair().unwrap();
 
     assert!(follows_session(&pipe), "a pipe, as sshd gives a command");
-    assert!(follows_session(&File::from(OwnedFd::from(socket))), "a socket");
+    assert!(
+        follows_session(&File::from(OwnedFd::from(socket))),
+        "a socket"
+    );
 }
 
 /// systemd and the `&` in the `rk dashboard` script give /dev/null; a
@@ -29,7 +32,9 @@ fn dev_null_or_a_file_on_stdin_is_no_session() {
 #[test]
 fn drain_returns_once_the_writer_closes() {
     let (mut writer, reader) = UnixStream::pair().unwrap();
-    writer.write_all(b"anything the client sends is ignored\n").unwrap();
+    writer
+        .write_all(b"anything the client sends is ignored\n")
+        .unwrap();
     drop(writer);
 
     drain(reader);

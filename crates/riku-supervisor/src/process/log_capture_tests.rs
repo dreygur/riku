@@ -116,7 +116,12 @@ fn each_captured_line_starts_with_its_capture_time() {
         .unwrap();
     let before = chrono::Utc::now() - chrono::Duration::seconds(1);
 
-    run_log_capture_thread(&b"listening on :37139\nready\n"[..], &log_path, file, "stdout");
+    run_log_capture_thread(
+        &b"listening on :37139\nready\n"[..],
+        &log_path,
+        file,
+        "stdout",
+    );
 
     let written = fs::read_to_string(&log_path).unwrap();
     let lines: Vec<_> = written

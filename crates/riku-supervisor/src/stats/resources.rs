@@ -6,6 +6,9 @@
 //! `/proc` per supervisor tick. Other platforms have no `/proc` and read an
 //! empty snapshot, so their workers report zero.
 
+// Project rule 16 forbids `?`, so every early return here is spelled out.
+#![allow(clippy::question_mark)]
+
 /// CPU time and resident memory of a worker.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ResourceUsage {
@@ -133,8 +136,12 @@ mod linux {
     impl Units {
         pub(super) fn of_host() -> Units {
             // SAFETY: sysconf only reads a system constant.
-            let (ticks, page) =
-                unsafe { (libc::sysconf(libc::_SC_CLK_TCK), libc::sysconf(libc::_SC_PAGESIZE)) };
+            let (ticks, page) = unsafe {
+                (
+                    libc::sysconf(libc::_SC_CLK_TCK),
+                    libc::sysconf(libc::_SC_PAGESIZE),
+                )
+            };
             Units {
                 ticks_per_second: u64::try_from(ticks).unwrap_or(100).max(1),
                 page_bytes: u64::try_from(page).unwrap_or(4096),

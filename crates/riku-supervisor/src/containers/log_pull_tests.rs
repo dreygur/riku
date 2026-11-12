@@ -95,7 +95,11 @@ fn capped_pull_writes_complete_lines_and_continues_next_call() {
     puller.tick(&engine, &known, Start::All);
 
     let written = fs::read_to_string(log_root.join("myapp").join("web.1.log")).unwrap();
-    assert_eq!(first, stamped(&["one", "two"]), "first call kept lines past the cut");
+    assert_eq!(
+        first,
+        stamped(&["one", "two"]),
+        "first call kept lines past the cut"
+    );
     assert_eq!(written, stamped(&["one", "two", "three", "four"]));
     assert_eq!(
         logged(&argv_log)[1],

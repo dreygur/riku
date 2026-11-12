@@ -171,7 +171,10 @@ const CLOCK_WIDTH: usize = 8;
 /// the worker prefix padded to `col_width`.
 fn prefixed(prefix: &str, col_width: usize, line: &str) -> String {
     let (clock, text) = match split_stamp(line) {
-        Some((at, text)) => (at.with_timezone(&Local).format("%H:%M:%S").to_string(), text),
+        Some((at, text)) => (
+            at.with_timezone(&Local).format("%H:%M:%S").to_string(),
+            text,
+        ),
         None => (" ".repeat(CLOCK_WIDTH), line),
     };
     format!("{clock} {prefix:<col_width$} | {text}")

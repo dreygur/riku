@@ -16,11 +16,24 @@ fn container_deploy_stops_first_when_the_engine_socket_is_refused() {
     let paths = crate::config::RikuPaths::for_tests(tmp.path());
     let checkout = paths.app_root.join("shop");
     std::fs::create_dir_all(&checkout).unwrap();
-    std::fs::write(checkout.join("compose.yaml"), "services:\n  web:\n    image: nginx\n").unwrap();
+    std::fs::write(
+        checkout.join("compose.yaml"),
+        "services:\n  web:\n    image: nginx\n",
+    )
+    .unwrap();
     for args in [
         &["init", "-q"][..],
         &["add", "."][..],
-        &["-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "-m", "c"][..],
+        &[
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-q",
+            "-m",
+            "c",
+        ][..],
     ] {
         let out = std::process::Command::new("git")
             .arg("-C")
@@ -38,7 +51,10 @@ fn container_deploy_stops_first_when_the_engine_socket_is_refused() {
 
     assert!(format!("{err:#}").contains("rootless podman"), "{err:#}");
     let log = std::fs::read_to_string(paths.deploy_log_file("shop")).unwrap_or_default();
-    assert!(!log.contains("pre-deploy"), "hooks ran before the engine check:\n{log}");
+    assert!(
+        !log.contains("pre-deploy"),
+        "hooks ran before the engine check:\n{log}"
+    );
 }
 
 /// The release command fails while images are prepared, before any copy is

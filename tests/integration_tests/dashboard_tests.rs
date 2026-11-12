@@ -66,5 +66,8 @@ fn dashboard_with_no_session_on_stdin_keeps_running() {
     child.kill().unwrap();
     child.wait().unwrap();
 
-    assert!(!exited, "a dashboard with /dev/null on stdin must keep serving");
+    assert!(
+        !exited,
+        "a dashboard with /dev/null on stdin must keep serving"
+    );
 }
