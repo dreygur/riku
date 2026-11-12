@@ -544,8 +544,11 @@ service's own `environment` wins over the app env. So a `riku config set`
 changes every service's env, and the deploy it starts replaces every
 service.
 
-`riku destroy` stops and removes every copy and the app network and keeps
-the volumes. When the engine does not answer, destroy refuses and removes
+`riku destroy` stops and removes every copy, the app network and the images
+riku built for the app (`localhost/riku-<hash>`, one per `build` service),
+and keeps the volumes and pulled images such as `redis:7-alpine`, which
+other apps may use. An image the engine refuses to remove is a warning
+naming the `image rm` command to run by hand. When the engine does not answer, destroy refuses and removes
 nothing, since the containers would keep running with no app behind them.
 `riku destroy <app> --force` removes riku's files and route anyway and warns
 that the containers may still run.

@@ -81,6 +81,16 @@ impl Engine {
         self.run_quiet(&args_of(["rm", id.as_str()]))
     }
 
+    /// Remove the local image tag `image`. The engine refuses while a
+    /// container still uses it.
+    pub fn remove_image(&self, image: &str) -> Result<()> {
+        match check_positional("image", image) {
+            Ok(()) => {}
+            Err(e) => return Err(e),
+        }
+        self.run_quiet(&args_of(["image", "rm", image]))
+    }
+
     /// Block until the container exits and return its exit code. Bounded by
     /// the build limit, since it waits on one-off jobs such as a release
     /// command that can run as long as a build.

@@ -105,6 +105,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   App env still reaches every service, pulled ones included, as the docs
   say, so `riku config set` still replaces them all. Containers from an
   older riku carry no label and are replaced once.
+- `riku destroy` of a container app left the images riku built for it
+  (`localhost/riku-<hash>`) on disk. Destroy now removes them, found from
+  the compose `build` services and from the images the app's containers
+  ran; pulled images stay, since other apps may share them. A refused
+  removal is a warning.
 - `riku ps <app> --scale web=2` for a kind `SCALING` did not list yet (an
   app whose first deploy failed) started 3 copies: the count was added to
   the default of one. A kind missing from `SCALING` now starts from 0.

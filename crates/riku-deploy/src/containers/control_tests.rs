@@ -120,6 +120,43 @@ fn destroy_keeps_volumes() {
 }
 
 #[test]
+fn destroy_removes_the_images_riku_built_and_keeps_pulled_ones() {
+    let tmp = tempfile::tempdir().unwrap();
+    let compose = "
+services:
+  web:
+    build: ./web
+    ports: [\"8000\"]
+    depends_on: [redis]
+    healthcheck:
+      test: [\"CMD\", \"true\"]
+  redis:
+    image: redis:7-alpine
+";
+    let server = mock_server_with_domain(tmp.path(), "myapp", compose, "myapp.example.com");
+    let web_dir = server.paths.app_root.join("myapp").join("web");
+    std::fs::create_dir_all(&web_dir).unwrap();
+    std::fs::write(web_dir.join("Dockerfile"), "FROM scratch\n").unwrap();
+    deploy(&server).unwrap();
+    let before = server.calls().len();
+
+    destroy_containers(&myapp(), &server.paths).unwrap();
+
+    let calls = server.calls()[before..].to_vec();
+    let built = crate::containers::images::build_tag(&myapp(), &service("web"));
+    assert!(
+        calls.iter().any(|l| l == &format!("image rm {built}")),
+        "the built image {built} was not removed: {calls:#?}"
+    );
+    assert!(
+        !calls
+            .iter()
+            .any(|l| l.starts_with("image rm") && l.contains("redis")),
+        "a pulled image was removed: {calls:#?}"
+    );
+}
+
+#[test]
 fn destroy_containers_refuses_when_deploy_in_progress() {
     let tmp = tempfile::tempdir().unwrap();
     let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
