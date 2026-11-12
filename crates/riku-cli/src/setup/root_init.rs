@@ -34,6 +34,7 @@ use super::binary::install_root_binary;
 use super::deploy_account::ensure_account;
 use super::deploy_keys::read_key_file;
 use super::deploy_user::{deploy_user_name, passwd_home, DeployUser};
+use super::engine_group::offer_engine_group;
 use super::helper_install::install_router_helper;
 use super::init::InitOptions;
 use super::init_router::{deploy_router, setup_router_host};
@@ -185,6 +186,8 @@ pub fn root_init(options: &InitOptions) -> Result<(DeployUser, Router)> {
             return Err(e);
         }
     }
+    // After the service: joining a group needs a supervisor restart.
+    offer_engine_group(&user, options.no_systemd);
     if keys.is_empty() {
         report_existing_keys(&user.home);
     }

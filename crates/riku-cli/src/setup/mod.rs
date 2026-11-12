@@ -8,6 +8,7 @@ mod deploy_account;
 mod deploy_key_cmd;
 mod deploy_keys;
 pub(crate) mod deploy_user;
+mod engine_group;
 pub mod git_hook;
 mod guidance;
 mod helper_install;

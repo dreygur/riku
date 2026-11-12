@@ -30,7 +30,18 @@ its socket (`permission denied ... docker.sock`), and `riku doctor` and a
 container deploy then say so and stop. Two ways out, and the choice is the
 operator's: add the deploy user to the `docker` group, which is
 root-equivalent on the host, or use a rootless engine such as rootless
-podman. riku changes neither the group nor the socket.
+podman. Deploys and doctor change neither the group nor the socket.
+
+`sudo riku init` asks once, on a terminal, when the engine is docker and
+the deploy user cannot open its socket: `Add riku to the docker group so
+it can run container apps? This gives the riku user root-equivalent access
+on this host. [y/N]`. The group it names is the one that owns the socket.
+Only `y` or `yes` adds the deploy user (with `usermod -aG`) and restarts a
+running supervisor so it gets the group; if `usermod` fails, init prints
+the command to run and goes on. Any other answer, no terminal, a socket
+owned by root's group, or a group riku cannot resolve changes nothing and
+prints the two choices above. Podman and other engines, and a socket the
+deploy user already opens, get no question.
 
 An invalid settings.toml makes every router lookup fail with the file's
 error, rather than quietly falling back to nginx.

@@ -25,8 +25,9 @@ impl EngineUnreachable {
 
 /// What riku says when the engine refused its socket. Adding the deploy user
 /// to the docker group is the operator's call, since that group is root on
-/// the host, so riku names both ways out and takes neither.
-const SOCKET_CHOICE: &str = "The deploy user cannot open the engine's socket. Choose one: \
+/// the host, so riku names both ways out and takes neither. Root `riku
+/// init` prints the same text when the operator declines to add the group.
+pub const SOCKET_CHOICE: &str = "The deploy user cannot open the engine's socket. Choose one: \
      add the deploy user to the docker group, which is root-equivalent on this host, \
      or use a rootless engine such as rootless podman (engine.program in settings.toml). \
      riku changes neither the group nor the socket.";

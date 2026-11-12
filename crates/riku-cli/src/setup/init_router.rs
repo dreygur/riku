@@ -54,9 +54,8 @@ fn read_as_deploy_user(user: &DeployUser, file: &Path) -> Result<Option<String>>
     }
 }
 
-/// The deploy user's stored router from settings.toml, read as that user, as
-/// [`router::stored`] reads it; `None` when it is not set.
-pub fn deploy_router(user: &DeployUser) -> Result<Option<Router>> {
+/// The deploy user's settings.toml, read as that user; `None` when missing.
+pub(super) fn deploy_settings(user: &DeployUser) -> Result<Option<settings::ServerSettings>> {
     let paths = user.riku_paths();
     let raw = match read_as_deploy_user(user, &paths.settings_file) {
         Ok(Some(raw)) => raw,
@@ -64,7 +63,18 @@ pub fn deploy_router(user: &DeployUser) -> Result<Option<Router>> {
         Err(e) => return Err(e),
     };
     match settings::parse(&raw, &paths.settings_file) {
-        Ok(parsed) => Ok(parsed.router.map(|name| Router::from(name.as_str()))),
+        Ok(parsed) => Ok(Some(parsed)),
+        Err(e) => Err(e),
+    }
+}
+
+/// The deploy user's stored router from settings.toml, read as that user, as
+/// [`router::stored`] reads it; `None` when it is not set.
+pub fn deploy_router(user: &DeployUser) -> Result<Option<Router>> {
+    match deploy_settings(user) {
+        Ok(parsed) => Ok(parsed
+            .and_then(|parsed| parsed.router)
+            .map(|name| Router::from(name.as_str()))),
         Err(e) => Err(e),
     }
 }

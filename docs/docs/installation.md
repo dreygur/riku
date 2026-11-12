@@ -26,6 +26,8 @@ After running `sudo riku init`, the binary is installed to `/usr/local/bin/riku`
 
 `sudo riku init` also installs and starts `riku-router-helper.service`, a small root service on `/run/riku-router.sock`. It writes the nginx or Caddy site of each app (`/etc/riku/nginx`, `/etc/riku/caddy`, certificates in `/etc/riku/certs`) and reloads the router. See [Nginx](nginx.md#the-router-helper).
 
+When docker is installed and the deploy user cannot open its socket, `sudo riku init` asks on the terminal whether to add the deploy user to the group that owns the socket, which is root-equivalent on the host. The default is no; see [settings.md](settings.md#router-and-engine).
+
 ### Upgrading riku
 
 1. Install the new binary: the installer above, or `sudo cp riku /usr/local/bin/riku` from the release tarball.

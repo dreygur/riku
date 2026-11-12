@@ -53,14 +53,25 @@ fn ensure_group() -> Result<()> {
     }
 }
 
-/// Add `account` to the socket group. The group must exist.
-pub(super) fn add_to_socket_group(account: &str) -> Result<()> {
-    if !is_account_name(account) {
+/// The `usermod` arguments that add `account` to `group`, keeping its other
+/// groups.
+pub(super) fn usermod_args<'a>(group: &'a str, account: &'a str) -> [&'a str; 3] {
+    ["-aG", group, account]
+}
+
+/// Add `account` to `group`, which must exist. Both must be plain names.
+pub(super) fn add_to_group(group: &str, account: &str) -> Result<()> {
+    if !is_account_name(account) || !is_account_name(group) {
         return Err(anyhow!(
-            "refusing to add {account:?} to {SOCKET_GROUP}: not a plain account name"
+            "refusing to add {account:?} to {group:?}: not a plain account or group name"
         ));
     }
-    run("usermod", &["-aG", SOCKET_GROUP, account])
+    run("usermod", &usermod_args(group, account))
+}
+
+/// Add `account` to the socket group. The group must exist.
+pub(super) fn add_to_socket_group(account: &str) -> Result<()> {
+    add_to_group(SOCKET_GROUP, account)
 }
 
 fn has_tmpfiles() -> bool {

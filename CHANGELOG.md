@@ -32,6 +32,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one `▲` line with `riku install-plugins --plugins <names>`, since init
   does not download them and an upgrade otherwise kept the old release's
   binary without saying so.
+- `sudo riku init` asks whether to add the deploy user to docker's socket
+  group when the engine is docker and the deploy user cannot open
+  `/var/run/docker.sock`: "Add riku to the docker group so it can run
+  container apps? This gives the riku user root-equivalent access on this
+  host. [y/N]". The group named is the one that owns the socket. Only an
+  explicit yes runs `usermod -aG <group> <user>` and restarts a running
+  supervisor so it gets the group; a failed `usermod` prints the command
+  and init goes on. No, no terminal, a socket owned by root's group or an
+  unresolved group change nothing and print the two choices `riku doctor`
+  prints. Other engines and a reachable socket get no question. Doctor and
+  the container deploy error are unchanged.
 
 ### Changed
 
