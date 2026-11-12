@@ -60,6 +60,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `riku destroy --force` of an app whose `riku.toml` is invalid deleted
+  nothing: the container step read the config first and stopped destroy.
+  `--force` now skips that step with a warning naming the config error
+  and removes the route and files. Without `--force` destroy still
+  refuses, now naming `--force`, since it cannot tell whether the app
+  runs containers.
 - `riku ps <app> --scale` with a negative or malformed count printed an
   error and exited 0; it now fails before anything changes. A scale
   deploy that failed still recorded the new count in `SCALING`, so the

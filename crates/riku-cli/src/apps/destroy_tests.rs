@@ -153,6 +153,47 @@ fn forced_destroy_removes_the_app_when_the_engine_is_unreachable() {
     );
 }
 
+fn app_with_broken_riku_toml(root: &Path) -> RikuPaths {
+    let mut paths = RikuPaths::for_tests(root);
+    use_mock_caddy(&mut paths);
+    let app_dir = paths.app_root.join("shop");
+    fs::create_dir_all(&app_dir).unwrap();
+    fs::write(app_dir.join("riku.toml"), "[routing\nnot toml").unwrap();
+    fs::create_dir_all(paths.env_root.join("shop")).unwrap();
+    fs::create_dir_all(paths.git_root.join("shop.git")).unwrap();
+    paths
+}
+
+#[test]
+fn forced_destroy_removes_an_app_whose_riku_toml_is_invalid() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = app_with_broken_riku_toml(tmp.path());
+
+    cmd_destroy(&paths, "shop", DestroyMode::Force).unwrap();
+
+    for dir in [
+        paths.app_root.join("shop"),
+        paths.env_root.join("shop"),
+        paths.git_root.join("shop.git"),
+    ] {
+        assert!(!dir.exists(), "forced destroy left {}", dir.display());
+    }
+}
+
+#[test]
+fn destroy_without_force_refuses_an_invalid_riku_toml_naming_force() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = app_with_broken_riku_toml(tmp.path());
+
+    let err = cmd_destroy(&paths, "shop", DestroyMode::Safe).unwrap_err();
+
+    assert!(format!("{err:#}").contains("--force"), "{err:#}");
+    assert!(
+        paths.app_root.join("shop").exists(),
+        "a refused destroy removed the app"
+    );
+}
+
 fn seed_worker(paths: &RikuPaths, app: &str, kind: &str) -> String {
     let config = riku_supervisor::config::create_worker_config(
         app,

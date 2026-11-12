@@ -273,8 +273,10 @@ This deletes:
 For a container app, destroy first stops and removes every container and the
 app network, and keeps the volumes. When the container engine does not
 answer, destroy refuses and removes nothing, so no container is left running
-without an app. `--force` removes riku's files and route anyway and warns
-that containers may still be running:
+without an app. The same holds when the app's `riku.toml` is invalid, since
+destroy then cannot tell whether the app runs containers. `--force` removes
+riku's files and route anyway, says which step it skipped, and warns that
+containers may still be running:
 
 ```bash
 riku destroy myapp --force
