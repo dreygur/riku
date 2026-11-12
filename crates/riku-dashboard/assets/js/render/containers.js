@@ -58,6 +58,16 @@ function serviceHeadHtml(svc, copies, pending) {
 }
 
 /**
+ * A service known only from the kind of its copies, so nothing about its
+ * image.
+ * @param {string} name
+ * @returns {import("../state.js").Service}
+ */
+function kindService(name) {
+  return { name, built: false, image: null };
+}
+
+/**
  * Every service in start order, each followed by its copies. Without a
  * service list from the server the services are the copies' kinds.
  * @param {import("../state.js").Service[]} services compose services from /api/state
@@ -67,7 +77,7 @@ function serviceHeadHtml(svc, copies, pending) {
 export function containerRowsHtml(services, ws, pending) {
   const list = services.length
     ? services
-    : [...new Set(ws.map((w) => w.kind))].map((name) => ({ name, built: false, image: null }));
+    : [...new Set(ws.map((w) => w.kind))].map(kindService);
   return list.map((svc) => {
     const copies = ws.filter((w) => w.kind === svc.name);
     return serviceHeadHtml(svc, copies, pending) + copies.map((w) => workerRow(w)).join("");
