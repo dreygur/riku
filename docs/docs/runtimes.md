@@ -538,15 +538,29 @@ it is not replaced again by the same deploy. The release still runs before
 any routed copy is replaced. Its stdout and stderr print on the push output. A nonzero exit stops the
 deploy, and the last lines of output go to `riku logs <app> --deploy`.
 
-App env values reach only the services riku builds: the compose services
-with a `build` section and the `app` service of a Dockerfile app. A pulled
-`image:` service, such as `redis` or `postgres`, gets only its own compose
-`environment`, so app secrets never reach a third party image. `RIKU_*`
-keys configure riku itself and reach no container. A service's own
-`environment` wins over the app env. So a `riku config set` replaces the
-built services on the deploy it starts, and pulled services keep running.
-The `release` command always gets the app env, even when it runs in a
-pulled image.
+The app env (everything `riku config set` stores, minus `RIKU_*` keys,
+which configure riku itself) goes to a service when riku builds it (a
+compose service with a `build` section, or the `app` service of a
+Dockerfile app) or when it is the routed service, the one riku sends the
+app's traffic to, even if that one is pulled with `image:`. Every other
+service, such as a pulled `redis` or `postgres`, gets only its own compose
+`environment`, so app secrets never reach a third party image. To pass an
+app value to such a service, name it in its `environment` with `${VAR}`,
+which riku fills from the app env when it reads the compose file:
+
+```yaml
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+```
+
+A service's own `environment` wins over the app env. So a
+`riku config set` replaces the built and routed services on the deploy it
+starts, and the other pulled services keep running unless one of them
+uses a changed value through `${VAR}`. The `release` command always gets
+the app env, even when it runs in a pulled image.
 
 `riku destroy` stops and removes every copy, the app network and the images
 riku built for the app (`localhost/riku-<hash>`, one per `build` service),

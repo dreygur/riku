@@ -106,10 +106,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The app env reached every container, pulled images such as `redis` and
   `postgres` included, so app secrets went into third party images and a
   `riku config set` restarted the database. Only the services riku builds
-  (compose `build` services and a Dockerfile app's `app`) get the app env
-  now; a pulled service gets only its compose `environment`, and a config
-  change leaves it running. The `release` command still gets the app env,
-  even in a pulled image.
+  (compose `build` services and a Dockerfile app's `app`) and the routed
+  service, even a pulled one, get the app env now; any other pulled
+  service gets only its compose `environment` (use `${VAR}` there to pass
+  an app value), and a config change leaves it running. The `release`
+  command still gets the app env, even in a pulled image.
 - `riku destroy` of a container app left the images riku built for it
   (`localhost/riku-<hash>`) on disk. Destroy now removes them, found from
   the compose `build` services and from the images the app's containers

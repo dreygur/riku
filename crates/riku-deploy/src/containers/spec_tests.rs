@@ -128,6 +128,46 @@ fn built_and_pulled_spec(service: &str) -> riku_container::engine::RunSpec {
     copy_spec(&app, &project, def, copy, None, &env).unwrap()
 }
 
+/// A routed `web` pulled from a registry, beside a pulled `redis`.
+const PULLED_WEB_AND_REDIS: &str = "
+services:
+  redis:
+    image: redis:7-alpine
+  web:
+    image: ghcr.io/acme/web:1
+    ports: [\"8000\"]
+";
+
+#[test]
+fn a_pulled_routed_web_gets_the_app_env_and_redis_does_not() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_, project) = project_in(dir.path(), "myapp", PULLED_WEB_AND_REDIS);
+    let app = AppName::try_from("myapp").unwrap();
+    let env: BTreeMap<String, String> = [("RIKU_GHCR_TOKEN", "s3cret"), ("DATABASE_URL", "db")]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+    let copy = riku_container::types::CopyIndex::new(1).unwrap();
+    let spec_of = |name: &str| {
+        let def = project
+            .services
+            .iter()
+            .find(|s| s.name.as_str() == name)
+            .unwrap();
+        copy_spec(&app, &project, def, copy, None, &env).unwrap()
+    };
+
+    assert_eq!(
+        spec_of("web").env.keys().collect::<Vec<_>>(),
+        ["DATABASE_URL"],
+        "the routed web lacks the app env"
+    );
+    assert!(
+        spec_of("redis").env.is_empty(),
+        "app env reached the pulled redis"
+    );
+}
+
 #[test]
 fn a_built_service_gets_the_app_env_without_riku_settings() {
     let spec = built_and_pulled_spec("web");
