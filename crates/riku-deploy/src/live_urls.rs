@@ -62,7 +62,16 @@ fn domain_line(scheme: &str, domain: &str) -> Line {
     live_line(format!("{scheme}://{domain}"), UrlLabel::Domain, "")
 }
 
-fn fallback_lines(domain: &str, tls: Option<TlsState>) -> Vec<Line> {
+fn fallback_lines(domain: &str, tls: Option<TlsState>, private_ip: Option<Ipv4Addr>) -> Vec<Line> {
+    if let Some(ip) = private_ip {
+        return vec![
+            domain_line("http", domain),
+            line(
+                format!("HTTP only: {ip} is a private address, so no certificate can be issued"),
+                "",
+            ),
+        ];
+    }
     match tls {
         Some(TlsState::Issued) => vec![domain_line("https", domain)],
         Some(TlsState::ByCaddy) => vec![
@@ -116,7 +125,7 @@ pub(crate) fn live_lines(
         return no_domain_lines(app, routing);
     }
     if routing.fallback {
-        return fallback_lines(&routing.domains[0], tls);
+        return fallback_lines(&routing.domains[0], tls, routing.fallback_private_ip);
     }
     let scheme = if https_only { "https" } else { "http" };
     routing

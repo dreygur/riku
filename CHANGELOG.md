@@ -76,6 +76,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   renders those characters. The smoke script's Python, static and Go
   tests only wrote sample apps and are removed with their app templates;
   the static one used a `static:` Procfile kind riku no longer has.
+- A fallback name on a private address (`{ip}` in `fallback_domain` and
+  a private `server_ip`, such as `10.0.0.5`) was promised HTTPS: the push
+  said Caddy was getting a certificate, Caddy kept asking for one, and
+  nginx asked Let's Encrypt every hour. No certificate authority can
+  reach such a name, so riku now asks for none. Caddy gets a site with
+  only the `http://` address (the router helper's route takes a new
+  `https = "plain_http_only"`), nginx skips the ACME request, and the push
+  says `HTTP only: 10.0.0.5 is a private address, so no certificate can
+  be issued`. Public addresses and patterns without `{ip}` are unchanged.
 - Three more security tests checked only their own logic. The app
   directory traversal test now runs `riku apps create` with each
   traversing name and checks it is refused before anything is created.

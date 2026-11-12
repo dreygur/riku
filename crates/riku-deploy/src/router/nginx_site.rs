@@ -164,7 +164,10 @@ pub(super) fn apply_nginx_site(
         return Err(anyhow!("cannot publish static files for '{app}': {e}"));
     }
     let own_tls = https_only(env) && env.contains_key("RIKU_DOMAINS");
-    let fallback_domain = routing.domains.first().filter(|_| routing.fallback);
+    let fallback_domain = routing
+        .domains
+        .first()
+        .filter(|_| routing.fallback && routing.fallback_private_ip.is_none());
     drop_stale_pair(app, fallback_domain.map(String::as_str), paths);
     if (own_tls || fallback_domain.is_some()) && !has_pair(&name, paths) {
         let mut plain = env.clone();

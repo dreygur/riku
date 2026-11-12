@@ -240,8 +240,8 @@ fn apply_to(
         }
         Router::Caddy => {
             let send = |request: &Request| send_to_helper(paths, request);
-            let outcome = apply_caddy_site(send, app, env, backends, paths);
-            if outcome.is_ok() && routing.fallback {
+            let outcome = apply_caddy_site(send, app, env, &routing, backends, paths);
+            if outcome.is_ok() && routing.fallback && routing.fallback_private_ip.is_none() {
                 mark_caddy_tls(app, paths);
             }
             record_outcome(paths, &outcome);

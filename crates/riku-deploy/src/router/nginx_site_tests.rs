@@ -50,6 +50,7 @@ fn own_domains() -> AppRouting {
         port: None,
         mode: RoutingMode::Domain,
         fallback_skipped: None,
+        fallback_private_ip: None,
     }
 }
 
@@ -204,6 +205,95 @@ fn failed_fallback_certificate_serves_http_and_says_so() {
     let route = applied(&seen[0]);
     assert_eq!(route.https, HttpsPolicy::AlsoPlainHttp);
     assert!(route.tls.is_none());
+}
+
+fn seed_entry(paths: &RikuPaths) {
+    crate::router::routing_state::with_routing_lock(paths, |state| {
+        state.set_entry(
+            "myapp",
+            crate::router::routing_state::Entry {
+                mode: RoutingMode::Domain,
+                port: None,
+                picked: false,
+                tls: None,
+                cert_for: None,
+            },
+        );
+        Ok(())
+    })
+    .unwrap();
+}
+
+fn recorded_tls(paths: &RikuPaths) -> Option<crate::router::routing_state::TlsState> {
+    crate::router::routing_state::RoutingState::load(paths)
+        .unwrap()
+        .entry("myapp")
+        .and_then(|entry| entry.tls)
+}
+
+#[test]
+fn fallback_on_a_private_address_asks_for_no_certificate() {
+    let (tmp, paths) = setup();
+    seed_entry(&paths);
+    let seen = RefCell::new(Vec::new());
+    let env = env(&[("RIKU_DOMAINS", "myapp.10.0.0.5.example")]);
+    let routing = AppRouting {
+        domains: vec!["myapp.10.0.0.5.example".to_string()],
+        fallback: true,
+        fallback_private_ip: Some(std::net::Ipv4Addr::new(10, 0, 0, 5)),
+        ..own_domains()
+    };
+
+    apply_routed(
+        mock_helper(Reply::Ok { reloaded: true }, &seen),
+        &env,
+        &routing,
+        &tmp,
+        &paths,
+    )
+    .unwrap();
+
+    let seen = seen.borrow();
+    assert_eq!(seen.len(), 1, "one plain HTTP apply: {seen:?}");
+    let route = applied(&seen[0]);
+    assert_eq!(route.https, HttpsPolicy::AlsoPlainHttp);
+    assert!(route.tls.is_none());
+    assert_eq!(
+        recorded_tls(&paths),
+        None,
+        "a certificate was asked for a name on a private address"
+    );
+}
+
+#[test]
+fn fallback_on_a_public_address_still_asks_for_a_certificate() {
+    let (tmp, paths) = setup();
+    seed_entry(&paths);
+    let seen = RefCell::new(Vec::new());
+    let env = env(&[("RIKU_DOMAINS", "myapp.203.0.113.10.example")]);
+    let routing = AppRouting {
+        domains: vec!["myapp.203.0.113.10.example".to_string()],
+        fallback: true,
+        ..own_domains()
+    };
+
+    apply_routed(
+        mock_helper(Reply::Ok { reloaded: true }, &seen),
+        &env,
+        &routing,
+        &tmp,
+        &paths,
+    )
+    .unwrap();
+
+    assert!(
+        matches!(
+            recorded_tls(&paths),
+            Some(crate::router::routing_state::TlsState::FailedAt(_))
+        ),
+        "the certificate attempt must be recorded, got {:?}",
+        recorded_tls(&paths)
+    );
 }
 
 #[test]

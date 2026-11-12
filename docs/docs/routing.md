@@ -41,6 +41,14 @@ own domains only. Riku tries to get a certificate for it:
 - Caddy: Caddy gets the certificate itself; the push says HTTP works now and
   HTTPS once Caddy has it.
 
+When the pattern has `{ip}` and `server_ip` is a private address (such as
+`10.0.0.5` on a home or office network), no certificate authority can reach
+the name, so riku asks for none: nginx skips the ACME request, Caddy gets a
+site with only the `http://` address, and the push says `HTTP only: 10.0.0.5
+is a private address, so no certificate can be issued`. A pattern without
+`{ip}` resolves through your own DNS, so riku cannot tell its address and
+treats it as above.
+
 An app name that is not a valid DNS label (`my_app`) gets no fallback name,
 and the push says why.
 
@@ -51,6 +59,8 @@ writes it as `server_ip` when it is a public IPv4 address. On a cloud VM
 behind NAT the detected address is private, so init leaves `server_ip` out
 (the fallback is off) and prints the line to add with the public address.
 A private address would give a URL that only works inside that network.
+You can still set a private `server_ip` by hand for a server only used on
+its own network; its fallback names then get plain HTTP only.
 
 ## Port mode
 

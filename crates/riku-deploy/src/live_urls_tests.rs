@@ -10,6 +10,7 @@ fn routing(domains: &[&str], fallback: bool) -> AppRouting {
         port: None,
         mode: RoutingMode::Domain,
         fallback_skipped: None,
+        fallback_private_ip: None,
     }
 }
 
@@ -62,6 +63,42 @@ fn failed_fallback_says_http_only() {
 
     assert_eq!(lines[0], "Live at http://myapp.203.0.113.10.example");
     assert!(lines[1].contains("HTTPS"), "{lines:?}");
+}
+
+#[test]
+fn fallback_on_a_private_address_says_http_only_and_why() {
+    let routed = AppRouting {
+        fallback_private_ip: Some(Ipv4Addr::new(10, 0, 0, 5)),
+        ..routing(&["myapp.10.0.0.5.example"], true)
+    };
+
+    let lines = texts(live_lines("myapp", &routed, None, false));
+
+    assert_eq!(
+        lines,
+        [
+            "Live at http://myapp.10.0.0.5.example",
+            "HTTP only: 10.0.0.5 is a private address, so no certificate can be issued",
+        ]
+    );
+}
+
+#[test]
+fn caddy_fallback_on_a_public_address_still_waits_for_its_certificate() {
+    let lines = texts(live_lines(
+        "myapp",
+        &routing(&["myapp.203.0.113.10.example"], true),
+        Some(TlsState::ByCaddy),
+        false,
+    ));
+
+    assert_eq!(
+        lines,
+        [
+            "Live at http://myapp.203.0.113.10.example",
+            "Caddy is getting an HTTPS certificate; https://myapp.203.0.113.10.example works once it has one",
+        ]
+    );
 }
 
 #[test]

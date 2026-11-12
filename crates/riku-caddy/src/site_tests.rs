@@ -130,6 +130,21 @@ fn plain_site_adds_http() {
     );
 }
 
+/// A bare address in a Caddy site turns on automatic HTTPS for it, so a
+/// plain HTTP only site lists `http://` addresses alone.
+#[test]
+fn plain_http_only_site_has_no_bare_address() {
+    let expected = "# riku app: shop\n\
+        http://shop.example.com, http://www.shop.example.com {\n\
+        \treverse_proxy 127.0.0.1:5000\n\
+        }\n";
+
+    assert_eq!(
+        render_site("shop", &request(HttpsPolicy::PlainHttpOnly)).unwrap(),
+        expected
+    );
+}
+
 #[test]
 fn every_backend_is_an_upstream() {
     let plan = plan(

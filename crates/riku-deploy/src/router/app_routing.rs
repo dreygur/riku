@@ -14,12 +14,14 @@
 //! - A router plugin only does domain mode.
 
 use std::collections::{BTreeSet, HashMap};
+use std::net::{IpAddr, Ipv4Addr};
 
 use anyhow::{anyhow, Result};
 
 use crate::config::settings::RoutingSettings;
 use crate::router::port_rules::{check_port, pick_port};
 use crate::router::routing_state::{Entry, RoutingState};
+use crate::util::outbound_ip::public_v4;
 
 pub use crate::router::routing_state::RoutingMode;
 
@@ -51,6 +53,10 @@ pub struct AppRouting {
     pub mode: RoutingMode,
     /// Why an app without a domain got no fallback domain, for the push.
     pub fallback_skipped: Option<String>,
+    /// The private address the fallback domain names, when its pattern has
+    /// `{ip}` and `server_ip` is not public. No certificate can be issued
+    /// for such a name, so it is served over plain HTTP only.
+    pub fallback_private_ip: Option<Ipv4Addr>,
 }
 
 fn env_domains(env: &HashMap<String, String>) -> Vec<String> {
@@ -95,6 +101,20 @@ fn routed(domains: Vec<String>, mode: RoutingMode) -> AppRouting {
         port: None,
         mode,
         fallback_skipped: None,
+        fallback_private_ip: None,
+    }
+}
+
+/// The address in the fallback name when it is private. A pattern
+/// without `{ip}` resolves through DNS, so its address is not known here.
+fn private_fallback_ip(settings: &RoutingSettings) -> Option<Ipv4Addr> {
+    let needs_ip = settings
+        .fallback_domain
+        .as_ref()
+        .is_some_and(|pattern| pattern.needs_ip());
+    match settings.server_ip {
+        Some(ip) if needs_ip && public_v4(IpAddr::V4(ip)).is_none() => Some(ip),
+        _ => None,
     }
 }
 
@@ -191,6 +211,7 @@ pub fn resolve(
             Ok(domain) => {
                 routing.domains = vec![domain];
                 routing.fallback = true;
+                routing.fallback_private_ip = private_fallback_ip(settings);
             }
             Err(why) => routing.fallback_skipped = why,
         }
@@ -211,7 +232,7 @@ pub fn resolve(
     let tls = state
         .entry(app)
         .and_then(|entry| entry.tls)
-        .filter(|_| routing.fallback);
+        .filter(|_| routing.fallback && routing.fallback_private_ip.is_none());
     state.set_entry(
         app,
         Entry {

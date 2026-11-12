@@ -41,6 +41,31 @@ fn no_domain_and_fallback_resolves_to_domain_mode() {
 }
 
 #[test]
+fn a_fallback_name_on_a_private_address_is_marked_http_only() {
+    let private_ip = Ipv4Addr::new(10, 0, 0, 5);
+    let private = RoutingSettings {
+        server_ip: Some(private_ip),
+        ..routing(true)
+    };
+    let without_ip = RoutingSettings {
+        fallback_domain: Some(FallbackPattern::try_from("{app}.apps.example").unwrap()),
+        ..private.clone()
+    };
+
+    let on_private = resolve_fresh(&env(&[]), &private).unwrap();
+    let on_public = resolve_fresh(&env(&[]), &routing(true)).unwrap();
+    let dns_name = resolve_fresh(&env(&[]), &without_ip).unwrap();
+
+    assert_eq!(on_private.domains, ["myapp.10.0.0.5.example"]);
+    assert_eq!(on_private.fallback_private_ip, Some(private_ip));
+    assert_eq!(on_public.fallback_private_ip, None);
+    assert_eq!(
+        dns_name.fallback_private_ip, None,
+        "a name without {{ip}} resolves through DNS, so its address is not known to be private"
+    );
+}
+
+#[test]
 fn no_domain_no_fallback_resolves_to_port_mode() {
     let routed = resolve_fresh(&env(&[]), &routing(false)).unwrap();
 
