@@ -13,7 +13,7 @@ use crate::cmds::{
     name = "riku",
     version = env!("CARGO_PKG_VERSION"),
     about = "riku: the smallest PaaS you've ever seen (Rust edition)",
-    long_about = "riku is a single-binary micro-PaaS that provides Heroku-like git push deployments.\nManage apps, config, processes, and plugins, all from one tool."
+    long_about = "riku is a single-binary micro-PaaS.\nManage apps, config, processes, and plugins, all from one tool."
 )]
 pub struct Cli {
     /// Run a forwarded command on this registered server
