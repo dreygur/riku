@@ -224,7 +224,6 @@ cargo build --release
 # Run tests
 cargo test
 ./tests/deploy-smoke/test-all.sh          # Run deployment tests
-./tests/deploy-smoke/quick-test.sh myapp node  # Quick deployment test
 
 # Lint
 cargo clippy
@@ -306,7 +305,7 @@ Set in `~/.riku/envs/<app>/ENV`:
 1. **Make changes** to source code
 2. **Run tests**: `cargo test`
 3. **Lint**: `cargo clippy && cargo fmt`
-4. **Test deployment**: Use `tests/deploy-smoke/quick-test.sh`
+4. **Test deployment**: Use `tests/deploy-smoke/test-all.sh`
 5. **Commit** with conventional commits format
 
 ## Testing
@@ -321,7 +320,6 @@ cargo test --test integration_tests # Integration tests
 ### Deployment Tests
 ```bash
 ./tests/run-all-tests.sh            # Full test suite
-./tests/deploy-smoke/quick-test.sh app node  # Single app test
 ```
 
 ### Test Categories

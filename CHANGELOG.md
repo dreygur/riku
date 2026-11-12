@@ -64,6 +64,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it was a real directory, the one `riku apps create` and a push to
   `<app>.git` make. It removed only a symlink there. It now removes that
   directory too; a symlink is still removed without following it.
+- Three more tests passed without checking anything. The security test
+  for server name injection only checked that a directory existed; it now
+  parses domain lists with the route's parser and renders the accepted
+  ones. The smoke script's node version and scaling tests only wrote
+  files; they now deploy with the built riku and check that the node
+  plugin refuses a mismatched `[runtime] version` and that `riku ps
+  --scale worker=2` writes two worker configs.
+- `tests/deploy-smoke/quick-test.sh` is removed. It wrote a sample app and
+  printed push instructions, deploying nothing, and CI ran it as a test.
 - The first deploy hint (`riku apps`, `riku apps create`) and the
   `riku deploy --from` git hint printed their follow up lines as
   `▲    ...`; they are now `│` lines under the warning, on the same stream.

@@ -256,28 +256,42 @@ mod tests {
 
     // --- Nginx config security ---
 
+    /// The app's domain list reaches `server_name` only through
+    /// `parse_domains`, the parser the route build runs on `RIKU_DOMAINS`.
     #[test]
-    fn test_nginx_config_no_injection_in_server_name() -> Result<()> {
-        let (_temp_dir, riku_root) = setup_riku_env()?;
-        let app_path = riku_root.join("apps").join("testapp");
-        fs::create_dir_all(&app_path)?;
+    fn test_nginx_config_no_injection_in_server_name() {
+        use riku::util::domain::parse_domains;
 
-        // Write a Procfile
-        fs::write(app_path.join("Procfile"), "web: python app.py\n")?;
+        for raw in [
+            "safe.example.com;return 200 pwned",
+            "safe.example.com{",
+            "safe.example.com\"",
+            "safe.example.com$host",
+            "safe.example.com#",
+        ] {
+            let parsed = parse_domains(raw);
+            assert!(parsed.is_err(), "RIKU_DOMAINS={raw:?} parsed: {parsed:?}");
+        }
 
-        // Write ENV with injection attempt in server name
-        let env_dir = riku_root.join("envs").join("testapp");
-        fs::create_dir_all(&env_dir)?;
-        fs::write(
-            env_dir.join("ENV"),
-            "RIKU_DOMAINS=safe.example.com\nPORT=8080\n",
-        )?;
-
-        // Verify clean server name produces clean config
-        let nginx_dir = riku_root.join("nginx");
-        assert!(nginx_dir.exists());
-
-        Ok(())
+        let domains: Vec<String> = parse_domains("safe.example.com, \nwww.example.com")
+            .expect("a clean list parses")
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        let site = render_static_site(&domains, &[]).expect("a clean list renders");
+        let server_names: Vec<&str> = site
+            .lines()
+            .map(str::trim)
+            .filter(|line| line.starts_with("server_name"))
+            .collect();
+        assert!(!server_names.is_empty(), "no server_name in:\n{site}");
+        for line in server_names {
+            assert_eq!(
+                line.split_whitespace().collect::<Vec<_>>(),
+                ["server_name", "safe.example.com", "www.example.com;"],
+                "site:\n{site}"
+            );
+        }
     }
 
     /// Renders a static site, the shape that needs no backend, through the

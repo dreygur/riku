@@ -190,17 +190,34 @@ test_env_vars() {
         "RIKU_MAX_RESTARTS workers.max_restarts"
 }
 
+# A riku.toml `[runtime] version` that this machine's node does not match
+# must fail the build in the node plugin, naming both versions. The plugin
+# checks npm first, so without npm the check cannot be reached.
 test_node_version() {
     local app_dir="$1"
+    local app="node-version-app"
+    local output
 
-    log_info "Testing RIKU_NODE_VERSION env var"
+    log_info "Testing that a [runtime] version mismatch fails the node build"
+    if ! command -v npm >/dev/null 2>&1; then
+        log_warn "npm not found, node version test skipped"
+        return
+    fi
+    riku_local install-plugins --plugins node >/dev/null
+    create_riku_app "$app"
+    printf '[runtime]\nname = "node"\nversion = "0.1"\n' > "$app_dir/riku.toml"
 
-    cat >> "$app_dir/ENV" <<'EOF'
-RIKU_NODE_VERSION=18.17.0
-NODE_PACKAGE_MANAGER=npm
-EOF
-
-    log_info "✓ RIKU_NODE_VERSION test passed"
+    if output=$(riku_local deploy "$app" --from "$app_dir" 2>&1); then
+        log_error "deploy succeeded with [runtime] version 0.1"
+        FAILED=$((FAILED + 1))
+        return
+    fi
+    if [[ "$output" != *"RIKU_NODE_VERSION is 0.1, but this server's node is"* ]]; then
+        log_error "node plugin did not report the version mismatch: $output"
+        FAILED=$((FAILED + 1))
+        return
+    fi
+    log_info "✓ node plugin refused [runtime] version 0.1"
     PASSED=$((PASSED + 1))
 }
 
@@ -229,18 +246,48 @@ create_riku_app() {
     fi
 }
 
+# `riku ps APP --scale worker=2` must record the count and write a worker
+# config per copy. The app runs `sleep` through a stub runtime plugin, so no
+# toolchain is needed. Without a router helper the deploy then stops at the
+# Route step, after the worker configs are written, so its exit status is
+# not checked; `riku stop` cleans up either way.
 test_scaling() {
-    local app_dir="$1"
+    local app="scale-app"
+    local src="$TEST_DIR/$app-src"
+    local available="$RIKU_TEST_ROOT/workers-available"
+    local failed=0
 
-    log_info "Testing SCALING file"
+    log_info "Testing riku ps --scale"
+    mkdir -p "$src" "$available" "$RIKU_TEST_ROOT/workers-enabled" \
+        "$RIKU_TEST_ROOT/plugins"
+    # shellcheck disable=SC2016 # $1 belongs to the plugin, not this script.
+    printf '#!/bin/sh\ncase "$1" in start) echo true ;; esac\n' \
+        > "$RIKU_TEST_ROOT/plugins/stub"
+    chmod +x "$RIKU_TEST_ROOT/plugins/stub"
+    echo "worker: sleep 600" > "$src/Procfile"
+    create_riku_app "$app"
 
-    cat > "$app_dir/SCALING" <<'EOF'
-web=2
-worker=1
-EOF
+    riku_local deploy "$app" --from "$src" >/dev/null 2>&1 || true
+    riku_local ps "$app" --scale worker=2 >/dev/null 2>&1 || true
 
-    log_info "✓ SCALING file test passed"
-    PASSED=$((PASSED + 1))
+    if ! grep -qx "worker=2" "$RIKU_TEST_ROOT/envs/$app/SCALING" 2>/dev/null; then
+        log_error "SCALING does not record worker=2"
+        failed=1
+    fi
+    for copy in 1 2; do
+        if [ ! -f "$available/$app@worker.$copy.toml" ]; then
+            log_error "no worker config for copy $copy of $app"
+            failed=1
+        fi
+    done
+    riku_local stop "$app" >/dev/null 2>&1 || true
+
+    if [ "$failed" -eq 0 ]; then
+        log_info "✓ ps --scale wrote two worker configs"
+        PASSED=$((PASSED + 1))
+    else
+        FAILED=$((FAILED + 1))
+    fi
 }
 
 run_tests() {
@@ -258,12 +305,10 @@ run_tests() {
     log_info "=== Test 2: Node.js App ==="
     create_test_app "node-app" "node"
     test_node_version "$TEST_DIR/node-app"
-    test_scaling "$TEST_DIR/node-app"
 
     # Test 3: Python app
     log_info "=== Test 3: Python App ==="
     create_test_app "python-app" "python"
-    test_scaling "$TEST_DIR/python-app"
 
     # Test 4: Static site
     log_info "=== Test 4: Static Site ==="
@@ -272,6 +317,10 @@ run_tests() {
     # Test 5: Go app
     log_info "=== Test 5: Go App ==="
     create_test_app "go-app" "go"
+
+    # Test 6: Scaling, which does not depend on the runtime.
+    log_info "=== Test 6: Scaling ==="
+    test_scaling
 
     # Summary
     echo ""

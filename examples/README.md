@@ -89,10 +89,6 @@ cron: 0 2 * * * /path/to/script.sh
 You can test examples before deploying:
 
 ```bash
-# Run the test script
-../tests/deploy-smoke/quick-test.sh test-node node
-
-# Or run manually
 cd nodejs
 node server.js
 ```

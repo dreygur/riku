@@ -132,11 +132,6 @@ jobs:
           chmod +x tests/deploy-smoke/test-all.sh
           ./tests/deploy-smoke/test-all.sh
 
-      - name: Run quick test
-        run: |
-          chmod +x tests/deploy-smoke/quick-test.sh
-          ./tests/deploy-smoke/quick-test.sh test-node node
-
   e2e:
     name: Docker E2E
     runs-on: ubuntu-latest
