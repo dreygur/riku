@@ -1,8 +1,7 @@
 # Plugin System
 
 !!! tip "Looking for installable, versioned plugins?"
-    This page documents the original single-file plugins. For the modern
-    manifest-based bundles: addons, notifiers, `riku plugins install`,
+    This page documents single-file plugins. For manifest-based bundles: addons, notifiers, `riku plugins install`,
     marketplaces, and signature verification, see
     [Plugin Bundles](plugin-bundles.md) and the [Plugin Gallery](plugin-gallery.md).
 

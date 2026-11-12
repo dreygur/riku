@@ -134,7 +134,7 @@ pub(crate) fn authorize(
     if let Some(expected) = &state.token {
         let provided = bearer(headers).or_else(|| query.get("token").map(String::as_str));
         let ok = provided
-            .map(|tok| crate::supervisor::health::auth::constant_time_eq(tok, expected))
+            .map(|tok| crate::util::secure::constant_time_eq(tok, expected))
             .unwrap_or(false);
         if !ok {
             return Some((StatusCode::UNAUTHORIZED, "missing or invalid token").into_response());

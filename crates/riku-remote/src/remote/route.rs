@@ -4,8 +4,8 @@
 //! forwarded commands and `dashboard` started by a person on this machine.
 //! When riku runs as the ssh forced command (`SSH_ORIGINAL_COMMAND` set) or
 //! the command is local or any other server only command, neither is
-//! touched, so server side invocations, git push hooks included, behave
-//! exactly as before forwarding existed.
+//! touched, so server side invocations, git push hooks included, always
+//! run locally.
 
 use super::git_remote::read_remotes;
 use super::target::{resolve, Selection, Source, Target};

@@ -157,7 +157,8 @@ only one of nginx and Caddy it finds, or a prompt when both are and init has a
 terminal. Without a terminal and with both installed, it stops and asks for
 `RIKU_ROUTER=nginx` or `RIKU_ROUTER=caddy`; with neither, it stops and says to
 install one. `RIKU_ROUTER` always wins, and a rerun keeps the router already
-stored (nginx for older installs that have nginx).
+stored. When none is stored but `~/.riku` already exists and nginx is
+installed, init uses nginx.
 
 It then copies the binary to `/usr/local/bin/riku`, creates the deploy user, installs the units and the router helper, and creates the directory structure in the deploy user's home:
 ```

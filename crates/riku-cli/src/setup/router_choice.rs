@@ -43,8 +43,8 @@ pub(super) fn requested_router() -> Option<Router> {
 }
 
 /// Decide, in order: `requested` (`RIKU_ROUTER`, any name); `stored`; nginx
-/// when the riku tree already existed (`!fresh`) and nginx is installed, the
-/// old default; the only installed router; ask when two are installed and
+/// when the riku tree already existed (`!fresh`) and nginx is installed;
+/// the only installed router; ask when two are installed and
 /// init has a terminal; otherwise fail with what to do.
 pub(super) fn choose_router(
     installed: &[Router],

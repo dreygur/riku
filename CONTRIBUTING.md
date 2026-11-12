@@ -195,7 +195,9 @@ mod tests {
 
 - Use the `RikuPaths` struct for all path resolution
 - Keep riku's files under the `~/.riku/` layout in `ARCHITECTURE.md`
-- Maintain backward compatibility with existing configurations
+- riku keeps no backward compatibility: a change to a config format,
+  file layout or command replaces the old form outright, with a
+  `Breaking:` line in the CHANGELOG instead of a fallback in code
 
 ## Adding New Runtime Support
 

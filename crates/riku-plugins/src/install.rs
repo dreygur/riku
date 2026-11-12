@@ -218,7 +218,7 @@ impl<'a> PluginInstaller<'a> {
         };
         for entry in read_dir.flatten() {
             let dir = entry.path();
-            // Only manifest-based bundles; legacy single-file runtimes are skipped.
+            // Only manifest-based bundles; single-file runtimes are skipped.
             if !dir.is_dir() || !dir.join("riku-plugin.toml").exists() {
                 continue;
             }

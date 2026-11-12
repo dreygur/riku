@@ -37,7 +37,7 @@ pub(crate) enum Stored {
     Current(HashMap<String, String>),
     /// Computed from an ENV or settings file that changed since.
     Stale,
-    /// No deploy stored one, or it stored no source hash (an older riku).
+    /// No deploy stored one, or it stored no source hash.
     Missing,
 }
 

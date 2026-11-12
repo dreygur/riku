@@ -9,7 +9,6 @@ Component package located at `crates/riku-supervisor/src/health`.
 - `NoopControlActions` [actions.rs:NoopControlActions] (struct)
 - `actions.rs` [actions.rs] (and 1 additional symbols)
 - `load_or_create_token` [auth.rs:load_or_create_token] (fn)
-- `constant_time_eq` [auth.rs:constant_time_eq] (re-export)
 - `ControlState` [control.rs:ControlState] (struct)
 - `control_router` [control.rs:control_router] (fn)
 - `SharedSupervisorState` [mod.rs:SharedSupervisorState] (struct)

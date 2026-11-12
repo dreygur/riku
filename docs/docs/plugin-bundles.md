@@ -5,8 +5,8 @@ Riku's modern extension model is the **plugin bundle**, a directory with a
 versioned, checksum-verified, and (optionally) signature-verified through the
 `riku plugins` commands.
 
-> This is distinct from the legacy single-file plugins in
-> [Plugin System](plugins.md). Bundles are the path forward; the full contract
+> This is distinct from the single-file plugins in
+> [Plugin System](plugins.md). The full contract
 > is specified in [`PLUGIN_PROTOCOL.md`](https://github.com/dreygur/riku/blob/main/PLUGIN_PROTOCOL.md).
 
 ## Bundle layout

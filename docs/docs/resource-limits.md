@@ -358,16 +358,7 @@ RUST_LOG=info riku supervisor
 
 ---
 
-## Migration from Older Versions
-
-If upgrading from Riku 2.x:
-
-1. **No Breaking Changes** - Resource limits are enabled by default with safe values
-2. **Review App Behavior** - Some apps may need higher limits
-3. **Test First** - Deploy to staging before production
-4. **Monitor Logs** - Check for unexpected terminations
-
-### Rollback
+## Relaxing the Limits
 
 If resource limits cause issues, temporarily relax them with very high
 values in the drop-in, then `sudo systemctl restart riku`:

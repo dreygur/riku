@@ -4,8 +4,8 @@
 //! A push resets `apps/<app>` to the pushed commit before it builds. When
 //! the build fails the old processes keep running from the old build, but
 //! the checkout would stay at the broken commit, and anything that later
-//! reads it (a restart from an older riku, `riku run`, a plain
-//! `riku deploy`) would act on code that never went live.
+//! reads it (`riku run`, a plain `riku deploy`) would act on code that
+//! never went live.
 
 // Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
 #![allow(clippy::question_mark)]

@@ -217,7 +217,7 @@ The server list is the same file `riku server` uses,
 it. Client plugins live in
 `~/.riku/client-plugins`.
 
-`riku` keeps working as before: with `-s`, a repo remote or a default server it
+`riku` itself also forwards: with `-s`, a repo remote or a default server it
 forwards over ssh, and without one it runs the command on the current machine.
 
 ## Application Management

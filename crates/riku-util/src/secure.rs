@@ -12,3 +12,7 @@ pub fn constant_time_eq(a: &str, b: &str) -> bool {
     }
     a.ct_eq(b).into()
 }
+
+#[cfg(test)]
+#[path = "secure_tests.rs"]
+mod tests;

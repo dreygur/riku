@@ -154,7 +154,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the job that copy's `PORT` and socket variables. Cron jobs now use the
   app's cron worker config, and fall back to the first config only when
   there is none. riku's own config names put `cron` before every web
-  facing kind, so this needed an older or hand placed config to happen.
+  facing kind, so this needed a hand placed config to happen.
 - The Procfile `release` and `preflight` commands ran with riku's own env
   only, so a migration could not see the app's settings such as
   `DATABASE_URL`. They now get the app env, the same one the workers get.
@@ -196,7 +196,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and server settings files beside it in `PLUGIN_ENV.source`, and restart
   uses it without running the plugin while those files are unchanged. When
   ENV or the settings changed since (`riku config set`, `riku settings
-  set`), or nothing was stored (an app deployed by an older riku), restart
+  set`), or nothing was stored, restart
   runs the plugin's `env` with the current env as before, says so, and
   stores the result for the next restart.
 - `sudo riku doctor` said nothing about the supervisor binary, since root
@@ -284,8 +284,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   name is skipped, and the temp file is removed when the rename fails.
 - Two plugin installs at once (the CLI and the supervisor's install route)
   could each rewrite `~/.riku/plugins/.bundled` from the copy they read,
-  dropping one plugin's entry, so `riku init` treated that plugin as
-  installed by an older riku and never refreshed it. The update now holds
+  dropping one plugin's entry, so `riku init` found no record for that
+  plugin and never refreshed it. The update now holds
   an exclusive lock on `~/.riku/plugins/.bundled.lock` from read to write.
 - `scripts/install.sh` printed the old `-----> ` and ` !     ` lines and
   `error: ...`. It now uses the rail: `┌  riku install  <version>`, the
@@ -448,6 +448,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   steps, the shared layout and plugin claims and the Piku comparisons are
   gone. The example apps no longer carry Piku names (the Django example's
   package is `djangoapp`).
+- The `riku_supervisor::health::auth::constant_time_eq` re-export; callers
+  use `riku_util::secure::constant_time_eq`. The docs drop their old
+  version notes: the resource limits "Migration from Older Versions"
+  section, the `ROUTER` file fallback PLUGIN_PROTOCOL.md still described,
+  and the "legacy" label on name-based hooks, single-file plugins and
+  manifestless runtime plugins, which all stay supported.
 
 ## [0.1.4-rc.3] - 2026-11-11
 

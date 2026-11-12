@@ -19,8 +19,8 @@ use super::push_status::{deploy_result, DeployResult, STATUS_ENV};
 use super::repo::{ensure_repo_symlink, post_receive_hook};
 
 /// The directory under `repos/` a pushed path names. `riku@host:shop` and
-/// `riku@host:shop.git` both deploy app `shop`, and their repositories stay
-/// at `repos/shop` and `repos/shop.git` as before. App names cannot end in
+/// `riku@host:shop.git` both deploy app `shop`, from the repositories
+/// `repos/shop` and `repos/shop.git`. App names cannot end in
 /// `.git`, so only one suffix is taken off. A trailing `/`, which git
 /// accepts in a remote path, goes first.
 fn repo_dir_name(requested: &str) -> Result<String> {

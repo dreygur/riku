@@ -18,7 +18,7 @@ use super::RIKU_PLUGIN_API;
 /// failures, `release.activated`, the `app.*` events). This enum grows one
 /// variant at a time as each event's emit site is wired, so it never carries a
 /// name the kernel does not yet emit. The current set covers the four lifecycle
-/// points that map to the legacy hooks.
+/// points that map to the name-based hooks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventName {
     DeployRequested,
@@ -42,9 +42,9 @@ impl EventName {
         }
     }
 
-    /// The lifecycle event corresponding to a legacy hook stage, so the four
-    /// existing hooks emit events at the exact same points (`PLUGIN_PROTOCOL.md`
-    /// §7.1, "Legacy hook" column).
+    /// The lifecycle event corresponding to a name-based hook stage, so the
+    /// four hooks emit events at the exact same points (`PLUGIN_PROTOCOL.md`
+    /// §7.1, "Name-based hook" column).
     pub fn from_hook(hook: &PluginHook) -> Self {
         match hook {
             PluginHook::PreDeploy => EventName::DeployRequested,

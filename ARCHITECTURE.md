@@ -201,11 +201,12 @@ Riku extends in two ways:
   install`/`remove`, always best-effort (a failing hook never blocks the
   install or removal it's attached to).
 
-There is also a legacy, separate hook mechanism (`manager.rs`/`hooks.rs`):
-four fixed `riku-*`-prefixed executables (`riku-pre-deploy`,
-`riku-pre-build`, `riku-post-build`, `riku-post-deploy`) invoked directly
-by `riku-deploy` at the corresponding stage: predates the manifest-based
-event bus and is kept for backward compatibility.
+There is also a separate, name-based hook mechanism
+(`manager.rs`/`hooks.rs`): four fixed `riku-*`-prefixed executables
+(`riku-pre-deploy`, `riku-pre-build`, `riku-post-build`,
+`riku-post-deploy`) invoked directly by `riku-deploy` at the corresponding
+stage. They need no manifest. A failing pre-deploy, pre-build or
+post-build hook aborts the deploy; a failing post-deploy hook only warns.
 
 **Trust model.** `PluginInstaller` verifies a pinned checksum (rejects on
 mismatch) and, if the manifest carries an Ed25519 `signature`, requires it
@@ -478,7 +479,7 @@ manual/browser-driven verification of dashboard and plugin changes.
 ├── workers-available/  # Available worker TOML configs
 ├── workers-enabled/    # Enabled worker configs (symlinks)
 ├── acme/               # ACME/Let's Encrypt certificates
-└── plugins/            # Plugin bundles (runtime, addon, router, event, legacy hooks)
+└── plugins/            # Plugin bundles (runtime, addon, router, event, name-based hooks)
 ```
 
 ### File Formats

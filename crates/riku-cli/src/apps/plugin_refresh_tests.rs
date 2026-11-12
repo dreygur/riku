@@ -10,7 +10,7 @@ use super::*;
 const OLD_PYTHON: &[u8] = b"#!/bin/sh\necho '-----> uv not found'\n";
 
 /// Install `name` the way riku does, then put `old` in its place and in the
-/// record, as an older riku would have left it.
+/// record, as the previous riku release left it before an upgrade.
 fn install_older_copy(root: &Path, name: &str, old: &[u8]) {
     write_out(find(name).unwrap(), root).unwrap();
     write_plugin_file(root, name, old, 0o755).unwrap();
