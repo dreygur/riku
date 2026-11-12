@@ -30,7 +30,7 @@ pub fn cmd_deploy_logs(paths: &RikuPaths, app: &str, follow: bool) -> Result<()>
         return Ok(());
     }
 
-    display::section(&format!("Deploy log: {app}"));
+    display::step_done(&format!("Deploy log: {app}"), "");
 
     if follow {
         tail_deploy_log(&log_file)

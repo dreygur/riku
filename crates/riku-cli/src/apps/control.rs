@@ -75,7 +75,7 @@ pub fn cmd_restart(paths: &RikuPaths, app: &str, name: Option<&str>) -> Result<(
         Ok(target) => target,
         Err(e) => return Err(e),
     };
-    display::info(&format!("restarting app '{}'...", app));
+    display::step_done(&format!("restarting app '{}'...", app), "");
     match target {
         ControlTarget::Containers { app, service } => {
             crate::deploy::containers::restart_service(&app, paths, service.as_ref())
@@ -130,7 +130,7 @@ pub fn cmd_supervisor(paths: &RikuPaths) -> Result<()> {
 fn do_stop(paths: &RikuPaths, app: &str) -> Result<()> {
     match crate::deploy::app_stop::stop_procfile_app(app, paths) {
         Ok(0) => display::error(&format!("app '{}' is not deployed", app)),
-        Ok(_) => display::info(&format!("Stopped app '{}'.", app)),
+        Ok(_) => display::step_done(&format!("Stopped app '{}'.", app), ""),
         Err(e) => return Err(anyhow::anyhow!("cannot stop '{app}': {e}")),
     }
     Ok(())

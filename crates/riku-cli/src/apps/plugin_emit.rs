@@ -75,7 +75,7 @@ fn emit_as(
     };
 
     EventBus::new(paths).publish_custom(event_name, &plugin_name, app.unwrap_or(""), value);
-    display::success(&format!("emitted '{event_name}' from '{plugin_name}'"));
+    display::step_done(&format!("emitted '{event_name}' from '{plugin_name}'"), "");
     Ok(())
 }
 

@@ -18,19 +18,23 @@ pub(super) fn print_first_deploy_hint() {
 pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
     let app_root = &paths.app_root;
     if !app_root.exists() {
-        display::note("There are no applications deployed.");
+        display::detail("There are no applications deployed.");
         print_first_deploy_hint();
         return Ok(());
     }
 
-    let mut apps: Vec<String> = fs::read_dir(app_root)?
+    let entries = match fs::read_dir(app_root) {
+        Ok(entries) => entries,
+        Err(e) => return Err(anyhow::anyhow!("cannot read {}: {e}", app_root.display())),
+    };
+    let mut apps: Vec<String> = entries
         .filter_map(|e| e.ok())
         .filter(|e| e.path().is_dir())
         .map(|e| e.file_name().to_string_lossy().to_string())
         .collect();
 
     if apps.is_empty() {
-        display::note("There are no applications deployed.");
+        display::detail("There are no applications deployed.");
         print_first_deploy_hint();
         return Ok(());
     }
@@ -60,16 +64,16 @@ pub fn cmd_apps(paths: &RikuPaths) -> Result<()> {
         total_workers += worker_count;
     }
 
-    display::section("Deployed Apps");
+    display::step_done("Deployed Apps", "");
     crate::util::print_table(&headers, &rows, 2);
 
-    display::blank();
+    display::detail("");
     println!(
         "Total: {} app(s), {} worker(s) running",
         apps.len().to_string().green(),
         total_workers.to_string().green()
     );
-    display::blank();
+    display::detail("");
     display::warn("* = running");
 
     Ok(())

@@ -11,7 +11,7 @@ use riku_plugins::AddonService;
 pub fn cmd_addon_list(paths: &RikuPaths) -> Result<()> {
     let instances = AddonService::new(paths).list();
     if instances.is_empty() {
-        display::note("No addon instances. Create one with: riku addon create <plugin> <name>");
+        display::detail("No addon instances. Create one with: riku addon create <plugin> <name>");
         return Ok(());
     }
     let rows: Vec<Vec<String>> = instances
@@ -64,23 +64,34 @@ pub fn cmd_addon_bind(paths: &RikuPaths, instance: &str, app: &str) -> Result<()
 }
 
 /// `riku addon unbind <instance> <app>`
+#[allow(clippy::question_mark)]
 pub fn cmd_addon_unbind(paths: &RikuPaths, instance: &str, app: &str) -> Result<()> {
-    AddonService::new(paths).unbind(instance, app)?;
-    display::success(&format!("Unbound '{instance}' from '{app}'."));
+    if let Err(e) = AddonService::new(paths).unbind(instance, app) {
+        return Err(e);
+    }
+    display::step_done(&format!("Unbound '{instance}' from '{app}'."), "");
     Ok(())
 }
 
 /// `riku addon destroy <instance>`
+#[allow(clippy::question_mark)]
 pub fn cmd_addon_destroy(paths: &RikuPaths, instance: &str) -> Result<()> {
-    AddonService::new(paths).deprovision(instance)?;
-    display::success(&format!("Destroyed instance '{instance}'."));
+    if let Err(e) = AddonService::new(paths).deprovision(instance) {
+        return Err(e);
+    }
+    display::step_done(&format!("Destroyed instance '{instance}'."), "");
     Ok(())
 }
 
 /// `riku addon backup <instance>`
+#[allow(clippy::question_mark)]
 pub fn cmd_addon_backup(paths: &RikuPaths, instance: &str) -> Result<()> {
-    match AddonService::new(paths).backup(instance)? {
-        Some(artifact) => display::success(&format!("Backed up '{instance}' to {artifact}")),
+    let artifact = match AddonService::new(paths).backup(instance) {
+        Ok(artifact) => artifact,
+        Err(e) => return Err(e),
+    };
+    match artifact {
+        Some(artifact) => display::step_done(&format!("Backed up '{instance}' to {artifact}"), ""),
         None => display::warn(&format!(
             "Addon for '{instance}' produced no backup artifact"
         )),

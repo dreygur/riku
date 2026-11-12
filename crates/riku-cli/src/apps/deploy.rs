@@ -101,12 +101,14 @@ fn deploy_from_path(paths: &RikuPaths, app: &str, source: &str) -> Result<()> {
     }
 
     let app_dir = paths.app_root.join(app);
-    display::info(&format!("Copying files from '{}'...", source));
+    display::step_done(&format!("Copying files from '{}'...", source), "");
 
     // Copy to a temp dir first, then atomic rename
     let tmp_dir = paths.app_root.join(format!(".{}.tmp", app));
     if tmp_dir.exists() {
-        fs::remove_dir_all(&tmp_dir)?;
+        if let Err(e) = fs::remove_dir_all(&tmp_dir) {
+            return Err(anyhow::anyhow!("cannot remove {}: {e}", tmp_dir.display()));
+        }
     }
 
     if let Err(e) = copy_dir_recursive(source_path, &tmp_dir) {
@@ -115,12 +117,24 @@ fn deploy_from_path(paths: &RikuPaths, app: &str, source: &str) -> Result<()> {
     }
 
     if app_dir.exists() {
-        fs::remove_dir_all(&app_dir)?;
+        if let Err(e) = fs::remove_dir_all(&app_dir) {
+            return Err(anyhow::anyhow!("cannot remove {}: {e}", app_dir.display()));
+        }
     }
 
-    fs::rename(&tmp_dir, &app_dir)?;
+    if let Err(e) = fs::rename(&tmp_dir, &app_dir) {
+        return Err(anyhow::anyhow!(
+            "cannot move {} to {}: {e}",
+            tmp_dir.display(),
+            app_dir.display()
+        ));
+    }
 
-    display::success(&format!("Copied {} files", count_files(&app_dir)?));
+    let copied = match count_files(&app_dir) {
+        Ok(count) => count,
+        Err(e) => return Err(e),
+    };
+    display::step_done(&format!("Copied {copied} files"), "");
 
     Ok(())
 }

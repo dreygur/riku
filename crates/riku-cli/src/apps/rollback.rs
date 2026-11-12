@@ -16,7 +16,7 @@ pub fn cmd_rollback(paths: &RikuPaths, app: &str, to: Option<&str>, list: bool) 
 fn show_history(paths: &RikuPaths, app: &str) -> Result<()> {
     let history = crate::deploy::releases::ReleaseLog::new(paths).list(app);
     if history.is_empty() {
-        display::note(&format!("No release history for '{app}' yet."));
+        display::detail(&format!("No release history for '{app}' yet."));
         return Ok(());
     }
     // Newest first; the first row is the current release.

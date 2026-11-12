@@ -73,7 +73,7 @@ fn show_all_verbose(paths: &RikuPaths, apps: &[String]) -> Result<()> {
         }
     }
 
-    display::section("All Processes");
+    display::step_done("All Processes", "");
     crate::util::print_table(&headers, &rows, 2);
 
     println!(
@@ -97,10 +97,10 @@ fn show_all_compact(paths: &RikuPaths, apps: &[String]) -> Result<()> {
         ]);
     }
 
-    display::section("Deployed Apps");
+    display::step_done("Deployed Apps", "");
     crate::util::print_table(&headers, &rows, 2);
 
-    display::blank();
+    display::detail("");
     display::warn("Use 'riku ps <app> --verbose' for detailed process info");
     Ok(())
 }

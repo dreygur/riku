@@ -26,7 +26,7 @@ fn print_capabilities(manifest: &PluginManifest) {
         requested.push("privileged".to_string());
     }
     if requested.is_empty() {
-        display::note("Capabilities: none declared.");
+        display::detail("Capabilities: none declared.");
     } else {
         display::warn(&format!("Capabilities granted: {}", requested.join(", ")));
     }
@@ -71,9 +71,9 @@ fn finish_install(manifest: &PluginManifest) {
 /// strongest, then a pinned checksum, then nothing.
 fn report_trust(manifest: &PluginManifest) {
     if manifest.signature.is_some() {
-        display::note("Signature verified by a trusted publisher.");
+        display::detail("Signature verified by a trusted publisher.");
     } else if manifest.checksum.is_some() {
-        display::note("Checksum verified.");
+        display::detail("Checksum verified.");
     } else {
         display::warn("No signature or checksum in the manifest, installed unverified.");
     }
@@ -83,7 +83,7 @@ fn report_trust(manifest: &PluginManifest) {
 pub fn cmd_plugins_list(paths: &RikuPaths) -> Result<()> {
     let installed = PluginInstaller::new(paths).list();
     if installed.is_empty() {
-        display::note("No plugin bundles installed. Add one: riku plugins install <source>");
+        display::detail("No plugin bundles installed. Add one: riku plugins install <source>");
         return Ok(());
     }
     let rows: Vec<Vec<String>> = installed
@@ -107,9 +107,12 @@ pub fn cmd_plugins_list(paths: &RikuPaths) -> Result<()> {
 }
 
 /// `riku plugins remove <name>`
+#[allow(clippy::question_mark)]
 pub fn cmd_plugins_remove(paths: &RikuPaths, name: &str) -> Result<()> {
-    PluginInstaller::new(paths).remove(name)?;
-    display::success(&format!("Removed plugin '{name}'."));
+    if let Err(e) = PluginInstaller::new(paths).remove(name) {
+        return Err(e);
+    }
+    display::step_done(&format!("Removed plugin '{name}'."), "");
     Ok(())
 }
 
@@ -117,7 +120,9 @@ pub fn cmd_plugins_remove(paths: &RikuPaths, name: &str) -> Result<()> {
 pub fn cmd_plugins_search(paths: &RikuPaths, query: &str) -> Result<()> {
     let results = MarketplaceService::new(paths).search(query);
     if results.is_empty() {
-        display::note("No matches. Register a marketplace: riku plugins marketplace add <git-url>");
+        display::detail(
+            "No matches. Register a marketplace: riku plugins marketplace add <git-url>",
+        );
         return Ok(());
     }
     let rows: Vec<Vec<String>> = results
@@ -155,13 +160,13 @@ pub fn cmd_plugins_add(paths: &RikuPaths, spec: &str) -> Result<()> {
 pub fn cmd_plugins_doctor(paths: &RikuPaths) -> Result<()> {
     let results = PluginInstaller::new(paths).audit();
     if results.is_empty() {
-        display::note("No plugin bundles installed.");
+        display::detail("No plugin bundles installed.");
         return Ok(());
     }
     let mut failures = 0;
     for r in &results {
         match r.status {
-            HealthStatus::Ok => display::success(&format!("{}, {}", r.name, r.detail)),
+            HealthStatus::Ok => display::step_done(&format!("{}, {}", r.name, r.detail), ""),
             HealthStatus::Warn => display::warn(&format!("{}, {}", r.name, r.detail)),
             HealthStatus::Fail => {
                 failures += 1;
@@ -191,12 +196,16 @@ fn parse_spec(spec: &str) -> Result<(&str, Option<&str>, Option<&str>)> {
 }
 
 /// `riku plugins marketplace add <url> [--name]`
+#[allow(clippy::question_mark)]
 pub fn cmd_marketplace_add(paths: &RikuPaths, url: &str, name: Option<&str>) -> Result<()> {
     display::warn(
         "A marketplace can publish code that runs on this server. Only add ones you trust.",
     );
-    let registered = MarketplaceService::new(paths).add(url, name)?;
-    display::success(&format!("Registered marketplace '{registered}'."));
+    let registered = match MarketplaceService::new(paths).add(url, name) {
+        Ok(registered) => registered,
+        Err(e) => return Err(e),
+    };
+    display::step_done(&format!("Registered marketplace '{registered}'."), "");
     Ok(())
 }
 
@@ -204,7 +213,7 @@ pub fn cmd_marketplace_add(paths: &RikuPaths, url: &str, name: Option<&str>) -> 
 pub fn cmd_marketplace_list(paths: &RikuPaths) -> Result<()> {
     let markets = MarketplaceService::new(paths).list();
     if markets.is_empty() {
-        display::note(
+        display::detail(
             "No marketplaces registered. Add one: riku plugins marketplace add <git-url>",
         );
         return Ok(());
@@ -218,16 +227,22 @@ pub fn cmd_marketplace_list(paths: &RikuPaths) -> Result<()> {
 }
 
 /// `riku plugins marketplace remove <name>`
+#[allow(clippy::question_mark)]
 pub fn cmd_marketplace_remove(paths: &RikuPaths, name: &str) -> Result<()> {
-    MarketplaceService::new(paths).remove(name)?;
-    display::success(&format!("Removed marketplace '{name}'."));
+    if let Err(e) = MarketplaceService::new(paths).remove(name) {
+        return Err(e);
+    }
+    display::step_done(&format!("Removed marketplace '{name}'."), "");
     Ok(())
 }
 
 /// `riku plugins trust add <name> <pubkey>`
+#[allow(clippy::question_mark)]
 pub fn cmd_trust_add(paths: &RikuPaths, name: &str, pubkey: &str) -> Result<()> {
-    riku_plugins::signing::Keyring::new(paths).add(name, pubkey)?;
-    display::success(&format!("Trusted publisher key '{name}'."));
+    if let Err(e) = riku_plugins::signing::Keyring::new(paths).add(name, pubkey) {
+        return Err(e);
+    }
+    display::step_done(&format!("Trusted publisher key '{name}'."), "");
     Ok(())
 }
 
@@ -235,7 +250,7 @@ pub fn cmd_trust_add(paths: &RikuPaths, name: &str, pubkey: &str) -> Result<()> 
 pub fn cmd_trust_list(paths: &RikuPaths) -> Result<()> {
     let keys = riku_plugins::signing::Keyring::new(paths).list();
     if keys.is_empty() {
-        display::note("No trusted keys. Add one: riku plugins trust add <name> <pubkey>");
+        display::detail("No trusted keys. Add one: riku plugins trust add <name> <pubkey>");
         return Ok(());
     }
     let rows: Vec<Vec<String>> = keys
@@ -248,10 +263,12 @@ pub fn cmd_trust_list(paths: &RikuPaths) -> Result<()> {
 
 /// `riku plugins trust remove <name>`
 pub fn cmd_trust_remove(paths: &RikuPaths, name: &str) -> Result<()> {
-    if !riku_plugins::signing::Keyring::new(paths).remove(name)? {
-        anyhow::bail!("no trusted key named '{name}'");
+    match riku_plugins::signing::Keyring::new(paths).remove(name) {
+        Ok(true) => {}
+        Ok(false) => anyhow::bail!("no trusted key named '{name}'"),
+        Err(e) => return Err(e),
     }
-    display::success(&format!("Removed trusted key '{name}'."));
+    display::step_done(&format!("Removed trusted key '{name}'."), "");
     Ok(())
 }
 

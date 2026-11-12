@@ -9,15 +9,21 @@ use crate::config::RikuPaths;
 use crate::util::display;
 use crate::util::fs::{presence, Presence};
 
+/// `│  label   value`: one detail line with the label padded to 20 columns,
+/// so the values of consecutive fields line up.
+pub(crate) fn field(label: &str, value: &str) {
+    display::detail(&format!("{label:<20} {value}"));
+}
+
 /// Print where the host router keeps this app's config.
 fn print_route(paths: &RikuPaths, app: &str) {
     match Router::load(paths) {
         Ok(Router::Nginx) => {
             let site = crate::nginx::site_path(app);
             match presence(&site) {
-                Presence::Present => display::kv("Nginx Config:", &site.display().to_string()),
+                Presence::Present => field("Nginx Config:", &site.display().to_string()),
                 Presence::Missing => {}
-                Presence::Unknown => display::kv(
+                Presence::Unknown => field(
                     "Nginx Config:",
                     &format!(
                         "unknown, {} is not readable by this user",
@@ -29,9 +35,9 @@ fn print_route(paths: &RikuPaths, app: &str) {
         Ok(Router::Caddy) => {
             let site = crate::caddy::site_path(app, paths);
             match presence(&site) {
-                Presence::Present => display::kv("Caddy Site:", &site.display().to_string()),
+                Presence::Present => field("Caddy Site:", &site.display().to_string()),
                 Presence::Missing => {}
-                Presence::Unknown => display::kv(
+                Presence::Unknown => field(
                     "Caddy Site:",
                     &format!(
                         "unknown, {} is not readable by this user",
@@ -40,8 +46,8 @@ fn print_route(paths: &RikuPaths, app: &str) {
                 ),
             }
         }
-        Ok(Router::Plugin(name)) => display::kv("Router:", &format!("plugin {name}")),
-        Err(e) => display::kv("Router:", &format!("unreadable: {e}")),
+        Ok(Router::Plugin(name)) => field("Router:", &format!("plugin {name}")),
+        Err(e) => field("Router:", &format!("unreadable: {e}")),
     }
 }
 
@@ -59,15 +65,15 @@ pub fn cmd_apps_info(paths: &RikuPaths, app: &str) -> Result<()> {
         bail!("App not found");
     }
 
-    display::section(&format!("App: '{}'", app));
-    display::blank();
+    display::step_done(&format!("App: '{}'", app), "");
+    display::detail("");
 
-    display::kv("App Directory:", &app_dir.display().to_string());
+    field("App Directory:", &app_dir.display().to_string());
 
     let git_dir = paths.git_root.join(format!("{}.git", app));
     if git_dir.exists() {
-        display::kv("Git Repository:", &git_dir.display().to_string());
-        display::kv("Git Remote:", &format!("riku@<host>:{app}"));
+        field("Git Repository:", &git_dir.display().to_string());
+        field("Git Remote:", &format!("riku@<host>:{app}"));
     }
 
     print_disk_usage(&app_dir);
@@ -84,12 +90,12 @@ pub fn cmd_apps_info(paths: &RikuPaths, app: &str) -> Result<()> {
 
     let log_dir = paths.log_root.join(&app);
     if log_dir.exists() {
-        display::kv("Log Directory:", &log_dir.display().to_string());
+        field("Log Directory:", &log_dir.display().to_string());
     }
 
     let data_dir = paths.data_root.join(&app);
     if data_dir.exists() {
-        display::kv("Data Directory:", &data_dir.display().to_string());
+        field("Data Directory:", &data_dir.display().to_string());
     }
 
     Ok(())
@@ -101,7 +107,7 @@ fn print_disk_usage(app_dir: &std::path::Path) {
         if let Ok(output) = Command::new("du").args(["-sh", app_dir_str]).output() {
             if let Ok(du_output) = String::from_utf8(output.stdout) {
                 if let Some(size) = du_output.split_whitespace().next() {
-                    display::kv("Disk Usage:", size);
+                    field("Disk Usage:", size);
                 }
             }
         }
@@ -119,10 +125,10 @@ fn print_env_summary(paths: &RikuPaths, app: &str) -> Result<()> {
     if env.is_empty() {
         return Ok(());
     }
-    display::kv("Env Variables:", &format!("{} configured", env.len()));
+    field("Env Variables:", &format!("{} configured", env.len()));
     for key in ["RIKU_DOMAINS", "RIKU_NODE_VERSION", "PORT"] {
         if let Some(val) = env.get(key) {
-            display::kv(&format!("  {}:", key), val);
+            field(&format!("  {}:", key), val);
         }
     }
     Ok(())
@@ -132,7 +138,15 @@ fn print_env_summary(paths: &RikuPaths, app: &str) -> Result<()> {
 fn print_scaling(paths: &RikuPaths, app: &str) -> Result<()> {
     let scaling_file = paths.env_root.join(app).join("SCALING");
     if scaling_file.exists() {
-        let content = fs::read_to_string(&scaling_file)?;
+        let content = match fs::read_to_string(&scaling_file) {
+            Ok(content) => content,
+            Err(e) => {
+                return Err(anyhow::anyhow!(
+                    "cannot read {}: {e}",
+                    scaling_file.display()
+                ))
+            }
+        };
         let mut scales: Vec<String> = Vec::new();
         for line in content.lines() {
             let line = line.trim();
@@ -141,7 +155,7 @@ fn print_scaling(paths: &RikuPaths, app: &str) -> Result<()> {
             }
         }
         if !scales.is_empty() {
-            display::kv("Scaling:", &scales.join(", "));
+            field("Scaling:", &scales.join(", "));
         }
     }
     Ok(())
@@ -152,11 +166,11 @@ fn print_process_status(paths: &RikuPaths, app: &str) -> Result<()> {
     let worker_count = app_worker_configs(&paths.workers_enabled, app).len();
 
     if worker_count > 0 {
-        display::kv("Status:", &"running".green().to_string());
-        display::kv("Workers:", &format!("{} active", worker_count));
+        field("Status:", &"running".green().to_string());
+        field("Workers:", &format!("{} active", worker_count));
         print_supervisor_stats(paths, app);
     } else {
-        display::kv("Status:", &"stopped".yellow().to_string());
+        field("Status:", &"stopped".yellow().to_string());
     }
     Ok(())
 }
@@ -172,18 +186,18 @@ fn print_supervisor_stats(paths: &RikuPaths, app: &str) {
         return;
     };
 
-    display::kv(
+    field(
         "Memory:",
         &format!(
             "{:.2} MB",
             app_stats.total_memory_bytes as f64 / 1024.0 / 1024.0
         ),
     );
-    display::kv(
+    field(
         "Running Processes:",
         &app_stats.running_processes.to_string(),
     );
-    display::kv(
+    field(
         "Healthy Processes:",
         &app_stats.healthy_processes.to_string(),
     );

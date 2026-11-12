@@ -102,11 +102,13 @@ async fn bind_reporting(addr: SocketAddr) -> Result<(TcpListener, String)> {
 }
 
 fn print_banner(bound: SocketAddr, has_token: bool) {
-    display::info(&format!("Dashboard listening on http://{bound}"));
+    display::step_done(&format!("Dashboard listening on http://{bound}"), "");
     if has_token {
-        display::note("Token set: API requires it, and restart/stop/redeploy actions are enabled.");
+        display::detail(
+            "Token set: API requires it, and restart/stop/redeploy actions are enabled.",
+        );
     } else {
-        display::note(
+        display::detail(
             "Read-only, loopback-only, no token (actions disabled). Tunnel with: ssh -L 8088:localhost:8088 <host>",
         );
     }
