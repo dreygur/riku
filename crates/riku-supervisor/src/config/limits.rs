@@ -67,10 +67,8 @@ impl WorkerLimits {
 /// namespace leaves the worker only loopback, so it cannot reach the
 /// router, a database or anything else on the host network.
 ///
-/// Serialized as `[options.isolation]`, the key older configs used for
-/// both the sandbox and the limits. `options_file` reads it, along with any
-/// limits an older config kept beside `root_dir`.
-#[derive(Serialize, Clone, Debug, PartialEq)]
+/// Stored as `[options.isolation]`.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Sandbox {
     /// Directory to `pivot_root` the worker into. Must hold everything the
     /// worker needs (app code, libraries, `/proc`, `/dev`).
@@ -86,8 +84,8 @@ impl Sandbox {
 
     /// Refuses a `root_dir` without the shape `riku settings set` requires
     /// (riku-config `is_isolation_root`) or that is not an existing
-    /// directory. A worker config can also come from an older ENV file or be
-    /// edited by hand, and the directory can vanish after it was set.
+    /// directory. A worker config can be edited by hand, and the directory
+    /// can vanish after it was set.
     pub fn check_root(&self) -> anyhow::Result<()> {
         if !riku_config::app_settings::is_isolation_root(&self.root_dir) {
             anyhow::bail!(

@@ -35,7 +35,6 @@ macro_rules! parse_env_opt {
 }
 
 mod limits;
-mod options_file;
 pub use limits::{Sandbox, WorkerLimits};
 
 /// The main worker configuration structure stored in TOML files.
@@ -62,17 +61,19 @@ impl WorkerInfo {
     }
 }
 
-/// Options for the worker process. Read through [`options_file`], which
-/// holds the defaults and accepts the older `[options.isolation]` layout.
+/// Options for the worker process. A missing `timeout`, `grace_period` or
+/// `max_restarts` reads as the riku-config default.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(from = "options_file::OptionsFile")]
 pub struct WorkerOptions {
     pub working_dir: String,
     pub log_file: String,
     pub uid: Option<String>,
     pub gid: Option<String>,
+    #[serde(default = "default_timeout")]
     pub timeout: u64,
+    #[serde(default = "default_grace_period")]
     pub grace_period: u64,
+    #[serde(default = "default_max_restarts")]
     pub max_restarts: u32,
     pub health_check: Option<HealthCheck>,
     /// cgroup limits. `Some` puts the worker in its own cgroup with these

@@ -267,7 +267,7 @@ fn sandbox_root_must_be_an_existing_absolute_directory() {
     );
 }
 
-/// A root from an older ENV file skipped the settings check, so the
+/// A hand edited worker config skips the settings check, so the
 /// supervisor applies the same shape rule to every root it is given.
 #[test]
 fn sandbox_root_must_have_the_settings_shape_whatever_its_source() {
@@ -318,7 +318,7 @@ fn limits_and_sandbox_survive_a_toml_round_trip() {
 }
 
 #[test]
-fn a_config_from_before_the_split_keeps_its_limits_and_sandbox() {
+fn options_without_timeouts_read_the_defaults() {
     let text = r#"
 [worker]
 app = "app"
@@ -331,30 +331,16 @@ ordinal = 1
 [options]
 working_dir = "/srv/app"
 log_file = "/srv/log"
-
-[options.isolation]
-root_dir = "/srv/jail"
-max_memory_bytes = 268435456
-cpu_quota_us = 20000
-cpu_period_us = 50000
-max_pids = 64
 "#;
 
     let parsed: WorkerConfig = toml::from_str(text).unwrap();
 
-    let expected = WorkerLimits {
-        max_memory_bytes: Some(268435456),
-        cpu_quota_us: Some(20000),
-        cpu_period_us: 50000,
-        max_pids: Some(64),
-    };
-    assert_eq!(
-        parsed.options.limits,
-        Some(expected),
-        "old limits must not be dropped"
-    );
-    let root = parsed.options.sandbox.map(|sandbox| sandbox.root_dir);
-    assert_eq!(root.as_deref(), Some("/srv/jail"));
+    let options = parsed.options;
+    assert_eq!(options.timeout, riku_config::RIKU_WORKER_TIMEOUT);
+    assert_eq!(options.grace_period, riku_config::RIKU_WORKER_GRACE_PERIOD);
+    assert_eq!(options.max_restarts, riku_config::RIKU_MAX_RESTARTS);
+    assert!(options.limits.is_none(), "limits: {:?}", options.limits);
+    assert!(options.sandbox.is_none(), "sandbox: {:?}", options.sandbox);
 }
 
 #[test]

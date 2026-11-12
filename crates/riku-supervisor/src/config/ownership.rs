@@ -4,8 +4,8 @@
 //! Every TOML config riku writes records its app under `[worker] app`, and
 //! that field decides.
 //!
-//! A file with no readable owner (a `.ini` file, an unparsable TOML, a
-//! dangling symlink) falls back to its name, and only to the
+//! A file with no readable owner (an unparsable TOML, a dangling symlink)
+//! falls back to its name, and only to the
 //! `<app>@<kind>.<n>` form (see [`riku_util::file_names::worker`]), which
 //! names one app. Any other name is claimed by no app, because callers
 //! delete what this returns and leaving a stray file is the safe failure.
@@ -20,8 +20,6 @@ use std::path::{Path, PathBuf};
 #[path = "ownership_tests.rs"]
 mod tests;
 
-const CONFIG_EXTENSIONS: [&str; 2] = ["toml", "ini"];
-
 #[derive(Deserialize)]
 struct OwnerSection {
     worker: OwnerField,
@@ -32,7 +30,7 @@ struct OwnerField {
     app: String,
 }
 
-/// The `.toml` and `.ini` worker configs in `dir` that belong to `app`,
+/// The `.toml` worker configs in `dir` that belong to `app`,
 /// sorted by path. A missing `dir` yields an empty list.
 pub fn app_worker_configs(dir: &Path, app: &str) -> Vec<PathBuf> {
     let entries = match fs::read_dir(dir) {
@@ -55,7 +53,7 @@ pub fn app_worker_configs(dir: &Path, app: &str) -> Vec<PathBuf> {
 fn is_config_file(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| CONFIG_EXTENSIONS.contains(&ext))
+        .is_some_and(|ext| ext == "toml")
 }
 
 fn belongs_to(path: &Path, app: &str) -> bool {
