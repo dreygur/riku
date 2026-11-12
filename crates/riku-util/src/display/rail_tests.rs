@@ -39,6 +39,15 @@ fn plain_mode_renders_the_rail_without_escapes() {
 }
 
 #[test]
+fn a_detail_line_keeps_its_leading_spaces() {
+    assert_eq!(
+        plain(Mark::Rail, "    riku apps create myapp", ""),
+        "│      riku apps create myapp",
+        "the indented commands in the app not found help must stay indented under their heading"
+    );
+}
+
+#[test]
 fn a_multi_line_message_continues_on_the_rail() {
     assert_eq!(
         plain(

@@ -371,6 +371,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- `riku_util::echo` (`display::echo`, which picked a rail line by color
+  name and stripped a `-----> ` prefix) and the display aliases `info`,
+  `success`, `note`, `section`, `kv` and `blank`. Every caller now names
+  the rail function it always printed through, so no user visible line
+  changed and nothing moved between stdout and stderr.
 - Breaking: `workers.auto_restart` / `RIKU_AUTO_RESTART`. Every deploy
   already ran the new build with the flag off; it only kept non-web
   workers from being stopped first, and kept a process kind removed from

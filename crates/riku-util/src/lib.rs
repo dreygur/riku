@@ -45,7 +45,7 @@ pub mod validation;
 pub mod write_dir;
 
 // Re-export items used via `crate::util::*` call-sites.
-pub use display::{echo, print_table, print_table_with_title};
+pub use display::{print_table, print_table_with_title};
 pub use env::{parse_settings, write_config};
 pub use fs::{
     copy_dir_recursive, count_files, create_private_dir, restrict_to_owner, write_atomic,
