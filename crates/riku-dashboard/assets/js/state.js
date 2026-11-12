@@ -54,7 +54,8 @@
  * @property {Worker[]} [workers]
  * @property {Record<string, string>} [routing]
  * @property {Route} [route]
- * @property {LiveUrl[]} [urls] where the app is live, as a deploy prints it; empty without a route
+ * @property {LiveUrl[]} [urls] where the app is live now, from its last route apply, as a deploy prints it; empty without a route
+ * @property {LiveUrl[]} [pending_urls] what the current settings give when that differs from urls; live after a redeploy
  * @property {string} [deploy_lock] "held" while a deploy runs
  * @property {boolean} [released] false while no deploy has recorded a release
  * @property {string[]} [process_kinds] kinds the scale API takes, empty for a container app

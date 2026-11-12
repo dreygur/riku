@@ -149,6 +149,8 @@ fn a_worker_only_app_needs_the_helper_only_to_drop_a_recorded_route() {
                 picked: false,
                 tls: None,
                 cert_for: None,
+                domains: Vec::new(),
+                fallback: false,
             },
         );
         Ok(())

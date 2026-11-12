@@ -23,6 +23,8 @@ fn set_mode(paths: &RikuPaths, app: &str, mode: RoutingMode) {
                 picked: false,
                 tls: None,
                 cert_for: None,
+                domains: Vec::new(),
+                fallback: false,
             },
         );
         Ok(())

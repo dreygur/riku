@@ -64,7 +64,7 @@ pub mod teardown;
 pub mod worker_control;
 pub mod workers;
 
-pub use deploy_finish::app_urls;
+pub use deploy_finish::{app_urls, AppUrls};
 pub use live_urls::{LiveUrl, UrlLabel};
 pub use supervisor_ctl::spawn_app;
 pub use workers::create_workers_generic;

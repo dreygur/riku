@@ -51,8 +51,22 @@ fn routed(
     Ok((routing, tls))
 }
 
+/// Whether `app` gets a route at all: always for containers, else only a
+/// Procfile app with a web facing copy (see `router::has_route`).
+fn is_routed(
+    app: &str,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+    container: bool,
+) -> anyhow::Result<bool> {
+    if container {
+        return Ok(true);
+    }
+    crate::router::has_route(app, env, paths)
+}
+
 /// Where the app is live, as `live_urls` words it, and the notes around it.
-/// Nothing for a Procfile app without a route (see `router::has_route`).
+/// Nothing for a Procfile app without a route.
 #[allow(clippy::question_mark)]
 fn live_lines_of(
     app: &str,
@@ -60,18 +74,28 @@ fn live_lines_of(
     paths: &RikuPaths,
     container: bool,
 ) -> anyhow::Result<Vec<Line>> {
-    if !container {
-        match crate::router::has_route(app, env, paths) {
-            Ok(true) => {}
-            Ok(false) => return Ok(Vec::new()),
-            Err(e) => return Err(e),
-        }
+    match is_routed(app, env, paths, container) {
+        Ok(true) => {}
+        Ok(false) => return Ok(Vec::new()),
+        Err(e) => return Err(e),
     }
     let (routing, tls) = match routed(app, env, paths) {
         Ok(found) => found,
         Err(e) => return Err(e),
     };
-    let mut lines = live_lines(app, &routing, tls, crate::util::flag::https_only(env));
+    Ok(routing_lines(app, &routing, tls, env, paths))
+}
+
+/// The lines for `app` routed as `routing`, with the port and path URLs on
+/// the server's address.
+fn routing_lines(
+    app: &str,
+    routing: &AppRouting,
+    tls: Option<TlsState>,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+) -> Vec<Line> {
+    let mut lines = live_lines(app, routing, tls, crate::util::flag::https_only(env));
     let server = settings::load(paths).ok().map(|loaded| loaded.routing);
     let configured = server.as_ref().and_then(|routing| routing.server_ip);
     let needs_host = routing.port.is_some() || routing.mode == RoutingMode::Path;
@@ -85,7 +109,75 @@ fn live_lines_of(
     if let (RoutingMode::Path, Some(server)) = (routing.mode, &server) {
         lines.extend(path_lines(app, server.shared_port, server_ip));
     }
-    Ok(lines)
+    lines
+}
+
+/// The routing the last apply set up for `app`, from the routing state,
+/// with its certificate outcome. `None` when the app was never routed.
+#[allow(clippy::question_mark)]
+fn applied_routing(
+    app: &str,
+    paths: &RikuPaths,
+) -> anyhow::Result<Option<(AppRouting, Option<TlsState>)>> {
+    let state = match RoutingState::load(paths) {
+        Ok(state) => state,
+        Err(e) => return Err(e),
+    };
+    let Some(entry) = state.entry(app) else {
+        return Ok(None);
+    };
+    let routing = AppRouting {
+        domains: entry.domains.clone(),
+        fallback: entry.fallback,
+        port: entry.port,
+        mode: entry.mode,
+        fallback_skipped: None,
+        fallback_private_ip: None,
+    };
+    Ok(Some((routing, entry.tls)))
+}
+
+fn urls_of(lines: Vec<Line>) -> Vec<LiveUrl> {
+    lines.into_iter().filter_map(|line| line.url).collect()
+}
+
+/// Where the dashboard says an app is live.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AppUrls {
+    /// The URLs of the route the last apply set up, which the router serves
+    /// now.
+    pub urls: Vec<LiveUrl>,
+    /// The URLs the current settings give, when they differ from `urls`:
+    /// the app answers there only after a redeploy. Empty otherwise.
+    pub pending: Vec<LiveUrl>,
+}
+
+#[allow(clippy::question_mark)]
+fn app_urls_of(
+    app: &str,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+    container: bool,
+) -> anyhow::Result<AppUrls> {
+    match is_routed(app, env, paths, container) {
+        Ok(true) => {}
+        Ok(false) => return Ok(AppUrls::default()),
+        Err(e) => return Err(e),
+    }
+    let applied = match applied_routing(app, paths) {
+        Ok(Some((routing, tls))) => urls_of(routing_lines(app, &routing, tls, env, paths)),
+        Ok(None) => return Ok(AppUrls::default()),
+        Err(e) => return Err(e),
+    };
+    let fresh = match routed(app, env, paths) {
+        Ok((routing, tls)) => urls_of(routing_lines(app, &routing, tls, env, paths)),
+        Err(e) => return Err(e),
+    };
+    let pending = if fresh == applied { Vec::new() } else { fresh };
+    Ok(AppUrls {
+        urls: applied,
+        pending,
+    })
 }
 
 /// [`live_lines_of`] for the push output: a failure is shown to the pusher
@@ -105,21 +197,23 @@ fn live_at(
     }
 }
 
-/// The URLs a successful deploy of `app` printed, from the same lines, for
-/// the dashboard. `container` is whether the app runs as containers; `env`
-/// is its merged config. Empty for an app without a route, and when the
-/// routing cannot be read; the push output shows that reason instead.
+/// Where `app` is live for the dashboard, in the push output's URL form:
+/// the route the last apply recorded, and the URLs a redeploy would give
+/// when the settings changed since. `container` is whether the app runs as
+/// containers; `env` is its merged config. Both are empty for an app that
+/// was never routed or has no route, and when the routing cannot be read;
+/// the push output shows that reason instead.
 pub fn app_urls(
     app: &str,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
     container: bool,
-) -> Vec<LiveUrl> {
-    match live_lines_of(app, env, paths, container) {
-        Ok(lines) => lines.into_iter().filter_map(|line| line.url).collect(),
+) -> AppUrls {
+    match app_urls_of(app, env, paths, container) {
+        Ok(urls) => urls,
         Err(e) => {
             tracing::debug!("no URLs for '{app}': {e:#}");
-            Vec::new()
+            AppUrls::default()
         }
     }
 }

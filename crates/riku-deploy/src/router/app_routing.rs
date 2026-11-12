@@ -200,6 +200,8 @@ pub fn resolve(
                 picked: false,
                 tls: None,
                 cert_for: kept_cert.clone(),
+                domains: Vec::new(),
+                fallback: false,
             },
         );
         return Ok(routed(Vec::new(), RoutingMode::Path));
@@ -241,6 +243,8 @@ pub fn resolve(
             picked,
             tls,
             cert_for: kept_cert,
+            domains: routing.domains.clone(),
+            fallback: routing.fallback,
         },
     );
     Ok(routing)

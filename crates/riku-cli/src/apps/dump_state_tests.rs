@@ -138,8 +138,14 @@ fn enable_worker(paths: &RikuPaths, app: &str, kind: &str) {
 fn urls_are_the_push_summary_urls_and_none_without_a_route() {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
-    crate::config::settings::save_key(&paths, "routing", "server_ip", Some("192.168.10.121"))
-        .unwrap();
+    crate::config::settings::save_key(&paths, "routing", "server_ip", Some("10.0.0.5")).unwrap();
+    let state = paths.riku_root.join("routing");
+    fs::create_dir_all(&state).unwrap();
+    fs::write(
+        state.join("state.toml"),
+        "[apps.qs-py]\nmode = \"port\"\nport = 8102\n",
+    )
+    .unwrap();
     let releases = crate::deploy::releases::ReleaseLog::new(&paths);
     for (app, kind) in [("qs-py", "web"), ("jobs", "worker"), ("fresh", "web")] {
         fs::create_dir_all(paths.app_root.join(app)).unwrap();
@@ -159,7 +165,7 @@ fn urls_are_the_push_summary_urls_and_none_without_a_route() {
 
     assert_eq!(
         urls("qs-py"),
-        serde_json::json!([{ "url": "http://192.168.10.121:8102", "label": "lan" }])
+        serde_json::json!([{ "url": "http://10.0.0.5:8102", "label": "lan" }])
     );
     assert_eq!(urls("jobs"), serde_json::json!([]), "worker only app");
     assert_eq!(urls("fresh"), serde_json::json!([]), "never deployed app");

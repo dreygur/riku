@@ -67,6 +67,10 @@ export function metaHtml(a, cur, busy) {
   } else {
     parts.push('<span class="c-dim">no domain</span>');
   }
+  const pending = a.pending_urls || [];
+  if (pending.length) {
+    parts.push(`<span class="c-warn">settings changed, redeploy to use ${esc(pending.map((u) => String(u.url || "")).join(", "))}</span>`);
+  }
   parts.push(routeHtml(a.route));
   if (busy) {
     parts.push(`<span>${I.commit}${cur ? `<b>${esc(String(cur.sha).slice(0, 8))}</b><span class="c-dim">→</span>` : ""}<span class="c-warn">deploying</span></span>`);

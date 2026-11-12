@@ -52,10 +52,16 @@ pub struct AppStateEntry {
     /// Allowlisted routing/port env vars only: secrets are never dumped.
     pub routing: BTreeMap<String, String>,
     pub route: RouteState,
-    /// Where the app is live, the URLs a deploy prints, each labelled
-    /// `domain`, `lan` or `public`. Empty for an app without a route (worker
-    /// only), one that never deployed, and one whose routing cannot be read.
+    /// Where the app is live now, the URLs of the route its last apply set
+    /// up, in the form a deploy prints them, each labelled `domain`, `lan`
+    /// or `public`. Empty for an app without a route (worker only), one that
+    /// never deployed or was never routed, and one whose routing cannot be
+    /// read.
     pub urls: Vec<LiveUrl>,
+    /// The URLs the app's current settings give, when they differ from
+    /// `urls`: a settings change the app takes on its next deploy. Empty
+    /// when the settings match the route.
+    pub pending_urls: Vec<LiveUrl>,
     pub workers: Vec<WorkerStateEntry>,
     /// Whether any deploy of the app recorded a release. False for an app
     /// that was created but whose deploys all failed.

@@ -143,7 +143,7 @@ pub fn build_app_entry(
             containers || crate::deploy::containers::runs_containers(app, paths).unwrap_or(false);
         crate::deploy::app_urls(app, &env_map, paths, container)
     } else {
-        Vec::new()
+        crate::deploy::AppUrls::default()
     };
 
     AppStateEntry {
@@ -155,7 +155,8 @@ pub fn build_app_entry(
         },
         routing: extract_routing_fields(&env_map),
         route: route_state(app, paths),
-        urls,
+        urls: urls.urls,
+        pending_urls: urls.pending,
         workers,
         released,
         process_kinds,

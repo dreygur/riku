@@ -75,12 +75,29 @@ test("a running app has every control open until a deploy holds the lock", () =>
 });
 
 test("the card links the app's urls with their label, and says no domain only without one", () => {
-  const portMode = metaHtml({ app: "qs-py", routing: { RIKU_NGINX_PORTMAP: "true" }, urls: [{ url: "http://192.168.10.121:8102", label: "lan" }] }, undefined, false);
-  assert.ok(portMode.includes('href="http://192.168.10.121:8102"') && portMode.includes("LAN"), portMode);
+  const portMode = metaHtml({ app: "qs-py", routing: { RIKU_NGINX_PORTMAP: "true" }, urls: [{ url: "http://10.0.0.5:8102", label: "lan" }] }, undefined, false);
+  assert.ok(portMode.includes('href="http://10.0.0.5:8102"') && portMode.includes("LAN"), portMode);
   assert.ok(!portMode.includes("no domain"), portMode);
 
   const workerOnly = metaHtml({ app: "jobs", routing: { RIKU_DOMAINS: "jobs.example" }, urls: [] }, undefined, false);
   assert.ok(workerOnly.includes("no domain") && !workerOnly.includes("href="), workerOnly);
+});
+
+test("a url the settings give but the route does not yet is a note to redeploy, not the link", () => {
+  const changed = metaHtml({
+    app: "clacktest",
+    urls: [{ url: "http://10.0.0.5:8100", label: "lan" }],
+    pending_urls: [{ url: "http://clacktest.10.0.0.5.example", label: "domain" }],
+  }, undefined, false);
+  assert.ok(changed.includes('href="http://10.0.0.5:8100"'), changed);
+  assert.ok(changed.includes("settings changed, redeploy to use http://clacktest.10.0.0.5.example"), changed);
+  assert.ok(!changed.includes('href="http://clacktest'), "the pending url is not linked: " + changed);
+
+  const same = metaHtml({ app: "qs-py", urls: [{ url: "http://10.0.0.5:8102", label: "lan" }], pending_urls: [] }, undefined, false);
+  assert.ok(!same.includes("settings changed"), same);
+
+  const evil = metaHtml({ app: "a", urls: [], pending_urls: [{ url: `http://x/${EVIL}`, label: "domain" }] }, undefined, false);
+  assertNoRawMarkup(evil);
 });
 
 test("a url is escaped, and one that is not http or https is not linked", () => {

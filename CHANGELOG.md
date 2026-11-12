@@ -85,6 +85,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `https = "plain_http_only"`), nginx skips the ACME request, and the push
   says `HTTP only: 10.0.0.5 is a private address, so no certificate can
   be issued`. Public addresses and patterns without `{ip}` are unchanged.
+- The dashboard showed the URL an app's current settings give, not the
+  one it answers on. After a settings change an app that had not
+  redeployed showed a new fallback name that only reached Caddy's default
+  page, while the app still answered on its old port. `/api/state` `urls`
+  now come from the route the last deploy applied, recorded in the
+  routing state (`domains` and `fallback` are new in each entry), and the
+  new `pending_urls` lists what the current settings give when that
+  differs; the card says "settings changed, redeploy to use <url>". A
+  domain mode app last routed before this release has no domains
+  recorded, so its card shows that note until its next deploy. The push
+  outro is unchanged.
 - Three more security tests checked only their own logic. The app
   directory traversal test now runs `riku apps create` with each
   traversing name and checks it is refused before anything is created.

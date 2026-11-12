@@ -217,6 +217,8 @@ fn seed_entry(paths: &RikuPaths) {
                 picked: false,
                 tls: None,
                 cert_for: None,
+                domains: Vec::new(),
+                fallback: false,
             },
         );
         Ok(())
@@ -313,6 +315,8 @@ fn fallback_with_a_pair_carries_the_fullchain() {
                 picked: false,
                 tls: Some(crate::router::routing_state::TlsState::Issued),
                 cert_for: Some("myapp.203.0.113.10.example".to_string()),
+                domains: vec!["myapp.203.0.113.10.example".to_string()],
+                fallback: true,
             },
         );
         Ok(())
