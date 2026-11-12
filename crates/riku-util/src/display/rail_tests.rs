@@ -11,7 +11,7 @@ fn plain_mode_renders_the_rail_without_escapes() {
         plain(Mark::Rail, "", ""),
         plain(Mark::Step, "Router", "caddy"),
         plain(Mark::Warn, "Fallback domain off", ""),
-        plain(Mark::Rail, "192.168.10.121 is private", ""),
+        plain(Mark::Rail, "10.0.0.5 is private", ""),
         plain(Mark::Error, "Build failed", "exit code 1"),
         plain(Mark::Outro, "Riku is ready", ""),
     ];
@@ -26,7 +26,7 @@ fn plain_mode_renders_the_rail_without_escapes() {
          │\n\
          ◇  Router  caddy\n\
          ▲  Fallback domain off\n\
-         │  192.168.10.121 is private\n\
+         │  10.0.0.5 is private\n\
          ■  Build failed  exit code 1\n\
          └  Riku is ready\n\
          \n   Router   caddy\

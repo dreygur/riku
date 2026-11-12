@@ -173,7 +173,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chosen or the helper is asked anything, in every routing mode, and the
   default backend is always `/run/riku-sockets/<app>.sock`.
 - The embedded dashboard showed "no domain" for an app reachable on a
-  port, such as a port mode app at `http://192.168.10.121:8102`, and
+  port, such as a port mode app at `http://10.0.0.5:8102`, and
   `/api/state` did not say where any app is live. `/api/state` now carries
   `urls`, the URLs a deploy prints, from the same code, each labelled
   `domain`, `lan` or `public`; the card links them and says "no domain"
@@ -413,7 +413,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   writes use, and a taken name is skipped, never removed.
 - The push summary showed a port or path mode URL on a private address
   (the detected LAN address when `routing.server_ip` is not set) like any
-  other URL. It is still shown, now as `http://192.168.10.121:8100 (LAN)`,
+  other URL. It is still shown, now as `http://10.0.0.5:8100 (LAN)`,
   so it is clear the link only works on the server's network. A public
   address has no label.
 - `scripts/install.sh` installed the download unverified, as root, when
@@ -536,7 +536,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   summary of a port or path mode app showed
   `http://<this server's address>:8100`. It now shows the address the
   server was detected to use, which may be private
-  (`http://192.168.10.121:8100`), and keeps the placeholder only when none
+  (`http://10.0.0.5:8100`), and keeps the placeholder only when none
   is found.
 - `riku restart --hot` on a Procfile app only rewrote the worker configs
   through their `workers-enabled` symlinks and sent no SIGHUP. A write
