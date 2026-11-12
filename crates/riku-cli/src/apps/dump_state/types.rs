@@ -52,6 +52,9 @@ pub struct AppStateEntry {
     pub routing: BTreeMap<String, String>,
     pub route: RouteState,
     pub workers: Vec<WorkerStateEntry>,
+    /// Whether any deploy of the app recorded a release. False for an app
+    /// that was created but whose deploys all failed.
+    pub released: bool,
     /// Why the app's config (riku.toml or ENV) could not be read; `routing`
     /// is then empty. Left out of the JSON when the config is fine.
     #[serde(skip_serializing_if = "Option::is_none")]

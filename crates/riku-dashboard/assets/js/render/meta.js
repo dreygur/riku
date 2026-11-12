@@ -62,15 +62,32 @@ export function metaHtml(a, cur, busy) {
 /**
  * @param {boolean} busy
  * @param {import("./workers.js").WorkerState[]} st
+ * @param {boolean} neverDeployed no deploy recorded a release and no worker exists
  */
-export function healthBadge(busy, st) {
+export function healthBadge(busy, st, neverDeployed) {
   const run = st.filter((s) => s.cls === "alive").length;
   const total = st.length;
   if (busy) { return badge("warn", I.spin + "Deploying"); }
+  if (neverDeployed) { return badge("", '<span class="g-ring"></span>Never deployed'); }
   if (!total || st.every((s) => s.cls === "off")) { return badge("", '<span class="g-ring"></span>Stopped'); }
   if (st.some((s) => s.cls === "dead")) { return badge("bad", `<span class="g-sq"></span>Degraded · ${run}/${total}`); }
   if (st.some((s) => s.cls === "warn")) { return badge("warn", `${I.spin}Starting · ${run}/${total}`); }
   return badge("ok", `<span class="g-sq"></span>Healthy · ${run}/${total}`);
+}
+
+/**
+ * Which app controls are locked. A deploy locks them all. An app never
+ * deployed has nothing to restart, stop or scale, so only Logs and Redeploy
+ * stay open. An app with no worker up (all stopped) has nothing to stop or
+ * scale; Restart and Redeploy bring it back.
+ * @param {boolean} busy
+ * @param {import("./workers.js").WorkerState[]} st
+ * @param {boolean} neverDeployed
+ */
+export function lockedControls(busy, st, neverDeployed) {
+  if (busy) { return { restart: true, redeploy: true, stop: true, scale: true }; }
+  const up = st.some((s) => s.cls !== "off");
+  return { restart: neverDeployed, redeploy: false, stop: !up, scale: !up };
 }
 
 /** @param {import("../state.js").Worker} w */

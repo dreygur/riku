@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { esc, uptimeText } from "../format.js";
 import { serviceControlsHtml } from "../render/containers.js";
-import { alertHtml, routeHtml } from "../render/meta.js";
+import { alertHtml, healthBadge, lockedControls, routeHtml } from "../render/meta.js";
 import { emptyHtml, pushHost } from "../render/panels.js";
 import { stateOf, workerRow } from "../render/workers.js";
 
@@ -44,6 +44,26 @@ test("a caddy site the deploy user cannot see reads as unknown, not off", () => 
   assert.ok(routeHtml({ router: "caddy", site: null, site_known: true }).includes("off"));
   assert.ok(routeHtml({ router: "nginx", config_exists: false, config_known: false, enabled: false }).includes("unknown"));
   assert.ok(routeHtml({ router: "nginx", config_exists: false, config_known: true, enabled: false }).includes("off"));
+});
+
+test("an app no deploy released reads as never deployed, with only logs and redeploy open", () => {
+  const badge = healthBadge(false, [], true);
+  assert.ok(badge.includes("Never deployed"), badge);
+  assert.deepEqual(lockedControls(false, [], true), { restart: true, redeploy: false, stop: true, scale: true });
+});
+
+test("a stopped app can restart or redeploy, but not stop or scale", () => {
+  const off = [stateOf("stopped")];
+  assert.ok(healthBadge(false, off, false).includes("Stopped"));
+  assert.deepEqual(lockedControls(false, off, false), { restart: false, redeploy: false, stop: true, scale: true });
+  const crashed = [stateOf("crashed")];
+  assert.equal(lockedControls(false, crashed, false).stop, false, "a crashing worker can still be stopped");
+});
+
+test("a running app has every control open until a deploy holds the lock", () => {
+  const live = [stateOf("running")];
+  assert.deepEqual(lockedControls(false, live, false), { restart: false, redeploy: false, stop: false, scale: false });
+  assert.deepEqual(lockedControls(true, live, false), { restart: true, redeploy: true, stop: true, scale: true });
 });
 
 test("the crash alert escapes the worker name in its data-worker attribute", () => {

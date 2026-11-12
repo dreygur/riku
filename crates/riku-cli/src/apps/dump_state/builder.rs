@@ -9,6 +9,7 @@ use riku_util::file_names::worker::WorkerName;
 
 use crate::config::RikuPaths;
 use crate::deploy::lock;
+use crate::deploy::releases::ReleaseLog;
 
 use super::route::route_state;
 use super::supervisor_files::{load_app_stats, supervisor_uptime, unix_timestamp_now};
@@ -140,6 +141,7 @@ pub fn build_app_entry(
         routing: extract_routing_fields(&env_map),
         route: route_state(app, paths),
         workers,
+        released: !ReleaseLog::new(paths).list(app).is_empty(),
         config_error,
     }
 }

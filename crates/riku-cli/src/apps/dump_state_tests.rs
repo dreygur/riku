@@ -97,6 +97,22 @@ fn test_build_app_entry_reports_lock_state() {
     assert!(matches!(held_entry.deploy_lock, LockState::Held));
 }
 
+/// An app whose first deploy failed has no release; the dashboard shows it
+/// as never deployed instead of stopped.
+#[test]
+fn released_says_whether_any_deploy_recorded_a_release() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+    let released = |paths: &RikuPaths| build_app_entry("shop", paths, &HashMap::new()).released;
+
+    assert!(!released(&paths), "no deploy recorded a release yet");
+    crate::deploy::releases::ReleaseLog::new(&paths)
+        .record("shop", "0123456789abcdef")
+        .unwrap();
+    assert!(released(&paths), "a recorded release counts");
+}
+
 /// The router helper writes `/etc/riku/nginx/<app>.conf`; a config left in
 /// the deploy user's own `nginx_root` is not one nginx loads.
 #[test]

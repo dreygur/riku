@@ -6,7 +6,7 @@ import { num } from "./format.js";
 import { loadReleases, renderReleases } from "./releases.js";
 import { cardHtml } from "./render/apps.js";
 import { serviceControlsHtml } from "./render/containers.js";
-import { alertHtml, healthBadge, metaHtml } from "./render/meta.js";
+import { alertHtml, healthBadge, lockedControls, metaHtml } from "./render/meta.js";
 import { stateOf, workerRow } from "./render/workers.js";
 import { syncScale } from "./scale.js";
 import { nextCardId } from "./state.js";
@@ -21,7 +21,7 @@ export function createCard(app) {
   el.setAttribute("aria-labelledby", id);
   el.innerHTML = cardHtml(id, app);
   /** @type {Card} */
-  const c = { app, id, el, data: null, releases: [], webNow: 0, scaleVal: null, wasBusy: false, svcScale: {} };
+  const c = { app, id, el, data: null, releases: [], webNow: 0, scaleVal: null, scaleLocked: false, wasBusy: false, svcScale: {} };
   wire(c);
   loadReleases(c);
   return c;
@@ -44,20 +44,28 @@ function renderControls(c, ws) {
 }
 
 /**
- * Locks the controls that must not run during a deploy, leaving any button
- * mid-action alone.
+ * Locks the controls that must not run now (see lockedControls), leaving
+ * any button mid-action alone.
  * @param {Card} c
- * @param {boolean} busy
+ * @param {boolean} busy a deploy holds the lock
+ * @param {ReturnType<typeof lockedControls>} locks
  */
-function lockForDeploy(c, busy) {
+function lockControls(c, busy, locks) {
   const el = c.el;
   /** @type {HTMLElement} */ (el.querySelector("[data-controls]")).hidden = busy;
   /** @type {HTMLElement} */ (el.querySelector("[data-busynote]")).hidden = !busy;
-  el.querySelectorAll('[data-do="restart"],[data-do="redeploy"],[data-do="stop"],[data-do="svc-restart"],[data-do="svc-stop"]').forEach((b) => {
-    if (!b.hasAttribute("aria-busy")) { /** @type {HTMLButtonElement} */ (b).disabled = busy; }
+  /** @param {string} sel @param {boolean} locked */
+  const lock = (sel, locked) => el.querySelectorAll(sel).forEach((b) => {
+    if (!b.hasAttribute("aria-busy")) { /** @type {HTMLButtonElement} */ (b).disabled = locked; }
   });
+  lock('[data-do="restart"]', locks.restart);
+  lock('[data-do="redeploy"]', locks.redeploy);
+  lock('[data-do="stop"]', locks.stop);
+  lock('[data-do="svc-restart"],[data-do="svc-stop"]', busy);
   const rb = /** @type {HTMLButtonElement} */ (el.querySelector('[data-do="rollback"]'));
   if (rb && !rb.hasAttribute("aria-busy")) { rb.disabled = busy || c.releases.length < 2; }
+  c.scaleLocked = locks.scale;
+  syncScale(c);
 }
 
 /**
@@ -76,7 +84,8 @@ export function updateCard(c, a) {
   const st = ws.map((w) => stateOf(w.status));
   const dead = st.filter((s) => s.cls === "dead").length;
 
-  el.querySelector("[data-health]").innerHTML = healthBadge(busy, st);
+  const neverDeployed = a.released === false && !ws.length;
+  el.querySelector("[data-health]").innerHTML = healthBadge(busy, st, neverDeployed);
   el.classList.toggle("is-busy", busy);
   el.classList.toggle("is-bad", !busy && dead > 0);
   el.setAttribute("aria-busy", busy ? "true" : "false");
@@ -97,5 +106,5 @@ export function updateCard(c, a) {
     : '<div class="tr empty-row" role="row"><span role="cell">No workers running.</span></div>';
 
   renderControls(c, ws);
-  lockForDeploy(c, busy);
+  lockControls(c, busy, lockedControls(busy, st, neverDeployed));
 }

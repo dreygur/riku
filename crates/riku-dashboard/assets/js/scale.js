@@ -27,12 +27,15 @@ export function syncScale(c, keepInput) {
   const apply = /** @type {HTMLButtonElement} */ (el.querySelector('[data-do="scale"]'));
   const reset = /** @type {HTMLButtonElement} */ (el.querySelector('[data-do="reset"]'));
   if (!input || !apply || !reset) { return; }
+  const locked = c.scaleLocked;
+  if (locked) { c.scaleVal = null; }
   const val = c.scaleVal == null ? c.webNow : c.scaleVal;
   const dirty = c.scaleVal != null;
   if (!keepInput) { input.value = String(val); }
+  input.disabled = locked;
   el.querySelector("[data-stepper]").classList.toggle("dirty", dirty);
-  /** @type {HTMLButtonElement} */ (el.querySelector('[data-step="-1"]')).disabled = val <= 0;
-  /** @type {HTMLButtonElement} */ (el.querySelector('[data-step="1"]')).disabled = val >= MAX_SCALE;
+  /** @type {HTMLButtonElement} */ (el.querySelector('[data-step="-1"]')).disabled = locked || val <= 0;
+  /** @type {HTMLButtonElement} */ (el.querySelector('[data-step="1"]')).disabled = locked || val >= MAX_SCALE;
   reset.hidden = !dirty;
   if (apply.hasAttribute("aria-busy")) { return; }
   apply.disabled = !dirty;

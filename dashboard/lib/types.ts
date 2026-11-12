@@ -35,6 +35,8 @@ export interface AppState {
   routing: Record<string, string>; // RIKU_DOMAINS, RIKU_HTTPS_ONLY, ...
   route: RouteState;
   workers: Worker[];
+  /** False while no deploy of the app has recorded a release. */
+  released: boolean;
 }
 
 export interface RikuState {

@@ -46,6 +46,7 @@
  * @property {Record<string, string>} [routing]
  * @property {Route} [route]
  * @property {string} [deploy_lock] "held" while a deploy runs
+ * @property {boolean} [released] false while no deploy has recorded a release
  */
 
 /**
@@ -69,6 +70,7 @@
  * @property {Release[]} releases newest first
  * @property {number} webNow web workers running now
  * @property {number | null} scaleVal pending web scale, null when unchanged
+ * @property {boolean} scaleLocked scaling is off: a deploy runs, or no worker is up
  * @property {boolean} wasBusy
  * @property {Record<string, number>} svcScale pending copies per container service
  */

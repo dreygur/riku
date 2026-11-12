@@ -80,6 +80,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deploy now say so and name the two choices: add the deploy user to the
   docker group (root-equivalent) or use rootless podman. A container
   deploy checks the engine before it runs any hook or changes the env.
+- The embedded dashboard showed an app whose first deploy failed as
+  "Stopped", with Restart, Stop app and scaling active. `/api/state` now
+  carries `released`, and such an app shows "Never deployed" with only
+  Logs and Redeploy open. On a stopped app, Stop app and scaling are
+  disabled until a worker is up again.
 - Under Caddy, the dashboard and `riku apps info` showed every app as
   having no site, because the deploy user cannot read the root owned
   `/etc/riku/caddy`. They now say the site is unknown. For the same reason
