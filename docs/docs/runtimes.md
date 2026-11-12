@@ -507,8 +507,17 @@ services:
 
 On deploy riku logs in to the configured registry (see
 [GHCR authentication](#ghcr-authentication) below), pulls the `image`
-services, builds the `build` services, then replaces each service's
-containers in start order (see [Rolling replacement](#rolling-replacement)).
+services, builds the `build` services, then replaces the containers of each
+service that changed, in start order (see
+[Rolling replacement](#rolling-replacement)). A service is unchanged, and
+keeps running untouched, when all of its copies are up, there are as many as
+`SCALING` asks for, and each was started with exactly what the deploy would
+start it with now: the same image id (a rebuilt or newly pulled image under
+the same tag counts as a change), env, command, ports, mounts, labels,
+health check and the rest. The push prints `Keeping <service> (unchanged)`
+for each one. Containers started by a riku before this check carry no
+`riku.spec` label and are replaced once, as is every container after a riku
+upgrade that changes how the spec is recorded.
 Every copy is its own container, named `<app>.<service>.<n>`, on the app's
 network `riku-<app>`, where the other services reach it by its service name.
 Service names may not contain `.`, so no two apps can share a container name.
@@ -529,8 +538,11 @@ it is not replaced again by the same deploy. The release still runs before
 any routed copy is replaced. Its stdout and stderr print on the push output. A nonzero exit stops the
 deploy, and the last lines of output go to `riku logs <app> --deploy`.
 
-App env values are passed to every container, except `RIKU_*` keys, which
-configure riku itself. A service's own `environment` wins over the app env.
+App env values are passed to every container, pulled images such as
+`redis` included, except `RIKU_*` keys, which configure riku itself. A
+service's own `environment` wins over the app env. So a `riku config set`
+changes every service's env, and the deploy it starts replaces every
+service.
 
 `riku destroy` stops and removes every copy and the app network and keeps
 the volumes. When the engine does not answer, destroy refuses and removes
@@ -576,6 +588,7 @@ one of them is refused:
 | `riku.copy` | The copy number, from 1 |
 | `riku.port` | The host port riku published for the routed service |
 | `riku.restart` | The compose `restart` policy, which the supervisor applies. The engine's own restart policy stays off |
+| `riku.spec` | A sha256 of everything the copy was started with except its image id. A deploy compares it to keep unchanged services running |
 
 ### Scaling
 
@@ -623,8 +636,8 @@ only after every copy of that dependency passes its engine health check.
 
 ### Rolling replacement
 
-Every deploy, `riku restart` and image watch update replaces copies one at a
-time. How depends on the service:
+Every deploy (for the services that changed), `riku restart` and image watch
+update replaces copies one at a time. How depends on the service:
 
 - The routed service without writable storage overlaps. For each old copy,
   riku starts a new one, waits for it to be healthy, adds it to the router,
@@ -660,7 +673,7 @@ stopped sending it new requests by then.
 
 A service that mounts writable storage never scales and always stops first,
 since two copies must not write the same data. It is down on every deploy
-and every `riku restart` that includes it, from the moment the old copy
+that changes it and every `riku restart` that includes it, from the moment the old copy
 stops until the new one is healthy: up to 120 seconds with a compose
 healthcheck. Services that depend on it with `service_healthy` wait for it.
 Use `riku restart <app> <service>` to restart only the services that need

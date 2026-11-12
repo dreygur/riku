@@ -37,6 +37,7 @@ fn restart_is_logged_with_app_service_copy_exit_code_and_count() {
         image_id: "sha256:test".to_string(),
         host_port: None,
         restart: Some("unless-stopped".to_string()),
+        spec: None,
         state: ContainerState::Exited { code: 137 },
     };
     let mut tally = RestartTally::new();

@@ -44,6 +44,7 @@ fn apply_labels(_: &ServiceContext, fields: &Mapping, service: &mut ServiceDef) 
         labels::COPY,
         labels::PORT,
         labels::RESTART,
+        labels::SPEC,
     ]
     .into_iter()
     .find(|reserved| service.labels.contains_key(*reserved))

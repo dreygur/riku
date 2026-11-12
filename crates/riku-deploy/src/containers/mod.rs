@@ -14,6 +14,7 @@
 #![allow(clippy::question_mark)]
 
 mod app;
+mod changes;
 mod context;
 mod control;
 mod copy_restart;

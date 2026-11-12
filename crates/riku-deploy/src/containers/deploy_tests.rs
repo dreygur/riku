@@ -40,6 +40,7 @@ fn redeploy_keeps_old_copy_on_failure() {
     let site_before = server.site("myapp");
     assert!(site_before.contains("reverse_proxy"), "{site_before}");
     server.mark("exits", "web");
+    std::fs::write(server.state.join("image-id"), "sha256:new\n").unwrap();
 
     let err = deploy(&server).unwrap_err();
 

@@ -180,6 +180,7 @@ fn into_info(raw: RawContainer) -> std::result::Result<ContainerInfo, Unreadable
         id,
         app: riku.app,
         restart: label_map.get(labels::RESTART).cloned(),
+        spec: label_map.get(labels::SPEC).cloned(),
         host_port,
         name,
         service: riku.service,

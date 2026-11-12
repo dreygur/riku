@@ -95,6 +95,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `depends_on`, now start first when none of their copies is up; one that
   already runs is left alone, and one started for the release is not
   replaced again by that deploy.
+- A container app deploy replaced every container, so a change to one
+  service (or a routing setting) restarted the database too and took
+  minutes. A deploy now replaces only services whose running copies differ
+  from what it would start: image id, env, command, ports, mounts, labels,
+  health check and the rest, recorded in a new `riku.spec` label. Kept
+  services print `Keeping <service> (unchanged)`, and a kept routed
+  service's backends are published again so routing changes still apply.
+  App env still reaches every service, pulled ones included, as the docs
+  say, so `riku config set` still replaces them all. Containers from an
+  older riku carry no label and are replaced once.
 - `riku ps <app> --scale web=2` for a kind `SCALING` did not list yet (an
   app whose first deploy failed) started 3 copies: the count was added to
   the default of one. A kind missing from `SCALING` now starts from 0.

@@ -9,8 +9,9 @@ use riku_container::engine::ContainerId;
 use super::app::wanted;
 use super::context::ContainerApp;
 use crate::rolling::health::{wait_healthy, HealthTarget};
-use crate::rolling::{replace_all, CopyHandle, CopyRuntime};
+use crate::rolling::{replace_all, CopyHandle, CopyRuntime, RouteSink};
 use crate::util::display;
+use riku_util::backend::Backend;
 
 fn copies_word(n: u32) -> &'static str {
     if n == 1 {
@@ -80,6 +81,27 @@ fn roll_service(ctx: &ContainerApp, service: &ServiceDef, want: u32) -> Result<(
     let mut routes = ctx.routes(&service.name);
     let order = replace_order(&ctx.project, &service.name);
     match replace_all(&mut runtime, &mut routes, order, want) {
+        Ok(()) => Ok(()),
+        Err(e) => Err(e.context(format!("service '{}'", service.name))),
+    }
+}
+
+/// Publish the backends of the running copies of a routed `service` again,
+/// so a routing setting change reaches the router when a deploy keeps the
+/// copies. Nothing happens for an unrouted service or one with no backend.
+pub(super) fn republish_routes(ctx: &ContainerApp, service: &ServiceDef) -> Result<()> {
+    if !ctx.is_routed(&service.name) {
+        return Ok(());
+    }
+    let copies = match ctx.runtime(service).live() {
+        Ok(copies) => copies,
+        Err(e) => return Err(e),
+    };
+    let backends: Vec<Backend> = copies.into_iter().filter_map(|c| c.backend).collect();
+    if backends.is_empty() {
+        return Ok(());
+    }
+    match ctx.routes(&service.name).publish(&backends) {
         Ok(()) => Ok(()),
         Err(e) => Err(e.context(format!("service '{}'", service.name))),
     }

@@ -22,6 +22,7 @@ fn running_copy() -> ContainerInfo {
         image_id: "sha256:test".to_string(),
         host_port: None,
         restart: None,
+        spec: None,
         state: ContainerState::Running,
     }
 }

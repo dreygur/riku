@@ -1,5 +1,5 @@
-//! Deploying a container app: build or pull its images, then replace every
-//! service's copies in start order.
+//! Deploying a container app: build or pull its images, then replace the
+//! copies of every service that changed, in start order.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -8,16 +8,17 @@ use riku_container::compose::{check_scale, ComposeProject, ServiceDef};
 use riku_container::types::ServiceName;
 
 use super::app::{read_scaling, wanted};
+use super::changes::changed_services;
 use super::context::ContainerApp;
 use super::procfile_workers::ProcfileWorkers;
 use super::release::run_release;
 use super::removal::remove_dropped;
 use super::retire::retire_procfile_workers;
-use super::rollout::roll_out;
+use super::rollout::{republish_routes, roll_out};
 use super::{prepare_images, AppName};
 use crate::config::RikuPaths;
 use crate::supervisor_ctl::notify_supervisor_reload;
-use crate::util::display::OutputTail;
+use crate::util::display::{self, OutputTail};
 
 /// The runtime name hooks receive for container apps.
 pub const CONTAINER_RUNTIME: &str = "container";
@@ -70,18 +71,53 @@ fn prepare(ctx: &ContainerApp, recent: &OutputTail) -> Result<Prepared> {
     }
 }
 
-/// Replace the copies of every service the release did not just start,
-/// remove containers of dropped services, and take an app with no routed
-/// port off the router.
-fn roll_out_app(ctx: &ContainerApp, prepared: &Prepared) -> Result<()> {
-    let counts = &prepared.counts;
-    let services: Vec<&ServiceDef> = ctx
+/// The services the release did not just start, split into those whose
+/// running copies differ from what this deploy starts and those it keeps.
+fn split_changed<'a>(
+    ctx: &'a ContainerApp,
+    prepared: &Prepared,
+) -> Result<(Vec<&'a ServiceDef>, Vec<&'a ServiceDef>)> {
+    let candidates: Vec<&ServiceDef> = ctx
         .project
         .services
         .iter()
         .filter(|s| !prepared.started.contains(&s.name))
         .collect();
-    if let Err(e) = roll_out(ctx, counts, &services) {
+    let changed = match changed_services(ctx, &prepared.counts, candidates.clone()) {
+        Ok(changed) => changed,
+        Err(e) => return Err(e),
+    };
+    let kept = candidates
+        .into_iter()
+        .filter(|s| !changed.iter().any(|c| c.name == s.name))
+        .collect();
+    Ok((changed, kept))
+}
+
+/// Says each kept service is unchanged and publishes a kept routed
+/// service's backends again, so routing setting changes still apply.
+fn keep_services(ctx: &ContainerApp, kept: &[&ServiceDef]) -> Result<()> {
+    for service in kept {
+        display::step_done(&format!("Keeping {} (unchanged)", service.name), "");
+        if let Err(e) = republish_routes(ctx, service) {
+            return Err(e);
+        }
+    }
+    Ok(())
+}
+
+/// Replace the copies of every service that changed, keep the others,
+/// remove containers of dropped services, and take an app with no routed
+/// port off the router.
+fn roll_out_app(ctx: &ContainerApp, prepared: &Prepared) -> Result<()> {
+    let (changed, kept) = match split_changed(ctx, prepared) {
+        Ok(split) => split,
+        Err(e) => return Err(e),
+    };
+    if let Err(e) = roll_out(ctx, &prepared.counts, &changed) {
+        return Err(e);
+    }
+    if let Err(e) = keep_services(ctx, &kept) {
         return Err(e);
     }
     if let Err(e) = remove_dropped(&ctx.engine, ctx.app.as_str(), &ctx.project) {
@@ -97,9 +133,10 @@ fn roll_out_app(ctx: &ContainerApp, prepared: &Prepared) -> Result<()> {
 ///
 /// Every service's copy count
 /// comes from `SCALING` (1 when absent) and is checked before anything is
-/// built. Services are replaced in start order, one copy at a time; a
-/// service with `service_healthy` dependencies starts only once their copies
-/// are healthy. A failure stops the deploy and leaves the copies not yet
+/// built. Only services whose running copies differ from what the deploy
+/// starts (see [`super::changes`]) are replaced, in start order, one copy at
+/// a time; the others keep running. A service with `service_healthy`
+/// dependencies starts only once their copies are healthy. A failure stops the deploy and leaves the copies not yet
 /// replaced serving. Containers of services the compose file no longer has
 /// are removed, and an app with no routed port is taken off the router. An app
 /// that ran as a Procfile app has its old workers stopped and deleted once the

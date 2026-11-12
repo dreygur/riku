@@ -57,6 +57,9 @@ pub struct ContainerInfo {
     pub host_port: Option<u16>,
     /// The `riku.restart` label as written; `None` when absent.
     pub restart: Option<String>,
+    /// The `riku.spec` label as written; `None` when absent, as on a
+    /// container riku started before it set the label.
+    pub spec: Option<String>,
     pub state: ContainerState,
 }
 

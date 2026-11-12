@@ -3,7 +3,7 @@
 //! # Security model
 //!
 //! The compose parser already refuses the labels riku sets itself (app,
-//! service, copy, port, restart). The compose project label is dropped here,
+//! service, copy, port, restart, spec). The compose project label is dropped here,
 //! so a service cannot join another project's `list_project` results. App env
 //! entries named `RIKU_*` configure riku itself (registry credentials, for
 //! one) and are not passed on.
@@ -16,6 +16,7 @@ use riku_container::engine::{PullPolicy, RunSpec};
 use riku_container::types::{
     labels, ContainerName, CopyIndex, NetworkName, PortBinding, RestartPolicy,
 };
+use sha2::{Digest, Sha256};
 
 use super::images::build_tag;
 use super::AppName;
@@ -85,7 +86,8 @@ fn copy_env(app_env: &BTreeMap<String, String>, service: &ServiceDef) -> BTreeMa
     env
 }
 
-/// The run spec for copy `copy` of `service`.
+/// The run spec for copy `copy` of `service`, labelled with the service's
+/// [`spec_fingerprint`].
 ///
 /// `host_port` replaces the host port of the routed binding so every copy of
 /// the routed service listens on its own port; it is ignored for other
@@ -93,6 +95,58 @@ fn copy_env(app_env: &BTreeMap<String, String>, service: &ServiceDef) -> BTreeMa
 /// overlaid by the service's own `environment`. A service with a `build` runs
 /// the image tagged by `build_tag`, otherwise its `image`.
 pub fn copy_spec(
+    app: &AppName,
+    project: &ComposeProject,
+    service: &ServiceDef,
+    copy: CopyIndex,
+    host_port: Option<u16>,
+    env: &BTreeMap<String, String>,
+) -> Result<RunSpec> {
+    let fingerprint = match spec_fingerprint(app, project, service, env) {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => return Err(e),
+    };
+    let mut spec = match bare_spec(app, project, service, copy, host_port, env) {
+        Ok(spec) => spec,
+        Err(e) => return Err(e),
+    };
+    spec.labels.insert(labels::SPEC.to_string(), fingerprint);
+    Ok(spec)
+}
+
+/// A sha256 over everything a copy of `service` starts with apart from its
+/// image id: image reference, env values, labels, ports, mounts, command,
+/// health check and the rest. Every copy of a service gets the same value,
+/// since it is taken from copy 1 without a picked host port.
+///
+/// It is stored in the `riku.spec` label. Anyone who can read the label can
+/// read the container's env from the engine too, so it exposes nothing new.
+pub(crate) fn spec_fingerprint(
+    app: &AppName,
+    project: &ComposeProject,
+    service: &ServiceDef,
+    env: &BTreeMap<String, String>,
+) -> Result<String> {
+    let first = match CopyIndex::new(1) {
+        Some(copy) => copy,
+        None => return Err(anyhow!("copy index 1 was refused")),
+    };
+    let spec = match bare_spec(app, project, service, first, None, env) {
+        Ok(spec) => spec,
+        Err(e) => return Err(e),
+    };
+    let mut hasher = Sha256::new();
+    hasher.update(format!("{spec:?}").as_bytes());
+    for (name, value) in &spec.env {
+        hasher.update(name.as_bytes());
+        hasher.update([0u8]);
+        hasher.update(value.as_bytes());
+        hasher.update([0u8]);
+    }
+    Ok(hex::encode(hasher.finalize()))
+}
+
+fn bare_spec(
     app: &AppName,
     project: &ComposeProject,
     service: &ServiceDef,
