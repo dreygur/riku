@@ -14,6 +14,10 @@ case "$CMD" in
 
   build)
     cd "$APP_PATH"
+    if ! command -v nub >/dev/null 2>&1 && ! command -v npm >/dev/null 2>&1; then
+      echo "Node.js is not installed on this server (npm not found). Install Node.js, then push again." >&2
+      exit 1
+    fi
     # RIKU_NODE_VERSION (riku.toml [runtime] version) names a major, a
     # major.minor or an exact version. riku uses the server's node, so a
     # mismatch fails here rather than running the app on the wrong one.

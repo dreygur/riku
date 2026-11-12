@@ -128,7 +128,8 @@ npm install -g @nubjs/nub
 
 Without nub, Riku falls back to `npm` (`npm ci` / `npm install`) so existing
 deployments keep working, and prints how to install nub. `riku doctor` warns
-while nub is missing.
+while nub is missing. With neither nub nor npm on the server, the build stops
+with `Node.js is not installed on this server (npm not found)`.
 
 ### Environment Variables
 

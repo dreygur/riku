@@ -165,8 +165,10 @@ fn riku_notify_keeps_its_bundle_layout() {
 }
 
 /// Run the shipped node plugin's `build` with a mock `node` that reports
-/// `installed` and a mock `npm`. Returns the exit status and stderr.
-fn node_build(wanted: Option<&str>, installed: &str) -> (bool, String) {
+/// `installed` and, when `with_npm`, a mock `npm`. PATH holds only the mocks
+/// and bash, so a node, npm or nub on the host cannot leak in. Returns the
+/// exit status and stderr.
+fn node_build(wanted: Option<&str>, installed: &str, with_npm: bool) -> (bool, String) {
     let tmp = tempfile::tempdir().unwrap();
     let plugins = tmp.path().join("plugins");
     let bin = tmp.path().join("bin");
@@ -176,10 +178,12 @@ fn node_build(wanted: Option<&str>, installed: &str) -> (bool, String) {
     }
     write_out(find("node").unwrap(), &plugins).unwrap();
     std::fs::write(app.join("package.json"), "{}").unwrap();
-    for (name, body) in [
-        ("node", format!("echo v{installed}")),
-        ("npm", String::new()),
-    ] {
+    std::os::unix::fs::symlink("/bin/bash", bin.join("bash")).unwrap();
+    let mut tools = vec![("node", format!("echo v{installed}"))];
+    if with_npm {
+        tools.push(("npm", String::new()));
+    }
+    for (name, body) in tools {
         let tool = bin.join(name);
         std::fs::write(&tool, format!("#!/bin/sh\n{body}\n")).unwrap();
         std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -188,7 +192,7 @@ fn node_build(wanted: Option<&str>, installed: &str) -> (bool, String) {
     command
         .arg("build")
         .env_clear()
-        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+        .env("PATH", &bin)
         .env("HOME", tmp.path())
         .env("RIKU_APP_PATH", &app);
     if let Some(wanted) = wanted {
@@ -204,17 +208,67 @@ fn node_build(wanted: Option<&str>, installed: &str) -> (bool, String) {
 #[test]
 fn node_version_matches_on_whole_version_parts() {
     for wanted in ["22", "v22", "22.x", "22.11", "22.11.x", "22.11.1"] {
-        let (ok, stderr) = node_build(Some(wanted), "22.11.1");
+        let (ok, stderr) = node_build(Some(wanted), "22.11.1", true);
         assert!(ok, "{wanted} should match 22.11.1: {stderr}");
     }
-    let (ok, _) = node_build(None, "18.0.0");
+    let (ok, _) = node_build(None, "18.0.0", true);
     assert!(ok, "no version set builds with any node");
+}
+
+#[test]
+fn a_server_without_npm_or_nub_fails_the_build_saying_node_is_missing() {
+    let (ok, stderr) = node_build(None, "22.11.1", false);
+
+    assert!(!ok, "a build with no package manager must fail");
+    assert!(
+        stderr.contains("Node.js is not installed on this server (npm not found)"),
+        "{stderr}"
+    );
+    assert!(
+        !stderr.contains("nub") && !stderr.contains("command not found"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn python_and_go_builds_without_their_toolchain_say_it_is_missing() {
+    for (plugin, marker, wanted) in [
+        (
+            "python",
+            "requirements.txt",
+            "Python is not installed on this server",
+        ),
+        ("go", "go.mod", "Go is not installed on this server"),
+    ] {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
+        let app = tmp.path().join("app");
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::create_dir_all(&app).unwrap();
+        write_out(find(plugin).unwrap(), tmp.path()).unwrap();
+        std::fs::write(app.join(marker), "").unwrap();
+        std::os::unix::fs::symlink("/bin/bash", bin.join("bash")).unwrap();
+
+        let output = std::process::Command::new(tmp.path().join(plugin))
+            .arg("build")
+            .env_clear()
+            .env("PATH", &bin)
+            .env("HOME", tmp.path())
+            .env("RIKU_APP_PATH", &app)
+            .output()
+            .unwrap();
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "{plugin} built with no toolchain");
+        assert!(stderr.contains(wanted), "{plugin}: {stderr}");
+        assert!(!stderr.contains("command not found"), "{plugin}: {stderr}");
+    }
 }
 
 #[test]
 fn a_node_version_mismatch_fails_the_build_naming_both() {
     for wanted in ["20", "2", "22.1"] {
-        let (ok, stderr) = node_build(Some(wanted), "22.11.1");
+        let (ok, stderr) = node_build(Some(wanted), "22.11.1", true);
 
         assert!(!ok, "{wanted} must not match 22.11.1");
         assert!(

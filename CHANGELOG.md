@@ -62,6 +62,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `routing.static = true` is the switch, and only nginx serves them. The
   docs now say so, and a deploy of an app with `routing.static` set and no
   matching runtime says static files need a runtime.
+- The node plugin on a server without Node.js printed the nub install hint
+  and then died with `npm: command not found`. It now stops with one line
+  saying Node.js is not installed. The python plugin (no uv, no python3)
+  and the go plugin (no go) say the same for their toolchain.
 - `sudo riku init` without `--ssh-key` warned "No deploy key added" on a
   server that already had deploy keys. It now reports how many are
   authorized and warns only when there are none.

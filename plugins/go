@@ -16,6 +16,10 @@ case "$CMD" in
 
   build)
     cd "$APP_PATH"
+    if ! command -v go >/dev/null 2>&1; then
+      echo "Go is not installed on this server (go not found). Install Go, then push again." >&2
+      exit 1
+    fi
     if [ -f "go.mod" ]; then
       go mod download
     fi
