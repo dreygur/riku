@@ -33,9 +33,12 @@ const SOCKET_CHOICE: &str = "The deploy user cannot open the engine's socket. Ch
 
 impl EngineUnreachable {
     /// Whether the engine failed because this user may not open its socket.
+    /// Older docker says "daemon socket"; docker 29 names only the path,
+    /// such as `unix:///var/run/docker.sock`.
     fn socket_refused(&self) -> bool {
         let reason = self.reason.to_lowercase();
-        reason.contains("permission denied") && reason.contains("socket")
+        reason.contains("permission denied")
+            && (reason.contains("socket") || reason.contains(".sock"))
     }
 }
 
