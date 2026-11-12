@@ -40,6 +40,25 @@ fn removes_the_repo_link_but_not_the_repo_it_points_to() {
 }
 
 #[test]
+fn destroy_removes_the_repo_that_create_and_a_dot_git_push_make() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut paths = RikuPaths::for_tests(tmp.path());
+    use_mock_caddy(&mut paths);
+    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+    let repo = paths.git_root.join("shop.git");
+    fs::create_dir_all(repo.join("refs")).unwrap();
+    fs::write(repo.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+
+    cmd_destroy(&paths, "shop", DestroyMode::Safe).unwrap();
+
+    assert!(
+        fs::symlink_metadata(&repo).is_err(),
+        "repo {} survived destroy",
+        repo.display()
+    );
+}
+
+#[test]
 fn destroy_removes_the_published_static_files() {
     let tmp = tempfile::tempdir().unwrap();
     let mut paths = RikuPaths::for_tests(tmp.path());

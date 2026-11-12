@@ -34,13 +34,15 @@ fn remove_file(path: &Path) -> Result<()> {
     }
 }
 
-/// The `repos/<app>.git` symlink the hook made for a push to `repos/<app>`.
-/// Only the link goes here; `repos/<app>` is removed with the other app
-/// directories.
-fn remove_repo_link(paths: &RikuPaths, app: &str) -> Result<()> {
-    let link = paths.git_root.join(format!("{app}.git"));
-    match fs::symlink_metadata(&link) {
-        Ok(meta) if meta.file_type().is_symlink() => remove_file(&link),
+/// `repos/<app>.git`: the repo `riku apps create` and a push to `<app>.git`
+/// make, or the symlink the hook made for a push to `repos/<app>`. A link is
+/// removed, never followed, so its target survives. `repos/<app>` is removed
+/// with the other app directories.
+fn remove_dot_git_repo(paths: &RikuPaths, app: &str) -> Result<()> {
+    let repo = paths.git_root.join(format!("{app}.git"));
+    match fs::symlink_metadata(&repo) {
+        Ok(meta) if meta.file_type().is_symlink() => remove_file(&repo),
+        Ok(meta) if meta.is_dir() => remove_dir(&repo),
         _ => Ok(()),
     }
 }
@@ -87,14 +89,14 @@ fn remove_acme_certs(paths: &RikuPaths, app: &str) -> Result<()> {
     Ok(())
 }
 
-/// Delete worker configs, the repo link, the env, git and log directories,
+/// Delete worker configs, `repos/<app>.git`, the env, git and log directories,
 /// the ACME certs and the published static files, then `apps/<app>` last.
 #[allow(clippy::question_mark)]
 pub(super) fn remove_app_files(paths: &RikuPaths, app: &str) -> Result<()> {
     if let Err(e) = remove_worker_configs(paths, app) {
         return Err(e);
     }
-    if let Err(e) = remove_repo_link(paths, app) {
+    if let Err(e) = remove_dot_git_repo(paths, app) {
         return Err(e);
     }
     for dir in [&paths.env_root, &paths.git_root, &paths.log_root] {

@@ -60,6 +60,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `riku destroy` left the bare repo `~/.riku/repos/<app>.git` behind when
+  it was a real directory, the one `riku apps create` and a push to
+  `<app>.git` make. It removed only a symlink there. It now removes that
+  directory too; a symlink is still removed without following it.
 - The first deploy hint (`riku apps`, `riku apps create`) and the
   `riku deploy --from` git hint printed their follow up lines as
   `▲    ...`; they are now `│` lines under the warning, on the same stream.
