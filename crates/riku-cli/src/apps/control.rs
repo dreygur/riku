@@ -1,20 +1,29 @@
 use anyhow::Result;
 use std::collections::HashMap;
+use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 
 use super::control_target::{control_target, whole_procfile_app, ControlTarget};
 
 use crate::config::RikuPaths;
 use crate::supervisor::Supervisor;
+use crate::util::resource_limits::ResourceLimits;
 use crate::util::{display, exit_if_invalid, parse_settings};
 
-/// Run a command in the app context with LIVE_ENV loaded.
+/// Run a command in the app context with LIVE_ENV loaded, under the server
+/// resource limits with the app's own `RIKU_MAX_*` values put over them.
+#[allow(clippy::question_mark)]
 pub fn cmd_run(paths: &RikuPaths, app: &str, cmd: &[String]) -> Result<()> {
-    let app = exit_if_invalid(app, &paths.app_root)?;
+    let app = match exit_if_invalid(app, &paths.app_root) {
+        Ok(app) => app,
+        Err(e) => return Err(e),
+    };
 
     let config_file = paths.env_root.join(&app).join("LIVE_ENV");
     let mut env = HashMap::new();
-    parse_settings(&config_file, &mut env)?;
+    if let Err(e) = parse_settings(&config_file, &mut env) {
+        return Err(e);
+    }
 
     let app_dir = paths.app_root.join(&app);
 
@@ -22,16 +31,24 @@ pub fn cmd_run(paths: &RikuPaths, app: &str, cmd: &[String]) -> Result<()> {
         anyhow::bail!("no command specified for 'riku run'");
     }
 
+    let limits = ResourceLimits::from_env().with_app_env(&env);
     // Exec the binary directly rather than rejoining into `sh -c` to avoid
     // shell injection via metacharacters in the command arguments.
-    let mut child = Command::new(&cmd[0])
+    let mut command = Command::new(&cmd[0]);
+    command
         .args(&cmd[1..])
         .current_dir(&app_dir)
         .envs(&env)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()?;
+        .stderr(Stdio::inherit());
+    unsafe {
+        command.pre_exec(move || limits.apply());
+    }
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(e) => return Err(e.into()),
+    };
 
     let status = match child.wait() {
         Ok(status) => status,

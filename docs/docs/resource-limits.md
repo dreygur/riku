@@ -42,7 +42,8 @@ The server wide limits come from the environment of the process that starts
 the command. The supervisor reads these variables once, at startup, for
 every worker and cron job of every app. A build and the Procfile
 `preflight` and `release` commands read them from the riku process that
-runs the deploy. `riku run` applies none of these limits.
+runs the deploy. `riku run` reads them from the riku process that runs the
+command.
 
 An app can set its own value for any of them with the `limits.max_*` keys
 of `riku settings` (see [riku.toml](riku-toml.md)):
@@ -60,7 +61,7 @@ riku settings set myapp limits.max_open_files=4096 limits.max_cpu_seconds=7200
 | `limits.max_file_size_mb` | `RIKU_MAX_FILE_SIZE_MB` |
 
 A value the app sets replaces the server wide one for that app's workers,
-cron jobs, builds and `preflight` and `release` commands, in either
+cron jobs, builds, `preflight` and `release` commands and `riku run`, in either
 direction. A limit the app does not set keeps the server wide value. `set`
 redeploys the app, so the new limits apply from that deploy. Core dumps
 have no per app key. `limits.max_processes` is still UID-wide, as described

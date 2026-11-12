@@ -28,6 +28,27 @@ fn run_succeeds_for_a_passing_command() {
     assert!(result.is_ok(), "riku run failed: {result:?}");
 }
 
+#[test]
+fn run_applies_the_open_files_limit_the_app_sets() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+    fs::create_dir_all(paths.env_root.join("shop")).unwrap();
+    fs::write(
+        paths.env_root.join("shop").join("LIVE_ENV"),
+        "RIKU_MAX_OPEN_FILES=64\n",
+    )
+    .unwrap();
+
+    let command = ["sh", "-c", "test \"$(ulimit -n)\" = 64"].map(String::from);
+    let result = cmd_run(&paths, "shop", &command);
+
+    assert!(
+        result.is_ok(),
+        "the command must see the app's RIKU_MAX_OPEN_FILES=64 as ulimit -n: {result:?}"
+    );
+}
+
 /// A runtime plugin that takes any app and leaves `built` in the checkout
 /// when its `build` runs.
 const PLUGIN: &str = "#!/bin/sh\n[ \"$1\" = build ] && touch \"$RIKU_APP_PATH/built\"\nexit 0\n";
