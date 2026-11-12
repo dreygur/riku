@@ -42,3 +42,29 @@ fn hook_passes_app_and_repo_to_the_binary() {
         "mock riku got {called:?}"
     );
 }
+
+/// Without the binary the push fails with one rail error line, not the old
+/// ` !     ` prefix.
+#[test]
+fn hook_without_the_binary_fails_with_a_rail_error_line() {
+    let home = tempfile::tempdir().unwrap();
+    let missing = home.path().join("no-riku");
+    let hook = home.path().join("post-receive");
+    let script = post_receive_hook().replace(crate::util::ROOT_BINARY, missing.to_str().unwrap());
+    fs::write(&hook, script).unwrap();
+
+    let output = Command::new("bash")
+        .arg(&hook)
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .current_dir(home.path())
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        format!("■  riku binary not found at {}\n", missing.display())
+    );
+}

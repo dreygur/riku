@@ -60,6 +60,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The docs no longer list `RIKU_WORKER_PROCESSES`, `LOG_LEVEL` or
+  `LOG_ROTATION_SIZE`: nothing reads them. Scale with `riku ps --scale`
+  or the SCALING file; log rotation sizes are fixed.
+- The post-receive hook reports a missing riku binary as one `■` line
+  instead of the old ` !     ` prefix, and the example server hooks print
+  plain lines instead of `-----> ` and indented text, which showed up
+  inside the deploy rail as stray prefixes. The pre-deploy example names
+  `riku config set`, not `config:set`.
 - Worker memory and CPU counted only the `sh -c` wrapper, so every app
   showed about 2 MB and no CPU time. A worker with a cgroup now reports
   the cgroup's `memory.current` and `cpu.stat` usage; one without sums its

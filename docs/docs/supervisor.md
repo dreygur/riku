@@ -345,11 +345,7 @@ The supervisor handles log rotation automatically.
 - **Max files:** 5 rotated logs
 - **Format:** `app-process.log`, `app-process.log.1`, etc.
 
-### Configure Rotation
-
-```bash
-riku config set myapp LOG_ROTATION_SIZE=5242880  # 5MB
-```
+These are fixed; no setting changes them.
 
 ### View Logs
 

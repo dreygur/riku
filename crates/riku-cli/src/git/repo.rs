@@ -18,7 +18,7 @@ BINARY="{ROOT_BINARY}"
 if [ -x "$BINARY" ]; then
     exec "$BINARY" git-hook "$APP" "$REPO_PATH"
 else
-    echo " !     Riku binary not found at $BINARY" >&2
+    echo "■  riku binary not found at $BINARY" >&2
     exit 1
 fi
 "#

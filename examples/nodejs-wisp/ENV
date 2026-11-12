@@ -52,6 +52,3 @@ RIKU_NGINX_STATIC_PATHS=/static:public
 
 # Max restart attempts (default: 5)
 # RIKU_MAX_RESTARTS=5
-
-# Scale workers (alternative to SCALING file)
-# RIKU_WORKER_PROCESSES=web=2

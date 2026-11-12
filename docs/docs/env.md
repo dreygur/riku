@@ -127,16 +127,6 @@ riku settings set myapp workers.max_restarts=10
 - **Description:** Maximum restart attempts before marking as failed
 - **Values:** Positive integer
 
-### Worker Processes
-
-```bash
-RIKU_WORKER_PROCESSES=web=2,worker=1
-```
-
-- **Default:** (uses SCALING file)
-- **Description:** Alternative to SCALING file for process counts
-- **Values:** Comma-separated `type=count` pairs
-
 ---
 
 ## Nginx Configuration
@@ -287,30 +277,6 @@ Checked every 60 seconds. Only meaningful for compose apps (see
 With nginx, riku issues certificates through acme.sh from Let's Encrypt,
 without an account email; there is no setting for either. Caddy issues its
 own certificates.
-
----
-
-## Logging Settings
-
-### Log Level
-
-```bash
-LOG_LEVEL=info
-```
-
-- **Default:** `info`
-- **Description:** Logging verbosity
-- **Values:** `debug` | `info` | `warn` | `error`
-
-### Log Rotation Size
-
-```bash
-LOG_ROTATION_SIZE=10485760
-```
-
-- **Default:** `10485760` (10MB)
-- **Description:** Rotate logs when they exceed this size (bytes)
-- **Values:** Positive integer (bytes)
 
 ---
 

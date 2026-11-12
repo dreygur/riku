@@ -273,15 +273,13 @@ impl Supervisor {
 
     /// Stop and remove a configuration.
     ///
-    /// Stops exactly the one process this config file described, NOT every
+    /// Stops exactly the one process this config file described, not every
     /// process belonging to the app. A single worker config can be removed
     /// on its own (scaling one ordinal down, or a per-instance delete from
-    /// the dashboard), and this used to tear down every sibling ordinal too
-    /// (via `stop_app_processes`), turning e.g. "scale web from 5 to 3" into
-    /// a brief full outage until the following recreate step respawned
-    /// 1..3 again. `riku stop`/`riku destroy` still stop everything: they
-    /// remove *all* of an app's config files, so this runs once per file and
-    /// the net effect is unchanged for that case.
+    /// the dashboard); stopping the siblings too would turn "scale web from
+    /// 5 to 3" into a brief full outage until they were respawned.
+    /// `riku stop` and `riku destroy` remove all of an app's config files,
+    /// so this runs once per file and every process stops.
     // Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
     #[allow(clippy::question_mark)]
     pub(super) fn unload_config(&mut self, filename: &str) -> Result<()> {

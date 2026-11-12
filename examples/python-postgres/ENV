@@ -46,9 +46,6 @@ RIKU_NGINX_STATIC_PATHS=/static:static
 # Max restart attempts (default: 5)
 # RIKU_MAX_RESTARTS=5
 
-# Scale workers (alternative to SCALING file)
-# RIKU_WORKER_PROCESSES=web=4,worker=2
-
 # =============================================================================
 # Django-specific (set these via riku config:set)
 # =============================================================================
