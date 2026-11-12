@@ -162,6 +162,21 @@ fn flag(env: &HashMap<String, String>, key: &str) -> bool {
     env.get(key).is_some_and(|value| is_on(value))
 }
 
+/// Fails for a setting the Caddy route would otherwise drop without a
+/// word: `routing.static_paths`, since Caddy serves no static files.
+pub(super) fn refuse_nginx_only_settings(env: &HashMap<String, String>) -> Result<()> {
+    let static_paths = env
+        .get("RIKU_NGINX_STATIC_PATHS")
+        .is_some_and(|value| !value.trim().is_empty());
+    if static_paths {
+        return Err(anyhow!(
+            "routing.static_paths is nginx only: Caddy serves no static files. \
+             Remove it, or switch the server router to nginx"
+        ));
+    }
+    Ok(())
+}
+
 /// A route with only what Caddy uses.
 fn caddy_route(
     domains: Vec<String>,
@@ -257,6 +272,11 @@ pub fn build_route(
         return Err(route_error(app, anyhow!(reason)));
     }
     let caddy = matches!(router, Router::Caddy);
+    if caddy {
+        if let Err(e) = refuse_nginx_only_settings(env) {
+            return Err(route_error(app, e));
+        }
+    }
     let domains = if caddy {
         caddy_domains(env)
     } else {

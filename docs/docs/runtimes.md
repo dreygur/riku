@@ -746,7 +746,9 @@ a process or use a runtime whose `start` gives a command. A repo with only
 `public/index.html` and no runtime fails with `No runtime plugin matched`.
 
 Static files need the nginx router. Under Caddy the router helper refuses
-the route of an app with `static = true`, and `static_paths` is ignored.
+the route of an app with `static = true`, and a deploy that sets
+`static_paths` stops before any copy starts, with
+`routing.static_paths is nginx only`.
 
 ```
 myapp/

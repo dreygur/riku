@@ -108,6 +108,26 @@ fn web_copies_replace_the_default_backend() {
     );
 }
 
+/// The check runs before any copy starts, so a Caddy app that sets
+/// `routing.static_paths` fails there, not after its workers are up.
+#[test]
+fn caddy_check_refuses_static_paths_before_a_copy_starts() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = paths_with_workers(&tmp);
+    std::fs::write(&paths.router_file, "caddy").unwrap();
+    let e = env(&[
+        ("RIKU_DOMAINS", "shop.example.com"),
+        ("RIKU_NGINX_STATIC_PATHS", "/assets/:public"),
+    ]);
+
+    let err = check("shop", &e, &paths).unwrap_err();
+
+    assert!(
+        format!("{err:#}").contains("routing.static_paths is nginx only"),
+        "{err:#}"
+    );
+}
+
 #[test]
 fn caddy_publishes_no_site_for_a_worker_only_app() {
     let tmp = tempfile::tempdir().unwrap();

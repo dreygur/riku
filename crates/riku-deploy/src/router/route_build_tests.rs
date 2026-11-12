@@ -289,6 +289,27 @@ fn caddy_route_keeps_only_what_caddy_uses() {
     assert!(err.to_string().contains("Caddy does not take"), "{err}");
 }
 
+/// Caddy serves no static files, so `routing.static_paths` would be dropped
+/// without a word. The deploy stops instead, naming the setting, also for
+/// an app with no domain whose site is otherwise just removed.
+#[test]
+fn caddy_refuses_static_paths_naming_the_setting() {
+    let tmp = TempDir::new().unwrap();
+    let backends = [Backend::loopback(5000)];
+    for domain in [&[("RIKU_DOMAINS", "myapp.example")][..], &[][..]] {
+        let mut pairs = domain.to_vec();
+        pairs.push(("RIKU_NGINX_STATIC_PATHS", "/assets/:public"));
+
+        let err = build_for(&tmp, &Router::Caddy, &pairs, &backends).unwrap_err();
+
+        let text = format!("{err:#}");
+        assert!(
+            text.contains("routing.static_paths") && text.contains("nginx only"),
+            "{text}"
+        );
+    }
+}
+
 fn install_own_certificate(paths: &RikuPaths) {
     fs::write(paths.nginx_root.join("myapp.fullchain.crt"), CERT).unwrap();
     fs::write(paths.nginx_root.join("myapp.key"), KEY).unwrap();

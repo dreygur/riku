@@ -68,6 +68,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The ruby plugin's build printed "skipping gem install" and succeeded
   when bundler was missing, then the app crashed on `bundle exec`. The
   build now fails with one line saying bundler is not installed.
+- Under Caddy, `routing.static_paths` was dropped without a word. The
+  deploy now stops before any copy starts, saying the setting is nginx
+  only.
 - Under Caddy, the dashboard and `riku apps info` showed every app as
   having no site, because the deploy user cannot read the root owned
   `/etc/riku/caddy`. They now say the site is unknown. For the same reason
