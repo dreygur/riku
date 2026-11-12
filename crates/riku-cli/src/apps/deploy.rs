@@ -1,7 +1,6 @@
 use anyhow::{bail, Result};
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 use crate::config::app_settings::{AppSettings, Source};
 use crate::config::RikuPaths;
@@ -24,33 +23,9 @@ pub fn cmd_deploy(paths: &RikuPaths, app: &str, from_path: Option<&str>) -> Resu
         if let Err(e) = deploy_from_path(paths, &app, source_path) {
             return Err(e);
         }
-    } else if is_bare_repo() {
-        if let Err(e) = deploy_from_bare_repo(paths, &app) {
-            return Err(e);
-        }
     }
 
     crate::deploy::do_deploy(&app, paths, &deltas, None)
-}
-
-/// Check if current directory is a bare git repo.
-fn is_bare_repo() -> bool {
-    Command::new("git")
-        .args(["rev-parse", "--is-bare-repository"])
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim() == "true")
-        .unwrap_or(false)
-}
-
-/// Deploy from a bare repo by extracting files and setting up auto-deploy hook.
-fn deploy_from_bare_repo(paths: &RikuPaths, app: &str) -> Result<()> {
-    let bare_repo = std::env::current_dir()?;
-    crate::git::ensure_repo_symlink(paths, app)?;
-    crate::git::extract_bare_repo_to_app(&bare_repo, app, paths)?;
-    crate::git::setup_post_receive_hook(&bare_repo, app)?;
-    Ok(())
 }
 
 /// Whether `source` has a Procfile or a valid riku.toml with `[processes]`

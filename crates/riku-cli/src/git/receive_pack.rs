@@ -16,7 +16,7 @@ use crate::util::display;
 use crate::util::validation::{validate_app_name, REPO_SUFFIX};
 
 use super::push_status::{deploy_result, DeployResult, STATUS_ENV};
-use super::repo::{ensure_repo_symlink, post_receive_hook};
+use super::repo::post_receive_hook;
 
 /// The directory under `repos/` a pushed path names. `riku@host:shop` and
 /// `riku@host:shop.git` both deploy app `shop`, from the repositories
@@ -65,10 +65,6 @@ pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
         Ok(repo) => repo,
         Err(e) => return Err(e),
     };
-
-    if let Err(e) = ensure_repo_symlink(paths, &repo) {
-        return Err(e);
-    }
 
     let riku_repo = paths.git_root.join(&repo);
 

@@ -75,21 +75,6 @@ Or create an `ENV` file in `~/.riku/envs/myapp/ENV`.
 
 **A:** No. An `nginx.conf`, `nginx.custom.conf`, `nginx.custom` or `.nginx.conf` in your app directory is not supported: riku ignores it, prints a warning at deploy, and uses the generated config. There is no snippet file either. The route covers domains, backends, TLS, static files and the HTTP mode. Set headers and caching in the app.
 
-**Q: Can I store my bare git repo in a custom location?**
-
-**A:** Yes. Riku automatically symlinks custom repo locations to `~/.riku/repos/`:
-
-```bash
-# On server: create bare repo anywhere
-git init --bare ~/my-projects/myapp.git
-
-# Push to custom path
-git remote add riku riku@server:~/my-projects/myapp.git
-git push riku main
-
-# Riku creates: ~/.riku/repos/myapp.git → ~/my-projects/myapp.git
-```
-
 **Q: Does Riku auto-start the supervisor?**
 
 **A:** Yes. On first deployment, Riku automatically starts the supervisor daemon if not running. Nginx site files are written by the router helper to `/etc/riku/nginx`, which nginx loads through `/etc/nginx/conf.d/riku.conf` (both set up by `sudo riku init`).

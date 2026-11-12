@@ -146,7 +146,6 @@ echo 'web: node server.js' > Procfile
 
 ### Deploy
 
-**Option 1: Standard (repo in `~/.riku/repos/`)**
 ```bash
 # Add your Riku server as a remote
 git remote add riku riku@edge.example:myapp
@@ -156,29 +155,7 @@ git add . && git commit -m "Initial commit"
 git push riku main
 ```
 
-**Option 2: Custom bare repo location**
-
-You can create your bare git repo anywhere and Riku will automatically symlink it to `~/.riku/repos/`:
-
-```bash
-# On server: create bare repo anywhere
-git init --bare ~/my-projects/myapp.git
-
-# On local: push to custom path
-git remote add riku riku@edge.example:~/my-projects/myapp.git
-git push riku main
-
-# Riku will automatically:
-# 1. Create symlink ~/.riku/repos/myapp.git → ~/my-projects/myapp.git
-# 2. Deploy your app
-```
-
-The post-receive hook must pass the repo path. If using a custom hook, include:
-```bash
-#!/bin/bash
-REPO_PATH="$(pwd)"
-cat | RIKU_ROOT="$HOME/.riku" riku git-hook "myapp" "$REPO_PATH"
-```
+The push creates the repository in `~/.riku/repos/` on first use.
 
 ---
 
@@ -227,7 +204,6 @@ When you push to Riku:
 > Riku automatically handles:
 > - Nginx config validation and reload
 > - Supervisor auto-start on first deployment
-> - Custom bare repo locations (symlinked to `~/.riku/repos/`)
 
 ---
 

@@ -5,7 +5,7 @@
 //! - `create`: app creation
 //! - `info`: app details
 //! - `config`: environment variable management
-//! - `deploy`: deployment from paths and bare repos
+//! - `deploy`: redeploy, or deploy from a local path
 //! - `process`: process scaling and status (ps commands)
 //! - `logs`: log tailing
 //! - `stats`: resource usage statistics

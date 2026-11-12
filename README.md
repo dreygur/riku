@@ -142,9 +142,6 @@ git push riku main
 In a hurry? `riku quickstart` scaffolds a sample app and prints the exact
 `git remote add` line to copy.
 
-> You can keep a bare repo in the deploy user's home, `git init --bare ~/myapp.git`,
-> push to it, and Riku symlinks it into `~/.riku/repos/` for you.
-
 ## Commands
 
 | | |

@@ -1,4 +1,7 @@
 use super::*;
+use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::process::Command;
 
 /// The hook hands the app name and repository to the riku binary with a
 /// bare PATH and without reading the pushed refs itself. The test swaps the

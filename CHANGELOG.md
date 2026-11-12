@@ -371,6 +371,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Breaking: bare repos kept outside `~/.riku/repos/`. A push no longer
+  links `~/<app>.git` into `repos/`, `riku deploy` run inside a bare repo
+  no longer extracts it or installs a hook there, and `riku git-hook`
+  refuses a repo path outside `repos/`. Pushes to `riku@host:<app>` are
+  unchanged. The linking was broken anyway: it named `<app>.git.git` for
+  a push to `<app>.git`, and linked `repos/<app>.git` while git wrote to
+  `repos/<app>`.
 - `riku_util::echo` (`display::echo`, which picked a rail line by color
   name and stripped a `-----> ` prefix) and the display aliases `info`,
   `success`, `note`, `section`, `kv` and `blank`. Every caller now names

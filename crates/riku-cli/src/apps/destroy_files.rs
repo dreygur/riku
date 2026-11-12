@@ -34,8 +34,9 @@ fn remove_file(path: &Path) -> Result<()> {
     }
 }
 
-/// The `repos/<app>.git` symlink a push made to a bare repo kept outside
-/// riku. Only the link goes, never the repo it points to.
+/// The `repos/<app>.git` symlink the hook made for a push to `repos/<app>`.
+/// Only the link goes here; `repos/<app>` is removed with the other app
+/// directories.
 fn remove_repo_link(paths: &RikuPaths, app: &str) -> Result<()> {
     let link = paths.git_root.join(format!("{app}.git"));
     match fs::symlink_metadata(&link) {
