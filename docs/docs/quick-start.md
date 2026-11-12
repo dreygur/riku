@@ -205,8 +205,8 @@ remote:    Workers   web 1
 remote:    Logs      rk logs myapp
 ```
 
-A failed deploy names the step that failed, repeats the last 15 lines of
-build output, and ends with `rk logs myapp --deploy` for the full log and
+A failed deploy names the step that failed under the build output it
+streamed, and ends with `rk logs myapp --deploy` for the full log and
 the `git push` that retries it. `git push` exits non-zero.
 
 An app with no domain gets the server's fallback name, or a port of its own

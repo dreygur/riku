@@ -52,6 +52,24 @@ fn failure_says_how_to_retry_and_whether_the_old_release_runs() {
 }
 
 #[test]
+fn failure_block_puts_the_failed_step_before_the_outro_once() {
+    let block = render_failure(
+        "Build failed",
+        "plugin 'node' exited with code 127\nsee the build output above",
+        false,
+        false,
+    );
+
+    assert_eq!(
+        block,
+        "■  Build failed  plugin 'node' exited with code 127\
+         \n│  see the build output above\
+         \n│\
+         \n└  Deploy failed."
+    );
+}
+
+#[test]
 fn durations_switch_to_minutes_at_sixty_seconds() {
     assert_eq!(format_duration(Duration::from_millis(12_400)), "12.4s");
     assert_eq!(format_duration(Duration::from_secs(123)), "2m 03s");

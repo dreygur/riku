@@ -14,6 +14,7 @@
 //! | `warn`        | `▲  msg`              | stderr | non-fatal problems, hints        |
 //! | `error`       | `■  msg`              | stderr | failures (then return `Err`)     |
 //! | `step_failed` | `■  label  reason`    | stderr | the step that failed             |
+//! | `emit`        | pre rendered text     | either | a block that must stay in order  |
 //! | `note`        | `│  msg`              | stdout | detail under the step above      |
 //! | `detail`      | `│  msg`              | stdout | detail under the step above      |
 //! | `detail_err`  | `│  msg`              | stderr | detail that belongs with errors  |
@@ -32,7 +33,7 @@ mod table;
 mod tail;
 
 pub use rail::{
-    detail, detail_err, error, failure_already_shown, intro, mark_failure_shown, outro,
+    detail, detail_err, emit, error, failure_already_shown, intro, mark_failure_shown, outro,
     render_line, render_summary, step_done, step_failed, summary, warn, Mark,
 };
 pub use style::{paint, Paint, Stream};

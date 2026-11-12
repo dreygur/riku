@@ -66,6 +66,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and then died with `npm: command not found`. It now stops with one line
   saying Node.js is not installed. The python plugin (no uv, no python3)
   and the go plugin (no go) say the same for their toolchain.
+- A failed build printed its output twice, streamed and then again under
+  `■ Build failed`, and under `riku deploy` over ssh the `■` line came
+  after the outro, because it went to stderr and the rest to stdout. The
+  output now prints once, and the build output, the failed step and the
+  outro all go to stdout in that order.
 - `sudo riku init` without `--ssh-key` warned "No deploy key added" on a
   server that already had deploy keys. It now reports how many are
   authorized and warns only when there are none.

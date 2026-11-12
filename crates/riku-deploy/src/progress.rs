@@ -1,7 +1,8 @@
 //! What a deploy prints, on the rail from `riku_util::display`: an intro
 //! naming the app and commit, one step per phase, then an outro and a
-//! summary. A failed deploy names the phase that failed, repeats the last
-//! lines of build output and says how to retry.
+//! summary. A failed deploy names the phase that failed and says how to
+//! retry. Everything goes to stdout, the build output streamed by
+//! `tee_output` included, so an ssh client keeps the order.
 //!
 //! Every line also lands in the deploy log through [`DeployLogger`].
 
@@ -11,7 +12,7 @@ use crate::config::RikuPaths;
 use crate::git_ops::Commit;
 use crate::releases::ReleaseLog;
 use crate::util::deploy_logger::DeployLogger;
-use crate::util::display::{self, OutputTail};
+use crate::util::display::{self, render_line, Mark, OutputTail, Stream};
 
 /// A deploy phase, as named in its step line and in a failure.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -38,11 +39,6 @@ impl Phase {
             Phase::Processes => "Processes",
             Phase::Route => "Route",
         }
-    }
-
-    /// Whether this phase streams command output worth repeating on failure.
-    fn streams_output(self) -> bool {
-        matches!(self, Phase::Preflight | Phase::Build | Phase::Release)
     }
 }
 
@@ -147,26 +143,45 @@ impl DeployProgress {
         display::summary(&as_pairs(&rows));
     }
 
-    /// The failed phase with `err`, the last build lines, the outro and the
-    /// summary that says how to retry.
+    /// The failed phase with `err`, the outro and the summary that says how
+    /// to retry, all on stdout like the rest of the rail.
     pub(crate) fn failed(&mut self, err: &anyhow::Error, branch: &str) {
         let reason = format!("{err:#}");
         display::mark_failure_shown(&reason);
         self.log.log_raw(&format!("[ERROR] {reason}"));
         let label = format!("{} failed", self.phase.label());
-        let mut lines = without_label(&reason, &label).lines();
-        display::step_failed(&label, lines.next().unwrap_or(""));
-        for line in lines {
-            display::detail(line);
-        }
-        if self.phase.streams_output() {
-            for line in self.output.lines() {
-                display::detail(&line);
-            }
-        }
-        display::outro(failure_outro(self.previous_release_runs()));
+        let block = render_failure(
+            &label,
+            &reason,
+            self.previous_release_runs(),
+            Stream::Stdout.colour(),
+        );
+        display::emit(Stream::Stdout, &block);
         display::summary(&as_pairs(&failure_summary(&self.app, branch)));
     }
+}
+
+/// The `■` line of the failed step, the rest of its reason on `│` lines,
+/// and the outro. One block on one stream: `■` on stderr reached an ssh
+/// client after the outro on stdout. The build output is not repeated
+/// here, since every line of it was already streamed on the rail.
+fn render_failure(label: &str, reason: &str, previous_kept: bool, colour: bool) -> String {
+    let mut lines = without_label(reason, label).lines();
+    let mut block = render_line(Mark::Error, label, lines.next().unwrap_or(""), colour);
+    for line in lines {
+        block.push('\n');
+        block.push_str(&render_line(Mark::Rail, line, "", colour));
+    }
+    block.push('\n');
+    block.push_str(&render_line(Mark::Rail, "", "", colour));
+    block.push('\n');
+    block.push_str(&render_line(
+        Mark::Outro,
+        failure_outro(previous_kept),
+        "",
+        colour,
+    ));
+    block
 }
 
 /// `reason` without a leading `<label>: `, so `Build failed: plugin ..`

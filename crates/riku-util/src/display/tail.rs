@@ -1,10 +1,10 @@
-//! The last lines of a streamed command (a build, a release command), kept
-//! so a failure can show them again next to its reason.
+//! The last lines of a streamed command (a build, a release command). A
+//! failed deploy does not show them again, since each was streamed already.
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
-/// How many lines a failed deploy repeats under its reason.
+/// How many lines a tail keeps by default.
 pub const FAILURE_TAIL_LINES: usize = 15;
 
 /// A shared ring of the most recent output lines. Clones share the ring, so

@@ -73,11 +73,12 @@ fn trim_tail(buf: &mut String) {
     buf.drain(..cut);
 }
 
-/// Spawn background threads that mirror `child`'s stdout/stderr to this
-/// process's own stdout/stderr line by line, each under the output rail
-/// (`│  line`), so whoever watches `riku deploy` or `git push` sees it live.
-/// Every line from either stream also goes into `recent`, which a failed
-/// deploy shows again. The last [`STDERR_TAIL_CAP`] bytes of stderr are kept
+/// Spawn background threads that mirror `child`'s stdout and stderr to this
+/// process's stdout line by line, each under the output rail (`│  line`), so
+/// whoever watches `riku deploy` or `git push` sees it live. Both go to
+/// stdout because the rest of the deploy rail does: over ssh, stdout and
+/// stderr arrive on separate channels and lose their order. Every line from
+/// either stream also goes into `recent`. The last [`STDERR_TAIL_CAP`] bytes of stderr are kept
 /// in the returned buffer, so a failed exit can be classified by
 /// [`classify_resource_exit`] afterward. `child.stdout`/`child.stderr` must
 /// be `Stdio::piped()` for this to do anything (a `None` pipe is silently
@@ -108,7 +109,7 @@ pub fn tee_output(
         let recent = recent.clone();
         handles.push(std::thread::spawn(move || {
             for_each_line(stderr, |line| {
-                display::detail_err(line);
+                display::detail(line);
                 recent.push(line);
                 let mut buf = match tail.lock() {
                     Ok(buf) => buf,
