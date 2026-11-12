@@ -16,6 +16,7 @@ use super::rollout::roll_out;
 use super::{prepare_images, AppName};
 use crate::config::RikuPaths;
 use crate::supervisor_ctl::notify_supervisor_reload;
+use crate::util::display::OutputTail;
 
 /// The runtime name hooks receive for container apps.
 pub const CONTAINER_RUNTIME: &str = "container";
@@ -31,7 +32,7 @@ fn check_counts(project: &ComposeProject, counts: &BTreeMap<String, u32>) -> Res
 
 /// Pre build hooks, image pulls and builds, post build hooks, then the
 /// Procfile `release` command, in the new image, when there is one.
-fn build_images(ctx: &ContainerApp) -> Result<()> {
+fn build_images(ctx: &ContainerApp, recent: &OutputTail) -> Result<()> {
     let app = ctx.app.as_str();
     let runtime = Some(CONTAINER_RUNTIME);
     if let Err(e) = crate::hooks::run_pre_build(app, &ctx.app_path, ctx.paths, runtime, &ctx.env) {
@@ -43,11 +44,11 @@ fn build_images(ctx: &ContainerApp) -> Result<()> {
     if let Err(e) = crate::hooks::run_post_build(app, &ctx.app_path, ctx.paths, runtime, &ctx.env) {
         return Err(e);
     }
-    run_release(ctx)
+    run_release(ctx, recent)
 }
 
 /// Copy counts checked, images ready and the release command run.
-fn prepare(ctx: &ContainerApp) -> Result<BTreeMap<String, u32>> {
+fn prepare(ctx: &ContainerApp, recent: &OutputTail) -> Result<BTreeMap<String, u32>> {
     let counts = match read_scaling(ctx.app.as_str(), ctx.paths) {
         Ok(counts) => counts,
         Err(e) => return Err(e),
@@ -55,7 +56,7 @@ fn prepare(ctx: &ContainerApp) -> Result<BTreeMap<String, u32>> {
     if let Err(e) = check_counts(&ctx.project, &counts) {
         return Err(e);
     }
-    match build_images(ctx) {
+    match build_images(ctx, recent) {
         Ok(()) => Ok(counts),
         Err(e) => Err(e),
     }
@@ -92,7 +93,8 @@ fn roll_out_app(ctx: &ContainerApp, counts: &BTreeMap<String, u32>) -> Result<()
 ///
 /// `replacing` is called once the images and the release command are ready,
 /// right before the first copy is replaced. A failure before that call left
-/// every running copy as it was.
+/// every running copy as it was. The release command's output goes on the
+/// rail and its last lines into `recent`.
 ///
 /// Blocks for as long as builds and health waits take, so it must not run on
 /// a tokio runtime thread.
@@ -100,13 +102,14 @@ pub fn deploy_containers(
     app: &AppName,
     paths: &RikuPaths,
     env: &HashMap<String, String>,
+    recent: &OutputTail,
     replacing: impl FnOnce(),
 ) -> Result<()> {
     let ctx = match ContainerApp::load(app, paths, env.clone()) {
         Ok(ctx) => ctx,
         Err(e) => return Err(e),
     };
-    let counts = match prepare(&ctx) {
+    let counts = match prepare(&ctx, recent) {
         Ok(counts) => counts,
         Err(e) => return Err(e),
     };

@@ -42,8 +42,9 @@ fn deploy_container_app(
     progress.begin(Phase::Runtime);
     progress.done(containers::CONTAINER_RUNTIME);
     progress.begin(Phase::Processes);
+    let recent = progress.output().clone();
     let replaced =
-        containers::deploy_containers(&name, paths, env, || progress.release_replacing());
+        containers::deploy_containers(&name, paths, env, &recent, || progress.release_replacing());
     if let Err(e) = replaced {
         return Err(e);
     }

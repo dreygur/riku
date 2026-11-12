@@ -19,6 +19,7 @@ use riku_container::types::{labels, ContainerName, CopyIndex};
 
 use super::context::ContainerApp;
 use super::copy_spec;
+use crate::util::display::OutputTail;
 use crate::util::{display, parse_procfile};
 
 /// The routed service, or else the first service riku builds.
@@ -95,21 +96,21 @@ fn remove_stale(ctx: &ContainerApp, name: &ContainerName) -> Result<()> {
     }
 }
 
-fn print_logs(ctx: &ContainerApp, id: &ContainerId) {
-    if let Err(e) = ctx.engine.print_logs(id) {
+fn print_logs(ctx: &ContainerApp, id: &ContainerId, recent: &OutputTail) {
+    if let Err(e) = ctx.engine.print_logs(id, recent) {
         tracing::warn!("cannot show the release output: {e}");
     }
 }
 
-/// Start the release container, wait for it, show its output and remove it,
-/// whatever the exit code.
-fn run_to_exit(ctx: &ContainerApp, spec: &RunSpec) -> Result<()> {
+/// Start the release container, wait for it, put its output on the rail and
+/// remove it, whatever the exit code.
+fn run_to_exit(ctx: &ContainerApp, spec: &RunSpec, recent: &OutputTail) -> Result<()> {
     let id = match ctx.engine.run(spec, ctx.scratch()) {
         Ok(id) => id,
         Err(e) => return Err(anyhow!("cannot start the release container: {e}")),
     };
     let waited = ctx.engine.wait(&id);
-    print_logs(ctx, &id);
+    print_logs(ctx, &id, recent);
     let removed = ctx.engine.remove(&id);
     match waited {
         Ok(0) => {}
@@ -120,8 +121,9 @@ fn run_to_exit(ctx: &ContainerApp, spec: &RunSpec) -> Result<()> {
 }
 
 /// Run the Procfile `release` command, when there is one, in a one-off
-/// container from the new image. A nonzero exit is an error.
-pub(super) fn run_release(ctx: &ContainerApp) -> Result<()> {
+/// container from the new image. A nonzero exit is an error. Its stdout and
+/// stderr go on the rail and their last lines into `recent`.
+pub(super) fn run_release(ctx: &ContainerApp, recent: &OutputTail) -> Result<()> {
     let procfile = match parse_procfile(&ctx.app_path.join("Procfile")) {
         Ok(procfile) => procfile.unwrap_or_default(),
         Err(e) => return Err(anyhow!("invalid Procfile: {e}")),
@@ -148,5 +150,5 @@ pub(super) fn run_release(ctx: &ContainerApp) -> Result<()> {
         ));
     }
     display::step_done("Running release command", "");
-    run_to_exit(ctx, &spec)
+    run_to_exit(ctx, &spec, recent)
 }

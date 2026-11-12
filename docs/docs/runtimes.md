@@ -520,8 +520,9 @@ Containers of a service the compose file no longer has are removed.
 A container app's Procfile is read only for its `release` line. That command
 runs once per deploy, after the images are ready and before any copy is
 replaced, in a one-off container from the new image of the routed service
-(or else the first built service), with the app's env, network and mounts. A
-nonzero exit stops the deploy.
+(or else the first built service), with the app's env, network and mounts.
+Its stdout and stderr print on the push output. A nonzero exit stops the
+deploy, and the last lines of output go to `riku logs <app> --deploy`.
 
 App env values are passed to every container, except `RIKU_*` keys, which
 configure riku itself. A service's own `environment` wins over the app env.

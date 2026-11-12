@@ -34,4 +34,4 @@ pub use rail::{
 };
 pub use style::{paint, Paint, Stream};
 pub use table::{format_table, print_table, print_table_with_title};
-pub use tail::{OutputTail, FAILURE_TAIL_LINES};
+pub use tail::{for_each_line, OutputTail, FAILURE_TAIL_LINES};

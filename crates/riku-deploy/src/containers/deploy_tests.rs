@@ -1,4 +1,7 @@
-use crate::containers::mock_state::{deploy, mock_server_with_domain, MockServer, DB_AND_WEB};
+use crate::containers::mock_state::{
+    deploy, deploy_keeping_output, mock_server_with_domain, MockServer, DB_AND_WEB,
+};
+use crate::util::display::OutputTail;
 
 const DOMAIN: &str = "myapp.example.com";
 
@@ -111,6 +114,28 @@ fn failing_release_aborts_before_rollout() {
         "a new web copy started after the failed release"
     );
     assert_eq!(server.containers(), ["myapp.db.1", "myapp.web.1"]);
+}
+
+#[test]
+fn failing_release_output_reaches_the_rail_tail_from_both_streams() {
+    let tmp = tempfile::tempdir().unwrap();
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
+    with_release(&server);
+    std::fs::write(server.state.join("release-exits"), "").unwrap();
+    let recent = OutputTail::default();
+
+    let err = deploy_keeping_output(&server, &recent).unwrap_err();
+
+    let lines = recent.lines();
+    assert!(format!("{err:#}").contains("exited with code 1"), "{err:#}");
+    assert!(
+        lines.iter().any(|l| l == "Traceback: cannot reach redis"),
+        "the release's stderr is missing from the streamed output: {lines:?}"
+    );
+    assert!(
+        lines.iter().any(|l| l == "release ran"),
+        "the release's stdout is missing from the streamed output: {lines:?}"
+    );
 }
 
 #[test]

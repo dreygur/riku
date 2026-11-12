@@ -81,6 +81,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A container app's failed `release` command printed only `release command
+  exited with code 1`: the release container's stderr (a Python traceback,
+  say) was left to the engine client's own stderr and never reached the
+  push. Both streams now print on the rail like a Procfile `release`. A
+  failed deploy also writes the last 15 lines of build or command output to
+  the deploy log before the error, so `riku logs <app> --deploy` shows the
+  reason; the deploy log held no command output before.
 - `riku ps <app> --scale web=2` for a kind `SCALING` did not list yet (an
   app whose first deploy failed) started 3 copies: the count was added to
   the default of one. A kind missing from `SCALING` now starts from 0.

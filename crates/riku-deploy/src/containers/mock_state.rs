@@ -21,6 +21,7 @@ use super::context::saved_env;
 use super::{deploy_containers, AppName};
 use crate::config::RikuPaths;
 use crate::mock_engine::{logged, mock_engine};
+use crate::util::display::OutputTail;
 
 /// A storage service `db` with a health check, and a routed `web` that
 /// waits for `db` to be healthy.
@@ -153,6 +154,11 @@ pub fn myapp() -> AppName {
 
 /// Deploy `myapp` on `server` with its saved ENV.
 pub fn deploy(server: &MockServer) -> Result<()> {
+    deploy_keeping_output(server, &OutputTail::default())
+}
+
+/// [`deploy`], keeping the streamed engine output in `recent`.
+pub fn deploy_keeping_output(server: &MockServer, recent: &OutputTail) -> Result<()> {
     let env = saved_env("myapp", &server.paths).unwrap();
-    deploy_containers(&myapp(), &server.paths, &env, || {})
+    deploy_containers(&myapp(), &server.paths, &env, recent, || {})
 }

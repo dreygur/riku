@@ -70,6 +70,34 @@ fn failure_block_puts_the_failed_step_before_the_outro_once() {
 }
 
 #[test]
+fn failure_writes_the_last_command_output_to_the_deploy_log() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    let log_path = paths.deploy_log_file("agenttest");
+    let log = DeployLogger::new(&log_path).unwrap();
+    let mut progress = DeployProgress::new("agenttest", &paths, log);
+    progress.output().push("Traceback (most recent call last):");
+    progress
+        .output()
+        .push("redis.exceptions.ConnectionError: Error 111");
+
+    progress.failed(
+        &anyhow::anyhow!("release command exited with code 1"),
+        "main",
+    );
+
+    let written = std::fs::read_to_string(&log_path).unwrap();
+    let reason = written
+        .find("redis.exceptions.ConnectionError")
+        .unwrap_or_else(|| panic!("the deploy log lacks the command's last output: {written}"));
+    let error = written.find("[ERROR] release command exited").unwrap();
+    assert!(
+        reason < error,
+        "the output should come before the error line: {written}"
+    );
+}
+
+#[test]
 fn durations_switch_to_minutes_at_sixty_seconds() {
     assert_eq!(format_duration(Duration::from_millis(12_400)), "12.4s");
     assert_eq!(format_duration(Duration::from_secs(123)), "2m 03s");

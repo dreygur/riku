@@ -144,10 +144,13 @@ impl DeployProgress {
     }
 
     /// The failed phase with `err`, the outro and the summary that says how
-    /// to retry, all on stdout like the rest of the rail.
+    /// to retry, all on stdout like the rest of the rail. The deploy log,
+    /// which holds no streamed output, gets the last lines of it first, so
+    /// `riku logs <app> --deploy` shows why a command failed.
     pub(crate) fn failed(&mut self, err: &anyhow::Error, branch: &str) {
         let reason = format!("{err:#}");
         display::mark_failure_shown(&reason);
+        self.log_recent_output();
         self.log.log_raw(&format!("[ERROR] {reason}"));
         let label = format!("{} failed", self.phase.label());
         let block = render_failure(
@@ -158,6 +161,17 @@ impl DeployProgress {
         );
         display::emit(Stream::Stdout, &block);
         display::summary(&as_pairs(&failure_summary(&self.app, branch)));
+    }
+
+    fn log_recent_output(&mut self) {
+        let lines = self.output.lines();
+        if lines.is_empty() {
+            return;
+        }
+        self.log.log_raw("Last output:");
+        for line in lines {
+            self.log.log_raw(&format!("  {line}"));
+        }
     }
 }
 

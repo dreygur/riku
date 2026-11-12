@@ -2,10 +2,35 @@
 //! failed deploy does not show them again, since each was streamed already.
 
 use std::collections::VecDeque;
+use std::io::{BufRead, BufReader, Read};
 use std::sync::{Arc, Mutex};
 
 /// How many lines a tail keeps by default.
 pub const FAILURE_TAIL_LINES: usize = 15;
+
+/// Longest line handed on whole; a longer run without a newline is split, so
+/// one endless line cannot grow a buffer without bound.
+const MAX_LINE_BYTES: usize = 64 * 1024;
+
+/// Calls `on_line` for every line `source` writes until end of file, without
+/// the line ending. Bytes that are not UTF-8 are replaced rather than ending
+/// the read: a reader that stopped early would close the pipe and kill the
+/// writer with SIGPIPE.
+pub fn for_each_line(source: impl Read, mut on_line: impl FnMut(&str)) {
+    let mut reader = BufReader::new(source.take(u64::MAX));
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        let limit = (MAX_LINE_BYTES + 1) as u64;
+        reader.get_mut().set_limit(limit);
+        match reader.read_until(b'\n', &mut line) {
+            Ok(0) | Err(_) => return,
+            Ok(_) => {}
+        }
+        let text = String::from_utf8_lossy(&line);
+        on_line(text.trim_end_matches(['\n', '\r']));
+    }
+}
 
 /// A shared ring of the most recent output lines. Clones share the ring, so
 /// the threads reading a child's stdout and stderr can both feed it.
