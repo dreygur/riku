@@ -119,10 +119,15 @@ pub fn cmd_stop(paths: &RikuPaths, app: &str, service: Option<&str>) -> Result<(
 
 /// Start the supervisor daemon.
 /// For production use, prefer 'riku supervisor --daemon' or the systemd service.
+#[allow(clippy::question_mark)]
 pub fn cmd_supervisor(paths: &RikuPaths) -> Result<()> {
-    let mut supervisor = Supervisor::new(paths.workers_enabled.clone())?.with_actions(
-        std::sync::Arc::new(crate::control_actions::CliControlActions),
-    );
+    let supervisor = match Supervisor::new(paths.workers_enabled.clone()) {
+        Ok(supervisor) => supervisor,
+        Err(e) => return Err(e),
+    };
+    let mut supervisor = supervisor.with_actions(std::sync::Arc::new(
+        crate::control_actions::CliControlActions,
+    ));
     supervisor.run()
 }
 

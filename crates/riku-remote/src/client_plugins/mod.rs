@@ -29,8 +29,12 @@ use execute::{execute_plugin, is_executable};
 /// * `Ok(true)` - Plugin was found and executed
 /// * `Ok(false)` - No plugin found, continue with built-in command
 /// * `Err` - Plugin was found but failed to execute
+#[allow(clippy::question_mark)]
 pub fn try_execute_client_plugin(command: &str, args: &[String]) -> Result<bool> {
-    let plugin_path = get_client_plugin_path(command)?;
+    let plugin_path = match get_client_plugin_path(command) {
+        Ok(path) => path,
+        Err(e) => return Err(e),
+    };
 
     if !plugin_path.exists() {
         return Ok(false);
@@ -45,9 +49,10 @@ pub fn try_execute_client_plugin(command: &str, args: &[String]) -> Result<bool>
         ));
     }
 
-    // Execute the plugin
-    execute_plugin(&plugin_path, args)?;
-    Ok(true)
+    match execute_plugin(&plugin_path, args) {
+        Ok(_) => Ok(true),
+        Err(e) => Err(e),
+    }
 }
 
 /// Handler for `riku plugin list`.
