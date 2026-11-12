@@ -190,6 +190,85 @@ fn a_push_whose_deploy_fails_exits_non_zero_and_shows_the_failure_once() {
     );
 }
 
+/// A PATH holding a `git` that always fails and a `git-receive-pack` that
+/// leaves a marker file, so a test can tell whether riku went on past it.
+fn path_with_failing_git(root: &Path) -> PathBuf {
+    let bin = root.join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let marker = root.join("receive-pack-ran");
+    let scripts = [
+        ("git", "#!/bin/sh\nexit 1\n".to_string()),
+        (
+            "git-receive-pack",
+            format!("#!/bin/sh\n: > {}\n", marker.display()),
+        ),
+    ];
+    for (name, body) in scripts {
+        let script = bin.join(name);
+        fs::write(&script, body).unwrap();
+        fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    }
+    bin
+}
+
+fn riku_with_failing_git(root: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_riku"))
+        .args(args)
+        .env("PATH", path_with_failing_git(root))
+        .env("HOME", root.join("home"))
+        .env("RIKU_ROOT", root.join("riku"))
+        .env("XDG_CONFIG_HOME", root.join("config"))
+        .env_remove("SSH_ORIGINAL_COMMAND")
+        .output()
+        .expect("riku runs")
+}
+
+#[test]
+fn apps_create_fails_when_git_init_fails() {
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join("home")).unwrap();
+
+    let out = riku_with_failing_git(tmp.path(), &["apps", "create", "nogit"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+
+    assert!(
+        !out.status.success(),
+        "apps create must fail when git init fails, stderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("git init"),
+        "the error must name git init, stderr:\n{stderr}"
+    );
+    assert!(
+        !app_repo(tmp.path(), "nogit")
+            .join("hooks/post-receive")
+            .exists(),
+        "no hook may be written into a repository git did not create"
+    );
+}
+
+#[test]
+fn a_push_stops_when_git_init_fails() {
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join("home")).unwrap();
+
+    let out = riku_with_failing_git(tmp.path(), &["git-receive-pack", "nogit"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+
+    assert!(
+        !out.status.success(),
+        "the push must fail when git init fails, stderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("git init"),
+        "the error must name git init, stderr:\n{stderr}"
+    );
+    assert!(
+        !tmp.path().join("receive-pack-ran").exists(),
+        "git-receive-pack must not run after git init failed, stderr:\n{stderr}"
+    );
+}
+
 #[test]
 fn a_first_push_prints_nothing_on_the_rail_before_the_deploy_intro() {
     let tmp = TempDir::new().unwrap();

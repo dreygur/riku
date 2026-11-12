@@ -76,6 +76,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   renders those characters. The smoke script's Python, static and Go
   tests only wrote sample apps and are removed with their app templates;
   the static one used a `static:` Procfile kind riku no longer has.
+- `riku apps create` ignored the exit status of `git init`, and a push
+  to an app without a repo printed "git init failed." and went on to
+  install the hook and run `git-receive-pack` on a directory that was not
+  a repository. Both now stop with an error naming the repo path.
 - `tests/deploy-smoke/test-all.sh` took a `[remote]` argument it never
   read. The script only drives a local riku against a throwaway
   `RIKU_ROOT`, so the argument and its usage text are removed.

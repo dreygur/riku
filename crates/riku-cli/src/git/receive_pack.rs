@@ -82,7 +82,12 @@ pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
             .status();
         match status {
             Ok(status) if status.success() => {}
-            Ok(_) => display::error("git init failed."),
+            Ok(status) => {
+                return Err(anyhow!(
+                    "git init failed for {} ({status})",
+                    riku_repo.display()
+                ))
+            }
             Err(e) => return Err(anyhow!("cannot run git init: {e}")),
         }
     }

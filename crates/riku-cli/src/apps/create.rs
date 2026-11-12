@@ -16,14 +16,23 @@ fn create_dir(dir: &Path) -> Result<()> {
 }
 
 fn init_bare_repo(repo_dir: &Path) -> Result<()> {
-    match Command::new("git")
+    let output = match Command::new("git")
         .args(["init", "--bare"])
         .current_dir(repo_dir)
         .output()
     {
-        Ok(_) => Ok(()),
-        Err(e) => Err(anyhow!("failed to run git init: {e}")),
+        Ok(output) => output,
+        Err(e) => return Err(anyhow!("failed to run git init: {e}")),
+    };
+    if !output.status.success() {
+        return Err(anyhow!(
+            "git init failed in {} ({}): {}",
+            repo_dir.display(),
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
     }
+    Ok(())
 }
 
 fn write_hook(hook: &Path) -> Result<()> {
