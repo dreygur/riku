@@ -21,6 +21,7 @@ use nix::unistd::Pid;
 use riku_util::display::{self, for_each_line, OutputTail};
 
 use super::bounded::{spawn_in_group, wait_bounded};
+use super::legacy_notice::LegacyNotice;
 use super::Engine;
 
 /// How long the readers may keep draining once the engine client exited. A
@@ -34,23 +35,35 @@ fn command_name(args: &[OsString]) -> String {
         .unwrap_or_default()
 }
 
-fn tee_lines(pipe: impl Read + Send + 'static, recent: &OutputTail) -> JoinHandle<()> {
+/// Which lines [`Engine::run_teed`] passes on.
+#[derive(Clone, Copy)]
+pub(super) enum Teed {
+    Everything,
+    /// All but docker's legacy builder notice (see [`LegacyNotice`]).
+    WithoutLegacyNotice,
+}
+
+fn tee_lines(pipe: impl Read + Send + 'static, recent: &OutputTail, teed: Teed) -> JoinHandle<()> {
     let recent = recent.clone();
     spawn(move || {
+        let mut notice = LegacyNotice::default();
         for_each_line(pipe, |line| {
+            if matches!(teed, Teed::WithoutLegacyNotice) && notice.swallows(line) {
+                return;
+            }
             display::detail(line);
             recent.push(line);
         })
     })
 }
 
-fn tee_child(child: &mut Child, recent: &OutputTail) -> Vec<JoinHandle<()>> {
+fn tee_child(child: &mut Child, recent: &OutputTail, teed: Teed) -> Vec<JoinHandle<()>> {
     let mut readers = Vec::new();
     if let Some(stdout) = child.stdout.take() {
-        readers.push(tee_lines(stdout, recent));
+        readers.push(tee_lines(stdout, recent, teed));
     }
     if let Some(stderr) = child.stderr.take() {
-        readers.push(tee_lines(stderr, recent));
+        readers.push(tee_lines(stderr, recent, teed));
     }
     readers
 }
@@ -71,14 +84,16 @@ fn finish_readers(readers: Vec<JoinHandle<()>>, pgid: Pid) {
 
 impl Engine {
     /// Run the engine with `args` within `limit`, putting each line of its
-    /// stdout and stderr on the output rail and into `recent`. A failure
-    /// reports the exit status; the engine's reason is already on the rail.
+    /// stdout and stderr that `teed` passes on the output rail and into
+    /// `recent`. A failure reports the exit status; the engine's reason is
+    /// already on the rail.
     pub(super) fn run_teed(
         &self,
         args: &[OsString],
         subject: &str,
         limit: Duration,
         recent: &OutputTail,
+        teed: Teed,
     ) -> Result<()> {
         let command = command_name(args);
         let mut child = match spawn_in_group(
@@ -96,7 +111,7 @@ impl Engine {
             }
         };
         let pgid = Pid::from_raw(child.id() as i32);
-        let readers = tee_child(&mut child, recent);
+        let readers = tee_child(&mut child, recent, teed);
         let waited = wait_bounded(&mut child, &command, limit);
         finish_readers(readers, pgid);
         let status = match waited {

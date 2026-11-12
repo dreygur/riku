@@ -448,6 +448,10 @@ first of `docker`, `podman`, `nerdctl` and `finch` found on `PATH`, in that
 order. Docker must be version 23 or newer (or an engine with a compatible
 CLI), since riku reads engine output with `--format json`. Riku reads the
 compose file itself and talks to the engine directly; no `compose` tool runs.
+With docker, install the buildx plugin (`docker-buildx-plugin` from
+Docker's repository): without it docker builds with its deprecated legacy
+builder. riku keeps docker's notice about that off the push output, and
+`riku doctor` warns while buildx is missing. Podman needs nothing extra.
 The deploy user must be able to open the engine's socket; for rootful
 docker, `sudo riku init` asks whether to add it to the socket's group (see
 [settings.md](settings.md#router-and-engine)).

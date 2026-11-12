@@ -19,6 +19,7 @@ use super::env_file::write_env_file;
 use super::run_args::{run_args, whole_seconds_up};
 use super::run_spec::{PullPolicy, RunSpec};
 use super::spec_check::{check_positional, check_spec};
+use super::streamed::Teed;
 use super::{ContainerId, Engine};
 use crate::types::StopSignal;
 
@@ -123,6 +124,7 @@ impl Engine {
             image,
             self.settings().pull_timeout,
             recent,
+            Teed::Everything,
         )
     }
 }

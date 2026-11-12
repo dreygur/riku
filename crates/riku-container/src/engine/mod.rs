@@ -12,6 +12,7 @@
 
 mod bounded;
 mod build;
+mod buildx;
 mod control;
 mod detect;
 #[cfg(test)]
@@ -26,6 +27,7 @@ mod identity;
 mod ids;
 mod inspect;
 mod inspect_parse;
+mod legacy_notice;
 mod login;
 mod logs;
 mod lookup;

@@ -120,6 +120,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lines (`Step 2/4 : WORKDIR /app`) between the rail lines. Build and pull
   output now goes on the rail (`│  ...`) like runtime plugin build output,
   stderr included, and its last lines reach the deploy log on a failure.
+- Docker without the buildx plugin printed its "DEPRECATED: The legacy
+  builder is deprecated" notice into every container deploy. The notice
+  (its first line, the indented lines after it and the blank line that
+  ends it) is now left off the rail and the output tail, and `riku doctor`
+  warns when the engine is docker and `docker buildx version` fails,
+  naming the `docker-buildx-plugin` package. Podman is not checked.
 - A container whose app ran as PID 1 (`python app.py`) ignored `SIGTERM`,
   so each replaced copy waited the full 30 second grace before it was
   killed and a `riku config set` took a minute. Containers now run under

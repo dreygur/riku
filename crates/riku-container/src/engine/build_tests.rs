@@ -84,6 +84,32 @@ fn build_output_from_both_streams_goes_through_the_rail_tail() {
 }
 
 #[test]
+fn build_drops_the_legacy_builder_notice_and_keeps_the_rest() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _log) = logging_engine(
+        dir.path(),
+        "printf '%s\\n' \
+           'DEPRECATED: The legacy builder is deprecated and will be removed in a future release.' \
+           '            Install the buildx component to build images with BuildKit:' \
+           '            https://docs.docker.com/go/buildx/' \
+           '' >&2; \
+         echo 'Sending build context to Docker daemon  3.072kB'; \
+         echo 'Step 1/4 : FROM python:3.12-slim'",
+    );
+    let recent = OutputTail::default();
+
+    engine.build(&spec("/srv/app", None), &recent).unwrap();
+
+    assert_eq!(
+        recent.lines(),
+        [
+            "Sending build context to Docker daemon  3.072kB",
+            "Step 1/4 : FROM python:3.12-slim"
+        ]
+    );
+}
+
+#[test]
 fn build_refuses_a_relative_or_flag_like_context() {
     for context in ["app", "--output=/etc"] {
         let err = refused(&spec(context, None));

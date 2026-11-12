@@ -14,6 +14,7 @@ use anyhow::{anyhow, Result};
 use riku_util::display::OutputTail;
 
 use super::bounded::capture_capped;
+use super::streamed::Teed;
 use super::{ContainerId, Engine};
 
 /// Which part of a container's log history [`Engine::timestamped_logs`] returns.
@@ -147,6 +148,7 @@ impl Engine {
             id.as_str(),
             self.settings().build_timeout,
             recent,
+            Teed::Everything,
         )
     }
 

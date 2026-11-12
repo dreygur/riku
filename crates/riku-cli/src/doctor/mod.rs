@@ -139,7 +139,7 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     ));
     checks.push(settings_check::settings_file(paths));
     checks.extend(settings_check::routing(paths));
-    checks.push(container_check::container_engine(paths));
+    checks.extend(container_check::container_engine(paths));
     checks.push(checks::plugins(paths));
     checks.push(checks::disk(paths));
     checks.push(match &home {
