@@ -139,8 +139,8 @@ pub fn build_app_entry(
     };
     let released = !ReleaseLog::new(paths).list(app).is_empty();
     let urls = if released && config_error.is_none() {
-        let container = containers
-            || crate::deploy::containers::runs_containers(app, paths).unwrap_or(false);
+        let container =
+            containers || crate::deploy::containers::runs_containers(app, paths).unwrap_or(false);
         crate::deploy::app_urls(app, &env_map, paths, container)
     } else {
         Vec::new()

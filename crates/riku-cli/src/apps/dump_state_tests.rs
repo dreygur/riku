@@ -154,8 +154,7 @@ fn urls_are_the_push_summary_urls_and_none_without_a_route() {
         }
     }
     let urls = |app: &str| {
-        serde_json::to_value(build_app_entry(app, &paths, &HashMap::new())).unwrap()["urls"]
-            .clone()
+        serde_json::to_value(build_app_entry(app, &paths, &HashMap::new())).unwrap()["urls"].clone()
     };
 
     assert_eq!(

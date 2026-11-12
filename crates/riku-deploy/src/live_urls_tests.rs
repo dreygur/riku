@@ -132,7 +132,11 @@ fn a_private_address_is_labelled_lan() {
 #[test]
 fn live_lines_carry_the_url_and_its_label() {
     let urls = |lines: Vec<Line>| -> Vec<Option<LiveUrl>> {
-        lines.into_iter().filter(|l| l.colour == "green").map(|l| l.url).collect()
+        lines
+            .into_iter()
+            .filter(|l| l.colour == "green")
+            .map(|l| l.url)
+            .collect()
     };
     let live = |url: &str, label| {
         Some(LiveUrl {
@@ -142,7 +146,12 @@ fn live_lines_carry_the_url_and_its_label() {
     };
 
     assert_eq!(
-        urls(live_lines("shop", &routing(&["a.example"], false), None, true)),
+        urls(live_lines(
+            "shop",
+            &routing(&["a.example"], false),
+            None,
+            true
+        )),
         [live("https://a.example", UrlLabel::Domain)]
     );
     assert_eq!(
