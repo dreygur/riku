@@ -81,6 +81,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A Procfile deploy on a server whose supervisor was not running (its first
+  deploy without the systemd unit, or after the supervisor stopped) waited
+  60 seconds and failed with `copy 1 did not become healthy ... Connection
+  refused`: the supervisor was only started after the web copies had to
+  pass their health check, and nothing spawned them. It is now started
+  before any process changes, and when it cannot be started the deploy
+  fails at once, says so, and leaves the previous release running.
 - A container app's failed `release` command printed only `release command
   exited with code 1`: the release container's stderr (a Python traceback,
   say) was left to the engine client's own stderr and never reached the

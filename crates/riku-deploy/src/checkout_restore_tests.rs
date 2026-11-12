@@ -97,10 +97,9 @@ fn live_env_write_failure_resets_the_checkout_and_keeps_the_old_release() {
     let mut progress = DeployProgress::new("shop", &paths, log);
     let workers = HashMap::from([("worker".to_string(), "sleep 1".to_string())]);
 
-    let started = crate::procfile_deploy::release_and_start(
+    let started = crate::procfile_deploy::start_processes(
         "shop",
         &paths,
-        "test",
         &workers,
         &crate::procfile_deploy::PluginOutput {
             env: HashMap::new(),
@@ -108,6 +107,7 @@ fn live_env_write_failure_resets_the_checkout_and_keeps_the_old_release() {
         },
         &HashMap::new(),
         &mut progress,
+        |_| true,
     );
     crate::restore_checkout("shop", &paths, &mut progress);
 
@@ -124,6 +124,49 @@ fn live_env_write_failure_resets_the_checkout_and_keeps_the_old_release() {
     assert!(
         progress.previous_release_runs(),
         "nothing was restarted, so the outro must say the previous release was left as it was"
+    );
+}
+
+/// A web copy only starts when a supervisor spawns it, so without one the
+/// deploy must stop before touching a worker config instead of waiting out
+/// the health check of a copy nothing will ever run.
+#[test]
+fn no_supervisor_fails_before_any_process_changes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    let (good, _pushed) = app_with_release(&paths);
+    let log = DeployLogger::new(&paths.deploy_log_file("shop")).unwrap();
+    let mut progress = DeployProgress::new("shop", &paths, log);
+    let workers = HashMap::from([("web".to_string(), "python app.py".to_string())]);
+    let plugin = crate::procfile_deploy::PluginOutput {
+        env: HashMap::new(),
+        start_cmd: None,
+    };
+
+    let started = crate::procfile_deploy::start_processes(
+        "shop",
+        &paths,
+        &workers,
+        &plugin,
+        &HashMap::new(),
+        &mut progress,
+        |_| false,
+    );
+    crate::restore_checkout("shop", &paths, &mut progress);
+
+    let err = started.expect_err("no supervisor runs or can be started");
+    assert!(
+        format!("{err:#}").contains("supervisor is not running"),
+        "the error must name the missing supervisor, got: {err:#}"
+    );
+    assert!(
+        !paths.workers_available.join("shop@web.1.toml").exists(),
+        "no worker config may be written without a supervisor to run it"
+    );
+    let head = git(&paths.app_root.join("shop"), &["rev-parse", "HEAD"]);
+    assert_eq!(
+        head, good,
+        "nothing was replaced, so the checkout must go back to the released {good}"
     );
 }
 

@@ -16,7 +16,7 @@ use crate::plugins::runtime::{MissingRuntime, RuntimeContext, RuntimePlugin};
 use crate::progress::{DeployProgress, Phase};
 use crate::util::runtime_markers::{is_bundled_runtime, needed_runtime};
 use crate::workers::{is_scalable_kind, read_scaling_count};
-use crate::{env_setup, hooks, plugin_env, workers};
+use crate::{env_setup, hooks, plugin_env, supervisor_ctl, workers};
 
 /// What the runtime plugin's build left for the start step.
 pub(crate) struct PluginOutput {
@@ -135,9 +135,8 @@ fn build_with_plugin(
     }
 }
 
-/// Post build hooks, the `release` command, then worker configs and the
-/// processes themselves. `LIVE_ENV` and the stored plugin env are written
-/// just before the processes change, so a restart later sees what they run.
+/// Post build hooks, the `release` command, then the processes (see
+/// [`start_processes`]).
 pub(crate) fn release_and_start(
     app: &str,
     paths: &RikuPaths,
@@ -148,7 +147,6 @@ pub(crate) fn release_and_start(
     progress: &mut DeployProgress,
 ) -> Result<String> {
     let app_path = paths.app_root.join(app);
-    let start_cmd = plugin.start_cmd.as_deref();
     progress.log.log_raw("Running post-build hooks");
     if let Err(e) = hooks::run_post_build(app, &app_path, paths, Some(runtime), env) {
         return Err(e);
@@ -166,9 +164,45 @@ pub(crate) fn release_and_start(
         }
         progress.done_timed(release_cmd);
     }
+    start_processes(
+        app,
+        paths,
+        workers,
+        plugin,
+        env,
+        progress,
+        supervisor_ctl::ensure_supervisor_running,
+    )
+}
+
+/// Worker configs and the processes themselves, then the route. `LIVE_ENV`
+/// and the stored plugin env are written just before the processes change,
+/// so a restart later sees what they run.
+///
+/// Web copies must pass a health check, and only a running supervisor spawns
+/// them, so `start_supervisor` (which returns whether one runs afterwards) is
+/// called before anything changes. Without a supervisor the deploy fails
+/// there and the previous release keeps running.
+pub(crate) fn start_processes(
+    app: &str,
+    paths: &RikuPaths,
+    workers: &HashMap<String, String>,
+    plugin: &PluginOutput,
+    env: &HashMap<String, String>,
+    progress: &mut DeployProgress,
+    start_supervisor: impl Fn(&RikuPaths) -> bool,
+) -> Result<String> {
+    let app_path = paths.app_root.join(app);
+    let start_cmd = plugin.start_cmd.as_deref();
     progress.begin(Phase::Processes);
     if let Err(e) = workers::check_workers(app, Some(workers), env, paths, start_cmd) {
         return Err(e);
+    }
+    if !start_supervisor(paths) {
+        return Err(anyhow!(
+            "the supervisor is not running and could not be started, so no process was \
+             started; see riku doctor"
+        ));
     }
     if let Err(e) = env_setup::write_live_env(app, paths, env) {
         return Err(e);
