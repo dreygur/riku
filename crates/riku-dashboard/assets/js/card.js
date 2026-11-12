@@ -113,9 +113,8 @@ export function updateCard(c, a) {
     al.hidden = true; al.innerHTML = "";
   }
 
-  const peak = ws.reduce((max, w) => Math.max(max, num(w.memory_bytes)), 0);
   el.querySelector("[data-rows]").innerHTML = ws.length
-    ? ws.map((w) => workerRow(w, peak)).join("")
+    ? ws.map((w) => workerRow(w)).join("")
     : '<div class="tr empty-row" role="row"><span role="cell">No workers running.</span></div>';
 
   renderControls(c, ws);

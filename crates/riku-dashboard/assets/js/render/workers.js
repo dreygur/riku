@@ -43,33 +43,52 @@ function limitMeter(used, limit) {
       </span>`;
 }
 
-/** @param {number} used @param {number} peak */
-function peakMeter(used, peak) {
-  const pct = peak ? Math.min(100, (used / peak) * 100) : 0;
-  return `<span role="cell" class="mem">
-        <span class="meter" role="img" aria-label="memory"><i style="width:${pct.toFixed(1)}%"></i></span>
-        <span class="mem-val">${fmtBytes(used)}</span>
+/** @param {number} used */
+function unlimitedMem(used) {
+  return `<span role="cell" class="mem no-limit">
+        <span class="mem-val">${fmtBytes(used)} <span>no limit</span></span>
       </span>`;
 }
 
 /**
  * memory_limit_bytes is the worker's cgroup memory.max or configured limit,
- * null when it has none. Without one the bar is relative to the app's
- * largest worker and carries no warn or crit level.
+ * null when it has none. Without one there is nothing to measure against,
+ * so only the value shows.
  * @param {import("../state.js").Worker} w
- * @param {number} peak
  */
-function memCell(w, peak) {
+function memCell(w) {
   const used = num(w.memory_bytes);
   const limit = num(w.memory_limit_bytes);
-  return limit ? limitMeter(used, limit) : peakMeter(used, peak);
+  return limit ? limitMeter(used, limit) : unlimitedMem(used);
 }
 
+/** Tags riku gives the images it builds, `localhost/riku-<hash>[:tag]`. */
+const BUILT_IMAGE = /^localhost\/riku-[0-9a-f]+(:[\w.-]+)?$/;
+
 /**
- * @param {import("../state.js").Worker} w
- * @param {number} peak largest memory_bytes among the app's workers
+ * What a container row shows for its image: `built` for one riku built,
+ * otherwise the image reference. The title always holds the full value.
+ * @param {string} image
+ * @returns {{ text: string, title: string }}
  */
-export function workerRow(w, peak) {
+export function imageLabel(image) {
+  return BUILT_IMAGE.test(image)
+    ? { text: "built", title: `built by riku: ${image}` }
+    : { text: image, title: image };
+}
+
+/** @param {import("../state.js").Worker} w */
+function nameCell(w) {
+  const name = `<span class="w-label">${esc(workerName(w))}</span>`;
+  if (w.unit !== "container" || !w.image) {
+    return `<span role="cell" class="w-name">${name}</span>`;
+  }
+  const img = imageLabel(String(w.image));
+  return `<span role="cell" class="w-name">${name}<span class="w-img" title="${esc(img.title)}">${esc(img.text)}</span></span>`;
+}
+
+/** @param {import("../state.js").Worker} w */
+export function workerRow(w) {
   const isContainer = w.unit === "container";
   const st = stateOf(w.status);
   const rc = num(w.restart_count);
@@ -80,12 +99,11 @@ export function workerRow(w, peak) {
     ? (w.cpu_percent != null ? esc(w.cpu_percent.toFixed(1)) + "%" : NO_VALUE)
     : (w.pid ? fmtCpu(w.cpu_time_ms) : NO_VALUE);
   const stateLabel = isContainer && w.state_detail ? w.state_detail : st.label;
-  const nameExtra = isContainer && w.image ? `<span class="dim" title="${esc(w.image)}"> · ${esc(w.image)}</span>` : "";
 
   return `<div class="tr ${st.cls === "dead" ? "is-bad" : ""}" role="row">
-      <span role="cell" class="w-name">${esc(workerName(w))}${nameExtra}</span>
+      ${nameCell(w)}
       <span role="cell"><span class="state ${st.cls}">${glyph(st.cls)}${esc(stateLabel)}</span></span>
-      ${memCell(w, peak)}
+      ${memCell(w)}
       <span role="cell" class="${live ? "muted" : "dim"}">${cpuDisplay}</span>
       <span role="cell" class="${live ? "muted" : "dim"}">${pidOrContainer}</span>
       <span role="cell" class="r">${rc ? `<span class="rc-badge ${rlvl}" title="${rc} restarts">${I.restartSm}${rc}</span>` : '<span class="dim">0</span>'}</span>

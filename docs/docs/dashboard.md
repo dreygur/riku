@@ -52,7 +52,17 @@ A settings change (a domain, the fallback domain, the routing mode) reaches
 the router only on the next deploy. Until then `/api/state` `pending_urls`
 lists the URLs the current settings give, in the same form, and the card
 says "settings changed, redeploy to use <url>". It is empty when the
-settings match the route.
+settings match the route. When the deploy user cannot read the router's
+site directory (`/etc/riku/caddy` or `/etc/riku/nginx`), the card shows the
+router name alone and says why the site state is unknown in its tooltip.
+
+A worker's memory bar measures against its limit (`memory_limit_bytes`).
+A worker or container with no limit shows its memory with "no limit" and
+no bar. A container row shows its image under its name: the image
+reference for a pulled image, `built` for one riku built (the full tag is
+in the tooltip). A container app lists one row per service (stepper,
+Apply, Restart, Stop, Logs) in an aligned grid, then a row of its own with
+the release picker, Roll back and Stop app.
 
 ### Options
 

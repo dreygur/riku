@@ -118,6 +118,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Scaling 'worker' to 2`, so it was unclear whether anything started. It
   did start or stop the copies; it now also says so, for example
   `Started 1 copy of worker, 2 running`.
+- The embedded dashboard's container card: the image no longer wraps
+  under the worker name (it is a one line label under it, cut with an
+  ellipsis, full value in the tooltip), and an image riku built shows as
+  `built` instead of `localhost/riku-<hash>`. The service rows line up in
+  a grid with a fixed label column and no trailing divider, and the
+  release picker, Roll back and Stop app sit on their own row. A worker or
+  container without a memory limit shows its memory with "no limit" and no
+  bar, instead of a bar relative to the app's largest worker that read as
+  full. A router site the deploy user cannot read shows the router name
+  alone, the reason in a tooltip, instead of "caddy unknown".
 - `riku ps <app> --scale web=2` for a kind `SCALING` did not list yet (an
   app whose first deploy failed) started 3 copies: the count was added to
   the default of one. A kind missing from `SCALING` now starts from 0.

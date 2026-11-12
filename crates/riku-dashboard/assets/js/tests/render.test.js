@@ -6,7 +6,7 @@ import { kindSteppersHtml } from "../render/apps.js";
 import { serviceControlsHtml } from "../render/containers.js";
 import { alertHtml, healthBadge, lockedControls, metaHtml, routeHtml } from "../render/meta.js";
 import { emptyHtml, pushHost } from "../render/panels.js";
-import { stateOf, workerRow } from "../render/workers.js";
+import { imageLabel, stateOf, workerRow } from "../render/workers.js";
 
 const EVIL = `"><img src=x onerror=alert(1)>'`;
 
@@ -27,12 +27,26 @@ test("worker rows escape the worker name and container image, text and title ali
   assert.ok(html.includes(esc(EVIL)));
 });
 
-test("the memory bar measures against the worker's limit, and against the app peak without one", () => {
+test("the memory bar measures against the worker's limit, and there is no bar without one", () => {
   const mib = 1024 * 1024;
-  const limited = workerRow({ kind: "web", ordinal: 1, memory_bytes: 64 * mib, memory_limit_bytes: 128 * mib }, 64 * mib);
+  const limited = workerRow({ kind: "web", ordinal: 1, memory_bytes: 64 * mib, memory_limit_bytes: 128 * mib });
   assert.ok(limited.includes('aria-label="50% of memory limit"'), limited);
-  const open = workerRow({ kind: "web", ordinal: 1, memory_bytes: 64 * mib, memory_limit_bytes: null }, 64 * mib);
-  assert.ok(open.includes('aria-label="memory"'), open);
+  for (const unit of ["container", undefined]) {
+    const open = workerRow({ kind: "web", ordinal: 1, unit, memory_bytes: 64 * mib, memory_limit_bytes: null });
+    assert.ok(!open.includes('class="meter"'), `a bar without a limit: ${open}`);
+    assert.ok(open.includes("64") && open.includes("no limit"), open);
+  }
+});
+
+test("a container row keeps the name on one line and shows the image as a short label", () => {
+  const pulled = workerRow({ kind: "redis", ordinal: 1, unit: "container", image: "redis:7-alpine" });
+  assert.ok(pulled.includes('<span class="w-img" title="redis:7-alpine">redis:7-alpine</span>'), pulled);
+  const built = workerRow({ kind: "web", ordinal: 2, unit: "container", image: "localhost/riku-0b00b8f683ba20d5:latest" });
+  assert.ok(built.includes(">built</span>"), built);
+  assert.ok(built.includes('title="built by riku: localhost/riku-0b00b8f683ba20d5:latest"'), built);
+  assert.ok(!built.includes(">localhost/riku-"), "the built tag is shown as text: " + built);
+  assert.equal(imageLabel("localhost/riku-0b00b8f683ba20d5").text, "built");
+  assert.equal(imageLabel("ghcr.io/acme/localhost/riku-x:1").text, "ghcr.io/acme/localhost/riku-x:1");
 });
 
 test("a worker only app gets a worker stepper and no web one, kind names escaped", () => {
@@ -47,10 +61,13 @@ test("an unknown router's error is escaped inside the title attribute", () => {
   assertNoRawMarkup(routeHtml({ router: "plugin", name: EVIL }));
 });
 
-test("a caddy site the deploy user cannot see reads as unknown, not off", () => {
-  assert.ok(routeHtml({ router: "caddy", site: null, site_known: false }).includes("unknown"));
+test("a router site the deploy user cannot see shows the router alone, the reason in a tooltip, not off", () => {
+  const caddy = routeHtml({ router: "caddy", site: null, site_known: false });
+  assert.ok(caddy.includes("caddy") && !caddy.includes(">unknown<") && !caddy.includes(">off<"), caddy);
+  assert.ok(/title="[^"]*unknown[^"]*"/.test(caddy), caddy);
   assert.ok(routeHtml({ router: "caddy", site: null, site_known: true }).includes("off"));
-  assert.ok(routeHtml({ router: "nginx", config_exists: false, config_known: false, enabled: false }).includes("unknown"));
+  const nginx = routeHtml({ router: "nginx", config_exists: false, config_known: false, enabled: false });
+  assert.ok(!nginx.includes(">unknown<") && /title="[^"]*unknown[^"]*"/.test(nginx), nginx);
   assert.ok(routeHtml({ router: "nginx", config_exists: false, config_known: true, enabled: false }).includes("off"));
 });
 
@@ -114,6 +131,20 @@ test("the crash alert escapes the worker name in its data-worker attribute", () 
 
 test("service controls escape the service name everywhere it appears", () => {
   assertNoRawMarkup(serviceControlsHtml("app-1", [{ kind: EVIL, ordinal: 1, unit: "container" }], {}));
+});
+
+test("service rows sit in one grid with no divider, and the app controls get their own row", () => {
+  const ws = ["redis", "web", "worker"].map((kind) => ({ kind, ordinal: 1, unit: "container" }));
+  const html = serviceControlsHtml("app-1", ws, {});
+  assert.ok(!html.includes("vsep"), "a divider trails a service row: " + html);
+  const grid = html.indexOf('class="svc-grid"');
+  const appRow = html.indexOf('class="app-row"');
+  assert.ok(grid >= 0 && appRow > grid, html);
+  assert.equal((html.match(/class="svc-row"/g) || []).length, 3, html);
+  const lastService = html.lastIndexOf('data-do="svc-stop"');
+  for (const appControl of ["data-rel", 'data-do="rollback"', 'data-do="stop"']) {
+    assert.ok(html.indexOf(appControl) > appRow && html.indexOf(appControl) > lastService, `${appControl} is not in the app row: ${html}`);
+  }
 });
 
 test("the empty panel escapes the host in the copy commands, and hides loopback names", () => {

@@ -16,16 +16,26 @@ function routeTag(router, word, cls) {
   return `<span>${I.server}${esc(router)} <span class="${cls}">${esc(word)}</span></span>`;
 }
 
+/**
+ * The router name alone, for a site the deploy user cannot read, with why
+ * its state is unknown in the tooltip.
+ * @param {string} router @param {string} root where the router helper keeps its sites
+ */
+function unknownRouteTag(router, root) {
+  const why = `site state unknown: the deploy user cannot read ${root}`;
+  return `<span title="${esc(why)}">${I.server}${esc(router)}</span>`;
+}
+
 /** @param {import("../state.js").Route} [route] */
 export function routeHtml(route) {
   const r = route || {};
   if (r.router === "nginx") {
     if (r.enabled) { return routeTag("nginx", "live", "c-ok"); }
-    if (r.config_known === false) { return routeTag("nginx", "unknown", "c-dim"); }
+    if (r.config_known === false) { return unknownRouteTag("nginx", "/etc/riku/nginx"); }
     return r.config_exists ? routeTag("nginx", "staged", "c-warn") : routeTag("nginx", "off", "c-dim");
   }
   if (r.router === "caddy") {
-    if (r.site_known === false) { return routeTag("caddy", "unknown", "c-dim"); }
+    if (r.site_known === false) { return unknownRouteTag("caddy", "/etc/riku/caddy"); }
     return r.site ? routeTag("caddy", "configured", "c-ok") : routeTag("caddy", "off", "c-dim");
   }
   if (r.router === "plugin") { return routeTag(r.name, "plugin", "c-dim"); }
