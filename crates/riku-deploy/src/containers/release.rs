@@ -20,6 +20,7 @@ use riku_container::types::{labels, ContainerName, CopyIndex, ServiceName};
 use super::context::ContainerApp;
 use super::copy_spec;
 use super::release_deps::start_release_dependencies;
+use super::spec::app_env_for;
 use crate::util::display::OutputTail;
 use crate::util::{display, parse_procfile};
 
@@ -52,7 +53,9 @@ fn release_labels(service: &ServiceDef) -> BTreeMap<String, String> {
 }
 
 /// A copy's spec for `service` with the release line as its only process:
-/// same image, env, network and mounts, but no ports and no health check.
+/// same image, network and mounts, but no ports and no health check. It
+/// always gets the app env, even when `service` is a pulled image: the
+/// release is the app's own command.
 fn release_spec(ctx: &ContainerApp, service: &ServiceDef, release: &str) -> Result<RunSpec> {
     let first = match CopyIndex::new(1) {
         Some(copy) => copy,
@@ -73,6 +76,7 @@ fn release_spec(ctx: &ContainerApp, service: &ServiceDef, release: &str) -> Resu
         Ok(name) => name,
         Err(e) => return Err(e),
     };
+    spec.env = app_env_for(&ctx.container_env, service);
     spec.ports = Vec::new();
     spec.healthcheck = None;
     spec.entrypoint = Some(vec![

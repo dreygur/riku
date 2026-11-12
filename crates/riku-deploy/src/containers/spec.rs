@@ -4,9 +4,11 @@
 //!
 //! The compose parser already refuses the labels riku sets itself (app,
 //! service, copy, port, restart, spec). The compose project label is dropped here,
-//! so a service cannot join another project's `list_project` results. App env
-//! entries named `RIKU_*` configure riku itself (registry credentials, for
-//! one) and are not passed on.
+//! so a service cannot join another project's `list_project` results. The app
+//! env, which holds the app's secrets, reaches only the services riku builds
+//! from the app's own code; a pulled image gets only its compose
+//! `environment`. App env entries named `RIKU_*` configure riku itself
+//! (registry credentials, for one) and are never passed on.
 
 use std::collections::BTreeMap;
 
@@ -76,7 +78,12 @@ fn copy_labels(
     labels_out
 }
 
-fn copy_env(app_env: &BTreeMap<String, String>, service: &ServiceDef) -> BTreeMap<String, String> {
+/// The app env without `RIKU_*` entries, overlaid by the service's own
+/// `environment`. What a built service and the release command run with.
+pub(super) fn app_env_for(
+    app_env: &BTreeMap<String, String>,
+    service: &ServiceDef,
+) -> BTreeMap<String, String> {
     let mut env: BTreeMap<String, String> = app_env
         .iter()
         .filter(|(name, _)| !name.starts_with(RIKU_ENV_PREFIX))
@@ -86,14 +93,24 @@ fn copy_env(app_env: &BTreeMap<String, String>, service: &ServiceDef) -> BTreeMa
     env
 }
 
+/// [`app_env_for`] for a service riku builds; a pulled image gets only its
+/// own `environment`.
+fn copy_env(app_env: &BTreeMap<String, String>, service: &ServiceDef) -> BTreeMap<String, String> {
+    match service.build {
+        Some(_) => app_env_for(app_env, service),
+        None => service.environment.clone(),
+    }
+}
+
 /// The run spec for copy `copy` of `service`, labelled with the service's
 /// [`spec_fingerprint`].
 ///
 /// `host_port` replaces the host port of the routed binding so every copy of
 /// the routed service listens on its own port; it is ignored for other
-/// services. The container env is the app env without `RIKU_*` entries,
-/// overlaid by the service's own `environment`. A service with a `build` runs
-/// the image tagged by `build_tag`, otherwise its `image`.
+/// services. A service with a `build` gets the app env without `RIKU_*`
+/// entries, overlaid by its own `environment`, and runs the image tagged by
+/// `build_tag`; a pulled service gets only its own `environment` and runs
+/// its `image`.
 pub fn copy_spec(
     app: &AppName,
     project: &ComposeProject,

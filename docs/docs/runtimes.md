@@ -538,11 +538,15 @@ it is not replaced again by the same deploy. The release still runs before
 any routed copy is replaced. Its stdout and stderr print on the push output. A nonzero exit stops the
 deploy, and the last lines of output go to `riku logs <app> --deploy`.
 
-App env values are passed to every container, pulled images such as
-`redis` included, except `RIKU_*` keys, which configure riku itself. A
-service's own `environment` wins over the app env. So a `riku config set`
-changes every service's env, and the deploy it starts replaces every
-service.
+App env values reach only the services riku builds: the compose services
+with a `build` section and the `app` service of a Dockerfile app. A pulled
+`image:` service, such as `redis` or `postgres`, gets only its own compose
+`environment`, so app secrets never reach a third party image. `RIKU_*`
+keys configure riku itself and reach no container. A service's own
+`environment` wins over the app env. So a `riku config set` replaces the
+built services on the deploy it starts, and pulled services keep running.
+The `release` command always gets the app env, even when it runs in a
+pulled image.
 
 `riku destroy` stops and removes every copy, the app network and the images
 riku built for the app (`localhost/riku-<hash>`, one per `build` service),

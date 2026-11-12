@@ -97,18 +97,51 @@ services:
     assert_eq!(spec.labels["team"], "blue");
 }
 
-#[test]
-fn riku_settings_in_app_env_do_not_reach_the_container() {
+/// A built `web` and a pulled `redis` with its own `environment`.
+const BUILT_AND_PULLED: &str = "
+services:
+  redis:
+    image: redis:7-alpine
+    environment:
+      REDIS_ARGS: --save 60 1
+  web:
+    build: ./web
+";
+
+/// The run spec of `service` in [`BUILT_AND_PULLED`] with an app env that
+/// holds a riku setting and an app variable.
+fn built_and_pulled_spec(service: &str) -> riku_container::engine::RunSpec {
     let dir = tempfile::tempdir().unwrap();
-    let (_, project) = project_in(dir.path(), "myapp", WEB);
+    std::fs::create_dir_all(dir.path().join("myapp").join("web")).unwrap();
+    let (_, project) = project_in(dir.path(), "myapp", BUILT_AND_PULLED);
     let app = AppName::try_from("myapp").unwrap();
     let env: BTreeMap<String, String> = [("RIKU_GHCR_TOKEN", "s3cret"), ("DATABASE_URL", "db")]
         .into_iter()
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
+    let def = project
+        .services
+        .iter()
+        .find(|s| s.name.as_str() == service)
+        .unwrap();
     let copy = riku_container::types::CopyIndex::new(1).unwrap();
+    copy_spec(&app, &project, def, copy, None, &env).unwrap()
+}
 
-    let spec = copy_spec(&app, &project, &project.services[0], copy, None, &env).unwrap();
+#[test]
+fn a_built_service_gets_the_app_env_without_riku_settings() {
+    let spec = built_and_pulled_spec("web");
 
     assert_eq!(spec.env.keys().collect::<Vec<_>>(), ["DATABASE_URL"]);
+}
+
+#[test]
+fn a_pulled_service_gets_only_its_own_environment() {
+    let spec = built_and_pulled_spec("redis");
+
+    assert_eq!(
+        spec.env.keys().collect::<Vec<_>>(),
+        ["REDIS_ARGS"],
+        "app env reached a pulled image"
+    );
 }

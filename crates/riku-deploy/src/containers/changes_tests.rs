@@ -149,10 +149,9 @@ fn new_image_id_under_the_same_tag_replaces_the_service() {
     );
 }
 
-/// The docs say every container gets the app env, so an app env change
-/// reaches redis too and it must restart to see it.
+/// Only built services get the app env, so redis keeps running.
 #[test]
-fn app_env_change_replaces_every_service_that_gets_the_app_env() {
+fn app_env_change_replaces_web_and_not_redis() {
     let tmp = tempfile::tempdir().unwrap();
     let server = deployed_server(tmp.path());
     fs::write(server.paths.env_root.join("myapp").join("ENV"), "FOO=2\n").unwrap();
@@ -162,7 +161,7 @@ fn app_env_change_replaces_every_service_that_gets_the_app_env() {
 
     assert_eq!(
         replaced(&server, before).0,
-        ["web", "redis"],
+        ["web"],
         "{:#?}",
         &server.calls()[before..]
     );

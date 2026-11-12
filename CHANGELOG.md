@@ -102,9 +102,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   health check and the rest, recorded in a new `riku.spec` label. Kept
   services print `Keeping <service> (unchanged)`, and a kept routed
   service's backends are published again so routing changes still apply.
-  App env still reaches every service, pulled ones included, as the docs
-  say, so `riku config set` still replaces them all. Containers from an
-  older riku carry no label and are replaced once.
+  Containers from an older riku carry no label and are replaced once.
+- The app env reached every container, pulled images such as `redis` and
+  `postgres` included, so app secrets went into third party images and a
+  `riku config set` restarted the database. Only the services riku builds
+  (compose `build` services and a Dockerfile app's `app`) get the app env
+  now; a pulled service gets only its compose `environment`, and a config
+  change leaves it running. The `release` command still gets the app env,
+  even in a pulled image.
 - `riku destroy` of a container app left the images riku built for it
   (`localhost/riku-<hash>`) on disk. Destroy now removes them, found from
   the compose `build` services and from the images the app's containers
