@@ -151,6 +151,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Apply, Restart, Stop and Logs, then the copies indented under it. A
   stopped service keeps its header, from the new `/api/state` `services`
   list.
+- A memory value without a limit, in a container or Procfile card, sat at
+  the far right of the MEMORY column, away from its header. It now starts
+  under the header.
 - The embedded dashboard's container card: the image no longer wraps
   under the worker name (it is a one line label under it, cut with an
   ellipsis, full value in the tooltip), and an image riku built shows as

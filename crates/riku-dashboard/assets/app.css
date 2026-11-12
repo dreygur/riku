@@ -232,8 +232,8 @@ body.drawer-open main { padding-bottom: calc(50vh + 32px); }
 .meter i { display: block; height: 100%; background: var(--info); transition: width .4s; }
 .mem.warn .meter i { background: var(--warn); } .mem.warn .mem-val { color: var(--warn); }
 .mem.crit .meter i { background: var(--danger); } .mem.crit .mem-val { color: var(--danger-text); }
-.mem.no-limit { justify-content: flex-end; }
 .mem-val { min-width: 96px; text-align: right; }
+.mem.no-limit .mem-val { min-width: 0; text-align: left; }
 .mem-val span { color: var(--text-3); }
 .rc-badge { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; }
 .rc-badge.warn { background: rgba(242,184,75,.12); color: var(--warn); }
