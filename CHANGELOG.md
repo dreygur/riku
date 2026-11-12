@@ -95,6 +95,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`2026-11-12T08:14:03Z listening on :37139`), and container lines behind
   the engine's time. `riku logs` shows it as local `HH:MM:SS` before the
   worker name.
+- The dashboard logs panel showed every line at the time the browser
+  received it. The log stream now sends each line's own time (the stamp
+  above, or the deploy log's), and the panel shows it as local `HH:MM:SS`,
+  or no time for a line without one.
 - Under Caddy, the dashboard and `riku apps info` showed every app as
   having no site, because the deploy user cannot read the root owned
   `/etc/riku/caddy`. They now say the site is unknown. For the same reason
