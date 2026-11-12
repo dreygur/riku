@@ -42,6 +42,11 @@ hangup stops it; without a tty, a dashboard whose stdin is a pipe or a socket
 stops once stdin closes or its parent process goes away. A dashboard with
 any other stdin, such as `/dev/null` under systemd, keeps running.
 
+Each app card links where the app is live: the URLs a deploy prints at the
+end of a push, from `/api/state` `urls` (each `{url, label}`, label
+`domain`, `lan` for an address only the server's network reaches, or
+`public`). A worker only app, or one never deployed, shows "no domain".
+
 ### Options
 
 | Option | Description |

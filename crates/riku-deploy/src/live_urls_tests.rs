@@ -127,6 +127,35 @@ fn a_private_address_is_labelled_lan() {
     );
 }
 
+/// The dashboard takes the URL and its label from the same lines; an
+/// unknown server address is not a URL anyone can open.
+#[test]
+fn live_lines_carry_the_url_and_its_label() {
+    let urls = |lines: Vec<Line>| -> Vec<Option<LiveUrl>> {
+        lines.into_iter().filter(|l| l.colour == "green").map(|l| l.url).collect()
+    };
+    let live = |url: &str, label| {
+        Some(LiveUrl {
+            url: url.to_string(),
+            label,
+        })
+    };
+
+    assert_eq!(
+        urls(live_lines("shop", &routing(&["a.example"], false), None, true)),
+        [live("https://a.example", UrlLabel::Domain)]
+    );
+    assert_eq!(
+        urls(port_lines(8100, Some(Ipv4Addr::new(203, 0, 113, 10)))),
+        [live("http://203.0.113.10:8100", UrlLabel::Public)]
+    );
+    assert_eq!(
+        urls(path_lines("shop", 8080, Some(Ipv4Addr::new(10, 0, 0, 2)))),
+        [live("http://10.0.0.2:8080/shop/", UrlLabel::Lan)]
+    );
+    assert_eq!(urls(port_lines(8100, None)), [None]);
+}
+
 #[test]
 fn port_lines_without_server_ip_say_where_to_look() {
     let lines = texts(port_lines(8100, None));

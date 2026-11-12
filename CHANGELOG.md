@@ -60,6 +60,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The embedded dashboard showed "no domain" for an app reachable on a
+  port, such as a port mode app at `http://192.168.10.121:8102`, and
+  `/api/state` did not say where any app is live. `/api/state` now carries
+  `urls`, the URLs a deploy prints, from the same code, each labelled
+  `domain`, `lan` or `public`; the card links them and says "no domain"
+  only for an app without one (worker only, never deployed). The Next.js
+  `dashboard/` does not read `urls` yet.
 - `riku destroy` left the bare repo `~/.riku/repos/<app>.git` behind when
   it was a real directory, the one `riku apps create` and a push to
   `<app>.git` make. It removed only a symlink there. It now removes that

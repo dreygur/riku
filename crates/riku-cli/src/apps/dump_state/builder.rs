@@ -137,6 +137,14 @@ pub fn build_app_entry(
     } else {
         process_kinds(paths, app, &workers)
     };
+    let released = !ReleaseLog::new(paths).list(app).is_empty();
+    let urls = if released && config_error.is_none() {
+        let container = containers
+            || crate::deploy::containers::runs_containers(app, paths).unwrap_or(false);
+        crate::deploy::app_urls(app, &env_map, paths, container)
+    } else {
+        Vec::new()
+    };
 
     AppStateEntry {
         app: app.to_string(),
@@ -147,8 +155,9 @@ pub fn build_app_entry(
         },
         routing: extract_routing_fields(&env_map),
         route: route_state(app, paths),
+        urls,
         workers,
-        released: !ReleaseLog::new(paths).list(app).is_empty(),
+        released,
         process_kinds,
         config_error,
     }

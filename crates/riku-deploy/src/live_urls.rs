@@ -3,6 +3,8 @@
 
 use std::net::{IpAddr, Ipv4Addr};
 
+use serde::Serialize;
+
 use crate::router::app_routing::{AppRouting, RoutingMode};
 pub(crate) use crate::router::routing_state::TlsState;
 use crate::util::outbound_ip::public_v4;
@@ -10,22 +12,61 @@ use crate::util::outbound_ip::public_v4;
 /// nginx's "any host" name, which is not a URL.
 const CATCH_ALL_NAME: &str = "_";
 
-/// One line of the push output and its colour.
+/// Who can open a live URL.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UrlLabel {
+    /// One of the app's domains, its own or the fallback domain.
+    Domain,
+    /// A port or path URL on an address the internet cannot reach; the push
+    /// output marks it `(LAN)`.
+    Lan,
+    /// A port or path URL on a public address.
+    Public,
+}
+
+/// A URL the app is live at, as the push output lists it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LiveUrl {
+    pub url: String,
+    pub label: UrlLabel,
+}
+
+/// One line of the push output and its colour. `url` is set on a "Live at"
+/// line whose host is known.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Line {
     pub text: String,
     pub colour: &'static str,
+    pub url: Option<LiveUrl>,
 }
 
 fn line(text: String, colour: &'static str) -> Line {
-    Line { text, colour }
+    Line {
+        text,
+        colour,
+        url: None,
+    }
+}
+
+/// The green "Live at" line for `url`, with `suffix` after it in the text.
+fn live_line(url: String, label: UrlLabel, suffix: &str) -> Line {
+    Line {
+        text: format!("Live at {url}{suffix}"),
+        colour: "green",
+        url: Some(LiveUrl { url, label }),
+    }
+}
+
+fn domain_line(scheme: &str, domain: &str) -> Line {
+    live_line(format!("{scheme}://{domain}"), UrlLabel::Domain, "")
 }
 
 fn fallback_lines(domain: &str, tls: Option<TlsState>) -> Vec<Line> {
     match tls {
-        Some(TlsState::Issued) => vec![line(format!("Live at https://{domain}"), "green")],
+        Some(TlsState::Issued) => vec![domain_line("https", domain)],
         Some(TlsState::ByCaddy) => vec![
-            line(format!("Live at http://{domain}"), "green"),
+            domain_line("http", domain),
             line(
                 format!(
                     "Caddy is getting an HTTPS certificate; https://{domain} works once it has one"
@@ -34,7 +75,7 @@ fn fallback_lines(domain: &str, tls: Option<TlsState>) -> Vec<Line> {
             ),
         ],
         _ => vec![
-            line(format!("Live at http://{domain}"), "green"),
+            domain_line("http", domain),
             line(
                 "HTTPS is not available for this name yet; the app answers on plain HTTP"
                     .to_string(),
@@ -82,7 +123,7 @@ pub(crate) fn live_lines(
         .domains
         .iter()
         .filter(|domain| domain.as_str() != CATCH_ALL_NAME)
-        .map(|domain| line(format!("Live at {scheme}://{domain}"), "green"))
+        .map(|domain| domain_line(scheme, domain))
         .collect()
 }
 
@@ -96,23 +137,28 @@ pub(crate) fn url_host(configured: Option<Ipv4Addr>, detected: Option<IpAddr>) -
     }
 }
 
-/// The host of a port or path URL, and the label after the URL: ` (LAN)`
-/// for an address the internet cannot reach, so a pusher elsewhere knows
-/// the link only works on the server's network.
-fn host_and_label(server_ip: Option<Ipv4Addr>) -> (String, &'static str) {
+/// The "Live at" line for a port or path URL on `server_ip` (`path` starts
+/// with `:`). An address the internet cannot reach gets ` (LAN)` after the
+/// URL, so a pusher elsewhere knows the link only works on the server's
+/// network. An unknown address prints a placeholder and carries no URL.
+fn host_line(server_ip: Option<Ipv4Addr>, path: &str) -> Line {
     match server_ip {
-        Some(ip) if public_v4(IpAddr::V4(ip)).is_some() => (ip.to_string(), ""),
-        Some(ip) => (ip.to_string(), " (LAN)"),
-        None => ("<this server's address>".to_string(), ""),
+        Some(ip) if public_v4(IpAddr::V4(ip)).is_some() => {
+            live_line(format!("http://{ip}{path}"), UrlLabel::Public, "")
+        }
+        Some(ip) => live_line(format!("http://{ip}{path}"), UrlLabel::Lan, " (LAN)"),
+        None => line(
+            format!("Live at http://<this server's address>{path}"),
+            "green",
+        ),
     }
 }
 
 /// The push output for an app answering on `port`. `server_ip` is the
 /// address from settings.toml, when known.
 pub(crate) fn port_lines(port: u16, server_ip: Option<Ipv4Addr>) -> Vec<Line> {
-    let (host, label) = host_and_label(server_ip);
     vec![
-        line(format!("Live at http://{host}:{port}{label}"), "green"),
+        host_line(server_ip, &format!(":{port}")),
         line(
             format!("Open port {port} in the server's firewall if it is closed"),
             "",
@@ -126,12 +172,8 @@ pub(crate) fn port_lines(port: u16, server_ip: Option<Ipv4Addr>) -> Vec<Line> {
 
 /// The push output for a path mode app on the shared port.
 pub(crate) fn path_lines(app: &str, shared_port: u16, server_ip: Option<Ipv4Addr>) -> Vec<Line> {
-    let (host, label) = host_and_label(server_ip);
     vec![
-        line(
-            format!("Live at http://{host}:{shared_port}/{app}/{label}"),
-            "green",
-        ),
+        host_line(server_ip, &format!(":{shared_port}/{app}/")),
         line(
             format!("The app must handle the base path /{app}: requests reach it without the prefix, which is sent as X-Forwarded-Prefix"),
             "yellow",

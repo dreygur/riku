@@ -40,11 +40,21 @@
  */
 
 /**
+ * A url the app is live at. label is "domain" for one of its domains, "lan"
+ * for a port or path url on an address the internet cannot reach, "public"
+ * for one on a public address.
+ * @typedef {object} LiveUrl
+ * @property {string} url
+ * @property {string} label
+ */
+
+/**
  * @typedef {object} App
  * @property {string} app
  * @property {Worker[]} [workers]
  * @property {Record<string, string>} [routing]
  * @property {Route} [route]
+ * @property {LiveUrl[]} [urls] where the app is live, as a deploy prints it; empty without a route
  * @property {string} [deploy_lock] "held" while a deploy runs
  * @property {boolean} [released] false while no deploy has recorded a release
  * @property {string[]} [process_kinds] kinds the scale API takes, empty for a container app

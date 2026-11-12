@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { esc, uptimeText } from "../format.js";
 import { kindSteppersHtml } from "../render/apps.js";
 import { serviceControlsHtml } from "../render/containers.js";
-import { alertHtml, healthBadge, lockedControls, routeHtml } from "../render/meta.js";
+import { alertHtml, healthBadge, lockedControls, metaHtml, routeHtml } from "../render/meta.js";
 import { emptyHtml, pushHost } from "../render/panels.js";
 import { stateOf, workerRow } from "../render/workers.js";
 
@@ -72,6 +72,22 @@ test("a running app has every control open until a deploy holds the lock", () =>
   const live = [stateOf("running")];
   assert.deepEqual(lockedControls(false, live, false), { restart: false, redeploy: false, stop: false, scale: false });
   assert.deepEqual(lockedControls(true, live, false), { restart: true, redeploy: true, stop: true, scale: true });
+});
+
+test("the card links the app's urls with their label, and says no domain only without one", () => {
+  const portMode = metaHtml({ app: "qs-py", routing: { RIKU_NGINX_PORTMAP: "true" }, urls: [{ url: "http://192.168.10.121:8102", label: "lan" }] }, undefined, false);
+  assert.ok(portMode.includes('href="http://192.168.10.121:8102"') && portMode.includes("LAN"), portMode);
+  assert.ok(!portMode.includes("no domain"), portMode);
+
+  const workerOnly = metaHtml({ app: "jobs", routing: { RIKU_DOMAINS: "jobs.example" }, urls: [] }, undefined, false);
+  assert.ok(workerOnly.includes("no domain") && !workerOnly.includes("href="), workerOnly);
+});
+
+test("a url is escaped, and one that is not http or https is not linked", () => {
+  const evil = metaHtml({ app: "a", urls: [{ url: `http://x/${EVIL}`, label: "domain" }] }, undefined, false);
+  assertNoRawMarkup(evil);
+  const script = metaHtml({ app: "a", urls: [{ url: "javascript:alert(1)", label: "domain" }] }, undefined, false);
+  assert.ok(!script.includes("href="), script);
 });
 
 test("the crash alert escapes the worker name in its data-worker attribute", () => {

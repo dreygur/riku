@@ -113,6 +113,59 @@ fn released_says_whether_any_deploy_recorded_a_release() {
     assert!(released(&paths), "a recorded release counts");
 }
 
+fn enable_worker(paths: &RikuPaths, app: &str, kind: &str) {
+    fs::create_dir_all(&paths.workers_enabled).unwrap();
+    let config = crate::supervisor::config::create_worker_config(
+        app,
+        kind,
+        "run",
+        1,
+        HashMap::new(),
+        "/srv/app",
+        "/srv/log",
+    );
+    fs::write(
+        paths.workers_enabled.join(format!("{app}@{kind}.1.toml")),
+        toml::to_string(&config).unwrap(),
+    )
+    .unwrap();
+}
+
+/// `urls` says where the app is live, as the push summary does: a port
+/// mode app on a LAN address gets its URL labelled `lan`, while a worker
+/// only app and an app that never deployed get none.
+#[test]
+fn urls_are_the_push_summary_urls_and_none_without_a_route() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    crate::config::settings::save_key(&paths, "routing", "server_ip", Some("192.168.10.121"))
+        .unwrap();
+    let releases = crate::deploy::releases::ReleaseLog::new(&paths);
+    for (app, kind) in [("qs-py", "web"), ("jobs", "worker"), ("fresh", "web")] {
+        fs::create_dir_all(paths.app_root.join(app)).unwrap();
+        fs::write(
+            paths.app_root.join(app).join("riku.toml"),
+            "[routing]\nmode = \"port\"\nport = 8102\n",
+        )
+        .unwrap();
+        enable_worker(&paths, app, kind);
+        if app != "fresh" {
+            releases.record(app, "0123456789abcdef").unwrap();
+        }
+    }
+    let urls = |app: &str| {
+        serde_json::to_value(build_app_entry(app, &paths, &HashMap::new())).unwrap()["urls"]
+            .clone()
+    };
+
+    assert_eq!(
+        urls("qs-py"),
+        serde_json::json!([{ "url": "http://192.168.10.121:8102", "label": "lan" }])
+    );
+    assert_eq!(urls("jobs"), serde_json::json!([]), "worker only app");
+    assert_eq!(urls("fresh"), serde_json::json!([]), "never deployed app");
+}
+
 /// The dashboard shows one scale control per kind the scale API takes: the
 /// long running kinds of SCALING (a kind scaled to 0 included) and of the
 /// workers, never a one shot or cron kind, and no `web` the app lacks.

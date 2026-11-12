@@ -4,6 +4,7 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 
 use super::route::RouteState;
+use crate::deploy::LiveUrl;
 use crate::supervisor::stats::ProcessStatus;
 
 /// Product name and version of the container engine, for operator visibility.
@@ -51,6 +52,10 @@ pub struct AppStateEntry {
     /// Allowlisted routing/port env vars only: secrets are never dumped.
     pub routing: BTreeMap<String, String>,
     pub route: RouteState,
+    /// Where the app is live, the URLs a deploy prints, each labelled
+    /// `domain`, `lan` or `public`. Empty for an app without a route (worker
+    /// only), one that never deployed, and one whose routing cannot be read.
+    pub urls: Vec<LiveUrl>,
     pub workers: Vec<WorkerStateEntry>,
     /// Whether any deploy of the app recorded a release. False for an app
     /// that was created but whose deploys all failed.

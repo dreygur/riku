@@ -1,7 +1,7 @@
 // @ts-check
 // Markup for an app card's header: health badge, meta line and crash alert.
 // Pure string builders: every server value passes through esc() or num().
-import { esc, fmtAgo, fmtBytes, isOn, num } from "../format.js";
+import { esc, fmtAgo, fmtBytes, num } from "../format.js";
 import { I } from "../icons.js";
 import { workerName } from "./workers.js";
 
@@ -32,20 +32,37 @@ export function routeHtml(route) {
   return `<span title="${esc(r.error || "")}">${I.server}router <span class="c-bad">unknown</span></span>`;
 }
 
+/** Tags for the url labels the push output names; a domain needs none. */
+const URL_TAGS = { lan: "LAN", public: "public" };
+
+/**
+ * A link to one live url. Only http and https urls are linked.
+ * @param {import("../state.js").LiveUrl} u
+ */
+function urlLink(u) {
+  const url = String(u.url || "");
+  const parts = /^(https?):\/\/(.+)$/.exec(url);
+  if (!parts) {
+    return `<span>${esc(url)}</span>`;
+  }
+  const https = parts[1] === "https";
+  const shown = parts[2];
+  const tag = URL_TAGS[/** @type {"lan" | "public"} */ (u.label)];
+  return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${https ? I.https : ""}${esc(shown)}${https ? "" : '<span class="tag-http">http</span>'}${tag ? `<span class="tag-http">${tag}</span>` : ""}${I.ext}</a>`;
+}
+
 /**
  * @param {import("../state.js").App} a
  * @param {import("../state.js").Release | undefined} cur current release
  * @param {boolean} busy a deploy holds the lock
  */
 export function metaHtml(a, cur, busy) {
-  const https = isOn((a.routing || {}).RIKU_HTTPS_ONLY);
-  const doms = domainsOf(a);
+  const urls = a.urls || [];
   const parts = [];
-  if (doms.length) {
-    const d = doms[0];
-    parts.push(`<a href="${https ? "https" : "http"}://${esc(d)}" target="_blank" rel="noopener noreferrer">${https ? I.https : ""}${esc(d)}${https ? "" : '<span class="tag-http">http</span>'}${I.ext}</a>`);
-    if (doms.length > 1) {
-      parts.push(`<span class="c-dim" title="${esc(doms.slice(1).join(", "))}">+${doms.length - 1} more</span>`);
+  if (urls.length) {
+    parts.push(urlLink(urls[0]));
+    if (urls.length > 1) {
+      parts.push(`<span class="c-dim" title="${esc(urls.slice(1).map((u) => u.url).join(", "))}">+${urls.length - 1} more</span>`);
     }
   } else {
     parts.push('<span class="c-dim">no domain</span>');

@@ -7,7 +7,7 @@ use std::path::Path;
 
 use crate::config::router::Router;
 use crate::config::{settings, RikuPaths};
-use crate::live_urls::{live_lines, path_lines, port_lines, url_host, Line, TlsState};
+use crate::live_urls::{live_lines, path_lines, port_lines, url_host, Line, LiveUrl, TlsState};
 use crate::procfile_deploy::Deployed;
 use crate::progress::{DeployProgress, Outcome};
 use crate::router::app_routing::{AppRouting, RoutingMode};
@@ -51,30 +51,25 @@ fn routed(
     Ok((routing, tls))
 }
 
-/// Where the app is live, as `live_urls` words it. Nothing for a Procfile
-/// app without a route (see `router::has_route`).
-fn live_at(
+/// Where the app is live, as `live_urls` words it, and the notes around it.
+/// Nothing for a Procfile app without a route (see `router::has_route`).
+#[allow(clippy::question_mark)]
+fn live_lines_of(
     app: &str,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
     container: bool,
-) -> Vec<Line> {
+) -> anyhow::Result<Vec<Line>> {
     if !container {
         match crate::router::has_route(app, env, paths) {
             Ok(true) => {}
-            Ok(false) => return Vec::new(),
-            Err(e) => {
-                display::warn(&format!("Cannot tell where the app is live: {e:#}"));
-                return Vec::new();
-            }
+            Ok(false) => return Ok(Vec::new()),
+            Err(e) => return Err(e),
         }
     }
     let (routing, tls) = match routed(app, env, paths) {
         Ok(found) => found,
-        Err(e) => {
-            display::warn(&format!("Cannot tell where the app is live: {e:#}"));
-            return Vec::new();
-        }
+        Err(e) => return Err(e),
     };
     let mut lines = live_lines(app, &routing, tls, crate::util::flag::https_only(env));
     let server = settings::load(paths).ok().map(|loaded| loaded.routing);
@@ -90,7 +85,43 @@ fn live_at(
     if let (RoutingMode::Path, Some(server)) = (routing.mode, &server) {
         lines.extend(path_lines(app, server.shared_port, server_ip));
     }
-    lines
+    Ok(lines)
+}
+
+/// [`live_lines_of`] for the push output: a failure is shown to the pusher
+/// and drops only the URL lines.
+fn live_at(
+    app: &str,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+    container: bool,
+) -> Vec<Line> {
+    match live_lines_of(app, env, paths, container) {
+        Ok(lines) => lines,
+        Err(e) => {
+            display::warn(&format!("Cannot tell where the app is live: {e:#}"));
+            Vec::new()
+        }
+    }
+}
+
+/// The URLs a successful deploy of `app` printed, from the same lines, for
+/// the dashboard. `container` is whether the app runs as containers; `env`
+/// is its merged config. Empty for an app without a route, and when the
+/// routing cannot be read; the push output shows that reason instead.
+pub fn app_urls(
+    app: &str,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+    container: bool,
+) -> Vec<LiveUrl> {
+    match live_lines_of(app, env, paths, container) {
+        Ok(lines) => lines.into_iter().filter_map(|line| line.url).collect(),
+        Err(e) => {
+            tracing::debug!("no URLs for '{app}': {e:#}");
+            Vec::new()
+        }
+    }
 }
 
 /// Splits `lines` into the URLs for the summary, printing every other line
