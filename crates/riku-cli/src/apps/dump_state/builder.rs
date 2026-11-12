@@ -14,7 +14,9 @@ use crate::deploy::releases::ReleaseLog;
 use super::kinds::process_kinds;
 use super::route::route_state;
 use super::supervisor_files::{load_app_stats, supervisor_uptime, unix_timestamp_now};
-use super::types::{AppStateEntry, EngineInfo, LockState, StateDump, UnitKind, WorkerStateEntry};
+use super::types::{
+    AppStateEntry, EngineInfo, LockState, ServiceStateEntry, StateDump, UnitKind, WorkerStateEntry,
+};
 
 /// Known non-secret routing/port keys an app's `ENV` file may carry.
 const ROUTING_ENV_ALLOWLIST: &[&str] = &[
@@ -137,6 +139,7 @@ pub fn build_app_entry(
     } else {
         process_kinds(paths, app, &workers)
     };
+    let services = container_services(app, paths, &env_map);
     let released = !ReleaseLog::new(paths).list(app).is_empty();
     let urls = if released && config_error.is_none() {
         let container =
@@ -160,8 +163,41 @@ pub fn build_app_entry(
         workers,
         released,
         process_kinds,
+        services,
         config_error,
     }
+}
+
+/// The compose services of `app` when it runs as containers, from its
+/// checkout and env. Nothing for a Procfile app or an unreadable project.
+fn container_services(
+    app: &str,
+    paths: &RikuPaths,
+    env: &HashMap<String, String>,
+) -> Vec<ServiceStateEntry> {
+    let app_path = paths.app_root.join(app);
+    if !matches!(
+        crate::deploy::containers::is_container_app(&app_path, env),
+        Ok(true)
+    ) {
+        return Vec::new();
+    }
+    let project = match crate::deploy::containers::load_project(app, &app_path, env) {
+        Ok(project) => project,
+        Err(_) => return Vec::new(),
+    };
+    project
+        .services
+        .iter()
+        .map(|service| ServiceStateEntry {
+            name: service.name.to_string(),
+            built: service.build.is_some(),
+            image: match service.build {
+                Some(_) => None,
+                None => service.image.clone(),
+            },
+        })
+        .collect()
 }
 
 #[allow(clippy::question_mark)]

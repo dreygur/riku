@@ -192,6 +192,36 @@ fn process_kinds_are_the_scalable_kinds_of_scaling_and_workers() {
     assert_eq!(entry.process_kinds, vec!["mailer", "worker"]);
 }
 
+/// The container card draws one header per compose service, a stopped one
+/// included, so the state lists them in start order with how each image
+/// comes about; a Procfile app lists none.
+#[test]
+fn services_list_every_compose_service_with_its_image() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let app = "ct-compose";
+    let app_path = paths.app_root.join(app);
+    fs::create_dir_all(app_path.join("web")).unwrap();
+    fs::write(
+        app_path.join("compose.yaml"),
+        "services:\n  web:\n    build: ./web\n    depends_on: [redis]\n  redis:\n    image: redis:7-alpine\n",
+    )
+    .unwrap();
+    fs::create_dir_all(paths.app_root.join("procfile-app")).unwrap();
+
+    let entry = build_app_entry(app, &paths, &HashMap::new());
+    let plain = build_app_entry("procfile-app", &paths, &HashMap::new());
+
+    assert_eq!(
+        serde_json::to_value(&entry.services).unwrap(),
+        serde_json::json!([
+            {"name": "redis", "built": false, "image": "redis:7-alpine"},
+            {"name": "web", "built": true, "image": null}
+        ])
+    );
+    assert!(plain.services.is_empty(), "a Procfile app listed services");
+}
+
 /// The router helper writes `/etc/riku/nginx/<app>.conf`; a config left in
 /// the deploy user's own `nginx_root` is not one nginx loads.
 #[test]

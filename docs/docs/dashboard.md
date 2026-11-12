@@ -58,11 +58,15 @@ router name alone and says why the site state is unknown in its tooltip.
 
 A worker's memory bar measures against its limit (`memory_limit_bytes`).
 A worker or container with no limit shows its memory with "no limit" and
-no bar. A container row shows its image under its name: the image
-reference for a pulled image, `built` for one riku built (the full tag is
-in the tooltip). A container app lists one row per service (stepper,
-Apply, Restart, Stop, Logs) in an aligned grid, then a row of its own with
-the release picker, Roll back and Stop app.
+no bar, the value under the column header. A container app's table has a
+header row per compose service (from `/api/state` `services`), a stopped
+service included: its name, its image (the reference of a pulled image,
+`built` for one riku built, the full value in the tooltip), and its
+stepper, Apply, Restart, Stop and Logs. The service's copies are listed
+indented under it. Below the table sit the release picker, Roll back and
+Stop app. The release picker preselects the previous release, the one
+Roll back goes to; the current release is listed first and cannot be
+picked.
 
 ### Options
 

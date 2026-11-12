@@ -146,6 +146,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Scaling 'worker' to 2`, so it was unclear whether anything started. It
   did start or stop the copies; it now also says so, for example
   `Started 1 copy of worker, 2 running`.
+- The embedded dashboard's container card groups each service with its
+  copies: a header row with the service name, its image and its stepper,
+  Apply, Restart, Stop and Logs, then the copies indented under it. A
+  stopped service keeps its header, from the new `/api/state` `services`
+  list.
 - The embedded dashboard's container card: the image no longer wraps
   under the worker name (it is a one line label under it, cut with an
   ellipsis, full value in the tooltip), and an image riku built shows as

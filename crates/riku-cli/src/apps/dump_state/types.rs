@@ -70,10 +70,24 @@ pub struct AppStateEntry {
     /// long running kinds in `SCALING` and in `workers`. Empty for a
     /// container app, whose services are its workers' kinds.
     pub process_kinds: Vec<String>,
+    /// The compose services of a container app in start order, those with
+    /// no copy running included. Empty for a Procfile app and for an app
+    /// whose compose file cannot be read.
+    pub services: Vec<ServiceStateEntry>,
     /// Why the app's config (riku.toml or ENV) could not be read; `routing`
     /// is then empty. Left out of the JSON when the config is fine.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config_error: Option<String>,
+}
+
+/// One compose service of a container app.
+#[derive(Serialize)]
+pub struct ServiceStateEntry {
+    pub name: String,
+    /// Whether riku builds the image from the app's code.
+    pub built: bool,
+    /// The image reference a pulled service runs; `None` for a built one.
+    pub image: Option<String>,
 }
 
 /// State snapshot for an individual worker or container copy.

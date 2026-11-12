@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { esc, uptimeText } from "../format.js";
 import { kindSteppersHtml } from "../render/apps.js";
-import { serviceControlsHtml } from "../render/containers.js";
+import { containerFooterHtml, containerRowsHtml } from "../render/containers.js";
 import { alertHtml, healthBadge, lockedControls, metaHtml, routeHtml } from "../render/meta.js";
 import { emptyHtml, pushHost } from "../render/panels.js";
 import { imageLabel, stateOf, workerRow } from "../render/workers.js";
@@ -38,15 +38,44 @@ test("the memory bar measures against the worker's limit, and there is no bar wi
   }
 });
 
-test("a container row keeps the name on one line and shows the image as a short label", () => {
-  const pulled = workerRow({ kind: "redis", ordinal: 1, unit: "container", image: "redis:7-alpine" });
-  assert.ok(pulled.includes('<span class="w-img" title="redis:7-alpine">redis:7-alpine</span>'), pulled);
-  const built = workerRow({ kind: "web", ordinal: 2, unit: "container", image: "localhost/riku-0b00b8f683ba20d5:latest" });
-  assert.ok(built.includes(">built</span>"), built);
-  assert.ok(built.includes('title="built by riku: localhost/riku-0b00b8f683ba20d5:latest"'), built);
-  assert.ok(!built.includes(">localhost/riku-"), "the built tag is shown as text: " + built);
+test("the image label says built for riku's own images and names a pulled one", () => {
   assert.equal(imageLabel("localhost/riku-0b00b8f683ba20d5").text, "built");
+  assert.equal(imageLabel("localhost/riku-0b00b8f683ba20d5:latest").title, "built by riku: localhost/riku-0b00b8f683ba20d5:latest");
   assert.equal(imageLabel("ghcr.io/acme/localhost/riku-x:1").text, "ghcr.io/acme/localhost/riku-x:1");
+});
+
+const SERVICES = [
+  { name: "redis", built: false, image: "redis:7-alpine" },
+  { name: "web", built: true, image: null },
+  { name: "worker", built: true, image: null },
+];
+const COPIES = [
+  { kind: "redis", ordinal: 1, unit: "container", image: "redis:7-alpine" },
+  { kind: "web", ordinal: 1, unit: "container", image: "localhost/riku-0b00b8f683ba20d5:latest" },
+];
+
+test("each service heads its copies, with its image and controls on the header", () => {
+  const html = containerRowsHtml(SERVICES, COPIES, {});
+  const at = (s) => html.indexOf(s);
+  assert.ok(at('data-service-head="redis"') < at(">redis.1<"), html);
+  assert.ok(at(">redis.1<") < at('data-service-head="web"'), html);
+  assert.ok(at('data-service-head="web"') < at(">web.1<"), html);
+  assert.ok(at(">web.1<") < at('data-service-head="worker"'), "a header out of order: " + html);
+  assert.equal((html.match(/data-service-head=/g) || []).length, 3, "a service with no copy lost its header");
+  assert.ok(html.includes('title="redis:7-alpine">redis:7-alpine</span>'), html);
+  assert.ok(html.includes('title="built by riku: localhost/riku-0b00b8f683ba20d5:latest">built</span>'), html);
+  assert.ok(html.includes('title="built by riku">built</span>'), "a stopped built service lost its label: " + html);
+  for (const ctl of ['data-svc-scale="worker"', 'data-do="svc-scale" data-service="web"', 'data-do="svc-restart" data-service="redis"', 'data-do="svc-stop" data-service="redis"', 'data-do="logs" data-worker="web"']) {
+    assert.ok(html.includes(ctl), `${ctl} missing: ${html}`);
+  }
+  const copyRow = html.slice(at(">web.1<") - 200, at(">web.1<") + 400);
+  assert.ok(!copyRow.includes("w-img"), "the image is repeated on the copy row: " + copyRow);
+});
+
+test("service headers fall back to the workers' kinds when the state lists no services", () => {
+  const html = containerRowsHtml([], COPIES, { web: 3 });
+  assert.equal((html.match(/data-service-head=/g) || []).length, 2, html);
+  assert.ok(html.includes('data-svc-scale="web" value="3"'), "the typed count was lost: " + html);
 });
 
 test("a worker only app gets a worker stepper and no web one, kind names escaped", () => {
@@ -129,21 +158,15 @@ test("the crash alert escapes the worker name in its data-worker attribute", () 
   assertNoRawMarkup(alertHtml(ws, ws.map((w) => stateOf(w.status)), 1));
 });
 
-test("service controls escape the service name everywhere it appears", () => {
-  assertNoRawMarkup(serviceControlsHtml("app-1", [{ kind: EVIL, ordinal: 1, unit: "container" }], {}));
+test("service headers escape the service name and image everywhere they appear", () => {
+  assertNoRawMarkup(containerRowsHtml([{ name: EVIL, built: false, image: EVIL }], [{ kind: EVIL, ordinal: 1, unit: "container", image: EVIL }], {}));
 });
 
-test("service rows sit in one grid with no divider, and the app controls get their own row", () => {
-  const ws = ["redis", "web", "worker"].map((kind) => ({ kind, ordinal: 1, unit: "container" }));
-  const html = serviceControlsHtml("app-1", ws, {});
-  assert.ok(!html.includes("vsep"), "a divider trails a service row: " + html);
-  const grid = html.indexOf('class="svc-grid"');
-  const appRow = html.indexOf('class="app-row"');
-  assert.ok(grid >= 0 && appRow > grid, html);
-  assert.equal((html.match(/class="svc-row"/g) || []).length, 3, html);
-  const lastService = html.lastIndexOf('data-do="svc-stop"');
+test("a container app's footer holds only the app controls", () => {
+  const html = containerFooterHtml("app-1");
+  assert.ok(!html.includes("vsep") && !html.includes("data-service"), html);
   for (const appControl of ["data-rel", 'data-do="rollback"', 'data-do="stop"']) {
-    assert.ok(html.indexOf(appControl) > appRow && html.indexOf(appControl) > lastService, `${appControl} is not in the app row: ${html}`);
+    assert.ok(html.includes(appControl), `${appControl} missing: ${html}`);
   }
 });
 

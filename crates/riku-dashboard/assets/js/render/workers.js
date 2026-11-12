@@ -77,17 +77,12 @@ export function imageLabel(image) {
     : { text: image, title: image };
 }
 
-/** @param {import("../state.js").Worker} w */
-function nameCell(w) {
-  const name = `<span class="w-label">${esc(workerName(w))}</span>`;
-  if (w.unit !== "container" || !w.image) {
-    return `<span role="cell" class="w-name">${name}</span>`;
-  }
-  const img = imageLabel(String(w.image));
-  return `<span role="cell" class="w-name">${name}<span class="w-img" title="${esc(img.title)}">${esc(img.text)}</span></span>`;
-}
-
-/** @param {import("../state.js").Worker} w */
+/**
+ * One worker, or one copy of a container service. A copy's image shows on
+ * its service's header row (see containers.js), so the copy row is indented
+ * under it and carries only its own name.
+ * @param {import("../state.js").Worker} w
+ */
 export function workerRow(w) {
   const isContainer = w.unit === "container";
   const st = stateOf(w.status);
@@ -100,8 +95,10 @@ export function workerRow(w) {
     : (w.pid ? fmtCpu(w.cpu_time_ms) : NO_VALUE);
   const stateLabel = isContainer && w.state_detail ? w.state_detail : st.label;
 
-  return `<div class="tr ${st.cls === "dead" ? "is-bad" : ""}" role="row">
-      ${nameCell(w)}
+  const classes = ["tr", isContainer ? "copy" : "", st.cls === "dead" ? "is-bad" : ""].filter(Boolean).join(" ");
+
+  return `<div class="${classes}" role="row">
+      <span role="cell" class="w-name"><span class="w-label">${esc(workerName(w))}</span></span>
       <span role="cell"><span class="state ${st.cls}">${glyph(st.cls)}${esc(stateLabel)}</span></span>
       ${memCell(w)}
       <span role="cell" class="${live ? "muted" : "dim"}">${cpuDisplay}</span>

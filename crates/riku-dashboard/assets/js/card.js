@@ -5,7 +5,7 @@ import { wire } from "./card-events.js";
 import { num } from "./format.js";
 import { loadReleases, renderReleases } from "./releases.js";
 import { cardHtml, kindSteppersHtml } from "./render/apps.js";
-import { serviceControlsHtml } from "./render/containers.js";
+import { containerFooterHtml, containerRowsHtml } from "./render/containers.js";
 import { alertHtml, healthBadge, lockedControls, metaHtml } from "./render/meta.js";
 import { stateOf, workerRow } from "./render/workers.js";
 import { syncScale } from "./scale.js";
@@ -31,13 +31,22 @@ export function createCard(app) {
 }
 
 /**
- * @param {Card} c
+ * Whether the card shows container services: the server lists compose
+ * services, or a worker is a container.
+ * @param {import("./state.js").App} a
  * @param {import("./state.js").Worker[]} ws
  */
-function renderControls(c, ws) {
+const isContainerApp = (a, ws) => (a.services || []).length > 0 || ws.some((w) => w.unit === "container");
+
+/**
+ * @param {Card} c
+ * @param {import("./state.js").Worker[]} ws
+ * @param {boolean} containers
+ */
+function renderControls(c, ws, containers) {
   const controls = c.el.querySelector("[data-controls]");
-  if (ws.some((w) => w.unit === "container")) {
-    controls.innerHTML = serviceControlsHtml(c.id, ws, c.svcScale);
+  if (containers) {
+    controls.innerHTML = containerFooterHtml(c.id);
     renderReleases(c);
     return;
   }
@@ -69,12 +78,15 @@ function lockControls(c, busy, locks) {
   /** @type {HTMLElement} */ (el.querySelector("[data-busynote]")).hidden = !busy;
   /** @param {string} sel @param {boolean} locked */
   const lock = (sel, locked) => el.querySelectorAll(sel).forEach((b) => {
-    if (!b.hasAttribute("aria-busy")) { /** @type {HTMLButtonElement} */ (b).disabled = locked; }
+    if (!b.hasAttribute("aria-busy")) { /** @type {HTMLButtonElement | HTMLInputElement} */ (b).disabled = locked; }
   });
   lock('[data-do="restart"]', locks.restart);
   lock('[data-do="redeploy"]', locks.redeploy);
   lock('[data-do="stop"]', locks.stop);
-  lock('[data-do="svc-restart"],[data-do="svc-stop"]', busy);
+  // The service controls sit in the table rows, which stay visible while a
+  // deploy runs, so they lock instead of hiding with the footer.
+  lock('[data-do="svc-restart"],[data-do="svc-stop"],[data-svc-step],[data-svc-scale]', busy);
+  if (busy) { lock('[data-do="svc-scale"]', true); }
   const rb = /** @type {HTMLButtonElement} */ (el.querySelector('[data-do="rollback"]'));
   if (rb && !rb.hasAttribute("aria-busy")) { rb.disabled = busy || c.releases.length < 2; }
   c.scaleLocked = locks.scale;
@@ -113,10 +125,13 @@ export function updateCard(c, a) {
     al.hidden = true; al.innerHTML = "";
   }
 
-  el.querySelector("[data-rows]").innerHTML = ws.length
-    ? ws.map((w) => workerRow(w)).join("")
-    : '<div class="tr empty-row" role="row"><span role="cell">No workers running.</span></div>';
+  const containers = isContainerApp(a, ws);
+  el.querySelector("[data-rows]").innerHTML = containers
+    ? containerRowsHtml(a.services || [], ws, c.svcScale)
+    : ws.length
+      ? ws.map((w) => workerRow(w)).join("")
+      : '<div class="tr empty-row" role="row"><span role="cell">No workers running.</span></div>';
 
-  renderControls(c, ws);
+  renderControls(c, ws, containers);
   lockControls(c, busy, lockedControls(busy, st, neverDeployed));
 }

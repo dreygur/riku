@@ -31,7 +31,9 @@ mod types;
 
 pub use builder::{build_app_entry, build_state_dump, extract_routing_fields};
 pub use route::RouteState;
-pub use types::{AppStateEntry, EngineInfo, LockState, StateDump, UnitKind, WorkerStateEntry};
+pub use types::{
+    AppStateEntry, EngineInfo, LockState, ServiceStateEntry, StateDump, UnitKind, WorkerStateEntry,
+};
 
 /// Dump the current supervisor state matrix as pretty-printed JSON to stdout.
 #[allow(clippy::question_mark)]

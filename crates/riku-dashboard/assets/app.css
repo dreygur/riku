@@ -215,6 +215,9 @@ body.drawer-open main { padding-bottom: calc(50vh + 32px); }
 .tr .w-name { font-weight: 500; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .w-label, .w-img { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .w-img { font: 400 11px/1.2 var(--mono); color: var(--text-3); }
+.tr.svc-head { height: auto; min-height: 52px; padding-top: 8px; padding-bottom: 8px; background: var(--inset); }
+.svc-ctl { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tr.copy .w-name { padding-left: 18px; }
 .tr .muted { color: var(--text-2); }
 .tr .dim { color: var(--text-3); }
 .tr.empty-row { color: var(--text-3); grid-template-columns: 1fr; }
@@ -243,11 +246,6 @@ body.drawer-open main { padding-bottom: calc(50vh + 32px); }
 .ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .ctl-label { font: 500 12px/1 var(--sans); color: var(--text-2); }
 .vsep { width: 1px; height: 24px; background: var(--line); }
-.svc-grid, .app-row { flex-basis: 100%; }
-.svc-grid { display: flex; flex-direction: column; gap: 10px; }
-.svc-row { display: grid; grid-template-columns: 160px repeat(5, auto); justify-content: start; align-items: center; gap: 10px; }
-.svc-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.app-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
 .stepper { display: inline-flex; align-items: stretch; height: 36px; border: 1px solid var(--line-strong); background: var(--raised); }
 .stepper.dirty { border-color: var(--info); }
 .st-btn { width: 34px; display: grid; place-items: center; border: 0; background: transparent; color: var(--text-2); cursor: pointer; }
@@ -376,8 +374,8 @@ body.drawer-open #toasts { bottom: calc(48vh + 18px); }
   .app-head, .controls, .busy-note, .alert { padding-left: 16px; padding-right: 16px; }
   .vsep { display: none; }
   .controls .grow { display: none; }
-  .svc-row { display: flex; flex-wrap: wrap; }
-  .svc-name { flex-basis: 100%; }
+  .tr.svc-head { display: flex; flex-wrap: wrap; position: sticky; left: 0; max-width: calc(100vw - 32px); }
+  .tr.svc-head .w-name { flex-basis: 100%; }
   .select select { min-width: 0; width: 100%; }
   .drawer { height: 72vh; }
   body.drawer-open main { padding-bottom: calc(72vh + 32px); }

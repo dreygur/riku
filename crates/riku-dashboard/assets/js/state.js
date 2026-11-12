@@ -49,8 +49,17 @@
  */
 
 /**
+ * A compose service of a container app.
+ * @typedef {object} Service
+ * @property {string} name
+ * @property {boolean} built riku builds its image from the app's code
+ * @property {string | null} image the image a pulled service runs, null for a built one
+ */
+
+/**
  * @typedef {object} App
  * @property {string} app
+ * @property {Service[]} [services] compose services in start order, empty for a Procfile app
  * @property {Worker[]} [workers]
  * @property {Record<string, string>} [routing]
  * @property {Route} [route]
