@@ -11,13 +11,14 @@ differ: bug fixes go failing test, fix, commit with no plan; features get a
 half page design in chat that the owner approves, EGM only on request; the
 full suite and one review run once per batch; one PR per batch.
 
-Goal for 0.1.4 ("somewhat complete"), all merged to main 2026-11-11
-without CI at the owner's request, release not yet tagged: merge
-`feat/small-boards` and `fix/nginx-cache-catch-all`; custom certificates (`riku certs`); node
-plugin honours `RIKU_NODE_VERSION` by failing on a mismatch; no
-`your-server` placeholders in docs; `v0.1.4-rc.1` tag to prove the release
-workflow, then `v0.1.4`. The Next.js dashboard, the framework design and
-phase 4 come after.
+Project status (owner, 2026-11-14): done at v0.1.9. No work is planned;
+start anything new only on the owner's request. The Next.js dashboard,
+the framework design and phase 4 were never started.
+
+Goal for 0.1.4 ("somewhat complete"): reached and released as v0.1.4 on
+2026-11-13 (small boards, nginx certificate fixes, `riku certs`, node
+`RIKU_NODE_VERSION` check, no `your-server` placeholders, release workflow
+proven by the tag).
 
 - Each project has a design in `docs/superpowers/specs/` (owner approved) and
   a plan in `docs/superpowers/plans/`, written just before it runs. Specs
@@ -60,6 +61,29 @@ phase 4 come after.
 
 ### Done
 
+- Releases 0.1.4 to 0.1.9 (2026-11-13), each tested on the owner's test
+  server through a `v<next>-rc.N` prerelease (a local amd64 build uploaded
+  to it, deleted after the release):
+  - 0.1.4 (#95, fe5a5d3): server test fixes, container fixes, dashboard
+    service rows, a failed push rolls the branch back, supervisor started
+    before the health check.
+  - 0.1.5 (#96, b70d734): POSIX sh plugins and hook, deploy user shell
+    kept current by init, one supervisor restart, full capped deploy log,
+    podman image ids, stats written on container deploy, Alpine nginx
+    `http.d`, Go detected by `go.mod` only.
+  - 0.1.6 (#97, 31e795f): the push, dashboard and `/api/state` name an
+    app's URL with https when the router serves HTTPS. Public 80/443 test
+    passed with Let's Encrypt.
+  - 0.1.7 (#98, d053eeb): wildcard domains get no URL; an own certificate
+    lists https only for the names it covers; the shared path port answers
+    404 for a path of no app.
+  - 0.1.8 (#99, b20c0b0): the node plugin runs apps on the node nub
+    provides on a server without node.
+  - 0.1.9 (#100, 9c1f1b6): under nginx, path mode deploys again, the first
+    fallback certificate is kept (acme.sh's `router-renew` deleted it mid
+    issue), a missing acme.sh is named and not recorded as a failure, and
+    `riku doctor` checks for acme.sh. Both routers, path mode on 8080 and
+    public HTTPS were checked on the server.
 - cgroup v2 delegation fix on `fix/cgroup-delegation` (2026-11-12): riku
   units say `Delegate=yes`, the supervisor takes over its own cgroup from
   `/proc/self/cgroup` instead of `/sys/fs/cgroup/riku/apps`. Not merged,
@@ -148,7 +172,7 @@ phase 4 come after.
   passed, 0 failed, 2 ignored. Merged into `feat/caddy-router` at 10e956b
   (gate green there too), not pushed.
 
-### Phase 3: container integration (3a done, PR #73 open)
+### Phase 3: container integration (3a done, merged as #73)
 
 - Same spec, split in two plans (owner, 2026-10-31). 3a server side: plan
   `plans/2026-10-30-container-integration.md` (owner approved), 16 tasks,
@@ -237,7 +261,7 @@ phase 4 come after.
   Procfile builds in a container, riku-sync wiring and its carried duties) is
   dropped.
 
-### Developer experience: config files and the first run (next)
+### Developer experience: config files and the first run (done)
 
 - Spec `specs/2026-11-09-developer-experience-design.md` (owner approved
   2026-11-09). Branch `feat/dev-experience`.
@@ -269,7 +293,7 @@ phase 4 come after.
     signed); the push printed the raw comma list of domains; quick start
     claimed apps answer on the bare IP.
 
-### After developer experience: small boards and binary size
+### After developer experience: small boards and binary size (done, released in 0.1.4)
 
 - One task: build targets for Pi Zero / Zero W (armv6), Pi Zero 2 W and Pi
   3/4/5 (arm64, armv7), shipped as both glibc and static musl builds; a size
@@ -313,7 +337,7 @@ phase 4 come after.
     trial profile was removed. riku stays on unwind for the supervisor
     (Cargo.toml). The owner sets the size budget from this table.
 
-### Phase 4: one rk managing many servers
+### Phase 4: one rk managing many servers (not started)
 
 - No design yet. The owner wants to be asked questions interactively first.
 - Owner direction 2026-11-01: a fleet such as one controller board and ten
@@ -323,8 +347,12 @@ phase 4 come after.
 
 ## Known open problems, outside the plans
 
-- Server test of 0.1.4-rc.3 (2026-11-11), fixed on `fix/server-test-bugs`,
-  not pushed: restart after a failed push took the app down (checkout reset
+- Left open on purpose at the end (owner, 2026-11-14): the supervisor's
+  full stats.json write every 5 s can briefly bring back a stale view
+  after a container deploy; on Alpine an nginx reload returns before its
+  workers serve, so a route answers 404 for about 2 s.
+- Server test of 0.1.4-rc.3 (2026-11-11), fixed on `fix/server-test-bugs`
+  and released in 0.1.4: restart after a failed push took the app down (checkout reset
   to the last release, restart never builds), plain init beside a system
   install, the doubled push failure, init and plugin output, the port URL
   placeholder. Fixed after: the dashboard's per worker restart now bumps
