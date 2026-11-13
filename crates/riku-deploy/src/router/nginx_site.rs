@@ -176,7 +176,7 @@ pub(super) fn apply_nginx_site(
             return Err(e);
         }
         if let Some(domain) = fallback_domain {
-            if fallback_certificate(app, domain, paths) != TlsState::Issued {
+            if fallback_certificate(app, domain, paths) != Some(TlsState::Issued) {
                 display::warn(&format!(
                     "HTTPS for {domain} is not available yet; the app answers on plain HTTP"
                 ));

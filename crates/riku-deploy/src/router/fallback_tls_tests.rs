@@ -68,9 +68,14 @@ fn drop_stale_pair_removes_the_files_and_the_record() {
     for suffix in ["key", "crt", "fullchain.crt"] {
         std::fs::write(paths.nginx_root.join(format!("myapp.{suffix}")), "pem").unwrap();
     }
-    let outcome =
-        fallback_certificate_with(|_, _, _| Ok(true), "myapp", "old.example", &paths, 1000);
-    assert_eq!(outcome, TlsState::Issued);
+    let outcome = fallback_certificate_with(
+        |_, _, _| Ok(SingleCert::Ready),
+        "myapp",
+        "old.example",
+        &paths,
+        1000,
+    );
+    assert_eq!(outcome, Some(TlsState::Issued));
 
     drop_stale_pair("myapp", None, &paths);
 
@@ -90,7 +95,13 @@ fn drop_stale_pair_keeps_an_own_certificate() {
     for suffix in ["key", "crt", "fullchain.crt", "own-cert"] {
         std::fs::write(paths.nginx_root.join(format!("myapp.{suffix}")), "pem").unwrap();
     }
-    fallback_certificate_with(|_, _, _| Ok(true), "myapp", "old.example", &paths, 1000);
+    fallback_certificate_with(
+        |_, _, _| Ok(SingleCert::Ready),
+        "myapp",
+        "old.example",
+        &paths,
+        1000,
+    );
 
     drop_stale_pair("myapp", None, &paths);
 
@@ -106,10 +117,15 @@ fn drop_stale_pair_keeps_an_own_certificate() {
 fn issued_certificate_is_recorded() {
     let (_tmp, paths) = paths();
 
-    let outcome =
-        fallback_certificate_with(|_, _, _| Ok(true), "myapp", "myapp.example", &paths, 1000);
+    let outcome = fallback_certificate_with(
+        |_, _, _| Ok(SingleCert::Ready),
+        "myapp",
+        "myapp.example",
+        &paths,
+        1000,
+    );
 
-    assert_eq!(outcome, TlsState::Issued);
+    assert_eq!(outcome, Some(TlsState::Issued));
     assert_eq!(recorded(&paths), Some(TlsState::Issued));
 }
 
@@ -117,10 +133,15 @@ fn issued_certificate_is_recorded() {
 fn failed_issue_is_recorded_with_its_time() {
     let (_tmp, paths) = paths();
 
-    let outcome =
-        fallback_certificate_with(|_, _, _| Ok(false), "myapp", "myapp.example", &paths, 1000);
+    let outcome = fallback_certificate_with(
+        |_, _, _| Ok(SingleCert::Failed),
+        "myapp",
+        "myapp.example",
+        &paths,
+        1000,
+    );
 
-    assert_eq!(outcome, TlsState::FailedAt(1000));
+    assert_eq!(outcome, Some(TlsState::FailedAt(1000)));
     assert_eq!(recorded(&paths), Some(TlsState::FailedAt(1000)));
 }
 
@@ -131,13 +152,53 @@ fn failed_issue_is_not_retried_within_an_hour() {
     let calls = Cell::new(0);
     let issue = |_: &str, _: &str, _: &RikuPaths| {
         calls.set(calls.get() + 1);
-        Ok(true)
+        Ok(SingleCert::Ready)
     };
 
     let soon = fallback_certificate_with(issue, "myapp", "myapp.example", &paths, 1000 + 3599);
     let later = fallback_certificate_with(issue, "myapp", "myapp.example", &paths, 1000 + 3600);
 
-    assert_eq!(soon, TlsState::FailedAt(1000));
-    assert_eq!(later, TlsState::Issued);
+    assert_eq!(soon, Some(TlsState::FailedAt(1000)));
+    assert_eq!(later, Some(TlsState::Issued));
     assert_eq!(calls.get(), 1);
+}
+
+#[test]
+fn missing_acme_sh_records_no_failure() {
+    let (_tmp, paths) = paths();
+    let missing = |_: &str, _: &str, _: &RikuPaths| {
+        Ok(SingleCert::NoAcme("/home/riku/.acme.sh/acme.sh".into()))
+    };
+
+    let outcome = fallback_certificate_with(missing, "myapp", "myapp.example", &paths, 1000);
+
+    assert_eq!(outcome, None, "nothing was asked of Let's Encrypt");
+    assert_eq!(
+        recorded(&paths),
+        None,
+        "a recorded failure would block the first push after acme.sh is installed"
+    );
+}
+
+/// acme.sh runs `riku router-renew` as its reload command while the deploy
+/// is still issuing, and that rebuilds the route through `drop_stale_pair`.
+#[test]
+fn a_renew_during_the_issue_keeps_the_new_pair() {
+    let (_tmp, paths) = paths();
+    std::fs::create_dir_all(&paths.nginx_root).unwrap();
+    let issue = |app: &str, domain: &str, paths: &RikuPaths| {
+        for suffix in ["key", "crt", "fullchain.crt"] {
+            std::fs::write(paths.nginx_root.join(format!("{app}.{suffix}")), "pem").unwrap();
+        }
+        drop_stale_pair(app, Some(domain), paths);
+        Ok(SingleCert::Ready)
+    };
+
+    let outcome = fallback_certificate_with(issue, "myapp", "myapp.example", &paths, 1000);
+
+    assert_eq!(outcome, Some(TlsState::Issued));
+    assert!(
+        paths.nginx_root.join("myapp.key").exists(),
+        "the renew deleted the pair acme.sh had just written"
+    );
 }
