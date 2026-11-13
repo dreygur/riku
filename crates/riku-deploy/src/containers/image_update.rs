@@ -11,6 +11,7 @@ use riku_container::compose::ServiceDef;
 use riku_container::engine::ContainerState;
 use riku_container::types::ServiceName;
 
+use super::changes::bare_id;
 use super::context::ContainerApp;
 use super::AppName;
 use crate::config::RikuPaths;
@@ -58,6 +59,12 @@ fn running_image_ids(ctx: &ContainerApp, service: &ServiceName) -> Result<Vec<St
     Ok(ids)
 }
 
+/// Whether every running copy runs the image `pulled` names, by id without
+/// the `sha256:` prefix (see [`bare_id`]).
+fn runs_pulled_image(running: &[String], pulled: &str) -> bool {
+    running.iter().all(|id| bare_id(id) == bare_id(pulled))
+}
+
 /// Pull the image for a service and replace its copies if the tag moved.
 pub fn update_service(
     app: &AppName,
@@ -97,7 +104,7 @@ pub fn update_service(
     if running.is_empty() {
         return Ok(ImageUpdate::NotRunning);
     }
-    if running.iter().all(|id| id == &pulled_id) {
+    if runs_pulled_image(&running, &pulled_id) {
         return Ok(ImageUpdate::Unchanged);
     }
     let counts = match super::app::read_scaling(app.as_str(), paths) {
@@ -134,3 +141,7 @@ pub fn is_built_service(app: &AppName, paths: &RikuPaths, service: &ServiceName)
     };
     Ok(def.build.is_some())
 }
+
+#[cfg(test)]
+#[path = "image_update_tests.rs"]
+mod tests;

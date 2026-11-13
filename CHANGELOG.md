@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the docker socket's group), shown as `restarted (new groups)`. Before, a
   supervisor started before the deploy user joined `riku-sockets` kept
   running without it, since a process keeps the groups it started with.
+- The image watch no longer replaces a podman service every time it
+  checks. Podman lists a pulled image as `sha256:<id>` but gives a
+  container's image as the bare id, so the two never matched; the ids are
+  now compared without the prefix, as deploys already did.
 
 ## [0.1.4] - 2026-11-13
 
