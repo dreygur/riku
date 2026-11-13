@@ -11,6 +11,7 @@ use crate::config::{settings, RikuPaths};
 use crate::live_urls::{
     domain_tls, live_lines, path_lines, port_lines, url_host, Line, LiveUrl, TlsState,
 };
+use crate::own_cert_cover::covered_domains;
 use crate::procfile_deploy::Deployed;
 use crate::progress::{DeployProgress, Outcome};
 use crate::router::app_routing::{AppRouting, RoutingMode};
@@ -103,7 +104,7 @@ fn routing_lines(
     let own_tls = domain_tls(
         active,
         crate::util::flag::https_only(env),
-        has_own_cert(paths, app),
+        has_own_cert(paths, app).then(|| covered_domains(paths, app, &routing.domains)),
     );
     let mut lines = live_lines(app, routing, tls, own_tls);
     let server = settings::load(paths).ok().map(|loaded| loaded.routing);

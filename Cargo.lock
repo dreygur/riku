@@ -1886,6 +1886,8 @@ dependencies = [
  "riku-route",
  "riku-supervisor",
  "riku-util",
+ "rustls",
+ "rustls-webpki",
  "serde",
  "serde_json",
  "sha2",

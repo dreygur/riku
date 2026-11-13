@@ -34,39 +34,48 @@ pub struct LiveUrl {
 }
 
 /// Whether the router serves the app's own domains over HTTPS.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DomainTls {
     /// Plain HTTP only: nginx or a router plugin with no certificate for
     /// the app.
     PlainHttp,
-    /// HTTPS on every name: the app is `https_only`, or nginx or Caddy
-    /// serves the certificate its owner supplied.
+    /// HTTPS on every name: the app is `https_only`, so the router sends
+    /// plain HTTP there.
     Served,
     /// Caddy's automatic HTTPS, which gets a public certificate for every
-    /// hostname but not for a bare IP or a wildcard.
+    /// hostname but not for a bare IP.
     CaddyAutomatic,
+    /// nginx or Caddy serving the certificate its owner supplied on every
+    /// name: HTTPS works on the `covered` names, and the rest get a browser
+    /// warning there, so they are listed with plain HTTP.
+    OwnCert { covered: Vec<String> },
 }
 
 /// How `router` serves the app's own domains. Caddy writes each domain as a
 /// bare site address next to its `http://` one, so it serves HTTPS on its
 /// own; nginx serves 443 only with a certificate pair on the route; a router
-/// plugin gets no certificate at all.
-pub(crate) fn domain_tls(router: &Router, https_only: bool, own_cert: bool) -> DomainTls {
-    match router {
+/// plugin gets no certificate at all. `own_cert` holds the domains the
+/// owner's certificate covers, when the app has one.
+pub(crate) fn domain_tls(
+    router: &Router,
+    https_only: bool,
+    own_cert: Option<Vec<String>>,
+) -> DomainTls {
+    match (router, own_cert) {
         _ if https_only => DomainTls::Served,
-        Router::Nginx | Router::Caddy if own_cert => DomainTls::Served,
-        Router::Caddy => DomainTls::CaddyAutomatic,
-        Router::Nginx | Router::Plugin(_) => DomainTls::PlainHttp,
+        (Router::Nginx | Router::Caddy, Some(covered)) => DomainTls::OwnCert { covered },
+        (Router::Caddy, _) => DomainTls::CaddyAutomatic,
+        (Router::Nginx | Router::Plugin(_), _) => DomainTls::PlainHttp,
     }
 }
 
 impl DomainTls {
-    fn scheme(self, domain: &str) -> &'static str {
-        let public_name = !domain.starts_with('*') && domain.parse::<IpAddr>().is_err();
+    fn scheme(&self, domain: &str) -> &'static str {
         match self {
             DomainTls::Served => "https",
-            DomainTls::CaddyAutomatic if public_name => "https",
-            DomainTls::CaddyAutomatic | DomainTls::PlainHttp => "http",
+            DomainTls::CaddyAutomatic if domain.parse::<IpAddr>().is_err() => "https",
+            DomainTls::OwnCert { covered } if covered.iter().any(|name| name == domain) => "https",
+            DomainTls::CaddyAutomatic | DomainTls::OwnCert { .. } | DomainTls::PlainHttp => "http",
         }
     }
 }
@@ -99,6 +108,15 @@ fn live_line(url: String, label: UrlLabel, suffix: &str) -> Line {
 
 fn domain_line(scheme: &str, domain: &str) -> Line {
     live_line(format!("{scheme}://{domain}"), UrlLabel::Domain, "")
+}
+
+/// A domain of the app's own list. A wildcard routes every name under it
+/// but is no address a browser can open, so its line carries no URL.
+fn own_domain_line(tls: &DomainTls, domain: &str) -> Line {
+    if domain.starts_with("*.") {
+        return line(format!("Serves {domain}: a wildcard has no single URL"), "");
+    }
+    domain_line(tls.scheme(domain), domain)
 }
 
 fn fallback_lines(domain: &str, tls: Option<TlsState>, private_ip: Option<Ipv4Addr>) -> Vec<Line> {
@@ -169,7 +187,7 @@ pub(crate) fn live_lines(
         .domains
         .iter()
         .filter(|domain| domain.as_str() != CATCH_ALL_NAME)
-        .map(|domain| domain_line(own_tls.scheme(domain), domain))
+        .map(|domain| own_domain_line(&own_tls, domain))
         .collect()
 }
 
