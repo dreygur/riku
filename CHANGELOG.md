@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The push output, the dashboard and `/api/state` name an app's URL with
+  `https://` whenever the router serves it over HTTPS, instead of
+  `http://`. With Caddy that is every own domain (Caddy's automatic HTTPS;
+  a bare IP or a wildcard name stays `http://`) and the fallback domain on
+  a public address, which keeps one line saying plain HTTP works while
+  Caddy issues the certificate. With nginx an own domain is `https://`
+  when the app is `https_only` or brings its own certificate. A fallback
+  domain on a private address, nginx without a certificate, router
+  plugins without `https_only`, and port and path URLs stay `http://`.
+
 ## [0.1.5] - 2026-11-13
 
 ### Changed

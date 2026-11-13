@@ -5,9 +5,12 @@
 use std::collections::HashMap;
 use std::path::Path;
 
+use crate::config::own_cert::has_own_cert;
 use crate::config::router::Router;
 use crate::config::{settings, RikuPaths};
-use crate::live_urls::{live_lines, path_lines, port_lines, url_host, Line, LiveUrl, TlsState};
+use crate::live_urls::{
+    domain_tls, live_lines, path_lines, port_lines, url_host, Line, LiveUrl, TlsState,
+};
 use crate::procfile_deploy::Deployed;
 use crate::progress::{DeployProgress, Outcome};
 use crate::router::app_routing::{AppRouting, RoutingMode};
@@ -29,19 +32,16 @@ fn record_release(app: &str, app_path: &Path, paths: &RikuPaths) {
     }
 }
 
-/// The app's routing as the router saw it, with its certificate outcome.
-/// An error is shown to the pusher and drops only the URL lines.
+/// The app's routing as the `active` router saw it, with its certificate
+/// outcome. An error is shown to the pusher and drops only the URL lines.
 #[allow(clippy::question_mark)]
 fn routed(
     app: &str,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
+    active: &Router,
 ) -> anyhow::Result<(AppRouting, Option<TlsState>)> {
-    let active = match Router::load(paths) {
-        Ok(active) => active,
-        Err(e) => return Err(e),
-    };
-    let routing = match routing_env(app, env, paths, &active, Record::Peek) {
+    let routing = match routing_env(app, env, paths, active, Record::Peek) {
         Ok((_, routing)) => routing,
         Err(e) => return Err(e),
     };
@@ -79,23 +79,33 @@ fn live_lines_of(
         Ok(false) => return Ok(Vec::new()),
         Err(e) => return Err(e),
     }
-    let (routing, tls) = match routed(app, env, paths) {
+    let active = match Router::load(paths) {
+        Ok(active) => active,
+        Err(e) => return Err(e),
+    };
+    let (routing, tls) = match routed(app, env, paths, &active) {
         Ok(found) => found,
         Err(e) => return Err(e),
     };
-    Ok(routing_lines(app, &routing, tls, env, paths))
+    Ok(routing_lines(app, &routing, tls, &active, env, paths))
 }
 
-/// The lines for `app` routed as `routing`, with the port and path URLs on
-/// the server's address.
+/// The lines for `app` routed as `routing` by `active`, with the port and
+/// path URLs on the server's address.
 fn routing_lines(
     app: &str,
     routing: &AppRouting,
     tls: Option<TlsState>,
+    active: &Router,
     env: &HashMap<String, String>,
     paths: &RikuPaths,
 ) -> Vec<Line> {
-    let mut lines = live_lines(app, routing, tls, crate::util::flag::https_only(env));
+    let own_tls = domain_tls(
+        active,
+        crate::util::flag::https_only(env),
+        has_own_cert(paths, app),
+    );
+    let mut lines = live_lines(app, routing, tls, own_tls);
     let server = settings::load(paths).ok().map(|loaded| loaded.routing);
     let configured = server.as_ref().and_then(|routing| routing.server_ip);
     let needs_host = routing.port.is_some() || routing.mode == RoutingMode::Path;
@@ -164,13 +174,17 @@ fn app_urls_of(
         Ok(false) => return Ok(AppUrls::default()),
         Err(e) => return Err(e),
     }
+    let active = match Router::load(paths) {
+        Ok(active) => active,
+        Err(e) => return Err(e),
+    };
     let applied = match applied_routing(app, paths) {
-        Ok(Some((routing, tls))) => urls_of(routing_lines(app, &routing, tls, env, paths)),
+        Ok(Some((routing, tls))) => urls_of(routing_lines(app, &routing, tls, &active, env, paths)),
         Ok(None) => return Ok(AppUrls::default()),
         Err(e) => return Err(e),
     };
-    let fresh = match routed(app, env, paths) {
-        Ok((routing, tls)) => urls_of(routing_lines(app, &routing, tls, env, paths)),
+    let fresh = match routed(app, env, paths, &active) {
+        Ok((routing, tls)) => urls_of(routing_lines(app, &routing, tls, &active, env, paths)),
         Err(e) => return Err(e),
     };
     let pending = if fresh == applied { Vec::new() } else { fresh };
