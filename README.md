@@ -173,7 +173,7 @@ set with `riku install-plugins` (or pick some: `riku install-plugins --plugins n
 | `node` | `package.json` | nub (npm / pnpm / bun lockfiles) |
 | `python` | `requirements.txt`, `pyproject.toml` | uv (`uv.lock`), pip fallback |
 | `ruby` | `Gemfile` | Bundler |
-| `go` | `go.mod`, `.go` files | go build |
+| `go` | `go.mod` | go build |
 | `rust-lang` | `Cargo.toml` | cargo build |
 | `java` | `pom.xml`, `build.gradle` | Maven / Gradle |
 | `clojure` | `project.clj`, `deps.edn` | Leiningen / Clojure CLI |

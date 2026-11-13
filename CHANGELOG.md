@@ -24,13 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deploy user with login shell `/bin/sh` (it was `/bin/bash`), so a push
   over ssh works on a host without bash. Init leaves an existing deploy
   user's shell and existing repos' hooks as they are.
+- Go apps need a `go.mod`: the go plugin detects only that, and a failed
+  detection names the go plugin only for an app with one. A stray `.go`
+  file no longer makes a node, python or rust app look like Go (its
+  `*.go` check never matched before, since `find -quit` printed nothing,
+  while the missing plugin hint already picked go for it).
 
 ### Fixed
 
-- The go plugin detects an app that has `.go` files at its top and no
-  `go.mod`. Its check never matched: `find -quit` without `-print` prints
-  nothing. Building such an app still needs a `go.mod`, which go itself
-  says.
 - `sudo riku init` restarts the supervisor at most once. Before, an
   upgrade that also added the deploy user to docker's group restarted it
   twice, stopping every app twice. The docker group question now comes

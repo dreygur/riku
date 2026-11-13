@@ -1,6 +1,6 @@
 #!/bin/sh
 # Riku runtime plugin: Go
-# Handles apps with go.mod or *.go files.
+# Handles apps with a go.mod.
 set -eu
 
 CMD="${1:-}"
@@ -8,9 +8,9 @@ APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
 
 case "$CMD" in
   detect)
-    [ -f "$APP_PATH/go.mod" ] \
-      || find "$APP_PATH" -maxdepth 1 -name "*.go" -print -quit 2>/dev/null | grep -q . \
-      && exit 0
+    # go.mod only: go cannot build without one, and a stray .go file must
+    # not claim a node, python or rust app (the first plugin by name wins).
+    [ -f "$APP_PATH/go.mod" ] && exit 0
     exit 1
     ;;
 

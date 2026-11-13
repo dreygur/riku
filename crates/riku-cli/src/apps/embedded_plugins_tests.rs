@@ -229,29 +229,40 @@ fn a_server_without_npm_or_nub_fails_the_build_saying_node_is_missing() {
     );
 }
 
-/// A Go app needs no go.mod: a `.go` file at the top of the app is enough,
-/// and one only in a subdirectory is not.
+/// Go cannot build without a go.mod, so only a go.mod makes an app Go. A
+/// stray `.go` file must not win over python, which detects after go.
 #[test]
-fn go_detects_an_app_with_go_files_and_no_go_mod() {
+fn only_a_go_mod_makes_an_app_go() {
     let tmp = tempfile::tempdir().unwrap();
-    write_out(find("go").unwrap(), tmp.path()).unwrap();
-    let detect = |app: &std::path::Path| {
-        std::process::Command::new(tmp.path().join("go"))
-            .arg("detect")
-            .env("RIKU_APP_PATH", app)
-            .status()
-            .unwrap()
-            .success()
+    let plugin_dir = tmp.path().join("plugins");
+    std::fs::create_dir_all(&plugin_dir).unwrap();
+    for name in ["go", "python"] {
+        write_out(find(name).unwrap(), &plugin_dir).unwrap();
+    }
+    let plugins = riku_plugins::runtime::discover(&plugin_dir);
+    let app = |name: &str, files: &[&str]| {
+        let dir = tmp.path().join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        for file in files {
+            std::fs::write(dir.join(file), "").unwrap();
+        }
+        dir
     };
-    let flat = tmp.path().join("flat");
-    std::fs::create_dir_all(&flat).unwrap();
-    std::fs::write(flat.join("main.go"), "package main\n").unwrap();
-    let nested = tmp.path().join("nested");
-    std::fs::create_dir_all(nested.join("cmd")).unwrap();
-    std::fs::write(nested.join("cmd/main.go"), "package main\n").unwrap();
+    let runtime = |dir: &std::path::Path| {
+        riku_plugins::runtime::detect(&plugins, dir, &Default::default())
+            .unwrap()
+            .map(|plugin| plugin.name)
+    };
 
-    assert!(detect(&flat), "main.go at the top was not detected");
-    assert!(!detect(&nested), "a .go file below the top was detected");
+    assert_eq!(runtime(&app("loose", &["main.go"])), None);
+    assert_eq!(
+        runtime(&app("module", &["go.mod", "main.go"])).as_deref(),
+        Some("go")
+    );
+    assert_eq!(
+        runtime(&app("pyapp", &["requirements.txt", "main.go"])).as_deref(),
+        Some("python")
+    );
 }
 
 #[test]

@@ -12,7 +12,6 @@ fn app_with(file: &str) -> TempDir {
 fn markers_pick_the_runtime() {
     let cases = [
         ("go.mod", "go"),
-        ("main.go", "go"),
         ("package.json", "node"),
         ("requirements.txt", "python"),
         ("pyproject.toml", "python"),
@@ -37,4 +36,14 @@ fn first_marker_in_order_wins() {
 fn no_marker_gives_none() {
     let app = app_with("README.md");
     assert_eq!(needed_runtime(app.path()), None);
+}
+
+/// Like the go plugin, only a go.mod marks a Go app: a stray `.go` file
+/// neither makes an app Go nor hides its real runtime.
+#[test]
+fn a_go_file_is_not_a_marker() {
+    assert_eq!(needed_runtime(app_with("main.go").path()), None);
+    let app = app_with("requirements.txt");
+    fs::write(app.path().join("main.go"), "").unwrap();
+    assert_eq!(needed_runtime(app.path()), Some("python"));
 }

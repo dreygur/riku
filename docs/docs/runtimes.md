@@ -214,10 +214,9 @@ end
 
 ### Detection
 
-Riku detects Go apps by the presence of:
-- `go.mod` - Go modules
-- `Godeps/` - Godeps
-- `.go` files - Raw Go source
+Riku detects a Go app by its `go.mod`, and only by that: go builds only
+modules, and a stray `.go` file in a node, python or rust app must not make
+it Go. An app without a `go.mod` needs one first (`go mod init <module>`).
 
 ### Go Modules
 
