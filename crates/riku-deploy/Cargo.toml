@@ -30,6 +30,8 @@ toml = { workspace = true }
 tracing = { workspace = true }
 glob = { workspace = true }
 reqwest = { workspace = true }
+rustls = { workspace = true }
+webpki = { package = "rustls-webpki", version = "0.103", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 riku-route = { path = "../riku-route", features = ["test-server"] }

@@ -121,36 +121,76 @@ fn caddy_lists_https_for_own_domains_it_can_get_a_public_certificate_for() {
         [
             "Live at https://a.example.com",
             "Live at http://203.0.113.5",
-            "Live at http://*.example.com",
+            "Serves *.example.com: a wildcard has no single URL",
         ],
-        "Caddy gives a bare IP its internal CA, and a wildcard needs a DNS challenge"
+        "Caddy gives a bare IP its internal CA"
     );
 }
 
 #[test]
 fn https_on_own_domains_follows_the_router_and_the_app_certificate() {
+    let covered = || Some(vec!["a.example".to_string()]);
+    let own = || DomainTls::OwnCert {
+        covered: vec!["a.example".to_string()],
+    };
     let cases = [
-        (Router::Caddy, false, false, DomainTls::CaddyAutomatic),
-        (Router::Caddy, false, true, DomainTls::Served),
-        (Router::Nginx, false, false, DomainTls::PlainHttp),
-        (Router::Nginx, false, true, DomainTls::Served),
-        (Router::Nginx, true, false, DomainTls::Served),
+        (Router::Caddy, false, None, DomainTls::CaddyAutomatic),
+        (Router::Caddy, false, covered(), own()),
+        (Router::Nginx, false, None, DomainTls::PlainHttp),
+        (Router::Nginx, false, covered(), own()),
+        (Router::Nginx, true, None, DomainTls::Served),
+        (Router::Nginx, true, covered(), DomainTls::Served),
         (
             Router::Plugin("x".into()),
             false,
-            true,
+            covered(),
             DomainTls::PlainHttp,
         ),
-        (Router::Plugin("x".into()), true, false, DomainTls::Served),
+        (Router::Plugin("x".into()), true, None, DomainTls::Served),
     ];
 
-    for (router, https_only, own_cert, wanted) in cases {
+    for (case, (router, https_only, covered_names, wanted)) in cases.into_iter().enumerate() {
         assert_eq!(
-            domain_tls(&router, https_only, own_cert),
+            domain_tls(&router, https_only, covered_names),
             wanted,
-            "{router:?} https_only={https_only} own_cert={own_cert}"
+            "case {case}"
         );
     }
+}
+
+#[test]
+fn own_certificate_lists_https_only_for_the_names_it_covers() {
+    let lines = texts(live_lines(
+        "myapp",
+        &routing(&["a.example", "b.example"], false),
+        None,
+        DomainTls::OwnCert {
+            covered: vec!["a.example".to_string()],
+        },
+    ));
+
+    assert_eq!(
+        lines,
+        ["Live at https://a.example", "Live at http://b.example"],
+        "a name outside the certificate gets a browser warning on HTTPS"
+    );
+}
+
+#[test]
+fn wildcard_domain_is_listed_without_a_url() {
+    let lines = live_lines(
+        "myapp",
+        &routing(&["*.example.com"], false),
+        None,
+        DomainTls::Served,
+    );
+
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0].url, None, "nobody can open *.example.com");
+    assert_eq!(
+        lines[0].text,
+        "Serves *.example.com: a wildcard has no single URL"
+    );
 }
 
 #[test]

@@ -47,6 +47,7 @@ mod live_urls;
 pub mod lock;
 #[cfg(test)]
 mod mock_engine;
+mod own_cert_cover;
 mod pipeline;
 mod plugin_env;
 mod procfile_deploy;

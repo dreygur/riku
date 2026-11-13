@@ -43,6 +43,16 @@ fn nginx_paths_strip_prefix_and_send_forwarded_prefix() {
 }
 
 #[test]
+fn a_path_of_no_app_is_not_found() {
+    let config = render(&[shop()]);
+
+    assert!(
+        config.contains("location / {\n    return 404;\n  }"),
+        "without it nginx serves its own html root: {config}"
+    );
+}
+
+#[test]
 fn bare_app_path_redirects_to_slash() {
     let config = render(&[shop()]);
 
