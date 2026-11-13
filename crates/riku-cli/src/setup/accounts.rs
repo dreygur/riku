@@ -1,6 +1,7 @@
-//! The three account changes root init makes: create the deploy user,
-//! create a group, add a user to a group. This module picks the tool for
-//! the host.
+//! The account changes root init makes: create the deploy user, create a
+//! group, add a user to a group, and (shadow-utils only, through
+//! [`super::deploy_account`]) move the deploy user to `/bin/sh`. This
+//! module picks the tool for the host.
 //!
 //! shadow-utils (`useradd`, `groupadd`, `usermod`) is used when all three
 //! are on `PATH`, which covers Debian, Ubuntu, Fedora, RHEL, Arch and
@@ -106,7 +107,7 @@ pub(super) fn host_kind(search_path: &OsStr, os_release: &str, nixos_marker: boo
     }
 }
 
-fn this_host() -> Host {
+pub(super) fn this_host() -> Host {
     let search_path = std::env::var_os("PATH").unwrap_or_default();
     let os_release = std::fs::read_to_string(OS_RELEASE).unwrap_or_default();
     host_kind(&search_path, &os_release, Path::new(NIXOS_MARKER).exists())
@@ -194,7 +195,7 @@ fn nixos_stop(lines: &str) -> anyhow::Error {
 }
 
 #[allow(clippy::question_mark)]
-fn run(cmd: &Cmd) -> Result<()> {
+pub(super) fn run(cmd: &Cmd) -> Result<()> {
     let mut command = Command::new(cmd.program);
     command.args(&cmd.args);
     let stdin = if cmd.input.is_some() {

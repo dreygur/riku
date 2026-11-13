@@ -19,6 +19,7 @@ mod nginx_host;
 mod nginx_worker;
 mod outside_supervisor;
 mod prerequisites;
+mod repo_hooks;
 mod root_init;
 mod router_choice;
 mod router_dirs;

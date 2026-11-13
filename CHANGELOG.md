@@ -22,8 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `riku plugins install <name>` to get the new copies.
 - The post-receive hook is `#!/bin/sh`, and `sudo riku init` creates the
   deploy user with login shell `/bin/sh` (it was `/bin/bash`), so a push
-  over ssh works on a host without bash. Init leaves an existing deploy
-  user's shell and existing repos' hooks as they are.
+  over ssh works on a host without bash.
+- `riku init` keeps what riku owns current: it moves a deploy user an
+  older init gave `/bin/bash` to `/bin/sh` with `usermod` (`Deploy user
+  shell /bin/sh`; any other shell is left alone, and on NixOS or without
+  usermod it only says what to do), and it rewrites every app repo's
+  post-receive hook whose text or mode differs from the current one
+  (`Git hooks updated N`, a warning naming each repo it cannot write).
 - Go apps need a `go.mod`: the go plugin detects only that, and a failed
   detection names the go plugin only for an app with one. A stray `.go`
   file no longer makes a node, python or rust app look like Go (its

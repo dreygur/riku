@@ -23,6 +23,7 @@ use super::guidance::{print_finish, InstallScope};
 use super::init_router::persist_router;
 use super::outside_supervisor::replace_outside_supervisor;
 use super::prerequisites::{check_prerequisites, warn_not_root};
+use super::repo_hooks::{refresh_repo_hooks, HookRefresh};
 use super::root_init::root_init;
 use super::router_choice;
 use super::runtime_plugins::refresh_runtime_plugins;
@@ -112,6 +113,20 @@ fn prepare_tree(paths: &RikuPaths, router: &Router) -> Result<()> {
     };
     display::step_done("Files", &format!("{root}, git hook on branch {branch}"));
     Ok(())
+}
+
+/// One step when some hooks were rewritten, one warning per repo that could
+/// not be; nothing when every hook was current.
+fn report_hook_refresh(refresh: HookRefresh) {
+    if refresh.updated > 0 {
+        display::step_done("Git hooks", &format!("updated {}", refresh.updated));
+    }
+    for (repo, why) in refresh.failed {
+        display::warn(&format!(
+            "Git hook of {} not updated: {why}",
+            repo.display()
+        ));
+    }
 }
 
 fn setup_user_service(paths: &RikuPaths, router: &Router, no_systemd: bool) -> Result<()> {
@@ -232,6 +247,7 @@ fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<Router> {
         return Err(e);
     }
     refresh_runtime_plugins(paths);
+    report_hook_refresh(refresh_repo_hooks(&paths.git_root));
     if user_steps {
         // Root starts the system unit next; only this deploy user child may
         // signal the deploy user's supervisor.

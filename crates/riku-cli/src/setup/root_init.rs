@@ -33,7 +33,7 @@ use crate::util::socket_dir;
 use crate::util::ROOT_BINARY;
 
 use super::binary::install_root_binary;
-use super::deploy_account::ensure_account;
+use super::deploy_account::{ensure_account, ensure_login_shell};
 use super::deploy_keys::read_key_file;
 use super::deploy_user::{deploy_user_name, passwd_home, DeployUser};
 use super::engine_group::{joined_socket_group, offer_engine_group};
@@ -156,6 +156,7 @@ pub fn root_init(options: &InitOptions) -> Result<(DeployUser, Router)> {
     if let Err(e) = ensure_account(&deploy_user_name()) {
         return Err(e);
     }
+    ensure_login_shell(&deploy_user_name());
     let user = match DeployUser::lookup() {
         Ok(user) => user,
         Err(e) => return Err(e),
