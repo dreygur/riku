@@ -165,9 +165,9 @@ fn riku_notify_keeps_its_bundle_layout() {
 }
 
 /// Run the shipped node plugin's `build` with a mock `node` that reports
-/// `installed` and, when `with_npm`, a mock `npm`. PATH holds only the mocks
-/// and bash, so a node, npm or nub on the host cannot leak in. Returns the
-/// exit status and stderr.
+/// `installed` and, when `with_npm`, a mock `npm`. PATH holds only the
+/// mocks (the plugin runs with `/bin/sh`), so a node, npm or nub on the host
+/// cannot leak in. Returns the exit status and stderr.
 fn node_build(wanted: Option<&str>, installed: &str, with_npm: bool) -> (bool, String) {
     let tmp = tempfile::tempdir().unwrap();
     let plugins = tmp.path().join("plugins");
@@ -178,7 +178,6 @@ fn node_build(wanted: Option<&str>, installed: &str, with_npm: bool) -> (bool, S
     }
     write_out(find("node").unwrap(), &plugins).unwrap();
     std::fs::write(app.join("package.json"), "{}").unwrap();
-    std::os::unix::fs::symlink("/bin/bash", bin.join("bash")).unwrap();
     let mut tools = vec![("node", format!("echo v{installed}"))];
     if with_npm {
         tools.push(("npm", String::new()));
@@ -230,6 +229,42 @@ fn a_server_without_npm_or_nub_fails_the_build_saying_node_is_missing() {
     );
 }
 
+/// Go cannot build without a go.mod, so only a go.mod makes an app Go. A
+/// stray `.go` file must not win over python, which detects after go.
+#[test]
+fn only_a_go_mod_makes_an_app_go() {
+    let tmp = tempfile::tempdir().unwrap();
+    let plugin_dir = tmp.path().join("plugins");
+    std::fs::create_dir_all(&plugin_dir).unwrap();
+    for name in ["go", "python"] {
+        write_out(find(name).unwrap(), &plugin_dir).unwrap();
+    }
+    let plugins = riku_plugins::runtime::discover(&plugin_dir);
+    let app = |name: &str, files: &[&str]| {
+        let dir = tmp.path().join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        for file in files {
+            std::fs::write(dir.join(file), "").unwrap();
+        }
+        dir
+    };
+    let runtime = |dir: &std::path::Path| {
+        riku_plugins::runtime::detect(&plugins, dir, &Default::default())
+            .unwrap()
+            .map(|plugin| plugin.name)
+    };
+
+    assert_eq!(runtime(&app("loose", &["main.go"])), None);
+    assert_eq!(
+        runtime(&app("module", &["go.mod", "main.go"])).as_deref(),
+        Some("go")
+    );
+    assert_eq!(
+        runtime(&app("pyapp", &["requirements.txt", "main.go"])).as_deref(),
+        Some("python")
+    );
+}
+
 #[test]
 fn python_go_and_ruby_builds_without_their_toolchain_say_it_is_missing() {
     for (plugin, marker, wanted) in [
@@ -248,7 +283,6 @@ fn python_go_and_ruby_builds_without_their_toolchain_say_it_is_missing() {
         std::fs::create_dir_all(&app).unwrap();
         write_out(find(plugin).unwrap(), tmp.path()).unwrap();
         std::fs::write(app.join(marker), "").unwrap();
-        std::os::unix::fs::symlink("/bin/bash", bin.join("bash")).unwrap();
 
         let output = std::process::Command::new(tmp.path().join(plugin))
             .arg("build")

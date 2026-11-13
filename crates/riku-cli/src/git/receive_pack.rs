@@ -42,11 +42,9 @@ fn install_post_receive_hook(hook_path: &std::path::Path) -> Result<()> {
     if let Err(e) = fs::write(hook_path, post_receive_hook()) {
         return Err(anyhow!("cannot write {}: {e}", hook_path.display()));
     }
-    let mode = match fs::metadata(hook_path) {
-        Ok(meta) => meta.permissions().mode(),
-        Err(e) => return Err(anyhow!("cannot stat {}: {e}", hook_path.display())),
-    };
-    match fs::set_permissions(hook_path, fs::Permissions::from_mode(mode | 0o755)) {
+    // Exactly 0755: write bits the umask left for the group would let
+    // another account change what every push runs.
+    match fs::set_permissions(hook_path, fs::Permissions::from_mode(0o755)) {
         Ok(()) => Ok(()),
         Err(e) => Err(anyhow!(
             "cannot make {} executable: {e}",

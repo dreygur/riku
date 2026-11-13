@@ -14,7 +14,9 @@ use crate::util::{display, ROOT_BINARY};
 
 use super::deploy_user::{deploy_user_name, passwd_home, running_as_root};
 use super::router_units::unit_ordering;
-use super::supervisor_binary::{action_for, service_main_pid, write_unit, UnitChange, UnitScope};
+use super::supervisor_binary::{
+    action_for, service_main_pid, with_groups, write_unit, UnitChange, UnitScope,
+};
 
 pub const SYSTEMD_DIR: &str = "/etc/systemd/system";
 
@@ -82,13 +84,18 @@ pub(super) fn systemctl_ok(args: &[&str]) -> bool {
 
 /// Reload, enable and start `riku.service`, then print one step saying
 /// which of those worked. A supervisor that already runs is restarted only
-/// when it runs another binary than [`ROOT_BINARY`] or `unit` changed (see
-/// [`super::supervisor_binary`]). Whether the supervisor stays up is checked
+/// when it runs another binary than [`ROOT_BINARY`], `unit` changed, or it
+/// lacks one of the deploy user's `groups` (see
+/// [`super::supervisor_binary`]), and then only once. Whether the supervisor stays up is checked
 /// by the init summary. An error when `daemon-reload` fails, since a
 /// restart would then run the old unit text, or when systemd cannot say
 /// whether the service runs. `systemctl` runs one `systemctl` call and says
 /// whether it succeeded ([`systemctl_ok`] outside tests).
-fn start_riku_service(unit: UnitChange, systemctl: impl Fn(&[&str]) -> bool) -> Result<()> {
+fn start_riku_service(
+    unit: UnitChange,
+    groups: &[u32],
+    systemctl: impl Fn(&[&str]) -> bool,
+) -> Result<()> {
     if !systemctl(&["daemon-reload"]) {
         return Err(anyhow!(
             "systemctl daemon-reload failed, so riku.service was not restarted with the new unit"
@@ -102,7 +109,13 @@ fn start_riku_service(unit: UnitChange, systemctl: impl Fn(&[&str]) -> bool) -> 
         Ok(pid) => pid,
         Err(e) => return Err(e),
     };
-    let action = action_for(main_pid, unit, Path::new("/proc"), Path::new(ROOT_BINARY));
+    let proc_root = Path::new("/proc");
+    let action = with_groups(
+        action_for(main_pid, unit, proc_root, Path::new(ROOT_BINARY)),
+        main_pid,
+        groups,
+        proc_root,
+    );
     if systemctl(&[action.verb(), "riku"]) {
         done.push(action.outcome());
     }
@@ -111,8 +124,10 @@ fn start_riku_service(unit: UnitChange, systemctl: impl Fn(&[&str]) -> bool) -> 
 }
 
 /// Install systemd service files for riku daemon (system-wide, requires root).
+/// `groups` are the gids of the groups root init put the deploy user in; a
+/// running supervisor without one of them is restarted.
 #[allow(clippy::question_mark)]
-pub fn install_systemd_service(router: &Router) -> Result<()> {
+pub fn install_systemd_service(router: &Router, groups: &[u32]) -> Result<()> {
     if !running_as_root() {
         return Ok(());
     }
@@ -130,7 +145,7 @@ pub fn install_systemd_service(router: &Router) -> Result<()> {
         Err(e) => return Err(e),
     };
 
-    start_riku_service(change, systemctl_ok)
+    start_riku_service(change, groups, systemctl_ok)
 }
 
 #[cfg(test)]

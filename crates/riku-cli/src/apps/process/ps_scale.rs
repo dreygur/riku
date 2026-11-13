@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::apps::control_target::{control_target, ControlTarget};
 use crate::config::RikuPaths;
 use crate::deploy::containers::{scale_service, AppName, ServiceName};
-use crate::util::{display, exit_if_invalid, parse_settings};
+use crate::util::{display, parse_settings, require_app};
 
 #[allow(clippy::question_mark)]
 fn service_count(setting: &str) -> Result<(ServiceName, u32)> {
@@ -103,7 +103,7 @@ fn scale_procfile(paths: &RikuPaths, app: &str, settings: &[String]) -> Result<(
 /// rebuild; Procfile apps redeploy with the new worker counts.
 #[allow(clippy::question_mark)]
 pub fn cmd_ps_scale(paths: &RikuPaths, app: &str, settings: &[String]) -> Result<()> {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match require_app(app, &paths.app_root) {
         Ok(app) => app,
         Err(e) => return Err(e),
     };

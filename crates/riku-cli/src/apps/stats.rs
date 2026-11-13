@@ -5,7 +5,7 @@ use std::fs;
 
 use super::info::field;
 use crate::config::RikuPaths;
-use crate::util::{display, exit_if_invalid};
+use crate::util::{display, require_app};
 
 /// Show stats for all apps.
 pub fn cmd_stats_all(paths: &RikuPaths) -> Result<()> {
@@ -75,7 +75,7 @@ pub fn cmd_stats_all(paths: &RikuPaths) -> Result<()> {
 /// Show stats for a specific app.
 #[allow(clippy::question_mark)]
 pub fn cmd_stats_app(paths: &RikuPaths, app: &str) -> Result<()> {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match require_app(app, &paths.app_root) {
         Ok(app) => app,
         Err(e) => return Err(e),
     };

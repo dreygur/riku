@@ -19,8 +19,9 @@ use super::removal::app_containers;
 use super::spec::spec_fingerprint;
 
 /// Docker reports ids as `sha256:<hex>`; other engines may leave the
-/// prefix off in one listing and not the other.
-fn bare_id(id: &str) -> &str {
+/// prefix off in one listing and not the other (podman 5 prints it in
+/// `image ls` but not in a container's `Image`).
+pub(super) fn bare_id(id: &str) -> &str {
     id.trim().trim_start_matches("sha256:")
 }
 

@@ -130,6 +130,17 @@ pub(crate) fn container_rows(
     rows
 }
 
+/// The rows the supervisor would write for `infos` before it has sampled
+/// them or seen a restart: what a deploy knows right after starting copies.
+pub fn deployed_container_rows(infos: &[ContainerInfo]) -> Vec<ProcessStats> {
+    container_rows(
+        infos,
+        &HashMap::new(),
+        &RestartTally::new(),
+        &Restarts::new(),
+    )
+}
+
 #[cfg(test)]
 #[path = "stats_tests.rs"]
 mod tests;

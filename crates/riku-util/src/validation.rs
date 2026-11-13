@@ -10,7 +10,6 @@
 use anyhow::{anyhow, Result};
 use std::fs;
 use std::path::Path;
-use std::process;
 
 use super::display;
 
@@ -97,19 +96,19 @@ pub fn existing_app(app: &str, app_root: &Path) -> Result<String> {
     Ok(name)
 }
 
-/// Sanitize name, check app dir exists, exit(1) if not.
-pub fn exit_if_invalid(app: &str, app_root: &Path) -> Result<String> {
-    let app = sanitize_app_name(app);
+/// The sanitized name of an app that exists under `app_root`. For a bad or
+/// missing app it prints the CLI's hints on the rail and returns the error,
+/// which the CLI prints last as its `■` line.
+pub fn require_app(name: &str, app_root: &Path) -> Result<String> {
+    let app = sanitize_app_name(name);
     if app.is_empty() {
-        display::error(&format!("invalid app name '{}'.", app));
         display::warn(
             "App names must contain only alphanumeric characters, dots, underscores, and hyphens.",
         );
         display::warn("Path traversal sequences (..) and a trailing .git are not allowed.");
-        process::exit(1);
+        return Err(anyhow!("invalid app name '{name}'."));
     }
     if !app_root.join(&app).exists() {
-        display::error(&format!("app '{}' not found.", app));
         display::detail("");
         display::warn("To deploy a new app:");
         display::detail_err("  Option 1: Create app and push via git");
@@ -122,7 +121,7 @@ pub fn exit_if_invalid(app: &str, app_root: &Path) -> Result<String> {
         display::detail("");
         display::warn("Or list existing apps:");
         display::detail_err("  riku apps");
-        process::exit(1);
+        return Err(anyhow!("app '{app}' not found."));
     }
     Ok(app)
 }

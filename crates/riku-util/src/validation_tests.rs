@@ -61,6 +61,25 @@ fn refuses_an_app_name_ending_in_git() {
     assert_eq!(validate_app_name("shop.gitlab").unwrap(), "shop.gitlab");
 }
 
+/// The dashboard, the supervisor control plane and tests call the commands
+/// that use this check, so a bad or missing app must come back as an error
+/// for the caller, never end the process.
+#[test]
+fn require_app_returns_an_error_for_a_missing_or_bad_app() {
+    let apps = TempDir::new().unwrap();
+    fs::create_dir(apps.path().join("shop")).unwrap();
+
+    assert_eq!(require_app("shop", apps.path()).unwrap(), "shop");
+    assert_eq!(
+        require_app("ghost", apps.path()).unwrap_err().to_string(),
+        "app 'ghost' not found."
+    );
+    assert_eq!(
+        require_app("../etc", apps.path()).unwrap_err().to_string(),
+        "invalid app name '../etc'."
+    );
+}
+
 #[test]
 fn test_ensure_path_within_accepts_child() {
     let temp_dir = TempDir::new().unwrap();

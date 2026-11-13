@@ -40,6 +40,7 @@ mod routes;
 mod runtime;
 mod spec;
 mod start;
+mod stats_publish;
 mod worker_files;
 
 pub use app::{is_container_app, load_project, read_scaling, SINGLE_IMAGE_PORT};

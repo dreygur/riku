@@ -8,7 +8,7 @@ use riku_supervisor::config::app_worker_configs;
 use super::helpers::{load_stats, lookup_process_stats, read_worker_config};
 use super::scaling_display::{show_desired_scale_verbose, show_scaling_compact};
 use crate::config::RikuPaths;
-use crate::util::exit_if_invalid;
+use crate::util::require_app;
 
 const CONTAINER_HEADERS: &[&str] = &[
     "SERVICE",
@@ -82,7 +82,7 @@ pub(crate) fn container_rows_for_app(
 /// Show process scaling info.
 #[allow(clippy::question_mark)]
 pub fn cmd_ps_show(paths: &RikuPaths, app: &str, verbose: bool) -> Result<()> {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match require_app(app, &paths.app_root) {
         Ok(a) => a,
         Err(e) => return Err(e),
     };

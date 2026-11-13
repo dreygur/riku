@@ -1,7 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Riku runtime plugin: Rust
 # Handles apps with Cargo.toml.
-set -euo pipefail
+set -eu
 
 CMD="${1:-}"
 APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
@@ -31,7 +31,7 @@ case "$CMD" in
     # Try to detect binary name from Cargo.toml
     bin=$(grep -m1 '^name' "$APP_PATH/Cargo.toml" 2>/dev/null | sed 's/.*= *"\(.*\)"/\1/' || true)
     if [ -n "$bin" ]; then
-      echo "./target/release/$bin"
+      printf './target/release/%s\n' "$bin"
     else
       echo "./target/release/app"
     fi
@@ -42,7 +42,7 @@ case "$CMD" in
     exit 0
     ;;
   *)
-    echo "Unknown subcommand: $CMD" >&2
+    printf 'Unknown subcommand: %s\n' "$CMD" >&2
     exit 1
     ;;
 esac

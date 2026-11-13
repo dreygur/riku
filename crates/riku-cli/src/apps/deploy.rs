@@ -4,14 +4,14 @@ use std::path::Path;
 
 use crate::config::app_settings::{AppSettings, Source};
 use crate::config::RikuPaths;
-use crate::util::{copy_dir_recursive, count_files, display, exit_if_invalid};
+use crate::util::{copy_dir_recursive, count_files, display, require_app};
 
 /// Deploy an app.
 // Explicit match/if-let over `?` per project convention (.claude/CLAUDE.md
 // rule 16): every early exit stays visible as a `return Err(...)`.
 #[allow(clippy::question_mark)]
 pub fn cmd_deploy(paths: &RikuPaths, app: &str, from_path: Option<&str>) -> Result<()> {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match require_app(app, &paths.app_root) {
         Ok(name) => name,
         Err(e) => return Err(e),
     };

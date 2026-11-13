@@ -69,14 +69,14 @@ fn no_tools_names_what_to_install() {
 #[test]
 fn shadow_commands_are_the_ones_init_always_ran() {
     assert_eq!(
-        create_user_commands(Tool::Shadow, "riku", "/bin/bash"),
+        create_user_commands(Tool::Shadow, "riku", "/bin/sh"),
         [Cmd::new(
             "useradd",
             &[
                 "--create-home",
                 "--user-group",
                 "--shell",
-                "/bin/bash",
+                "/bin/sh",
                 "--password",
                 "*",
                 "--",
@@ -102,7 +102,7 @@ fn busybox_commands_map_every_useradd_flag() {
     set_password.input = Some("riku:*\n".to_string());
 
     assert_eq!(
-        create_user_commands(Tool::BusyBox, "riku", "/bin/bash"),
+        create_user_commands(Tool::BusyBox, "riku", "/bin/sh"),
         [
             Cmd::new("addgroup", &["-S", "riku"]),
             Cmd::new(
@@ -113,7 +113,7 @@ fn busybox_commands_map_every_useradd_flag() {
                     "-h",
                     "/home/riku",
                     "-s",
-                    "/bin/bash",
+                    "/bin/sh",
                     "-G",
                     "riku",
                     "riku"

@@ -105,9 +105,13 @@ RIKU_ROOT         riku root (~/.riku)
 
 ### Writing a Custom Runtime Plugin
 
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
+A plugin is any executable. The bundled ones are POSIX `sh`, so they run
+where `/bin/sh` is dash or BusyBox and bash is not installed (Alpine);
+`shellcheck -s sh` checks a script for that.
+
+```sh
+#!/bin/sh
+set -eu
 CMD="${1:-}"
 APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
 APP="${RIKU_APP:-app}"

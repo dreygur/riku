@@ -77,9 +77,9 @@ async fn scale(
     if let Some(denied) = authorize_mutation(&state, &headers) {
         return denied;
     }
-    let app = match crate::util::validate_app_name(&app) {
+    let app = match known_app(&state.paths, &app) {
         Ok(a) => a,
-        Err(_) => return (StatusCode::BAD_REQUEST, "invalid app name").into_response(),
+        Err(refused) => return refused.into_response(),
     };
     // Translate the JSON object into the CLI's `kind=count` settings.
     let settings: Vec<String> = body
@@ -195,9 +195,9 @@ async fn run_action(
     if let Some(denied) = authorize_mutation(&state, &headers) {
         return denied;
     }
-    let app = match crate::util::validate_app_name(&app) {
+    let app = match known_app(&state.paths, &app) {
         Ok(a) => a,
-        Err(_) => return (StatusCode::BAD_REQUEST, "invalid app name").into_response(),
+        Err(refused) => return refused.into_response(),
     };
 
     let paths = state.paths.clone();
@@ -212,6 +212,24 @@ async fn run_action(
         )
             .into_response(),
     }
+}
+
+/// The app named in the path when it is valid and exists, else the status
+/// and message refusing it. Checked before calling a CLI command function,
+/// which would print its terminal hints for an unknown app and fail as a
+/// server error instead of a 404.
+pub(crate) fn known_app(
+    paths: &crate::config::RikuPaths,
+    app: &str,
+) -> Result<String, (StatusCode, String)> {
+    let app = match crate::util::validate_app_name(app) {
+        Ok(a) => a,
+        Err(_) => return Err((StatusCode::BAD_REQUEST, "invalid app name".to_string())),
+    };
+    if !paths.app_root.join(&app).exists() {
+        return Err((StatusCode::NOT_FOUND, format!("app '{app}' not found")));
+    }
+    Ok(app)
 }
 
 /// Require the configured token in the `Authorization: Bearer` header.
@@ -268,5 +286,25 @@ mod tests {
         assert!(authorize_mutation(&st, &auth_header("Bearer secret")).is_none());
         assert!(authorize_mutation(&st, &auth_header("Bearer nope")).is_some());
         assert!(authorize_mutation(&st, &HeaderMap::new()).is_some());
+    }
+
+    /// An app that does not exist is a 404, answered before any CLI
+    /// function runs.
+    #[tokio::test]
+    async fn an_action_on_an_unknown_app_is_a_404() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let state = DashboardState {
+            paths: RikuPaths::for_tests(tmp.path()),
+            token: Some("secret".to_string()),
+        };
+
+        let res = restart(
+            State(state),
+            auth_header("Bearer secret"),
+            Path("ghost".to_string()),
+        )
+        .await;
+
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
     }
 }

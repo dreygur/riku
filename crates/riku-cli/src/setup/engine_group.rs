@@ -30,8 +30,6 @@ use super::deploy_user::DeployUser;
 use super::init_router::deploy_settings;
 use super::router_choice::interactive;
 use super::socket_group::{add_to_group, is_account_name};
-use super::supervisor_binary::{service_main_pid, UnitScope};
-use super::system_service::systemctl_ok;
 
 const DOCKER: &str = "docker";
 const DOCKER_SOCKET: &str = "/var/run/docker.sock";
@@ -177,25 +175,6 @@ fn ask(group: &str, user: &str) -> bool {
     }
 }
 
-/// Restart a running supervisor so it starts with the new group. systemd
-/// sets a service's groups when it starts it.
-fn restart_supervisor(group: &str, no_systemd: bool) {
-    let running = matches!(service_main_pid(UnitScope::System), Ok(Some(_)));
-    if no_systemd || !running {
-        display::detail(&format!(
-            "The riku supervisor gets the {group} group the next time it starts"
-        ));
-        return;
-    }
-    if systemctl_ok(&["restart", "riku"]) {
-        display::step_done("Service", &format!("restarted (joined {group})"));
-    } else {
-        display::warn(&format!(
-            "systemctl restart riku failed; restart it so the supervisor joins {group}"
-        ));
-    }
-}
-
 fn join(group: &str, user: &DeployUser, no_systemd: bool) {
     // The error names the command to run by hand, or the NixOS lines.
     if let Err(e) = add_to_group(group, &user.name) {
@@ -203,12 +182,34 @@ fn join(group: &str, user: &DeployUser, no_systemd: bool) {
         return;
     }
     display::step_done("Container engine", &format!("{} joined {group}", user.name));
-    restart_supervisor(group, no_systemd);
+    if no_systemd {
+        display::detail(&format!(
+            "The riku supervisor gets the {group} group the next time it starts"
+        ));
+    }
+}
+
+/// The gid of the group that owns docker's socket when the deploy user is
+/// a listed member of it, so the supervisor must run with it. `None` for
+/// no socket, the deploy user's own primary group, or no membership.
+pub(super) fn joined_socket_group(user: &DeployUser) -> Option<u32> {
+    let gid = match std::fs::metadata(DOCKER_SOCKET) {
+        Ok(meta) => meta.gid(),
+        Err(_) => return None,
+    };
+    if gid == user.gid() {
+        return None;
+    }
+    match group_name(gid) {
+        Some(group) if group.mem.iter().any(|member| member == &user.name) => Some(gid),
+        _ => None,
+    }
 }
 
 /// Offer to add the deploy user to the group that owns docker's socket.
 /// Never fails init: a refused or failed change is printed and init goes on.
-/// Runs after the service is installed, so a restart picks up the group.
+/// Runs before the service is installed, which restarts a running
+/// supervisor that lacks the group (see [`joined_socket_group`]).
 pub(super) fn offer_engine_group(user: &DeployUser, no_systemd: bool) {
     let Some(kind) = found_engine(user) else {
         return;

@@ -103,7 +103,7 @@ curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.s
 `sudo riku init` creates the deploy user and its groups with the tools the host has:
 
 - Debian, Ubuntu, Fedora, RHEL, Arch and openSUSE: shadow-utils (`useradd`, `groupadd`, `usermod`).
-- Alpine: BusyBox (`adduser`, `addgroup`, `chpasswd`) when shadow-utils is not installed. The deploy user's login shell is `/bin/bash`, so install bash first (`apk add bash`).
+- Alpine: BusyBox (`adduser`, `addgroup`, `chpasswd`) when shadow-utils is not installed. bash is not needed: the deploy user's login shell is `/bin/sh`, and the git hook and bundled plugins are POSIX `sh`. A deploy user an older init made with `/bin/bash` is moved to `/bin/sh` by `sudo riku init` where `usermod` exists (shadow-utils); with BusyBox alone, init prints the command to run.
 - NixOS: riku changes no users or groups. Init prints the `configuration.nix` lines to add (the deploy user, its group, `riku-sockets` and the extra groups it needs) and stops; run `nixos-rebuild switch`, then `sudo riku init` again.
 
 With neither tool set, init stops and names what to install.
@@ -298,8 +298,8 @@ sudo firewall-cmd --reload
 Point your domain to your server's IP address:
 
 ```
-A record: your-domain.com → your.server.ip
-A record: *.your-domain.com → your.server.ip
+A record: example.com → 203.0.113.10
+A record: *.example.com → 203.0.113.10
 ```
 
 ## Testing Your Installation

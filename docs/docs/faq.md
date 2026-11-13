@@ -71,7 +71,7 @@ Or create an `ENV` file in `~/.riku/envs/myapp/ENV`.
 
 **Q: Does Riku auto-start the supervisor?**
 
-**A:** Yes. On first deployment, Riku automatically starts the supervisor daemon if not running. Nginx site files are written by the router helper to `/etc/riku/nginx`, which nginx loads through `/etc/nginx/conf.d/riku.conf` (both set up by `sudo riku init`).
+**A:** Yes. On first deployment, Riku automatically starts the supervisor daemon if not running. Nginx site files are written by the router helper to `/etc/riku/nginx`, which nginx loads through `/etc/nginx/conf.d/riku.conf`, or `/etc/nginx/http.d/riku.conf` on Alpine (both set up by `sudo riku init`).
 
 **Q: Do I need to install python3-venv for Python apps?**
 

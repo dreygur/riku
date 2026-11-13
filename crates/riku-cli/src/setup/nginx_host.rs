@@ -3,7 +3,7 @@
 //! The router helper writes every site config into `/etc/riku/nginx` and
 //! never under `/etc/nginx`. Setup creates that root owned directory, installs
 //! the one root-owned file that loads it, `/etc/nginx/conf.d/riku.conf`
-//! and puts the nginx worker user in the `riku-sockets` group (see
+//! (Alpine: `/etc/nginx/http.d/riku.conf`) and puts the nginx worker user in the `riku-sockets` group (see
 //! [`super::nginx_worker`]).
 //!
 //! Security: the include file's text is a constant (see
@@ -25,7 +25,7 @@ use crate::nginx::{include_file_contents, needs_catch_all, write_include_file};
 use crate::util::display;
 
 use super::deploy_user::DeployUser;
-use super::nginx_worker::grant_nginx_sockets;
+use super::nginx_worker::{grant_nginx_sockets, Joined};
 use super::router_dirs::{secure_cert_dirs, secure_dir};
 
 /// A regular file owned by `root_uid` that no one else can write.
@@ -128,10 +128,58 @@ fn prepare_site_root(site_root: &Path, owner: u32) -> Result<()> {
     secure_dir(site_root, owner, None, SITE_ROOT_MODE)
 }
 
+/// What a reload of nginx came to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Reload {
+    Done,
+    /// nginx is not running under systemd, so its next start reads the
+    /// groups anyway.
+    NotRunning,
+    Failed,
+}
+
+/// Reload nginx through systemd when its unit is active. An nginx started
+/// outside systemd is left alone; its next reload, which every deploy
+/// does, gives the workers the group.
+fn reload_running_nginx(paths: &RikuPaths) -> Reload {
+    let systemctl = |args: &[&str]| {
+        Command::new(&paths.reload_programs.systemctl)
+            .args(args)
+            .stdin(Stdio::null())
+            .output()
+            .is_ok_and(|output| output.status.success())
+    };
+    if !systemctl(&["is-active", "--quiet", "nginx"]) {
+        return Reload::NotRunning;
+    }
+    if systemctl(&["reload", "nginx"]) {
+        Reload::Done
+    } else {
+        Reload::Failed
+    }
+}
+
+/// nginx workers keep the groups they started with, so a worker user that
+/// just joined the socket group reaches app sockets only after a reload.
+/// `reload` runs only then.
+pub(super) fn reload_for_group(joined: Joined, reload: impl FnOnce() -> Reload) {
+    if joined == Joined::Already {
+        return;
+    }
+    match reload() {
+        Reload::Done => display::step_done("Nginx", "reloaded, its workers now reach app sockets"),
+        Reload::NotRunning => {}
+        Reload::Failed => display::warn(
+            "systemctl reload nginx failed; reload nginx so its workers can reach app sockets",
+        ),
+    }
+}
+
 /// Make the system nginx load riku's sites. Root only. A host without the
 /// include directory gets a warning saying what to do.
 ///
-/// nginx is not reloaded here. The next deploy reloads it.
+/// nginx is reloaded only when its worker user just joined the socket
+/// group (see [`reload_for_group`]); site changes wait for the next deploy.
 #[allow(clippy::question_mark)]
 pub fn setup_nginx_host(user: &DeployUser) -> Result<()> {
     // Root writes under these paths, so the environment (kept
@@ -164,7 +212,12 @@ pub fn setup_nginx_host(user: &DeployUser) -> Result<()> {
     if let Err(e) = load_riku_sites(&paths) {
         return Err(e);
     }
-    grant_nginx_sockets()
+    let joined = match grant_nginx_sockets() {
+        Ok(joined) => joined,
+        Err(e) => return Err(e),
+    };
+    reload_for_group(joined, || reload_running_nginx(&paths));
+    Ok(())
 }
 
 #[cfg(test)]

@@ -309,7 +309,11 @@ server's local time before the worker name:
 ```
 
 Without a process, every `*.log` file of the app is followed except
-`deploy.log` (use `--deploy` for that one). With a process or service name,
+`deploy.log` (use `--deploy` for that one). The deploy log holds the last
+10 deploys, each from a `---- deploy ----` line, with every line of
+build, release and runtime plugin output (`| ` after the time), up to
+5 MiB of history plus 5 MiB for the deploy running now. It is mode 0600.
+With a process or service name,
 its `<name>.<n>.log` files are followed, one per copy. A name with no log
 files is an error that lists the names that have logs. Container services
 log to the same files, written by the supervisor.

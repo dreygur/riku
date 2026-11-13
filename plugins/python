@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Riku runtime plugin: Python
 # Handles apps with requirements.txt, pyproject.toml, or setup.py.
 # Builds with uv when it is installed (recommended), else with pip.
-set -euo pipefail
+set -eu
 
 CMD="${1:-}"
 APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
@@ -18,10 +18,6 @@ PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 # version is made again.
 PYTHON_VERSION="${RIKU_PYTHON_VERSION:-}"
 VERSION_MARK="$VENV_PATH/.riku-python-version"
-UV_PYTHON=()
-if [ -n "$PYTHON_VERSION" ]; then
-  UV_PYTHON=(--python "$PYTHON_VERSION")
-fi
 
 # Drop a venv made for another RIKU_PYTHON_VERSION than the one asked for now.
 # A venv with no mark and no version asked keeps working as before.
@@ -39,14 +35,19 @@ mark_venv() {
 
 # Install with uv: from uv.lock when the app has one (fails when the lock is
 # out of date, like a frozen install), else from requirements.txt or the
-# project itself. Any failure stops the build.
+# project itself. Any failure stops the build. The function's own
+# positional parameters carry `--python <version>` when one is asked for.
 build_with_uv() {
+  set --
+  if [ -n "$PYTHON_VERSION" ]; then
+    set -- --python "$PYTHON_VERSION"
+  fi
   if [ -f uv.lock ]; then
-    UV_PROJECT_ENVIRONMENT="$VENV_PATH" uv sync ${UV_PYTHON[@]+"${UV_PYTHON[@]}"} --locked --no-dev
+    UV_PROJECT_ENVIRONMENT="$VENV_PATH" uv sync "$@" --locked --no-dev
     return
   fi
   drop_stale_venv
-  [ -d "$VENV_PATH" ] || uv venv ${UV_PYTHON[@]+"${UV_PYTHON[@]}"} "$VENV_PATH"
+  [ -d "$VENV_PATH" ] || uv venv "$@" "$VENV_PATH"
   mark_venv
   export VIRTUAL_ENV="$VENV_PATH"
   if [ -f requirements.txt ]; then
@@ -59,20 +60,20 @@ build_with_uv() {
 }
 
 build_with_pip() {
-  local python="python3"
+  pip_python="python3"
   if [ -n "$PYTHON_VERSION" ]; then
-    python="python$PYTHON_VERSION"
-    if ! command -v "$python" >/dev/null 2>&1; then
-      echo "RIKU_PYTHON_VERSION is $PYTHON_VERSION but $python is not installed on the server." >&2
+    pip_python="python$PYTHON_VERSION"
+    if ! command -v "$pip_python" >/dev/null 2>&1; then
+      echo "RIKU_PYTHON_VERSION is $PYTHON_VERSION but $pip_python is not installed on the server." >&2
       echo "Install it, or install uv, which fetches the interpreter itself." >&2
       exit 1
     fi
   fi
   drop_stale_venv
-  [ -d "$VENV_PATH" ] || "$python" -m venv "$VENV_PATH"
+  [ -d "$VENV_PATH" ] || "$pip_python" -m venv "$VENV_PATH"
   mark_venv
   # shellcheck disable=SC1091
-  source "$VENV_PATH/bin/activate"
+  . "$VENV_PATH/bin/activate"
   if [ -f requirements.txt ]; then
     pip install -r requirements.txt
   elif [ -f pyproject.toml ]; then
@@ -120,7 +121,7 @@ case "$CMD" in
     exit 0
     ;;
   *)
-    echo "Unknown subcommand: $CMD" >&2
+    printf 'Unknown subcommand: %s\n' "$CMD" >&2
     exit 1
     ;;
 esac

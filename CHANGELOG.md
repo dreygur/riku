@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `riku logs <app> --deploy` shows every line of build, release and
+  runtime plugin output, for deploys that worked and ones that failed, not
+  only the last 15 lines of a failure. The deploy log keeps the last 10
+  deploys, each starting with a `---- deploy ----` line, within 5 MiB of
+  history; one deploy writes at most 5 MiB of output to it, then a line
+  saying the rest was cut. The file is now mode 0600, since build output
+  can hold what an app prints of its secrets.
+- The bundled runtime plugins (node, python, ruby, go, rust-lang) and
+  riku-notify's `on-event` are POSIX `sh` scripts (`#!/bin/sh`), so they
+  run on hosts without bash, such as Alpine. Re-run `riku init` or
+  `riku plugins install <name>` to get the new copies.
+- The post-receive hook is `#!/bin/sh`, and `sudo riku init` creates the
+  deploy user with login shell `/bin/sh` (it was `/bin/bash`), so a push
+  over ssh works on a host without bash.
+- `riku init` keeps what riku owns current: it moves a deploy user an
+  older init gave `/bin/bash` to `/bin/sh` with `usermod` (`Deploy user
+  shell /bin/sh`; any other shell is left alone, and on NixOS or without
+  usermod it only says what to do), and it rewrites every app repo's
+  post-receive hook whose text or mode differs from the current one
+  (`Git hooks updated N`, a warning naming each repo it cannot write).
+- Go apps need a `go.mod`: the go plugin detects only that, and a failed
+  detection names the go plugin only for an app with one. A stray `.go`
+  file no longer makes a node, python or rust app look like Go (its
+  `*.go` check never matched before, since `find -quit` printed nothing,
+  while the missing plugin hint already picked go for it).
+
+### Fixed
+
+- `riku apps` and `riku ps` count a container app's copies right after
+  its deploy instead of showing it `stopped 0` until the supervisor's next
+  listing: the deploy writes the app's container rows into `stats.json`
+  itself. The supervisor and the deploy now both write that file under a
+  lock on `stats.json.lock`, so neither loses the other's rows.
+- `sudo riku init` with the nginx router works with Alpine's nginx: when
+  `/etc/nginx/conf.d` is missing and `/etc/nginx/http.d` exists, the
+  include that loads riku's sites goes to `/etc/nginx/http.d/riku.conf`,
+  and `riku doctor` checks that file. Hosts with `conf.d` are unchanged.
+- `sudo riku init` restarts the supervisor at most once. Before, an
+  upgrade that also added the deploy user to docker's group restarted it
+  twice, stopping every app twice. The docker group question now comes
+  before the service step, and that step also restarts a running
+  supervisor that lacks a group the deploy user is in (`riku-sockets`, or
+  the docker socket's group), shown as `restarted (new groups)`. Before, a
+  supervisor started before the deploy user joined `riku-sockets` kept
+  running without it, since a process keeps the groups it started with.
+- The image watch no longer replaces a podman service every time it
+  checks. Podman lists a pulled image as `sha256:<id>` but gives a
+  container's image as the bare id, so the two never matched; the ids are
+  now compared without the prefix, as deploys already did.
+- A dashboard restart, stop, redeploy, scale or env edit naming an app
+  that does not exist answers 404 instead of stopping the dashboard, and
+  the same request on the supervisor's control plane (deploy, restart,
+  stop, destroy) is an error instead of stopping the supervisor. The CLI
+  functions they call exited the process for an unknown app.
+- Those CLI functions no longer exit the process for a bad or unknown app
+  name: they print the same hints and return the error, which the CLI
+  prints last as its `■` line (after the hints, where it used to come
+  first). A bad name is now shown as typed, not as the empty sanitized
+  name.
+- The post-receive hook a first push creates is mode 0755. It kept the
+  write bits the umask allowed, so under umask 002 (common for ssh
+  sessions with pam_umask) it was group writable.
+- A lifecycle hook (`riku-pre-deploy` and the others) without an execute
+  bit is skipped with a warning naming the file, as runtime plugins are.
+  riku used to make it executable and run it.
+- `sudo riku init` with the nginx router reloads a running nginx when it
+  has just added nginx's worker user to `riku-sockets`, so the workers
+  reach uWSGI sockets at once rather than after the next deploy. A
+  re-run that changes no group does not reload nginx.
+
 ## [0.1.4] - 2026-11-13
 
 ### Added

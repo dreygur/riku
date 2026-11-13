@@ -56,4 +56,4 @@ pub use process_util::get_free_port;
 pub use procfile::parse_procfile;
 pub use root_binary::ROOT_BINARY;
 pub use ssh_keys::{setup_authorized_keys, setup_authorized_keys_in};
-pub use validation::{ensure_path_within, existing_app, exit_if_invalid, validate_app_name};
+pub use validation::{ensure_path_within, existing_app, require_app, validate_app_name};

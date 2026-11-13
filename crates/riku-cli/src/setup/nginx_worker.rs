@@ -16,7 +16,7 @@
 use std::fs;
 
 use anyhow::{anyhow, Result};
-use nix::unistd::User;
+use nix::unistd::{Group, User};
 
 use crate::config::SOCKET_GROUP;
 use crate::util::display;
@@ -81,13 +81,29 @@ fn worker_user() -> Result<String> {
     Ok(name)
 }
 
+/// Whether the nginx worker user joined the socket group in this init.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Joined {
+    Now,
+    Already,
+}
+
+fn is_socket_group_member(worker: &str) -> bool {
+    matches!(Group::from_name(SOCKET_GROUP), Ok(Some(group)) if group.mem.iter().any(|m| m == worker))
+}
+
 /// Put the nginx worker user in the socket group, which root init has
-/// already created. Root only.
+/// already created, and say whether it was a member before. Root only.
 #[allow(clippy::question_mark)]
-pub(super) fn grant_nginx_sockets() -> Result<()> {
+pub(super) fn grant_nginx_sockets() -> Result<Joined> {
     let worker = match worker_user() {
         Ok(worker) => worker,
         Err(e) => return Err(e),
+    };
+    let joined = if is_socket_group_member(&worker) {
+        Joined::Already
+    } else {
+        Joined::Now
     };
     if let Err(e) = add_to_socket_group(&worker) {
         return Err(e);
@@ -96,7 +112,7 @@ pub(super) fn grant_nginx_sockets() -> Result<()> {
         "Nginx sockets",
         &format!("{worker} reads them through {SOCKET_GROUP}"),
     );
-    Ok(())
+    Ok(joined)
 }
 
 #[cfg(test)]

@@ -18,7 +18,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Json, Response};
 use serde::Deserialize;
 
-use super::mutations::{authorize_mutation, finish};
+use super::mutations::{authorize_mutation, finish, known_app};
 use super::DashboardState;
 
 /// GET /api/apps/:app/env
@@ -60,9 +60,9 @@ pub(crate) async fn edit_env(
     if let Some(denied) = authorize_mutation(&state, &headers) {
         return denied;
     }
-    let app = match crate::util::validate_app_name(&app) {
+    let app = match known_app(&state.paths, &app) {
         Ok(a) => a,
-        Err(_) => return (StatusCode::BAD_REQUEST, "invalid app name").into_response(),
+        Err(refused) => return refused.into_response(),
     };
 
     let paths = state.paths.clone();

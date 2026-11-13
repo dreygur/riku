@@ -102,6 +102,54 @@ fn a_rewritten_unit_restarts_a_supervisor_on_the_installed_binary() {
     assert_eq!(fs::read_to_string(&unit).unwrap(), "Delegate=yes");
 }
 
+/// A process keeps the groups it started with, so a group root init just
+/// joined reaches the supervisor only through a restart.
+#[test]
+fn a_supervisor_without_a_joined_group_is_restarted_once() {
+    let tmp = tempfile::tempdir().unwrap();
+    let proc_root = tmp.path().join("proc");
+    let status = |pid: u32, groups: &str| {
+        let dir = proc_root.join(pid.to_string());
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("status"),
+            format!("Name:\triku\nGroups:\t{groups}\nPid:\t{pid}\n"),
+        )
+        .unwrap();
+    };
+    status(41, "1000 ");
+    status(42, "998 1000 ");
+
+    assert_eq!(
+        with_groups(ServiceAction::KeepRunning, Some(41), &[998], &proc_root),
+        ServiceAction::Restart(RestartReason::MissingGroups)
+    );
+    assert_eq!(
+        with_groups(ServiceAction::KeepRunning, Some(42), &[998], &proc_root),
+        ServiceAction::KeepRunning,
+        "a supervisor already in every group is left running"
+    );
+    assert_eq!(
+        with_groups(
+            ServiceAction::Restart(RestartReason::NewBinary),
+            Some(41),
+            &[998],
+            &proc_root
+        ),
+        ServiceAction::Restart(RestartReason::NewBinary),
+        "one restart covers the new binary and the group"
+    );
+    assert_eq!(
+        with_groups(ServiceAction::KeepRunning, Some(43), &[998], &proc_root),
+        ServiceAction::Restart(RestartReason::MissingGroups),
+        "groups that cannot be read count as missing"
+    );
+    assert_eq!(
+        ServiceAction::Restart(RestartReason::MissingGroups).outcome(),
+        "restarted (new groups)"
+    );
+}
+
 #[test]
 fn a_stopped_service_is_started() {
     let tmp = tempfile::tempdir().unwrap();

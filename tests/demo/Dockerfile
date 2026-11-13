@@ -46,7 +46,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 RUN npm install -g @nubjs/nub
 
 # Dedicated, non-root deploy user, as on a real server.
-RUN useradd -m -s /bin/bash riku \
+RUN useradd -m -s /bin/sh riku \
     && usermod -p '*' riku \
     && mkdir -p /home/riku/.ssh \
     && chmod 700 /home/riku/.ssh \

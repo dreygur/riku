@@ -26,7 +26,7 @@ The helper is the root owned binary `/usr/local/bin/riku` running as `riku-route
 | `/var/lib/riku/static` | published static files (see Static Files) |
 | `/var/lib/riku/acme` | the ACME challenge webroot |
 
-nginx loads the site files through one file, `/etc/nginx/conf.d/riku.conf`, which holds a single line, `include /etc/riku/nginx/*.conf;`. Riku writes nothing else under `/etc/nginx`. Sites listen on `[::]` as well as `0.0.0.0` when the host has IPv6, and WebSocket upgrades are proxied by default.
+nginx loads the site files through one file, `/etc/nginx/conf.d/riku.conf` (on Alpine, whose nginx has `/etc/nginx/http.d` and no `conf.d`, `/etc/nginx/http.d/riku.conf`; `riku doctor` checks the same file), which holds a single line, `include /etc/riku/nginx/*.conf;`. Riku writes nothing else under `/etc/nginx`. Sites listen on `[::]` as well as `0.0.0.0` when the host has IPv6, and WebSocket upgrades are proxied by default.
 
 The helper restarts on its own after a crash. Check it with `systemctl status riku-router-helper` and `journalctl -u riku-router-helper`.
 

@@ -25,16 +25,18 @@ use std::path::Path;
 use anyhow::Result;
 
 use crate::config::router::Router;
+use crate::config::SOCKET_GROUP;
 use crate::doctor::ssh_check::{riku_key_count, Reader};
 use crate::util::display;
 use crate::util::public_key::PublicKey;
+use crate::util::socket_dir;
 use crate::util::ROOT_BINARY;
 
 use super::binary::install_root_binary;
-use super::deploy_account::ensure_account;
+use super::deploy_account::{ensure_account, ensure_login_shell};
 use super::deploy_keys::read_key_file;
 use super::deploy_user::{deploy_user_name, passwd_home, DeployUser};
-use super::engine_group::offer_engine_group;
+use super::engine_group::{joined_socket_group, offer_engine_group};
 use super::helper_install::install_router_helper;
 use super::init::InitOptions;
 use super::init_router::{deploy_router, setup_router_host};
@@ -107,6 +109,15 @@ fn existing_router(user: &DeployUser) -> Result<Router> {
     ))
 }
 
+/// The groups root init put the deploy user in, which the supervisor must
+/// run with: the socket group and, when joined, the docker socket's group.
+fn supervisor_groups(user: &DeployUser) -> Vec<u32> {
+    socket_dir::group_id(SOCKET_GROUP)
+        .into_iter()
+        .chain(joined_socket_group(user))
+        .collect()
+}
+
 /// Run a root init: per-user steps as the deploy user, then host setup.
 /// Returns the deploy user it set up and the router.
 #[allow(clippy::question_mark)]
@@ -145,6 +156,7 @@ pub fn root_init(options: &InitOptions) -> Result<(DeployUser, Router)> {
     if let Err(e) = ensure_account(&deploy_user_name()) {
         return Err(e);
     }
+    ensure_login_shell(&deploy_user_name());
     let user = match DeployUser::lookup() {
         Ok(user) => user,
         Err(e) => return Err(e),
@@ -174,6 +186,10 @@ pub fn root_init(options: &InitOptions) -> Result<(DeployUser, Router)> {
         return Err(e);
     }
 
+    // Every group change comes before the service, so one restart at most
+    // gives the supervisor all of them.
+    offer_engine_group(&user, options.no_systemd);
+
     if options.no_systemd {
         display::step_done("Service", "skipped (--no-systemd)");
     } else {
@@ -182,12 +198,10 @@ pub fn root_init(options: &InitOptions) -> Result<(DeployUser, Router)> {
                 return Err(e);
             }
         }
-        if let Err(e) = install_systemd_service(&router) {
+        if let Err(e) = install_systemd_service(&router, &supervisor_groups(&user)) {
             return Err(e);
         }
     }
-    // After the service: joining a group needs a supervisor restart.
-    offer_engine_group(&user, options.no_systemd);
     if keys.is_empty() {
         report_existing_keys(&user.home);
     }

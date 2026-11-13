@@ -5,6 +5,8 @@ use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read};
 use std::sync::{Arc, Mutex};
 
+use crate::deploy_logger::DeployLogSink;
+
 /// How many lines a tail keeps by default.
 pub const FAILURE_TAIL_LINES: usize = 15;
 
@@ -33,11 +35,14 @@ pub fn for_each_line(source: impl Read, mut on_line: impl FnMut(&str)) {
 }
 
 /// A shared ring of the most recent output lines. Clones share the ring, so
-/// the threads reading a child's stdout and stderr can both feed it.
-#[derive(Clone, Debug)]
+/// the threads reading a child's stdout and stderr can both feed it. A tail
+/// made by [`OutputTail::logged_to`] also writes every line to the deploy
+/// log.
+#[derive(Clone)]
 pub struct OutputTail {
     lines: Arc<Mutex<VecDeque<String>>>,
     cap: usize,
+    log: Option<DeployLogSink>,
 }
 
 impl Default for OutputTail {
@@ -52,11 +57,23 @@ impl OutputTail {
         Self {
             lines: Arc::new(Mutex::new(VecDeque::with_capacity(cap))),
             cap,
+            log: None,
+        }
+    }
+
+    /// This tail, also writing every line pushed to it into `log`.
+    pub fn logged_to(self, log: DeployLogSink) -> Self {
+        Self {
+            log: Some(log),
+            ..self
         }
     }
 
     /// Keep `line`, dropping the oldest one when full.
     pub fn push(&self, line: &str) {
+        if let Some(log) = &self.log {
+            log.write_streamed(line);
+        }
         let mut lines = match self.lines.lock() {
             Ok(lines) => lines,
             Err(poisoned) => poisoned.into_inner(),

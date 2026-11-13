@@ -36,23 +36,9 @@ pub fn is_bundled_runtime(name: &str) -> bool {
     BUNDLED_RUNTIMES.contains(&name)
 }
 
-/// Whether the top level of `app_path` holds a `*.go` file. The go plugin
-/// accepts those without a `go.mod`.
-fn has_go_file(app_path: &Path) -> bool {
-    let Ok(entries) = std::fs::read_dir(app_path) else {
-        return false;
-    };
-    entries
-        .flatten()
-        .any(|entry| entry.path().extension().is_some_and(|ext| ext == "go"))
-}
-
 /// The shell runtime whose marker file `app_path` has, if any. Used to name
 /// the plugin to install when no installed plugin accepted the app.
 pub fn needed_runtime(app_path: &Path) -> Option<&'static str> {
-    if has_go_file(app_path) {
-        return Some("go");
-    }
     MARKERS
         .iter()
         .find(|(_, files)| files.iter().any(|file| app_path.join(file).exists()))

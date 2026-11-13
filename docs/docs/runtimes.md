@@ -214,10 +214,9 @@ end
 
 ### Detection
 
-Riku detects Go apps by the presence of:
-- `go.mod` - Go modules
-- `Godeps/` - Godeps
-- `.go` files - Raw Go source
+Riku detects a Go app by its `go.mod`, and only by that: go builds only
+modules, and a stray `.go` file in a node, python or rust app must not make
+it Go. An app without a `go.mod` needs one first (`go mod init <module>`).
 
 ### Go Modules
 
@@ -540,8 +539,8 @@ up, so a migration can reach its database on a first deploy. A dependency
 that already runs is left alone for the release, and a service started for
 it is not replaced again by the same deploy. The release still runs before
 any routed copy is replaced. Its stdout and stderr print on the push
-output. A nonzero exit stops the deploy, and the last lines of output go
-to `riku logs <app> --deploy`.
+output and in `riku logs <app> --deploy`. A nonzero exit stops the
+deploy.
 
 The app env (everything `riku config set` stores, minus `RIKU_*` keys,
 which configure riku itself) goes to a service when riku builds it (a

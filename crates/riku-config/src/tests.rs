@@ -90,15 +90,23 @@ fn root_dirs_reject_relative_or_climbing_paths() {
     }
 }
 
+/// conf.d wherever it exists (Debian, Ubuntu, RHEL, nginx.org), so those
+/// hosts never change; Alpine's http.d only when conf.d is missing.
 #[test]
-fn nginx_host_paths_default_to_the_system_nginx_directories() {
-    let p = NginxHostPaths::resolve(None);
-    assert_eq!(
-        p.include_file,
-        Path::new("/etc/nginx/conf.d/riku.conf"),
-        "the include must land in a directory nginx loads inside http"
-    );
-    assert_eq!(NginxHostPaths::system(), p);
+fn the_include_goes_to_conf_d_unless_only_alpines_http_d_exists() {
+    let conf_d = Path::new("/etc/nginx/conf.d/riku.conf");
+    let http_d = Path::new("/etc/nginx/http.d/riku.conf");
+    let with = |dirs: &'static [&'static str]| {
+        crate::nginx_host::host_include_file(move |dir: &Path| {
+            dirs.iter().any(|d| Path::new(d) == dir)
+        })
+    };
+
+    assert_eq!(with(&["/etc/nginx/conf.d"]), conf_d);
+    assert_eq!(with(&["/etc/nginx/conf.d", "/etc/nginx/http.d"]), conf_d);
+    assert_eq!(with(&["/etc/nginx/http.d"]), http_d);
+    assert_eq!(with(&[]), conf_d, "no nginx yet: init warns about conf.d");
+    assert_eq!(NginxHostPaths::system(), NginxHostPaths::resolve(None));
 }
 
 #[test]

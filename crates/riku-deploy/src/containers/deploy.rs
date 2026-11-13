@@ -15,6 +15,7 @@ use super::release::run_release;
 use super::removal::remove_dropped;
 use super::retire::retire_procfile_workers;
 use super::rollout::{republish_routes, roll_out};
+use super::stats_publish::publish_container_stats;
 use super::{prepare_images, AppName};
 use crate::config::RikuPaths;
 use crate::supervisor_ctl::notify_supervisor_reload;
@@ -183,6 +184,9 @@ pub fn deploy_containers(
     };
     replacing();
     let rolled = roll_out_app(&ctx, &prepared);
+    if rolled.is_ok() {
+        publish_container_stats(&ctx, paths);
+    }
     notify_supervisor_reload(paths);
     match rolled {
         Ok(()) => retire_procfile_workers(&ctx, stale),

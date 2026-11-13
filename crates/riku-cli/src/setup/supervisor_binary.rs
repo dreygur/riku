@@ -30,6 +30,8 @@ pub(super) enum ServiceAction {
 pub(super) enum RestartReason {
     NewBinary,
     NewUnit,
+    /// The deploy user joined a group the running supervisor lacks.
+    MissingGroups,
 }
 
 /// Whether writing the unit file changed its text.
@@ -55,6 +57,7 @@ impl ServiceAction {
             ServiceAction::KeepRunning => "running",
             ServiceAction::Restart(RestartReason::NewBinary) => "restarted (new binary)",
             ServiceAction::Restart(RestartReason::NewUnit) => "restarted (unit changed)",
+            ServiceAction::Restart(RestartReason::MissingGroups) => "restarted (new groups)",
         }
     }
 }
@@ -141,6 +144,46 @@ pub(super) fn action_for(
         UnitChange::Changed => ServiceAction::Restart(RestartReason::NewUnit),
         UnitChange::Same => ServiceAction::KeepRunning,
     }
+}
+
+/// `action`, turned into a restart when it would keep the supervisor
+/// `main_pid` running without one of `groups`. A process keeps the groups it
+/// started with, so a group the deploy user joined during this init reaches
+/// the supervisor only through a restart. Groups that cannot be read from
+/// `<proc_root>/<pid>/status` count as missing.
+pub(super) fn with_groups(
+    action: ServiceAction,
+    main_pid: Option<u32>,
+    groups: &[u32],
+    proc_root: &Path,
+) -> ServiceAction {
+    let (ServiceAction::KeepRunning, Some(pid)) = (&action, main_pid) else {
+        return action;
+    };
+    let running = process_groups(proc_root, pid).unwrap_or_default();
+    if groups.iter().all(|gid| running.contains(gid)) {
+        action
+    } else {
+        ServiceAction::Restart(RestartReason::MissingGroups)
+    }
+}
+
+/// The supplementary groups on the `Groups:` line of `<proc_root>/<pid>/status`.
+#[allow(clippy::question_mark)]
+fn process_groups(proc_root: &Path, pid: u32) -> Option<Vec<u32>> {
+    let status = match fs::read_to_string(proc_root.join(pid.to_string()).join("status")) {
+        Ok(status) => status,
+        Err(_) => return None,
+    };
+    let line = match status.lines().find_map(|line| line.strip_prefix("Groups:")) {
+        Some(line) => line,
+        None => return None,
+    };
+    Some(
+        line.split_whitespace()
+            .filter_map(|gid| gid.parse().ok())
+            .collect(),
+    )
 }
 
 /// Whether `<proc_root>/<pid>/exe` is the `installed` binary.
