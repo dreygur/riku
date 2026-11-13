@@ -28,5 +28,8 @@ server {
     proxy_redirect off;
   }
 {% endfor %}
+  location / {
+    return 404;
+  }
   add_header X-Deployed-By "Riku" always;
 }

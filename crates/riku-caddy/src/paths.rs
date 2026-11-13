@@ -36,7 +36,8 @@ fn app_block(app: &str, backends: &[Backend]) -> Result<String> {
     ))
 }
 
-/// The site file text for every path mode app on `port`.
+/// The site file text for every path mode app on `port`. A path of no app
+/// gets a 404, which Caddy would otherwise answer with an empty 200.
 #[allow(clippy::question_mark)]
 pub fn render_paths(port: u16, apps: &[(String, Vec<Backend>)]) -> Result<String> {
     let blocks: Result<Vec<String>> = apps
@@ -48,7 +49,7 @@ pub fn render_paths(port: u16, apps: &[(String, Vec<Backend>)]) -> Result<String
         Err(e) => return Err(e),
     };
     Ok(format!(
-        "# riku path apps\nhttp://:{port} {{\n{}}}\n",
+        "# riku path apps\nhttp://:{port} {{\n{}\thandle {{\n\t\trespond 404\n\t}}\n}}\n",
         blocks.concat()
     ))
 }

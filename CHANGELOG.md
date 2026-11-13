@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An app with its own certificate lists `https://` only for the domains
   that certificate covers. Its other domains are listed with `http://`,
   since HTTPS there gets a browser warning.
+- On the shared path mode port, a path that belongs to no app answers 404.
+  Caddy answered an empty 200 and nginx served its own html root.
 
 ## [0.1.6] - 2026-11-13
 
