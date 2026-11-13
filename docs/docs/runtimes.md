@@ -540,8 +540,8 @@ up, so a migration can reach its database on a first deploy. A dependency
 that already runs is left alone for the release, and a service started for
 it is not replaced again by the same deploy. The release still runs before
 any routed copy is replaced. Its stdout and stderr print on the push
-output. A nonzero exit stops the deploy, and the last lines of output go
-to `riku logs <app> --deploy`.
+output and in `riku logs <app> --deploy`. A nonzero exit stops the
+deploy.
 
 The app env (everything `riku config set` stores, minus `RIKU_*` keys,
 which configure riku itself) goes to a service when riku builds it (a

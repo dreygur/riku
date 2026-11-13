@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `riku logs <app> --deploy` shows every line of build, release and
+  runtime plugin output, for deploys that worked and ones that failed, not
+  only the last 15 lines of a failure. The deploy log keeps the last 10
+  deploys, each starting with a `---- deploy ----` line, within 5 MiB of
+  history; one deploy writes at most 5 MiB of output to it, then a line
+  saying the rest was cut. The file is now mode 0600, since build output
+  can hold what an app prints of its secrets.
+
 ### Fixed
 
 - `sudo riku init` restarts the supervisor at most once. Before, an

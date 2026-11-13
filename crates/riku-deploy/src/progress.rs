@@ -4,7 +4,9 @@
 //! retry. Everything goes to stdout, the build output streamed by
 //! `tee_output` included, so an ssh client keeps the order.
 //!
-//! Every line also lands in the deploy log through [`DeployLogger`].
+//! Every line also lands in the deploy log through [`DeployLogger`]: the
+//! steps directly, the streamed command output through the [`OutputTail`]
+//! the log's sink feeds.
 
 use std::time::{Duration, Instant};
 
@@ -68,13 +70,14 @@ pub(crate) struct DeployProgress {
 impl DeployProgress {
     pub(crate) fn new(app: &str, paths: &RikuPaths, log: DeployLogger) -> Self {
         let now = Instant::now();
+        let output = OutputTail::default().logged_to(log.sink());
         Self {
             log,
             app: app.to_string(),
             started: now,
             phase: Phase::Sync,
             phase_started: now,
-            output: OutputTail::default(),
+            output,
             had_release: !ReleaseLog::new(paths).list(app).is_empty(),
             release_replaced: false,
         }
@@ -144,13 +147,11 @@ impl DeployProgress {
     }
 
     /// The failed phase with `err`, the outro and the summary that says how
-    /// to retry, all on stdout like the rest of the rail. The deploy log,
-    /// which holds no streamed output, gets the last lines of it first, so
-    /// `riku logs <app> --deploy` shows why a command failed.
+    /// to retry, all on stdout like the rest of the rail. The deploy log
+    /// already holds every output line, so it gets only the error.
     pub(crate) fn failed(&mut self, err: &anyhow::Error, branch: &str) {
         let reason = format!("{err:#}");
         display::mark_failure_shown(&reason);
-        self.log_recent_output();
         self.log.log_raw(&format!("[ERROR] {reason}"));
         let label = format!("{} failed", self.phase.label());
         let block = render_failure(
@@ -161,17 +162,6 @@ impl DeployProgress {
         );
         display::emit(Stream::Stdout, &block);
         display::summary(&as_pairs(&failure_summary(&self.app, branch)));
-    }
-
-    fn log_recent_output(&mut self) {
-        let lines = self.output.lines();
-        if lines.is_empty() {
-            return;
-        }
-        self.log.log_raw("Last output:");
-        for line in lines {
-            self.log.log_raw(&format!("  {line}"));
-        }
     }
 }
 

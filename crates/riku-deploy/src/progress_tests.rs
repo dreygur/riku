@@ -69,31 +69,57 @@ fn failure_block_puts_the_failed_step_before_the_outro_once() {
     );
 }
 
+/// `riku logs <app> --deploy` shows the whole build, once, whether the
+/// deploy worked or not, and a failure's error comes after the output.
 #[test]
-fn failure_writes_the_last_command_output_to_the_deploy_log() {
+fn the_deploy_log_holds_every_output_line_once_on_success_and_failure() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());
     let log_path = paths.deploy_log_file("agenttest");
-    let log = DeployLogger::new(&log_path).unwrap();
-    let mut progress = DeployProgress::new("agenttest", &paths, log);
-    progress.output().push("Traceback (most recent call last):");
+    let lines: Vec<String> = (0..30).map(|n| format!("compiling unit {n}")).collect();
+    let outcome = Outcome {
+        commit: None,
+        urls: &[],
+        workers: "",
+    };
+
+    let mut progress =
+        DeployProgress::new("agenttest", &paths, DeployLogger::new(&log_path).unwrap());
+    lines.iter().for_each(|line| progress.output().push(line));
+    progress.succeeded(&outcome);
+    let written = std::fs::read_to_string(&log_path).unwrap();
+    for line in &lines {
+        assert_eq!(
+            written.matches(&format!("| {line}\n")).count(),
+            1,
+            "{line}: {written}"
+        );
+    }
+
+    let mut progress =
+        DeployProgress::new("agenttest", &paths, DeployLogger::new(&log_path).unwrap());
     progress
         .output()
         .push("redis.exceptions.ConnectionError: Error 111");
-
     progress.failed(
         &anyhow::anyhow!("release command exited with code 1"),
         "main",
     );
-
     let written = std::fs::read_to_string(&log_path).unwrap();
-    let reason = written
-        .find("redis.exceptions.ConnectionError")
-        .unwrap_or_else(|| panic!("the deploy log lacks the command's last output: {written}"));
+    assert_eq!(
+        written.matches("ConnectionError").count(),
+        1,
+        "the output is not written twice: {written}"
+    );
+    let reason = written.find("redis.exceptions.ConnectionError").unwrap();
     let error = written.find("[ERROR] release command exited").unwrap();
     assert!(
         reason < error,
         "the output should come before the error line: {written}"
+    );
+    assert!(
+        written.contains("compiling unit 29"),
+        "the previous deploy is kept: {written}"
     );
 }
 
