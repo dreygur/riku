@@ -12,7 +12,7 @@ fn a_failed_daemon_reload_fails_init_and_restarts_nothing() {
         args != ["daemon-reload"]
     };
 
-    let started = start_riku_service(UnitChange::Changed, systemctl);
+    let started = start_riku_service(UnitChange::Changed, &[], systemctl);
 
     assert!(started.is_err(), "a failed reload must fail init");
     assert_eq!(

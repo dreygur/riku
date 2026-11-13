@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `sudo riku init` restarts the supervisor at most once. Before, an
+  upgrade that also added the deploy user to docker's group restarted it
+  twice, stopping every app twice. The docker group question now comes
+  before the service step, and that step also restarts a running
+  supervisor that lacks a group the deploy user is in (`riku-sockets`, or
+  the docker socket's group), shown as `restarted (new groups)`. Before, a
+  supervisor started before the deploy user joined `riku-sockets` kept
+  running without it, since a process keeps the groups it started with.
+
 ## [0.1.4] - 2026-11-13
 
 ### Added

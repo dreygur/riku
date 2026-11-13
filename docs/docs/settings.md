@@ -37,7 +37,9 @@ the deploy user cannot open its socket: `Add riku to the docker group so
 it can run container apps? This gives the riku user root-equivalent access
 on this host. [y/N]`. The group it names is the one that owns the socket.
 Only `y` or `yes` adds the deploy user (with `usermod -aG`, or BusyBox
-`addgroup`) and restarts a running supervisor so it gets the group; if
+`addgroup`), and the service step that follows restarts a running
+supervisor so it gets the group, in the same single restart an upgrade
+needs; if
 that fails, init prints the command to run and goes on. On NixOS it prints
 the `extraGroups` line for configuration.nix instead. Any other answer, no terminal, a socket
 owned by root's group, or a group riku cannot resolve changes nothing and
