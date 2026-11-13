@@ -5,12 +5,16 @@
   </picture>
 </p>
 
-**Git-push deployments on a single small box: one Rust binary, no Docker required.**
+<p align="center">
+  <strong>Git-push deployments on a single small box: one Rust binary, no Docker required.</strong>
+</p>
 
-[![CI](https://github.com/dreygur/riku/actions/workflows/ci.yml/badge.svg)](https://github.com/dreygur/riku/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Latest release](https://img.shields.io/github/v/release/dreygur/riku?sort=semver)](https://github.com/dreygur/riku/releases)
-[![Made with Rust](https://img.shields.io/badge/made%20with-Rust-orange.svg)](https://www.rust-lang.org/)
+<p align="center">
+  <a href="https://github.com/dreygur/riku/actions/workflows/ci.yml"><img src="https://github.com/dreygur/riku/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://github.com/dreygur/riku/releases"><img src="https://img.shields.io/github/v/release/dreygur/riku?sort=semver" alt="Latest release"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/made%20with-Rust-orange.svg" alt="Made with Rust"></a>
+</p>
 
 > **Read this first.** I built riku to serve my own needs, and most of its
 > code was written by AI. It is largely AI slop: it works for me, on my
