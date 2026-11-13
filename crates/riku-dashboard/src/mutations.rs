@@ -215,8 +215,9 @@ async fn run_action(
 }
 
 /// The app named in the path when it is valid and exists, else the status
-/// and message refusing it. Checked before calling a CLI command function:
-/// those exit the process for an unknown app, which would stop the dashboard.
+/// and message refusing it. Checked before calling a CLI command function,
+/// which would print its terminal hints for an unknown app and fail as a
+/// server error instead of a 404.
 pub(crate) fn known_app(
     paths: &crate::config::RikuPaths,
     app: &str,
@@ -287,10 +288,10 @@ mod tests {
         assert!(authorize_mutation(&st, &HeaderMap::new()).is_some());
     }
 
-    /// The CLI functions behind these actions exit the process for an app
-    /// that does not exist, which would take the dashboard down with it.
+    /// An app that does not exist is a 404, answered before any CLI
+    /// function runs.
     #[tokio::test]
-    async fn an_action_on_an_unknown_app_is_a_404_and_the_dashboard_lives() {
+    async fn an_action_on_an_unknown_app_is_a_404() {
         let tmp = tempfile::TempDir::new().unwrap();
         let state = DashboardState {
             paths: RikuPaths::for_tests(tmp.path()),

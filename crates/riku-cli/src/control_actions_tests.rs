@@ -1,9 +1,9 @@
 use super::*;
 
-/// The supervisor runs these on its control plane; the CLI functions behind
-/// them exit the process for an unknown app, which would stop the supervisor.
+/// The supervisor runs these on its control plane, so an unknown app must
+/// be an error it can answer with.
 #[test]
-fn an_unknown_app_is_an_error_not_a_supervisor_exit() {
+fn an_unknown_app_is_an_error() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());
     let actions = CliControlActions;

@@ -25,7 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that does not exist answers 404 instead of stopping the dashboard, and
   the same request on the supervisor's control plane (deploy, restart,
   stop, destroy) is an error instead of stopping the supervisor. The CLI
-  functions they call exit the process for an unknown app.
+  functions they call exited the process for an unknown app.
+- Those CLI functions no longer exit the process for a bad or unknown app
+  name: they print the same hints and return the error, which the CLI
+  prints last as its `■` line (after the hints, where it used to come
+  first). A bad name is now shown as typed, not as the empty sanitized
+  name.
 
 ## [0.1.4] - 2026-11-13
 

@@ -14,8 +14,8 @@ use crate::util::existing_app;
 
 /// Routes control-plane requests to the same command functions `riku <cmd>`
 /// uses, so HTTP-triggered actions behave identically to the CLI. The app is
-/// checked with [`existing_app`] first: those functions exit the process
-/// for an unknown app, and here that process is the supervisor.
+/// checked with [`existing_app`] first, so an unknown app is a plain error
+/// and the supervisor's log gets none of the CLI's terminal hints.
 pub struct CliControlActions;
 
 impl ControlActions for CliControlActions {
