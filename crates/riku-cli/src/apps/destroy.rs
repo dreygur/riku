@@ -6,7 +6,7 @@ use anyhow::Result;
 use super::destroy_engine::container_cleanup;
 use super::destroy_files::remove_app_files;
 use crate::config::RikuPaths;
-use crate::util::{display, exit_if_invalid};
+use crate::util::{display, require_app};
 
 /// The runtime plugin removes what it started outside the app directory.
 /// A failure is reported and destroy goes on: the app is going away either
@@ -41,7 +41,7 @@ impl From<bool> for DestroyMode {
 /// Destroy an app: remove directories and config files, preserve data/cache.
 #[allow(clippy::question_mark)]
 pub fn cmd_destroy(paths: &RikuPaths, app: &str, mode: DestroyMode) -> Result<()> {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match require_app(app, &paths.app_root) {
         Ok(app) => app,
         Err(e) => return Err(e),
     };

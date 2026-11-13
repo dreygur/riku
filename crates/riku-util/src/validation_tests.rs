@@ -65,21 +65,17 @@ fn refuses_an_app_name_ending_in_git() {
 /// that use this check, so a bad or missing app must come back as an error
 /// for the caller, never end the process.
 #[test]
-fn exit_if_invalid_returns_an_error_for_a_missing_or_bad_app() {
+fn require_app_returns_an_error_for_a_missing_or_bad_app() {
     let apps = TempDir::new().unwrap();
     fs::create_dir(apps.path().join("shop")).unwrap();
 
-    assert_eq!(exit_if_invalid("shop", apps.path()).unwrap(), "shop");
+    assert_eq!(require_app("shop", apps.path()).unwrap(), "shop");
     assert_eq!(
-        exit_if_invalid("ghost", apps.path())
-            .unwrap_err()
-            .to_string(),
+        require_app("ghost", apps.path()).unwrap_err().to_string(),
         "app 'ghost' not found."
     );
     assert_eq!(
-        exit_if_invalid("../etc", apps.path())
-            .unwrap_err()
-            .to_string(),
+        require_app("../etc", apps.path()).unwrap_err().to_string(),
         "invalid app name '../etc'."
     );
 }

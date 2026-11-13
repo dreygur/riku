@@ -8,13 +8,13 @@ use super::control_target::{control_target, whole_procfile_app, ControlTarget};
 use crate::config::RikuPaths;
 use crate::supervisor::Supervisor;
 use crate::util::resource_limits::ResourceLimits;
-use crate::util::{display, exit_if_invalid, parse_settings};
+use crate::util::{display, parse_settings, require_app};
 
 /// Run a command in the app context with LIVE_ENV loaded, under the server
 /// resource limits with the app's own `RIKU_MAX_*` values put over them.
 #[allow(clippy::question_mark)]
 pub fn cmd_run(paths: &RikuPaths, app: &str, cmd: &[String]) -> Result<()> {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match require_app(app, &paths.app_root) {
         Ok(app) => app,
         Err(e) => return Err(e),
     };
@@ -67,7 +67,7 @@ pub fn cmd_run(paths: &RikuPaths, app: &str, cmd: &[String]) -> Result<()> {
 /// worker, from the current build. A rebuild is `riku deploy`.
 #[allow(clippy::question_mark)]
 pub fn cmd_restart(paths: &RikuPaths, app: &str, name: Option<&str>) -> Result<()> {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match require_app(app, &paths.app_root) {
         Ok(app) => app,
         Err(e) => return Err(e),
     };
@@ -99,7 +99,7 @@ fn restart_workers(paths: &RikuPaths, app: &str, process: Option<&str>) -> Resul
 /// enabled worker configs. Naming a service of a Procfile app fails.
 #[allow(clippy::question_mark)]
 pub fn cmd_stop(paths: &RikuPaths, app: &str, service: Option<&str>) -> Result<()> {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match require_app(app, &paths.app_root) {
         Ok(app) => app,
         Err(e) => return Err(e),
     };

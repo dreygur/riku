@@ -20,8 +20,8 @@ use super::config::shell_split;
 
 const MASK: &str = "***";
 
-/// `app` validated and known, or why not. Unlike `exit_if_invalid` it
-/// returns instead of exiting, so callers and tests see the error.
+/// `app` validated and known, or why not. Unlike `require_app` it prints
+/// no hints, so callers and tests see only the error.
 pub(super) fn known_app(paths: &RikuPaths, app: &str) -> Result<String> {
     let app = match validate_app_name(app) {
         Ok(app) => app,

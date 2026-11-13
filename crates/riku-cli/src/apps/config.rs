@@ -7,15 +7,21 @@ use std::fs;
 
 use crate::config::app_settings::keys;
 use crate::config::RikuPaths;
-use crate::util::{display, exit_if_invalid, parse_settings};
+use crate::util::{display, parse_settings, require_app};
 
 /// Show app configuration (ENV file).
 pub fn cmd_config_show(paths: &RikuPaths, app: &str) -> Result<()> {
-    let app = exit_if_invalid(app, &paths.app_root)?;
+    let app = match require_app(app, &paths.app_root) {
+        Ok(app) => app,
+        Err(e) => return Err(e),
+    };
 
     let config_file = paths.env_root.join(&app).join("ENV");
     if config_file.exists() {
-        let content = fs::read_to_string(&config_file)?;
+        let content = match fs::read_to_string(&config_file) {
+            Ok(content) => content,
+            Err(e) => return Err(e.into()),
+        };
         println!("{}", content.trim());
     } else {
         display::warn(&format!("app '{}' not deployed, no config found.", app));
@@ -25,12 +31,18 @@ pub fn cmd_config_show(paths: &RikuPaths, app: &str) -> Result<()> {
 
 /// Get a single config value.
 pub fn cmd_config_get(paths: &RikuPaths, app: &str, key: &str) -> Result<()> {
-    let app = exit_if_invalid(app, &paths.app_root)?;
+    let app = match require_app(app, &paths.app_root) {
+        Ok(app) => app,
+        Err(e) => return Err(e),
+    };
 
     let config_file = paths.env_root.join(&app).join("ENV");
     if config_file.exists() {
         let mut env = HashMap::new();
-        let settings = parse_settings(&config_file, &mut env)?;
+        let settings = match parse_settings(&config_file, &mut env) {
+            Ok(settings) => settings,
+            Err(e) => return Err(e),
+        };
         // Raw, for `$(riku config get app KEY)` in scripts.
         if let Some(val) = settings.get(key) {
             println!("{val}");
@@ -68,7 +80,7 @@ fn set_keys(settings: &[String]) -> Vec<&str> {
 
 /// Set config values (KEY=VALUE pairs), write config, trigger deploy.
 pub fn cmd_config_set(paths: &RikuPaths, app: &str, settings: &[String]) -> Result<()> {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match require_app(app, &paths.app_root) {
         Ok(app) => app,
         Err(e) => return Err(e),
     };
@@ -122,7 +134,7 @@ pub fn config_after_set(
 
 /// Unset config values, write config, trigger deploy.
 pub fn cmd_config_unset(paths: &RikuPaths, app: &str, keys: &[String]) -> Result<()> {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match require_app(app, &paths.app_root) {
         Ok(app) => app,
         Err(e) => return Err(e),
     };
@@ -155,11 +167,17 @@ pub fn config_after_unset(
 
 /// Show live running configuration (LIVE_ENV file).
 pub fn cmd_config_live(paths: &RikuPaths, app: &str) -> Result<()> {
-    let app = exit_if_invalid(app, &paths.app_root)?;
+    let app = match require_app(app, &paths.app_root) {
+        Ok(app) => app,
+        Err(e) => return Err(e),
+    };
 
     let live_config = paths.env_root.join(&app).join("LIVE_ENV");
     if live_config.exists() {
-        let content = fs::read_to_string(&live_config)?;
+        let content = match fs::read_to_string(&live_config) {
+            Ok(content) => content,
+            Err(e) => return Err(e.into()),
+        };
         println!("{}", content.trim());
     } else {
         display::warn(&format!("app '{}' not deployed, no config found.", app));

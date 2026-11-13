@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # E2E test: set an environment variable and verify it appears in the ENV file.
-# config set requires the app directory to exist (exit_if_invalid checks app_root).
+# config set requires the app directory to exist (require_app checks app_root).
 # We deploy a minimal app first so the directory is present, then set a config key.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"

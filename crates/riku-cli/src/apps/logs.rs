@@ -6,7 +6,7 @@ use anyhow::{anyhow, Result};
 use riku_container::types::ServiceName;
 
 use crate::config::RikuPaths;
-use crate::util::{display, exit_if_invalid, validate_app_name};
+use crate::util::{display, require_app, validate_app_name};
 
 mod services;
 mod tail;
@@ -63,7 +63,7 @@ fn requested_service(service: &str) -> Result<Option<ServiceName>> {
 /// Tail all process log files for an app or a single service.
 #[allow(clippy::question_mark)]
 pub fn cmd_logs(paths: &RikuPaths, app: &str, service: &str) -> Result<()> {
-    let app = match exit_if_invalid(app, &paths.app_root) {
+    let app = match require_app(app, &paths.app_root) {
         Ok(a) => a,
         Err(e) => return Err(e),
     };

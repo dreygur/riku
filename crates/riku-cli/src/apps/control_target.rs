@@ -4,7 +4,7 @@
 //!
 //! # Security model
 //!
-//! The app name was already checked by `exit_if_invalid`; the service name
+//! The app name was already checked by `require_app`; the service name
 //! comes from the command line and is validated into a [`ServiceName`] before
 //! it reaches the engine.
 

@@ -99,7 +99,7 @@ pub fn existing_app(app: &str, app_root: &Path) -> Result<String> {
 /// The sanitized name of an app that exists under `app_root`. For a bad or
 /// missing app it prints the CLI's hints on the rail and returns the error,
 /// which the CLI prints last as its `■` line.
-pub fn exit_if_invalid(name: &str, app_root: &Path) -> Result<String> {
+pub fn require_app(name: &str, app_root: &Path) -> Result<String> {
     let app = sanitize_app_name(name);
     if app.is_empty() {
         display::warn(
