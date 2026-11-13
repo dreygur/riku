@@ -22,10 +22,14 @@ fn hook_passes_app_and_repo_to_the_binary() {
     let original = post_receive_hook();
     let script = original.replace(crate::util::ROOT_BINARY, mock_riku.to_str().unwrap());
     assert_ne!(script, original, "hook does not name the root binary");
+    assert!(
+        script.starts_with("#!/bin/sh\n"),
+        "the hook must run where bash is missing:\n{script}"
+    );
     fs::write(&hook, script).unwrap();
+    fs::set_permissions(&hook, fs::Permissions::from_mode(0o755)).unwrap();
 
-    let status = Command::new("bash")
-        .arg(&hook)
+    let status = Command::new(&hook)
         .env_clear()
         .env("PATH", "/usr/bin:/bin")
         .env("HOME", home.path())
@@ -52,9 +56,9 @@ fn hook_without_the_binary_fails_with_a_rail_error_line() {
     let hook = home.path().join("post-receive");
     let script = post_receive_hook().replace(crate::util::ROOT_BINARY, missing.to_str().unwrap());
     fs::write(&hook, script).unwrap();
+    fs::set_permissions(&hook, fs::Permissions::from_mode(0o755)).unwrap();
 
-    let output = Command::new("bash")
-        .arg(&hook)
+    let output = Command::new(&hook)
         .env_clear()
         .env("PATH", "/usr/bin:/bin")
         .current_dir(home.path())

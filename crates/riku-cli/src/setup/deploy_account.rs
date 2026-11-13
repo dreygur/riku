@@ -13,7 +13,9 @@ use crate::util::display;
 use super::accounts;
 
 const MAX_NAME_LEN: usize = 32;
-const LOGIN_SHELL: &str = "/bin/bash";
+/// sshd runs the forced command through the login shell, so it must exist
+/// on every host: Alpine has no bash unless someone installs it.
+const LOGIN_SHELL: &str = "/bin/sh";
 
 /// A login name `useradd` accepts on every distro: lowercase letter or `_`
 /// first, then lowercase letters, digits, `_` or `-`, at most 32 bytes.

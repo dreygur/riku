@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   riku-notify's `on-event` are POSIX `sh` scripts (`#!/bin/sh`), so they
   run on hosts without bash, such as Alpine. Re-run `riku init` or
   `riku plugins install <name>` to get the new copies.
+- The post-receive hook is `#!/bin/sh`, and `sudo riku init` creates the
+  deploy user with login shell `/bin/sh` (it was `/bin/bash`), so a push
+  over ssh works on a host without bash. Init leaves an existing deploy
+  user's shell and existing repos' hooks as they are.
 
 ### Fixed
 

@@ -75,7 +75,7 @@ fn hook_under_test(repo: &Path) {
     fs::write(
         &hook,
         format!(
-            "#!/usr/bin/env bash\nset -e\nAPP=\"$(basename \"$(pwd)\" .git)\"\n\
+            "#!/bin/sh\nset -e\nAPP=\"$(basename \"$(pwd)\" .git)\"\n\
              cat | \"{riku}\" git-hook \"$APP\" \"$(pwd)\"\n"
         ),
     )
