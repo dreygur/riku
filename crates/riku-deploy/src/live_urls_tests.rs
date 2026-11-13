@@ -149,9 +149,12 @@ fn https_on_own_domains_follows_the_router_and_the_app_certificate() {
         (Router::Plugin("x".into()), true, None, DomainTls::Served),
     ];
 
-    for (router, https_only, own_cert, wanted) in cases {
-        let shown = format!("{router:?} https_only={https_only} own_cert={own_cert:?}");
-        assert_eq!(domain_tls(&router, https_only, own_cert), wanted, "{shown}");
+    for (case, (router, https_only, covered_names, wanted)) in cases.into_iter().enumerate() {
+        assert_eq!(
+            domain_tls(&router, https_only, covered_names),
+            wanted,
+            "case {case}"
+        );
     }
 }
 
