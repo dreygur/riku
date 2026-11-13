@@ -146,6 +146,14 @@ version`. A `RIKU_NODE_VERSION` line in the app's ENV is an env var for the
 app and does not pick the version. See [Environment Variables](env.md) for
 what the version accepts.
 
+A server with node installed runs every app on that node, and a version
+that does not match fails the build. A server with nub and no node runs
+each app on a node nub downloads and caches for the deploy user: the
+`[runtime] version` when set, else the app's own pin (`engines.node` in
+package.json, `.node-version`, `.nvmrc`), else the latest LTS. The build,
+the app's processes and `node` in a Procfile line all use that node. nub
+must be on the deploy user's PATH, for example in `/usr/local/bin`.
+
 ### Example server.js
 
 ```javascript

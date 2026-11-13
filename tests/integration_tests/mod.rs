@@ -7,6 +7,7 @@ mod dashboard_tests;
 mod e2e_tests;
 mod mock_supervisor;
 mod nginx_tests;
+mod node_plugin_tests;
 mod plugin_tests;
 mod push_tests;
 mod regression_tests;
