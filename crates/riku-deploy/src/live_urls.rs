@@ -5,6 +5,7 @@ use std::net::{IpAddr, Ipv4Addr};
 
 use serde::Serialize;
 
+use crate::config::router::Router;
 use crate::router::app_routing::{AppRouting, RoutingMode};
 pub(crate) use crate::router::routing_state::TlsState;
 use crate::util::outbound_ip::public_v4;
@@ -30,6 +31,44 @@ pub enum UrlLabel {
 pub struct LiveUrl {
     pub url: String,
     pub label: UrlLabel,
+}
+
+/// Whether the router serves the app's own domains over HTTPS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DomainTls {
+    /// Plain HTTP only: nginx or a router plugin with no certificate for
+    /// the app.
+    PlainHttp,
+    /// HTTPS on every name: the app is `https_only`, or nginx or Caddy
+    /// serves the certificate its owner supplied.
+    Served,
+    /// Caddy's automatic HTTPS, which gets a public certificate for every
+    /// hostname but not for a bare IP or a wildcard.
+    CaddyAutomatic,
+}
+
+/// How `router` serves the app's own domains. Caddy writes each domain as a
+/// bare site address next to its `http://` one, so it serves HTTPS on its
+/// own; nginx serves 443 only with a certificate pair on the route; a router
+/// plugin gets no certificate at all.
+pub(crate) fn domain_tls(router: &Router, https_only: bool, own_cert: bool) -> DomainTls {
+    match router {
+        _ if https_only => DomainTls::Served,
+        Router::Nginx | Router::Caddy if own_cert => DomainTls::Served,
+        Router::Caddy => DomainTls::CaddyAutomatic,
+        Router::Nginx | Router::Plugin(_) => DomainTls::PlainHttp,
+    }
+}
+
+impl DomainTls {
+    fn scheme(self, domain: &str) -> &'static str {
+        let public_name = !domain.starts_with('*') && domain.parse::<IpAddr>().is_err();
+        match self {
+            DomainTls::Served => "https",
+            DomainTls::CaddyAutomatic if public_name => "https",
+            DomainTls::CaddyAutomatic | DomainTls::PlainHttp => "http",
+        }
+    }
 }
 
 /// One line of the push output and its colour. `url` is set on a "Live at"
@@ -75,11 +114,9 @@ fn fallback_lines(domain: &str, tls: Option<TlsState>, private_ip: Option<Ipv4Ad
     match tls {
         Some(TlsState::Issued) => vec![domain_line("https", domain)],
         Some(TlsState::ByCaddy) => vec![
-            domain_line("http", domain),
+            domain_line("https", domain),
             line(
-                format!(
-                    "Caddy is getting an HTTPS certificate; https://{domain} works once it has one"
-                ),
+                format!("Caddy is issuing the certificate; http://{domain} works meanwhile"),
                 "",
             ),
         ],
@@ -110,12 +147,13 @@ fn no_domain_lines(app: &str, routing: &AppRouting) -> Vec<Line> {
 }
 
 /// The push output for `app` routed as `routing`. `tls` is the fallback
-/// certificate outcome; `https_only` is the app's own setting.
+/// certificate outcome; `own_tls` is how the router serves the app's own
+/// domains.
 pub(crate) fn live_lines(
     app: &str,
     routing: &AppRouting,
     tls: Option<TlsState>,
-    https_only: bool,
+    own_tls: DomainTls,
 ) -> Vec<Line> {
     let mode_has_own_lines = routing.port.is_some() || routing.mode == RoutingMode::Path;
     if routing.domains.is_empty() && mode_has_own_lines {
@@ -127,12 +165,11 @@ pub(crate) fn live_lines(
     if routing.fallback {
         return fallback_lines(&routing.domains[0], tls, routing.fallback_private_ip);
     }
-    let scheme = if https_only { "https" } else { "http" };
     routing
         .domains
         .iter()
         .filter(|domain| domain.as_str() != CATCH_ALL_NAME)
-        .map(|domain| domain_line(scheme, domain))
+        .map(|domain| domain_line(own_tls.scheme(domain), domain))
         .collect()
 }
 

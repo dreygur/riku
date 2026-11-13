@@ -1,6 +1,7 @@
 use std::net::Ipv4Addr;
 
 use super::*;
+use crate::config::router::Router;
 use crate::router::app_routing::{AppRouting, RoutingMode};
 
 fn routing(domains: &[&str], fallback: bool) -> AppRouting {
@@ -24,7 +25,7 @@ fn announce_lists_each_domain() {
         "myapp",
         &routing(&["a.example", "b.example"], false),
         None,
-        true,
+        DomainTls::Served,
     );
 
     assert_eq!(
@@ -35,7 +36,12 @@ fn announce_lists_each_domain() {
 
 #[test]
 fn catch_all_name_is_not_a_url() {
-    let lines = live_lines("myapp", &routing(&["_", "a.example"], false), None, false);
+    let lines = live_lines(
+        "myapp",
+        &routing(&["_", "a.example"], false),
+        None,
+        DomainTls::PlainHttp,
+    );
 
     assert_eq!(texts(lines), ["Live at http://a.example"]);
 }
@@ -46,7 +52,7 @@ fn issued_fallback_lists_https() {
         "myapp",
         &routing(&["myapp.203.0.113.10.example"], true),
         Some(TlsState::Issued),
-        false,
+        DomainTls::PlainHttp,
     );
 
     assert_eq!(texts(lines), ["Live at https://myapp.203.0.113.10.example"]);
@@ -58,7 +64,7 @@ fn failed_fallback_says_http_only() {
         "myapp",
         &routing(&["myapp.203.0.113.10.example"], true),
         Some(TlsState::FailedAt(1)),
-        false,
+        DomainTls::PlainHttp,
     ));
 
     assert_eq!(lines[0], "Live at http://myapp.203.0.113.10.example");
@@ -72,7 +78,7 @@ fn fallback_on_a_private_address_says_http_only_and_why() {
         ..routing(&["myapp.10.0.0.5.example"], true)
     };
 
-    let lines = texts(live_lines("myapp", &routed, None, false));
+    let lines = texts(live_lines("myapp", &routed, None, DomainTls::PlainHttp));
 
     assert_eq!(
         lines,
@@ -84,21 +90,67 @@ fn fallback_on_a_private_address_says_http_only_and_why() {
 }
 
 #[test]
-fn caddy_fallback_on_a_public_address_still_waits_for_its_certificate() {
+fn caddy_fallback_on_a_public_address_lists_https_while_its_certificate_is_issued() {
     let lines = texts(live_lines(
         "myapp",
         &routing(&["myapp.203.0.113.10.example"], true),
         Some(TlsState::ByCaddy),
-        false,
+        DomainTls::CaddyAutomatic,
     ));
 
     assert_eq!(
         lines,
         [
-            "Live at http://myapp.203.0.113.10.example",
-            "Caddy is getting an HTTPS certificate; https://myapp.203.0.113.10.example works once it has one",
+            "Live at https://myapp.203.0.113.10.example",
+            "Caddy is issuing the certificate; http://myapp.203.0.113.10.example works meanwhile",
         ]
     );
+}
+
+#[test]
+fn caddy_lists_https_for_own_domains_it_can_get_a_public_certificate_for() {
+    let lines = texts(live_lines(
+        "myapp",
+        &routing(&["a.example.com", "203.0.113.5", "*.example.com"], false),
+        None,
+        DomainTls::CaddyAutomatic,
+    ));
+
+    assert_eq!(
+        lines,
+        [
+            "Live at https://a.example.com",
+            "Live at http://203.0.113.5",
+            "Live at http://*.example.com",
+        ],
+        "Caddy gives a bare IP its internal CA, and a wildcard needs a DNS challenge"
+    );
+}
+
+#[test]
+fn https_on_own_domains_follows_the_router_and_the_app_certificate() {
+    let cases = [
+        (Router::Caddy, false, false, DomainTls::CaddyAutomatic),
+        (Router::Caddy, false, true, DomainTls::Served),
+        (Router::Nginx, false, false, DomainTls::PlainHttp),
+        (Router::Nginx, false, true, DomainTls::Served),
+        (Router::Nginx, true, false, DomainTls::Served),
+        (
+            Router::Plugin("x".into()),
+            false,
+            true,
+            DomainTls::PlainHttp,
+        ),
+        (Router::Plugin("x".into()), true, false, DomainTls::Served),
+    ];
+
+    for (router, https_only, own_cert, wanted) in cases {
+        assert_eq!(
+            domain_tls(&router, https_only, own_cert),
+            wanted,
+            "{router:?} https_only={https_only} own_cert={own_cert}"
+        );
+    }
 }
 
 #[test]
@@ -108,7 +160,7 @@ fn no_domain_no_fallback_says_how_to_add_one() {
         ..routing(&[], false)
     };
 
-    let lines = texts(live_lines("my_app", &routed, None, false));
+    let lines = texts(live_lines("my_app", &routed, None, DomainTls::PlainHttp));
 
     assert!(
         lines.iter().any(|l| l.contains("my_app' does not make")),
@@ -133,7 +185,7 @@ fn port_only_app_has_no_domain_lines() {
         ..routing(&[], false)
     };
 
-    assert!(live_lines("myapp", &routed, None, false).is_empty());
+    assert!(live_lines("myapp", &routed, None, DomainTls::PlainHttp).is_empty());
 }
 
 #[test]
@@ -187,7 +239,7 @@ fn live_lines_carry_the_url_and_its_label() {
             "shop",
             &routing(&["a.example"], false),
             None,
-            true
+            DomainTls::Served
         )),
         [live("https://a.example", UrlLabel::Domain)]
     );
@@ -238,7 +290,7 @@ fn path_mode_lists_the_path_and_warns_about_the_base_path() {
         ..routing(&[], false)
     };
 
-    let mut lines = texts(live_lines("shop", &routed, None, false));
+    let mut lines = texts(live_lines("shop", &routed, None, DomainTls::PlainHttp));
     lines.extend(texts(path_lines(
         "shop",
         8080,
