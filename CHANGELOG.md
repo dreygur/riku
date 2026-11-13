@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A lifecycle hook (`riku-pre-deploy` and the others) without an execute
   bit is skipped with a warning naming the file, as runtime plugins are.
   riku used to make it executable and run it.
+- `sudo riku init` with the nginx router reloads a running nginx when it
+  has just added nginx's worker user to `riku-sockets`, so the workers
+  reach uWSGI sockets at once rather than after the next deploy. A
+  re-run that changes no group does not reload nginx.
 
 ## [0.1.4] - 2026-11-13
 

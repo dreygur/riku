@@ -106,3 +106,21 @@ fn root_write_refuses_a_writable_or_foreign_owned_directory() {
     let err = check_write_dir(&dir, me).unwrap_err().to_string();
     assert!(err.contains("group or world writable (mode 775)"), "{err}");
 }
+
+/// nginx workers keep the groups they started with, so the socket group
+/// reaches them only through a reload, and a re-run init that changed
+/// nothing must not reload nginx.
+#[test]
+fn nginx_is_reloaded_only_when_its_worker_just_joined_the_socket_group() {
+    let reloads = std::cell::Cell::new(0);
+    let reload = || {
+        reloads.set(reloads.get() + 1);
+        Reload::Done
+    };
+
+    reload_for_group(Joined::Already, reload);
+    assert_eq!(reloads.get(), 0, "reloaded without a group change");
+
+    reload_for_group(Joined::Now, reload);
+    assert_eq!(reloads.get(), 1, "a new member needs one reload");
+}
