@@ -298,6 +298,34 @@ fn a_push_stops_when_git_init_fails() {
     );
 }
 
+/// The hook runs on every push as the deploy user. sshd sessions often get
+/// umask 002 from pam_umask, and the hook riku makes on a first push must
+/// still be 0755, not group writable. Nothing is pushed: receive-pack
+/// lists the refs to the closed stdin and ends, so the hook never runs.
+#[test]
+fn the_hook_a_first_push_creates_is_0755_under_umask_002() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let tmp = TempDir::new().unwrap();
+    let out = Command::new("sh")
+        .args(["-c", "umask 002 && exec \"$0\" git-receive-pack lazy"])
+        .arg(env!("CARGO_BIN_EXE_riku"))
+        .env("HOME", tmp.path().join("home"))
+        .env("RIKU_ROOT", tmp.path().join("riku"))
+        .env("XDG_CONFIG_HOME", tmp.path().join("config"))
+        .env_remove("SSH_ORIGINAL_COMMAND")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("riku runs");
+
+    let hook = app_repo(tmp.path(), "lazy").join("hooks/post-receive");
+    let mode = match fs::metadata(&hook) {
+        Ok(meta) => meta.permissions().mode() & 0o777,
+        Err(e) => panic!("no hook at {} ({e}), riku: {out:?}", hook.display()),
+    };
+    assert_eq!(mode, 0o755, "hook mode {mode:o}");
+}
+
 #[test]
 fn a_first_push_prints_nothing_on_the_rail_before_the_deploy_intro() {
     let tmp = TempDir::new().unwrap();

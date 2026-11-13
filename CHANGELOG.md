@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prints last as its `■` line (after the hints, where it used to come
   first). A bad name is now shown as typed, not as the empty sanitized
   name.
+- The post-receive hook a first push creates is mode 0755. It kept the
+  write bits the umask allowed, so under umask 002 (common for ssh
+  sessions with pam_umask) it was group writable.
 
 ## [0.1.4] - 2026-11-13
 
