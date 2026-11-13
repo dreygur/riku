@@ -14,7 +14,7 @@ To publish this app to Riku, make a copy of this folder and run the following co
 
 ```bash
 git init .
-git remote add riku riku@your_server:wispchat
+git remote add riku riku@edge.example:wispchat
 git add .
 git commit -a -m "initial commit"
 git push riku main
@@ -23,7 +23,7 @@ git push riku main
 Then you can set up an SSL cert and connect a domain with riku settings like this:
 
 ```bash
-riku settings set wispchat routing.domains=your_server routing.https_only=true
+riku settings set wispchat routing.domains=edge.example routing.https_only=true
 ```
 
-Then visit the site `your_server` and you will see a simple websocket chat application.
+Then visit `https://edge.example` and you will see a simple websocket chat application.

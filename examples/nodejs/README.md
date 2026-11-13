@@ -13,7 +13,7 @@ git add .
 git commit -m "Initial commit"
 
 # Add your Riku server as remote
-git remote add riku riku@your-server:nodejs-example
+git remote add riku riku@edge.example:nodejs-example
 
 # Deploy
 git push riku main
@@ -39,7 +39,7 @@ riku settings set nodejs-example health.url=/health
 riku apps info nodejs-example
 
 # Or access via server IP
-curl http://your-server-ip
+curl http://203.0.113.10
 ```
 
 ## API Endpoints

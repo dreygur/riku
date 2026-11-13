@@ -298,8 +298,8 @@ sudo firewall-cmd --reload
 Point your domain to your server's IP address:
 
 ```
-A record: your-domain.com → your.server.ip
-A record: *.your-domain.com → your.server.ip
+A record: example.com → 203.0.113.10
+A record: *.example.com → 203.0.113.10
 ```
 
 ## Testing Your Installation
