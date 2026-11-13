@@ -1,7 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Riku runtime plugin: Go
 # Handles apps with go.mod or *.go files.
-set -euo pipefail
+set -eu
 
 CMD="${1:-}"
 APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
@@ -46,7 +46,7 @@ case "$CMD" in
     exit 0
     ;;
   *)
-    echo "Unknown subcommand: $CMD" >&2
+    printf 'Unknown subcommand: %s\n' "$CMD" >&2
     exit 1
     ;;
 esac

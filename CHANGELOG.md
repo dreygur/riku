@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   history; one deploy writes at most 5 MiB of output to it, then a line
   saying the rest was cut. The file is now mode 0600, since build output
   can hold what an app prints of its secrets.
+- The bundled runtime plugins (node, python, ruby, go, rust-lang) and
+  riku-notify's `on-event` are POSIX `sh` scripts (`#!/bin/sh`), so they
+  run on hosts without bash, such as Alpine. Re-run `riku init` or
+  `riku plugins install <name>` to get the new copies.
 
 ### Fixed
 

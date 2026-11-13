@@ -165,9 +165,9 @@ fn riku_notify_keeps_its_bundle_layout() {
 }
 
 /// Run the shipped node plugin's `build` with a mock `node` that reports
-/// `installed` and, when `with_npm`, a mock `npm`. PATH holds only the mocks
-/// and bash, so a node, npm or nub on the host cannot leak in. Returns the
-/// exit status and stderr.
+/// `installed` and, when `with_npm`, a mock `npm`. PATH holds only the
+/// mocks (the plugin runs with `/bin/sh`), so a node, npm or nub on the host
+/// cannot leak in. Returns the exit status and stderr.
 fn node_build(wanted: Option<&str>, installed: &str, with_npm: bool) -> (bool, String) {
     let tmp = tempfile::tempdir().unwrap();
     let plugins = tmp.path().join("plugins");
@@ -178,7 +178,6 @@ fn node_build(wanted: Option<&str>, installed: &str, with_npm: bool) -> (bool, S
     }
     write_out(find("node").unwrap(), &plugins).unwrap();
     std::fs::write(app.join("package.json"), "{}").unwrap();
-    std::os::unix::fs::symlink("/bin/bash", bin.join("bash")).unwrap();
     let mut tools = vec![("node", format!("echo v{installed}"))];
     if with_npm {
         tools.push(("npm", String::new()));
@@ -248,7 +247,6 @@ fn python_go_and_ruby_builds_without_their_toolchain_say_it_is_missing() {
         std::fs::create_dir_all(&app).unwrap();
         write_out(find(plugin).unwrap(), tmp.path()).unwrap();
         std::fs::write(app.join(marker), "").unwrap();
-        std::os::unix::fs::symlink("/bin/bash", bin.join("bash")).unwrap();
 
         let output = std::process::Command::new(tmp.path().join(plugin))
             .arg("build")

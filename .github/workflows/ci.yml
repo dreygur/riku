@@ -65,6 +65,13 @@ jobs:
           TEST_SH=dash sh tests/install/pick_platform.sh
           TEST_SH=bash sh tests/install/pick_platform.sh
 
+      # The bundled plugins run with /bin/sh, which is dash or BusyBox on
+      # many servers, so they must stay POSIX.
+      - name: Check the bundled plugins are POSIX sh
+        run: |
+          shellcheck -s sh plugins/node plugins/python plugins/ruby plugins/go \
+            plugins/rust-lang plugins/riku-notify/bin/on-event
+
       - name: Build release
         run: mise run build:release
 
