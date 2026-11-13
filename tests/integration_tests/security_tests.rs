@@ -10,34 +10,6 @@ mod tests {
     use std::path::PathBuf;
     use tempfile::TempDir;
 
-    // Helper to create a temporary Riku environment
-    fn setup_riku_env() -> Result<(TempDir, PathBuf)> {
-        let temp_dir = TempDir::new()?;
-        let riku_root = temp_dir.path().join(".riku");
-
-        let dirs = [
-            "apps",
-            "data",
-            "envs",
-            "repos",
-            "logs",
-            "nginx",
-            "cache",
-            "workers",
-            "workers-available",
-            "workers-enabled",
-            "acme",
-            "acme-www",
-            "plugins",
-        ];
-
-        for dir in &dirs {
-            fs::create_dir_all(riku_root.join(dir))?;
-        }
-
-        Ok((temp_dir, riku_root))
-    }
-
     // --- App directory traversal protection ---
 
     /// `riku apps create` refuses a name that would leave `apps/` or `repos/`
@@ -291,137 +263,75 @@ mod tests {
 
     // --- Worker config injection ---
 
+    /// A Procfile command and ENV values reach the worker config as TOML
+    /// strings, so quotes and newlines in them cannot add a section or key,
+    /// such as a `uid` the supervisor would run the worker as.
     #[test]
-    fn test_worker_config_toml_structure() -> Result<()> {
-        let (_temp_dir, riku_root) = setup_riku_env()?;
+    fn a_hostile_command_or_env_value_cannot_add_keys_to_a_worker_config() {
+        use riku::supervisor::config::{create_worker_config, WorkerConfig};
+        use std::collections::HashMap;
 
-        // Create a worker config with standard fields
-        let config_content = r#"
-[worker]
-app = "testapp"
-kind = "web"
-command = "python app.py"
-ordinal = 1
+        let command = "python app.py\"\n[options]\nuid = \"0\"\n#";
+        let value = "x\"\nRIKU_SANDBOX = \"off\"\n[options]\ngid = \"0";
+        let env = HashMap::from([("GREETING".to_string(), value.to_string())]);
+        let config = create_worker_config("shop", "web", command, 1, env, "/srv/shop", "/log");
 
-[env]
-PORT = "8080"
-HOST = "localhost"
+        // The deploy writes worker configs with `toml::to_string`.
+        let text = toml::to_string(&config).expect("the config serializes");
+        let read: WorkerConfig = toml::from_str(&text).expect("the config reads back");
 
-[options]
-working_dir = "/tmp"
-"#;
-
-        let config_path = riku_root.join("workers-enabled").join("testapp@web.1.toml");
-        fs::write(&config_path, config_content)?;
-
-        // Verify it parses as valid TOML
-        let content = fs::read_to_string(&config_path)?;
-        let _parsed: toml::Value = toml::from_str(&content)?;
-
-        Ok(())
+        assert_eq!(read.worker.command, command, "config:\n{text}");
+        assert_eq!(
+            read.env.get("GREETING").map(String::as_str),
+            Some(value),
+            "config:\n{text}"
+        );
+        assert_eq!(
+            (read.options.uid, read.options.gid),
+            (None, None),
+            "config:\n{text}"
+        );
+        assert!(
+            !read.env.contains_key("RIKU_SANDBOX"),
+            "an ENV value added a key:\n{text}"
+        );
     }
 
-    // --- Procfile cron bounds ---
-
+    /// Runtime discovery has its own test (riku-plugins
+    /// `discover_skips_non_executable`); this covers the lookup `riku plugin
+    /// list` and `exists` use.
     #[test]
-    fn test_procfile_cron_boundary_values() -> Result<()> {
-        let (_temp_dir, riku_root) = setup_riku_env()?;
-        let app_path = riku_root.join("apps").join("cronapp");
-        fs::create_dir_all(&app_path)?;
+    fn a_non_executable_file_in_the_plugin_directory_is_not_a_plugin() {
+        use std::os::unix::fs::PermissionsExt;
 
-        // Write Procfile with boundary cron values
-        // Valid: minute=59, hour=23, day=31, month=12, weekday=6
-        let valid_procfile = "cron: 59 23 31 12 6 /usr/bin/valid-task\n";
-        fs::write(app_path.join("Procfile"), valid_procfile)?;
+        let tmp = TempDir::new().unwrap();
+        let paths = riku::config::RikuPaths::for_tests(tmp.path());
+        fs::create_dir_all(&paths.plugin_root).unwrap();
+        let plugin = paths.plugin_root.join("notes");
+        fs::write(&plugin, "#!/bin/sh\necho ran\n").unwrap();
+        fs::set_permissions(&plugin, fs::Permissions::from_mode(0o644)).unwrap();
 
-        let content = fs::read_to_string(app_path.join("Procfile"))?;
-        assert!(content.contains("59 23 31 12 6"));
-
-        // Invalid: hour=24 (max is 23)
-        let invalid_procfile = "cron: 0 24 * * * /usr/bin/invalid-task\n";
-        fs::write(app_path.join("Procfile.invalid"), invalid_procfile)?;
-
-        Ok(())
+        assert!(!riku::plugins::plugin_exists("notes", &paths));
+        assert_eq!(
+            riku::plugins::list_plugins(&paths).unwrap(),
+            Vec::<String>::new()
+        );
     }
 
-    // --- File permission tests ---
-
+    /// The post-receive hook runs on every push as the deploy user, so no
+    /// other account may change it. riku sets the mode itself rather than
+    /// leaving it to the umask.
     #[test]
-    fn test_plugin_must_be_executable() -> Result<()> {
-        let (_temp_dir, riku_root) = setup_riku_env()?;
+    fn the_post_receive_hook_riku_writes_is_writable_only_by_its_owner() {
+        use std::os::unix::fs::PermissionsExt;
 
-        // Create a non-executable plugin file
-        let plugin_path = riku_root.join("plugins").join("test-plugin");
-        fs::write(&plugin_path, "#!/bin/bash\necho test\n")?;
+        let tmp = TempDir::new().unwrap();
+        let paths = riku::config::RikuPaths::for_tests(tmp.path());
+        riku::cli::apps::cmd_apps_create(&paths, "shop").expect("apps create succeeds");
 
-        // Set permissions to non-executable
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&plugin_path, fs::Permissions::from_mode(0o644))?;
-
-            let metadata = fs::metadata(&plugin_path)?;
-            let mode = metadata.permissions().mode();
-            assert_eq!(mode & 0o111, 0, "Plugin should not be executable");
-        }
-
-        Ok(())
-    }
-
-    // --- Git hook security ---
-
-    #[test]
-    fn test_git_hook_not_world_writable() -> Result<()> {
-        let (_temp_dir, riku_root) = setup_riku_env()?;
-
-        // Create a mock git hook
-        let hook_dir = riku_root.join("repos").join("testapp").join("hooks");
-        fs::create_dir_all(&hook_dir)?;
-
-        let hook_path = hook_dir.join("post-receive");
-        fs::write(&hook_path, "#!/bin/bash\necho deploy\n")?;
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            // Set proper permissions (755, not 777)
-            fs::set_permissions(&hook_path, fs::Permissions::from_mode(0o755))?;
-
-            let metadata = fs::metadata(&hook_path)?;
-            let mode = metadata.permissions().mode();
-            // Verify not world-writable
-            assert_eq!(mode & 0o002, 0, "Git hook should not be world-writable");
-        }
-
-        Ok(())
-    }
-
-    // --- Log directory isolation ---
-
-    #[test]
-    fn test_log_directory_per_app_isolation() -> Result<()> {
-        let (_temp_dir, riku_root) = setup_riku_env()?;
-
-        // Create log directories for two apps
-        let app1_logs = riku_root.join("logs").join("app1");
-        let app2_logs = riku_root.join("logs").join("app2");
-        fs::create_dir_all(&app1_logs)?;
-        fs::create_dir_all(&app2_logs)?;
-
-        // Write log files
-        fs::write(app1_logs.join("web.1.log"), "app1 log data")?;
-        fs::write(app2_logs.join("web.1.log"), "app2 log data")?;
-
-        // Verify isolation - each app only sees its own logs
-        let app1_log_content = fs::read_to_string(app1_logs.join("web.1.log"))?;
-        let app2_log_content = fs::read_to_string(app2_logs.join("web.1.log"))?;
-
-        assert!(app1_log_content.contains("app1"));
-        assert!(!app1_log_content.contains("app2"));
-        assert!(app2_log_content.contains("app2"));
-        assert!(!app2_log_content.contains("app1"));
-
-        Ok(())
+        let hook = paths.git_root.join("shop.git/hooks/post-receive");
+        let mode = fs::metadata(&hook).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o755, "{} has mode {mode:o}", hook.display());
     }
 
     /// `config set` output reaches terminals, CI logs and agent
