@@ -278,6 +278,14 @@ fn fallback_on_a_public_address_still_asks_for_a_certificate() {
         fallback: true,
         ..own_domains()
     };
+    std::fs::create_dir_all(&paths.acme_sh_root).unwrap();
+    let acme_sh = paths.acme_sh_root.join("acme.sh");
+    std::fs::write(&acme_sh, "#!/bin/sh\nexit 1\n").unwrap();
+    std::fs::set_permissions(
+        &acme_sh,
+        std::os::unix::fs::PermissionsExt::from_mode(0o755),
+    )
+    .unwrap();
 
     apply_routed(
         mock_helper(Reply::Ok { reloaded: true }, &seen),
@@ -293,7 +301,7 @@ fn fallback_on_a_public_address_still_asks_for_a_certificate() {
             recorded_tls(&paths),
             Some(crate::router::routing_state::TlsState::FailedAt(_))
         ),
-        "the certificate attempt must be recorded, got {:?}",
+        "acme.sh ran and failed, so the attempt must be recorded, got {:?}",
         recorded_tls(&paths)
     );
 }

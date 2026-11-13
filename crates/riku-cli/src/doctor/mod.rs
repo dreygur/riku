@@ -9,6 +9,7 @@
 //! Exit code: `0` when nothing failed (warnings allowed), `1` when any check
 //! has [`Status::Fail`], so it composes in CI and provisioning scripts.
 
+pub mod acme_check;
 pub mod binary_check;
 pub mod checks;
 pub mod container_check;
@@ -128,6 +129,7 @@ pub fn collect(paths: &RikuPaths) -> Vec<Check> {
     ));
     checks.push(helper_check::router_helper(paths));
     checks.extend(router_check::router(paths));
+    checks.extend(acme_check::acme_sh(paths));
     checks.extend(router_dirs_check::router_dirs(
         &[
             PathBuf::from(NGINX_SITE_ROOT),

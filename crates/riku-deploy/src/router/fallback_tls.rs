@@ -6,6 +6,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
+use riku_nginx::SingleCert;
 
 use crate::config::RikuPaths;
 use crate::router::routing_state::{with_routing_lock, Entry, RoutingState, TlsState};
@@ -52,22 +53,52 @@ fn record(paths: &RikuPaths, app: &str, tls: TlsState, cert_for: Option<&str>) {
     }
 }
 
+/// Record that the pair in `nginx_root` is for `domain` before acme.sh
+/// writes it. acme.sh runs `riku router-renew` while the issue is still
+/// going, and a pair with no record of its name would look stale there and
+/// be deleted.
+fn claim_pair(paths: &RikuPaths, app: &str, domain: &str) {
+    let saved = with_routing_lock(paths, |state| {
+        if let Some(entry) = state.entry(app).cloned() {
+            state.set_entry(
+                app,
+                Entry {
+                    cert_for: Some(domain.to_string()),
+                    ..entry
+                },
+            );
+        }
+        Ok(())
+    });
+    if let Err(e) = saved {
+        tracing::warn!("cannot record the certificate name of '{app}': {e:#}");
+    }
+}
+
 /// [`fallback_certificate`] with the issuer and the clock given.
 pub(super) fn fallback_certificate_with(
-    issue: impl Fn(&str, &str, &RikuPaths) -> Result<bool>,
+    issue: impl Fn(&str, &str, &RikuPaths) -> Result<SingleCert>,
     app: &str,
     domain: &str,
     paths: &RikuPaths,
     at: u64,
-) -> TlsState {
+) -> Option<TlsState> {
     if let Some(failed) = last_failure(paths, app) {
         if at.saturating_sub(failed) < RETRY_AFTER_SECS {
-            return TlsState::FailedAt(failed);
+            return Some(TlsState::FailedAt(failed));
         }
     }
+    claim_pair(paths, app, domain);
     let outcome = match issue(app, domain, paths) {
-        Ok(true) => TlsState::Issued,
-        Ok(false) => TlsState::FailedAt(at),
+        Ok(SingleCert::Ready) => TlsState::Issued,
+        Ok(SingleCert::Failed) => TlsState::FailedAt(at),
+        Ok(SingleCert::NoAcme(acme_sh)) => {
+            display::warn(&format!(
+                "No certificate for {domain}: acme.sh is not installed at {}. Install it as the deploy user: cd ~ && curl -fsSL https://get.acme.sh | sh",
+                acme_sh.display()
+            ));
+            return None;
+        }
         Err(e) => {
             display::warn(&format!("Certificate for {domain} failed: {e:#}"));
             TlsState::FailedAt(at)
@@ -75,13 +106,14 @@ pub(super) fn fallback_certificate_with(
     };
     let covers = (outcome == TlsState::Issued).then_some(domain);
     record(paths, app, outcome, covers);
-    outcome
+    Some(outcome)
 }
 
 /// Issue `app`'s fallback certificate for `domain` unless a recent attempt
 /// failed. Never fails the deploy: without a certificate the app stays on
-/// plain HTTP.
-pub(super) fn fallback_certificate(app: &str, domain: &str, paths: &RikuPaths) -> TlsState {
+/// plain HTTP. `None` means nothing was tried, because acme.sh is missing,
+/// so the next deploy tries again.
+pub(super) fn fallback_certificate(app: &str, domain: &str, paths: &RikuPaths) -> Option<TlsState> {
     fallback_certificate_with(riku_nginx::issue_single, app, domain, paths, now())
 }
 

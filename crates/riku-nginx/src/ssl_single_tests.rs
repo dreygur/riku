@@ -16,7 +16,7 @@ fn existing_pair_is_reused_without_issuing() {
 
     let issued = issue_single("myapp", "myapp.203.0.113.10.example", &paths).unwrap();
 
-    assert!(issued);
+    assert_eq!(issued, SingleCert::Ready);
 }
 
 #[test]
@@ -25,7 +25,10 @@ fn without_acme_sh_there_is_no_certificate_and_no_self_signed() {
 
     let issued = issue_single("myapp", "myapp.203.0.113.10.example", &paths).unwrap();
 
-    assert!(!issued);
+    assert_eq!(
+        issued,
+        SingleCert::NoAcme(paths.acme_sh_root.join("acme.sh"))
+    );
     assert!(
         !paths.nginx_root.join("myapp.crt").exists(),
         "a fallback domain must never get a self-signed certificate"
@@ -44,7 +47,7 @@ fn an_own_certificate_is_reused_even_for_another_name() {
 
     let issued = issue_single("myapp", "myapp.203.0.113.10.example", &paths).unwrap();
 
-    assert!(issued);
+    assert_eq!(issued, SingleCert::Ready);
     assert!(!acme_sh.with_extension("sh.ran").exists(), "acme.sh ran");
 }
 

@@ -170,6 +170,16 @@ With `RIKU_NGINX_STATIC` the server's `root` is
 
 Riku supports ACME (Let's Encrypt) for automatic SSL certificates.
 
+riku issues certificates with acme.sh, which it does not install. Install
+it as the deploy user, from that user's home:
+
+```bash
+sudo -u riku -H sh -c 'cd ~ && curl -fsSL https://get.acme.sh | sh'
+```
+
+Without it a push says acme.sh is missing, the app stays on plain HTTP,
+and the next push tries again. `riku doctor` warns while it is missing.
+
 Every generated server answers `/.well-known/acme-challenge` from the
 webroot `/var/lib/riku/acme`, outside the deploy home. `sudo riku init`
 creates it owned by the deploy user, group `riku-sockets`, mode `2750`.

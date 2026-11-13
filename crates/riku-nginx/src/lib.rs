@@ -36,7 +36,7 @@ pub use remove::remove_deploy_files;
 pub use route_site::{render_route_site, RouteSite, SiteFiles, SiteShape};
 pub use sanitize::breaks_directive;
 pub use ssl::ensure_ssl_certificates;
-pub use ssl_single::issue_single;
+pub use ssl_single::{issue_single, SingleCert};
 pub use static_site::{publish_static, remove_static, static_locations};
 
 /// Files an app might ship hoping to replace its generated nginx config.

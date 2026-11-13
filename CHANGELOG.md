@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A path mode app failed to deploy under nginx with "has no domain to
+  route": the check before a copy starts built a domain site for it.
+- Under nginx, a fallback domain's first certificate never reached the
+  app, and the push hung for minutes. acme.sh runs `riku router-renew`
+  during the issue, which took the new pair for a stale one, deleted it
+  and started a second issue that waited on the first. riku now records
+  the pair's name before acme.sh runs.
+- Under nginx without acme.sh, a push says acme.sh is missing and how to
+  install it, and records no failed attempt, so the next push tries again
+  instead of waiting an hour. `riku doctor` warns while it is missing.
+
 ## [0.1.8] - 2026-11-13
 
 ### Fixed
