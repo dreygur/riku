@@ -214,3 +214,38 @@ fn broken_settings_fail_the_deploy() {
         server.calls()
     );
 }
+
+/// `riku apps` counts a container app's running rows in stats.json, which
+/// the supervisor rewrites seconds later; the deploy puts them there itself
+/// and leaves the other apps' entries as they were.
+#[test]
+fn a_container_deploy_puts_its_running_copies_in_the_stats_file() {
+    use crate::supervisor::stats::{read_stats_file, ProcessStatus, StatsManager};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
+    let stats_file = server.paths.riku_root.join("stats.json");
+    let mut other = StatsManager::new();
+    other.register_process("shop@web.1".into(), "shop".into(), "web".into(), 1);
+    other.mark_running("shop@web.1", 4242);
+    other.write_stats_to_file(&stats_file).unwrap();
+    let shop_before = read_stats_file(&stats_file).unwrap();
+
+    deploy(&server).unwrap();
+
+    let stats = read_stats_file(&stats_file).expect("stats.json parses");
+    let running: Vec<&str> = stats
+        .iter()
+        .filter(|entry| entry.app == "myapp")
+        .flat_map(|entry| &entry.processes)
+        .filter(|p| p.container.is_some() && p.status == ProcessStatus::Running)
+        .map(|p| p.process_id.as_str())
+        .collect();
+    assert_eq!(running.len(), 2, "running container rows: {running:?}");
+    let shop_after: Vec<_> = stats.iter().filter(|entry| entry.app == "shop").collect();
+    assert_eq!(
+        serde_json::to_string(&shop_after).unwrap(),
+        serde_json::to_string(&shop_before.iter().collect::<Vec<_>>()).unwrap(),
+        "another app's entry changed"
+    );
+}

@@ -121,10 +121,26 @@ impl StatsManager {
     /// crash or external log-rotation sweep running concurrently never
     /// observes a half-written `stats.json`: the same guarantee already
     /// applied to worker TOML, ENV, and nginx config writes.
+    ///
+    /// Holds the stats lock (see [`super::stats_file`]) while it writes, so
+    /// a deploy's update of one app is never half overwritten.
+    #[allow(clippy::question_mark)]
     pub fn write_stats_to_file(&self, path: &std::path::Path) -> anyhow::Result<()> {
         let app_stats = self.get_all_stats();
-        let json = serde_json::to_string_pretty(&app_stats)?;
+        let json = match serde_json::to_string_pretty(&app_stats) {
+            Ok(json) => json,
+            Err(e) => return Err(anyhow::anyhow!("cannot encode stats: {e}")),
+        };
+        let _lock = match super::stats_file::lock(path) {
+            Ok(lock) => lock,
+            Err(e) => return Err(e),
+        };
         crate::util::write_atomic(path, json.as_bytes())
+    }
+
+    /// Track `process` as it is, replacing a row with the same id.
+    pub(crate) fn insert(&mut self, process: ProcessStats) {
+        self.stats.insert(process.process_id.clone(), process);
     }
 
     /// Drop the stopped process rows of every app `exists` says is gone.

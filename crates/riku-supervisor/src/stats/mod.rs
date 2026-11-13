@@ -6,11 +6,13 @@ pub mod manager;
 pub mod queries;
 pub mod repository;
 pub mod resources;
+pub mod stats_file;
 pub mod types;
 
 pub use manager::StatsManager;
 pub use repository::read_stats_file;
 pub use resources::{ProcessTable, ResourceUsage};
+pub use stats_file::replace_app_container_rows;
 pub use types::{AppStats, ContainerFacts, HealthStatus, ProcessStats, ProcessStatus};
 
 #[cfg(test)]

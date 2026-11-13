@@ -49,6 +49,7 @@ use feed::EventStream;
 use log_thread::LogThread;
 use restarts::Restarts;
 use stats::container_rows;
+pub use stats::deployed_container_rows;
 use tally::RestartTally;
 
 use crate::health::actions::SharedActions;

@@ -37,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `riku apps` and `riku ps` count a container app's copies right after
+  its deploy instead of showing it `stopped 0` until the supervisor's next
+  listing: the deploy writes the app's container rows into `stats.json`
+  itself. The supervisor and the deploy now both write that file under a
+  lock on `stats.json.lock`, so neither loses the other's rows.
 - `sudo riku init` with the nginx router works with Alpine's nginx: when
   `/etc/nginx/conf.d` is missing and `/etc/nginx/http.d` exists, the
   include that loads riku's sites goes to `/etc/nginx/http.d/riku.conf`,
