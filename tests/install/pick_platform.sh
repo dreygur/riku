@@ -72,16 +72,84 @@ check Linux armv6l  32 2.36 ""   linux-armv6      ""
 check Linux aarch64 32 2.36 ""   linux-armv7      ""
 check Linux aarch64 64 2.36 ""   linux-arm64      ""
 check Linux x86_64  64 ""   ""   linux-amd64-musl ""
-check Linux aarch64 64 2.28 ""   linux-arm64-musl "older than 2.31"
+check Linux aarch64 64 2.28 ""   linux-arm64-musl "▲  glibc 2.28 is older than 2.31"
 check Linux x86_64  64 2.39 musl linux-amd64-musl ""
 check Darwin arm64  64 ""   musl macos-arm64      ""
 check Linux x86_64  64 2.31 ""   linux-amd64      ""
 check Linux aarch64 32 ""   ""   linux-armv7-musl ""
 
 # Errors print nothing on stdout, so nothing gets downloaded.
-check Linux x86_64  64 2.39 bogus "" "must be gnu or musl"
+check Linux x86_64  64 2.39 bogus "" "■  RIKU_LIBC must be gnu or musl"
 check Linux riscv64 64 2.39 ""   ""               "unsupported architecture"
 check Linux x86_64  32 2.36 ""   ""               "no 32 bit x86 build"
 check Linux aarch64 64 2.28 gnu  ""               "RIKU_LIBC=gnu" "installing the musl build"
+
+# An unknown argument fails before anything is downloaded, as one plain
+# error line: stderr is not a terminal here, so no color codes.
+out="$("$test_sh" "$script" --bogus 2>"$stderr_file")"
+status=$?
+errors="$(cat "$stderr_file")"
+if [ "$status" -ne 1 ] || [ -n "$out" ] || [ "$errors" != "■  unknown argument '--bogus'" ]; then
+  echo "FAIL --bogus: status $status, stdout '$out', stderr '$errors'"
+  failures=$((failures + 1))
+else
+  echo "ok   --bogus -> $errors"
+fi
+
+# A checksum that cannot be fetched stops the install, unless
+# RIKU_SKIP_CHECKSUM=1 says to go on unverified. MOCKS ($1) replaces
+# `download` (and the hash tools) inside the installer's shell.
+checksum_case() {
+  # shellcheck disable=SC2016
+  "$test_sh" -c '
+    . "$0"
+    eval "$1"
+    asset="$(mktemp)"
+    verify_checksum "$asset" "https://example.invalid/riku.sha256" "${asset}.sum"
+    rm -f "$asset" "${asset}.sum"
+    echo "installing"
+  ' "$script" "$1" 2>"$stderr_file"
+}
+
+# An empty checksum must never match an empty hash: either one empty stops.
+# The mocks expand in the installer's shell, so they are single quoted.
+# shellcheck disable=SC2016
+for mocks in \
+  'download() { : > "$2"; }' \
+  'download() { echo "abc123  riku" > "$2"; }; sha256sum() { return 1; }; shasum() { return 1; }'
+do
+  out="$(RIKU_INSTALL_LIB=1 checksum_case "$mocks")"
+  status=$?
+  errors="$(cat "$stderr_file")"
+  case "$status $out $errors" in
+    "1  ■  "*"empty"*"RIKU_SKIP_CHECKSUM=1"*)
+      echo "ok   empty checksum or hash -> stops ($errors)" ;;
+    *)
+      echo "FAIL empty checksum or hash ($mocks): status $status, stdout '$out', stderr '$errors'"
+      failures=$((failures + 1)) ;;
+  esac
+done
+
+out="$(RIKU_INSTALL_LIB=1 checksum_case 'download() { return 1; }')"
+status=$?
+errors="$(cat "$stderr_file")"
+case "$status $out $errors" in
+  "1  ■  could not fetch the checksum"*"RIKU_SKIP_CHECKSUM=1"*)
+    echo "ok   unfetched checksum -> stops" ;;
+  *)
+    echo "FAIL unfetched checksum: status $status, stdout '$out', stderr '$errors'"
+    failures=$((failures + 1)) ;;
+esac
+
+out="$(RIKU_INSTALL_LIB=1 RIKU_SKIP_CHECKSUM=1 checksum_case 'download() { return 1; }')"
+status=$?
+errors="$(cat "$stderr_file")"
+case "$status $out $errors" in
+  "0 installing ▲  could not fetch the checksum"*"installing unverified"*)
+    echo "ok   unfetched checksum with RIKU_SKIP_CHECKSUM=1 -> warns, goes on" ;;
+  *)
+    echo "FAIL RIKU_SKIP_CHECKSUM=1: status $status, stdout '$out', stderr '$errors'"
+    failures=$((failures + 1)) ;;
+esac
 
 [ "$failures" -eq 0 ] || { echo "$failures case(s) failed"; exit 1; }

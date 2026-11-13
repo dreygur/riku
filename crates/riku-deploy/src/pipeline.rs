@@ -42,7 +42,10 @@ fn deploy_container_app(
     progress.begin(Phase::Runtime);
     progress.done(containers::CONTAINER_RUNTIME);
     progress.begin(Phase::Processes);
-    if let Err(e) = containers::deploy_containers(&name, paths, env) {
+    let recent = progress.output().clone();
+    let replaced =
+        containers::deploy_containers(&name, paths, env, &recent, || progress.release_replacing());
+    if let Err(e) = replaced {
         return Err(e);
     }
     if let Err(e) = env_setup::write_live_env(app, paths, env) {
@@ -100,6 +103,11 @@ pub(crate) fn run(
     };
 
     let deployed = if is_container {
+        // An engine this user cannot reach fails here, before any hook runs
+        // or the env changes, with the reason and what the operator can do.
+        if let Err(e) = containers::open_engine(paths) {
+            return Err(e);
+        }
         if let Err(e) = deploy_env::refuse_container_processes(app, paths) {
             return Err(e);
         }
@@ -138,3 +146,7 @@ pub(crate) fn run(
     deploy_finish::finish_deploy(app, paths, &deployed, &env, progress);
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "pipeline_tests.rs"]
+mod tests;

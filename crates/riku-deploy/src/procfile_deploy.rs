@@ -15,13 +15,15 @@ use crate::config::RikuPaths;
 use crate::plugins::runtime::{MissingRuntime, RuntimeContext, RuntimePlugin};
 use crate::progress::{DeployProgress, Phase};
 use crate::util::runtime_markers::{is_bundled_runtime, needed_runtime};
-use crate::workers::{read_scaling_count, ONE_SHOT_KINDS};
-use crate::{env_setup, hooks, workers};
+use crate::workers::{is_scalable_kind, read_scaling_count};
+use crate::{env_setup, hooks, plugin_env, supervisor_ctl, workers};
 
 /// What the runtime plugin's build left for the start step.
-struct PluginOutput {
-    env: HashMap<String, String>,
-    start_cmd: Option<String>,
+pub(crate) struct PluginOutput {
+    /// The plugin's `env` output, kept for `riku restart`.
+    pub env: HashMap<String, String>,
+    /// The plugin's `start` command, run as `web` when no process is declared.
+    pub start_cmd: Option<String>,
 }
 
 /// What a finished app deploy reports: the runtime that built it and its
@@ -35,7 +37,7 @@ pub(crate) struct Deployed {
 fn process_counts(app: &str, paths: &RikuPaths, declared: &HashMap<String, String>) -> String {
     let mut kinds: Vec<&String> = declared
         .keys()
-        .filter(|kind| !ONE_SHOT_KINDS.contains(&kind.as_str()) && !kind.starts_with("cron"))
+        .filter(|kind| is_scalable_kind(kind))
         .collect();
     kinds.sort();
     kinds
@@ -57,7 +59,7 @@ fn install_hint(app: &str, runtime: &str) -> anyhow::Error {
 
 /// The installed plugin that builds `app`. When none does and the app needs
 /// a runtime riku ships, the error names the command that installs it.
-fn detect_runtime(
+pub(crate) fn detect_runtime(
     app: &str,
     app_path: &Path,
     paths: &RikuPaths,
@@ -70,8 +72,11 @@ fn detect_runtime(
             Some(name) if !plugins.iter().any(|p| p.name == name) => {
                 Err(install_hint(app, name))
             }
+            _ if crate::router::app_routing::serves_static_site(env) => Err(anyhow!(
+                "No runtime plugin matched '{app}'. `routing.static` is set, but riku serves static files only next to a runtime: the app still needs a runtime plugin and a process. See the Static Sites section of the runtimes docs."
+            )),
             _ => Err(anyhow!(
-                "No runtime plugin matched '{app}'. Run 'riku install-plugins' or set RIKU_RUNTIME=<name> in the app env."
+                "No runtime plugin matched '{app}'. Run 'riku install-plugins' or set runtime.name in riku.toml (or with riku settings set)."
             )),
         },
         Err(e) => match e.downcast_ref::<MissingRuntime>() {
@@ -80,6 +85,22 @@ fn detect_runtime(
             }
             _ => Err(e),
         },
+    }
+}
+
+/// The env the runtime plugin `runtime` runs with: `env` with its version
+/// key taken only from riku.toml `[runtime] version`.
+pub(crate) fn runtime_env_for(
+    app: &str,
+    paths: &RikuPaths,
+    env: &HashMap<String, String>,
+    runtime: &str,
+) -> Result<HashMap<String, String>> {
+    match crate::config::app_config::runtime_versions(paths, app) {
+        Ok(versions) => Ok(crate::config::app_config::runtime_plugin_env(
+            env, &versions, runtime,
+        )),
+        Err(e) => Err(e),
     }
 }
 
@@ -114,14 +135,14 @@ fn build_with_plugin(
     }
 }
 
-/// Post build hooks, the `release` command, then worker configs and the
-/// processes themselves.
-fn release_and_start(
+/// Post build hooks, the `release` command, then the processes (see
+/// [`start_processes`]).
+pub(crate) fn release_and_start(
     app: &str,
     paths: &RikuPaths,
     runtime: &str,
     workers: &HashMap<String, String>,
-    start_cmd: Option<&str>,
+    plugin: &PluginOutput,
     env: &HashMap<String, String>,
     progress: &mut DeployProgress,
 ) -> Result<String> {
@@ -132,15 +153,64 @@ fn release_and_start(
     }
     if let Some(release_cmd) = workers.get("release") {
         progress.begin(Phase::Release);
-        if let Err(e) = run_one_shot(OneShot::Release, release_cmd, &app_path, progress.output()) {
+        if let Err(e) = run_one_shot(
+            OneShot::Release,
+            release_cmd,
+            &app_path,
+            env,
+            progress.output(),
+        ) {
             return Err(e);
         }
         progress.done_timed(release_cmd);
     }
+    start_processes(
+        app,
+        paths,
+        workers,
+        plugin,
+        env,
+        progress,
+        supervisor_ctl::ensure_supervisor_running,
+    )
+}
+
+/// Worker configs and the processes themselves, then the route. `LIVE_ENV`
+/// and the stored plugin env are written just before the processes change,
+/// so a restart later sees what they run.
+///
+/// Web copies must pass a health check, and only a running supervisor spawns
+/// them, so `start_supervisor` (which returns whether one runs afterwards) is
+/// called before anything changes. Without a supervisor the deploy fails
+/// there and the previous release keeps running.
+pub(crate) fn start_processes(
+    app: &str,
+    paths: &RikuPaths,
+    workers: &HashMap<String, String>,
+    plugin: &PluginOutput,
+    env: &HashMap<String, String>,
+    progress: &mut DeployProgress,
+    start_supervisor: impl Fn(&RikuPaths) -> bool,
+) -> Result<String> {
+    let app_path = paths.app_root.join(app);
+    let start_cmd = plugin.start_cmd.as_deref();
     progress.begin(Phase::Processes);
+    if let Err(e) = workers::check_workers(app, Some(workers), env, paths, start_cmd) {
+        return Err(e);
+    }
+    if !start_supervisor(paths) {
+        return Err(anyhow!(
+            "the supervisor is not running and could not be started, so no process was \
+             started; see riku doctor"
+        ));
+    }
     if let Err(e) = env_setup::write_live_env(app, paths, env) {
         return Err(e);
     }
+    if let Err(e) = plugin_env::save(app, paths, &plugin.env) {
+        return Err(e);
+    }
+    progress.release_replacing();
     if let Err(e) =
         workers::create_workers_generic(app, &app_path, Some(workers), env, paths, start_cmd)
     {
@@ -161,12 +231,28 @@ fn release_and_start(
     if let Err(e) = crate::spawn_app(app, paths) {
         return Err(e);
     }
-    let router = match Router::load(paths) {
-        Ok(router) => router.name().to_string(),
-        Err(_) => String::new(),
-    };
-    progress.done(&router);
+    if let Some(router) = route_step(app, env, paths) {
+        progress.done(&router);
+    }
     Ok(counts)
+}
+
+/// The detail of the `Route` step, the active router's name, or `None` for
+/// an app the router left out (see `router::has_route`). Like a Procfile
+/// without `release`, an app with no route prints no step at all.
+///
+/// When `has_route` fails here the step prints as it did before the check:
+/// the router was already configured, so the step must not fail the deploy.
+fn route_step(app: &str, env: &HashMap<String, String>, paths: &RikuPaths) -> Option<String> {
+    match crate::router::has_route(app, env, paths) {
+        Ok(false) => return None,
+        Ok(true) => {}
+        Err(e) => tracing::warn!("cannot tell whether '{app}' has a route: {e:#}"),
+    }
+    match Router::load(paths) {
+        Ok(router) => Some(router.name().to_string()),
+        Err(_) => Some(String::new()),
+    }
 }
 
 /// Build and start a Procfile app from its process list (riku.toml or
@@ -183,7 +269,7 @@ pub(crate) fn deploy_procfile_app(
     progress: &mut DeployProgress,
 ) -> Result<Deployed> {
     let app_path = paths.app_root.join(app);
-    if let Err(e) = workers::apply_scaling_deltas(app, paths, deltas, &workers) {
+    if let Err(e) = workers::record_scaling_deltas(app, paths, deltas, &workers) {
         return Err(e);
     }
     // Worker creation gets the full list: a list holding only one shot
@@ -195,6 +281,7 @@ pub(crate) fn deploy_procfile_app(
             OneShot::Preflight,
             &preflight_cmd,
             &app_path,
+            env,
             progress.output(),
         ) {
             return Err(e);
@@ -211,13 +298,17 @@ pub(crate) fn deploy_procfile_app(
         Err(e) => return Err(e),
     };
     progress.done(&plugin.name);
+    let plugin_run_env = match runtime_env_for(app, paths, env, &plugin.name) {
+        Ok(plugin_run_env) => plugin_run_env,
+        Err(e) => return Err(e),
+    };
     let env_path = paths.env_root.join(app);
     let ctx = RuntimeContext {
         app,
         app_path: &app_path,
         env_path: &env_path,
         riku_root: &paths.riku_root,
-        app_env: env,
+        app_env: &plugin_run_env,
     };
     progress.begin(Phase::Build);
     let output = match build_with_plugin(&plugin, &ctx, paths, progress) {
@@ -231,17 +322,8 @@ pub(crate) fn deploy_procfile_app(
         ));
     }
     progress.done_timed("");
-    env.extend(output.env);
-    let start_cmd = output.start_cmd.as_deref();
-    match release_and_start(
-        app,
-        paths,
-        &plugin.name,
-        &declared,
-        start_cmd,
-        env,
-        progress,
-    ) {
+    env.extend(output.env.clone());
+    match release_and_start(app, paths, &plugin.name, &declared, &output, env, progress) {
         Ok(workers) => Ok(Deployed {
             runtime: plugin.name,
             workers,

@@ -27,6 +27,8 @@ mod parse;
 mod processes;
 mod values;
 
+pub use values::is_isolation_root;
+
 use keys::{EnvName, Key};
 use values::Value;
 
@@ -77,6 +79,17 @@ impl AppSettings {
     fn runtime_name(&self) -> Option<String> {
         match self.value_of("runtime.name") {
             Some(Value::Text(name)) => Some(name.clone()),
+            _ => None,
+        }
+    }
+
+    /// The `RIKU_<NAME>_VERSION` key and the version `[runtime] version`
+    /// sets, when it is set.
+    pub fn runtime_version(&self) -> Option<(String, String)> {
+        match (self.runtime_name(), self.value_of("runtime.version")) {
+            (Some(name), Some(Value::Text(version))) => {
+                Some((keys::runtime_version_env(&name), version.clone()))
+            }
             _ => None,
         }
     }

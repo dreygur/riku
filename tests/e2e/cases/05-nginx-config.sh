@@ -20,14 +20,18 @@ cat > "$src/package.json" << 'EOF'
 {"name":"testapp","version":"1.0.0","private":true}
 EOF
 
-RIKU_SKIP_BUILD=1 push_app "$APP" "$src"
+push_app "$APP" "$src"
 
 # The router helper installs the site as root in /etc/riku/nginx/{app}.conf
 SITE="/etc/riku/nginx/${APP}.conf"
 assert_file_exists "$SITE"
 
-# The config must reference the app name
-assert_file_contains "$SITE" "$APP"
+# The config must route to the app's own upstream. A domainless app is in
+# port mode with server_name _, so the app shows up only in the upstream
+# name: riku_ and the hex of the app name (riku-nginx backends::upstream_name).
+UPSTREAM="riku_$(printf '%s' "$APP" | od -An -tx1 | tr -d ' \n')"
+assert_file_contains "$SITE" "upstream ${UPSTREAM} {"
+assert_file_contains "$SITE" "proxy_pass http://${UPSTREAM};"
 
 # The deploy user's tree holds no nginx config of its own
 assert_file_not_exists "$RIKU_ROOT/nginx/${APP}.conf"

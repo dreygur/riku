@@ -28,8 +28,8 @@ fn copy_on_port(port: u16, app: &str, paths: &RikuPaths) -> Result<bool> {
 }
 
 /// Whether the app named `name` pins `port` in its ENV or runs a copy on it.
-/// A `RIKU_UPSTREAM_PORT` left in an old ENV file says nothing about a live
-/// app, so only `PORT` and the enabled copies count.
+/// A `RIKU_UPSTREAM_PORT` in ENV says nothing about a live app, so only
+/// `PORT` and the enabled copies count.
 fn app_uses_port(port: u16, name: &str, paths: &RikuPaths) -> Result<bool> {
     let mut env = HashMap::new();
     let env_file = paths.env_root.join(name).join("ENV");

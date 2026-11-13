@@ -57,8 +57,8 @@ pub struct RoutingSettings {
     /// The port path mode apps share.
     pub shared_port: u16,
     pub port_range: PortRange,
-    /// False when the file has no `[routing]` section, which keeps a server
-    /// that has not run `riku doctor --fix` routing exactly as before.
+    /// False when the file has no `[routing]` section; the defaults above
+    /// then apply.
     pub present: bool,
 }
 
@@ -95,6 +95,11 @@ impl TryFrom<&str> for FallbackPattern {
 }
 
 impl FallbackPattern {
+    /// The pattern as written, placeholders included.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
     /// Whether the pattern needs a server IP to expand.
     pub fn needs_ip(&self) -> bool {
         self.0.contains(IP_PLACEHOLDER)
@@ -206,7 +211,7 @@ pub(super) fn routing_settings(table: &toml::Table, file: &Path) -> Result<Routi
     Ok(routing)
 }
 
-/// The `[routing]` text `riku init` and `riku doctor --fix` append. The
+/// The `[routing]` text `riku init` appends. The
 /// `server_ip` line is left out when no public IPv4 address is known, which
 /// turns the fallback domain off until the operator adds it.
 pub fn routing_section(ip: Option<Ipv4Addr>) -> String {

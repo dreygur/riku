@@ -2,9 +2,10 @@
 //! how the app is reached: its domains (its own or the fallback), the port
 //! it answers on and its mode.
 //!
+//! A server without a `[routing]` section uses the `RoutingSettings`
+//! defaults: no fallback domain, so a domainless app is in port mode.
+//!
 //! The rules, in order:
-//! - No `[routing]` section: the app routes exactly as before this existed
-//!   (`legacy`), and `routing.mode` or `routing.port` are refused.
 //! - `mode = "path"` takes no domains and no port.
 //! - An app with no domain gets the fallback domain, unless it asked for
 //!   port mode; with no fallback it falls into port mode.
@@ -13,12 +14,14 @@
 //! - A router plugin only does domain mode.
 
 use std::collections::{BTreeSet, HashMap};
+use std::net::{IpAddr, Ipv4Addr};
 
 use anyhow::{anyhow, Result};
 
 use crate::config::settings::RoutingSettings;
 use crate::router::port_rules::{check_port, pick_port};
 use crate::router::routing_state::{Entry, RoutingState};
+use crate::util::outbound_ip::public_v4;
 
 pub use crate::router::routing_state::RoutingMode;
 
@@ -26,9 +29,16 @@ const DOMAINS_KEY: &str = "RIKU_DOMAINS";
 const MODE_KEY: &str = "RIKU_ROUTING_MODE";
 const PORT_KEY: &str = "RIKU_ROUTING_PORT";
 /// uWSGI and static sites have no port mode listener, so a domainless one
-/// stays in domain mode and routes as it did before port mode existed.
+/// stays in domain mode.
 const WSGI_KEY: &str = "RIKU_NGINX_WSGI";
 const STATIC_KEY: &str = "RIKU_NGINX_STATIC";
+
+/// Whether the router serves the app's own files: `RIKU_NGINX_STATIC` set,
+/// the key nginx's static template and riku-nginx `publish_static` check
+/// (`routing.static = false` leaves it out).
+pub(crate) fn serves_static_site(env: &HashMap<String, String>) -> bool {
+    env.contains_key(STATIC_KEY)
+}
 
 /// How one app is reached.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,10 +51,12 @@ pub struct AppRouting {
     /// The port the app answers on for any host name, besides its domains.
     pub port: Option<u16>,
     pub mode: RoutingMode,
-    /// True on a server with no `[routing]` section.
-    pub legacy: bool,
     /// Why an app without a domain got no fallback domain, for the push.
     pub fallback_skipped: Option<String>,
+    /// The private address the fallback domain names, when its pattern has
+    /// `{ip}` and `server_ip` is not public. No certificate can be issued
+    /// for such a name, so it is served over plain HTTP only.
+    pub fallback_private_ip: Option<Ipv4Addr>,
 }
 
 fn env_domains(env: &HashMap<String, String>) -> Vec<String> {
@@ -88,8 +100,21 @@ fn routed(domains: Vec<String>, mode: RoutingMode) -> AppRouting {
         fallback: false,
         port: None,
         mode,
-        legacy: false,
         fallback_skipped: None,
+        fallback_private_ip: None,
+    }
+}
+
+/// The address in the fallback name when it is private. A pattern
+/// without `{ip}` resolves through DNS, so its address is not known here.
+fn private_fallback_ip(settings: &RoutingSettings) -> Option<Ipv4Addr> {
+    let needs_ip = settings
+        .fallback_domain
+        .as_ref()
+        .is_some_and(|pattern| pattern.needs_ip());
+    match settings.server_ip {
+        Some(ip) if needs_ip && public_v4(IpAddr::V4(ip)).is_none() => Some(ip),
+        _ => None,
     }
 }
 
@@ -157,17 +182,6 @@ pub fn resolve(
             Ok(pair) => pair,
             Err(e) => return Err(e),
         };
-    if !settings.present {
-        if mode_set.is_some() || port_set.is_some() {
-            return Err(anyhow!(
-                "routing.mode and routing.port need a [routing] section in settings.toml; run riku doctor --fix on the server"
-            ));
-        }
-        return Ok(AppRouting {
-            legacy: true,
-            ..routed(domains, RoutingMode::Domain)
-        });
-    }
     if plugin_router
         && (port_set.is_some() || matches!(mode_set, Some(RoutingMode::Port | RoutingMode::Path)))
     {
@@ -186,6 +200,8 @@ pub fn resolve(
                 picked: false,
                 tls: None,
                 cert_for: kept_cert.clone(),
+                domains: Vec::new(),
+                fallback: false,
             },
         );
         return Ok(routed(Vec::new(), RoutingMode::Path));
@@ -197,11 +213,12 @@ pub fn resolve(
             Ok(domain) => {
                 routing.domains = vec![domain];
                 routing.fallback = true;
+                routing.fallback_private_ip = private_fallback_ip(settings);
             }
             Err(why) => routing.fallback_skipped = why,
         }
     }
-    let serves_a_port = !env.contains_key(WSGI_KEY) && !env.contains_key(STATIC_KEY);
+    let serves_a_port = !env.contains_key(WSGI_KEY) && !serves_static_site(env);
     let implicit_port = routing.domains.is_empty() && !plugin_router && serves_a_port;
     routing.mode = match mode_set {
         Some(mode) => mode,
@@ -217,7 +234,7 @@ pub fn resolve(
     let tls = state
         .entry(app)
         .and_then(|entry| entry.tls)
-        .filter(|_| routing.fallback);
+        .filter(|_| routing.fallback && routing.fallback_private_ip.is_none());
     state.set_entry(
         app,
         Entry {
@@ -226,6 +243,8 @@ pub fn resolve(
             picked,
             tls,
             cert_for: kept_cert,
+            domains: routing.domains.clone(),
+            fallback: routing.fallback,
         },
     );
     Ok(routing)

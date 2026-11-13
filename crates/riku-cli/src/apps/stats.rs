@@ -3,6 +3,7 @@ use colored::Colorize;
 use riku_supervisor::config::app_worker_configs;
 use std::fs;
 
+use super::info::field;
 use crate::config::RikuPaths;
 use crate::util::{display, exit_if_invalid};
 
@@ -11,67 +12,80 @@ pub fn cmd_stats_all(paths: &RikuPaths) -> Result<()> {
     let stats_file = paths.riku_root.join("stats.json");
 
     if let Some(app_stats_vec) = riku_supervisor::stats::read_stats_file(&stats_file) {
-        display::section("Riku Stats");
-        display::blank();
+        display::step_done("Riku Stats", "");
+        display::detail("");
 
         for app_stats in app_stats_vec {
             let memory_mb = app_stats.total_memory_bytes as f64 / 1024.0 / 1024.0;
 
-            display::info(&format!("App: {}", app_stats.app));
-            display::kv(
+            display::step_done(&format!("App: {}", app_stats.app), "");
+            field(
                 "Processes:",
                 &format!(
                     "{}/{} running",
                     app_stats.running_processes, app_stats.total_processes
                 ),
             );
-            display::kv(
+            field(
                 "Healthy:",
                 &format!(
                     "{}/{}",
                     app_stats.healthy_processes, app_stats.total_processes
                 ),
             );
-            display::kv("Memory:", &format!("{:.2} MB", memory_mb));
-            display::blank();
+            field("Memory:", &format!("{:.2} MB", memory_mb));
+            display::detail("");
         }
         return Ok(());
     }
 
     // Fallback: show basic info from worker configs
-    display::section("Deployed Apps");
-    display::blank();
+    display::step_done("Deployed Apps", "");
+    display::detail("");
 
     if !paths.app_root.exists() {
         display::warn("No apps deployed.");
         return Ok(());
     }
 
-    for entry in fs::read_dir(&paths.app_root)?.flatten() {
+    let entries = match fs::read_dir(&paths.app_root) {
+        Ok(entries) => entries,
+        Err(e) => {
+            return Err(anyhow::anyhow!(
+                "cannot read {}: {e}",
+                paths.app_root.display()
+            ))
+        }
+    };
+    for entry in entries.flatten() {
         let app_name = entry.file_name().to_string_lossy().to_string();
 
         // Count workers
         let worker_count = app_worker_configs(&paths.workers_enabled, &app_name).len();
 
-        display::note(&format!("{}: {} workers", app_name.green(), worker_count));
+        display::detail(&format!("{}: {} workers", app_name.green(), worker_count));
     }
 
-    display::blank();
-    display::note("Note: Detailed stats require supervisor to be running.");
+    display::detail("");
+    display::detail("Note: Detailed stats require supervisor to be running.");
 
     Ok(())
 }
 
 /// Show stats for a specific app.
+#[allow(clippy::question_mark)]
 pub fn cmd_stats_app(paths: &RikuPaths, app: &str) -> Result<()> {
-    let app = exit_if_invalid(app, &paths.app_root)?;
+    let app = match exit_if_invalid(app, &paths.app_root) {
+        Ok(app) => app,
+        Err(e) => return Err(e),
+    };
 
     let stats_file = paths.riku_root.join("stats.json");
 
     if let Some(app_stats_vec) = riku_supervisor::stats::read_stats_file(&stats_file) {
         if let Some(app_stats) = app_stats_vec.into_iter().find(|s| s.app == app) {
-            display::section(&format!("Stats for '{}'", app));
-            display::blank();
+            display::step_done(&format!("Stats for '{}'", app), "");
+            display::detail("");
 
             println!(
                 "{:<25} {:<10} {:<10} {:<12} {:<15}",
@@ -106,7 +120,7 @@ pub fn cmd_stats_app(paths: &RikuPaths, app: &str) -> Result<()> {
     }
 
     // Fallback: show basic info
-    display::section(&format!("Processes for '{}'", app));
+    display::step_done(&format!("Processes for '{}'", app), "");
 
     let worker_configs = app_worker_configs(&paths.workers_enabled, &app);
 

@@ -1,5 +1,8 @@
 use super::*;
+use crate::fake_supervisor::FakeSupervisor;
 use std::fs;
+use std::os::unix::process::ExitStatusExt;
+use std::time::{Duration, SystemTime};
 use tempfile::TempDir;
 
 fn paths_for(root: &std::path::Path) -> RikuPaths {
@@ -16,17 +19,44 @@ fn seed_worker(paths: &RikuPaths, app: &str, kind: &str, ordinal: u32) {
     std::os::unix::fs::symlink(&available, paths.workers_enabled.join(&filename)).unwrap();
 }
 
+fn age_an_hour(config: &std::path::Path) -> SystemTime {
+    let hour_ago = SystemTime::now() - Duration::from_secs(3600);
+    let file = fs::File::options().write(true).open(config).unwrap();
+    file.set_modified(hour_ago).unwrap();
+    fs::metadata(config).unwrap().modified().unwrap()
+}
+
 #[test]
-fn restart_swaps_the_symlink_without_touching_content() {
+fn restart_touches_only_that_worker_and_signals_the_supervisor() {
     let tmp = TempDir::new().unwrap();
     let paths = paths_for(tmp.path());
+    seed_worker(&paths, "myapp", "web", 1);
     seed_worker(&paths, "myapp", "web", 2);
+    let target = paths.workers_available.join("myapp@web.2.toml");
+    let sibling = paths.workers_available.join("myapp@web.1.toml");
+    let target_before = age_an_hour(&target);
+    let sibling_before = age_an_hour(&sibling);
+    let mut supervisor = FakeSupervisor::start(&paths);
 
-    restart_worker("myapp", &paths, "web", 2).unwrap();
+    let restarted = restart_worker("myapp", &paths, "web", 2);
 
-    let enabled = paths.workers_enabled.join("myapp@web.2.toml");
-    assert!(enabled.symlink_metadata().unwrap().file_type().is_symlink());
-    assert_eq!(fs::read_to_string(&enabled).unwrap(), "placeholder");
+    let status = supervisor.child.wait().unwrap();
+    assert!(restarted.is_ok(), "restart failed: {restarted:?}");
+    let target_after = fs::metadata(&target).unwrap().modified().unwrap();
+    assert!(
+        target_after > target_before,
+        "web.2's config mtime must advance so the supervisor reloads it"
+    );
+    assert_eq!(
+        fs::metadata(&sibling).unwrap().modified().unwrap(),
+        sibling_before,
+        "web.1 must not be restarted"
+    );
+    assert_eq!(
+        status.signal(),
+        Some(nix::sys::signal::Signal::SIGHUP as i32),
+        "the supervisor must get a SIGHUP to reload, got {status:?}"
+    );
 }
 
 #[test]

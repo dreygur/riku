@@ -1,8 +1,8 @@
 # Server settings
 
 Server wide settings live in `~/.riku/settings.toml` (under `$RIKU_ROOT` when
-that is set). The file is optional. Without it every setting has the default
-shown below, so an existing server behaves as before.
+that is set). The file is optional. Without it, or without one of its
+sections, every setting has the default shown below.
 
 ```toml
 [router]
@@ -25,15 +25,32 @@ Per app settings live in [riku.toml](riku-toml.md), not here.
 | `router.name` | `nginx` | The router that exposes apps: `nginx`, `caddy`, or the name of a router plugin. `riku init` writes it from `RIKU_ROUTER`. |
 | `engine.program` | detected | The container engine: a name such as `podman`, or an absolute path. |
 
-Older versions kept these in `ROUTER` and `CONTAINER_ENGINE` files in the
-riku root. Those files are still read when the key is not set here. An
-invalid settings.toml makes every router lookup fail with the file's error,
-rather than quietly falling back to nginx.
+riku runs the engine as the deploy user. A rootful docker refuses that user
+its socket (`permission denied ... docker.sock`), and `riku doctor` and a
+container deploy then say so and stop. Two ways out, and the choice is the
+operator's: add the deploy user to the `docker` group, which is
+root-equivalent on the host, or use a rootless engine such as rootless
+podman. Deploys and doctor change neither the group nor the socket.
+
+`sudo riku init` asks once, on a terminal, when the engine is docker and
+the deploy user cannot open its socket: `Add riku to the docker group so
+it can run container apps? This gives the riku user root-equivalent access
+on this host. [y/N]`. The group it names is the one that owns the socket.
+Only `y` or `yes` adds the deploy user (with `usermod -aG`, or BusyBox
+`addgroup`) and restarts a running supervisor so it gets the group; if
+that fails, init prints the command to run and goes on. On NixOS it prints
+the `extraGroups` line for configuration.nix instead. Any other answer, no terminal, a socket
+owned by root's group, or a group riku cannot resolve changes nothing and
+prints the two choices above. Podman and other engines, and a socket the
+deploy user already opens, get no question.
+
+An invalid settings.toml makes every router lookup fail with the file's
+error, rather than quietly falling back to nginx.
 
 ## Routing
 
 How an app without a domain of its own gets a URL. `riku init` writes this
-section on a new server; `riku doctor --fix` adds it to an older one. See
+section when it is missing. See
 [App URLs](routing.md) for what each mode does.
 
 ```toml
@@ -51,8 +68,9 @@ port_range = "8100-8199"
 | `routing.shared_port` | `8080` | The port path mode apps share. |
 | `routing.port_range` | `"8100-8199"` | Where riku picks a port for a port mode app that sets none. |
 
-Without the section the server routes as older versions did, and the
-riku.toml keys `routing.mode` and `routing.port` are refused.
+Without the section every key has the default in the table: no fallback
+domain, so an app without a domain is in port mode. `riku doctor` prints a
+`routing` line saying which applies.
 
 ## Engine time limits
 
@@ -81,23 +99,5 @@ The error names the key and the file.
 `riku doctor` parses the file and fails with that error when it is invalid.
 It reports `defaults` when the file does not exist.
 
-When riku changes a key itself (`riku init`, `riku doctor --fix`) it rewrites
-the file from its parsed form: every key is kept, comments are not.
-
-## Migrating
-
-`riku doctor --fix`, run as the deploy user, moves the old homes into the new
-ones:
-
-- the `ROUTER` and `CONTAINER_ENGINE` files into `router.name` and
-  `engine.program` (a key already set here wins), then removes the files;
-- each app's `RIKU_*` keys from its ENV file into its server override
-  (`riku settings`). A key moves only when the override gives back exactly
-  the value it had, so the app runs with the same settings; a key whose value
-  would change (for example `RIKU_HTTPS_ONLY=1`, which is not `true` or
-  `false`) stays in ENV with a warning. ENV is first copied to `ENV.bak`, and
-  every other line is kept as it was.
-
-Running it again changes nothing. Downgrading riku after the migration is not
-supported: older versions refuse the new settings.toml sections and no longer
-find the keys that moved out of ENV.
+When `riku init` changes a key itself it rewrites the file from its parsed
+form: every key is kept, comments are not.

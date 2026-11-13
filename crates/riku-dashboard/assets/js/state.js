@@ -12,7 +12,7 @@
  * @property {string} [status]
  * @property {number} [pid]
  * @property {number} [memory_bytes]
- * @property {number} [memory_limit_bytes]
+ * @property {number | null} [memory_limit_bytes] cgroup memory.max or the configured limit, null when none
  * @property {number} [cpu_time_ms]
  * @property {number} [restart_count]
  * @property {string} [unit] "container" for container services
@@ -23,31 +23,58 @@
  */
 
 /**
- * Tagged by `router`: nginx carries enabled/config_exists, caddy the site
- * file path (null without one), plugin its name, and unknown the error from
- * reading the ROUTER file.
+ * Tagged by `router`: nginx carries enabled/config_exists and config_known
+ * (false when the user cannot read /etc/riku/nginx), caddy the site
+ * file path (null without one) and site_known (false when the deploy user
+ * cannot read the site root, so a null site means nothing), plugin its name,
+ * and unknown the error from reading the ROUTER file.
  * @typedef {object} Route
  * @property {string} [router]
  * @property {boolean} [enabled]
  * @property {boolean} [config_exists]
+ * @property {boolean} [config_known]
  * @property {string | null} [site]
+ * @property {boolean} [site_known]
  * @property {string} [name]
  * @property {string} [error]
  */
 
 /**
+ * A url the app is live at. label is "domain" for one of its domains, "lan"
+ * for a port or path url on an address the internet cannot reach, "public"
+ * for one on a public address.
+ * @typedef {object} LiveUrl
+ * @property {string} url
+ * @property {string} label
+ */
+
+/**
+ * A compose service of a container app.
+ * @typedef {object} Service
+ * @property {string} name
+ * @property {boolean} built riku builds its image from the app's code
+ * @property {string | null} image the image a pulled service runs, null for a built one
+ */
+
+/**
  * @typedef {object} App
  * @property {string} app
+ * @property {Service[]} [services] compose services in start order, empty for a Procfile app
  * @property {Worker[]} [workers]
  * @property {Record<string, string>} [routing]
  * @property {Route} [route]
+ * @property {LiveUrl[]} [urls] where the app is live now, from its last route apply, as a deploy prints it; empty without a route
+ * @property {LiveUrl[]} [pending_urls] what the current settings give when that differs from urls; live after a redeploy
  * @property {string} [deploy_lock] "held" while a deploy runs
+ * @property {boolean} [released] false while no deploy has recorded a release
+ * @property {string[]} [process_kinds] kinds the scale API takes, empty for a container app
  */
 
 /**
  * @typedef {object} StateData
  * @property {App[]} [apps]
  * @property {number | null} [supervisor_uptime_seconds]
+ * @property {string} [supervisor_uptime_unavailable] why the uptime was not read (a root run)
  * @property {{ name: string, version: string }} [engine]
  * @property {string} [riku_version]
  */
@@ -62,8 +89,10 @@
  * @property {HTMLElement} el
  * @property {App | null} data last /api/state entry for the app
  * @property {Release[]} releases newest first
- * @property {number} webNow web workers running now
- * @property {number | null} scaleVal pending web scale, null when unchanged
+ * @property {Map<string, number>} kindNow copies of each process kind now
+ * @property {Map<string, number>} kindScale pending counts, only for kinds that differ from now
+ * @property {string} kindsKey the process kinds the steppers were drawn for
+ * @property {boolean} scaleLocked scaling is off: a deploy runs, or no worker is up
  * @property {boolean} wasBusy
  * @property {Record<string, number>} svcScale pending copies per container service
  */

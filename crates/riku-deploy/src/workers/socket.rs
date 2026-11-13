@@ -1,39 +1,19 @@
-//! Check for an app that names its uWSGI socket with `RIKU_NGINX_SOCKET`.
+//! Refusing a socket path the app names with `RIKU_NGINX_SOCKET`.
 //!
-//! One path cannot be shared by several copies, so such an app runs one uWSGI
-//! process. The check runs before any worker config changes.
+//! Security: the router helper picks every socket path the route points at,
+//! and the route build refuses the key (see `router::refused_key`). A web
+//! facing copy must not listen on a path the app picked either: it would
+//! bind wherever the app says, outside the socket directory, and no route
+//! would reach it.
 
 use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 
-use crate::config::RikuPaths;
-
-use super::read_scaling_count;
-
-const WSGI_KINDS: [&str; 4] = ["wsgi", "jwsgi", "rwsgi", "php"];
-
-/// Refuse a custom `RIKU_NGINX_SOCKET` when any uWSGI kind is scaled
-/// past one process. A TCP web app ignores the key.
-#[allow(clippy::question_mark)]
-pub(super) fn check_custom_socket(
-    app: &str,
-    env: &HashMap<String, String>,
-    paths: &RikuPaths,
-) -> Result<()> {
-    if !env.contains_key("RIKU_NGINX_SOCKET") {
-        return Ok(());
+/// Fail with the route build's reason when `env` sets a key it refuses.
+pub(super) fn refuse_app_socket(env: &HashMap<String, String>) -> Result<()> {
+    match crate::router::refused_key(env) {
+        Some(reason) => Err(anyhow!(reason)),
+        None => Ok(()),
     }
-    for kind in WSGI_KINDS {
-        let count = match read_scaling_count(paths, app, kind) {
-            Ok(count) => count,
-            Err(e) => return Err(e),
-        };
-        if count > 1 {
-            return Err(anyhow!(
-                "{kind} is scaled to {count} but RIKU_NGINX_SOCKET names one socket; remove RIKU_NGINX_SOCKET to run several copies"
-            ));
-        }
-    }
-    Ok(())
 }

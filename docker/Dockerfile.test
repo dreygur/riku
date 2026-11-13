@@ -20,7 +20,7 @@ RUN cargo build --release 2>&1
 # Install riku binary to PATH
 RUN cp target/release/riku /usr/local/bin/riku
 
-# Create riku user (dedicated deployment user, like piku)
+# Create the dedicated deploy user
 RUN useradd -m -s /bin/bash riku
 
 COPY docker/test-entrypoint.sh /test-entrypoint.sh

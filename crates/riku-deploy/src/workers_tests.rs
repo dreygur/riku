@@ -2,6 +2,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 
+use super::files::write_worker_config;
 use super::mock_supervisor::{MockRoutes, MockSupervisor};
 use super::*;
 use crate::util::backend::Backend;
@@ -239,7 +240,7 @@ fn test_create_workers_generic_skips_comment_lines() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_auto_restart_false_skips_removal_of_existing_configs() -> anyhow::Result<()> {
+fn a_kind_dropped_from_the_procfile_stops() -> anyhow::Result<()> {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
     let app_path = tmp.path().join("app");
@@ -247,13 +248,11 @@ fn test_auto_restart_false_skips_removal_of_existing_configs() -> anyhow::Result
     fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
     fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
 
-    let existing = paths.workers_enabled.join("myapp@web.1.toml");
-    fs::write(&existing, "[worker]\n")?;
-
+    let dropped = paths.workers_enabled.join("myapp@cleaner.1.toml");
+    fs::write(&dropped, "[worker]\n")?;
     fs::write(app_path.join("Procfile"), "worker: echo hello\n")?;
+    let env = HashMap::new();
 
-    let mut env = HashMap::new();
-    env.insert("RIKU_AUTO_RESTART".to_string(), "false".to_string());
     create_workers_generic(
         "myapp",
         &app_path,
@@ -264,14 +263,14 @@ fn test_auto_restart_false_skips_removal_of_existing_configs() -> anyhow::Result
     )?;
 
     assert!(
-        existing.exists(),
-        "existing config should be preserved when RIKU_AUTO_RESTART=false"
+        !dropped.exists(),
+        "a process kind no longer declared must stop"
     );
     Ok(())
 }
 
 #[test]
-fn scale_down_removes_surplus_copies_with_auto_restart_off() -> anyhow::Result<()> {
+fn scale_down_removes_surplus_copies() -> anyhow::Result<()> {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
     let app_path = tmp.path().join("app");
@@ -279,8 +278,7 @@ fn scale_down_removes_surplus_copies_with_auto_restart_off() -> anyhow::Result<(
     fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
     fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
     fs::write(app_path.join("Procfile"), "worker: echo hello\n")?;
-    let mut env = HashMap::new();
-    env.insert("RIKU_AUTO_RESTART".to_string(), "false".to_string());
+    let env = HashMap::new();
 
     fs::write(paths.env_root.join("myapp/SCALING"), "worker=3\n")?;
     create_workers_generic(
@@ -363,7 +361,7 @@ fn dropping_the_web_line_lets_a_static_app_get_the_static_template() -> anyhow::
 
     let saved = fs::read_to_string(&env_file)?;
     assert!(
-        !saved.contains("RIKU_NGINX_PORTMAP") && !saved.contains("RIKU_NGINX_EXTERNAL_PORT"),
+        !saved.contains("RIKU_NGINX_PORTMAP"),
         "routing keys of the old web line survived:\n{saved}"
     );
     assert!(saved.contains("RIKU_NGINX_STATIC=true"), "{saved}");
@@ -408,10 +406,9 @@ fn pinned_app(tmp: &TempDir) -> (RikuPaths, std::path::PathBuf) {
 }
 
 #[test]
-fn custom_socket_refuses_scale() {
+fn an_app_socket_fails_the_deploy_before_any_worker_config() {
     let tmp = TempDir::new().unwrap();
     let (paths, app_path) = pinned_app(&tmp);
-    fs::write(paths.env_root.join("myapp/SCALING"), "wsgi=2\n").unwrap();
     fs::write(app_path.join("Procfile"), "wsgi: uwsgi app.ini\n").unwrap();
     let env = HashMap::from([("RIKU_NGINX_SOCKET".to_string(), "/srv/s.sock".to_string())]);
 
@@ -425,20 +422,24 @@ fn custom_socket_refuses_scale() {
     )
     .unwrap_err();
 
-    assert!(err.to_string().contains("RIKU_NGINX_SOCKET"), "{err}");
+    assert!(
+        err.to_string()
+            .contains("RIKU_NGINX_SOCKET cannot be set by an app"),
+        "{err}"
+    );
     assert!(!paths.workers_available.join("myapp@wsgi.1.toml").exists());
 }
 
 #[test]
-fn stale_custom_socket_does_not_stop_a_tcp_web_app_scaling() {
+fn an_app_socket_does_not_concern_a_worker_only_app() {
     let tmp = TempDir::new().unwrap();
     let (paths, app_path) = pinned_app(&tmp);
-    fs::write(paths.env_root.join("myapp/SCALING"), "web=2\n").unwrap();
+    fs::write(app_path.join("Procfile"), "worker: python worker.py\n").unwrap();
     let env = HashMap::from([("RIKU_NGINX_SOCKET".to_string(), "/srv/s.sock".to_string())]);
 
     deploy(&app_path, &env, &paths, None).unwrap();
 
-    assert!(paths.workers_available.join("myapp@web.2.toml").exists());
+    assert!(paths.workers_available.join("myapp@worker.1.toml").exists());
 }
 
 #[test]

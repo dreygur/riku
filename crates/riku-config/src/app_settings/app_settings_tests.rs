@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::Path;
 
 use super::*;
@@ -35,18 +34,14 @@ fn maps_domains_and_https_to_env() {
 }
 
 #[test]
-fn false_flag_is_omitted_but_auto_restart_false_is_kept() {
-    let settings = repo("[routing]\nstatic = false\n[workers]\nauto_restart = false\n").unwrap();
+fn false_flag_is_omitted() {
+    let settings = repo("[routing]\nstatic = false\n").unwrap();
 
     let env = settings.env();
 
     assert!(
         !env.contains_key("RIKU_NGINX_STATIC"),
         "a false flag must not be present"
-    );
-    assert_eq!(
-        env.get("RIKU_AUTO_RESTART").map(String::as_str),
-        Some("false")
     );
 }
 
@@ -111,10 +106,31 @@ fn refuses_server_only_keys_in_repo() {
         "[secrets]\nghcr_token = \"abc\"\n",
         "[limits]\nmax_memory_mb = 4096\n",
         "[routing]\nbind_address = \"0.0.0.0\"\n",
+        "[limits]\nisolation_root = \"/srv/jail\"\n",
     ] {
         let message = err(repo(raw));
         assert!(message.contains("riku settings set"), "{raw}: {message}");
     }
+}
+
+#[test]
+fn isolation_root_must_be_a_plain_absolute_path() {
+    for root in ["srv/jail", "/srv/../etc", "/srv/ja il", "/srv/$HOME", "/"] {
+        let raw = format!("[limits]\nisolation_root = \"{root}\"\n");
+        let message = err(server(&raw));
+        assert!(
+            message.contains("limits.isolation_root"),
+            "{root}: {message}"
+        );
+    }
+
+    let env = server("[limits]\nisolation_root = \"/srv/jail-1/app.d\"\n")
+        .unwrap()
+        .env();
+    assert_eq!(
+        env.get("RIKU_ISOLATION_ROOT").map(String::as_str),
+        Some("/srv/jail-1/app.d")
+    );
 }
 
 #[test]
@@ -206,32 +222,6 @@ fn no_process_sections_means_none() {
         .unwrap()
         .processes()
         .is_none());
-}
-
-#[test]
-fn from_env_round_trips_table_keys_only() {
-    let mut env = HashMap::new();
-    env.insert(
-        "RIKU_DOMAINS".to_string(),
-        "a.example,b.example".to_string(),
-    );
-    env.insert("RIKU_WORKER_TIMEOUT".to_string(), "60".to_string());
-    env.insert("RIKU_RUNTIME".to_string(), "node".to_string());
-    env.insert("RIKU_NODE_VERSION".to_string(), "22".to_string());
-    env.insert("DATABASE_URL".to_string(), "postgres://x".to_string());
-
-    let (settings, moved) = AppSettings::from_env(&env);
-    let back = server(&settings.to_toml().unwrap()).unwrap().env();
-
-    assert_eq!(back.get("RIKU_DOMAINS"), env.get("RIKU_DOMAINS"));
-    assert_eq!(
-        back.get("RIKU_WORKER_TIMEOUT"),
-        env.get("RIKU_WORKER_TIMEOUT")
-    );
-    assert_eq!(back.get("RIKU_NODE_VERSION"), env.get("RIKU_NODE_VERSION"));
-    assert!(!back.contains_key("DATABASE_URL"));
-    assert!(!moved.contains(&"DATABASE_URL".to_string()));
-    assert_eq!(moved.len(), 4, "moved: {moved:?}");
 }
 
 #[test]

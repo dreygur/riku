@@ -1,11 +1,10 @@
 //! Health check and process monitoring for the ProcessManager.
 
 use anyhow::Result;
-use std::time::Duration;
+use std::cell::OnceCell;
 
 use crate::config::HealthCheck;
-use crate::plugins::{EventBus, EventName};
-use crate::stats::{get_process_resources, HealthStatus};
+use crate::stats::{HealthStatus, ProcessTable};
 
 use super::ProcessManager;
 
@@ -34,6 +33,7 @@ impl ProcessManager {
             .filter(|g| g.status == super::generation::GenerationStatus::Probing)
             .map(|g| g.temp_key.clone())
             .collect();
+        let procs = OnceCell::new();
 
         for (process_id, process) in self.processes.iter_mut() {
             if probing_keys.contains(process_id) {
@@ -93,10 +93,11 @@ impl ProcessManager {
             // Process is running - update stats
             self.stats.mark_running(process_id, process.pid_as_u32());
 
-            // Update resource usage
-            if let Some((cpu_ms, memory)) = get_process_resources(process.pid_as_u32()) {
-                self.stats.update_resource_usage(process_id, cpu_ms, memory);
-            }
+            let pid = process.pid_as_u32();
+            let usage =
+                process.resource_usage(|| procs.get_or_init(ProcessTable::read).tree_usage(pid));
+            self.stats
+                .update_resource_usage(process_id, usage, process.memory_limit());
 
             // Collect health check configs for later
             if let Some(health_config) = &process.health_check_config {
@@ -154,201 +155,6 @@ impl ProcessManager {
             }
         }
     }
-
-    /// Third pass: restart processes that need it; entries prefixed
-    /// "__remove__" are permanently failed processes that must be removed
-    /// without restarting. Limits concurrent restarts to prevent a
-    /// thundering herd.
-    // Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
-    #[allow(clippy::question_mark)]
-    fn restart_or_remove_processes(&mut self, to_restart: Vec<String>) -> Result<()> {
-        const MAX_RESTARTS_PER_CYCLE: usize = 5;
-        let mut restarts_this_cycle = 0;
-
-        for process_id in to_restart {
-            if let Some(id) = process_id.strip_prefix("__remove__") {
-                // Fire app.failed before removing: this is the one case
-                // restart_process() never reaches, and it's the case an
-                // admin most needs to hear about (riku has given up, not
-                // just self-healed).
-                if let Some(p) = self.processes.get(id) {
-                    emit_app_failed(
-                        p.config.worker.app.clone(),
-                        id.to_string(),
-                        p.last_exit_code,
-                        p.restart_count,
-                        p.config.options.max_restarts,
-                    );
-                }
-                // Remove the dead entry so Drop reaps the zombie child.
-                self.processes.remove(id);
-                tracing::error!(
-                    "Process {} permanently failed; removed from supervision",
-                    id
-                );
-            } else {
-                // Stagger restarts to prevent system overload
-                if restarts_this_cycle < MAX_RESTARTS_PER_CYCLE {
-                    if let Err(e) = self.restart_process(&process_id) {
-                        return Err(e);
-                    }
-                    restarts_this_cycle += 1;
-                } else {
-                    tracing::debug!(
-                        "Deferring restart of {} to next cycle (throttling)",
-                        process_id
-                    );
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Perform an HTTP health check on a process.
-    pub(super) fn perform_health_check(
-        &self,
-        process_id: &str,
-        config: &HealthCheck,
-    ) -> HealthStatus {
-        use reqwest::blocking::Client;
-
-        let port = self.get_process_port(process_id);
-        let url = match port {
-            Some(p) => format!("http://127.0.0.1:{}{}", p, config.url),
-            None => return HealthStatus::Error("No port configured".to_string()),
-        };
-
-        let client = riku_http::blocking_client_builder()
-            .timeout(Duration::from_secs(config.timeout))
-            .build()
-            .unwrap_or_else(|_| Client::new());
-
-        match client.get(&url).send() {
-            Ok(response) => {
-                if response.status().is_success() {
-                    HealthStatus::Healthy
-                } else {
-                    HealthStatus::Unhealthy
-                }
-            }
-            Err(e) => {
-                if e.is_timeout() {
-                    HealthStatus::Timeout
-                } else {
-                    HealthStatus::Error(e.to_string())
-                }
-            }
-        }
-    }
-
-    /// Get the port for a process from its environment.
-    pub(super) fn get_process_port(&self, process_id: &str) -> Option<u16> {
-        self.processes
-            .get(process_id)
-            .and_then(|p| p.config.env.get("PORT"))
-            .and_then(|p: &String| p.parse::<u16>().ok())
-    }
-
-    /// Restart a specific process.
-    pub(super) fn restart_process(&mut self, process_id: &str) -> Result<()> {
-        tracing::info!("Restarting process: {}", process_id);
-
-        // Capture config, current restart count, and the crash's exit code
-        // before removing the process.
-        let (config, prev_restart_count, exit_code) = match self.processes.get(process_id) {
-            Some(p) => (Some(p.config.clone()), p.restart_count, p.last_exit_code),
-            None => (None, 0, None),
-        };
-
-        if let Some(config) = config {
-            // Mark as restarting in stats
-            self.stats.mark_restarting(process_id);
-
-            // Remove the old process entry (terminates it via Drop).
-            self.processes.remove(process_id);
-
-            // Spawn a fresh process and then update its restart counter so that
-            // the exponential backoff keeps growing across successive crashes.
-            self.spawn_process(&config)?;
-
-            let new_restart_count = prev_restart_count + 1;
-            if let Some(new_process) = self.processes.get_mut(process_id) {
-                new_process.restart_count = new_restart_count;
-                new_process.last_restart = std::time::Instant::now();
-            }
-
-            emit_app_restarted(
-                config.worker.app,
-                process_id.to_string(),
-                exit_code,
-                new_restart_count,
-            );
-        }
-
-        Ok(())
-    }
-}
-
-/// Fire the `app.restarted` lifecycle event (Plugin Protocol v1 §7.1) for a
-/// crash we just recovered from.
-///
-/// Dispatched on its own thread: `EventBus::emit` runs each subscriber
-/// synchronously with its own timeout, and this fires from the supervisor's
-/// single-threaded 1-second monitoring tick: a slow or unreachable
-/// notification target must never delay health checks for every other app.
-fn emit_app_restarted(app: String, instance: String, exit_code: Option<i32>, restart_count: u32) {
-    std::thread::spawn(move || {
-        let paths = match riku_config::RikuPaths::from_env() {
-            Ok(paths) => paths,
-            Err(e) => {
-                tracing::error!("Cannot emit app.restarted for {app}: {e}");
-                return;
-            }
-        };
-        EventBus::new(&paths).publish(
-            EventName::AppRestarted,
-            &app,
-            serde_json::json!({
-                "instance": instance,
-                "exit_code": exit_code,
-                "restart_count": restart_count,
-            }),
-        );
-    });
-}
-
-/// Fire the `app.failed` lifecycle event for a process that crashed enough
-/// times to hit `max_restarts` and is being permanently removed from
-/// supervision: the case `emit_app_restarted` never covers, since
-/// `restart_process()` (and therefore that emit call) is never reached once
-/// riku gives up.
-fn emit_app_failed(
-    app: String,
-    instance: String,
-    exit_code: Option<i32>,
-    restart_count: u32,
-    max_restarts: u32,
-) {
-    std::thread::spawn(move || {
-        let paths = match riku_config::RikuPaths::from_env() {
-            Ok(paths) => paths,
-            Err(e) => {
-                tracing::error!("Cannot emit app.failed for {app}: {e}");
-                return;
-            }
-        };
-        EventBus::new(&paths).publish(
-            EventName::AppFailed,
-            &app,
-            serde_json::json!({
-                "instance": instance,
-                "exit_code": exit_code,
-                "restart_count": restart_count,
-                "max_restarts": max_restarts,
-            }),
-        );
-    });
 }
 
 #[cfg(test)]

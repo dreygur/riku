@@ -43,10 +43,6 @@ pub fn load_or_create_token(token_file: &Path) -> io::Result<String> {
     Ok(token)
 }
 
-/// Constant-time string comparison, re-exported from the shared util crate so
-/// existing `health::auth::constant_time_eq` call-sites keep working.
-pub use crate::util::secure::constant_time_eq;
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -65,13 +61,5 @@ mod tests {
 
         let second = load_or_create_token(&token_file).unwrap();
         assert_eq!(first, second, "token must be stable across reloads");
-    }
-
-    #[test]
-    fn constant_time_eq_matches_normal_equality() {
-        assert!(constant_time_eq("abc123", "abc123"));
-        assert!(!constant_time_eq("abc123", "abc124"));
-        assert!(!constant_time_eq("short", "longer-string"));
-        assert!(constant_time_eq("", ""));
     }
 }

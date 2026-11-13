@@ -22,7 +22,6 @@ pub(crate) use riku_cli as cli;
 pub(crate) use riku_config as config;
 pub(crate) use riku_deploy as deploy;
 pub(crate) use riku_plugins as plugins;
-pub(crate) use riku_supervisor as supervisor;
 pub(crate) use riku_util as util;
 
 mod addons;
@@ -34,8 +33,10 @@ mod market;
 mod mutations;
 mod routes;
 mod service_mutations;
+mod session;
 mod system;
 
+use std::future::IntoFuture;
 use std::net::{IpAddr, SocketAddr};
 
 use anyhow::{anyhow, Result};
@@ -101,11 +102,13 @@ async fn bind_reporting(addr: SocketAddr) -> Result<(TcpListener, String)> {
 }
 
 fn print_banner(bound: SocketAddr, has_token: bool) {
-    display::info(&format!("Dashboard listening on http://{bound}"));
+    display::step_done(&format!("Dashboard listening on http://{bound}"), "");
     if has_token {
-        display::note("Token set: API requires it, and restart/stop/redeploy actions are enabled.");
+        display::detail(
+            "Token set: API requires it, and restart/stop/redeploy actions are enabled.",
+        );
     } else {
-        display::note(
+        display::detail(
             "Read-only, loopback-only, no token (actions disabled). Tunnel with: ssh -L 8088:localhost:8088 <host>",
         );
     }
@@ -122,7 +125,21 @@ async fn serve(addr: SocketAddr, state: DashboardState) -> Result<()> {
         Err(e) => return Err(anyhow!("reading the address bound for {addr}: {e}")),
     }
     let app = routes::router(state);
-    match axum::serve(listener, app).await {
+    let server = axum::serve(listener, app).into_future();
+    let Some(session_end) = session::watch() else {
+        return served(server.await);
+    };
+    tokio::select! {
+        outcome = server => served(outcome),
+        () = session_end.notified() => {
+            tracing::info!("the session that started the dashboard ended, stopping");
+            Ok(())
+        }
+    }
+}
+
+fn served(outcome: std::io::Result<()>) -> Result<()> {
+    match outcome {
         Ok(()) => Ok(()),
         Err(e) => Err(anyhow!("serving dashboard: {e}")),
     }

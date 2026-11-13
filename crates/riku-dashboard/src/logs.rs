@@ -5,7 +5,8 @@
 //! Each file is followed from a short distance back from its current end (a
 //! small backlog so the viewer isn't blank on a quiet app), polled on a short
 //! interval; a client disconnect drops the channel and the tailer task exits
-//! on its next send.
+//! on its next send. Each event is `<file stem>\t<time>\t<text>`, the time
+//! the line's own stamp or empty.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -21,6 +22,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use super::routes::authorize;
 use super::DashboardState;
+use crate::util::log_stamp::{format_stamp, split_stamp};
 
 #[derive(Deserialize)]
 pub(crate) struct LogQuery {
@@ -107,7 +109,7 @@ pub(crate) async fn stream(
                             if tx
                                 .send(Ok(Event::default()
                                     .event("log")
-                                    .data(format!("{tag}\t{line}"))))
+                                    .data(event_data(&tag, line))))
                                 .await
                                 .is_err()
                             {
@@ -126,3 +128,16 @@ pub(crate) async fn stream(
         .keep_alive(axum::response::sse::KeepAlive::default())
         .into_response()
 }
+
+/// One `log` event: `<file stem>\t<time>\t<text>`. The time is the line's
+/// own stamp in UTC (see `riku_util::log_stamp`), empty when it has none.
+fn event_data(tag: &str, line: &str) -> String {
+    match split_stamp(line) {
+        Some((at, text)) => format!("{tag}\t{}\t{text}", format_stamp(at)),
+        None => format!("{tag}\t\t{line}"),
+    }
+}
+
+#[cfg(test)]
+#[path = "logs_tests.rs"]
+mod tests;

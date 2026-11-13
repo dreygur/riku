@@ -32,10 +32,10 @@ export function LogSheet({
     setLines([]);
     const es = new EventSource(api.logsUrl(app));
     es.addEventListener("log", (ev) => {
+      // `<tag>\t<UTC time or empty>\t<text>`; this sheet shows no time.
       const data = (ev as MessageEvent).data as string;
-      const tab = data.indexOf("\t");
-      const tag = tab > 0 ? data.slice(0, tab) : "";
-      const text = tab > 0 ? data.slice(tab + 1) : data;
+      const [tag, , ...rest] = data.split("\t");
+      const text = rest.join("\t");
       setLines((prev) => {
         const next = prev.length > 2000 ? prev.slice(-2000) : prev.slice();
         next.push({ tag, text });

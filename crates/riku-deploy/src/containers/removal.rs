@@ -1,9 +1,11 @@
 //! Stopping and removing container copies outside a rolling replacement:
 //! services dropped from the compose file, `riku stop` and `riku destroy`.
 //!
-//! Only containers, and on destroy the app network, are removed. Volumes are
-//! never touched, so an app's data outlives its containers.
+//! Only containers, and on destroy the app network and the images riku
+//! built for the app, are removed. Volumes are never touched, so an app's
+//! data outlives its containers, and pulled images stay for other apps.
 
+use std::collections::BTreeSet;
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
@@ -14,9 +16,10 @@ use riku_container::types::{NetworkName, DEFAULT_STOP_GRACE};
 use super::app::load_project;
 use super::context::saved_env;
 use super::engine_open::open_engine;
+use super::images::build_tag;
 use super::AppName;
 use crate::config::RikuPaths;
-use crate::util::echo;
+use crate::util::display;
 
 /// The service's own stop grace, or the default for a container whose
 /// service is no longer in `project` (or when there is no project).
@@ -76,19 +79,57 @@ pub(crate) fn remove_dropped(engine: &Engine, app: &str, project: &ComposeProjec
     if dropped.is_empty() {
         return Ok(());
     }
-    echo(
-        &format!(
-            "-----> Removing {} containers of services no longer in the compose file",
-            dropped.len()
-        ),
-        "yellow",
-    );
+    display::warn(&format!(
+        "Removing {} containers of services no longer in the compose file",
+        dropped.len()
+    ));
     remove_containers(engine, Some(project), &dropped)
 }
 
-/// Stop and remove every container of `app` and its network, for
-/// `riku destroy`. Holds the deploy lock for the whole removal. Volumes are
-/// kept, and the output says so.
+/// The image tags riku built for `app`: those of the compose services with a
+/// `build` section, when the project could be read, and those its containers
+/// ran (a service dropped from the compose file since). Pulled images are
+/// never among them, since other apps may share them.
+fn built_images(
+    app: &AppName,
+    project: Option<&ComposeProject>,
+    containers: &[ContainerInfo],
+) -> BTreeSet<String> {
+    let from_project = project.into_iter().flat_map(|project| {
+        project
+            .services
+            .iter()
+            .filter(|s| s.build.is_some())
+            .map(|s| build_tag(app, &s.name))
+    });
+    let from_containers = containers.iter().filter_map(|info| match &info.service {
+        Some(service) => Some(build_tag(app, service)).filter(|tag| &info.image == tag),
+        None => None,
+    });
+    from_project.chain(from_containers).collect()
+}
+
+/// Remove each built image that exists. A failure is a warning: the app is
+/// gone either way, and the image only takes disk space.
+fn remove_built_images(engine: &Engine, images: &BTreeSet<String>) {
+    for image in images {
+        let removed = match engine.image_id(image) {
+            Ok(Some(_)) => engine.remove_image(image),
+            Ok(None) => continue,
+            Err(e) => Err(e),
+        };
+        if let Err(e) = removed {
+            display::warn(&format!(
+                "Cannot remove the built image {image}: {e}. Remove it with the engine's `image rm {image}`."
+            ));
+        }
+    }
+}
+
+/// Stop and remove every container of `app`, its network and the images
+/// riku built for it, for `riku destroy`. Holds the deploy lock for the
+/// whole removal. Volumes and pulled images are kept, and the output says
+/// so.
 ///
 /// Runs while the checkout still exists, so the services' grace periods are
 /// used when the compose file can still be read.
@@ -116,13 +157,16 @@ pub fn destroy_containers(app: &AppName, paths: &RikuPaths) -> Result<()> {
     if let Err(e) = engine.remove_network(network.as_str()) {
         return Err(anyhow!("cannot remove network {}: {e}", network.as_str()));
     }
-    echo(
+    let images = built_images(app, project.as_ref(), &containers);
+    remove_built_images(&engine, &images);
+    display::step_done(
         &format!(
-            "Removed {} containers and network {} of '{app}'. Volumes are kept.",
+            "Removed {} containers, network {} and {} built images of '{app}'. Volumes and pulled images are kept.",
             containers.len(),
-            network.as_str()
+            network.as_str(),
+            images.len()
         ),
-        "green",
+        "",
     );
     Ok(())
 }

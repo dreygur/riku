@@ -22,6 +22,17 @@ fn is_production_mode() -> bool {
     )
 }
 
+/// Production escalates to error level and also prints to stderr, since
+/// operators often tail redirected output rather than the log filter.
+fn report_startup_problem(text: &str) {
+    if is_production_mode() {
+        tracing::error!("{text}");
+        eprintln!("{text}");
+    } else {
+        tracing::warn!("{text}");
+    }
+}
+
 // Explicit match over `?` per project convention (.claude/CLAUDE.md rule 16).
 #[allow(clippy::question_mark)]
 impl Supervisor {
@@ -41,27 +52,24 @@ impl Supervisor {
         }
     }
 
-    /// Best-effort check that cgroup v2 isolation, if any worker opts into
-    /// it, will actually work. Non-fatal: isolation is opt-in per worker, so
-    /// a riku deployment that never uses it should still run. Without this
-    /// check the first failure surfaces deep inside `spawn_process` the
-    /// moment someone enables isolation.
-    pub(super) fn check_cgroup_isolation(&self) {
-        if let Err(e) = crate::cgroups::verify_root_writable() {
-            let diagnostic = crate::cgroups::startup_diagnostic(&e);
-            if is_production_mode() {
-                // Production deployments shouldn't have to go digging
-                // through `RUST_LOG=debug` output to find this: escalate to
-                // error level and also print straight to stderr, so it's
-                // visible at boot regardless of the configured log filter
-                // (the default `EnvFilter` is `info`, which would show a
-                // `tracing::warn!` too, but operators frequently redirect
-                // stdout/stderr to a log file and tail it directly).
-                tracing::error!("{}", diagnostic);
-                eprintln!("{}", diagnostic);
-            } else {
-                tracing::warn!("{}", diagnostic);
+    /// Take over the supervisor's delegated cgroup so workers that set a
+    /// resource limit can get their own. Non-fatal: limits are opt-in per
+    /// worker, so a riku deployment that never sets one still runs, and the
+    /// diagnostic names the fix at boot instead of at the first such deploy.
+    pub(super) fn check_cgroup_isolation(&mut self) {
+        match crate::cgroups::take_over_own() {
+            Ok(tree) => {
+                let missing = tree.missing_controllers();
+                if !missing.is_empty() {
+                    report_startup_problem(&format!(
+                        "cgroup controllers not delegated to riku: {}; workers \
+                         that set those limits will refuse to start",
+                        missing.join(", ")
+                    ));
+                }
+                self.process_manager.set_cgroup_tree(tree);
             }
+            Err(e) => report_startup_problem(&crate::cgroups::startup_diagnostic(&e)),
         }
     }
 

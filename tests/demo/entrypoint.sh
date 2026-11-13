@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 # entrypoint.sh: container init for the persistent riku demo environment.
 #
-# Same boot sequence as ../stress/container/entrypoint.sh (see that file for
-# the detailed rationale on SSH key import order, the forced-command SSH
-# setup, and the plugin-bundling reasoning), plus:
+# Boot sequence:
+#   - imports any bootstrap SSH public keys and starts sshd.
+#   - runs the root `riku init --no-systemd`, the same init a server gets
+#     from `sudo riku init`, minus the systemd units this container cannot
+#     run. It sets up the deploy user's tree, /run/riku-sockets,
+#     /var/lib/riku, /etc/riku/nginx and /etc/nginx/conf.d/riku.conf.
+#   - starts what those units would: the router helper as root (it writes
+#     app sites to /etc/riku/nginx and reloads nginx), nginx, and the
+#     supervisor as the deploy user.
 #   - the crates/riku-dashboard embedded API server (`riku dashboard`),
 #     started on 127.0.0.1:8088, the actual backend the Next.js dashboard
 #     talks to (see dashboard/app/api/riku/[...path]/route.ts).
@@ -16,50 +22,66 @@
 #     calls `riku git-hook`), just invoked with a local repo path instead of
 #     an ssh:// remote.
 #
-# Unlike the automated test target, this container is meant to stay up: it
-# does not tear itself down, and run_demo.sh does not stop it after boot,
-# only run_demo.sh (re-run) or stop_demo.sh do that.
+# This container is meant to stay up: it does not tear itself down, and
+# run_demo.sh does not stop it after boot, only run_demo.sh (re-run) or
+# stop_demo.sh do that.
 set -euo pipefail
 
 BOOTSTRAP_DIR="/home/riku/.ssh-bootstrap"
-RIKU_SSH_DIR="/home/riku/.ssh"
+BOOTSTRAP_KEYS="/root/bootstrap_keys"
 LOG_DIR="/var/log/riku-demo"
 RIKU_ROOT="/home/riku/.riku"
 DASHBOARD_TOKEN="${RIKU_DASHBOARD_TOKEN:-demo}"
 mkdir -p "$LOG_DIR"
 
-echo "[entrypoint] importing bootstrap SSH key(s), if any"
+# Bootstrap public keys are gathered into one root owned file and handed to
+# `riku init --ssh-key`, which authorizes them with riku's forced command.
+init_args=(--no-systemd)
+: > "$BOOTSTRAP_KEYS"
 if [ -d "$BOOTSTRAP_DIR" ]; then
     shopt -s nullglob
     for pub in "$BOOTSTRAP_DIR"/*.pub; do
-        cp "$pub" "$RIKU_SSH_DIR/"
-        echo "[entrypoint] imported $(basename "$pub")"
+        cat "$pub" >> "$BOOTSTRAP_KEYS"
+        echo "[entrypoint] found bootstrap key $(basename "$pub")"
     done
     shopt -u nullglob
 fi
-chown -R riku:riku "$RIKU_SSH_DIR"
-chmod 700 "$RIKU_SSH_DIR"
-chmod 600 "$RIKU_SSH_DIR"/*.pub 2>/dev/null || true
+if [ -s "$BOOTSTRAP_KEYS" ]; then
+    init_args+=(--ssh-key "$BOOTSTRAP_KEYS")
+fi
 
 echo "[entrypoint] starting sshd on port 2222"
 /usr/sbin/sshd -D -e >"$LOG_DIR/sshd.log" 2>&1 &
 SSHD_PID=$!
 
-echo "[entrypoint] running 'riku init --no-systemd' as user riku"
-su - riku -c "RIKU_ROOT=$RIKU_ROOT /usr/local/bin/riku init --no-systemd" \
+echo "[entrypoint] running 'riku init ${init_args[*]}' as root for deploy user riku"
+RIKU_USER=riku RIKU_ROUTER=nginx /usr/local/bin/riku init "${init_args[@]}" \
     > "$LOG_DIR/riku-init.log" 2>&1 || {
         echo "[entrypoint] riku init failed, see $LOG_DIR/riku-init.log";
         cat "$LOG_DIR/riku-init.log";
         exit 1;
     }
 cat "$LOG_DIR/riku-init.log"
-# The post-receive hook `riku apps create` writes looks for the binary at
-# /usr/local/bin/riku only, where the image installs it as root. A plain
-# `riku init` refuses to run until that file exists.
 
 echo "[entrypoint] starting nginx"
 nginx -t
 service nginx start
+
+# Root init with --no-systemd installs no riku-router-helper.service, so the
+# helper runs here, as root, the way that unit would run it. Deploys reach it
+# through /run/riku-router.sock and fail without it.
+echo "[entrypoint] starting the router helper as root"
+RIKU_USER=riku /usr/local/bin/riku router-helper > "$LOG_DIR/riku-router-helper.log" 2>&1 &
+ROUTER_HELPER_PID=$!
+for _ in $(seq 1 50); do
+    [ -S /run/riku-router.sock ] && break
+    sleep 0.1
+done
+if [ ! -S /run/riku-router.sock ]; then
+    echo "[entrypoint] router helper did not start, see $LOG_DIR/riku-router-helper.log"
+    cat "$LOG_DIR/riku-router-helper.log"
+    exit 1
+fi
 
 echo "[entrypoint] starting riku supervisor as user riku"
 su - riku -c "RIKU_ROOT=$RIKU_ROOT /usr/local/bin/riku supervisor" \
@@ -125,12 +147,13 @@ RIKU_ROOT="$RIKU_ROOT" \
     > "$LOG_DIR/dashboard.log" 2>&1 &
 DASHBOARD_UI_PID=$!
 
-echo "[entrypoint] all services started: sshd=$SSHD_PID supervisor=$SUPERVISOR_PID dashboard-api=$DASHBOARD_API_PID dashboard-ui=$DASHBOARD_UI_PID"
+echo "[entrypoint] all services started: sshd=$SSHD_PID router-helper=$ROUTER_HELPER_PID supervisor=$SUPERVISOR_PID dashboard-api=$DASHBOARD_API_PID dashboard-ui=$DASHBOARD_UI_PID"
 echo "[entrypoint] tailing logs in foreground"
 
 touch /var/log/nginx/access.log /var/log/nginx/error.log
 tail -F \
     "$LOG_DIR/sshd.log" \
+    "$LOG_DIR/riku-router-helper.log" \
     "$LOG_DIR/riku-supervisor.log" \
     "$LOG_DIR/riku-dashboard-api.log" \
     "$LOG_DIR/dashboard.log" \
@@ -141,7 +164,7 @@ TAIL_PID=$!
 
 term_handler() {
     echo "[entrypoint] caught termination signal, shutting down"
-    kill "$SUPERVISOR_PID" "$DASHBOARD_API_PID" "$DASHBOARD_UI_PID" "$SSHD_PID" "$TAIL_PID" 2>/dev/null || true
+    kill "$SUPERVISOR_PID" "$ROUTER_HELPER_PID" "$DASHBOARD_API_PID" "$DASHBOARD_UI_PID" "$SSHD_PID" "$TAIL_PID" 2>/dev/null || true
     service nginx stop || true
     wait
     exit 0

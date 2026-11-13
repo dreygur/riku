@@ -217,7 +217,7 @@ The server list is the same file `riku server` uses,
 it. Client plugins live in
 `~/.riku/client-plugins`.
 
-`riku` keeps working as before: with `-s`, a repo remote or a default server it
+`riku` itself also forwards: with `-s`, a repo remote or a default server it
 forwards over ssh, and without one it runs the command on the current machine.
 
 ## Application Management
@@ -263,7 +263,7 @@ riku destroy myapp
 This deletes:
 - Application code in `~/.riku/apps/<app>/`
 - Environment variables in `~/.riku/envs/<app>/`
-- Git repository in `~/.riku/repos/<app>/`
+- Git repository in `~/.riku/repos/<app>.git/`
 - Logs in `~/.riku/logs/<app>/`
 - Nginx configuration
 - Worker configurations
@@ -273,8 +273,10 @@ This deletes:
 For a container app, destroy first stops and removes every container and the
 app network, and keeps the volumes. When the container engine does not
 answer, destroy refuses and removes nothing, so no container is left running
-without an app. `--force` removes riku's files and route anyway and warns
-that containers may still be running:
+without an app. The same holds when the app's `riku.toml` is invalid, since
+destroy then cannot tell whether the app runs containers. `--force` removes
+riku's files and route anyway, says which step it skipped, and warns that
+containers may still be running:
 
 ```bash
 riku destroy myapp --force
@@ -297,6 +299,15 @@ riku logs myapp worker
 
 Logs are stored in `~/.riku/logs/<app>/` and automatically rotated at 10MB.
 
+The supervisor writes each line behind the time it captured it, in UTC to
+the second (`2026-11-12T08:14:03Z listening on :37139`); a container line
+carries the engine's time for it. `riku logs` shows that time in the
+server's local time before the worker name:
+
+```
+14:14:03 web.1 | listening on :37139
+```
+
 Without a process, every `*.log` file of the app is followed except
 `deploy.log` (use `--deploy` for that one). With a process or service name,
 its `<name>.<n>.log` files are followed, one per copy. A name with no log
@@ -305,22 +316,42 @@ log to the same files, written by the supervisor.
 
 ---
 
-### `riku restart <app> [service]`
+### `riku restart <app> [process]`
 
-Restart all processes for an application.
+Restart the running processes of an application from the current build.
+Nothing is built. To rebuild, or to apply a change to the Procfile, the
+domains or other routing settings, run `riku deploy <app>`.
 
 ```bash
 riku restart myapp
-riku restart myapp worker   # one service of a container app
+riku restart myapp worker   # one process kind, or one container service
 ```
 
-A Procfile app is stopped and deployed again. For zero-downtime rolling restarts, use `riku restart myapp --hot`.
+A Procfile app's worker configs are written again from the app's current
+ENV and riku settings, the env a deploy would give them (the runtime
+plugin's `env` output included), so a value edited in ENV takes effect.
+The plugin's `env` output is the one the last deploy stored; when ENV or
+the server settings changed since, restart runs the plugin's `env` again
+with the current env and stores that instead.
+No build, release or preflight runs and the checkout is left as it is. Each
+kind keeps its command and its number of copies. Web facing kinds are
+replaced one copy at a time as on a deploy: a new copy starts, passes its
+health check and joins the router before an old one stops. Other kinds are
+stopped and started with the new config. An app with no running workers
+(never deployed, or stopped) is refused with a pointer to `riku deploy`. Naming a
+process kind (`web`, `worker`, ...) restarts only that kind's workers; a
+kind the app does not run is refused with the list of kinds it does run.
+`LIVE_ENV` (`riku config live`) is written only by a restart that covers
+every running kind; a restart of one kind leaves it as it was and says so,
+since the other kinds still run the old env.
 
 A container app replaces the copies of the named service, or of every
 service in start order, one at a time from the images they run now, without
-a rebuild. A stopped service starts again. `--hot` does the same for a
-container app and cannot be combined with a service. See
+a rebuild. A stopped service starts again. See
 [Rolling replacement](runtimes.md#rolling-replacement).
+
+`--hot` is the same as a plain restart, kept for scripts, and cannot be
+combined with a service.
 
 ---
 
@@ -333,7 +364,8 @@ riku stop myapp
 riku stop myapp worker   # one service of a container app
 ```
 
-To restart, use `riku restart <app>` or push a new commit.
+To start a stopped Procfile app again, use `riku deploy <app>` or push a new
+commit. A stopped container service starts again with `riku restart <app>`.
 
 For a container app, stop removes the copies of the named service, or every
 container of the app, and keeps the volumes. When the routed service is
@@ -453,7 +485,10 @@ Scale worker processes.
 riku ps myapp --scale web=4 worker=2
 ```
 
-This creates/updates the `SCALING` file and triggers a restart.
+This records the counts in `~/.riku/envs/<app>/SCALING` and redeploys the
+app. A negative or malformed count fails before anything changes. When the
+redeploy fails before any worker changed, `SCALING` is put back as it was,
+and copies above a lowered count keep running.
 
 For a container app, each named compose service grows or shrinks without a
 rebuild and without restarting the copies it keeps, and the count is
@@ -462,13 +497,8 @@ storage, or publishes a port other than the routed HTTP one, cannot run more
 than one copy, and a count of 0 is refused. See
 [Scaling](runtimes.md#scaling).
 
-**Alternative:** Create a `SCALING` file directly:
-```bash
-echo "web=4" > SCALING
-echo "worker=2" >> SCALING
-git add SCALING && git commit -m "scale up"
-git push riku main
-```
+A `SCALING` file committed to the app's repo is not read: riku reads only
+`~/.riku/envs/<app>/SCALING`, which this command writes.
 
 ---
 
@@ -908,12 +938,12 @@ riku config show myapp
 # Scale up
 riku ps myapp --scale web=4 worker=2
 
-# Restart after config change
+# Restart the running processes, no rebuild
 riku restart myapp
 
 # Stop for maintenance
 riku stop myapp
 
-# Start again
-riku restart myapp
+# Start again (rebuilds from the checkout)
+riku deploy myapp
 ```

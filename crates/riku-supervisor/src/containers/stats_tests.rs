@@ -23,6 +23,7 @@ fn web_copy(id: &str, state: ContainerState) -> ContainerInfo {
         image_id: "sha256:img1".to_string(),
         host_port: None,
         restart: Some("always".to_string()),
+        spec: None,
         state,
     }
 }
@@ -69,6 +70,7 @@ fn stats_rows_carry_engine_state() {
         image_id: "sha256:img1".to_string(),
         host_port: None,
         restart: None,
+        spec: None,
         state: ContainerState::Running,
     };
 
@@ -82,6 +84,7 @@ fn stats_rows_carry_engine_state() {
         image_id: "sha256:img1".to_string(),
         host_port: None,
         restart: None,
+        spec: None,
         state: ContainerState::Exited { code: 137 },
     };
 

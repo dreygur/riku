@@ -29,14 +29,14 @@ riku config set nodejs-example PORT=3000
 riku config set nodejs-example NODE_ENV=production
 
 # Health-gate deploys on the /health endpoint instead of an open port
-riku config set nodejs-example RIKU_HEALTH_CHECK_URL=/health
+riku settings set nodejs-example health.url=/health
 ```
 
 ### 3. Access Your App
 
 ```bash
 # Get the app URL (if domain is configured)
-riku config get nodejs-example RIKU_DOMAINS
+riku apps info nodejs-example
 
 # Or access via server IP
 curl http://your-server-ip
@@ -47,7 +47,7 @@ curl http://your-server-ip
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/` | GET | Welcome message |
-| `/health` | GET | Health check (used by Riku when `RIKU_HEALTH_CHECK_URL=/health`) |
+| `/health` | GET | Health check (used by Riku when `health.url = "/health"`) |
 | `/env` | GET | Environment information |
 | `/echo` | POST | Echo request body |
 
@@ -78,19 +78,11 @@ curl -X POST http://localhost:3000/echo \
 
 ### Scaling
 
-Create a `SCALING` file to run multiple instances:
-
-```
-web=4
-```
-
-Then commit and push:
+Run more instances from the server, which redeploys the app (a `SCALING`
+file in the repo is not read):
 
 ```bash
-echo "web=4" > SCALING
-git add SCALING
-git commit -m "Scale to 4 workers"
-git push riku main
+riku ps <app> --scale web=4
 ```
 
 ## Project Structure

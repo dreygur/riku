@@ -32,8 +32,8 @@ impl WorkerName {
         }
     }
 
-    /// Reads `<app>@<kind>.<n>` back. `None` for any other shape, including
-    /// the legacy one, and for an app name or kind no Procfile app can have.
+    /// Reads `<app>@<kind>.<n>` back. `None` for any other shape, and for
+    /// an app name or kind no Procfile app can have.
     #[allow(clippy::question_mark)]
     pub fn parse(id: &str) -> Option<WorkerName> {
         let Some((app, rest)) = id.split_once(APP_SEPARATOR) else {

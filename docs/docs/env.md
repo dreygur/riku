@@ -1,6 +1,8 @@
 # Environment Variables
 
-Riku uses environment variables to configure application behavior, nginx, and the supervisor. Variables are stored in `~/.riku/envs/<app>/ENV`.
+An app's environment variables are stored in `~/.riku/envs/<app>/ENV` and handed to its processes.
+
+riku's own per app settings (domains, HTTPS, static files, worker timeouts, limits and the rest of the [riku.toml](riku-toml.md) table) are not read from ENV. Set them in the repo's `riku.toml` or with `riku settings set`. A table key such as `RIKU_DOMAINS` written into ENV by hand is ignored. The settings below show the `riku settings` form where one applies.
 
 ## Setting Environment Variables
 
@@ -31,52 +33,16 @@ API_URL=$BASE_URL/api
 
 ---
 
-## Renamed in 0.1.2
-
-Every variable riku reads now starts with `RIKU_`. The old names are no longer
-read. `riku deploy` and `riku doctor` print a hint for each old name still set
-in an app ENV.
-
-| Old name | New name |
-|----------|----------|
-| `NGINX_SERVER_NAME` | `RIKU_DOMAINS` |
-| `NGINX_HTTPS_ONLY` | `RIKU_HTTPS_ONLY` |
-| `NGINX_INTERNAL_PORT` | `RIKU_UPSTREAM_PORT` |
-| `BIND_ADDRESS` | `RIKU_BIND_ADDRESS` |
-| `ACME_ROOT` | `RIKU_ACME_ROOT` |
-| `NODE_VERSION` | `RIKU_NODE_VERSION` |
-| `PYTHON_VERSION` | `RIKU_PYTHON_VERSION` |
-| `RUNTIME` | `RIKU_RUNTIME` |
-| `GHCR_USERNAME` | `RIKU_GHCR_USERNAME` |
-| `GHCR_TOKEN` | `RIKU_GHCR_TOKEN` |
-| `NGINX_<NAME>` (static, ...) | `RIKU_NGINX_<NAME>` |
-
-`ACME_EMAIL`, `ACME_ROOT_CA` and `PYTHON_PACKAGE_MANAGER` (and their `RIKU_`
-names) were never read and are retired: certificates come from Let's Encrypt
-without an account email, and Python apps build with uv or pip. Deploys and
-`riku doctor` say to remove them.
-
-Unchanged: `PORT`, `PATH`, `HOME`, `COMPOSE_FILE`, the `UWSGI_*` options
-(uWSGI reads them from its own environment), and names that already start
-with `RIKU_`.
-
-Lifecycle hooks now get the detected runtime as `RIKU_DETECTED_RUNTIME`
-(it was `RIKU_RUNTIME`), so it never collides with the `RIKU_RUNTIME`
-override an app sets in its ENV.
+Lifecycle hooks get the detected runtime as `RIKU_DETECTED_RUNTIME`, so it
+never collides with the `RIKU_RUNTIME` override.
 
 ## Runtime Settings
 
-### Auto Restart
+### Worker replacement on deploy
 
-```bash
-RIKU_AUTO_RESTART=true
-```
-
-- **Default:** `true`
-- **Description:** Automatically restart workers on deploy
-- **Values:** `true` | `false`
-
-When set to `false`, you must manually restart with `riku restart <app>`.
+Every successful deploy runs the new build: web facing kinds are replaced
+one copy at a time, other kinds are stopped and started from the new
+configs, and a kind that left the Procfile stops.
 
 ---
 
@@ -95,7 +61,7 @@ riku config set myapp PORT=3000
 ### Bind Address
 
 ```bash
-RIKU_BIND_ADDRESS=127.0.0.1
+riku settings set myapp routing.bind_address=127.0.0.1
 ```
 
 - **Default:** `127.0.0.1`
@@ -105,7 +71,7 @@ RIKU_BIND_ADDRESS=127.0.0.1
 ### Server Name
 
 ```bash
-RIKU_DOMAINS=example.com
+riku settings set myapp routing.domains=example.com
 ```
 
 - **Default:** (none)
@@ -120,7 +86,7 @@ riku settings set myapp routing.domains=myapp.example.com
 ### Force HTTPS
 
 ```bash
-RIKU_HTTPS_ONLY=true
+riku settings set myapp routing.https_only=true
 ```
 
 - **Default:** `false`
@@ -134,7 +100,7 @@ RIKU_HTTPS_ONLY=true
 ### Worker Timeout
 
 ```bash
-RIKU_WORKER_TIMEOUT=3600
+riku settings set myapp workers.timeout=3600
 ```
 
 - **Default:** `3600` (1 hour)
@@ -144,7 +110,7 @@ RIKU_WORKER_TIMEOUT=3600
 ### Grace Period
 
 ```bash
-RIKU_WORKER_GRACE_PERIOD=60
+riku settings set myapp workers.grace_period=60
 ```
 
 - **Default:** `60` seconds
@@ -154,22 +120,12 @@ RIKU_WORKER_GRACE_PERIOD=60
 ### Max Restarts
 
 ```bash
-RIKU_MAX_RESTARTS=10
+riku settings set myapp workers.max_restarts=10
 ```
 
 - **Default:** `10`
 - **Description:** Maximum restart attempts before marking as failed
 - **Values:** Positive integer
-
-### Worker Processes
-
-```bash
-RIKU_WORKER_PROCESSES=web=2,worker=1
-```
-
-- **Default:** (uses SCALING file)
-- **Description:** Alternative to SCALING file for process counts
-- **Values:** Comma-separated `type=count` pairs
 
 ---
 
@@ -178,7 +134,7 @@ RIKU_WORKER_PROCESSES=web=2,worker=1
 ### Static Paths
 
 ```bash
-RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static
+riku settings set myapp routing.static_paths=/static:public,/assets:static
 ```
 
 - **Default:** (none)
@@ -188,22 +144,20 @@ RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static
 **Example:**
 ```bash
 # Serve /static/* from ./public directory
-RIKU_NGINX_STATIC_PATHS=/static:public
+riku settings set myapp routing.static_paths=/static:public
 
 # Multiple paths
-RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static,/images:img
+riku settings set myapp routing.static_paths=/static:public,/assets:static,/images:img
 ```
 
-### Removed Keys
+### Refused Keys
 
-A deploy fails, naming the key, when the app's ENV sets any of these. The core route dropped them. See [Nginx](nginx.md#removed-keys).
-
-`RIKU_NGINX_CLOUDFLARE_ACL`, `RIKU_NGINX_CACHE_PATH`, `RIKU_NGINX_CACHE_PREFIXES`, `RIKU_NGINX_CACHE_SIZE`, `RIKU_NGINX_CACHE_TIME`, `RIKU_NGINX_CACHE_EXPIRY`, `RIKU_NGINX_CACHE_REDIRECTS`, `RIKU_NGINX_CACHE_ANY`, `RIKU_NGINX_CACHE_CONTROL`, `RIKU_NGINX_CATCH_ALL`, `RIKU_NGINX_CSP`, `RIKU_NGINX_INCLUDE_FILE`, `RIKU_NGINX_IPV4_ADDRESS`, `RIKU_NGINX_IPV6_ADDRESS`, `RIKU_DISABLE_IPV6`, `RIKU_NGINX_SOCKET`
+A deploy or `riku restart` of an app with a web facing process fails, naming the key, before any worker changes, when the app's ENV sets `RIKU_NGINX_SOCKET`: the router helper picks socket paths itself, and no copy listens on a path the app chose. The route refuses it too, in every routing mode (path mode included), so a static site that sets it fails at the Route step.
 
 ### Allow Git Folders
 
 ```bash
-RIKU_NGINX_ALLOW_GIT_FOLDERS=false
+riku settings set myapp routing.allow_git_folders=false
 ```
 
 - **Default:** `false`
@@ -218,8 +172,11 @@ Setting this to `true` exposes your git history publicly.
 
 ### Node Version
 
-```bash
-RIKU_NODE_VERSION=18.17.0
+```toml
+# riku.toml
+[runtime]
+name = "node"
+version = "18.17.0"
 ```
 
 - **Default:** (none, uses whatever `node` is on `$PATH`)
@@ -227,8 +184,10 @@ RIKU_NODE_VERSION=18.17.0
 - **Description:** the node riku builds with must match. `18` and `18.x`
   match any 18 release, `18.17` any 18.17 patch, `18.17.0` only that one.
   Riku uses the server's `node` and does not install another version, so on
-  a mismatch the build fails and names both versions. Set it in riku.toml
-  as `[runtime] version`.
+  a mismatch the build fails and names both versions. The plugin gets it as
+  `RIKU_NODE_VERSION`, set only from `[runtime] version`: a
+  `RIKU_NODE_VERSION` line in ENV is an app env var and does not pick the
+  version.
 - **Values:** Any valid Node.js version
 
 ### Node Package Manager
@@ -244,13 +203,20 @@ setting to configure. Commit a lockfile to pin your dependency versions. See
 
 ### Python Version
 
-```bash
-RIKU_PYTHON_VERSION=3.11.4
+```toml
+# riku.toml
+[runtime]
+name = "python"
+version = "3.11"
 ```
 
-- **Default:** `"3"` (system Python 3)
-- **Description:** Python version to use (passed to `python3 -m venv`)
-- **Values:** Any valid Python 3.x version
+- **Default:** (none: uv's default Python, or `python3` with pip)
+- **Description:** the Python the venv is made with. uv fetches it when it
+  is missing; pip needs `python<version>` on the server. A venv made for
+  another version is made again. The plugin gets it as
+  `RIKU_PYTHON_VERSION`, set only from `[runtime] version`; an ENV line of
+  that name is an app env var.
+- **Values:** A Python 3 version such as `3.11` or `3.11.4`
 
 ### Package Manager
 
@@ -279,19 +245,19 @@ Setting it selects the container runtime even when the repo also has a `package.
 ### GHCR Username
 
 ```bash
-RIKU_GHCR_USERNAME=your-username
+riku settings set myapp secrets.ghcr_username=your-username
 ```
 
 - **Default:** (none)
 - **Description:** Username for `docker login ghcr.io`, run before pulling a compose app's images
 - **Values:** Any GitHub username
 
-Required together with `RIKU_GHCR_TOKEN` only for private GHCR images; omit both for public images. Setting only one of the two fails the deploy.
+Required together with `secrets.ghcr_token` only for private GHCR images; omit both for public images. Setting only one of the two fails the deploy.
 
 ### GHCR Token
 
 ```bash
-RIKU_GHCR_TOKEN=ghp_xxxxxxxxxxxx
+riku settings set myapp secrets.ghcr_token=ghp_xxxxxxxxxxxx
 ```
 
 - **Default:** (none)
@@ -306,7 +272,7 @@ riku settings set myapp secrets.ghcr_username=octocat secrets.ghcr_token=ghp_xxx
 ### Watched Services
 
 ```bash
-RIKU_WATCH_SERVICES=web,worker
+riku settings set myapp containers.watch_services=web,worker
 ```
 
 - **Default:** (none, auto-update disabled)
@@ -326,50 +292,27 @@ own certificates.
 
 ---
 
-## Logging Settings
-
-### Log Level
-
-```bash
-LOG_LEVEL=info
-```
-
-- **Default:** `info`
-- **Description:** Logging verbosity
-- **Values:** `debug` | `info` | `warn` | `error`
-
-### Log Rotation Size
-
-```bash
-LOG_ROTATION_SIZE=10485760
-```
-
-- **Default:** `10485760` (10MB)
-- **Description:** Rotate logs when they exceed this size (bytes)
-- **Values:** Positive integer (bytes)
-
----
-
 ## Complete Example
 
 Example `~/.riku/envs/myapp/ENV`:
 
 ```bash
-# Application settings
 DATABASE_URL=postgres://localhost/myapp_prod
 SECRET_KEY=supersecret123
 DEBUG=false
+```
 
-# Domain and HTTPS
-RIKU_DOMAINS=myapp.example.com
-RIKU_HTTPS_ONLY=true
+and the riku settings beside it, in the repo's `riku.toml`:
 
-# Worker settings
-RIKU_WORKER_TIMEOUT=3600
-RIKU_WORKER_GRACE_PERIOD=60
+```toml
+[routing]
+domains = ["myapp.example.com"]
+https_only = true
+static_paths = ["/static:public", "/assets:static"]
 
-# Static files
-RIKU_NGINX_STATIC_PATHS=/static:public,/assets:static
+[workers]
+timeout = 3600
+grace_period = 60
 ```
 
 ---
@@ -413,7 +356,7 @@ Shows the actual configuration being used by the supervisor.
 ### Variable Not Applied
 
 1. Check spelling: `riku config get myapp KEY_NAME`
-2. Restart the app: `riku restart myapp`
+2. Deploy the app so its workers get the new env: `riku deploy myapp`
 3. Check live config: `riku config live myapp`
 
 ### Interpolation Not Working
@@ -430,4 +373,4 @@ API_URL=${BASE_URL}/api
 
 ### Nginx Config Not Updated
 
-The router config is rebuilt on deploy. After changing routing variables (`RIKU_DOMAINS`, `RIKU_HTTPS_ONLY`, static paths), deploy again. If the deploy fails, the message comes from the router helper.
+The router config is rebuilt on deploy. After changing routing settings in `riku.toml`, push again; `riku settings set` redeploys by itself. If the deploy fails, the message comes from the router helper.

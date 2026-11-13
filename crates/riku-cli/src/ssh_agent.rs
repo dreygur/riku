@@ -20,8 +20,8 @@ fn is_forced_option_with_inline_value(word: &str) -> bool {
     })
 }
 
-/// Whether `forced` is `riku agent` with only scope, identity and `--json`,
-/// meaning the command itself has to come from the client.
+/// Whether `forced` is `riku agent` with only scope and identity, meaning
+/// the command itself has to come from the client.
 pub fn is_bare_agent(forced: &[String]) -> bool {
     if forced.get(1).map(String::as_str) != Some("agent") {
         return false;
@@ -32,7 +32,7 @@ pub fn is_bare_agent(forced: &[String]) -> bool {
             if rest.next().is_none() {
                 return false;
             }
-        } else if word != "--json" && !is_forced_option_with_inline_value(word) {
+        } else if !is_forced_option_with_inline_value(word) {
             return false;
         }
     }
@@ -40,8 +40,7 @@ pub fn is_bare_agent(forced: &[String]) -> bool {
 }
 
 /// Checks the client's words and returns the ones to append to the forced
-/// argv. `--json` is dropped because the output is always JSON and a forced
-/// command may already carry it.
+/// argv.
 pub fn client_request(words: Vec<String>) -> anyhow::Result<Vec<String>> {
     let mut words = words.into_iter().peekable();
     if words.peek().map(String::as_str) == Some("agent") {
@@ -54,9 +53,6 @@ pub fn client_request(words: Vec<String>) -> anyhow::Result<Vec<String>> {
             request.push(word);
             request.extend(words);
             break;
-        }
-        if word == "--json" {
-            continue;
         }
         if word == "--confirm" {
             let token = match words.next() {

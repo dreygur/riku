@@ -1,6 +1,7 @@
 use std::time::{Duration, Instant};
 
 use riku_config::settings::EngineSettings;
+use riku_util::display::OutputTail;
 
 use crate::engine::fixture::{logged, logging_engine, ID};
 use crate::engine::{ContainerId, LogRange};
@@ -28,7 +29,7 @@ fn print_logs_is_bounded_by_the_build_limit() {
     let engine = engine.with_settings(limits);
     let id = ContainerId::try_from(ID).unwrap();
 
-    let result = engine.print_logs(&id);
+    let result = engine.print_logs(&id, &OutputTail::default());
     assert!(
         result.is_ok(),
         "print_logs should succeed within build limit: {result:?}"
@@ -42,7 +43,7 @@ fn print_logs_is_bounded_by_the_build_limit() {
     let engine = engine.with_settings(limits);
     let started = Instant::now();
 
-    let err = match engine.print_logs(&id) {
+    let err = match engine.print_logs(&id, &OutputTail::default()) {
         Ok(()) => panic!("print_logs should have timed out"),
         Err(e) => e,
     };

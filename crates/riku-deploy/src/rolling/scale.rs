@@ -63,7 +63,8 @@ pub(super) fn publish_added(
     }
 }
 
-/// Adds a healthy copy to `copies` and routes to it.
+/// Adds a healthy copy to `copies` and routes to it. When the router does
+/// not confirm, the copy is withdrawn (see [`withdraw`]).
 pub(super) fn add_copy(
     runtime: &mut impl CopyRuntime,
     routes: &mut impl RouteSink,
@@ -73,9 +74,42 @@ pub(super) fn add_copy(
         Ok(fresh) => fresh,
         Err(e) => return Err(e),
     };
+    let mut with_fresh = copies.clone();
+    with_fresh.push(fresh.clone());
+    match publish_live(routes, &with_fresh) {
+        Ok(()) => {
+            copies.push(fresh);
+            Ok(())
+        }
+        Err(e) => Err(withdraw(runtime, routes, copies, fresh, e)),
+    }
+}
+
+/// After the router did not confirm `fresh`, publishes the routes of
+/// `copies` (without it) again. Once that is confirmed `fresh` serves
+/// nothing, so it is stopped and the service is back to its count.
+/// Otherwise (no other routed copy, a second refusal, or a failed stop) it
+/// may be serving, so it stays running and joins `copies`; the next deploy
+/// drains or replaces it.
+fn withdraw(
+    runtime: &mut impl CopyRuntime,
+    routes: &mut impl RouteSink,
+    copies: &mut Vec<LiveCopy>,
+    fresh: LiveCopy,
+    unconfirmed: anyhow::Error,
+) -> anyhow::Error {
     let index = fresh.copy;
+    let previous = backends_of(copies);
+    let restored = !previous.is_empty() && routes.publish(&previous).is_ok();
+    if restored && runtime.stop(&fresh).is_ok() {
+        return unconfirmed.context(format!(
+            "router not confirmed for copy {index}; copy {index} stopped and the previous routes restored"
+        ));
+    }
     copies.push(fresh);
-    publish_added(routes, copies, index)
+    unconfirmed.context(format!(
+        "router not confirmed for copy {index}; copy {index} left running, the next deploy drains or replaces it"
+    ))
 }
 
 /// Removes `old` from the routes, then stops it. When `old` is the last

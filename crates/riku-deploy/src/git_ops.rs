@@ -4,7 +4,7 @@ use anyhow::Result;
 use std::path::Path;
 use std::process::Command;
 
-use crate::util::echo;
+use crate::util::display;
 
 /// `git` run in the app's working tree. A post-receive hook exports
 /// `GIT_DIR` for the bare repo, which would otherwise win over the checkout.
@@ -77,7 +77,14 @@ pub fn deploy_branch(repo: &Path) -> Option<String> {
 
 /// Fetch from origin (best-effort). git's own stderr is captured so a failure
 /// shows as one warning on the output rail instead of raw `fatal:` lines.
+///
+/// A checkout without `.git` is skipped: `riku deploy --from` copies a plain
+/// directory, which has nothing to fetch into. Without the check, git would
+/// also walk up and fetch into whatever repo holds the app root.
 pub fn git_fetch(app_path: &Path) {
+    if !app_path.join(".git").exists() {
+        return;
+    }
     let output = Command::new("git")
         .args(["fetch", "--quiet", "origin"])
         .current_dir(app_path)
@@ -90,9 +97,9 @@ pub fn git_fetch(app_path: &Path) {
         Ok(out) => {
             let stderr = String::from_utf8_lossy(&out.stderr);
             let reason = stderr.lines().next().unwrap_or("no message");
-            echo(&format!("git fetch failed: {reason}"), "yellow");
+            display::warn(&format!("git fetch failed: {reason}"));
         }
-        Err(e) => echo(&format!("git fetch failed: {e}"), "yellow"),
+        Err(e) => display::warn(&format!("git fetch failed: {e}")),
     }
 }
 
@@ -128,7 +135,7 @@ pub fn git_update_submodules(app_path: &Path) {
         .status();
 
     if let Err(e) = init {
-        echo(&format!("git submodule init failed: {}", e), "yellow");
+        display::warn(&format!("git submodule init failed: {}", e));
     }
 
     let update = Command::new("git")
@@ -139,7 +146,7 @@ pub fn git_update_submodules(app_path: &Path) {
         .status();
 
     if let Err(e) = update {
-        echo(&format!("git submodule update failed: {}", e), "yellow");
+        display::warn(&format!("git submodule update failed: {}", e));
     }
 }
 

@@ -188,6 +188,30 @@ fn get_start_cmd_returns_first_nonempty_line() {
 }
 
 #[test]
+fn build_runs_under_the_open_files_limit_its_app_sets() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("nofile");
+    make_plugin(
+        tmp.path(),
+        "testplugin",
+        &format!("#!/bin/sh\nulimit -n > '{}'\n", out.display()),
+    );
+    let plugins = discover(tmp.path());
+    let app_env = HashMap::from([("RIKU_MAX_OPEN_FILES".to_string(), "200".to_string())]);
+    let ctx = RuntimeContext {
+        app: "myapp",
+        app_path: tmp.path(),
+        env_path: tmp.path(),
+        riku_root: tmp.path(),
+        app_env: &app_env,
+    };
+
+    build(&plugins[0], &ctx, &OutputTail::default()).unwrap();
+
+    assert_eq!(fs::read_to_string(&out).unwrap().trim(), "200");
+}
+
+#[test]
 fn parse_env_lines_handles_values_with_equals() {
     let raw = b"URL=http://example.com?foo=bar\nKEY=val\n";
     let env = parse_env_lines(raw).unwrap();

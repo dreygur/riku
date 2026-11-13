@@ -152,7 +152,7 @@ pub fn render_summary(rows: &[(&str, &str)], colour: bool) -> String {
 /// Writes `text` and a newline, ignoring write errors. `println!` panics on
 /// a closed pipe, and a panic in the git hook skips recording a failed
 /// deploy, so a dropped ssh connection would turn a failure into a success.
-pub(super) fn emit(stream: Stream, text: &str) {
+pub fn emit(stream: Stream, text: &str) {
     let _ = match stream {
         Stream::Stdout => writeln!(std::io::stdout().lock(), "{text}"),
         Stream::Stderr => writeln!(std::io::stderr().lock(), "{text}"),

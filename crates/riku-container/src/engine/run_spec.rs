@@ -50,6 +50,9 @@ pub struct RunSpec {
     /// Rounded up to whole seconds when passed to the engine.
     pub stop_grace: Duration,
     pub healthcheck: Option<HealthCheck>,
+    /// Run the engine's init (`--init`) as PID 1, so an app that does not
+    /// handle signals itself still stops on the stop signal.
+    pub init: bool,
 }
 
 impl fmt::Debug for RunSpec {
@@ -71,6 +74,7 @@ impl fmt::Debug for RunSpec {
             .field("stop_signal", &self.stop_signal)
             .field("stop_grace", &self.stop_grace)
             .field("healthcheck", &self.healthcheck)
+            .field("init", &self.init)
             .finish()
     }
 }

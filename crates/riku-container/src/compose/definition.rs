@@ -92,6 +92,10 @@ pub struct ServiceDef {
     pub labels: BTreeMap<String, String>,
     pub working_dir: Option<String>,
     pub user: Option<String>,
+    /// Run the engine's init (`--init`) as PID 1, so the app gets the stop
+    /// signal and zombies are reaped. True unless the compose file says
+    /// `init: false`.
+    pub init: bool,
 }
 
 impl fmt::Debug for ServiceDef {
@@ -116,6 +120,7 @@ impl fmt::Debug for ServiceDef {
             .field("labels", &self.labels)
             .field("working_dir", &self.working_dir)
             .field("user", &self.user)
+            .field("init", &self.init)
             .finish()
     }
 }

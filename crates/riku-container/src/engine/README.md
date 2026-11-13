@@ -72,7 +72,7 @@ Component package located at `crates/riku-container/src/engine`.
 - `ContainerStats` [stats.rs:ContainerStats] (struct)
 - `parse_stats` [stats.rs:parse_stats] (fn)
 - `stats` [stats.rs:stats] (fn)
-- `run_streamed` [streamed.rs:run_streamed] (fn)
+- `run_teed` [streamed.rs:run_teed] (fn)
 
 ## Invariants
 - [build.rs] Paths must be absolute and cannot contain parent traversal (`..`)

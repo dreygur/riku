@@ -67,19 +67,25 @@ fn enable_worker(paths: &RikuPaths, kind: &str, copy: u32, pairs: &[(&str, &str)
     std::fs::write(file, toml::to_string(&config).unwrap()).unwrap();
 }
 
+/// A static site has no web copy but nginx serves its files, so it keeps a
+/// route to its default backend. A worker only app serves nothing and gets
+/// no route at all.
 #[test]
-fn worker_only_and_static_apps_keep_their_default_backend() {
+fn only_a_static_app_without_web_copies_is_routed() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = paths_with_workers(&tmp);
     enable_worker(&paths, "worker", 1, &[]);
     let socket = Backend::Unix(paths.socket_root.join("shop.sock"));
-
-    let worker_only = routed_backends(&Router::Nginx, "shop", &env(&[]), &paths, None).unwrap();
     let static_env = env(&[("RIKU_NGINX_STATIC", "true")]);
+
     let static_site = routed_backends(&Router::Nginx, "shop", &static_env, &paths, None).unwrap();
 
-    assert_eq!(worker_only, vec![socket.clone()]);
     assert_eq!(static_site, vec![socket]);
+    assert!(has_route("shop", &static_env, &paths).unwrap());
+    assert!(
+        !has_route("shop", &env(&[]), &paths).unwrap(),
+        "a worker only app must get no route"
+    );
 }
 
 #[test]
@@ -92,17 +98,101 @@ fn web_copies_replace_the_default_backend() {
 
     let backends = routed_backends(&Router::Nginx, "shop", &e, &paths, None).unwrap();
 
+    assert!(
+        has_route("shop", &e, &paths).unwrap(),
+        "a web app is routed"
+    );
     assert_eq!(
         backends,
         vec![Backend::loopback(5001), Backend::loopback(5002)]
     );
 }
 
+/// The check runs before any copy starts, so a Caddy app that sets
+/// `routing.static_paths` fails there, not after its workers are up.
 #[test]
-fn caddy_deploys_a_worker_only_app_to_the_port_from_its_env() {
+fn caddy_check_refuses_static_paths_before_a_copy_starts() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = paths_with_workers(&tmp);
+    crate::config::settings::save_key(&paths, "router", "name", Some("caddy")).unwrap();
+    let e = env(&[
+        ("RIKU_DOMAINS", "shop.example.com"),
+        ("RIKU_NGINX_STATIC_PATHS", "/assets/:public"),
+    ]);
+
+    let err = check("shop", &e, &paths).unwrap_err();
+
+    assert!(
+        format!("{err:#}").contains("routing.static_paths is nginx only"),
+        "{err:#}"
+    );
+}
+
+/// A worker only app that was never routed has nothing to take off the
+/// router, so its deploy must not need the router helper. One with a route
+/// recorded still goes through the helper, and fails when it is missing.
+#[test]
+fn a_worker_only_app_needs_the_helper_only_to_drop_a_recorded_route() {
     let tmp = tempfile::tempdir().unwrap();
     let mut paths = paths_with_workers(&tmp);
-    std::fs::write(&paths.router_file, "caddy").unwrap();
+    paths.router_socket = tmp.path().join("no-helper.sock");
+    enable_worker(&paths, "worker", 1, &[]);
+
+    configure("shop", tmp.path(), &env(&[]), &paths, None).unwrap();
+
+    routing_state::with_routing_lock(&paths, |state| {
+        state.set_entry(
+            "shop",
+            routing_state::Entry {
+                mode: RoutingMode::Domain,
+                port: None,
+                picked: false,
+                tls: None,
+                cert_for: None,
+                domains: Vec::new(),
+                fallback: false,
+            },
+        );
+        Ok(())
+    })
+    .unwrap();
+    let err = configure("shop", tmp.path(), &env(&[]), &paths, None).unwrap_err();
+    assert!(format!("{err:#}").contains("router helper"), "{err:#}");
+}
+
+/// Path mode never builds a per app route, so it must refuse the key itself,
+/// before the routing state or the helper sees the app.
+#[test]
+fn path_mode_app_that_names_its_socket_is_refused() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = paths_with_workers(&tmp);
+    let e = env(&[
+        ("RIKU_NGINX_STATIC", "true"),
+        ("RIKU_ROUTING_MODE", "path"),
+        ("RIKU_NGINX_SOCKET", "/srv/s.sock"),
+    ]);
+    let backends = [Backend::Unix("/srv/s.sock".into())];
+
+    let configured = configure("shop", tmp.path(), &e, &paths, None).unwrap_err();
+    let applied = apply("shop", tmp.path(), &e, &paths, &backends).unwrap_err();
+
+    for err in [configured, applied] {
+        assert!(
+            format!("{err:#}").contains("RIKU_NGINX_SOCKET cannot be set by an app"),
+            "{err:#}"
+        );
+    }
+    assert!(
+        previous_entry("shop", &paths).is_none(),
+        "a refused app must not be recorded in path mode"
+    );
+}
+
+#[test]
+fn caddy_publishes_no_site_for_a_worker_only_app() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut paths = paths_with_workers(&tmp);
+    crate::config::settings::save_key(&paths, "router", "name", Some("caddy")).unwrap();
     std::fs::create_dir_all(&paths.caddy_root).unwrap();
     let ok = tmp.path().join("mock_caddy");
     std::fs::write(&ok, "#!/bin/sh\nexit 0\n").unwrap();
@@ -114,6 +204,8 @@ fn caddy_deploys_a_worker_only_app_to_the_port_from_its_env() {
 
     configure("shop", tmp.path(), &e, &paths, None).unwrap();
 
-    let site = std::fs::read_to_string(paths.caddy_root.join("shop.caddy")).unwrap();
-    assert!(site.contains("reverse_proxy 127.0.0.1:5001"), "{site}");
+    assert!(
+        !paths.caddy_root.join("shop.caddy").exists(),
+        "nothing of a worker only app answers HTTP, so it gets no site"
+    );
 }

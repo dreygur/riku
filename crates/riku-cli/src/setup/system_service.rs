@@ -1,4 +1,8 @@
-/// System-wide (root) systemd service installation for riku.
+//! System-wide (root) systemd service installation for riku.
+
+// Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
+#![allow(clippy::question_mark)]
+
 use anyhow::{anyhow, Result};
 use std::fs;
 use std::path::Path;
@@ -9,7 +13,8 @@ use crate::config::{ACME_WEBROOT, SOCKET_ROOT, STATIC_ROOT};
 use crate::util::{display, ROOT_BINARY};
 
 use super::deploy_user::{deploy_user_name, passwd_home, running_as_root};
-use super::router_units::{remove_stale_units, unit_ordering, STALE_UNITS};
+use super::router_units::unit_ordering;
+use super::supervisor_binary::{action_for, service_main_pid, write_unit, UnitChange, UnitScope};
 
 pub const SYSTEMD_DIR: &str = "/etc/systemd/system";
 
@@ -37,6 +42,10 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=riku
 
+# Hands the unit's cgroup to the supervisor, which gives each isolated
+# worker its own cgroup with memory, cpu and pids limits inside it.
+Delegate=yes
+
 # Security hardening
 NoNewPrivileges=true
 ProtectSystem=strict
@@ -51,10 +60,6 @@ PrivateTmp=true
 # The leading - keeps the unit starting when a directory is missing.
 ReadWritePaths={deploy_home}/.riku -{socket_root} -{acme_webroot} -{static_root}
 
-# Resource limits
-MemoryMax=512M
-CPUQuota=50%
-
 [Install]
 WantedBy=multi-user.target
 "#,
@@ -68,14 +73,6 @@ WantedBy=multi-user.target
     )
 }
 
-fn write_system_unit(systemd_dir: &Path, content: &str) -> Result<()> {
-    let service_path = systemd_dir.join("riku.service");
-    if let Err(e) = fs::write(&service_path, content) {
-        return Err(anyhow!("failed to write {}: {e}", service_path.display()));
-    }
-    Ok(())
-}
-
 pub(super) fn systemctl_ok(args: &[&str]) -> bool {
     Command::new("systemctl")
         .args(args)
@@ -84,35 +81,32 @@ pub(super) fn systemctl_ok(args: &[&str]) -> bool {
 }
 
 /// Reload, enable and start `riku.service`, then print one step saying
-/// which of those worked. Whether the supervisor stays up is checked by the
-/// init summary.
-fn start_riku_service() {
-    let _ = systemctl_ok(&["daemon-reload"]);
+/// which of those worked. A supervisor that already runs is restarted only
+/// when it runs another binary than [`ROOT_BINARY`] or `unit` changed (see
+/// [`super::supervisor_binary`]). Whether the supervisor stays up is checked
+/// by the init summary. An error when `daemon-reload` fails, since a
+/// restart would then run the old unit text, or when systemd cannot say
+/// whether the service runs. `systemctl` runs one `systemctl` call and says
+/// whether it succeeded ([`systemctl_ok`] outside tests).
+fn start_riku_service(unit: UnitChange, systemctl: impl Fn(&[&str]) -> bool) -> Result<()> {
+    if !systemctl(&["daemon-reload"]) {
+        return Err(anyhow!(
+            "systemctl daemon-reload failed, so riku.service was not restarted with the new unit"
+        ));
+    }
     let mut done = vec!["riku.service written"];
-    if systemctl_ok(&["enable", "riku"]) {
+    if systemctl(&["enable", "riku"]) {
         done.push("enabled");
     }
-    if systemctl_ok(&["start", "riku"]) {
-        done.push("started");
+    let main_pid = match service_main_pid(UnitScope::System) {
+        Ok(pid) => pid,
+        Err(e) => return Err(e),
+    };
+    let action = action_for(main_pid, unit, Path::new("/proc"), Path::new(ROOT_BINARY));
+    if systemctl(&[action.verb(), "riku"]) {
+        done.push(action.outcome());
     }
     display::step_done("Service", &done.join(", "));
-}
-
-/// Stop and delete the reload watcher units an earlier init installed.
-/// On a host that never had them the disable calls fail and are ignored.
-fn remove_old_watchers(systemd_dir: &Path) -> Result<()> {
-    for unit in STALE_UNITS {
-        let _ = systemctl_ok(&["disable", "--now", unit]);
-    }
-    let removed = match remove_stale_units(systemd_dir) {
-        Ok(removed) => removed,
-        Err(e) => return Err(anyhow!("{e}")),
-    };
-    if !removed {
-        return Ok(());
-    }
-    let _ = systemctl_ok(&["daemon-reload"]);
-    display::detail("Removed the old nginx reload watcher");
     Ok(())
 }
 
@@ -131,12 +125,12 @@ pub fn install_systemd_service(router: &Router) -> Result<()> {
     }
 
     let unit = render_system_unit(router, &deploy_user, &deploy_home, ROOT_BINARY);
-    if let Err(e) = write_system_unit(systemd_dir, &unit) {
-        return Err(e);
-    }
+    let change = match write_unit(&systemd_dir.join("riku.service"), &unit) {
+        Ok(change) => change,
+        Err(e) => return Err(e),
+    };
 
-    start_riku_service();
-    remove_old_watchers(systemd_dir)
+    start_riku_service(change, systemctl_ok)
 }
 
 #[cfg(test)]

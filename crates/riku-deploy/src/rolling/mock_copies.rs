@@ -28,6 +28,9 @@ pub struct MockRoutes {
     log: CallLog,
     publishes: usize,
     fail_publish: Option<usize>,
+    /// Makes every publish from this 1-based call on fail, as a router that
+    /// went down does.
+    pub down_from: Option<usize>,
     /// Makes `check` fail, as for a snippet nginx refuses.
     pub refuse_check: bool,
     /// Every list handed to `publish`, in order.
@@ -61,6 +64,7 @@ pub fn mock_routes(log: &CallLog, fail_publish: Option<usize>) -> MockRoutes {
         log: log.clone(),
         publishes: 0,
         fail_publish,
+        down_from: None,
         refuse_check: false,
         published: Vec::new(),
     }
@@ -109,7 +113,8 @@ impl RouteSink for MockRoutes {
         self.log
             .borrow_mut()
             .push(format!("publish {}", backends.len()));
-        if self.fail_publish == Some(self.publishes) {
+        let down = self.down_from.is_some_and(|from| self.publishes >= from);
+        if down || self.fail_publish == Some(self.publishes) {
             return Err(anyhow!("reload not confirmed"));
         }
         Ok(())

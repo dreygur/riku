@@ -66,6 +66,15 @@ pub struct Entry {
     /// pair is never served for another name. `None`: no riku issued pair.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cert_for: Option<String>,
+    /// The domains the router serves the app under, as resolved for the
+    /// last apply: its own or the one fallback name. Empty when it has
+    /// none, as in path mode. The dashboard reads it to show where the app answers now,
+    /// which the current settings may no longer give.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub domains: Vec<String>,
+    /// True when `domains` is the fallback name.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fallback: bool,
 }
 
 /// Every app's entry.

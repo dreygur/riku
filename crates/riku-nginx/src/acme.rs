@@ -113,20 +113,14 @@ pub(crate) fn install_renew_hook(
         }
     });
     if !installed {
-        crate::util::echo(
-            &format!(
-                "-----> Could not set the renew hook: acme.sh has no certificate for {}",
-                domains.join(", ")
-            ),
-            "yellow",
-        );
+        crate::util::display::warn(&format!(
+            "Could not set the renew hook: acme.sh has no certificate for {}",
+            domains.join(", ")
+        ));
         return;
     }
     if let Err(e) = fs::write(&marker, "") {
-        crate::util::echo(
-            &format!("-----> Could not record the renew hook: {e}"),
-            "yellow",
-        );
+        crate::util::display::warn(&format!("Could not record the renew hook: {e}"));
     }
 }
 
@@ -146,9 +140,9 @@ fn install_existing(
         .map(|output| output.status.success())
         .unwrap_or(false);
     if installed {
-        crate::util::echo(
-            &format!("-----> Installed the Let's Encrypt certificate acme.sh holds for '{domain}'"),
-            "green",
+        crate::util::display::step_done(
+            &format!("Installed the Let's Encrypt certificate acme.sh holds for '{domain}'"),
+            "",
         );
     }
     installed
@@ -157,10 +151,7 @@ fn install_existing(
 fn remove_if_present(path: &std::path::Path) {
     if let Err(e) = fs::remove_file(path) {
         if e.kind() != std::io::ErrorKind::NotFound {
-            crate::util::echo(
-                &format!("-----> Could not remove {}: {e}", path.display()),
-                "yellow",
-            );
+            crate::util::display::warn(&format!("Could not remove {}: {e}", path.display()));
         }
     }
 }
@@ -199,10 +190,9 @@ pub fn forget_acme(app: &str, domains: &[String], paths: &crate::config::RikuPat
                 command.args(["--remove", "-d", domain.as_str()]);
                 command.args(ecc);
                 if !matches!(command.output(), Ok(output) if output.status.success()) {
-                    crate::util::echo(
-                        &format!("-----> acme.sh could not drop its certificate for '{domain}'"),
-                        "yellow",
-                    );
+                    crate::util::display::warn(&format!(
+                        "acme.sh could not drop its certificate for '{domain}'"
+                    ));
                 }
             }
         }
@@ -224,17 +214,17 @@ fn issue(
     {
         Ok(output) => output,
         Err(e) => {
-            crate::util::echo(&format!("-----> acme.sh execution failed: {e}"), "yellow");
+            crate::util::display::warn(&format!("acme.sh execution failed: {e}"));
             return false;
         }
     };
     if output.status.success() {
-        crate::util::echo(
+        crate::util::display::step_done(
             &format!(
-                "-----> Obtained Let's Encrypt certificate for {}",
+                "Obtained Let's Encrypt certificate for {}",
                 domains.join(", ")
             ),
-            "green",
+            "",
         );
         return true;
     }
@@ -242,10 +232,7 @@ fn issue(
         return install_existing(app, &domains[0], paths, acme_sh);
     }
     let stderr = String::from_utf8_lossy(&output.stderr);
-    crate::util::echo(
-        &format!("-----> Let's Encrypt certificate issue failed: {stderr}"),
-        "yellow",
-    );
+    crate::util::display::warn(&format!("Let's Encrypt certificate issue failed: {stderr}"));
     false
 }
 
@@ -292,12 +279,11 @@ pub(crate) fn try_acme_certificates(
             .filter(|other| *other != domain)
             .map(String::as_str)
             .collect();
-        crate::util::echo(
+        crate::util::display::warn(
             &format!(
-                "-----> The certificate covers only '{domain}'; {} failed the Let's Encrypt check and get a certificate name error",
+                "The certificate covers only '{domain}'; {} failed the Let's Encrypt check and get a certificate name error",
                 uncovered.join(", ")
             ),
-            "yellow",
         );
         return Ok(Some(true));
     }

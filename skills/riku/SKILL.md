@@ -1,6 +1,6 @@
 ---
 name: riku
-description: Use when deploying, configuring, inspecting or debugging apps on a riku server (git push micro-PaaS, Piku port), when a repo has a riku git remote, riku.toml or Procfile, or when running riku, rk or "riku agent" commands over ssh.
+description: Use when deploying, configuring, inspecting or debugging apps on a riku server (git push micro-PaaS), when a repo has a riku git remote, riku.toml or Procfile, or when running riku, rk or "riku agent" commands over ssh.
 ---
 
 # Riku
@@ -78,9 +78,9 @@ cat fullchain.pem key.pem | riku certs set myapp   # own TLS cert
 riku certs show|unset myapp
 ```
 
-`config` holds the app's own env vars. `settings` holds riku keys (`routing.*`, `runtime.*`, `workers.*`, `health.*`, `limits.*`, `secrets.*`). `config set` refuses `RIKU_*` keys and names the `settings` key to use. Precedence per key, later wins: repo `riku.toml`, legacy `RIKU_*` in ENV, `riku settings`. Server-only keys (`limits.*`, `secrets.*`, `routing.bind_address`) are refused in the repo `riku.toml`.
+`config` holds the app's own env vars. `settings` holds riku keys (`routing.*`, `runtime.*`, `workers.*`, `health.*`, `limits.*`, `secrets.*`). `config set` refuses `RIKU_*` keys and names the `settings` key to use. Precedence per key, later wins: repo `riku.toml`, `riku settings`; a settings key written into ENV is ignored. Server-only keys (`limits.*`, `secrets.*`, `routing.bind_address`) are refused in the repo `riku.toml`.
 
-Also: `riku addon` (databases, caches), `riku plugins` (bundles, marketplaces), `riku doctor [--fix]`, `sudo riku init`. Each has `--help` with examples.
+Also: `riku addon` (databases, caches), `riku plugins` (bundles, marketplaces), `riku doctor`, `sudo riku init`. Each has `--help` with examples.
 
 ## Agent interface (JSON)
 

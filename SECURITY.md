@@ -2,14 +2,14 @@
 
 ## Trust Boundary
 
-Riku follows the same trust model as Heroku and Piku: **anyone with git push access can execute arbitrary code on the server**. Procfile commands (web, worker, preflight, release) run via `sh -c` as the riku user with no sandboxing.
+Riku follows the same trust model as Heroku: **anyone with git push access can execute arbitrary code on the server**. Procfile commands (web, worker, preflight, release) run via `sh -c` as the riku user with no sandboxing.
 
 This is by design. A PaaS that executes user-provided Procfiles inherently grants shell access.
 
 ## Operator Responsibilities
 
 - **SSH access = server access.** Only add trusted users' SSH keys to `authorized_keys`.
-- **Run riku under a dedicated unprivileged user** (e.g., `riku` or `piku`). Never run as root.
+- **Run riku under a dedicated unprivileged user** (e.g., `riku`). Never run as root.
 - **Restrict the riku user's capabilities**: no sudo, limited filesystem access.
 - **For untrusted workloads**, use container deployments with Docker/Podman to add isolation.
 

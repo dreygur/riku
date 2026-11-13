@@ -92,6 +92,24 @@ fn test_write_live_env_reads_existing_env_file() -> Result<()> {
 }
 
 #[test]
+fn a_setting_key_in_env_stays_out_of_live_env() -> Result<()> {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    setup_env_dir(&paths, "myapp");
+    let env_file = paths.env_root.join("myapp").join("ENV");
+    fs::write(&env_file, "RIKU_MAX_CPU_SECONDS=1\nPORT=5000\n")?;
+
+    write_live_env("myapp", &paths, &HashMap::new())?;
+
+    let content = fs::read_to_string(paths.env_root.join("myapp").join("LIVE_ENV"))?;
+    assert!(
+        !content.contains("RIKU_MAX_CPU_SECONDS") && content.contains("PORT=5000"),
+        "LIVE_ENV:\n{content}"
+    );
+    Ok(())
+}
+
+#[test]
 fn live_env_and_its_dir_are_owner_only() -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
     let tmp = TempDir::new().unwrap();

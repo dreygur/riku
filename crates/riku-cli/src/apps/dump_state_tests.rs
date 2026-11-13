@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use tempfile::TempDir;
 
-use super::supervisor_files::{load_app_stats, supervisor_uptime_seconds};
+use super::supervisor_files::{load_app_stats, supervisor_uptime, supervisor_uptime_seconds};
 use super::*;
 use crate::config::RikuPaths;
 
@@ -97,22 +97,181 @@ fn test_build_app_entry_reports_lock_state() {
     assert!(matches!(held_entry.deploy_lock, LockState::Held));
 }
 
+/// An app whose first deploy failed has no release; the dashboard shows it
+/// as never deployed instead of stopped.
 #[test]
-fn test_build_app_entry_nginx_state() {
+fn released_says_whether_any_deploy_recorded_a_release() {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
-    let app = "webapp";
+    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+    let released = |paths: &RikuPaths| build_app_entry("shop", paths, &HashMap::new()).released;
+
+    assert!(!released(&paths), "no deploy recorded a release yet");
+    crate::deploy::releases::ReleaseLog::new(&paths)
+        .record("shop", "0123456789abcdef")
+        .unwrap();
+    assert!(released(&paths), "a recorded release counts");
+}
+
+fn enable_worker(paths: &RikuPaths, app: &str, kind: &str) {
+    fs::create_dir_all(&paths.workers_enabled).unwrap();
+    let config = crate::supervisor::config::create_worker_config(
+        app,
+        kind,
+        "run",
+        1,
+        HashMap::new(),
+        "/srv/app",
+        "/srv/log",
+    );
+    fs::write(
+        paths.workers_enabled.join(format!("{app}@{kind}.1.toml")),
+        toml::to_string(&config).unwrap(),
+    )
+    .unwrap();
+}
+
+/// `urls` says where the app is live, as the push summary does: a port
+/// mode app on a LAN address gets its URL labelled `lan`, while a worker
+/// only app and an app that never deployed get none.
+#[test]
+fn urls_are_the_push_summary_urls_and_none_without_a_route() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    crate::config::settings::save_key(&paths, "routing", "server_ip", Some("10.0.0.5")).unwrap();
+    let state = paths.riku_root.join("routing");
+    fs::create_dir_all(&state).unwrap();
+    fs::write(
+        state.join("state.toml"),
+        "[apps.qs-py]\nmode = \"port\"\nport = 8102\n",
+    )
+    .unwrap();
+    let releases = crate::deploy::releases::ReleaseLog::new(&paths);
+    for (app, kind) in [("qs-py", "web"), ("jobs", "worker"), ("fresh", "web")] {
+        fs::create_dir_all(paths.app_root.join(app)).unwrap();
+        fs::write(
+            paths.app_root.join(app).join("riku.toml"),
+            "[routing]\nmode = \"port\"\nport = 8102\n",
+        )
+        .unwrap();
+        enable_worker(&paths, app, kind);
+        if app != "fresh" {
+            releases.record(app, "0123456789abcdef").unwrap();
+        }
+    }
+    let urls = |app: &str| {
+        serde_json::to_value(build_app_entry(app, &paths, &HashMap::new())).unwrap()["urls"].clone()
+    };
+
+    assert_eq!(
+        urls("qs-py"),
+        serde_json::json!([{ "url": "http://10.0.0.5:8102", "label": "lan" }])
+    );
+    assert_eq!(urls("jobs"), serde_json::json!([]), "worker only app");
+    assert_eq!(urls("fresh"), serde_json::json!([]), "never deployed app");
+}
+
+/// The dashboard shows one scale control per kind the scale API takes: the
+/// long running kinds of SCALING (a kind scaled to 0 included) and of the
+/// workers, never a one shot or cron kind, and no `web` the app lacks.
+#[test]
+fn process_kinds_are_the_scalable_kinds_of_scaling_and_workers() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let app = "limittest";
     fs::create_dir_all(paths.app_root.join(app)).unwrap();
     fs::create_dir_all(paths.env_root.join(app)).unwrap();
+    fs::write(
+        paths.env_root.join(app).join("SCALING"),
+        "release=1\ncron1=1\nworker=1\nmailer=0\n",
+    )
+    .unwrap();
 
-    let route = |paths: &RikuPaths| {
-        serde_json::to_value(build_app_entry(app, paths, &HashMap::new()).route).unwrap()
+    let entry = build_app_entry(app, &paths, &HashMap::new());
+
+    assert_eq!(entry.process_kinds, vec!["mailer", "worker"]);
+}
+
+/// The container card draws one header per compose service, a stopped one
+/// included, so the state lists them in start order with how each image
+/// comes about; a Procfile app lists none.
+#[test]
+fn services_list_every_compose_service_with_its_image() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let app = "ct-compose";
+    let app_path = paths.app_root.join(app);
+    fs::create_dir_all(app_path.join("web")).unwrap();
+    fs::write(
+        app_path.join("compose.yaml"),
+        "services:\n  web:\n    build: ./web\n    depends_on: [redis]\n  redis:\n    image: redis:7-alpine\n",
+    )
+    .unwrap();
+    fs::create_dir_all(paths.app_root.join("procfile-app")).unwrap();
+
+    let entry = build_app_entry(app, &paths, &HashMap::new());
+    let plain = build_app_entry("procfile-app", &paths, &HashMap::new());
+
+    assert_eq!(
+        serde_json::to_value(&entry.services).unwrap(),
+        serde_json::json!([
+            {"name": "redis", "built": false, "image": "redis:7-alpine"},
+            {"name": "web", "built": true, "image": null}
+        ])
+    );
+    assert!(plain.services.is_empty(), "a Procfile app listed services");
+}
+
+/// The router helper writes `/etc/riku/nginx/<app>.conf`; a config left in
+/// the deploy user's own `nginx_root` is not one nginx loads.
+#[test]
+fn nginx_state_reads_the_site_the_helper_writes() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let site_root = tmp.path().join("etc-riku-nginx");
+    fs::create_dir_all(&site_root).unwrap();
+    let state = || {
+        serde_json::to_value(route::nginx_site_state(
+            &site_root.join("webapp.conf"),
+            &paths,
+        ))
+        .unwrap()
     };
-    assert_eq!(route(&paths)["config_exists"], false);
 
-    fs::write(paths.nginx_root.join(format!("{}.conf", app)), "# conf").unwrap();
-    assert_eq!(route(&paths)["router"], "nginx");
-    assert_eq!(route(&paths)["config_exists"], true);
+    fs::write(paths.nginx_root.join("webapp.conf"), "# stray").unwrap();
+    assert_eq!(state()["config_exists"], false, "{}", state());
+    assert_eq!(state()["config_known"], true);
+
+    fs::write(site_root.join("webapp.conf"), "# conf").unwrap();
+    assert_eq!(state()["router"], "nginx");
+    assert_eq!(state()["config_exists"], true, "{}", state());
+}
+
+/// Like a Caddy site, a site root this user cannot search says nothing
+/// about the config, so it reads as unknown, not missing.
+#[test]
+fn nginx_state_is_unknown_when_the_site_root_is_closed() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let site_root = tmp.path().join("closed");
+    fs::create_dir_all(&site_root).unwrap();
+    fs::set_permissions(&site_root, fs::Permissions::from_mode(0o000)).unwrap();
+
+    let state = route::nginx_site_state(&site_root.join("webapp.conf"), &paths);
+    fs::set_permissions(&site_root, fs::Permissions::from_mode(0o755)).unwrap();
+
+    if nix::unistd::Uid::effective().is_root() {
+        return; // root searches any directory, so there is nothing to observe
+    }
+    assert_eq!(
+        state,
+        route::RouteState::Nginx {
+            config_exists: false,
+            config_known: false,
+            enabled: false,
+        }
+    );
 }
 
 #[test]
@@ -157,13 +316,47 @@ fn test_supervisor_uptime_seconds_missing_pid_file_returns_none() {
     assert!(supervisor_uptime_seconds(&paths).is_none());
 }
 
+/// The pid file outlives its supervisor, so only a locked one has an uptime.
 #[test]
-fn test_supervisor_uptime_seconds_present() {
+fn supervisor_uptime_needs_a_locked_pid_file() {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
-    fs::write(paths.riku_root.join("supervisor.pid"), "1\n").unwrap();
-    let uptime = supervisor_uptime_seconds(&paths);
-    assert!(uptime.is_some());
+    let pid_file = paths.riku_root.join("supervisor.pid");
+    fs::write(&pid_file, "1\n").unwrap();
+    assert_eq!(supervisor_uptime_seconds(&paths), None, "unlocked: exited");
+
+    let held = fs::File::open(&pid_file).unwrap();
+    held.lock().unwrap();
+    assert!(supervisor_uptime_seconds(&paths).is_some());
+}
+
+/// Root never reads the deploy user's pid file, so it must say why the
+/// uptime is missing instead of looking like a stopped supervisor.
+#[test]
+fn root_reports_the_uptime_as_unavailable() {
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let pid_file = paths.riku_root.join("supervisor.pid");
+    fs::write(&pid_file, "1\n").unwrap();
+    let held = fs::File::open(&pid_file).unwrap();
+    held.lock().unwrap();
+
+    let as_root = supervisor_uptime(&paths, true);
+    assert_eq!(as_root.seconds, None, "root must not read the pid file");
+    assert!(
+        as_root
+            .unavailable
+            .is_some_and(|why| why.contains("as root")),
+        "root gets a reason: {:?}",
+        as_root.unavailable
+    );
+
+    let as_user = supervisor_uptime(&paths, false);
+    assert!(
+        as_user.seconds.is_some(),
+        "the deploy user reads the uptime"
+    );
+    assert_eq!(as_user.unavailable, None);
 }
 
 #[test]
@@ -193,7 +386,7 @@ fn dump_state_reports_caddy_site() {
     let paths = make_paths(&tmp);
     let app = "shop";
     fs::create_dir_all(paths.env_root.join(app)).unwrap();
-    fs::write(&paths.router_file, "caddy\n").unwrap();
+    crate::config::settings::save_key(&paths, "router", "name", Some("caddy")).unwrap();
     fs::create_dir_all(&paths.caddy_root).unwrap();
     let site = paths.caddy_root.join("shop.caddy");
     fs::write(&site, "# riku app: shop\n").unwrap();
@@ -201,8 +394,33 @@ fn dump_state_reports_caddy_site() {
     let route = serde_json::to_value(build_app_entry(app, &paths, &HashMap::new()).route).unwrap();
     assert_eq!(
         route,
-        serde_json::json!({ "router": "caddy", "site": site.display().to_string() }),
+        serde_json::json!({ "router": "caddy", "site": site.display().to_string(), "site_known": true }),
         "caddy route should carry the site path and no nginx fields"
+    );
+}
+
+#[test]
+fn caddy_site_is_unknown_not_missing_when_the_site_root_is_unreadable() {
+    use std::os::unix::fs::PermissionsExt;
+    if nix::unistd::Uid::effective().is_root() {
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    let paths = make_paths(&tmp);
+    let app = "shop";
+    fs::create_dir_all(paths.env_root.join(app)).unwrap();
+    crate::config::settings::save_key(&paths, "router", "name", Some("caddy")).unwrap();
+    fs::create_dir_all(&paths.caddy_root).unwrap();
+    fs::write(paths.caddy_root.join("shop.caddy"), "# riku app: shop\n").unwrap();
+    fs::set_permissions(&paths.caddy_root, fs::Permissions::from_mode(0o000)).unwrap();
+
+    let route = serde_json::to_value(build_app_entry(app, &paths, &HashMap::new()).route).unwrap();
+
+    fs::set_permissions(&paths.caddy_root, fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(
+        route,
+        serde_json::json!({ "router": "caddy", "site": null, "site_known": false }),
+        "a root-only site root must read as unknown, not as no site"
     );
 }
 
@@ -291,7 +509,8 @@ fn process_row_unchanged() {
             "processes":[{{"process_id":"{app}-web-1","app":"{app}","kind":"web","ordinal":1,
             "pid":4242,"status":"running","started_at":null,"last_health_check":null,
             "health_check_status":"unknown","restart_count":0,"last_restart_at":null,
-            "cpu_time_ms":200,"memory_bytes":1000,"requests_total":0,"requests_per_second":0.0}}],
+            "cpu_time_ms":200,"memory_bytes":1000,"memory_limit_bytes":268435456,
+            "requests_total":0,"requests_per_second":0.0}}],
             "last_updated":"2026-11-02T00:00:00Z"}}]"#,
         app = app
     );
@@ -317,6 +536,7 @@ fn process_row_unchanged() {
         "status": "running",
         "restart_count": 0,
         "memory_bytes": 1000,
+        "memory_limit_bytes": 268435456,
         "cpu_time_ms": 200,
         "unit": "process",
         "container_id": null,
@@ -331,7 +551,7 @@ fn process_row_unchanged() {
 fn engine_missing_is_null() {
     let tmp = TempDir::new().unwrap();
     let paths = make_paths(&tmp);
-    fs::write(&paths.container_engine_file, "missing-engine\n").unwrap();
+    crate::config::settings::save_key(&paths, "engine", "program", Some("missing-engine")).unwrap();
     let dump = build_state_dump(&paths).unwrap();
     assert_eq!(dump.engine, None);
 
@@ -355,11 +575,8 @@ fn engine_present_reports_info() {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&engine_bin, fs::Permissions::from_mode(0o755)).unwrap();
     }
-    fs::write(
-        &paths.container_engine_file,
-        engine_bin.display().to_string(),
-    )
-    .unwrap();
+    let engine = engine_bin.display().to_string();
+    crate::config::settings::save_key(&paths, "engine", "program", Some(&engine)).unwrap();
 
     let dump = build_state_dump(&paths).unwrap();
     assert_eq!(

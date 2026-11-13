@@ -2,7 +2,7 @@
 use anyhow::Result;
 use std::fs;
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::util::display;
@@ -69,6 +69,15 @@ fn select_key(found_keys: Vec<PathBuf>, ssh_dir: &std::path::Path) -> Result<Opt
     prompt_select_key(found_keys)
 }
 
+/// `question` on the rail, the cursor left after it for the answer.
+fn show_prompt(question: &str) {
+    let colour = display::Stream::Stdout.colour();
+    print!(
+        "{} ",
+        display::render_line(display::Mark::Rail, question, "", colour)
+    );
+}
+
 /// Flush the prompt and read one line of the answer.
 fn read_answer() -> Result<String> {
     if let Err(e) = io::stdout().flush() {
@@ -81,33 +90,38 @@ fn read_answer() -> Result<String> {
     }
 }
 
+/// `ssh-keygen` for a new ed25519 key at `key`. No shell runs it, so `key`
+/// must be absolute: a literal `~` would make ssh-keygen write into a
+/// directory named `~`.
+fn keygen_command(key: &Path) -> Command {
+    let mut command = Command::new("ssh-keygen");
+    command
+        .args(["-q", "-t", "ed25519", "-C", "riku@server", "-N", "", "-f"])
+        .arg(key);
+    command
+}
+
 #[allow(clippy::question_mark)]
 fn prompt_create_key(ssh_dir: &std::path::Path) -> Result<Option<PathBuf>> {
     display::warn("No SSH keys found");
-    print!("│  Create new SSH key? [y/N]: ");
+    show_prompt("Create new SSH key? [y/N]:");
     let input = match read_answer() {
         Ok(input) => input,
         Err(e) => return Err(e),
     };
 
     if input.trim().to_lowercase() == "y" {
-        display::detail("Generating an SSH key");
-
         if let Err(e) = fs::create_dir_all(ssh_dir) {
             return Err(anyhow::anyhow!(
                 "failed to create {}: {e}",
                 ssh_dir.display()
             ));
         }
-        // No shell runs this, so the path must be absolute: a literal `~`
-        // would make ssh-keygen write into a directory named `~`.
-        let status = Command::new("ssh-keygen")
-            .args(["-t", "ed25519", "-C", "riku@server", "-N", "", "-f"])
-            .arg(ssh_dir.join("id_ed25519"))
-            .status();
+        let key = ssh_dir.join("id_ed25519");
+        let status = keygen_command(&key).status();
 
         if status.is_ok_and(|s| s.success()) {
-            display::detail("SSH key created");
+            display::step_done("SSH key", &format!("created {}", key.display()));
             return Ok(Some(ssh_dir.join("id_ed25519.pub")));
         } else {
             display::warn("Could not create an SSH key");
@@ -128,7 +142,7 @@ fn prompt_select_key(found_keys: Vec<PathBuf>) -> Result<Option<PathBuf>> {
         display::detail(&format!("  [{}] {}", i + 1, key.display()));
     }
 
-    print!("│  Select key (1-{}): ", found_keys.len());
+    show_prompt(&format!("Select key (1-{}):", found_keys.len()));
     let input = match read_answer() {
         Ok(input) => input,
         Err(e) => return Err(e),
@@ -146,3 +160,7 @@ fn prompt_select_key(found_keys: Vec<PathBuf>) -> Result<Option<PathBuf>> {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "ssh_tests.rs"]
+mod tests;

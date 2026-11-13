@@ -3,6 +3,7 @@
 /// This file contains all integration tests for Riku,
 /// organized by module for better maintainability.
 mod cli_tests;
+mod dashboard_tests;
 mod e2e_tests;
 mod mock_supervisor;
 mod nginx_tests;

@@ -34,6 +34,7 @@ Component package located at `crates/riku-supervisor/src/process`.
 - `stop_process_by_id` [stop.rs:stop_process_by_id] (fn)
 - `stop_app_processes` [stop.rs:stop_app_processes] (fn)
 - `stop_all_processes` [stop.rs:stop_all_processes] (fn)
+- `set_cgroup_tree` [worker_cgroup.rs:set_cgroup_tree] (fn)
 - `minimal_config` [test_support.rs:minimal_config] (fn, test builds only)
 - `ProcessInfo` [test_support.rs:ProcessInfo] (struct, test builds only)
 - [isolation](./isolation/README.md) - Child contract for `isolation`

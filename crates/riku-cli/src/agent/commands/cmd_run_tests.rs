@@ -94,6 +94,25 @@ fn run_returns_when_a_background_child_keeps_the_pipe_open() {
 }
 
 #[test]
+fn run_applies_the_open_files_limit_the_app_sets() {
+    let dir = tempfile::tempdir().unwrap();
+    let app_env = HashMap::from([("RIKU_MAX_OPEN_FILES".to_string(), "64".to_string())]);
+
+    let outcome = run_captured(
+        &shell("ulimit -n"),
+        dir.path(),
+        &app_env,
+        Duration::from_secs(10),
+    )
+    .unwrap();
+
+    assert_eq!(
+        outcome.stdout.text, "64\n",
+        "the command must see the app's RIKU_MAX_OPEN_FILES=64 as ulimit -n"
+    );
+}
+
+#[test]
 fn run_caps_output_and_says_so() {
     let dir = tempfile::tempdir().unwrap();
     let outcome = run_captured(

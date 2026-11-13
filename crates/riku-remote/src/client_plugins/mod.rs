@@ -29,8 +29,12 @@ use execute::{execute_plugin, is_executable};
 /// * `Ok(true)` - Plugin was found and executed
 /// * `Ok(false)` - No plugin found, continue with built-in command
 /// * `Err` - Plugin was found but failed to execute
+#[allow(clippy::question_mark)]
 pub fn try_execute_client_plugin(command: &str, args: &[String]) -> Result<bool> {
-    let plugin_path = get_client_plugin_path(command)?;
+    let plugin_path = match get_client_plugin_path(command) {
+        Ok(path) => path,
+        Err(e) => return Err(e),
+    };
 
     if !plugin_path.exists() {
         return Ok(false);
@@ -45,23 +49,28 @@ pub fn try_execute_client_plugin(command: &str, args: &[String]) -> Result<bool>
         ));
     }
 
-    // Execute the plugin
-    execute_plugin(&plugin_path, args)?;
-    Ok(true)
+    match execute_plugin(&plugin_path, args) {
+        Ok(_) => Ok(true),
+        Err(e) => Err(e),
+    }
 }
 
 /// Handler for `riku plugin list`.
+#[allow(clippy::question_mark)]
 pub fn cmd_plugin_list() -> Result<()> {
-    let plugins = list_client_plugins()?;
+    let plugins = match list_client_plugins() {
+        Ok(plugins) => plugins,
+        Err(e) => return Err(e),
+    };
     if plugins.is_empty() {
         display::warn("No client plugins installed.");
-        display::blank();
-        display::note("Install plugins by placing executable scripts in:");
-        display::note("  ~/.riku/client-plugins/");
+        display::detail("");
+        display::detail("Install plugins by placing executable scripts in:");
+        display::detail("  ~/.riku/client-plugins/");
     } else {
-        display::section("Available Client Plugins");
+        display::step_done("Available Client Plugins", "");
         for plugin in plugins {
-            display::note(&format!("  {}", plugin));
+            display::detail(&format!("  {}", plugin));
         }
     }
     Ok(())
@@ -69,11 +78,18 @@ pub fn cmd_plugin_list() -> Result<()> {
 
 /// Handler for `riku plugin exists <name>`.
 pub fn cmd_plugin_exists(name: &str) -> Result<()> {
-    if client_plugin_exists(name)? {
-        display::success(&format!("Plugin '{}' is installed and executable.", name));
-        std::process::exit(0);
-    } else {
-        display::warn(&format!("Plugin '{}' not found or not executable.", name));
-        std::process::exit(1);
+    match client_plugin_exists(name) {
+        Ok(true) => {
+            display::step_done(
+                &format!("Plugin '{}' is installed and executable.", name),
+                "",
+            );
+            std::process::exit(0);
+        }
+        Ok(false) => {
+            display::warn(&format!("Plugin '{}' not found or not executable.", name));
+            std::process::exit(1);
+        }
+        Err(e) => Err(e),
     }
 }

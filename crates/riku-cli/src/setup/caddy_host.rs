@@ -28,13 +28,16 @@ use nix::unistd::{Group, User};
 use crate::caddy::{has_import, import_line, SYSTEM_CADDYFILE as CADDYFILE};
 use crate::config::RikuPaths;
 use crate::util::socket_dir;
-use crate::util::{echo, write_atomic};
+use crate::util::{display, write_atomic};
 
 use super::caddy_admin::move_admin_to_socket;
-use super::host_cleanup::clear_foreign_entries;
 use super::nginx_host::{check_write_dir, ROOT_UID};
+use super::router_dirs::secure_cert_dirs;
 
 pub(super) const CADDY_USER: &str = "caddy";
+/// The site root's certificate dir; riku-route `caddy_certs.rs` `CERT_DIR`
+/// names the same one.
+const CERTS_DIR: &str = "certs";
 
 /// `current` with `line` appended on its own line, or `None` when that
 /// exact line is already there.
@@ -112,8 +115,10 @@ pub(super) fn run(program: &str, args: &[&str]) -> Result<()> {
     }
 }
 
+/// Adds riku's import and the admin socket to the Caddyfile. True when the
+/// file changed.
 #[allow(clippy::question_mark)]
-fn add_caddyfile_import(paths: &RikuPaths) -> Result<()> {
+fn add_caddyfile_import(paths: &RikuPaths) -> Result<bool> {
     let current = match fs::read_to_string(CADDYFILE) {
         Ok(text) => text,
         Err(e) if e.kind() == ErrorKind::NotFound => {
@@ -131,16 +136,16 @@ fn add_caddyfile_import(paths: &RikuPaths) -> Result<()> {
     let text = with_admin.as_deref().unwrap_or(&current);
     let with_import = caddyfile_with_import(text, &import_line(paths));
     let Some(updated) = with_import.or(with_admin) else {
-        return Ok(());
+        return Ok(false);
     };
     if let Err(e) = write_atomic(Path::new(CADDYFILE), updated.as_bytes()) {
         return Err(e);
     }
-    echo(
-        &format!("{CADDYFILE} imports riku sites and uses the admin socket"),
-        "green",
+    display::step_done(
+        "Caddyfile",
+        &format!("{CADDYFILE} imports riku sites, admin socket"),
     );
-    Ok(())
+    Ok(true)
 }
 
 /// The name of the `caddy` user's primary group, the only group the site
@@ -206,20 +211,20 @@ pub fn setup_caddy_host(paths: &RikuPaths) -> Result<()> {
     if let Err(e) = prepare_site_root(&paths.caddy_root, ROOT_UID, Some(ROOT_UID), &group) {
         return Err(e);
     }
-    if let Err(e) = clear_foreign_entries(&paths.caddy_root, ROOT_UID) {
+    let certs = paths.caddy_root.join(CERTS_DIR);
+    let gid = socket_dir::group_id(&group);
+    if let Err(e) = secure_cert_dirs(&certs, ROOT_UID, gid, socket_dir::SOCKET_DIR_MODE) {
         return Err(e);
     }
-    if let Err(e) = add_caddyfile_import(paths) {
-        return Err(e);
-    }
-    echo(
-        &format!(
-            "{} ready for Caddy ({group} reads it)",
-            paths.caddy_root.display()
-        ),
-        "green",
+    let caddyfile_changed = match add_caddyfile_import(paths) {
+        Ok(changed) => changed,
+        Err(e) => return Err(e),
+    };
+    display::step_done(
+        "Router files",
+        &format!("{}, group {group}", paths.caddy_root.display()),
     );
-    move_admin_to_socket(&group)
+    move_admin_to_socket(&group, caddyfile_changed)
 }
 
 #[cfg(test)]

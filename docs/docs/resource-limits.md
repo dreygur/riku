@@ -24,8 +24,8 @@ Two of these are opt-in and are left unset unless you configure them:
 - **Memory** caps *virtual* address space (`RLIMIT_AS`). Node/v8 and the JVM
   reserve multiple GB of virtual memory at startup and abort under a tight cap,
   so applying one by default would make those builds and workers unrunnable.
-  Resident memory for isolated workers is bounded by the cgroup `memory.max`
-  instead (see [Supervisor](supervisor.md)).
+  Resident memory is bounded by the cgroup `memory.max` instead, set with
+  `limits.isolation_max_memory_mb` (see [riku.toml](riku-toml.md)).
 - **Processes** (`RLIMIT_NPROC`) is UID-wide, not per-worker: every process the
   deploy user owns counts against it, including the supervisor and your shell.
   A per-app-looking number set here can lock the whole user out of forking.
@@ -36,87 +36,112 @@ Set either one explicitly when you want it enforced.
 
 ## Configuration
 
-### Environment Variables
+### Where the limits are read
 
-Configure resource limits via environment variables before starting the supervisor:
+The server wide limits come from the environment of the process that starts
+the command. The supervisor reads these variables once, at startup, for
+every worker and cron job of every app. A build and the Procfile
+`preflight` and `release` commands read them from the riku process that
+runs the deploy. `riku run` and `riku agent run` read them from the riku
+process that runs the command.
+
+An app can set its own value for any of them with the `limits.max_*` keys
+of `riku settings` (see [riku.toml](riku-toml.md)):
 
 ```bash
-# Set memory limit to 256 MB
-export RIKU_MAX_MEMORY_MB=256
-
-# Set CPU time limit to 1 hour (3600 seconds)
-export RIKU_MAX_CPU_SECONDS=3600
-
-# Set max open files to 2048
-export RIKU_MAX_OPEN_FILES=2048
-
-# Set max processes to 32
-export RIKU_MAX_PROCESSES=32
-
-# Set max file size to 512 MB
-export RIKU_MAX_FILE_SIZE_MB=512
-
-# Enable core dumps (NOT recommended for production)
-export RIKU_ENABLE_CORE_DUMPS=1
-
-# Start supervisor with configured limits
-riku supervisor
+riku settings set myapp limits.max_open_files=4096 limits.max_cpu_seconds=7200
 ```
+
+| Key | Variable |
+|-----|----------|
+| `limits.max_memory_mb` | `RIKU_MAX_MEMORY_MB` |
+| `limits.max_cpu_seconds` | `RIKU_MAX_CPU_SECONDS` |
+| `limits.max_open_files` | `RIKU_MAX_OPEN_FILES` |
+| `limits.max_processes` | `RIKU_MAX_PROCESSES` |
+| `limits.max_file_size_mb` | `RIKU_MAX_FILE_SIZE_MB` |
+
+A value the app sets replaces the server wide one for that app's workers,
+cron jobs, builds, `preflight` and `release` commands, `riku run` and
+`riku agent run`, in either direction. A limit the app does not set keeps the server wide value. `set`
+redeploys the app, so the new limits apply from that deploy. Core dumps
+have no per app key. `limits.max_processes` is still UID-wide, as described
+above, even when one app sets it.
 
 ### Systemd Service
 
-For systemd deployments, add environment variables to the service file:
+The supervisor runs as `riku.service` (a root install) or as the deploy
+user's user unit `riku`. `riku init` rewrites the unit file itself, so put
+the variables in a drop-in, which init leaves alone:
+
+```bash
+sudo systemctl edit riku        # or, for a user install: systemctl --user edit riku
+```
 
 ```ini
 [Service]
-Type=simple
-User=riku
-WorkingDirectory=/home/riku
-ExecStart=/usr/local/bin/riku supervisor
-
-# Resource limits
 Environment="RIKU_MAX_MEMORY_MB=512"
 Environment="RIKU_MAX_CPU_SECONDS=7200"
 Environment="RIKU_MAX_OPEN_FILES=1024"
 Environment="RIKU_MAX_PROCESSES=64"
 Environment="RIKU_MAX_FILE_SIZE_MB=1024"
+# Enable core dumps (not recommended for production)
+# Environment="RIKU_ENABLE_CORE_DUMPS=1"
+```
 
-Restart=always
-RestartSec=10s
+Then restart the supervisor so it reads them, which restarts every app's
+workers:
+
+```bash
+sudo systemctl restart riku     # or: systemctl --user restart riku
+```
+
+### Running the supervisor by hand
+
+Without systemd, set the variables in the shell that starts it:
+
+```bash
+RIKU_MAX_CPU_SECONDS=3600 RIKU_MAX_OPEN_FILES=2048 riku supervisor
 ```
 
 ---
 
 ## Multi-Tenant Recommendations
 
-For multi-tenant deployments, use stricter limits to prevent resource abuse:
+For multi-tenant deployments, use stricter limits to prevent resource abuse.
+Each set below goes in the `riku` unit's drop-in (see above); the values
+apply to every worker of every app.
 
 ### Conservative (High Security)
-```bash
-export RIKU_MAX_MEMORY_MB=256      # 256 MB per app
-export RIKU_MAX_CPU_SECONDS=1800   # 30 minutes
-export RIKU_MAX_OPEN_FILES=512     # 512 files
-export RIKU_MAX_PROCESSES=32       # 32 processes
-export RIKU_MAX_FILE_SIZE_MB=512   # 512 MB files
+```ini
+Environment="RIKU_MAX_MEMORY_MB=256"
+Environment="RIKU_MAX_CPU_SECONDS=1800"
+Environment="RIKU_MAX_OPEN_FILES=512"
+Environment="RIKU_MAX_PROCESSES=32"
+Environment="RIKU_MAX_FILE_SIZE_MB=512"
 ```
 
 ### Moderate (Balanced)
-```bash
-export RIKU_MAX_MEMORY_MB=512      # 512 MB per app
-export RIKU_MAX_CPU_SECONDS=3600   # 1 hour
-export RIKU_MAX_OPEN_FILES=1024    # 1024 files
-export RIKU_MAX_PROCESSES=64       # 64 processes
-export RIKU_MAX_FILE_SIZE_MB=1024  # 1 GB files
+```ini
+Environment="RIKU_MAX_MEMORY_MB=512"
+Environment="RIKU_MAX_CPU_SECONDS=3600"
+Environment="RIKU_MAX_OPEN_FILES=1024"
+Environment="RIKU_MAX_PROCESSES=64"
+Environment="RIKU_MAX_FILE_SIZE_MB=1024"
 ```
 
 ### Generous (Trusted Users)
-```bash
-export RIKU_MAX_MEMORY_MB=1024     # 1 GB per app
-export RIKU_MAX_CPU_SECONDS=7200   # 2 hours
-export RIKU_MAX_OPEN_FILES=2048    # 2048 files
-export RIKU_MAX_PROCESSES=128      # 128 processes
-export RIKU_MAX_FILE_SIZE_MB=2048  # 2 GB files
+```ini
+Environment="RIKU_MAX_MEMORY_MB=1024"
+Environment="RIKU_MAX_CPU_SECONDS=7200"
+Environment="RIKU_MAX_OPEN_FILES=2048"
+Environment="RIKU_MAX_PROCESSES=128"
+Environment="RIKU_MAX_FILE_SIZE_MB=2048"
 ```
+
+To give one app different values, use its `limits.max_*` keys (see
+"Where the limits are read" above). For per worker resident memory, CPU
+share and process count, use the cgroup settings `limits.isolation_*` (see
+[riku.toml](riku-toml.md)).
 
 ---
 
@@ -258,32 +283,27 @@ except OSError as e:
 
 **Solution:**
 - Check app logs in `~/.riku/logs/<app>/`
-- Increase limits if legitimate usage:
-  ```bash
-  export RIKU_MAX_CPU_SECONDS=7200  # 2 hours
-  export RIKU_MAX_MEMORY_MB=1024    # 1 GB
-  systemctl restart riku-supervisor
+- Increase limits if legitimate usage, in the unit's drop-in
+  (`sudo systemctl edit riku`):
+  ```ini
+  Environment="RIKU_MAX_CPU_SECONDS=7200"
+  Environment="RIKU_MAX_MEMORY_MB=1024"
   ```
+  then `sudo systemctl restart riku`.
 
 ### File Operations Failing
 
 **Symptom:** App logs show "Too many open files" errors
 
-**Solution:**
-```bash
-export RIKU_MAX_OPEN_FILES=2048
-systemctl restart riku-supervisor
-```
+**Solution:** add `Environment="RIKU_MAX_OPEN_FILES=2048"` to the drop-in,
+then `sudo systemctl restart riku`.
 
 ### Cannot Fork Worker Processes
 
 **Symptom:** App logs show "Resource temporarily unavailable" on `fork()`
 
-**Solution:**
-```bash
-export RIKU_MAX_PROCESSES=128
-systemctl restart riku-supervisor
-```
+**Solution:** add `Environment="RIKU_MAX_PROCESSES=128"` to the drop-in,
+then `sudo systemctl restart riku`.
 
 ---
 
@@ -338,25 +358,16 @@ RUST_LOG=info riku supervisor
 
 ---
 
-## Migration from Older Versions
+## Relaxing the Limits
 
-If upgrading from Riku 2.x:
+If resource limits cause issues, temporarily relax them with very high
+values in the drop-in, then `sudo systemctl restart riku`:
 
-1. **No Breaking Changes** - Resource limits are enabled by default with safe values
-2. **Review App Behavior** - Some apps may need higher limits
-3. **Test First** - Deploy to staging before production
-4. **Monitor Logs** - Check for unexpected terminations
-
-### Rollback
-
-If resource limits cause issues, temporarily disable by setting very high values:
-
-```bash
-export RIKU_MAX_MEMORY_MB=16384      # 16 GB (effectively unlimited)
-export RIKU_MAX_CPU_SECONDS=86400    # 24 hours
-export RIKU_MAX_OPEN_FILES=65536     # 64K files
-export RIKU_MAX_PROCESSES=1024       # 1K processes
-systemctl restart riku-supervisor
+```ini
+Environment="RIKU_MAX_MEMORY_MB=16384"
+Environment="RIKU_MAX_CPU_SECONDS=86400"
+Environment="RIKU_MAX_OPEN_FILES=65536"
+Environment="RIKU_MAX_PROCESSES=1024"
 ```
 
 ---
@@ -365,8 +376,6 @@ systemctl restart riku-supervisor
 
 Planned improvements:
 
-- [ ] **Per-App Limits** - Configure limits per application in `ENV` file
-- [ ] **cgroups v2 Support** - More granular control (CPU shares, memory.max)
 - [ ] **Automatic Scaling** - Increase limits based on metrics
 - [ ] **Limit Notifications** - Alert when apps approach limits
 

@@ -175,18 +175,16 @@ fn bundled_riku_notify_plugin_delivers_webhook_on_app_restarted() {
         String::from_utf8_lossy(&buf[..n]).to_string()
     });
 
-    std::env::set_var(
-        "RIKU_NOTIFY_WEBHOOK_URL",
+    let webhook = vec![(
+        "RIKU_NOTIFY_WEBHOOK_URL".to_string(),
         format!("http://127.0.0.1:{port}/incident"),
-    );
+    )];
 
-    EventBus::new(&paths).publish(
+    EventBus::new(&paths).with_subscriber_env(webhook).publish(
         EventName::AppRestarted,
         "demo-app",
         serde_json::json!({ "instance": "demo-app.web.0", "exit_code": 137, "restart_count": 2 }),
     );
-
-    std::env::remove_var("RIKU_NOTIFY_WEBHOOK_URL");
 
     let request = received.join().unwrap();
     assert!(request.contains("POST /incident"), "got: {request}");

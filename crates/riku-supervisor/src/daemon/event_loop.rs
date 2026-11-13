@@ -1,7 +1,6 @@
 //! Supervisor event loop, reload handling, and clean shutdown.
 
 use anyhow::Result;
-use std::fs;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -85,7 +84,7 @@ impl Supervisor {
     }
 
     /// Clean shutdown: stop the health server, wait for in-flight cron jobs,
-    /// stop every managed process, and release the PID file. Only reached
+    /// stop every managed process, and release the PID file's lock. Only reached
     /// when the event loop exits via a shutdown signal, an error exiting
     /// the loop skips straight to returning that error instead.
     pub(super) fn shutdown(&mut self) -> Result<()> {
@@ -100,11 +99,10 @@ impl Supervisor {
             return Err(e);
         }
 
-        // Drop PID file lock (releases exclusive lock automatically)
+        // The file stays: a starter may already have it open, and unlinking
+        // it would let that one and the next start lock two different files.
+        // Readers take liveness from the lock, never from the file existing.
         drop(self.pid_file_lock.take());
-
-        // Remove PID file on clean exit
-        let _ = fs::remove_file(&self.pid_file);
 
         Ok(())
     }

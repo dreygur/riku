@@ -3,11 +3,8 @@
 //! The router helper writes every site config into `/etc/riku/nginx` and
 //! never under `/etc/nginx`. Setup creates that root owned directory, installs
 //! the one root-owned file that loads it, `/etc/nginx/conf.d/riku.conf`
-//! (replacing an older include of the deploy user's own nginx directory), and
-//! puts the nginx worker user in the `riku-sockets` group (see
-//! [`super::nginx_worker`]). Older versions left links into the deploy home
-//! and deploy owned files in `sites-enabled` and `conf.d`; every entry root
-//! does not own is removed (see [`super::host_cleanup`]).
+//! and puts the nginx worker user in the `riku-sockets` group (see
+//! [`super::nginx_worker`]).
 //!
 //! Security: the include file's text is a constant (see
 //! [`crate::nginx::include_line`]), and it is written only into a directory
@@ -17,23 +14,24 @@
 
 use std::fs;
 use std::io::ErrorKind;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, Result};
 
-use crate::config::{NginxHostPaths, RikuPaths, NGINX_SITE_ROOT};
+use crate::config::{NginxHostPaths, RikuPaths, CERT_ROOT, NGINX_SITE_ROOT};
 use crate::nginx::{include_file_contents, needs_catch_all, write_include_file};
-use crate::util::echo;
+use crate::util::display;
 
 use super::deploy_user::DeployUser;
-use super::host_cleanup::{
-    check_removed_base, clear_deploy_owned_router_files, is_trusted_file, removed_dir_now,
-};
 use super::nginx_worker::grant_nginx_sockets;
+use super::router_dirs::{secure_cert_dirs, secure_dir};
 
-const SITES_ENABLED: &str = "/etc/nginx/sites-enabled";
+/// A regular file owned by `root_uid` that no one else can write.
+fn is_trusted_file(meta: &fs::Metadata, root_uid: u32) -> bool {
+    meta.is_file() && meta.uid() == root_uid && meta.mode() & 0o022 == 0
+}
 
 /// Whether the include file should carry riku's catch-all server, from what
 /// `nginx -T` shows. When nginx cannot dump its config the answer is no, so
@@ -49,10 +47,7 @@ fn wants_catch_all(paths: &RikuPaths) -> bool {
             &paths.nginx_include_file,
         ),
         _ => {
-            echo(
-                "nginx -T failed, so no catch-all server was added for unknown hosts",
-                "yellow",
-            );
+            display::warn("nginx -T failed, so no catch-all server was added for unknown hosts");
             false
         }
     }
@@ -83,9 +78,9 @@ fn install_include(paths: &RikuPaths, root_uid: u32) -> Result<bool> {
 
 fn load_riku_sites(paths: &RikuPaths) -> Result<()> {
     match install_include(paths, ROOT_UID) {
-        Ok(true) => echo(
+        Ok(true) => crate::util::display::step_done(
+            "Nginx include",
             &format!("{} loads riku sites", paths.nginx_include_file.display()),
-            "green",
         ),
         Ok(false) => {}
         Err(e) => return Err(e),
@@ -107,8 +102,14 @@ fn missing_dir_warning(paths: &RikuPaths, dir: &Path) -> String {
     )
 }
 
-/// Create `site_root` (`/etc/riku/nginx`) as a `0755` directory owned by
-/// `owner` inside a parent that only `owner` can write.
+/// The mode of `/etc/riku/nginx`: root writes, nginx workers read.
+const SITE_ROOT_MODE: u32 = 0o755;
+/// The mode of `/etc/riku/certs` and each app directory in it: root only.
+const CERT_DIR_MODE: u32 = 0o700;
+
+/// Create `site_root` (`/etc/riku/nginx`) inside a parent that only `owner`
+/// can write, and give it owner `owner` and mode `0755` whether or not it
+/// existed.
 fn prepare_site_root(site_root: &Path, owner: u32) -> Result<()> {
     let Some(parent) = site_root.parent() else {
         return Err(anyhow!("{} has no parent directory", site_root.display()));
@@ -120,15 +121,11 @@ fn prepare_site_root(site_root: &Path, owner: u32) -> Result<()> {
         return Err(anyhow!("{e}"));
     }
     match fs::create_dir(site_root) {
-        Ok(()) => {
-            if let Err(e) = fs::set_permissions(site_root, fs::Permissions::from_mode(0o755)) {
-                return Err(anyhow!("failed to chmod {}: {e}", site_root.display()));
-            }
-        }
+        Ok(()) => {}
         Err(e) if e.kind() == ErrorKind::AlreadyExists => {}
         Err(e) => return Err(anyhow!("failed to create {}: {e}", site_root.display())),
     }
-    check_write_dir(site_root, owner)
+    secure_dir(site_root, owner, None, SITE_ROOT_MODE)
 }
 
 /// Make the system nginx load riku's sites. Root only. A host without the
@@ -151,22 +148,17 @@ pub fn setup_nginx_host(user: &DeployUser) -> Result<()> {
             file.display()
         ));
     };
-    let swept = [Path::new(SITES_ENABLED), dir];
-    let removed = removed_dir_now();
-    if let Err(e) = check_removed_base(&removed, ROOT_UID) {
-        return Err(e);
-    }
-    if let Err(e) = clear_deploy_owned_router_files(&swept, ROOT_UID, &removed) {
-        return Err(e);
-    }
     if !dir.is_dir() {
-        echo(&missing_dir_warning(&paths, dir), "yellow");
+        display::warn(&missing_dir_warning(&paths, dir));
         return Ok(());
     }
     if let Err(e) = check_write_dir(dir, ROOT_UID) {
         return Err(e);
     }
     if let Err(e) = prepare_site_root(Path::new(NGINX_SITE_ROOT), ROOT_UID) {
+        return Err(e);
+    }
+    if let Err(e) = secure_cert_dirs(Path::new(CERT_ROOT), ROOT_UID, None, CERT_DIR_MODE) {
         return Err(e);
     }
     if let Err(e) = load_riku_sites(&paths) {

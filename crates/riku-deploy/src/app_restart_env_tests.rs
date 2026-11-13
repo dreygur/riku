@@ -1,0 +1,177 @@
+use std::collections::HashMap;
+use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::os::unix::process::ExitStatusExt;
+
+use super::*;
+use crate::fake_supervisor::FakeSupervisor;
+use crate::rolling::NoRoutes;
+use crate::workers::mock_supervisor::{MockRoutes, MockSupervisor};
+
+/// A runtime plugin that takes any app, leaves `built` in the checkout when
+/// its `build` runs, and adds `PLUGIN_ENV=1` from its `env`.
+const PLUGIN: &str = r#"#!/bin/sh
+case "$1" in
+  detect) exit 0 ;;
+  build)  touch "$RIKU_APP_PATH/built" ;;
+  env)    echo "PLUGIN_ENV=1" ;;
+  start)  ;;
+esac
+"#;
+
+/// `myapp` deployed with one `worker` copy while its ENV said `FLAG=old`.
+pub(super) fn deployed_app(paths: &RikuPaths) -> PathBuf {
+    for dir in [
+        &paths.workers_available,
+        &paths.workers_enabled,
+        &paths.plugin_root,
+    ] {
+        fs::create_dir_all(dir).unwrap();
+    }
+    let plugin = paths.plugin_root.join("fake");
+    fs::write(&plugin, PLUGIN).unwrap();
+    fs::set_permissions(&plugin, fs::Permissions::from_mode(0o755)).unwrap();
+    let app_path = paths.app_root.join("myapp");
+    fs::create_dir_all(&app_path).unwrap();
+    fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
+    fs::create_dir_all(paths.log_root.join("myapp")).unwrap();
+    let processes = HashMap::from([("worker".to_string(), "python jobs.py".to_string())]);
+    let env = HashMap::from([("FLAG".to_string(), "old".to_string())]);
+    workers::create_workers_generic("myapp", &app_path, Some(&processes), &env, paths, None)
+        .unwrap();
+    paths.workers_available.join("myapp@worker.1.toml")
+}
+
+#[test]
+fn restart_rewrites_configs_from_the_edited_env_without_a_build() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    let config = deployed_app(&paths);
+    fs::write(paths.env_root.join("myapp").join("ENV"), "FLAG=new\n").unwrap();
+    let mut supervisor = FakeSupervisor::start(&paths);
+
+    let restarted = restart_procfile_app_with(
+        "myapp",
+        None,
+        &paths,
+        |_| false,
+        supervisor_ctl::notify_supervisor_reload,
+        &mut NoRoutes,
+    );
+
+    let status = supervisor.child.wait().unwrap();
+    assert_eq!(restarted.ok(), Some(1), "one worker restarted");
+    let rewritten: WorkerConfig = toml::from_str(&fs::read_to_string(&config).unwrap()).unwrap();
+    assert_eq!(
+        rewritten.env.get("FLAG").map(String::as_str),
+        Some("new"),
+        "the config must carry the value now in ENV"
+    );
+    assert_eq!(
+        rewritten.env.get("PLUGIN_ENV").map(String::as_str),
+        Some("1"),
+        "the runtime plugin's env is added as on a deploy"
+    );
+    assert_eq!(rewritten.worker.command, "python jobs.py");
+    assert!(
+        !paths.app_root.join("myapp").join("built").exists(),
+        "restart must not run the plugin's build"
+    );
+    assert_eq!(
+        status.signal(),
+        Some(nix::sys::signal::Signal::SIGHUP as i32),
+        "the supervisor must get a SIGHUP to reload"
+    );
+}
+
+/// `riku restart myapp worker` rewrites only `worker`; `beat` keeps the old
+/// env, so `LIVE_ENV` must not claim the whole app runs the new one.
+#[test]
+fn restarting_one_kind_leaves_live_env_alone() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    let worker = deployed_app(&paths);
+    let processes = HashMap::from([
+        ("worker".to_string(), "python jobs.py".to_string()),
+        ("beat".to_string(), "python beat.py".to_string()),
+    ]);
+    let old = HashMap::from([("FLAG".to_string(), "old".to_string())]);
+    let app_path = paths.app_root.join("myapp");
+    workers::create_workers_generic("myapp", &app_path, Some(&processes), &old, &paths, None)
+        .unwrap();
+    fs::write(paths.env_root.join("myapp").join("ENV"), "FLAG=new\n").unwrap();
+
+    let restarted = restart_procfile_app_with(
+        "myapp",
+        Some("worker"),
+        &paths,
+        |_| true,
+        |_| {},
+        &mut NoRoutes,
+    );
+
+    assert_eq!(restarted.ok(), Some(1), "only the worker copy restarts");
+    let rewritten: WorkerConfig = toml::from_str(&fs::read_to_string(&worker).unwrap()).unwrap();
+    assert_eq!(rewritten.env.get("FLAG").map(String::as_str), Some("new"));
+    assert!(
+        !paths.env_root.join("myapp").join("LIVE_ENV").exists(),
+        "beat still runs FLAG=old, so LIVE_ENV must not be written"
+    );
+}
+
+/// A router helper that is down fails the restart before anything is
+/// written: no worker config, and no `LIVE_ENV` describing an env the
+/// workers do not run with.
+#[test]
+fn a_refused_router_writes_neither_configs_nor_live_env() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    let worker = deployed_app(&paths);
+    let app_path = paths.app_root.join("myapp");
+    let mock_supervisor = MockSupervisor::start(&paths);
+    let mut routes = MockRoutes::new(&paths);
+    let processes = HashMap::from([
+        ("web".to_string(), "python app.py".to_string()),
+        ("worker".to_string(), "python jobs.py".to_string()),
+    ]);
+    let old = HashMap::from([("FLAG".to_string(), "old".to_string())]);
+    workers::create_workers_with(
+        "myapp",
+        &app_path,
+        Some(&processes),
+        &old,
+        &paths,
+        None,
+        &mut routes,
+    )
+    .unwrap();
+    let web = paths.workers_available.join("myapp@web.1.toml");
+    let before = (
+        fs::read_to_string(&worker).unwrap(),
+        fs::read_to_string(&web).unwrap(),
+    );
+    fs::write(paths.env_root.join("myapp").join("ENV"), "FLAG=new\n").unwrap();
+    let _supervisor = FakeSupervisor::start(&paths);
+    routes.refuse_check = true;
+
+    let restarted = restart_procfile_app_with(
+        "myapp",
+        None,
+        &paths,
+        |_| false,
+        supervisor_ctl::notify_supervisor_reload,
+        &mut routes,
+    );
+
+    assert!(restarted.is_err(), "a refused router check must fail");
+    let after = (
+        fs::read_to_string(&worker).unwrap(),
+        fs::read_to_string(&web).unwrap(),
+    );
+    assert_eq!(after, before, "no worker config may change");
+    assert!(
+        !paths.env_root.join("myapp").join("LIVE_ENV").exists(),
+        "LIVE_ENV must not be written when nothing restarted"
+    );
+    drop(mock_supervisor);
+}

@@ -5,7 +5,7 @@
 //! - `create`: app creation
 //! - `info`: app details
 //! - `config`: environment variable management
-//! - `deploy`: deployment from paths and bare repos
+//! - `deploy`: redeploy, or deploy from a local path
 //! - `process`: process scaling and status (ps commands)
 //! - `logs`: log tailing
 //! - `stats`: resource usage statistics
@@ -13,6 +13,7 @@
 //! - `hot_reload`: restart --hot
 //! - `control_target`: container app or Procfile app, for per service commands
 
+mod bundled_record;
 mod certs_cmd;
 mod certs_reapply;
 pub mod config;
@@ -30,8 +31,10 @@ pub mod info;
 pub mod install_plugins;
 pub mod list;
 pub mod logs;
+mod owned_file;
 mod plugin_download;
 pub mod plugin_emit;
+pub mod plugin_refresh;
 mod plugin_write;
 pub mod process;
 pub mod rollback;

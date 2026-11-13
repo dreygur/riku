@@ -47,33 +47,17 @@ fn custom_root_parameter_works() {
 }
 
 #[test]
-fn acme_sh_root_defaults_to_home_acme_sh() {
-    // Test that RIKU_ACME_ROOT defaults to ~/.acme.sh when not set
-    // We test the logic directly rather than through from_dirs to avoid parallel test issues
-    let home = PathBuf::from("/home/bob");
+fn acme_sh_root_is_riku_acme_root_else_home_acme_sh() {
+    let home = Path::new("/home/bob");
 
-    // Simulate the RIKU_ACME_ROOT resolution logic
-    let result = std::env::var("ACME_ROOT_TEST_VAR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| home.join(".acme.sh"));
-
-    assert_eq!(result, Path::new("/home/bob/.acme.sh"));
-}
-
-#[test]
-fn acme_sh_root_respects_env_var() {
-    // Save the original value
-    let orig_value = env::var("RIKU_ACME_ROOT").ok();
-
-    env::set_var("RIKU_ACME_ROOT", "/custom/acme");
-    let p = paths_with_root("/x", "/home/bob");
-    assert_eq!(p.acme_sh_root, Path::new("/custom/acme"));
-
-    // Restore original value or remove if it wasn't set
-    match orig_value {
-        Some(v) => env::set_var("RIKU_ACME_ROOT", v),
-        None => env::remove_var("RIKU_ACME_ROOT"),
-    }
+    assert_eq!(
+        super::acme_sh_root(None, home),
+        Path::new("/home/bob/.acme.sh")
+    );
+    assert_eq!(
+        super::acme_sh_root(Some("/custom/acme".to_string()), home),
+        Path::new("/custom/acme")
+    );
 }
 
 #[test]
@@ -108,8 +92,7 @@ fn root_dirs_reject_relative_or_climbing_paths() {
 
 #[test]
 fn nginx_host_paths_default_to_the_system_nginx_directories() {
-    let p = NginxHostPaths::resolve(None, None);
-    assert_eq!(p.sites_enabled, Path::new(DEFAULT_NGINX_SITES_ENABLED));
+    let p = NginxHostPaths::resolve(None);
     assert_eq!(
         p.include_file,
         Path::new("/etc/nginx/conf.d/riku.conf"),
@@ -121,10 +104,9 @@ fn nginx_host_paths_default_to_the_system_nginx_directories() {
 #[test]
 fn for_tests_keeps_nginx_host_paths_inside_the_test_root() {
     let p = RikuPaths::for_tests(Path::new("/tmp/riku-case"));
-    for path in [&p.nginx_sites_enabled, &p.nginx_include_file] {
-        assert!(
-            path.starts_with("/tmp/riku-case"),
-            "a test must never touch the machine's real nginx: {path:?}"
-        );
-    }
+    assert!(
+        p.nginx_include_file.starts_with("/tmp/riku-case"),
+        "a test must never touch the machine's real nginx: {:?}",
+        p.nginx_include_file
+    );
 }

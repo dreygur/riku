@@ -7,6 +7,6 @@
   "overrides": {
     "commander": "^6.2.1"
   },
-  "description": "Piku wisp example.",
-  "name": "piku-wisp-example"
+  "description": "Riku wisp example.",
+  "name": "riku-wisp-example"
 }

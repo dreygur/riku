@@ -5,11 +5,10 @@ A minimal Rust web app for Riku, built by the `rust-lang` runtime plugin
 writes `Hello!` to every connection, as raw bytes with no HTTP response
 line, so it is not a valid HTTP reply.
 
-- `Cargo.toml`, `Cargo.lock`: the `piku-rust` package.
+- `Cargo.toml`, `Cargo.lock`: the `riku-rust-example` package.
 - `rust-toolchain.toml`: pins Rust 1.78.0.
-- `Procfile`: `web: cargo run`.
-- `ENV`: `PORT=4000` and `RIKU_BIND_ADDRESS=127.0.0.1`.
-- `SCALING`: one `web` worker.
+- `Procfile`: `web: cargo run`. riku sets `PORT` and `RIKU_BIND_ADDRESS` for
+  each copy and runs one; `riku ps <app> --scale web=2` runs two.
 
 This crate is not a member of the riku workspace. Run it on its own with
 `RIKU_BIND_ADDRESS=127.0.0.1 PORT=4000 cargo run` from this directory.

@@ -55,6 +55,10 @@ run)
   echo "$id";;
 stop) echo '{"Status":"exited","ExitCode":0}' > "$S/$last.state";;
 wait) if [ -e "$S/release-exits" ]; then echo 1; else echo 0; fi;;
+logs)
+  echo "release ran"
+  [ -e "$S/release-exits" ] && echo "Traceback: cannot reach redis" >&2
+  exit 0;;
 rm) rm -f "$S/$last".*;;
 image) if [ -e "$S/image-id" ]; then cat "$S/image-id"; else echo sha256:x; fi;;
 network)

@@ -1,5 +1,6 @@
 //! Setup commands: server initialization, binary installation, systemd, and SSH key management.
 
+mod accounts;
 pub mod binary;
 mod caddy_admin;
 mod caddy_host;
@@ -8,22 +9,26 @@ mod deploy_account;
 mod deploy_key_cmd;
 mod deploy_keys;
 pub(crate) mod deploy_user;
+mod engine_group;
 pub mod git_hook;
 mod guidance;
 mod helper_install;
-mod host_cleanup;
 pub mod init;
 mod init_router;
 mod nginx_host;
 mod nginx_worker;
+mod outside_supervisor;
 mod prerequisites;
 mod root_init;
 mod router_choice;
+mod router_dirs;
 mod router_units;
+mod runtime_plugins;
 pub(crate) mod server_ip;
 mod socket_group;
 pub mod ssh;
-mod stale_binary;
+mod supervisor_binary;
+mod system_install;
 pub mod system_service;
 pub mod systemd;
 pub mod user_service;

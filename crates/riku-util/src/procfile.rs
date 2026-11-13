@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use super::display::echo;
+use super::display;
 use crate::cron::validate_cron_expression;
 
 /// Pre-compiled environment variable expansion regex (also used by `env.rs`).
@@ -100,13 +100,10 @@ pub fn parse_procfile(filename: &Path) -> Result<Option<HashMap<String, String>>
             }
         };
         if workers.contains_key(&kind) {
-            echo(
-                &format!(
-                    "found multiple {} workers, only the last one will be used.",
-                    kind
-                ),
-                "yellow",
-            );
+            display::warn(&format!(
+                "found multiple {} workers, only the last one will be used.",
+                kind
+            ));
         }
         workers.insert(kind, command);
     }
@@ -117,10 +114,7 @@ pub fn parse_procfile(filename: &Path) -> Result<Option<HashMap<String, String>>
         || workers.contains_key("rwsgi"))
         && workers.contains_key("web")
     {
-        echo(
-            "found both 'wsgi' and 'web' workers, disabling 'web'",
-            "yellow",
-        );
+        display::warn("found both 'wsgi' and 'web' workers, disabling 'web'");
         workers.remove("web");
     }
 

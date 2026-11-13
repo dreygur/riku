@@ -31,14 +31,17 @@ release = "node migrate.js"
 backup = "0 2 * * * ./scripts/backup.sh"
 ```
 
-An app without a `riku.toml` deploys as before, from its Procfile and ENV.
+An app without a `riku.toml` deploys from its Procfile and ENV with every
+setting at its default.
 
 ## Keys
 
-Keys are `section.name`. Each maps to the `RIKU_*` variable riku used to read
-from the app's ENV file.
+Keys are `section.name`. Each one reaches the app's processes as the `RIKU_*`
+env var in the last column. riku reads these settings only from `riku.toml`
+and the server override: the same `RIKU_*` name written into the app's ENV
+file is ignored.
 
-| Key | Type | Replaces |
+| Key | Type | Env var |
 | --- | --- | --- |
 | `routing.domains` | list of strings | `RIKU_DOMAINS` |
 | `routing.https_only` | bool | `RIKU_HTTPS_ONLY` |
@@ -54,7 +57,6 @@ from the app's ENV file.
 | `workers.timeout` | whole number | `RIKU_WORKER_TIMEOUT` |
 | `workers.grace_period` | whole number | `RIKU_WORKER_GRACE_PERIOD` |
 | `workers.max_restarts` | whole number | `RIKU_MAX_RESTARTS` |
-| `workers.auto_restart` | bool | `RIKU_AUTO_RESTART` |
 | `health.url` | string | `RIKU_HEALTH_CHECK_URL` |
 | `health.interval` | whole number | `RIKU_HEALTH_CHECK_INTERVAL` |
 | `health.timeout` | whole number | `RIKU_HEALTH_CHECK_TIMEOUT` |
@@ -68,9 +70,55 @@ from the app's ENV file.
 | `limits.isolation_max_pids` | whole number, server only | `RIKU_ISOLATION_MAX_PIDS` |
 | `limits.isolation_cpu_quota_us` | whole number, server only | `RIKU_ISOLATION_CPU_QUOTA_US` |
 | `limits.isolation_cpu_period_us` | whole number, server only | `RIKU_ISOLATION_CPU_PERIOD_US` |
+| `limits.isolation_root` | absolute path, server only | `RIKU_ISOLATION_ROOT` |
 | `containers.watch_services` | list of strings | `RIKU_WATCH_SERVICES` |
 | `secrets.ghcr_username` | string, server only | `RIKU_GHCR_USERNAME` |
 | `secrets.ghcr_token` | string, server only | `RIKU_GHCR_TOKEN` |
+
+The runtime version follows the same rule. The runtime plugin and riku take
+it only from `[runtime] version`. A `RIKU_NODE_VERSION` (or any
+`RIKU_<NAME>_VERSION`) line in the app's ENV is an ordinary env var for the
+app: the plugin never sees it, and when `riku.toml` sets the version the
+app sees that value instead.
+
+The `limits.max_*` keys are the app's rlimits. Each one set replaces the
+server wide value of the same `RIKU_MAX_*` variable for the app's workers,
+cron jobs, builds and `preflight` and `release` commands; one left unset
+keeps the server wide value (see [Resource limits](resource-limits.md)).
+
+### cgroup limits and the sandbox
+
+The `limits.isolation_*` keys are per worker cgroup v2 limits. Setting
+`isolation_max_memory_mb` (`memory.max`), `isolation_max_pids` (`pids.max`)
+or `isolation_cpu_quota_us` (`cpu.max`, as quota per
+`isolation_cpu_period_us`, default 100000) puts each of the app's workers in
+its own cgroup under the supervisor's, with those limits. Nothing else
+changes: the worker keeps the host filesystem and network, so a web worker
+still answers the router. `isolation_cpu_period_us` alone limits nothing
+and asks for no cgroup. A memory limit also sets `memory.swap.max` to 0
+where the kernel has swap accounting, so a worker at its limit is OOM
+killed instead of paging out to swap past it.
+
+The supervisor can only create these cgroups when its systemd unit has
+`Delegate=yes`, which `riku init` writes. Without it the supervisor prints a
+cgroup diagnostic at startup, and a worker that sets one of these limits
+refuses to start rather than run unlimited.
+
+The full sandbox is a separate switch, the server only key
+`limits.isolation_root`, set with
+`riku settings set <app> limits.isolation_root=<dir>`. The repo file cannot
+set it, and `riku config set` refuses `RIKU_ISOLATION_ROOT` like every other
+key in the table above. The value must be an absolute path other than `/`,
+with no `..` part, made only of letters, digits and `. - _ /`. The
+supervisor refuses to start a sandboxed worker whose root breaks that rule
+or is not an
+existing directory. It starts the worker inside a `pivot_root` to
+that directory, which must hold everything the worker needs, with its own
+PID, mount and network namespaces. The network namespace leaves the worker
+only its own loopback, so a sandboxed worker cannot reach the router, a
+database or anything else on the host network. Use it only for self
+contained workers, never for `web`. A sandboxed worker also gets its own
+cgroup, with the limits above when they are set.
 
 An unknown key, a value of the wrong type, or a malformed file stops the
 deploy with an error naming the file, the line and the key. The error never
@@ -120,10 +168,7 @@ override may set every key but cannot declare processes.
 For each key, later wins:
 
 1. `riku.toml` in the app repo
-2. the same `RIKU_*` variable still in the app's ENV file (from older
-   versions; deploys warn about it)
-3. the server override (`riku settings`)
+2. the server override (`riku settings`)
 
-`riku config set` now refuses these `RIKU_*` keys and names the `riku
-settings` key to use instead. `riku doctor --fix` moves existing ones out of
-ENV into the server override; see [Server settings](settings.md#migrating).
+`riku config set` refuses these `RIKU_*` keys and names the `riku settings`
+key to use instead.

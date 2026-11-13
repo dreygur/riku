@@ -6,13 +6,14 @@
 # you can open the dashboard and see a populated, working riku instance
 # immediately after `docker compose up --build`.
 #
-# This is NOT the automated test target (see ../stress/container/ for that):
-# this one stays running after boot so a human can poke at it. It reuses
-# that target's sshd_config, sudoers/nginx-wrapper plumbing rather than
-# duplicating them.
+# It stays running after boot so a human can poke at it.
+#
+# The container has no systemd, so entrypoint.sh runs the root
+# `riku init --no-systemd` and then starts by hand what the units would
+# start: the router helper (as root), nginx and the supervisor.
 FROM ubuntu:24.04
-# See ../stress/container/Dockerfile for why 24.04: matches the glibc
-# version of whatever host built the riku binary being COPYed in.
+# 24.04 matches the glibc of the host that usually builds the riku binary
+# COPYed in below.
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -44,53 +45,36 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 # (packageManager field in dashboard/package.json, lockfile is nub.lock).
 RUN npm install -g @nubjs/nub
 
-# Dedicated, non-root deploy user, same model as the automated test target.
+# Dedicated, non-root deploy user, as on a real server.
 RUN useradd -m -s /bin/bash riku \
     && usermod -p '*' riku \
     && mkdir -p /home/riku/.ssh \
     && chmod 700 /home/riku/.ssh \
     && chown -R riku:riku /home/riku/.ssh
 
-# `riku apps create` runs `git init --bare` with no --initial-branch, so a
-# fresh bare repo's HEAD follows git's own init.defaultBranch. Every demo app
-# pushes to `main`; without this, HEAD points at the nonexistent `refs/heads/
-# master` and the post-receive hook's `git clone` of that bare repo (see
-# src/cli/git/hook.rs) checks out nothing, deploying an empty tree.
-RUN su - riku -c "git config --global init.defaultBranch main"
+# `riku init` sets the deploy user's git init.defaultBranch to main, the
+# branch every demo app pushes.
 
 RUN mkdir -p /var/run/sshd \
     && ssh-keygen -A
-COPY tests/stress/container/sshd_config /etc/ssh/sshd_config
+COPY tests/demo/sshd_config /etc/ssh/sshd_config
 
+# Root owned and closed to writers: root init refuses any other binary.
 ARG RIKU_BINARY=target/release/riku
 COPY ${RIKU_BINARY} /usr/local/bin/riku
-RUN chmod 755 /usr/local/bin/riku
+RUN chown root:root /usr/local/bin/riku && chmod 755 /usr/local/bin/riku
 
-# Static nginx vhosts: the dashboard's own (fixed) vhost, plus the same
-# catch-all + include-riku's-generated-per-app-configs pattern the
-# automated test target uses.
-COPY tests/demo/nginx-site.conf /etc/nginx/sites-available/riku.conf
+# The dashboard's own vhost and a catch-all. riku's app sites are not
+# included here: root init writes /etc/nginx/conf.d/riku.conf, which loads
+# /etc/riku/nginx/*.conf where the router helper writes them.
+COPY tests/demo/nginx-site.conf /etc/nginx/sites-available/demo.conf
 RUN rm -f /etc/nginx/sites-enabled/default \
-    && ln -sf /etc/nginx/sites-available/riku.conf /etc/nginx/sites-enabled/riku.conf \
-    && mkdir -p /home/riku/.riku/nginx \
-    && chown -R riku:riku /home/riku/.riku \
-    && touch /home/riku/.riku/nginx/.keep
+    && ln -sf /etc/nginx/sites-available/demo.conf /etc/nginx/sites-enabled/demo.conf \
+    && mkdir -p /home/riku/.riku \
+    && chown -R riku:riku /home/riku/.riku
 
-# riku (running as the unprivileged riku user) needs to write per-app
-# symlinks into /etc/nginx/sites-enabled/ and reload nginx, see
-# ../stress/container/Dockerfile for the full rationale, reused verbatim
-# here.
-RUN chgrp riku /etc/nginx/sites-enabled \
-    && chmod g+w /etc/nginx/sites-enabled
-COPY tests/stress/container/sudoers-riku-nginx /etc/sudoers.d/riku-nginx
-RUN chmod 440 /etc/sudoers.d/riku-nginx \
-    && visudo -cf /etc/sudoers.d/riku-nginx
-COPY tests/stress/container/nginx-wrapper.sh /usr/local/bin/nginx
-RUN chmod 755 /usr/local/bin/nginx
-
-# Runtime plugins baked into the image (no network egress to
-# raw.githubusercontent.com required at boot): same reasoning as the
-# automated test target. sqlite-volume is an addon bundle, not a runtime
+# Runtime plugins baked into the image, so boot needs no network egress to
+# raw.githubusercontent.com. sqlite-volume is an addon bundle, not a runtime
 # plugin, but lives in the same plugins/ directory (bundles are discovered
 # by riku-plugin.toml presence, not by name).
 COPY plugins/ /home/riku/.riku/plugins/

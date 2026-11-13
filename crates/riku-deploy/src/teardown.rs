@@ -27,12 +27,17 @@ pub fn plugin_destroy(app: &str, paths: &RikuPaths) -> Result<()> {
         Ok(None) => return Ok(()),
         Err(e) => return Err(e),
     };
+    let plugin_run_env =
+        match crate::procfile_deploy::runtime_env_for(app, paths, &env, &plugin.name) {
+            Ok(plugin_run_env) => plugin_run_env,
+            Err(e) => return Err(e),
+        };
     let ctx = RuntimeContext {
         app,
         app_path: &app_path,
         env_path: &env_path,
         riku_root: &paths.riku_root,
-        app_env: &env,
+        app_env: &plugin_run_env,
     };
     destroy(&plugin, &ctx)
 }

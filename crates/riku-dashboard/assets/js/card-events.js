@@ -6,7 +6,7 @@ import { openLogs } from "./logs/drawer.js";
 import { soon } from "./poll.js";
 import { loadReleases } from "./releases.js";
 import { MAX_SCALE } from "./render/apps.js";
-import { setScale, setServiceScale, syncScale } from "./scale.js";
+import { setScale, setServiceScale, syncScale, valueOf } from "./scale.js";
 import { toast } from "./toast.js";
 
 /** @typedef {import("./state.js").Card} Card */
@@ -79,12 +79,13 @@ async function appAction(c, btn, what) {
   const app = c.app;
   const viewLogs = { label: "View logs", run: () => openLogs(app) };
   if (what === "scale") {
-    const n = c.scaleVal;
-    if (n == null) { return; }
+    if (!c.kindScale.size) { return; }
+    const counts = Object.fromEntries(c.kindScale);
+    const summary = [...c.kindScale].map(([kind, n]) => `${kind} to ${n}`).join(", ");
     await withBusy(c, btn, "Applying...", async () => {
-      if (await act(app, "scale", { web: n })) {
-        toast("ok", `Scaling ${app} web to ${n}`, "Workers appear as they start.", viewLogs);
-        c.scaleVal = null; soon();
+      if (await act(app, "scale", counts)) {
+        toast("ok", `Scaling ${app} ${summary}`, "Workers appear as they start.", viewLogs);
+        c.kindScale.clear(); soon();
       }
     });
   } else if (what === "rollback") {
@@ -124,7 +125,8 @@ async function onClick(c, e) {
   const target = /** @type {HTMLElement} */ (e.target);
   const step = /** @type {HTMLButtonElement} */ (target.closest("[data-step]"));
   if (step) {
-    if (!step.disabled) { setScale(c, (c.scaleVal == null ? c.webNow : c.scaleVal) + Number(step.dataset.step)); }
+    const kind = step.dataset.kind;
+    if (!step.disabled) { setScale(c, kind, valueOf(c, kind) + Number(step.dataset.step)); }
     return;
   }
   const svcStep = /** @type {HTMLButtonElement} */ (target.closest("[data-svc-step]"));
@@ -136,32 +138,37 @@ async function onClick(c, e) {
   if (!btn || btn.disabled) { return; }
   const what = btn.dataset.do;
   if (what === "logs") { openLogs(c.app, btn.dataset.worker || ""); return; }
-  if (what === "reset") { c.scaleVal = null; syncScale(c); return; }
+  if (what === "reset") { c.kindScale.clear(); syncScale(c); return; }
   await appAction(c, btn, what);
 }
 
 /**
+ * The process steppers are redrawn when the app's kinds change, so their
+ * inputs are wired through the card instead of one by one.
  * @param {Card} c
- * @param {HTMLInputElement} input the card's web scale input
  */
-function wireScaleInput(c, input) {
-  input.addEventListener("input", () => {
+function wireScaleInputs(c) {
+  /** @param {Event} e */
+  const kindInput = (e) => /** @type {HTMLInputElement} */ (/** @type {HTMLElement} */ (e.target).closest("[data-scale]"));
+  c.el.addEventListener("input", (e) => {
+    const input = kindInput(e);
+    if (!input) { return; }
     const n = parseInt(input.value, 10);
-    if (!isNaN(n)) { setScale(c, n, true); }
+    if (!isNaN(n)) { setScale(c, input.dataset.scale, n, true); }
   });
-  input.addEventListener("blur", () => syncScale(c));
-  input.addEventListener("keydown", (e) => {
+  c.el.addEventListener("focusout", (e) => { if (kindInput(e)) { syncScale(c); } });
+  c.el.addEventListener("keydown", (e) => {
+    if (!kindInput(e)) { return; }
     if (e.key === "Enter") { e.preventDefault(); const b = /** @type {HTMLButtonElement} */ (c.el.querySelector('[data-do="scale"]')); if (b) b.click(); }
-    if (e.key === "Escape") { c.scaleVal = null; syncScale(c); }
+    if (e.key === "Escape") { c.kindScale.clear(); syncScale(c); }
   });
 }
 
 /** @param {Card} c */
 export function wire(c) {
   const el = c.el;
-  const input = /** @type {HTMLInputElement} */ (el.querySelector("[data-scale]"));
   el.addEventListener("click", (e) => onClick(c, e));
-  if (input) { wireScaleInput(c, input); }
+  wireScaleInputs(c);
   el.addEventListener("input", (e) => {
     const sInput = /** @type {HTMLInputElement} */ (/** @type {HTMLElement} */ (e.target).closest("[data-svc-scale]"));
     if (!sInput) { return; }

@@ -1,6 +1,6 @@
 # Process Supervisor
 
-Riku includes a custom process supervisor written in Rust that manages application processes. It replaces uWSGI Emperor from the original Piku.
+Riku includes a custom process supervisor written in Rust that manages application processes.
 
 ---
 
@@ -210,27 +210,12 @@ Environment variables for the process. Inherited from `~/.riku/envs/<app>/ENV`.
 
 ## Scaling
 
-### Using SCALING File
-
-Create a `SCALING` file in your app root:
-
-```
-web=2
-worker=4
-```
-
-Commit and push:
-
-```bash
-git add SCALING && git commit -m "scale up"
-git push riku main
-```
-
-### Using CLI
-
 ```bash
 riku ps myapp --scale web=4 worker=2
 ```
+
+The counts are kept in `~/.riku/envs/<app>/SCALING`. A `SCALING` file in
+the app's repo is not read.
 
 ---
 
@@ -345,11 +330,7 @@ The supervisor handles log rotation automatically.
 - **Max files:** 5 rotated logs
 - **Format:** `app-process.log`, `app-process.log.1`, etc.
 
-### Configure Rotation
-
-```bash
-riku config set myapp LOG_ROTATION_SIZE=5242880  # 5MB
-```
+These are fixed; no setting changes them.
 
 ### View Logs
 
@@ -396,7 +377,7 @@ cron:    1/1 running
 ### Start Processes
 
 ```bash
-riku restart myapp
+riku deploy myapp
 ```
 
 ### Stop Processes

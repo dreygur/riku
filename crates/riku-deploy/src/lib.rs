@@ -31,12 +31,16 @@ pub(crate) use riku_util as util;
 
 // Deployment infrastructure modules (kept in binary)
 mod app_command;
+pub mod app_restart;
 pub mod app_stop;
 pub mod backup;
+mod checkout_restore;
 pub mod containers;
 mod deploy_env;
 mod deploy_finish;
 pub mod env_setup;
+#[cfg(test)]
+mod fake_supervisor;
 pub mod git_ops;
 pub mod hooks;
 mod live_urls;
@@ -44,18 +48,24 @@ pub mod lock;
 #[cfg(test)]
 mod mock_engine;
 mod pipeline;
+mod plugin_env;
 mod procfile_deploy;
 mod progress;
 pub mod releases;
+mod restart_env;
 pub mod rolling;
 pub mod router;
 pub mod scaling;
 pub mod service_update;
 pub mod supervisor_ctl;
+pub mod supervisor_pid;
+pub mod supervisor_stop;
 pub mod teardown;
 pub mod worker_control;
 pub mod workers;
 
+pub use deploy_finish::{app_urls, AppUrls};
+pub use live_urls::{LiveUrl, UrlLabel};
 pub use supervisor_ctl::spawn_app;
 pub use workers::create_workers_generic;
 
@@ -108,14 +118,72 @@ pub fn do_deploy(
         }
     };
     let mut progress = progress::DeployProgress::new(app, paths, dlog);
-    match pipeline::run(app, paths, deltas, newrev, &mut progress) {
+    let outcome = match scaling::ScalingBefore::read(app, paths) {
+        Ok(before) => match pipeline::run(app, paths, deltas, newrev, &mut progress) {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                restore_scaling(app, paths, &mut progress, before);
+                Err(e)
+            }
+        },
+        Err(e) => Err(e),
+    };
+    match outcome {
         Ok(()) => Ok(()),
         Err(e) => {
+            restore_checkout(app, paths, &mut progress);
             let repo = paths.git_root.join(format!("{app}.git"));
             let branch = git_ops::deploy_branch(&repo).unwrap_or_else(|| "main".to_string());
             progress.failed(&e, &branch);
             Err(e)
         }
+    }
+}
+
+/// After a failed deploy, put the checkout back at the release that still
+/// runs. Recorded in the deploy log; only a failure to do so is shown.
+///
+/// Once worker configs or containers started changing they run the new
+/// checkout, so it stays: resetting it would leave them running the old code.
+fn restore_checkout(app: &str, paths: &RikuPaths, progress: &mut progress::DeployProgress) {
+    if progress.release_replaced() {
+        progress.log.log_raw(
+            "Checkout kept at the pushed commit: worker configs or containers already changed",
+        );
+        return;
+    }
+    match checkout_restore::restore_last_release(app, paths) {
+        Ok(Some(sha)) => progress
+            .log
+            .log_raw(&format!("Checkout reset to the last release {sha}")),
+        Ok(None) => {}
+        Err(e) => {
+            let reason = format!("could not reset the checkout to the last release: {e:#}");
+            progress.log.log_raw(&format!("[WARN] {reason}"));
+            util::display::warn(&reason);
+        }
+    }
+}
+
+/// After a failed deploy, put the SCALING file back as the deploy found it,
+/// by the same rule as the checkout: once worker configs or containers
+/// started changing they run the new counts, so the file keeps them.
+fn restore_scaling(
+    app: &str,
+    paths: &RikuPaths,
+    progress: &mut progress::DeployProgress,
+    before: scaling::ScalingBefore,
+) {
+    if progress.release_replaced() {
+        progress
+            .log
+            .log_raw("SCALING kept: worker configs or containers already changed");
+        return;
+    }
+    if let Err(e) = before.restore(app, paths) {
+        let reason = format!("could not put SCALING back: {e:#}");
+        progress.log.log_raw(&format!("[WARN] {reason}"));
+        util::display::warn(&reason);
     }
 }
 

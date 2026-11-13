@@ -6,23 +6,37 @@ use super::control_target::{control_target, ControlTarget};
 use super::destroy::DestroyMode;
 use crate::config::RikuPaths;
 use crate::deploy::containers::{destroy_containers, EngineUnreachable};
-use crate::util::echo;
+use crate::util::display;
 
 /// Stop and remove a container app's copies and network while its compose
 /// file can still be read. Unlike plugin cleanup, a failure stops destroy:
 /// running copies would keep their ports after riku forgot the app.
 ///
 /// With the engine unreachable, `Safe` refuses with an error that is still an
-/// [`EngineUnreachable`], and `Force` warns and lets destroy go on.
+/// [`EngineUnreachable`], and `Force` warns and lets destroy go on. An app
+/// config that cannot be read (an invalid riku.toml) hides whether the app
+/// runs containers: `Safe` refuses, and `Force` skips the container step,
+/// says so, and lets destroy go on.
 #[allow(clippy::question_mark)]
 pub(super) fn container_cleanup(paths: &RikuPaths, app: &str, mode: DestroyMode) -> Result<()> {
-    let target = match control_target(paths, app, None) {
-        Ok(target) => target,
-        Err(e) => return Err(e),
+    let target = match (control_target(paths, app, None), mode) {
+        (Ok(target), _) => target,
+        (Err(e), DestroyMode::Safe) => {
+            return Err(e.context(format!(
+                "cannot tell whether '{app}' runs containers; \
+                 use --force to remove riku's files anyway"
+            )))
+        }
+        (Err(e), DestroyMode::Force) => {
+            display::warn(&format!(
+                "Skipped the container step of '{app}': {e:#}. Any containers it ran may still be running, remove them by hand"
+            ));
+            return Ok(());
+        }
     };
     let container_app = match target {
         ControlTarget::Containers { app, .. } => app,
-        ControlTarget::Procfile => return Ok(()),
+        ControlTarget::Procfile { .. } => return Ok(()),
     };
     let err = match destroy_containers(&container_app, paths) {
         Ok(()) => return Ok(()),
@@ -37,10 +51,9 @@ pub(super) fn container_cleanup(paths: &RikuPaths, app: &str, mode: DestroyMode)
              use --force to remove riku's files anyway"
         ))),
         DestroyMode::Force => {
-            echo(
-                &format!("Containers of '{app}' may still be running, remove them by hand"),
-                "yellow",
-            );
+            display::warn(&format!(
+                "Containers of '{app}' may still be running, remove them by hand"
+            ));
             Ok(())
         }
     }

@@ -21,6 +21,7 @@ use super::context::saved_env;
 use super::{deploy_containers, AppName};
 use crate::config::RikuPaths;
 use crate::mock_engine::{logged, mock_engine};
+use crate::util::display::OutputTail;
 
 /// A storage service `db` with a health check, and a routed `web` that
 /// waits for `db` to be healthy.
@@ -119,12 +120,9 @@ pub fn mock_server(root: &Path, app: &str, compose: &str, env: &str) -> MockServ
     let (_engine, log) = mock_engine(root, &prelude);
     let mut paths = RikuPaths::for_tests(root);
     fs::create_dir_all(&paths.riku_root).unwrap();
-    fs::write(
-        &paths.container_engine_file,
-        root.join("engine").display().to_string(),
-    )
-    .unwrap();
-    fs::write(&paths.router_file, "caddy").unwrap();
+    let engine = root.join("engine").display().to_string();
+    crate::config::settings::save_key(&paths, "engine", "program", Some(&engine)).unwrap();
+    crate::config::settings::save_key(&paths, "router", "name", Some("caddy")).unwrap();
     fs::create_dir_all(&paths.caddy_root).unwrap();
     let caddy = root.join("mock_caddy");
     executable(&caddy, "#!/bin/sh\nexit 0\n");
@@ -138,12 +136,29 @@ pub fn mock_server(root: &Path, app: &str, compose: &str, env: &str) -> MockServ
     MockServer { paths, state, log }
 }
 
+/// [`mock_server`] with no ENV and `domain` as the app's `routing.domains`
+/// in its server override.
+pub fn mock_server_with_domain(root: &Path, app: &str, compose: &str, domain: &str) -> MockServer {
+    let server = mock_server(root, app, compose, "");
+    fs::write(
+        server.paths.app_settings_override(app),
+        format!("[routing]\ndomains = [\"{domain}\"]\n"),
+    )
+    .unwrap();
+    server
+}
+
 pub fn myapp() -> AppName {
     AppName::try_from("myapp").unwrap()
 }
 
 /// Deploy `myapp` on `server` with its saved ENV.
 pub fn deploy(server: &MockServer) -> Result<()> {
+    deploy_keeping_output(server, &OutputTail::default())
+}
+
+/// [`deploy`], keeping the streamed engine output in `recent`.
+pub fn deploy_keeping_output(server: &MockServer, recent: &OutputTail) -> Result<()> {
     let env = saved_env("myapp", &server.paths).unwrap();
-    deploy_containers(&myapp(), &server.paths, &env)
+    deploy_containers(&myapp(), &server.paths, &env, recent, || {})
 }

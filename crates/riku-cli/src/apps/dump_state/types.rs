@@ -4,6 +4,7 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 
 use super::route::RouteState;
+use crate::deploy::LiveUrl;
 use crate::supervisor::stats::ProcessStatus;
 
 /// Product name and version of the container engine, for operator visibility.
@@ -35,6 +36,10 @@ pub struct StateDump {
     pub generated_at: u64,
     pub riku_version: &'static str,
     pub supervisor_uptime_seconds: Option<u64>,
+    /// Why the uptime was not read (run as root), left out otherwise. A
+    /// `null` uptime without it means no supervisor holds the pid file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supervisor_uptime_unavailable: Option<&'static str>,
     pub engine: Option<EngineInfo>,
     pub apps: Vec<AppStateEntry>,
 }
@@ -47,11 +52,42 @@ pub struct AppStateEntry {
     /// Allowlisted routing/port env vars only: secrets are never dumped.
     pub routing: BTreeMap<String, String>,
     pub route: RouteState,
+    /// Where the app is live now, the URLs of the route its last apply set
+    /// up, in the form a deploy prints them, each labelled `domain`, `lan`
+    /// or `public`. Empty for an app without a route (worker only), one that
+    /// never deployed or was never routed, and one whose routing cannot be
+    /// read.
+    pub urls: Vec<LiveUrl>,
+    /// The URLs the app's current settings give, when they differ from
+    /// `urls`: a settings change the app takes on its next deploy. Empty
+    /// when the settings match the route.
+    pub pending_urls: Vec<LiveUrl>,
     pub workers: Vec<WorkerStateEntry>,
+    /// Whether any deploy of the app recorded a release. False for an app
+    /// that was created but whose deploys all failed.
+    pub released: bool,
+    /// Process kinds the scale API takes for this Procfile app, sorted: the
+    /// long running kinds in `SCALING` and in `workers`. Empty for a
+    /// container app, whose services are its workers' kinds.
+    pub process_kinds: Vec<String>,
+    /// The compose services of a container app in start order, those with
+    /// no copy running included. Empty for a Procfile app and for an app
+    /// whose compose file cannot be read.
+    pub services: Vec<ServiceStateEntry>,
     /// Why the app's config (riku.toml or ENV) could not be read; `routing`
     /// is then empty. Left out of the JSON when the config is fine.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config_error: Option<String>,
+}
+
+/// One compose service of a container app.
+#[derive(Serialize)]
+pub struct ServiceStateEntry {
+    pub name: String,
+    /// Whether riku builds the image from the app's code.
+    pub built: bool,
+    /// The image reference a pulled service runs; `None` for a built one.
+    pub image: Option<String>,
 }
 
 /// State snapshot for an individual worker or container copy.
@@ -64,6 +100,9 @@ pub struct WorkerStateEntry {
     pub status: ProcessStatus,
     pub restart_count: u32,
     pub memory_bytes: u64,
+    /// The worker's memory limit (cgroup `memory.max` or the configured
+    /// limit); `null` when it has none, and always for a container.
+    pub memory_limit_bytes: Option<u64>,
     pub cpu_time_ms: u64,
     pub unit: UnitKind,
     pub container_id: Option<String>,

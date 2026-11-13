@@ -11,7 +11,6 @@
 //! - [`nginx_validation`]: warnings for nginx related env vars
 //! - [`procfile`]: Procfile parsing and cron validation
 //! - [`env`]: KEY=VALUE file parsing, variable expansion
-//! - [`legacy_env`]: env keys renamed to the `RIKU_` prefix
 //! - [`authorized_keys`]: migration of old deploy key forced commands
 //! - [`ssh_keys`]: SSH authorized_keys management
 //! - [`process_util`]: free-port allocation, Node version validation
@@ -26,9 +25,10 @@ pub mod env;
 pub mod file_names;
 pub mod flag;
 pub mod fs;
-pub mod legacy_env;
 pub mod listening;
+pub mod log_stamp;
 pub mod nginx_validation;
+pub mod outbound_ip;
 pub mod process_util;
 pub mod procfile;
 pub mod public_key;
@@ -45,7 +45,7 @@ pub mod validation;
 pub mod write_dir;
 
 // Re-export items used via `crate::util::*` call-sites.
-pub use display::{echo, print_table, print_table_with_title};
+pub use display::{print_table, print_table_with_title};
 pub use env::{parse_settings, write_config};
 pub use fs::{
     copy_dir_recursive, count_files, create_private_dir, restrict_to_owner, write_atomic,

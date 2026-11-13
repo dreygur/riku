@@ -1,5 +1,6 @@
 use tempfile::TempDir;
 
+use crate::config::create_worker_config;
 use crate::daemon::Supervisor;
 
 fn supervisor(tmp: &TempDir) -> Supervisor {
@@ -39,6 +40,59 @@ fn every_entry_is_scheduled_including_repeated_kinds() {
         .unwrap();
 
     assert_eq!(commands(&supervisor), vec!["./a", "./b"]);
+}
+
+fn write_config(supervisor: &Supervisor, file: &str, kind: &str, env: &[(&str, &str)]) {
+    let env = env
+        .iter()
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect();
+    let config = create_worker_config("shop", kind, "run", 1, env, "/srv/shop", "/srv/log");
+    std::fs::write(
+        supervisor.config_dir.join(file),
+        toml::to_string(&config).unwrap(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn cron_jobs_take_the_cron_config_env_over_a_web_copy_that_sorts_first() {
+    let tmp = TempDir::new().unwrap();
+    let supervisor = supervisor(&tmp);
+    write_config(
+        &supervisor,
+        "shop-web-1.toml",
+        "web",
+        &[("DATABASE_URL", "db"), ("PORT", "5000")],
+    );
+    write_config(
+        &supervisor,
+        "shop@cron.1.toml",
+        "cron",
+        &[("DATABASE_URL", "db")],
+    );
+
+    let (_, env) = supervisor.get_app_context("shop");
+
+    assert_eq!(
+        env.get("PORT"),
+        None,
+        "cron got the web copy's env instead of the cron config's: {env:?}"
+    );
+    assert_eq!(env.get("DATABASE_URL").map(String::as_str), Some("db"));
+}
+
+#[test]
+fn cron_jobs_fall_back_to_the_first_config_without_a_cron_config() {
+    let tmp = TempDir::new().unwrap();
+    let supervisor = supervisor(&tmp);
+    write_config(&supervisor, "shop@web.1.toml", "web", &[("PORT", "5000")]);
+    write_config(&supervisor, "shop@worker.1.toml", "worker", &[]);
+
+    let (dir, env) = supervisor.get_app_context("shop");
+
+    assert_eq!(dir.as_deref(), Some("/srv/shop"));
+    assert_eq!(env.get("PORT").map(String::as_str), Some("5000"));
 }
 
 #[test]

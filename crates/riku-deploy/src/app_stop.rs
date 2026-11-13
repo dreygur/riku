@@ -26,8 +26,8 @@ fn remove_if_present(path: &Path) -> Result<()> {
     }
 }
 
-/// The socket riku made for the copy `config` describes. A
-/// `RIKU_NGINX_SOCKET` path is the app's own and is never returned.
+/// The socket riku made for the copy `config` describes, when its config
+/// names exactly that socket.
 fn own_socket(app: &str, config: &Path, paths: &RikuPaths) -> Option<PathBuf> {
     let worker = match crate::router::parsed_worker(config) {
         Some(worker) => worker,

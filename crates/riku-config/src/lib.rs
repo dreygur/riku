@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 pub mod app_config;
 pub mod app_settings;
-pub mod container_engine;
+mod host_paths;
 pub mod nginx_host;
 pub mod own_cert;
 pub mod program;
@@ -23,7 +23,11 @@ pub mod settings;
 
 use root_dirs::root_dirs;
 
-pub use nginx_host::{NginxHostPaths, DEFAULT_NGINX_INCLUDE_FILE, DEFAULT_NGINX_SITES_ENABLED};
+pub use host_paths::{
+    ACME_WEBROOT, CADDY_SITE_ROOT, CERT_ROOT, NGINX_SITE_ROOT, ROUTER_SOCKET, SOCKET_GROUP,
+    SOCKET_ROOT, STATIC_ROOT, SYSTEMD_RUNTIME_DIR, VAR_ROOT,
+};
+pub use nginx_host::{NginxHostPaths, DEFAULT_NGINX_INCLUDE_FILE};
 pub use reload_programs::ReloadPrograms;
 
 /// Default worker timeout in seconds (2 hours).
@@ -34,48 +38,6 @@ pub const RIKU_WORKER_GRACE_PERIOD: u64 = 30;
 
 /// Default max restart attempts before marking app as failed.
 pub const RIKU_MAX_RESTARTS: u32 = 5;
-
-/// Where uWSGI copies put their unix sockets on a real host. It sits outside
-/// the deploy user's home so nginx needs no access to that home. Root init
-/// creates it owned by the deploy user, group [`SOCKET_GROUP`], mode `2750`.
-pub const SOCKET_ROOT: &str = "/run/riku-sockets";
-
-/// The group shared by the deploy user and the nginx worker user, and the
-/// only group that can reach [`SOCKET_ROOT`].
-pub const SOCKET_GROUP: &str = "riku-sockets";
-
-/// The router helper's socket. The helper binds it itself, directly in `/run`
-/// so the deploy user needs no access to any directory below it.
-pub const ROUTER_SOCKET: &str = "/run/riku-router.sock";
-
-/// Exists on a host that booted with systemd as init.
-pub const SYSTEMD_RUNTIME_DIR: &str = "/run/systemd/system";
-
-/// Where Caddy site files live on a real host. It sits outside the deploy
-/// user's home so the `caddy` user needs no access to that home. Root init
-/// creates it owned by root, group `caddy`, mode `2750`; only the router
-/// helper writes site files here.
-pub const CADDY_SITE_ROOT: &str = "/etc/riku/caddy";
-
-/// Root-owned `0755` directory of the nginx site configs the router helper
-/// renders, one `<app>.conf` each. The host include loads `*.conf` from here.
-pub const NGINX_SITE_ROOT: &str = "/etc/riku/nginx";
-
-/// Root-owned `0700` directory of per app TLS material, `<app>/fullchain.pem`
-/// and `<app>/key.pem`, written by the router helper.
-pub const CERT_ROOT: &str = "/etc/riku/certs";
-
-/// Root-owned `0755` parent of the directories nginx serves files from.
-pub const VAR_ROOT: &str = "/var/lib/riku";
-
-/// The ACME http-01 webroot on a real host. Root init creates it owned by
-/// the deploy user, group [`SOCKET_GROUP`], mode `2750`, so the nginx worker
-/// reads challenge files without any access to the deploy home.
-pub const ACME_WEBROOT: &str = "/var/lib/riku/acme";
-
-/// Where deploys publish each app's static files for nginx, one directory
-/// per app. Same owner, group and mode as [`ACME_WEBROOT`].
-pub const STATIC_ROOT: &str = "/var/lib/riku/static";
 
 /// All resolved directory paths used by riku.
 #[derive(Debug, Clone)]
@@ -98,11 +60,8 @@ pub struct RikuPaths {
     pub caddy_root: PathBuf,
     /// The router helper's socket, [`ROUTER_SOCKET`] outside tests.
     pub router_socket: PathBuf,
-    /// Holds the host router name. See [`router::Router::load`].
-    pub router_file: PathBuf,
-    /// Holds the container engine choice. See [`container_engine::load`].
-    pub container_engine_file: PathBuf,
-    /// Holds the server wide settings. See [`settings::load`].
+    /// Holds the server wide settings, the router and engine choice
+    /// included. See [`settings::load`].
     pub settings_file: PathBuf,
     pub cache_root: PathBuf,
     pub workers_root: PathBuf,
@@ -120,17 +79,21 @@ pub struct RikuPaths {
     /// Published static files, `<static_root>/<app>`. [`STATIC_ROOT`]
     /// outside tests, not taken from the environment either.
     pub static_root: PathBuf,
-    /// Where older riku versions symlinked each app config
-    /// (`/etc/nginx/sites-enabled`). riku no longer writes here: a root
-    /// `riku init` removes the links that point into `nginx_root` and
-    /// `riku doctor` reports any left. See [`NginxHostPaths`] for overrides.
-    pub nginx_sites_enabled: PathBuf,
     /// The root-owned file that makes nginx load `nginx_root/*.conf`
     /// (`/etc/nginx/conf.d/riku.conf`). Only a root `riku init` writes it.
     /// See [`NginxHostPaths`] for overrides.
     pub nginx_include_file: PathBuf,
     /// Programs a router reload runs. Tests replace them with mock scripts.
     pub reload_programs: ReloadPrograms,
+}
+
+/// The acme.sh install: `raw` (the `RIKU_ACME_ROOT` value) when set, else
+/// `~/.acme.sh`. Takes the value so tests never set the variable.
+fn acme_sh_root(raw: Option<String>, home: &Path) -> PathBuf {
+    match raw {
+        Some(root) => PathBuf::from(root),
+        None => home.join(".acme.sh"),
+    }
 }
 
 impl RikuPaths {
@@ -160,9 +123,7 @@ impl RikuPaths {
     /// [`Self::from_dirs`] with the system nginx paths given.
     pub fn with_nginx_host(riku_root: PathBuf, home: &Path, nginx_host: NginxHostPaths) -> Self {
         let riku_script = env::current_exe().unwrap_or_else(|_| PathBuf::from("riku"));
-        let acme_sh_root = env::var("RIKU_ACME_ROOT")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| home.join(".acme.sh"));
+        let acme_sh_root = acme_sh_root(env::var("RIKU_ACME_ROOT").ok(), home);
 
         Self {
             plugin_root: riku_root.join("plugins"),
@@ -175,8 +136,6 @@ impl RikuPaths {
             socket_root: PathBuf::from(SOCKET_ROOT),
             caddy_root: PathBuf::from(CADDY_SITE_ROOT),
             router_socket: PathBuf::from(ROUTER_SOCKET),
-            router_file: riku_root.join(router::ROUTER_FILE),
-            container_engine_file: riku_root.join(container_engine::ENGINE_FILE),
             settings_file: riku_root.join(settings::SETTINGS_FILE),
             cache_root: riku_root.join("cache"),
             workers_root: riku_root.join("workers"),
@@ -188,7 +147,6 @@ impl RikuPaths {
             riku_root,
             riku_script,
             acme_sh_root,
-            nginx_sites_enabled: nginx_host.sites_enabled,
             nginx_include_file: nginx_host.include_file,
             reload_programs: ReloadPrograms::default(),
         }
@@ -221,7 +179,6 @@ impl RikuPaths {
     /// and the static root, `root/static`. Tests create the ones they use.
     pub fn for_tests(root: &Path) -> Self {
         let nginx_host = NginxHostPaths {
-            sites_enabled: root.join("nginx-sites-enabled"),
             include_file: root.join("nginx-conf.d").join("riku.conf"),
         };
         let mut paths = Self::with_nginx_host(root.join(".riku"), root, nginx_host);

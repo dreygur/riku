@@ -91,7 +91,7 @@ the backend can fill in behind it.
   plus `scale` and `rollback`.
 - **Wire details:** process status is **snake_case** (`running`, `starting`,
   `stopped`, `crashed`, `restarting`, `oom_killed`); health is snake_case too.
-  Worker entries carry `memory_bytes`, `cpu_time_ms`, `restart_count`, `pid`.
+  Worker entries carry `memory_bytes`, `memory_limit_bytes` (null without a limit), `cpu_time_ms`, `restart_count`, `pid`.
 
 ## Interaction & quality
 

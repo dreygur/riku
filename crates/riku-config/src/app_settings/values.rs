@@ -6,7 +6,9 @@
 //! router config, an env file or a shell can carry quoting, separators or
 //! control characters. `document_root` must be a relative path with no `..`.
 //! The server override is operator input, so it is only refused control
-//! characters (they would corrupt an env file). Error messages name the key,
+//! characters (they would corrupt an env file), except `isolation_root`,
+//! which becomes the worker's `pivot_root` target and must be a plain
+//! absolute path other than `/` with no `..`. Error messages name the key,
 //! never the value, because a misspelled secret key would otherwise print the
 //! secret.
 
@@ -50,7 +52,25 @@ fn check_text(key: &Key, text: &str, source: Source) -> Result<(), String> {
     {
         return Err(format!("{path} must be a relative path inside the app"));
     }
+    if path == "limits.isolation_root" && !is_isolation_root(text) {
+        return Err(format!(
+            "{path} must be an absolute path below / with no .. made of letters, digits and . - _ /"
+        ));
+    }
     Ok(())
+}
+
+/// Whether `text` has the shape a sandbox root must have: an absolute path
+/// other than `/`, with no `..` part, made only of letters, digits and
+/// `. - _ /`. The settings check and the supervisor both use it, so a root
+/// from any source meets the same rule.
+pub fn is_isolation_root(text: &str) -> bool {
+    text.starts_with('/')
+        && !text.trim_matches('/').is_empty()
+        && !text.split('/').any(|part| part == "..")
+        && text
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b".-_/".contains(&b))
 }
 
 fn wrong_type(key: &Key, expected: &str) -> String {
@@ -97,7 +117,7 @@ pub fn check(key: &Key, value: &toml::Value, source: Source) -> Result<Value, St
             Some(n) if n >= 0 => Ok(Value::Int(n as u64)),
             _ => Err(wrong_type(key, "a whole number, 0 or more")),
         },
-        Kind::Flag | Kind::Bool => match value.as_bool() {
+        Kind::Flag => match value.as_bool() {
             Some(b) => Ok(Value::Bool(b)),
             None => Err(wrong_type(key, "true or false")),
         },
@@ -138,7 +158,7 @@ pub fn parse_text(key: &Key, text: &str) -> Option<toml::Value> {
             Ok(n) => Some(toml::Value::Integer(n)),
             Err(_) => None,
         },
-        Kind::Flag | Kind::Bool => match text.trim() {
+        Kind::Flag => match text.trim() {
             "true" => Some(toml::Value::Boolean(true)),
             "false" => Some(toml::Value::Boolean(false)),
             _ => None,

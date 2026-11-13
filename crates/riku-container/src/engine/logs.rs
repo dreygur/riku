@@ -11,8 +11,10 @@ use std::ffi::OsString;
 use std::process::ExitStatus;
 
 use anyhow::{anyhow, Result};
+use riku_util::display::OutputTail;
 
 use super::bounded::capture_capped;
+use super::streamed::Teed;
 use super::{ContainerId, Engine};
 
 /// Which part of a container's log history [`Engine::timestamped_logs`] returns.
@@ -136,14 +138,17 @@ fn range_args(range: &LogRange) -> Vec<OsString> {
 }
 
 impl Engine {
-    /// Stream the container's logs to stdout and stderr.
+    /// Put the container's logs, stdout and stderr alike, on the output rail
+    /// and keep the last lines in `recent`.
     ///
     /// Bounded by the engine build limit.
-    pub fn print_logs(&self, id: &ContainerId) -> Result<()> {
-        self.run_streamed(
+    pub fn print_logs(&self, id: &ContainerId, recent: &OutputTail) -> Result<()> {
+        self.run_teed(
             &args_of(["logs", id.as_str()]),
             id.as_str(),
             self.settings().build_timeout,
+            recent,
+            Teed::Everything,
         )
     }
 

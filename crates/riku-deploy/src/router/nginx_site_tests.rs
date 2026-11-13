@@ -49,8 +49,8 @@ fn own_domains() -> AppRouting {
         fallback: false,
         port: None,
         mode: RoutingMode::Domain,
-        legacy: true,
         fallback_skipped: None,
+        fallback_private_ip: None,
     }
 }
 
@@ -119,7 +119,7 @@ fn route_the_gate_refuses_never_reaches_the_helper() {
     let seen = RefCell::new(Vec::new());
     let env = env(&[
         ("RIKU_DOMAINS", "myapp.example"),
-        ("RIKU_NGINX_CACHE_PATH", "/etc"),
+        ("RIKU_NGINX_SOCKET", "/etc/x.sock"),
     ]);
 
     let err = apply(
@@ -131,7 +131,7 @@ fn route_the_gate_refuses_never_reaches_the_helper() {
     .unwrap_err()
     .to_string();
 
-    assert!(err.contains("RIKU_NGINX_CACHE_PATH"), "{err}");
+    assert!(err.contains("RIKU_NGINX_SOCKET"), "{err}");
     assert!(seen.borrow().is_empty(), "the helper was asked anyway");
 }
 
@@ -184,7 +184,6 @@ fn failed_fallback_certificate_serves_http_and_says_so() {
     let routing = AppRouting {
         domains: vec!["myapp.203.0.113.10.example".to_string()],
         fallback: true,
-        legacy: false,
         ..own_domains()
     };
 
@@ -208,6 +207,97 @@ fn failed_fallback_certificate_serves_http_and_says_so() {
     assert!(route.tls.is_none());
 }
 
+fn seed_entry(paths: &RikuPaths) {
+    crate::router::routing_state::with_routing_lock(paths, |state| {
+        state.set_entry(
+            "myapp",
+            crate::router::routing_state::Entry {
+                mode: RoutingMode::Domain,
+                port: None,
+                picked: false,
+                tls: None,
+                cert_for: None,
+                domains: Vec::new(),
+                fallback: false,
+            },
+        );
+        Ok(())
+    })
+    .unwrap();
+}
+
+fn recorded_tls(paths: &RikuPaths) -> Option<crate::router::routing_state::TlsState> {
+    crate::router::routing_state::RoutingState::load(paths)
+        .unwrap()
+        .entry("myapp")
+        .and_then(|entry| entry.tls)
+}
+
+#[test]
+fn fallback_on_a_private_address_asks_for_no_certificate() {
+    let (tmp, paths) = setup();
+    seed_entry(&paths);
+    let seen = RefCell::new(Vec::new());
+    let env = env(&[("RIKU_DOMAINS", "myapp.10.0.0.5.example")]);
+    let routing = AppRouting {
+        domains: vec!["myapp.10.0.0.5.example".to_string()],
+        fallback: true,
+        fallback_private_ip: Some(std::net::Ipv4Addr::new(10, 0, 0, 5)),
+        ..own_domains()
+    };
+
+    apply_routed(
+        mock_helper(Reply::Ok { reloaded: true }, &seen),
+        &env,
+        &routing,
+        &tmp,
+        &paths,
+    )
+    .unwrap();
+
+    let seen = seen.borrow();
+    assert_eq!(seen.len(), 1, "one plain HTTP apply: {seen:?}");
+    let route = applied(&seen[0]);
+    assert_eq!(route.https, HttpsPolicy::AlsoPlainHttp);
+    assert!(route.tls.is_none());
+    assert_eq!(
+        recorded_tls(&paths),
+        None,
+        "a certificate was asked for a name on a private address"
+    );
+}
+
+#[test]
+fn fallback_on_a_public_address_still_asks_for_a_certificate() {
+    let (tmp, paths) = setup();
+    seed_entry(&paths);
+    let seen = RefCell::new(Vec::new());
+    let env = env(&[("RIKU_DOMAINS", "myapp.203.0.113.10.example")]);
+    let routing = AppRouting {
+        domains: vec!["myapp.203.0.113.10.example".to_string()],
+        fallback: true,
+        ..own_domains()
+    };
+
+    apply_routed(
+        mock_helper(Reply::Ok { reloaded: true }, &seen),
+        &env,
+        &routing,
+        &tmp,
+        &paths,
+    )
+    .unwrap();
+
+    assert!(
+        matches!(
+            recorded_tls(&paths),
+            Some(crate::router::routing_state::TlsState::FailedAt(_))
+        ),
+        "the certificate attempt must be recorded, got {:?}",
+        recorded_tls(&paths)
+    );
+}
+
 #[test]
 fn fallback_with_a_pair_carries_the_fullchain() {
     let (tmp, paths) = setup();
@@ -225,6 +315,8 @@ fn fallback_with_a_pair_carries_the_fullchain() {
                 picked: false,
                 tls: Some(crate::router::routing_state::TlsState::Issued),
                 cert_for: Some("myapp.203.0.113.10.example".to_string()),
+                domains: vec!["myapp.203.0.113.10.example".to_string()],
+                fallback: true,
             },
         );
         Ok(())
@@ -234,7 +326,6 @@ fn fallback_with_a_pair_carries_the_fullchain() {
     let routing = AppRouting {
         domains: vec!["myapp.203.0.113.10.example".to_string()],
         fallback: true,
-        legacy: false,
         ..own_domains()
     };
 
@@ -289,7 +380,8 @@ fn check_asks_the_helper_for_its_status() {
         version: "0.1.2".to_string(),
     };
 
-    check_nginx_site(mock_helper(status, &seen), "myapp", &env(&[]), &paths).unwrap();
+    let env = env(&[("RIKU_DOMAINS", "myapp.example")]);
+    check_nginx_site(mock_helper(status, &seen), "myapp", &env, &paths).unwrap();
 
     assert_eq!(seen.borrow().as_slice(), [Request::Status {}]);
 }

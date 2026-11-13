@@ -264,7 +264,7 @@ pub enum PluginsCmd {
         after_help = "Examples:\n  riku plugins install ./examples/plugins/postgres\n  riku plugins install github:riku-plugins/redis"
     )]
     Install {
-        /// Local directory or git URL (github:owner/repo, https://…/repo.git)
+        /// Local directory or git URL (github:owner/repo, https://host/owner/repo.git)
         source: String,
     },
 
@@ -372,7 +372,7 @@ pub enum MarketplaceCmd {
         after_help = "Examples:\n  riku plugins marketplace add github:dreygur/riku-marketplace"
     )]
     Add {
-        /// Git URL (github:owner/repo, https://…/repo.git)
+        /// Git URL (github:owner/repo, https://host/owner/repo.git)
         url: String,
         /// Override the derived marketplace name
         #[arg(long)]

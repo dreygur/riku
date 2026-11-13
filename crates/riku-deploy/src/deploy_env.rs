@@ -11,36 +11,25 @@ use anyhow::{anyhow, Result};
 use crate::config::app_config::{self, AppEnv};
 use crate::config::app_settings::{AppSettings, Source};
 use crate::config::RikuPaths;
-use crate::util::{deploy_logger::DeployLogger, echo};
+use crate::util::deploy_logger::DeployLogger;
 
-fn warn(hint: &str, dlog: &mut DeployLogger) {
-    echo(hint, "yellow");
-    dlog.log_raw(&format!("[WARN] {hint}"));
-}
+/// The runtime whose version `validate_env_vars` checks.
+const NODE_RUNTIME: &str = "node";
 
-fn warn_about(loaded: &AppEnv, dlog: &mut DeployLogger) {
-    let warnings = crate::util::validate_env_vars(&loaded.env);
+/// The node version is checked as the node plugin gets it, from riku.toml
+/// only: an ENV line of that name is an app env var riku does not read.
+fn warn_about(loaded: &AppEnv, versions: &HashMap<String, String>, dlog: &mut DeployLogger) {
+    let checked = app_config::runtime_plugin_env(&loaded.env, versions, NODE_RUNTIME);
+    let warnings = crate::util::validate_env_vars(&checked);
     crate::util::print_env_warnings(&warnings);
     for w in &warnings {
         dlog.log_warn(w);
     }
-    for (old, replacement) in crate::util::legacy_env::legacy_keys(&loaded.env) {
-        warn(&format!("ENV key {}", replacement.hint(old)), dlog);
-    }
-    if !loaded.legacy_keys.is_empty() {
-        warn(
-            &format!(
-                "ENV holds riku settings ({}); run riku doctor --fix to move them into riku settings",
-                loaded.legacy_keys.join(", ")
-            ),
-            dlog,
-        );
-    }
 }
 
 /// The app's merged env from `app_config::load_env` (repo riku.toml, ENV,
-/// server override). Invalid, renamed and legacy keys are reported on the
-/// terminal and in the deploy log, but do not stop the deploy; an invalid
+/// server override). Invalid values are reported on the terminal and in the
+/// deploy log, but do not stop the deploy; an invalid
 /// riku.toml or ENV file does.
 ///
 /// Every deploy, container apps included, tightens the env dir to `0700`
@@ -65,8 +54,21 @@ pub(crate) fn load_deploy_env(
         Ok(loaded) => loaded,
         Err(e) => return Err(e),
     };
-    warn_about(&loaded, dlog);
+    let versions = match app_config::runtime_versions(paths, app) {
+        Ok(versions) => versions,
+        Err(e) => return Err(e),
+    };
+    warn_about(&loaded, &versions, dlog);
     Ok(loaded.env)
+}
+
+/// The merged env as [`load_deploy_env`] reads it, for `riku restart`:
+/// nothing is printed and no file mode changes.
+pub(crate) fn load_restart_env(app: &str, paths: &RikuPaths) -> Result<HashMap<String, String>> {
+    match app_config::load_env(paths, app) {
+        Ok(loaded) => Ok(loaded.env),
+        Err(e) => Err(e),
+    }
 }
 
 /// The app's process list for a Procfile deploy.

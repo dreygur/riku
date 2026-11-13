@@ -1,20 +1,29 @@
 use anyhow::Result;
 use std::collections::HashMap;
+use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 
-use super::control_target::{control_target, ControlTarget};
+use super::control_target::{control_target, whole_procfile_app, ControlTarget};
 
 use crate::config::RikuPaths;
 use crate::supervisor::Supervisor;
+use crate::util::resource_limits::ResourceLimits;
 use crate::util::{display, exit_if_invalid, parse_settings};
 
-/// Run a command in the app context with LIVE_ENV loaded.
+/// Run a command in the app context with LIVE_ENV loaded, under the server
+/// resource limits with the app's own `RIKU_MAX_*` values put over them.
+#[allow(clippy::question_mark)]
 pub fn cmd_run(paths: &RikuPaths, app: &str, cmd: &[String]) -> Result<()> {
-    let app = exit_if_invalid(app, &paths.app_root)?;
+    let app = match exit_if_invalid(app, &paths.app_root) {
+        Ok(app) => app,
+        Err(e) => return Err(e),
+    };
 
     let config_file = paths.env_root.join(&app).join("LIVE_ENV");
     let mut env = HashMap::new();
-    parse_settings(&config_file, &mut env)?;
+    if let Err(e) = parse_settings(&config_file, &mut env) {
+        return Err(e);
+    }
 
     let app_dir = paths.app_root.join(&app);
 
@@ -22,16 +31,24 @@ pub fn cmd_run(paths: &RikuPaths, app: &str, cmd: &[String]) -> Result<()> {
         anyhow::bail!("no command specified for 'riku run'");
     }
 
+    let limits = ResourceLimits::from_env().with_app_env(&env);
     // Exec the binary directly rather than rejoining into `sh -c` to avoid
     // shell injection via metacharacters in the command arguments.
-    let mut child = Command::new(&cmd[0])
+    let mut command = Command::new(&cmd[0]);
+    command
         .args(&cmd[1..])
         .current_dir(&app_dir)
         .envs(&env)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()?;
+        .stderr(Stdio::inherit());
+    unsafe {
+        command.pre_exec(move || limits.apply());
+    }
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(e) => return Err(e.into()),
+    };
 
     let status = match child.wait() {
         Ok(status) => status,
@@ -43,30 +60,37 @@ pub fn cmd_run(paths: &RikuPaths, app: &str, cmd: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// Restart an app. A container app replaces the copies of `service`, or of
-/// every service, one at a time from the images it runs now; a Procfile app
-/// is stopped and deployed again. Naming a service of a Procfile app fails.
+/// Restart an app without building it. For a container app `name` is a
+/// service: the copies of it, or of every service, are replaced one at a
+/// time from the images they run now. For a Procfile app `name` is a
+/// process kind: the supervisor restarts that kind's workers, or every
+/// worker, from the current build. A rebuild is `riku deploy`.
 #[allow(clippy::question_mark)]
-pub fn cmd_restart(paths: &RikuPaths, app: &str, service: Option<&str>) -> Result<()> {
+pub fn cmd_restart(paths: &RikuPaths, app: &str, name: Option<&str>) -> Result<()> {
     let app = match exit_if_invalid(app, &paths.app_root) {
         Ok(app) => app,
         Err(e) => return Err(e),
     };
-    let target = match control_target(paths, &app, service) {
+    let target = match control_target(paths, &app, name) {
         Ok(target) => target,
         Err(e) => return Err(e),
     };
-    display::info(&format!("restarting app '{}'...", app));
+    display::step_done(&format!("restarting app '{}'...", app), "");
     match target {
         ControlTarget::Containers { app, service } => {
             crate::deploy::containers::restart_service(&app, paths, service.as_ref())
         }
-        ControlTarget::Procfile => {
-            if let Err(e) = do_stop(paths, &app) {
-                return Err(e);
-            }
-            crate::deploy::do_deploy(&app, paths, &HashMap::new(), None)
+        ControlTarget::Procfile { process } => restart_workers(paths, &app, process.as_deref()),
+    }
+}
+
+fn restart_workers(paths: &RikuPaths, app: &str, process: Option<&str>) -> Result<()> {
+    match crate::deploy::app_restart::restart_procfile_app(app, process, paths) {
+        Ok(count) => {
+            display::step_done("Restarted", &format!("{count} worker(s) of '{app}'"));
+            Ok(())
         }
+        Err(e) => Err(e),
     }
 }
 
@@ -83,17 +107,27 @@ pub fn cmd_stop(paths: &RikuPaths, app: &str, service: Option<&str>) -> Result<(
         Ok(ControlTarget::Containers { app, service }) => {
             crate::deploy::containers::stop_service(&app, paths, service.as_ref())
         }
-        Ok(ControlTarget::Procfile) => do_stop(paths, &app),
+        Ok(ControlTarget::Procfile { process }) => {
+            match whole_procfile_app(&app, process.as_deref()) {
+                Ok(()) => do_stop(paths, &app),
+                Err(e) => Err(e),
+            }
+        }
         Err(e) => Err(e),
     }
 }
 
 /// Start the supervisor daemon.
 /// For production use, prefer 'riku supervisor --daemon' or the systemd service.
+#[allow(clippy::question_mark)]
 pub fn cmd_supervisor(paths: &RikuPaths) -> Result<()> {
-    let mut supervisor = Supervisor::new(paths.workers_enabled.clone())?.with_actions(
-        std::sync::Arc::new(crate::control_actions::CliControlActions),
-    );
+    let supervisor = match Supervisor::new(paths.workers_enabled.clone()) {
+        Ok(supervisor) => supervisor,
+        Err(e) => return Err(e),
+    };
+    let mut supervisor = supervisor.with_actions(std::sync::Arc::new(
+        crate::control_actions::CliControlActions,
+    ));
     supervisor.run()
 }
 
@@ -101,7 +135,7 @@ pub fn cmd_supervisor(paths: &RikuPaths) -> Result<()> {
 fn do_stop(paths: &RikuPaths, app: &str) -> Result<()> {
     match crate::deploy::app_stop::stop_procfile_app(app, paths) {
         Ok(0) => display::error(&format!("app '{}' is not deployed", app)),
-        Ok(_) => display::info(&format!("Stopped app '{}'.", app)),
+        Ok(_) => display::step_done(&format!("Stopped app '{}'.", app), ""),
         Err(e) => return Err(anyhow::anyhow!("cannot stop '{app}': {e}")),
     }
     Ok(())

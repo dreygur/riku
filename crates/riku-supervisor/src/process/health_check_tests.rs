@@ -1,17 +1,23 @@
+use super::super::lifecycle_events::EventTarget;
 use super::super::test_support::minimal_config;
 use super::ProcessManager;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::Path;
-use std::sync::Mutex;
 use tempfile::TempDir;
 
-// `emit_app_restarted`/`emit_app_failed` read `RIKU_ROOT` via
-// `RikuPaths::from_env()`, and the notifier plugin reads
-// `RIKU_NOTIFY_WEBHOOK_URL`: both are process env vars. Serialize tests
-// in this module that touch them so they don't race each other (no other
-// test in this crate reads these names).
-static ENV_GUARD: Mutex<()> = Mutex::new(());
+/// Crash events for the riku tree under `home`, with the notify plugin
+/// posting to `port`. Passed to the manager, never set in the process
+/// environment, so tests running in parallel cannot see each other's.
+fn events_to(home: &Path, port: u16) -> EventTarget {
+    EventTarget {
+        paths: Some(riku_config::RikuPaths::for_tests(home)),
+        subscriber_env: vec![(
+            "RIKU_NOTIFY_WEBHOOK_URL".to_string(),
+            format!("http://127.0.0.1:{port}/incident"),
+        )],
+    }
+}
 
 /// Installs the real `plugins/riku-notify` bundle into `riku_root`,
 /// exactly as `riku install-plugins --plugins riku-notify` would, not a
@@ -76,18 +82,11 @@ fn one_shot_webhook_listener() -> (u16, std::thread::JoinHandle<Option<String>>)
 /// process's real exit code, instance id, and restart count.
 #[test]
 fn crash_triggers_app_restarted_event_through_the_real_notify_plugin() {
-    let _guard = ENV_GUARD.lock().unwrap();
-
     let tmp = TempDir::new().unwrap();
     let riku_root = tmp.path().join(".riku");
     install_real_notify_plugin(&riku_root);
 
     let (port, received) = one_shot_webhook_listener();
-    std::env::set_var("RIKU_ROOT", &riku_root);
-    std::env::set_var(
-        "RIKU_NOTIFY_WEBHOOK_URL",
-        format!("http://127.0.0.1:{port}/incident"),
-    );
 
     let log_path = tmp.path().join("test.log");
     let config = minimal_config(
@@ -96,7 +95,9 @@ fn crash_triggers_app_restarted_event_through_the_real_notify_plugin() {
         log_path.to_str().unwrap(),
     );
 
-    let mut pm = ProcessManager::new().expect("ProcessManager::new should succeed");
+    let mut pm = ProcessManager::new()
+        .expect("ProcessManager::new should succeed")
+        .with_events(events_to(tmp.path(), port));
     pm.spawn_process(&config).expect("spawn should succeed");
 
     // Poll the real production entry point until the crash is detected
@@ -120,20 +121,10 @@ fn crash_triggers_app_restarted_event_through_the_real_notify_plugin() {
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
 
-    // Do NOT clear the env vars yet: `emit_app_restarted` (called from
-    // inside `restart_process()`, above) spawns its own background
-    // thread that reads them independently of this thread's timing,
-    // clearing them here raced that thread and made this test hang
-    // (it fell back to `$HOME/.riku` with no webhook URL configured,
-    // so the plugin never fired and `received.join()` blocked forever).
-    // Keep them live until the webhook has actually been observed.
     let request = received
         .join()
         .expect("webhook listener thread should not panic")
         .expect("plugin never delivered the webhook within the deadline");
-
-    std::env::remove_var("RIKU_NOTIFY_WEBHOOK_URL");
-    std::env::remove_var("RIKU_ROOT");
 
     assert!(request.contains("POST /incident"), "got: {request}");
     assert!(
@@ -156,18 +147,11 @@ fn crash_triggers_app_restarted_event_through_the_real_notify_plugin() {
 /// detection is already "gave up" and there's no backoff to wait out.
 #[test]
 fn exhausted_retries_triggers_app_failed_event_through_the_real_notify_plugin() {
-    let _guard = ENV_GUARD.lock().unwrap();
-
     let tmp = TempDir::new().unwrap();
     let riku_root = tmp.path().join(".riku");
     install_real_notify_plugin(&riku_root);
 
     let (port, received) = one_shot_webhook_listener();
-    std::env::set_var("RIKU_ROOT", &riku_root);
-    std::env::set_var(
-        "RIKU_NOTIFY_WEBHOOK_URL",
-        format!("http://127.0.0.1:{port}/incident"),
-    );
 
     let log_path = tmp.path().join("test.log");
     let mut config = minimal_config(
@@ -177,7 +161,9 @@ fn exhausted_retries_triggers_app_failed_event_through_the_real_notify_plugin() 
     );
     config.options.max_restarts = 0;
 
-    let mut pm = ProcessManager::new().expect("ProcessManager::new should succeed");
+    let mut pm = ProcessManager::new()
+        .expect("ProcessManager::new should succeed")
+        .with_events(events_to(tmp.path(), port));
     pm.spawn_process(&config).expect("spawn should succeed");
 
     // Poll the real production entry point until the crash is detected
@@ -196,15 +182,10 @@ fn exhausted_retries_triggers_app_failed_event_through_the_real_notify_plugin() 
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
 
-    // Same reasoning as the sibling test above: keep the env vars alive
-    // until the webhook has actually been observed.
     let request = received
         .join()
         .expect("webhook listener thread should not panic")
         .expect("plugin never delivered the webhook within the deadline");
-
-    std::env::remove_var("RIKU_NOTIFY_WEBHOOK_URL");
-    std::env::remove_var("RIKU_ROOT");
 
     assert!(request.contains("POST /incident"), "got: {request}");
     assert!(

@@ -114,6 +114,7 @@ pub fn single_image_project(app_path: &Path, dockerfile: &Path) -> Result<Compos
         labels: BTreeMap::new(),
         working_dir: None,
         user: None,
+        init: true,
     };
     Ok(ComposeProject {
         services: vec![service],

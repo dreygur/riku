@@ -14,6 +14,7 @@
 #![allow(clippy::question_mark)]
 
 mod app;
+mod changes;
 mod context;
 mod control;
 mod copy_restart;
@@ -28,6 +29,7 @@ mod mock_workers;
 mod ports;
 mod procfile_workers;
 mod release;
+mod release_deps;
 mod removal;
 mod retire;
 #[cfg(test)]
@@ -44,7 +46,7 @@ pub use app::{is_container_app, load_project, read_scaling, SINGLE_IMAGE_PORT};
 pub use control::{restart_service, runs_containers, scale_service, service_names, stop_service};
 pub use copy_restart::{restart_copy, RestartOutcome};
 pub use deploy::{deploy_containers, CONTAINER_RUNTIME};
-pub use engine_open::{open_engine, EngineUnreachable};
+pub use engine_open::{open_engine, EngineUnreachable, SOCKET_CHOICE};
 pub use image_update::{is_built_service, update_service, ImageUpdate};
 pub use images::prepare_images;
 pub use ports::pick_free_port;

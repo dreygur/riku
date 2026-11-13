@@ -3,7 +3,8 @@
 //! The file lives at `${XDG_CONFIG_HOME:-$HOME/.config}/riku/servers.toml`
 //! (not `dirs::config_dir()`, which is `~/Library/Application Support` on
 //! macOS). It holds ssh targets, so the directory is created 700 and the file
-//! 600, written to a temp file in the same directory and renamed into place.
+//! 600, written through riku-util's `write_private` (exclusive `O_NOFOLLOW`
+//! temp file created 600, fsync, rename).
 //! Every entry is revalidated on load through the same `TryFrom` impls as
 //! command line input, so a hand edited bad entry is rejected with the file
 //! path and entry name.
@@ -11,8 +12,7 @@
 use super::types::{Server, ServerList, ServerName, SshAddress};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use std::io::Write;
-use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 
 #[derive(Serialize, Deserialize, Default)]
@@ -121,27 +121,6 @@ fn to_raw(list: &ServerList) -> RawFile {
     }
 }
 
-#[allow(clippy::question_mark)]
-fn write_private(dir: &Path, path: &Path, text: &str) -> std::io::Result<()> {
-    let mut temp = match tempfile::NamedTempFile::new_in(dir) {
-        Ok(temp) => temp,
-        Err(e) => return Err(e),
-    };
-    if let Err(e) = temp
-        .as_file()
-        .set_permissions(std::fs::Permissions::from_mode(0o600))
-    {
-        return Err(e);
-    }
-    if let Err(e) = temp.write_all(text.as_bytes()) {
-        return Err(e);
-    }
-    match temp.persist(path) {
-        Ok(_) => Ok(()),
-        Err(e) => Err(e.error),
-    }
-}
-
 /// Saves the list atomically with mode 600, creating the directory with mode 700.
 pub fn save(path: &Path, list: &ServerList) -> Result<()> {
     let dir = match path.parent() {
@@ -159,8 +138,8 @@ pub fn save(path: &Path, list: &ServerList) -> Result<()> {
         Ok(text) => text,
         Err(e) => return Err(anyhow!("failed to serialize server list: {e}")),
     };
-    if let Err(e) = write_private(dir, path, &text) {
-        return Err(anyhow!("failed to write {}: {e}", path.display()));
+    if let Err(e) = crate::util::write_private(path, text.as_bytes()) {
+        return Err(anyhow!("failed to write {}: {e:#}", path.display()));
     }
     Ok(())
 }

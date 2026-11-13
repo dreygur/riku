@@ -40,6 +40,25 @@ fn removes_the_repo_link_but_not_the_repo_it_points_to() {
 }
 
 #[test]
+fn destroy_removes_the_repo_that_create_and_a_dot_git_push_make() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut paths = RikuPaths::for_tests(tmp.path());
+    use_mock_caddy(&mut paths);
+    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+    let repo = paths.git_root.join("shop.git");
+    fs::create_dir_all(repo.join("refs")).unwrap();
+    fs::write(repo.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+
+    cmd_destroy(&paths, "shop", DestroyMode::Safe).unwrap();
+
+    assert!(
+        fs::symlink_metadata(&repo).is_err(),
+        "repo {} survived destroy",
+        repo.display()
+    );
+}
+
+#[test]
 fn destroy_removes_the_published_static_files() {
     let tmp = tempfile::tempdir().unwrap();
     let mut paths = RikuPaths::for_tests(tmp.path());
@@ -55,6 +74,29 @@ fn destroy_removes_the_published_static_files() {
     assert!(
         left.is_empty(),
         "published files survived destroy: {left:?}"
+    );
+}
+
+#[test]
+fn destroy_removes_the_release_history_and_keeps_other_apps() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut paths = RikuPaths::for_tests(tmp.path());
+    use_mock_caddy(&mut paths);
+    fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+    let releases = crate::deploy::releases::ReleaseLog::new(&paths);
+    releases.record("shop", "cbb93790").unwrap();
+    releases.record("shop-api", "a1f9f2d1").unwrap();
+
+    cmd_destroy(&paths, "shop", DestroyMode::Safe).unwrap();
+
+    assert!(
+        releases.list("shop").is_empty(),
+        "the release history survived destroy, so a new app of that name shows old releases"
+    );
+    assert_eq!(
+        releases.list("shop-api").len(),
+        1,
+        "another app lost its history"
     );
 }
 
@@ -98,11 +140,8 @@ fn container_app_without_engine(root: &Path) -> RikuPaths {
     fs::create_dir_all(paths.env_root.join("shop")).unwrap();
     fs::write(paths.env_root.join("shop").join("ENV"), "").unwrap();
     fs::create_dir_all(&paths.riku_root).unwrap();
-    fs::write(
-        &paths.container_engine_file,
-        root.join("no-such-engine").display().to_string(),
-    )
-    .unwrap();
+    let engine = root.join("no-such-engine").display().to_string();
+    crate::config::settings::save_key(&paths, "engine", "program", Some(&engine)).unwrap();
     paths
 }
 
@@ -134,6 +173,47 @@ fn forced_destroy_removes_the_app_when_the_engine_is_unreachable() {
     assert!(
         !paths.app_root.join("shop").exists(),
         "forced destroy left the app directory"
+    );
+}
+
+fn app_with_broken_riku_toml(root: &Path) -> RikuPaths {
+    let mut paths = RikuPaths::for_tests(root);
+    use_mock_caddy(&mut paths);
+    let app_dir = paths.app_root.join("shop");
+    fs::create_dir_all(&app_dir).unwrap();
+    fs::write(app_dir.join("riku.toml"), "[routing\nnot toml").unwrap();
+    fs::create_dir_all(paths.env_root.join("shop")).unwrap();
+    fs::create_dir_all(paths.git_root.join("shop.git")).unwrap();
+    paths
+}
+
+#[test]
+fn forced_destroy_removes_an_app_whose_riku_toml_is_invalid() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = app_with_broken_riku_toml(tmp.path());
+
+    cmd_destroy(&paths, "shop", DestroyMode::Force).unwrap();
+
+    for dir in [
+        paths.app_root.join("shop"),
+        paths.env_root.join("shop"),
+        paths.git_root.join("shop.git"),
+    ] {
+        assert!(!dir.exists(), "forced destroy left {}", dir.display());
+    }
+}
+
+#[test]
+fn destroy_without_force_refuses_an_invalid_riku_toml_naming_force() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = app_with_broken_riku_toml(tmp.path());
+
+    let err = cmd_destroy(&paths, "shop", DestroyMode::Safe).unwrap_err();
+
+    assert!(format!("{err:#}").contains("--force"), "{err:#}");
+    assert!(
+        paths.app_root.join("shop").exists(),
+        "a refused destroy removed the app"
     );
 }
 

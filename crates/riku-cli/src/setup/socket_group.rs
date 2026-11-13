@@ -8,8 +8,9 @@
 //!
 //! Security: root writes only into root-owned paths here (`/run`,
 //! `/etc/tmpfiles.d`), never into the deploy user's home. An account name
-//! reaches `usermod` or the tmpfiles line only after it is checked to be a
-//! plain account name, and commands run with a fixed argv and no shell.
+//! reaches the group tools ([`super::accounts`]) or the tmpfiles line only
+//! after it is checked to be a plain account name, and commands run with a
+//! fixed argv and no shell.
 
 use std::fs;
 use std::io::ErrorKind;
@@ -19,10 +20,10 @@ use anyhow::{anyhow, Result};
 use nix::unistd::Group;
 
 use crate::config::{SOCKET_GROUP, SOCKET_ROOT};
-use crate::util::echo;
+use crate::util::display;
 use crate::util::socket_dir::{self, SOCKET_DIR_MODE};
 
-use super::caddy_host::run;
+use super::accounts;
 use super::deploy_user::DeployUser;
 use super::nginx_host::{check_write_dir, ROOT_UID};
 
@@ -48,19 +49,24 @@ pub(super) fn tmpfiles_line(user: &str) -> String {
 fn ensure_group() -> Result<()> {
     match Group::from_name(SOCKET_GROUP) {
         Ok(Some(_)) => Ok(()),
-        Ok(None) => run("groupadd", &["--system", SOCKET_GROUP]),
+        Ok(None) => accounts::create_group(SOCKET_GROUP),
         Err(e) => Err(anyhow!("failed to look up group {SOCKET_GROUP}: {e}")),
     }
 }
 
-/// Add `account` to the socket group. The group must exist.
-pub(super) fn add_to_socket_group(account: &str) -> Result<()> {
-    if !is_account_name(account) {
+/// Add `account` to `group`, which must exist. Both must be plain names.
+pub(super) fn add_to_group(group: &str, account: &str) -> Result<()> {
+    if !is_account_name(account) || !is_account_name(group) {
         return Err(anyhow!(
-            "refusing to add {account:?} to {SOCKET_GROUP}: not a plain account name"
+            "refusing to add {account:?} to {group:?}: not a plain account or group name"
         ));
     }
-    run("usermod", &["-aG", SOCKET_GROUP, account])
+    accounts::add_to_group(account, group)
+}
+
+/// Add `account` to the socket group. The group must exist.
+pub(super) fn add_to_socket_group(account: &str) -> Result<()> {
+    add_to_group(SOCKET_GROUP, account)
 }
 
 fn has_tmpfiles() -> bool {
@@ -96,14 +102,11 @@ fn keep_after_reboot(user: &str) -> Result<()> {
     if has_tmpfiles() {
         return write_tmpfiles_entry(&tmpfiles_line(user));
     }
-    echo(
-        &format!(
-            "systemd-tmpfiles not found, so {SOCKET_ROOT} is gone after a reboot. \
+    display::warn(&format!(
+        "systemd-tmpfiles not found, so {SOCKET_ROOT} is gone after a reboot. \
              The supervisor recreates it only if it can write /run; otherwise re-run \
              sudo riku init after each boot"
-        ),
-        "yellow",
-    );
+    ));
     Ok(())
 }
 
@@ -130,10 +133,7 @@ pub(super) fn setup_socket_root(user: &DeployUser) -> Result<()> {
     if let Err(e) = keep_after_reboot(&user.name) {
         return Err(e);
     }
-    echo(
-        &format!("{SOCKET_ROOT} holds app sockets ({SOCKET_GROUP} only)"),
-        "green",
-    );
+    display::step_done("Sockets", &format!("{SOCKET_ROOT}, group {SOCKET_GROUP}"));
     Ok(())
 }
 

@@ -6,7 +6,7 @@ use anyhow::{anyhow, Result};
 use super::app::retain_scaling;
 use super::context::ContainerApp;
 use super::procfile_workers::ProcfileWorkers;
-use crate::util::echo;
+use crate::util::display;
 
 fn still_running(app: &str, cause: anyhow::Error) -> anyhow::Error {
     anyhow!("the containers of '{app}' are up and routed, but its old workers could not be stopped: {cause:#}")
@@ -19,9 +19,9 @@ pub(crate) fn retire_procfile_workers(ctx: &ContainerApp, workers: ProcfileWorke
     if workers.is_empty() {
         return Ok(());
     }
-    echo(
-        &format!("-----> Stopping the old Procfile workers of '{}'", ctx.app),
-        "green",
+    display::step_done(
+        &format!("Stopping the old Procfile workers of '{}'", ctx.app),
+        "",
     );
     if let Err(e) = workers.park(ctx.paths) {
         return Err(still_running(ctx.app.as_str(), e));

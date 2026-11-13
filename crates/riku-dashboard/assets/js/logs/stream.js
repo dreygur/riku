@@ -6,7 +6,7 @@
 // never pass through innerHTML.
 import { logsUrl } from "../api.js";
 import { $ } from "../dom.js";
-import { fmtClock } from "../format.js";
+import { fmtClock, parseLogEvent } from "../format.js";
 import { session } from "../state.js";
 import { renderSeg, syncLogUi } from "./drawer.js";
 
@@ -17,7 +17,7 @@ export const MAX_LINES = 2000;
  * @typedef {object} LogLine
  * @property {string} tag process tag before the first tab, e.g. "web.1"
  * @property {string} text
- * @property {Date} ts when the browser received it
+ * @property {Date | null} ts the line's own time from the server, null when it has none
  * @property {"err" | "warn" | ""} lvl
  * @property {string} [base] tag up to the first ":" or space
  * @property {string} [hay] lowercased tag and text for the filter
@@ -93,7 +93,7 @@ function lineEl(ln) {
   div.className = "ln" + (ln.lvl ? " " + ln.lvl : "");
   const tag = textSpan("ln-tag", ln.tag);
   tag.style.color = tagColor(ln.base || "-");
-  div.append(textSpan("ln-t", fmtClock(ln.ts)), tag, textSpan("ln-x", ln.text));
+  div.append(textSpan("ln-t", ln.ts ? fmtClock(ln.ts) : ""), tag, textSpan("ln-x", ln.text));
   return div;
 }
 
@@ -143,10 +143,9 @@ export function startStream() {
   });
   es.addEventListener("log", (/** @type {MessageEvent<string>} */ ev) => {
     if (L.stream !== "live") { setStream("live"); }
-    const d = ev.data, i = d.indexOf("\t");
-    const tag = i > 0 ? d.slice(0, i) : "", text = i > 0 ? d.slice(i + 1) : d;
+    const { tag, ts, text } = parseLogEvent(ev.data);
     /** @type {LogLine} */
-    const ln = { tag, text, ts: new Date(), lvl: lvlOf(tag, text) };
+    const ln = { tag, text, ts, lvl: lvlOf(tag, text) };
     if (L.paused) {
       L.pending.push(ln);
       if (L.pending.length > MAX_LINES) { L.pending.shift(); }

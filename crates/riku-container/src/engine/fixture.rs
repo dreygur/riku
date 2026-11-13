@@ -78,6 +78,7 @@ pub fn sample_spec() -> RunSpec {
         stop_signal: StopSignal::default(),
         stop_grace: DEFAULT_STOP_GRACE,
         healthcheck: None,
+        init: false,
     }
 }
 

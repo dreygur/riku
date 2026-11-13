@@ -24,9 +24,7 @@ laptop, a Raspberry Pi. You `git push`, Riku detects the language, builds it, ru
 it under a supervisor, and wires up nginx. That's it. No control plane, no cluster,
 no container runtime to babysit.
 
-It's a Rust reimplementation of [Piku](https://github.com/piku/piku), keeping that
-project's directory layout and workflow while shipping as a single binary. The
-musl builds are fully static; the glibc builds need glibc 2.31 or newer. On the
+It ships as a single binary. The musl builds are fully static; the glibc builds need glibc 2.31 or newer. On the
 server riku also needs git, nginx or Caddy, and openssl.
 
 ```bash
@@ -101,12 +99,6 @@ curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.s
 sudo riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
-Upgrading a host that runs an older riku: install the new binary the same way, run
-`sudo riku init` again, then `riku doctor --fix` as the deploy user to redeploy apps and
-rewrite stale keys and hooks. Restart the supervisor with `sudo systemctl restart riku`.
-Apps that set a removed key (see [`docs/docs/nginx.md`](docs/docs/nginx.md#removed-keys))
-fail to deploy until you unset it.
-
 ### The rk laptop client
 
 `rk` is a separate binary for your laptop (Linux or macOS) that runs riku
@@ -149,9 +141,6 @@ git push riku main
 
 In a hurry? `riku quickstart` scaffolds a sample app and prints the exact
 `git remote add` line to copy.
-
-> You can keep a bare repo in the deploy user's home, `git init --bare ~/myapp.git`,
-> push to it, and Riku symlinks it into `~/.riku/repos/` for you.
 
 ## Commands
 

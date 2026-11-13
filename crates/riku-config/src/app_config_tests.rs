@@ -28,11 +28,10 @@ fn repo_settings_reach_env() {
         loaded.env.get("RIKU_DOMAINS").map(String::as_str),
         Some("shop.example")
     );
-    assert!(loaded.legacy_keys.is_empty());
 }
 
 #[test]
-fn env_file_value_beats_repo_settings() {
+fn a_setting_key_in_env_is_ignored() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = app(tmp.path());
     write(
@@ -48,10 +47,10 @@ fn env_file_value_beats_repo_settings() {
 
     assert_eq!(
         loaded.env.get("RIKU_DOMAINS").map(String::as_str),
-        Some("env.example")
+        Some("repo.example"),
+        "riku.toml decides the setting, not ENV"
     );
     assert_eq!(loaded.env.get("PORT").map(String::as_str), Some("5000"));
-    assert_eq!(loaded.legacy_keys, vec!["RIKU_DOMAINS".to_string()]);
 }
 
 #[test]
@@ -162,7 +161,7 @@ fn no_riku_toml_matches_env_and_procfile() {
     let paths = app(tmp.path());
     let env_file = paths.env_root.join("shop").join("ENV");
     let procfile = paths.app_root.join("shop").join("Procfile");
-    write(env_file.clone(), "PORT=5000\nRIKU_WORKER_TIMEOUT=60\n");
+    write(env_file.clone(), "PORT=5000\nDATABASE_URL=postgres://db\n");
     write(
         procfile.clone(),
         "web: node server.js\nworker: node jobs.js\n",

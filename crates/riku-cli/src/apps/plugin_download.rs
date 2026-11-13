@@ -147,7 +147,7 @@ pub(crate) fn install_binary_plugin(paths: &RikuPaths, name: &str) -> Result<()>
         Err(e) => return Err(e),
     };
     let url = binary_url(name, version, triple);
-    display::info(&format!("Downloading {name} from {url}..."));
+    display::step_done(&format!("Downloading {name} from {url}..."), "");
     let bytes = match fetch_or_explain(&url, MAX_BINARY_BYTES, name, version, triple) {
         Ok(bytes) => bytes,
         Err(e) => return Err(e),

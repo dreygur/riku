@@ -146,7 +146,6 @@ echo 'web: node server.js' > Procfile
 
 ### Deploy
 
-**Option 1: Standard (repo in `~/.riku/repos/`)**
 ```bash
 # Add your Riku server as a remote
 git remote add riku riku@edge.example:myapp
@@ -156,29 +155,7 @@ git add . && git commit -m "Initial commit"
 git push riku main
 ```
 
-**Option 2: Custom bare repo location**
-
-You can create your bare git repo anywhere and Riku will automatically symlink it to `~/.riku/repos/`:
-
-```bash
-# On server: create bare repo anywhere
-git init --bare ~/my-projects/myapp.git
-
-# On local: push to custom path
-git remote add riku riku@edge.example:~/my-projects/myapp.git
-git push riku main
-
-# Riku will automatically:
-# 1. Create symlink ~/.riku/repos/myapp.git → ~/my-projects/myapp.git
-# 2. Deploy your app
-```
-
-The post-receive hook must pass the repo path. If using a custom hook, include:
-```bash
-#!/bin/bash
-REPO_PATH="$(pwd)"
-cat | RIKU_ROOT="$HOME/.riku" riku git-hook "myapp" "$REPO_PATH"
-```
+The push creates the repository in `~/.riku/repos/` on first use.
 
 ---
 
@@ -205,9 +182,13 @@ remote:    Workers   web 1
 remote:    Logs      rk logs myapp
 ```
 
-A failed deploy names the step that failed, repeats the last 15 lines of
-build output, and ends with `rk logs myapp --deploy` for the full log and
-the `git push` that retries it. `git push` exits non-zero.
+A failed deploy names the step that failed under the build output it
+streamed, and ends with `rk logs myapp --deploy` for the full log and
+the `git push` that retries it. `git push` exits non-zero, and the server
+puts its branch back where it was (or removes it after a failed first
+push), so the same `git push` deploys the commit again instead of
+answering "Everything up-to-date". Git still prints the branch update
+line, since the server takes the commits before it deploys them.
 
 An app with no domain gets the server's fallback name, or a port of its own
 when the server has none. See [App URLs](routing.md) for the three ways an
@@ -227,7 +208,6 @@ When you push to Riku:
 > Riku automatically handles:
 > - Nginx config validation and reload
 > - Supervisor auto-start on first deployment
-> - Custom bare repo locations (symlinked to `~/.riku/repos/`)
 
 ---
 
@@ -277,7 +257,7 @@ The full rules are in [Remote Servers](cli.md#remote-servers).
 | Task | Command |
 |------|---------|
 | View logs | `riku logs myapp` |
-| Scale workers | `echo "web=4" > SCALING && git push riku main` |
+| Scale workers | `riku ps myapp --scale web=4` |
 | Set env vars | `riku config set myapp KEY=value` |
 | Restart app | `riku restart myapp` |
 | Stop app | `riku stop myapp` |
@@ -362,7 +342,6 @@ ssh riku@edge.example "tail ~/.riku/logs/myapp/*.log"
 - [Installation Guide](installation.md) - Detailed installation instructions
 - [FAQ](faq.md) - Common questions
 - [GitHub Repository](https://github.com/dreygur/riku) - Source code and issues
-- [Original Piku](https://github.com/piku/piku) - The original Python version
 
 ---
 

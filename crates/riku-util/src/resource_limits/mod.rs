@@ -4,6 +4,7 @@
 //! and enable safe multi-tenant deployments.
 
 use nix::sys::resource::{setrlimit, Resource};
+use std::collections::HashMap;
 use std::env;
 
 #[cfg(test)]
@@ -16,6 +17,13 @@ mod tests;
 /// than the whole per-field block.
 fn env_u64(key: &str) -> Option<u64> {
     env::var(key).ok().and_then(|v| v.parse::<u64>().ok())
+}
+
+/// `key` read through `lookup` as megabytes, with its size in bytes. `None`
+/// when unset, unparsable, or too large for a `u64` byte count, so all three
+/// keep the limit already in place.
+fn megabytes(lookup: impl Fn(&str) -> Option<u64>, key: &str) -> Option<(u64, u64)> {
+    lookup(key).and_then(|mb| mb.checked_mul(1024 * 1024).map(|bytes| (mb, bytes)))
 }
 
 // rlim_t is 32 bits on 32-bit Linux (armv7); a value too large for it means
@@ -47,7 +55,7 @@ fn set_max_processes(_count: u64) -> std::io::Result<()> {
 }
 
 /// Resource limits configuration for spawned processes
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceLimits {
     /// Maximum address space (virtual memory) in bytes (RLIMIT_AS)
     /// Default: 512 MB per process
@@ -128,13 +136,36 @@ impl ResourceLimits {
     fn from_lookup(lookup: impl Fn(&str) -> Option<u64>) -> Self {
         // Memory (RLIMIT_AS) is opt-in: no virtual-address cap unless the
         // operator asks for one. See the doc comment above for why.
-        let mut limits = Self {
+        let base = Self {
             max_memory_bytes: None,
             ..Self::default()
         };
+        let mut limits = base.overlay(lookup);
 
-        if let Some(mb) = lookup("RIKU_MAX_MEMORY_MB") {
-            limits.max_memory_bytes = Some(mb * 1024 * 1024);
+        // Core dumps (disabled by default for security)
+        if env::var("RIKU_ENABLE_CORE_DUMPS").is_ok() {
+            limits.max_core_file_bytes = None; // Unlimited
+            tracing::warn!("Core dumps enabled - not recommended for production");
+        }
+
+        limits
+    }
+
+    /// These limits with the app's own `RIKU_MAX_*` values (its `limits.max_*`
+    /// settings) put over them. A key the app does not set, or sets to
+    /// something that is not a whole number, keeps the value from `self`.
+    pub fn with_app_env(&self, app_env: &HashMap<String, String>) -> Self {
+        self.clone()
+            .overlay(|key| app_env.get(key).and_then(|v| v.parse::<u64>().ok()))
+    }
+
+    /// `self` with every `RIKU_MAX_*` setting `lookup` returns replacing the
+    /// matching limit.
+    fn overlay(self, lookup: impl Fn(&str) -> Option<u64>) -> Self {
+        let mut limits = self;
+
+        if let Some((mb, bytes)) = megabytes(&lookup, "RIKU_MAX_MEMORY_MB") {
+            limits.max_memory_bytes = Some(bytes);
             tracing::info!("Resource limit: max_memory = {} MB", mb);
         }
 
@@ -157,15 +188,9 @@ impl ResourceLimits {
         }
 
         // File size limit in MB
-        if let Some(mb) = lookup("RIKU_MAX_FILE_SIZE_MB") {
-            limits.max_file_size_bytes = Some(mb * 1024 * 1024);
+        if let Some((mb, bytes)) = megabytes(&lookup, "RIKU_MAX_FILE_SIZE_MB") {
+            limits.max_file_size_bytes = Some(bytes);
             tracing::info!("Resource limit: max_file_size = {} MB", mb);
-        }
-
-        // Core dumps (disabled by default for security)
-        if env::var("RIKU_ENABLE_CORE_DUMPS").is_ok() {
-            limits.max_core_file_bytes = None; // Unlimited
-            tracing::warn!("Core dumps enabled - not recommended for production");
         }
 
         limits

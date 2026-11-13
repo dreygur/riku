@@ -21,8 +21,23 @@ fn database_port_binds_loopback_by_default() {
             protocol: Protocol::Tcp,
         }]
     );
-    assert_eq!(svc.stop_grace, Duration::from_secs(30));
+    assert_eq!(svc.stop_grace, Duration::from_secs(10));
     assert_eq!(svc.restart, RestartPolicy::No);
+    assert!(
+        svc.init,
+        "a service runs with the engine's init unless it says no"
+    );
+}
+
+#[test]
+fn init_false_turns_the_engine_init_off_and_a_non_bool_is_refused() {
+    let off = Fixture::new()
+        .parse("web", json!({"image": "myapp", "init": false}))
+        .unwrap();
+    assert!(!off.init);
+
+    let err = error_of(Fixture::new().parse("web", json!({"image": "myapp", "init": "yes"})));
+    assert!(err.contains("init"), "{err}");
 }
 
 #[test]

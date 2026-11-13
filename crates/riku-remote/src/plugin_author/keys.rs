@@ -85,10 +85,13 @@ pub fn cmd_plugins_keygen(program: Program, out: &str) -> Result<()> {
         return Err(e);
     }
 
-    display::success(&format!("Secret key written to {out} (keep it private)."));
-    display::section("Public key (share this so servers can trust you)");
+    display::step_done(
+        &format!("Secret key written to {out} (keep it private)."),
+        "",
+    );
+    display::step_done("Public key (share this so servers can trust you)", "");
     println!("  {}", keypair.public_hex());
-    display::note(&format!(
+    display::detail(&format!(
         "Trust it on a server with: {} <name> <pubkey>",
         program.trust_add()
     ));
@@ -120,7 +123,10 @@ pub fn cmd_plugins_sign(bundle: &str, key_file: &str) -> Result<()> {
     if let Err(e) = write_manifest_signature(dir, &keypair.sign_hex(&entry)) {
         return Err(e);
     }
-    display::success(&format!("Signed {} ({})", manifest.name, manifest.entry));
+    display::step_done(
+        &format!("Signed {} ({})", manifest.name, manifest.entry),
+        "",
+    );
     Ok(())
 }
 

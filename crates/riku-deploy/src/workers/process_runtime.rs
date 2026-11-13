@@ -82,7 +82,7 @@ impl ProcessRuntime<'_> {
     }
 
     /// Remove the stopped copy's own `<app>@<n>.sock`, which uWSGI leaves
-    /// behind. A `RIKU_NGINX_SOCKET` path is the app's, so it stays.
+    /// behind. Any other path its config names is left alone.
     fn remove_copy_socket(&self, copy: &LiveCopy) -> Result<()> {
         let own = crate::router::copy_socket(self.paths, self.app, copy.copy);
         if copy.backend != Some(Backend::Unix(own.clone())) {

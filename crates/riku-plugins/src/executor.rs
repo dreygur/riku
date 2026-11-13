@@ -5,13 +5,13 @@
 
 use nix::sys::signal::{kill, killpg, Signal};
 use nix::unistd::{getpgid, Pid};
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufReader, Read};
 use std::process::{Child, ExitStatus};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use crate::util::display::{self, OutputTail};
+use crate::util::display::{self, for_each_line, OutputTail};
 
 /// Read plugin timeout from `RIKU_PLUGIN_TIMEOUT` env var (seconds).
 /// Defaults to 300 seconds (5 minutes).
@@ -37,29 +37,6 @@ pub use riku_util::spawn::{output_retrying_etxtbsy, spawn_retrying_etxtbsy};
 /// full build log: this isn't meant to replace the live-streamed output.
 const STDERR_TAIL_CAP: usize = 4096;
 
-/// Longest line handed on whole; a longer run without a newline is split, so
-/// one endless line cannot grow a buffer without bound.
-const MAX_LINE_BYTES: usize = 64 * 1024;
-
-/// Calls `on_line` for every line `source` writes until end of file. Bytes
-/// that are not UTF-8 are replaced rather than ending the read: a reader
-/// that stopped early would close the pipe and kill the child with SIGPIPE.
-fn for_each_line(source: impl Read, mut on_line: impl FnMut(&str)) {
-    let mut reader = BufReader::new(source.take(u64::MAX));
-    let mut line = Vec::new();
-    loop {
-        line.clear();
-        let limit = (MAX_LINE_BYTES + 1) as u64;
-        reader.get_mut().set_limit(limit);
-        match reader.read_until(b'\n', &mut line) {
-            Ok(0) | Err(_) => return,
-            Ok(_) => {}
-        }
-        let text = String::from_utf8_lossy(&line);
-        on_line(text.trim_end_matches(['\n', '\r']));
-    }
-}
-
 /// Keeps the last `STDERR_TAIL_CAP` bytes of `buf`, cutting on a character
 /// boundary so multi-byte text never splits.
 fn trim_tail(buf: &mut String) {
@@ -73,11 +50,12 @@ fn trim_tail(buf: &mut String) {
     buf.drain(..cut);
 }
 
-/// Spawn background threads that mirror `child`'s stdout/stderr to this
-/// process's own stdout/stderr line by line, each under the output rail
-/// (`│  line`), so whoever watches `riku deploy` or `git push` sees it live.
-/// Every line from either stream also goes into `recent`, which a failed
-/// deploy shows again. The last [`STDERR_TAIL_CAP`] bytes of stderr are kept
+/// Spawn background threads that mirror `child`'s stdout and stderr to this
+/// process's stdout line by line, each under the output rail (`│  line`), so
+/// whoever watches `riku deploy` or `git push` sees it live. Both go to
+/// stdout because the rest of the deploy rail does: over ssh, stdout and
+/// stderr arrive on separate channels and lose their order. Every line from
+/// either stream also goes into `recent`. The last [`STDERR_TAIL_CAP`] bytes of stderr are kept
 /// in the returned buffer, so a failed exit can be classified by
 /// [`classify_resource_exit`] afterward. `child.stdout`/`child.stderr` must
 /// be `Stdio::piped()` for this to do anything (a `None` pipe is silently
@@ -108,7 +86,7 @@ pub fn tee_output(
         let recent = recent.clone();
         handles.push(std::thread::spawn(move || {
             for_each_line(stderr, |line| {
-                display::detail_err(line);
+                display::detail(line);
                 recent.push(line);
                 let mut buf = match tail.lock() {
                     Ok(buf) => buf,

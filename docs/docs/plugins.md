@@ -1,8 +1,7 @@
 # Plugin System
 
 !!! tip "Looking for installable, versioned plugins?"
-    This page documents the original single-file plugins. For the modern
-    manifest-based bundles: addons, notifiers, `riku plugins install`,
+    This page documents single-file plugins. For manifest-based bundles: addons, notifiers, `riku plugins install`,
     marketplaces, and signature verification, see
     [Plugin Bundles](plugin-bundles.md) and the [Plugin Gallery](plugin-gallery.md).
 
@@ -45,6 +44,25 @@ first-party **event-subscriber** bundle `riku-notify` (`riku install-plugins
 --plugins riku-notify`, not installed by default), see
 [Plugin Bundles](plugin-bundles.md#event-subscribers-notifiers).
 
+### Upgrading Bundled Plugins
+
+Installing a built-in plugin records the sha256 of every file it wrote in
+`~/.riku/plugins/.bundled`. On each `riku init` (including `sudo riku init`
+after an upgrade) riku compares the installed built-in plugins with that
+record:
+
+- unchanged since riku wrote it, and older than this riku's copy: rewritten,
+  shown as `◇  Runtime plugins  refreshed python, node`
+- changed by you, or with no record of riku writing it: left alone, with a
+  `▲` warning; `riku plugins install <name>` replaces it
+- a symlink, or not a regular file owned by the deploy user: never read or
+  replaced, and named in a warning
+
+The downloaded `java` and `clojure` plugins are not refreshed this way:
+init never downloads. When either is installed, init lists it with a `▲`
+line and the command to update it, `riku install-plugins --plugins
+java,clojure` (only the installed ones are named).
+
 ### Plugin Protocol
 
 Each runtime plugin is an executable that implements four subcommands, plus an optional fifth:
@@ -75,15 +93,15 @@ RIKU_ROOT         riku root (~/.riku)
 
 ### Detection Order
 
-1. If `RIKU_RUNTIME=<name>` is set in the app ENV → use that plugin, skip detection
+1. If `runtime.name` is set in riku.toml or with `riku settings set` → use that plugin, skip detection
 2. Otherwise → run `detect` on all non-`riku-*` plugins sorted alphabetically; first exit 0 wins
 3. If no plugin matches, the deploy fails. When the app's files call for a
    shipped runtime that is not installed (`package.json` for node,
-   `requirements.txt` for python, and so on), or `RIKU_RUNTIME` names one, the
+   `requirements.txt` for python, and so on), or `runtime.name` names one, the
    error names it: `app 'myapp' needs the node plugin. Install it with: rk
    plugins install node (on the server: riku plugins install node), then push
    again.` Otherwise it says `No runtime plugin matched` and suggests
-   `RIKU_RUNTIME=<name>`.
+   setting `runtime.name`.
 
 ### Writing a Custom Runtime Plugin
 

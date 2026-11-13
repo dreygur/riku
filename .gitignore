@@ -118,6 +118,9 @@ acme/
 !riku-plugin.toml
 # The repo's own plugin marketplace index.
 !marketplace.toml
+# Example app settings.
+!examples/riku.toml
+!examples/*/riku.toml
 
 # Procfile (app-specific, not repo)
 Procfile

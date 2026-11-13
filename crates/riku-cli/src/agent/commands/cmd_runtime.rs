@@ -95,7 +95,9 @@ pub fn cmd_agent_ps(paths: &RikuPaths, app: &str) -> AgentResponse {
     }))
 }
 
-pub fn cmd_agent_restart(paths: &RikuPaths, app: &str, service: Option<&str>) -> AgentResponse {
+/// Restart `app` without building. `name` is a service of a container app
+/// or a process kind of a Procfile app; `None` restarts everything.
+pub fn cmd_agent_restart(paths: &RikuPaths, app: &str, name: Option<&str>) -> AgentResponse {
     let app = match existing_app(app, &paths.app_root) {
         Ok(a) => a,
         Err(_) => {
@@ -106,7 +108,7 @@ pub fn cmd_agent_restart(paths: &RikuPaths, app: &str, service: Option<&str>) ->
         }
     };
 
-    match crate::apps::cmd_restart(paths, &app, service) {
+    match crate::apps::cmd_restart(paths, &app, name) {
         Ok(_) => AgentResponse::success(json!({
             "message": format!("Restart completed for {}", app)
         })),

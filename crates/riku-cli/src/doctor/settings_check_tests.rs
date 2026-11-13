@@ -12,26 +12,45 @@ fn absent_file_is_ok_with_defaults() {
     assert_eq!(check.detail, "defaults");
 }
 
-#[test]
-fn missing_routing_section_is_reported() {
+fn routing_line(settings_text: &str) -> Check {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());
     std::fs::create_dir_all(&paths.riku_root).unwrap();
-    std::fs::write(&paths.settings_file, "[router]\nname = \"nginx\"\n").unwrap();
-
-    let check = routing_section(&paths);
-
-    assert_eq!(check.map(|c| c.status), Some(Status::Warn));
+    std::fs::write(&paths.settings_file, settings_text).unwrap();
+    routing(&paths).expect("a valid file gives a routing line")
 }
 
 #[test]
-fn present_routing_section_is_not_reported() {
-    let tmp = tempfile::tempdir().unwrap();
-    let paths = RikuPaths::for_tests(tmp.path());
-    std::fs::create_dir_all(&paths.riku_root).unwrap();
-    std::fs::write(&paths.settings_file, "[routing]\nshared_port = 9000\n").unwrap();
+fn missing_routing_section_reports_the_defaults_as_ok() {
+    let check = routing_line("[router]\nname = \"nginx\"\n");
 
-    assert!(routing_section(&paths).is_none());
+    assert_eq!(check.status, Status::Ok, "{}", check.detail);
+    assert_eq!(check.detail, "defaults, port mode, no fallback domain");
+}
+
+#[test]
+fn routing_line_names_the_fallback_domain() {
+    let check = routing_line(
+        "[routing]\nfallback_domain = \"{app}.{ip}.example\"\nserver_ip = \"203.0.113.10\"\n",
+    );
+
+    assert_eq!(check.status, Status::Ok, "{}", check.detail);
+    assert_eq!(
+        check.detail,
+        "fallback domain {app}.{ip}.example with 203.0.113.10"
+    );
+}
+
+#[test]
+fn routing_line_says_the_fallback_is_off_without_server_ip() {
+    let check = routing_line("[routing]\nfallback_domain = \"{app}.{ip}.example\"\n");
+
+    assert_eq!(check.status, Status::Ok, "{}", check.detail);
+    assert!(
+        check.detail.contains("off (no server_ip)"),
+        "{}",
+        check.detail
+    );
 }
 
 #[test]

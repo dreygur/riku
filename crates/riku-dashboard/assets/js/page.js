@@ -4,7 +4,7 @@
 import { renderAuth, wireTokenForms } from "./auth.js";
 import { createCard, updateCard } from "./card.js";
 import { $ } from "./dom.js";
-import { esc, fmtDur, num } from "./format.js";
+import { esc, num, uptimeText } from "./format.js";
 import { closeLogs, renderSeg } from "./logs/drawer.js";
 import { L } from "./logs/stream.js";
 import { emptyHtml, lockedHtml } from "./render/panels.js";
@@ -22,7 +22,7 @@ export function setSup(state, data) {
   const t = $("#supText");
   if (state === "live" && data) {
     const d = /** @type {import("./state.js").StateData} */ (data);
-    const up = d.supervisor_uptime_seconds == null ? "uptime unknown" : "up " + fmtDur(d.supervisor_uptime_seconds);
+    const up = uptimeText(d);
     const eng = d.engine ? `<span class="sep">/</span>${esc(d.engine.name)} ${esc(d.engine.version)}` : "";
     t.innerHTML = `<b>Live</b><span class="sep">/</span>v${esc(d.riku_version)}<span class="sep">/</span>${esc(up)}${eng}`;
   } else if (state === "down") {

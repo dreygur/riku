@@ -12,8 +12,6 @@ use nix::sys::statvfs::statvfs;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 
-use crate::util::authorized_keys::RIKU_KEY_MARKER;
-
 use super::Check;
 
 /// External tools Riku relies on: git is required, systemd is strongly
@@ -126,6 +124,7 @@ pub fn plugins(paths: &RikuPaths) -> Check {
     let count = std::fs::read_dir(&paths.plugin_root)
         .map(|rd| {
             rd.filter_map(|e| e.ok())
+                .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
                 .filter(|e| e.path().is_file())
                 .count()
         })
@@ -176,42 +175,5 @@ pub fn disk(paths: &RikuPaths) -> Check {
             "disk space",
             format!("could not stat {}: {e}", target.display()),
         ),
-    }
-}
-
-/// Check that at least one riku deploy key is authorized for `git push`.
-pub fn ssh_access() -> Check {
-    let home = match std::env::var("HOME") {
-        Ok(h) => h,
-        Err(_) => return Check::warn("ssh access", "HOME not set, cannot locate authorized_keys"),
-    };
-
-    let authorized_keys = std::path::Path::new(&home).join(".ssh/authorized_keys");
-    if !authorized_keys.exists() {
-        return Check::warn(
-            "ssh access",
-            "no authorized_keys: git push deploys need a key (riku init)",
-        );
-    }
-
-    match std::fs::read_to_string(&authorized_keys) {
-        Ok(content) => {
-            let keys = content
-                .lines()
-                .filter(|l| l.contains(RIKU_KEY_MARKER))
-                .count();
-            if keys > 0 {
-                Check::ok(
-                    "ssh access",
-                    format!("{keys} riku deploy key(s) authorized"),
-                )
-            } else {
-                Check::warn(
-                    "ssh access",
-                    "authorized_keys present but no riku deploy keys, add one via riku init",
-                )
-            }
-        }
-        Err(e) => Check::warn("ssh access", format!("could not read authorized_keys: {e}")),
     }
 }

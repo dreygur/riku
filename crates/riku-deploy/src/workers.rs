@@ -11,13 +11,11 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::path::Path;
 
-use riku_container::types::CopyIndex;
-
 use crate::config::RikuPaths;
 use crate::rolling::RouteSink;
-use crate::util::echo;
+use crate::util::display;
 
-pub(crate) use super::scaling::apply_scaling_deltas;
+pub(crate) use super::scaling::record_scaling_deltas;
 
 /// The process kind a runtime plugin's start command runs as.
 const WEB_KIND: &str = "web";
@@ -25,78 +23,54 @@ const WEB_KIND: &str = "web";
 /// restart them every time they exit.
 pub(crate) const ONE_SHOT_KINDS: [&str; 2] = ["release", "preflight"];
 
+/// Whether `kind` runs as long lived copies that scaling counts: not a one
+/// shot command and not a cron entry.
+pub fn is_scalable_kind(kind: &str) -> bool {
+    !ONE_SHOT_KINDS.contains(&kind) && !kind.starts_with("cron")
+}
+
+mod copies;
 mod files;
 #[cfg(test)]
-mod mock_supervisor;
+pub(crate) mod mock_supervisor;
 mod pinned;
+mod plan;
 mod ports;
 pub(crate) mod process_runtime;
+mod rewrite;
+mod rewrite_plan;
 mod scaling;
 mod socket;
 mod stop_wait;
 pub(crate) mod web_env;
 mod web_rollout;
 
+use pinned::port_in_use;
+use plan::plan_workers;
+pub(crate) use rewrite::{
+    app_routes, kinds_down_while_restarting, rewrite_running, PartialRewrite, RewriteError,
+};
 pub use scaling::read_scaling_count;
 
-use files::{remove_stale_configs, remove_surplus_configs, write_worker_config};
-use pinned::{check_pinned_port_with, port_in_use};
-use socket::check_custom_socket;
-use web_env::{build_worker_env, clear_route_env, is_web_facing};
-use web_rollout::{roll_web_kind, stop_web_kind, WebDeploy, WebRoutes};
+use copies::{stop_dropped_kinds, write_copies};
+use files::remove_stale_configs;
+use web_env::{clear_route_env, is_web_facing};
+use web_rollout::{roll_web_kind, stop_web_kind, WebDeploy};
 
-/// Returns true when `RIKU_AUTO_RESTART` is not explicitly disabled.
-fn should_restart(env: &HashMap<String, String>) -> bool {
-    env.get("RIKU_AUTO_RESTART")
-        .map(|v| v.to_lowercase() != "false" && v != "0" && v != "no")
-        .unwrap_or(true)
-}
-
-/// Writes `count` configs for a kind no router fronts. Its old copies were
-/// removed first (see `remove_stale_configs`), so this is stop first.
-fn write_copies(deploy: &WebDeploy<'_>, kind: &str, command: &str, count: u32) -> Result<()> {
-    for copy in (1..=count).filter_map(CopyIndex::new) {
-        let worker_env =
-            match build_worker_env(deploy.app, kind, copy, deploy.env, &[], deploy.paths) {
-                Ok(worker_env) => worker_env,
-                Err(e) => return Err(e),
-            };
-        let written = write_worker_config(
-            deploy.app,
-            deploy.app_path,
-            kind,
-            command,
-            copy.get(),
-            worker_env,
-            deploy.paths,
-        );
-        if let Err(e) = written {
-            return Err(e);
-        }
+/// Run every check [`create_workers_generic`] makes before it changes a
+/// config, without changing anything, so a deploy can tell a refusal from a
+/// failure that left workers half replaced.
+pub(crate) fn check_workers(
+    app: &str,
+    processes: Option<&HashMap<String, String>>,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+    start_cmd: Option<&str>,
+) -> Result<()> {
+    match plan_workers(app, processes, env, paths, start_cmd, port_in_use) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
     }
-    Ok(())
-}
-
-/// Stops the web facing kinds that still run but left the Procfile, such as
-/// `wsgi` after the app moved to `web`.
-fn stop_dropped_kinds(deploy: &WebDeploy<'_>, kept: &HashMap<String, String>) -> Result<()> {
-    let running = match crate::router::web_copies(deploy.app, deploy.paths) {
-        Ok(running) => running,
-        Err(e) => return Err(e),
-    };
-    let mut dropped: Vec<&str> = running
-        .iter()
-        .map(|config| config.worker.kind.as_str())
-        .filter(|kind| !kept.contains_key(*kind))
-        .collect();
-    dropped.sort_unstable();
-    dropped.dedup();
-    for kind in dropped {
-        if let Err(e) = stop_web_kind(deploy, kind) {
-            return Err(e);
-        }
-    }
-    Ok(())
 }
 
 /// [`create_workers_generic`] with the route sink web copies publish to.
@@ -135,29 +109,20 @@ pub(crate) fn create_workers_probed(
     routes: &mut impl RouteSink,
     in_use: impl Fn(u16) -> bool,
 ) -> Result<()> {
-    if let Err(e) = check_pinned_port_with(app, env, paths, in_use) {
-        return Err(e);
-    }
-    if let Err(e) = check_custom_socket(app, env, paths) {
-        return Err(e);
-    }
-    if should_restart(env) {
-        remove_stale_configs(app, paths);
-    }
-
-    let entries = match (processes, start_cmd) {
-        (Some(declared), _) if !declared.is_empty() => declared.clone(),
-        (_, Some(cmd)) => HashMap::from([(WEB_KIND.to_string(), cmd.to_string())]),
-        (_, None) => {
-            echo(
-                "-----> No processes declared, skipping process creation",
-                "yellow",
-            );
+    let plan = match plan_workers(app, processes, env, paths, start_cmd, in_use) {
+        Ok(plan) => plan,
+        Err(e) => return Err(e),
+    };
+    remove_stale_configs(app, paths);
+    let plan = match plan {
+        Some(plan) => plan,
+        None => {
+            display::warn("No processes declared, skipping process creation");
             return Ok(());
         }
     };
 
-    if !entries.keys().any(|kind| is_web_facing(kind)) {
+    if !plan.entries.keys().any(|kind| is_web_facing(kind)) {
         if let Err(e) = clear_route_env(app, paths) {
             return Err(e);
         }
@@ -169,36 +134,18 @@ pub(crate) fn create_workers_probed(
         env,
         paths,
     };
-    let processes: Vec<(&String, &String)> = entries
-        .iter()
-        .filter(|(kind, _)| !ONE_SHOT_KINDS.contains(&kind.as_str()))
-        .collect();
-    let mut counts = HashMap::new();
-    for (kind, _) in &processes {
-        match read_scaling_count(paths, app, kind) {
-            Ok(count) => counts.insert(kind.to_string(), count),
-            Err(e) => return Err(e),
-        };
-    }
-    remove_surplus_configs(app, paths, &counts);
-
-    for (kind, command) in processes {
-        let effective_cmd = if command.is_empty() {
-            start_cmd.unwrap_or(command.as_str())
-        } else {
-            command.as_str()
-        };
-        let count = counts[kind.as_str()];
-        let outcome = match (is_web_facing(kind), count) {
+    for planned in &plan.kinds {
+        let (kind, command) = (planned.kind.as_str(), planned.command.as_str());
+        let outcome = match (is_web_facing(kind), planned.count) {
             (true, 0) => stop_web_kind(&deploy, kind),
-            (true, want) => roll_web_kind(&deploy, kind, effective_cmd, want, routes),
-            (false, count) => write_copies(&deploy, kind, effective_cmd, count),
+            (true, want) => roll_web_kind(&deploy, kind, command, want, routes),
+            (false, count) => write_copies(&deploy, kind, command, count),
         };
         if let Err(e) = outcome {
             return Err(e);
         }
     }
-    stop_dropped_kinds(&deploy, &entries)
+    stop_dropped_kinds(&deploy, &plan.entries)
 }
 
 /// Create worker configs for every entry of `processes`, the app's process
@@ -208,8 +155,8 @@ pub(crate) fn create_workers_probed(
 /// free slot, must pass its health check, and joins the router before an old
 /// copy is drained and stopped. A pinned `PORT` or shared socket stops the
 /// old copy first instead. Other kinds have their configs rewritten, stop
-/// first, unless `RIKU_AUTO_RESTART` is off. Copies above the scale count are
-/// removed either way. Needs the supervisor running.
+/// first, and kinds no longer declared stop. Copies above the scale count are
+/// removed. Needs the supervisor running.
 ///
 /// `start_cmd` is an optional fallback command supplied by the runtime plugin
 /// via its `start` subcommand. It fills an entry with an empty command, and
@@ -222,11 +169,7 @@ pub fn create_workers_generic(
     paths: &RikuPaths,
     start_cmd: Option<&str>,
 ) -> Result<()> {
-    let mut routes = WebRoutes {
-        app,
-        app_path,
-        paths,
-    };
+    let mut routes = app_routes(app, app_path, paths);
     create_workers_with(app, app_path, processes, env, paths, start_cmd, &mut routes)
 }
 

@@ -1,6 +1,9 @@
-use crate::containers::mock_state::{deploy, mock_server, MockServer, DB_AND_WEB};
+use crate::containers::mock_state::{
+    deploy, deploy_keeping_output, mock_server_with_domain, MockServer, DB_AND_WEB,
+};
+use crate::util::display::OutputTail;
 
-const ENV: &str = "RIKU_DOMAINS=myapp.example.com\n";
+const DOMAIN: &str = "myapp.example.com";
 
 fn position(calls: &[String], wanted: impl Fn(&str) -> bool) -> usize {
     calls
@@ -12,7 +15,7 @@ fn position(calls: &[String], wanted: impl Fn(&str) -> bool) -> usize {
 #[test]
 fn deploy_starts_services_in_order() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
     server.mark("slow", "db");
 
     deploy(&server).unwrap();
@@ -32,11 +35,12 @@ fn deploy_starts_services_in_order() {
 #[test]
 fn redeploy_keeps_old_copy_on_failure() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
     deploy(&server).unwrap();
     let site_before = server.site("myapp");
     assert!(site_before.contains("reverse_proxy"), "{site_before}");
     server.mark("exits", "web");
+    std::fs::write(server.state.join("image-id"), "sha256:new\n").unwrap();
 
     let err = deploy(&server).unwrap_err();
 
@@ -62,7 +66,7 @@ fn with_release(server: &MockServer) {
 #[test]
 fn release_runs_in_new_image_before_rollout() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
     with_release(&server);
 
     deploy(&server).unwrap();
@@ -92,7 +96,7 @@ fn release_runs_in_new_image_before_rollout() {
 #[test]
 fn failing_release_aborts_before_rollout() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
     with_release(&server);
     deploy(&server).unwrap();
     std::fs::write(server.state.join("release-exits"), "").unwrap();
@@ -114,9 +118,79 @@ fn failing_release_aborts_before_rollout() {
 }
 
 #[test]
+fn first_deploy_starts_the_release_dependencies_before_the_release() {
+    let tmp = tempfile::tempdir().unwrap();
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
+    with_release(&server);
+
+    deploy(&server).unwrap();
+
+    let calls = server.calls();
+    let db_ready = position(&calls, |l| l == "ready myapp.db.1");
+    let release_run = position(&calls, |l| {
+        l.starts_with("run") && l.contains("myapp-release")
+    });
+    assert!(
+        db_ready < release_run,
+        "the release ran before db was up: {calls:#?}"
+    );
+    let db_runs = calls
+        .iter()
+        .filter(|l| l.starts_with("run") && l.contains("myapp.db."))
+        .count();
+    assert_eq!(db_runs, 1, "db started twice on one deploy: {calls:#?}");
+    assert_eq!(server.containers(), ["myapp.db.1", "myapp.web.1"]);
+}
+
+#[test]
+fn redeploy_leaves_a_running_release_dependency_alone_for_the_release() {
+    let tmp = tempfile::tempdir().unwrap();
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
+    with_release(&server);
+    deploy(&server).unwrap();
+    let before = server.calls().len();
+
+    deploy(&server).unwrap();
+
+    let calls = server.calls()[before..].to_vec();
+    let release_run = position(&calls, |l| {
+        l.starts_with("run") && l.contains("myapp-release")
+    });
+    let touched_db = calls[..release_run]
+        .iter()
+        .any(|l| l.starts_with("stop") || (l.starts_with("run") && l.contains("myapp.db.")));
+    assert!(
+        !touched_db,
+        "db was stopped or started again before the release: {calls:#?}"
+    );
+}
+
+#[test]
+fn failing_release_output_reaches_the_rail_tail_from_both_streams() {
+    let tmp = tempfile::tempdir().unwrap();
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
+    with_release(&server);
+    std::fs::write(server.state.join("release-exits"), "").unwrap();
+    let recent = OutputTail::default();
+
+    let err = deploy_keeping_output(&server, &recent).unwrap_err();
+
+    let lines = recent.lines();
+    assert!(format!("{err:#}").contains("exited with code 1"), "{err:#}");
+    assert!(
+        lines.iter().any(|l| l == "Traceback: cannot reach redis"),
+        "the release's stderr is missing from the streamed output: {lines:?}"
+    );
+    assert!(
+        lines.iter().any(|l| l == "release ran"),
+        "the release's stdout is missing from the streamed output: {lines:?}"
+    );
+}
+
+#[test]
 fn broken_settings_fail_the_deploy() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, ENV);
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, DOMAIN);
     std::fs::write(
         &server.paths.settings_file,
         "[engine]\ncall_timeout = \"soon\"\n",

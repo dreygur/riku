@@ -9,10 +9,14 @@ use riku_util::file_names::worker::WorkerName;
 
 use crate::config::RikuPaths;
 use crate::deploy::lock;
+use crate::deploy::releases::ReleaseLog;
 
+use super::kinds::process_kinds;
 use super::route::route_state;
-use super::supervisor_files::{load_app_stats, supervisor_uptime_seconds, unix_timestamp_now};
-use super::types::{AppStateEntry, EngineInfo, LockState, StateDump, UnitKind, WorkerStateEntry};
+use super::supervisor_files::{load_app_stats, supervisor_uptime, unix_timestamp_now};
+use super::types::{
+    AppStateEntry, EngineInfo, LockState, ServiceStateEntry, StateDump, UnitKind, WorkerStateEntry,
+};
 
 /// Known non-secret routing/port keys an app's `ENV` file may carry.
 const ROUTING_ENV_ALLOWLIST: &[&str] = &[
@@ -79,6 +83,7 @@ fn build_worker_entry(p: &crate::supervisor::stats::ProcessStats) -> WorkerState
             status: p.status.clone(),
             restart_count: p.restart_count,
             memory_bytes: p.memory_bytes,
+            memory_limit_bytes: None,
             cpu_time_ms: p.cpu_time_ms,
             unit: UnitKind::Container,
             container_id: Some(short_id(&facts.id)),
@@ -94,6 +99,7 @@ fn build_worker_entry(p: &crate::supervisor::stats::ProcessStats) -> WorkerState
             status: p.status.clone(),
             restart_count: p.restart_count,
             memory_bytes: p.memory_bytes,
+            memory_limit_bytes: p.memory_limit_bytes,
             cpu_time_ms: p.cpu_time_ms,
             unit: UnitKind::Process,
             container_id: None,
@@ -127,6 +133,21 @@ pub fn build_app_entry(
             .collect(),
         None => Vec::new(),
     };
+    let containers = workers.iter().any(|w| w.unit == UnitKind::Container);
+    let process_kinds = if containers {
+        Vec::new()
+    } else {
+        process_kinds(paths, app, &workers)
+    };
+    let services = container_services(app, paths, &env_map);
+    let released = !ReleaseLog::new(paths).list(app).is_empty();
+    let urls = if released && config_error.is_none() {
+        let container =
+            containers || crate::deploy::containers::runs_containers(app, paths).unwrap_or(false);
+        crate::deploy::app_urls(app, &env_map, paths, container)
+    } else {
+        crate::deploy::AppUrls::default()
+    };
 
     AppStateEntry {
         app: app.to_string(),
@@ -137,9 +158,46 @@ pub fn build_app_entry(
         },
         routing: extract_routing_fields(&env_map),
         route: route_state(app, paths),
+        urls: urls.urls,
+        pending_urls: urls.pending,
         workers,
+        released,
+        process_kinds,
+        services,
         config_error,
     }
+}
+
+/// The compose services of `app` when it runs as containers, from its
+/// checkout and env. Nothing for a Procfile app or an unreadable project.
+fn container_services(
+    app: &str,
+    paths: &RikuPaths,
+    env: &HashMap<String, String>,
+) -> Vec<ServiceStateEntry> {
+    let app_path = paths.app_root.join(app);
+    if !matches!(
+        crate::deploy::containers::is_container_app(&app_path, env),
+        Ok(true)
+    ) {
+        return Vec::new();
+    }
+    let project = match crate::deploy::containers::load_project(app, &app_path, env) {
+        Ok(project) => project,
+        Err(_) => return Vec::new(),
+    };
+    project
+        .services
+        .iter()
+        .map(|service| ServiceStateEntry {
+            name: service.name.to_string(),
+            built: service.build.is_some(),
+            image: match service.build {
+                Some(_) => None,
+                None => service.image.clone(),
+            },
+        })
+        .collect()
 }
 
 #[allow(clippy::question_mark)]
@@ -171,10 +229,12 @@ pub fn build_state_dump(paths: &RikuPaths) -> Result<StateDump> {
     }
     apps.sort_by(|a, b| a.app.cmp(&b.app));
 
+    let uptime = supervisor_uptime(paths, nix::unistd::Uid::effective().is_root());
     Ok(StateDump {
         generated_at: unix_timestamp_now(),
         riku_version: env!("CARGO_PKG_VERSION"),
-        supervisor_uptime_seconds: supervisor_uptime_seconds(paths),
+        supervisor_uptime_seconds: uptime.seconds,
+        supervisor_uptime_unavailable: uptime.unavailable,
         engine: detect_engine(paths),
         apps,
     })

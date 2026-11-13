@@ -1,7 +1,7 @@
 use riku_container::types::CopyIndex;
 
 use super::*;
-use crate::containers::mock_state::{deploy, mock_server, myapp, DB_AND_WEB};
+use crate::containers::mock_state::{deploy, mock_server_with_domain, myapp, DB_AND_WEB};
 use crate::containers::{destroy_containers, restart_copy, RestartOutcome};
 
 fn service(name: &str) -> ServiceName {
@@ -11,7 +11,7 @@ fn service(name: &str) -> ServiceName {
 #[test]
 fn scale_refuses_storage_service() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
 
     let err = scale_service(&myapp(), &server.paths, &service("db"), 2).unwrap_err();
 
@@ -28,9 +28,60 @@ fn scale_refuses_storage_service() {
 }
 
 #[test]
+fn scale_says_how_many_copies_it_started_or_stopped() {
+    assert_eq!(
+        scale_summary(&service("worker"), 1, 2),
+        "Started 1 copy of worker, 2 running"
+    );
+    assert_eq!(
+        scale_summary(&service("worker"), 3, 1),
+        "Stopped 2 copies of worker, 1 running"
+    );
+    assert_eq!(
+        scale_summary(&service("worker"), 2, 2),
+        "worker already runs 2 copies"
+    );
+}
+
+#[test]
+fn scaling_a_worker_starts_a_copy_and_leaves_the_other_services_alone() {
+    let tmp = tempfile::tempdir().unwrap();
+    let compose = "
+services:
+  web:
+    image: nginx:alpine
+    ports: [\"80\"]
+    healthcheck:
+      test: [\"CMD\", \"true\"]
+  worker:
+    image: busybox
+";
+    let server = mock_server_with_domain(tmp.path(), "myapp", compose, "myapp.example.com");
+    deploy(&server).unwrap();
+    let before = server.calls().len();
+
+    scale_service(&myapp(), &server.paths, &service("worker"), 2).unwrap();
+
+    let calls = server.calls()[before..].to_vec();
+    let runs: Vec<&String> = calls.iter().filter(|l| l.starts_with("run")).collect();
+    assert!(
+        runs.len() == 1 && runs[0].contains("myapp.worker.2"),
+        "scaling should start exactly worker.2: {calls:#?}"
+    );
+    assert!(
+        !calls.iter().any(|l| l.starts_with("stop")),
+        "scaling stopped a copy: {calls:#?}"
+    );
+    assert_eq!(
+        server.containers(),
+        ["myapp.web.1", "myapp.worker.1", "myapp.worker.2"]
+    );
+}
+
+#[test]
 fn restart_copy_reports_busy() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     let _deploy = crate::lock::acquire("myapp", &server.paths).unwrap();
     let copy = CopyIndex::new(1).unwrap();
 
@@ -47,7 +98,7 @@ fn restart_copy_reports_busy() {
 #[test]
 fn restart_copy_replaces_a_crashed_copy() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     deploy(&server).unwrap();
     server.crash("myapp.web.1");
     let before = server.calls().len();
@@ -74,7 +125,7 @@ fn restart_copy_replaces_a_crashed_copy() {
 #[test]
 fn restart_copy_leaves_a_user_stopped_service_stopped() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     deploy(&server).unwrap();
     stop_service(&myapp(), &server.paths, Some(&service("web"))).unwrap();
     let after_stop = server.calls().len();
@@ -99,7 +150,7 @@ fn restart_copy_leaves_a_user_stopped_service_stopped() {
 #[test]
 fn destroy_keeps_volumes() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     deploy(&server).unwrap();
     let before = server.calls().len();
 
@@ -120,9 +171,46 @@ fn destroy_keeps_volumes() {
 }
 
 #[test]
+fn destroy_removes_the_images_riku_built_and_keeps_pulled_ones() {
+    let tmp = tempfile::tempdir().unwrap();
+    let compose = "
+services:
+  web:
+    build: ./web
+    ports: [\"8000\"]
+    depends_on: [redis]
+    healthcheck:
+      test: [\"CMD\", \"true\"]
+  redis:
+    image: redis:7-alpine
+";
+    let server = mock_server_with_domain(tmp.path(), "myapp", compose, "myapp.example.com");
+    let web_dir = server.paths.app_root.join("myapp").join("web");
+    std::fs::create_dir_all(&web_dir).unwrap();
+    std::fs::write(web_dir.join("Dockerfile"), "FROM scratch\n").unwrap();
+    deploy(&server).unwrap();
+    let before = server.calls().len();
+
+    destroy_containers(&myapp(), &server.paths).unwrap();
+
+    let calls = server.calls()[before..].to_vec();
+    let built = crate::containers::images::build_tag(&myapp(), &service("web"));
+    assert!(
+        calls.iter().any(|l| l == &format!("image rm {built}")),
+        "the built image {built} was not removed: {calls:#?}"
+    );
+    assert!(
+        !calls
+            .iter()
+            .any(|l| l.starts_with("image rm") && l.contains("redis")),
+        "a pulled image was removed: {calls:#?}"
+    );
+}
+
+#[test]
 fn destroy_containers_refuses_when_deploy_in_progress() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     deploy(&server).unwrap();
     let before = server.calls().len();
     let _lock = crate::lock::acquire("myapp", &server.paths).unwrap();
@@ -147,8 +235,7 @@ fn destroy_containers_refuses_when_deploy_in_progress() {
 #[test]
 fn restart_copy_clears_route_when_restart_fails() {
     let tmp = tempfile::tempdir().unwrap();
-    let env = "RIKU_DOMAINS=myapp.example.com\n";
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, env);
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     deploy(&server).unwrap();
     let site = server.site("myapp");
     assert!(
@@ -189,7 +276,7 @@ fn restart_copy_clears_route_when_restart_fails() {
 #[test]
 fn restart_service_refuses_when_dependency_has_no_running_copies() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     deploy(&server).unwrap();
 
     stop_service(&myapp(), &server.paths, Some(&service("db"))).unwrap();
@@ -217,7 +304,7 @@ fn restart_service_refuses_when_dependency_has_no_running_copies() {
 #[test]
 fn stop_service_stops_dropped_services_first() {
     let tmp = tempfile::tempdir().unwrap();
-    let server = mock_server(tmp.path(), "myapp", DB_AND_WEB, "");
+    let server = mock_server_with_domain(tmp.path(), "myapp", DB_AND_WEB, "myapp.example.com");
     deploy(&server).unwrap();
 
     let only_db = "

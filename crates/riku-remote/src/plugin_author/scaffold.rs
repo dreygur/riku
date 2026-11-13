@@ -72,17 +72,17 @@ pub fn cmd_plugins_scaffold(
         return Err(e);
     }
 
-    display::success(&format!(
-        "Scaffolded {plugin_type} plugin in ./{}",
-        bundle.display()
-    ));
-    display::note(&format!(
+    display::step_done(
+        &format!("Scaffolded {plugin_type} plugin in ./{}", bundle.display()),
+        "",
+    );
+    display::detail(&format!(
         "Edit bin/{name},{} then: {}",
         program.before_install(),
         program.install_command(&format!("./{}", bundle.display()))
     ));
     let program = program.name();
-    display::note(&format!(
+    display::detail(&format!(
         "Sign it for distribution: {program} plugins keygen && {program} plugins sign ./<dir> --key <file>"
     ));
     Ok(())

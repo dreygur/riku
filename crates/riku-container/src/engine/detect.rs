@@ -1,6 +1,6 @@
 //! Finding the container engine executable.
 //!
-//! Security model: the `CONTAINER_ENGINE` setting is operator input that ends
+//! Security model: the `engine.program` setting is operator input that ends
 //! up as the program riku executes. It is accepted only as an absolute path
 //! to an executable file or as a bare name resolved against the supplied
 //! search path. Relative paths and anything containing whitespace are refused,
@@ -28,7 +28,7 @@ pub struct EngineBinary {
 
 /// Resolve the engine to drive.
 ///
-/// `setting` is the `CONTAINER_ENGINE` value. With no setting, the first of
+/// `setting` is the settings.toml `engine.program` value. With no setting, the first of
 /// [`KNOWN_ENGINES`] found in `search_path` wins, so list order beats `PATH`
 /// order. The caller passes `PATH`; this function reads no environment.
 pub fn detect(setting: Option<&str>, search_path: &OsStr) -> Result<EngineBinary> {
@@ -43,20 +43,20 @@ fn from_setting(value: &str, search_path: &OsStr) -> Result<EngineBinary> {
     if path.is_absolute() {
         if !is_executable(path) {
             return Err(anyhow!(
-                "CONTAINER_ENGINE is {value}, which is not an executable file"
+                "engine.program is {value}, which is not an executable file"
             ));
         }
         return Ok(binary_at(path.to_path_buf()));
     }
     if value.contains('/') || value.contains(char::is_whitespace) {
         return Err(anyhow!(
-            "CONTAINER_ENGINE must be an engine name or an absolute path, got {value:?}"
+            "engine.program must be an engine name or an absolute path, got {value:?}"
         ));
     }
     match find_in(value, search_path) {
         Some(program) => Ok(binary_at(program)),
         None => Err(anyhow!(
-            "CONTAINER_ENGINE is {value}, but no executable with that name is on the search path"
+            "engine.program is {value}, but no executable with that name is on the search path"
         )),
     }
 }
@@ -69,7 +69,7 @@ fn from_known(search_path: &OsStr) -> Result<EngineBinary> {
     }
     Err(anyhow!(
         "no container engine found (looked for {} on the search path). \
-         Install one or set CONTAINER_ENGINE",
+         Install one or set engine.program in settings.toml",
         KNOWN_ENGINES.join(", ")
     ))
 }

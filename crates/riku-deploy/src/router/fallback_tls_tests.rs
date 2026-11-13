@@ -16,6 +16,8 @@ fn paths() -> (tempfile::TempDir, RikuPaths) {
                 picked: false,
                 tls: None,
                 cert_for: None,
+                domains: Vec::new(),
+                fallback: false,
             },
         );
         Ok(())

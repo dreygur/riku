@@ -9,8 +9,8 @@ fn routing(domains: &[&str], fallback: bool) -> AppRouting {
         fallback,
         port: None,
         mode: RoutingMode::Domain,
-        legacy: false,
         fallback_skipped: None,
+        fallback_private_ip: None,
     }
 }
 
@@ -66,6 +66,42 @@ fn failed_fallback_says_http_only() {
 }
 
 #[test]
+fn fallback_on_a_private_address_says_http_only_and_why() {
+    let routed = AppRouting {
+        fallback_private_ip: Some(Ipv4Addr::new(10, 0, 0, 5)),
+        ..routing(&["myapp.10.0.0.5.example"], true)
+    };
+
+    let lines = texts(live_lines("myapp", &routed, None, false));
+
+    assert_eq!(
+        lines,
+        [
+            "Live at http://myapp.10.0.0.5.example",
+            "HTTP only: 10.0.0.5 is a private address, so no certificate can be issued",
+        ]
+    );
+}
+
+#[test]
+fn caddy_fallback_on_a_public_address_still_waits_for_its_certificate() {
+    let lines = texts(live_lines(
+        "myapp",
+        &routing(&["myapp.203.0.113.10.example"], true),
+        Some(TlsState::ByCaddy),
+        false,
+    ));
+
+    assert_eq!(
+        lines,
+        [
+            "Live at http://myapp.203.0.113.10.example",
+            "Caddy is getting an HTTPS certificate; https://myapp.203.0.113.10.example works once it has one",
+        ]
+    );
+}
+
+#[test]
 fn no_domain_no_fallback_says_how_to_add_one() {
     let routed = AppRouting {
         fallback_skipped: Some("the app name 'my_app' does not make a valid hostname".to_string()),
@@ -115,10 +151,84 @@ fn port_lines_name_the_url_and_the_firewall() {
 }
 
 #[test]
+fn a_private_address_is_labelled_lan() {
+    let lan = Some(Ipv4Addr::new(10, 0, 0, 5));
+
+    assert_eq!(
+        texts(port_lines(8100, lan))[0],
+        "Live at http://10.0.0.5:8100 (LAN)"
+    );
+    assert_eq!(
+        texts(path_lines("shop", 8080, lan))[0],
+        "Live at http://10.0.0.5:8080/shop/ (LAN)"
+    );
+}
+
+/// The dashboard takes the URL and its label from the same lines; an
+/// unknown server address is not a URL anyone can open.
+#[test]
+fn live_lines_carry_the_url_and_its_label() {
+    let urls = |lines: Vec<Line>| -> Vec<Option<LiveUrl>> {
+        lines
+            .into_iter()
+            .filter(|l| l.colour == "green")
+            .map(|l| l.url)
+            .collect()
+    };
+    let live = |url: &str, label| {
+        Some(LiveUrl {
+            url: url.to_string(),
+            label,
+        })
+    };
+
+    assert_eq!(
+        urls(live_lines(
+            "shop",
+            &routing(&["a.example"], false),
+            None,
+            true
+        )),
+        [live("https://a.example", UrlLabel::Domain)]
+    );
+    assert_eq!(
+        urls(port_lines(8100, Some(Ipv4Addr::new(203, 0, 113, 10)))),
+        [live("http://203.0.113.10:8100", UrlLabel::Public)]
+    );
+    assert_eq!(
+        urls(path_lines("shop", 8080, Some(Ipv4Addr::new(10, 0, 0, 2)))),
+        [live("http://10.0.0.2:8080/shop/", UrlLabel::Lan)]
+    );
+    assert_eq!(urls(port_lines(8100, None)), [None]);
+}
+
+#[test]
 fn port_lines_without_server_ip_say_where_to_look() {
     let lines = texts(port_lines(8100, None));
 
     assert_eq!(lines[0], "Live at http://<this server's address>:8100");
+}
+
+#[test]
+fn url_host_falls_back_to_the_detected_address_when_none_is_configured() {
+    let public = Ipv4Addr::new(203, 0, 113, 10);
+    let private = Ipv4Addr::new(10, 0, 0, 5);
+
+    assert_eq!(
+        url_host(Some(public), Some(private.into())),
+        Some(public),
+        "server_ip from settings wins"
+    );
+    assert_eq!(
+        url_host(None, Some(private.into())),
+        Some(private),
+        "a server with no public address still shows the one it has"
+    );
+    assert_eq!(
+        url_host(None, None),
+        None,
+        "keep the placeholder when nothing is known"
+    );
 }
 
 #[test]
@@ -138,21 +248,6 @@ fn path_mode_lists_the_path_and_warns_about_the_base_path() {
     assert_eq!(lines[0], "Live at http://203.0.113.10:8080/shop/");
     assert!(
         lines.iter().any(|l| l.contains("base path /shop")),
-        "{lines:?}"
-    );
-}
-
-#[test]
-fn legacy_server_points_at_doctor_fix() {
-    let routed = AppRouting {
-        legacy: true,
-        ..routing(&[], false)
-    };
-
-    let lines = texts(live_lines("myapp", &routed, None, false));
-
-    assert!(
-        lines.iter().any(|l| l.contains("riku doctor --fix")),
         "{lines:?}"
     );
 }

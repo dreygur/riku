@@ -5,8 +5,10 @@
 //! status file and names it in [`STATUS_ENV`] for git-receive-pack, whose
 //! hooks inherit the environment. `riku git-hook` writes its error into that
 //! file, and once git-receive-pack returns the push exits non-zero when the
-//! file is not empty. The refs are already updated by then: the push fails,
-//! but the commits are on the server.
+//! file is not empty. Git updated the refs before the hook ran, so the hook
+//! also puts the deploy branch back where it was (see `hook::roll_back`):
+//! the commits stay on the server, but pushing them again retries the
+//! deploy.
 //!
 //! Security: the hook writes only to a file that already exists and never
 //! creates one, and the path comes from the environment of a process that
@@ -16,7 +18,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::Path;
 
-use crate::util::echo;
+use crate::util::display;
 
 /// Names the status file of the push a hook runs for.
 pub(crate) const STATUS_ENV: &str = "RIKU_PUSH_STATUS_FILE";
@@ -37,19 +39,29 @@ pub(crate) fn record_deploy_failure(err: &anyhow::Error) {
         None => return,
     };
     if let Err(e) = write_failure(Path::new(&status_file), err) {
-        echo(
-            &format!("cannot report the failed deploy to the push, it may exit 0: {e}"),
-            "yellow",
-        );
+        display::warn(&format!(
+            "cannot report the failed deploy to the push, it may exit 0: {e}"
+        ));
     }
 }
 
-/// The deploy error the hook recorded in `status_file`, if any.
-pub(crate) fn deploy_failure(status_file: &Path) -> Option<String> {
+/// What the hook left in the status file.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum DeployResult {
+    Succeeded,
+    /// The hook recorded this error. The hook printed it too, and the
+    /// pusher saw it through git's sideband.
+    Failed(String),
+    /// The status file could not be read, so nobody has reported anything.
+    Unknown(String),
+}
+
+/// Read the result the hook recorded in `status_file`.
+pub(crate) fn deploy_result(status_file: &Path) -> DeployResult {
     match fs::read_to_string(status_file) {
-        Ok(reason) if !reason.trim().is_empty() => Some(reason.trim().to_string()),
-        Ok(_) => None,
-        Err(e) => Some(format!("cannot read the deploy result: {e}")),
+        Ok(reason) if !reason.trim().is_empty() => DeployResult::Failed(reason.trim().to_string()),
+        Ok(_) => DeployResult::Succeeded,
+        Err(e) => DeployResult::Unknown(format!("cannot read the deploy result: {e}")),
     }
 }
 

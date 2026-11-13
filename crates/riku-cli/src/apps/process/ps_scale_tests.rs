@@ -43,6 +43,29 @@ fn service_count_rejects_invalid_settings_naming_the_setting() {
 }
 
 #[test]
+fn scale_procfile_refuses_a_bad_count_before_any_deploy() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = RikuPaths::for_tests(tmp.path());
+    let env_dir = paths.env_root.join("shop");
+    std::fs::create_dir_all(&env_dir).unwrap();
+    std::fs::write(env_dir.join("SCALING"), "web=1\n").unwrap();
+
+    for setting in ["web=-1", "web=two", "web"] {
+        let settings = vec!["worker=2".to_string(), setting.to_string()];
+        let err = match scale_procfile(&paths, "shop", &settings) {
+            Ok(()) => panic!("'{setting}' must fail the scale"),
+            Err(e) => format!("{e:#}"),
+        };
+        assert!(err.contains(setting), "error must name '{setting}': {err}");
+        assert_eq!(
+            std::fs::read_to_string(env_dir.join("SCALING")).unwrap(),
+            "web=1\n",
+            "'{setting}' changed SCALING"
+        );
+    }
+}
+
+#[test]
 fn scale_containers_fails_on_malformed_setting_before_scaling() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());

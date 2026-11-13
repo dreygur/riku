@@ -105,6 +105,9 @@ pub(crate) fn run_args(spec: &RunSpec, env_file: &Path) -> Result<Vec<OsString>>
     let mut args: Vec<OsString> = vec!["run".into(), "-d".into()];
     pair(&mut args, "--name", spec.name.as_str());
     pair(&mut args, "--restart", "no");
+    if spec.init {
+        args.push("--init".into());
+    }
     if spec.pull == PullPolicy::Never {
         args.push("--pull=never".into());
     }

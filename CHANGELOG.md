@@ -7,6 +7,749 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `riku init` (and so `sudo riku init` after an upgrade) refreshes the
+  bundled plugins installed in the deploy user's `~/.riku/plugins/` (go,
+  node, python, ruby, rust-lang, riku-notify) to this riku's version, but
+  only copies riku wrote and nobody changed since. Installing a bundled
+  plugin now records each file's sha256 in `~/.riku/plugins/.bundled`. A
+  copy that differs from its record, or has no record, is left alone with
+  a warning naming `riku plugins install <name>`. A symlink, or a file the
+  deploy user does not own, is never read or replaced. Before this an
+  upgrade kept the old plugin text, so a server went on running an
+  outdated python plugin.
+- The router directories stay root's on every run, not only at creation.
+  `sudo riku init` sets `/etc/riku/nginx` to root and `0755`,
+  `/etc/riku/certs` and each app directory in it to root and `0700`, and
+  `/etc/riku/caddy` and its `certs` directories to root, group `caddy`,
+  `2750`; a symlink in place of one is refused. The router helper refuses
+  to write a site or reload while its site root or certificate root is not
+  root owned or is writable by anyone else, naming the directory and the
+  mode it expects, and `riku doctor` prints each directory's owner and mode
+  and fails on one root does not own alone.
+- `riku init` names the installed downloaded plugins (java, clojure) in
+  one `▲` line with `riku install-plugins --plugins <names>`, since init
+  does not download them and an upgrade otherwise kept the old release's
+  binary without saying so.
+- `sudo riku init` asks whether to add the deploy user to docker's socket
+  group when the engine is docker and the deploy user cannot open
+  `/var/run/docker.sock`: "Add riku to the docker group so it can run
+  container apps? This gives the riku user root-equivalent access on this
+  host. [y/N]". The group named is the one that owns the socket. Only an
+  explicit yes runs `usermod -aG <group> <user>` and restarts a running
+  supervisor so it gets the group; a failed `usermod` prints the command
+  and init goes on. No, no terminal, a socket owned by root's group or an
+  unresolved group change nothing and print the two choices `riku doctor`
+  prints. Other engines and a reachable socket get no question. Doctor and
+  the container deploy error are unchanged.
+- `sudo riku init` creates users and groups beyond shadow-utils. It uses
+  `useradd`, `groupadd` and `usermod` when all three are on `PATH`, as
+  before; else BusyBox (Alpine): `addgroup -S`, `adduser -S -D -h -s -G`
+  and `chpasswd -e` to set the same unmatchable `*` password, since
+  BusyBox leaves a locked `!` that OpenSSH refuses even for a key, and
+  `addgroup <user> <group>` for membership. On NixOS (`/etc/NIXOS`, or
+  `ID=nixos` in `/etc/os-release`) it changes no users or groups: it
+  prints the `configuration.nix` lines and stops until the operator
+  rebuilds and runs init again. With neither tool set it stops naming
+  what to install. A failed group add names the command to run by hand.
+
+### Changed
+
+- An app with no web facing process (a Procfile with only `worker:`) and
+  no static site (`RIKU_NGINX_STATIC`) gets no route: the deploy takes it
+  off the router (removing a route an earlier deploy left), records no
+  port, and the push summary shows no URL. It used to be routed to a
+  default backend nothing listened on, and the summary showed that URL.
+  A static site without processes keeps its route.
+- Breaking: `riku restart` (and `riku agent restart`, the dashboard and the
+  control API restart) on a Procfile app restarts the running workers from
+  the current build and never rebuilds. It used to stop the app and deploy
+  the checkout again, so after a failed push it rebuilt the broken commit
+  and left the app down. Restart rewrites the running workers' configs from
+  the current ENV and riku settings (plus the runtime plugin's `env`
+  output, as a deploy computes them), so an edited ENV takes effect without
+  a build, release, preflight or checkout change; each kind keeps its
+  command and copy count, web facing kinds are rolled one copy at a time
+  through the router as on a deploy, and restart holds the app's deploy
+  lock. A web kind whose copies cannot overlap (a pinned `PORT`, or a
+  shared wsgi socket) stops its old copy first, so its route is down until
+  the new one is healthy; restart prints a `▲` warning for it first. A rebuild, a Procfile or routing change, or starting a stopped app
+  is `riku deploy <app>`; restart of an app with no running workers is
+  refused with that pointer. `--hot` is now the same as a plain restart.
+  Container apps keep their restart behavior.
+
+### Fixed
+
+- A Procfile deploy on a server whose supervisor was not running (its first
+  deploy without the systemd unit, or after the supervisor stopped) waited
+  60 seconds and failed with `copy 1 did not become healthy ... Connection
+  refused`: the supervisor was only started after the web copies had to
+  pass their health check, and nothing spawned them. It is now started
+  before any process changes, and when it cannot be started the deploy
+  fails at once, says so, and leaves the previous release running.
+- A container app's failed `release` command printed only `release command
+  exited with code 1`: the release container's stderr (a Python traceback,
+  say) was left to the engine client's own stderr and never reached the
+  push. Both streams now print on the rail like a Procfile `release`. A
+  failed deploy also writes the last 15 lines of build or command output to
+  the deploy log before the error, so `riku logs <app> --deploy` shows the
+  reason; the deploy log held no command output before.
+- A container app's first deploy ran the `release` command before any
+  service existed, so a release that talks to a sibling service (a
+  migration against the compose postgres or redis) always failed. The
+  services the release's service depends on, followed through
+  `depends_on`, now start first when none of their copies is up; one that
+  already runs is left alone, and one started for the release is not
+  replaced again by that deploy.
+- A container app deploy replaced every container, so a change to one
+  service (or a routing setting) restarted the database too and took
+  minutes. A deploy now replaces only services whose running copies differ
+  from what it would start: image id, env, command, ports, mounts, labels,
+  health check and the rest, recorded in a new `riku.spec` label. Kept
+  services print `Keeping <service> (unchanged)`, and a kept routed
+  service's backends are published again so routing changes still apply.
+  Containers from an older riku carry no label and are replaced once.
+- The app env reached every container, pulled images such as `redis` and
+  `postgres` included, so app secrets went into third party images and a
+  `riku config set` restarted the database. Only the services riku builds
+  (compose `build` services and a Dockerfile app's `app`) and the routed
+  service, even a pulled one, get the app env now; any other pulled
+  service gets only its compose `environment` (use `${VAR}` there to pass
+  an app value), and a config change leaves it running. The `release`
+  command still gets the app env, even in a pulled image.
+- `riku destroy` of a container app left the images riku built for it
+  (`localhost/riku-<hash>`) on disk. Destroy now removes them, found from
+  the compose `build` services and from the images the app's containers
+  ran; pulled images stay, since other apps may share them. A refused
+  removal is a warning.
+- A container deploy printed the engine's build and pull output as raw
+  lines (`Step 2/4 : WORKDIR /app`) between the rail lines. Build and pull
+  output now goes on the rail (`│  ...`) like runtime plugin build output,
+  stderr included, and its last lines reach the deploy log on a failure.
+- Docker without the buildx plugin printed its "DEPRECATED: The legacy
+  builder is deprecated" notice into every container deploy. The notice
+  (its first line, the indented lines after it and the blank line that
+  ends it) is now left off the rail and the output tail, and `riku doctor`
+  warns when the engine is docker and `docker buildx version` fails,
+  naming the `docker-buildx-plugin` package. Podman is not checked.
+- A container whose app ran as PID 1 (`python app.py`) ignored `SIGTERM`,
+  so each replaced copy waited the full 30 second grace before it was
+  killed and a `riku config set` took a minute. Containers now run under
+  the engine's init (`--init`), which passes the stop signal on, and the
+  default `stop_grace_period` is 10 seconds. A service sets `init: false`
+  (now an accepted compose key) to run without it; `stop_grace_period`
+  still overrides the grace. The init flag is part of the `riku.spec`
+  fingerprint, so every container is replaced once on the next deploy.
+- A failed deploy left the server's branch at the failed commit: git
+  updates the branch before the post-receive hook deploys, so the retry
+  the outro suggests, `git push riku <branch>`, answered "Everything
+  up-to-date" and deployed nothing, for Procfile and container apps
+  alike. The hook now moves the branch back to where it was with a
+  compare and swap from the pushed commit, or deletes it after a failed
+  first push, so the same push retries. A branch another push moved in
+  the meantime is left alone.
+- `riku destroy` left the app's release history
+  (`~/.riku/releases/<app>.log`), so a new app of the same name offered the
+  old app's commits in `riku rollback` and the dashboard's release picker.
+  Destroy now removes it.
+- `riku apps` listed a running container app as `stopped 0`: it counted
+  only Procfile worker configs. It now adds the app's containers the
+  supervisor last saw running, so a compose app with four copies reads
+  `running 4`.
+- `riku ps <app> --scale worker=2` on a container app printed only
+  `Scaling 'worker' to 2`, so it was unclear whether anything started. It
+  did start or stop the copies; it now also says so, for example
+  `Started 1 copy of worker, 2 running`.
+- The embedded dashboard's container card groups each service with its
+  copies: a header row with the service name, its image and its stepper,
+  Apply, Restart, Stop and Logs, then the copies indented under it. A
+  stopped service keeps its header, from the new `/api/state` `services`
+  list.
+- A memory value without a limit, in a container or Procfile card, sat at
+  the far right of the MEMORY column, away from its header. It now starts
+  under the header.
+- The embedded dashboard's container card: the image no longer wraps
+  under the worker name (it is a one line label under it, cut with an
+  ellipsis, full value in the tooltip), and an image riku built shows as
+  `built` instead of `localhost/riku-<hash>`. The service rows line up in
+  a grid with a fixed label column and no trailing divider, and the
+  release picker, Roll back and Stop app sit on their own row. A worker or
+  container without a memory limit shows its memory with "no limit" and no
+  bar, instead of a bar relative to the app's largest worker that read as
+  full. A router site the deploy user cannot read shows the router name
+  alone, the reason in a tooltip, instead of "caddy unknown".
+- `riku ps <app> --scale web=2` for a kind `SCALING` did not list yet (an
+  app whose first deploy failed) started 3 copies: the count was added to
+  the default of one. A kind missing from `SCALING` now starts from 0.
+  The failed deploy rollback above made this reachable, since a failed
+  first deploy no longer leaves a `SCALING` file behind.
+- Four more security tests and three smoke tests checked nothing. The ENV
+  tests wrote a file and read it back; they now read it through riku's
+  app env loader and check that shell syntax stays literal text and that
+  NUL and other control characters are dropped. The symlink test made a
+  link and checked it pointed out; it now destroys an app whose ACME
+  certificate link points outside riku's tree and checks the target
+  survives. The nginx template injection test only checked its own
+  strings and is removed: `nginx_site_refuses_values_that_could_inject_a_directive`
+  renders those characters. The smoke script's Python, static and Go
+  tests only wrote sample apps and are removed with their app templates;
+  the static one used a `static:` Procfile kind riku no longer has.
+- A fallback name on a private address (`{ip}` in `fallback_domain` and
+  a private `server_ip`, such as `10.0.0.5`) was promised HTTPS: the push
+  said Caddy was getting a certificate, Caddy kept asking for one, and
+  nginx asked Let's Encrypt every hour. No certificate authority can
+  reach such a name, so riku now asks for none. Caddy gets a site with
+  only the `http://` address (the router helper's route takes a new
+  `https = "plain_http_only"`), nginx skips the ACME request, and the push
+  says `HTTP only: 10.0.0.5 is a private address, so no certificate can
+  be issued`. Public addresses and patterns without `{ip}` are unchanged.
+- The dashboard showed the URL an app's current settings give, not the
+  one it answers on. After a settings change an app that had not
+  redeployed showed a new fallback name that only reached Caddy's default
+  page, while the app still answered on its old port. `/api/state` `urls`
+  now come from the route the last deploy applied, recorded in the
+  routing state (`domains` and `fallback` are new in each entry), and the
+  new `pending_urls` lists what the current settings give when that
+  differs; the card says "settings changed, redeploy to use <url>". A
+  domain mode app last routed before this release has no domains
+  recorded, so its card shows that note until its next deploy. The push
+  outro is unchanged.
+- Three more security tests checked only their own logic. The app
+  directory traversal test now runs `riku apps create` with each
+  traversing name and checks it is refused before anything is created.
+  The plugin directory test now checks that `plugin_exists` refuses
+  `../evil` while an executable sits there. The plugin name test is
+  removed: `validate_plugin_name`'s own tests in `riku-plugins` cover the
+  same names.
+- `riku apps create` ignored the exit status of `git init`, and a push
+  to an app without a repo printed "git init failed." and went on to
+  install the hook and run `git-receive-pack` on a directory that was not
+  a repository. Both now stop with an error naming the repo path.
+- `tests/deploy-smoke/test-all.sh` took a `[remote]` argument it never
+  read. The script only drives a local riku against a throwaway
+  `RIKU_ROOT`, so the argument and its usage text are removed.
+- The examples shipped `ENV` and `SCALING` files (`examples/`, `golang`,
+  `nodejs-wisp`, `python-postgres`, `rust`), and the docs told users to
+  commit a `SCALING` file and push. riku reads neither from the repo,
+  only `~/.riku/envs/<app>/`. The files are removed; the READMEs, the
+  FAQ, the quick start, the supervisor and CLI docs now give `riku
+  config set` and `riku ps --scale` lines instead.
+- A worker only app failed its deploy on a server without the router
+  helper: taking it off the router always asked the helper. An app the
+  routing state has no entry for was never routed, so the deploy now
+  skips the removal and needs no helper. An app with a recorded route
+  still goes through the helper and fails clearly when it is missing.
+- `riku destroy --force` of an app whose `riku.toml` is invalid deleted
+  nothing: the container step read the config first and stopped destroy.
+  `--force` now skips that step with a warning naming the config error
+  and removes the route and files. Without `--force` destroy still
+  refuses, now naming `--force`, since it cannot tell whether the app
+  runs containers.
+- `riku ps <app> --scale` with a negative or malformed count printed an
+  error and exited 0; it now fails before anything changes. A scale
+  deploy that failed still recorded the new count in `SCALING`, so the
+  next push started that many copies, and a lowered count stopped the
+  copies above it before the build, without draining them from the
+  router. `SCALING` is now put back when a deploy fails before any worker
+  config changed (the rule the checkout already follows), and copies
+  above a lowered count are drained and stopped by the worker rollout.
+- Breaking: an app has one repo, `~/.riku/repos/<app>.git`. A push to
+  `riku@host:<app>` wrote `repos/<app>`, and the hook linked
+  `repos/<app>.git` to it, so `riku apps create <app>` (which makes
+  `repos/<app>.git`) followed by a push to `<app>` failed: the hook
+  refused to replace the real directory with a link. A push to either
+  spelling now writes `repos/<app>.git`, the hook clones from it and
+  makes no link, and `riku git-hook` refuses any other repo path. A
+  `repos/<app>` left by an earlier push is no longer read; destroy still
+  removes it.
+- A path mode app (`routing.mode = "path"`) that set `RIKU_NGINX_SOCKET`
+  was not refused by name: path mode never built the per app route that
+  refuses the key, and the default backend still read it, so the deploy
+  failed only at the path site's socket check, after its own site had
+  been removed. Every route now refuses the key before a backend is
+  chosen or the helper is asked anything, in every routing mode, and the
+  default backend is always `/run/riku-sockets/<app>.sock`.
+- The embedded dashboard showed "no domain" for an app reachable on a
+  port, such as a port mode app at `http://10.0.0.5:8102`, and
+  `/api/state` did not say where any app is live. `/api/state` now carries
+  `urls`, the URLs a deploy prints, from the same code, each labelled
+  `domain`, `lan` or `public`; the card links them and says "no domain"
+  only for an app without one (worker only, never deployed). The Next.js
+  `dashboard/` does not read `urls` yet.
+- `riku destroy` left the bare repo `~/.riku/repos/<app>.git` behind when
+  it was a real directory, the one `riku apps create` and a push to
+  `<app>.git` make. It removed only a symlink there. It now removes that
+  directory too; a symlink is still removed without following it.
+- `riku deploy <app> --from <dir>` with a plain directory, which `--from`
+  accepts, warned `git fetch failed`: the copy has no git repo to fetch
+  into. The fetch is now skipped for a checkout without `.git`.
+- `riku apps info` listed `RIKU_NODE_VERSION` from the merged env, so it
+  showed an ENV value the node plugin never gets. It now shows a
+  `Runtime Version:` line only for riku.toml `[runtime] version`, read
+  the way the deploy reads it, naming the key the plugin gets.
+- Three more tests passed without checking anything. The security test
+  for server name injection only checked that a directory existed; it now
+  parses domain lists with the route's parser and renders the accepted
+  ones. The smoke script's node version and scaling tests only wrote
+  files; they now deploy with the built riku and check that the node
+  plugin refuses a mismatched `[runtime] version` and that `riku ps
+  --scale worker=2` writes two worker configs.
+- The examples set riku settings in `ENV` files and with `riku config
+  set`, which riku no longer reads or accepts. Their settings now sit in
+  a `riku.toml` (`examples/riku.toml` lists the tables;
+  `examples/python-postgres/riku.toml` keeps its `routing.static_paths`)
+  or in `riku settings set` commands. `RIKU_BIND_ADDRESS=127.0.0.1` (the
+  default, and server only) and the version and nginx keys nothing reads
+  are dropped; the golang and nodejs-wisp `ENV` files held nothing else
+  and are removed.
+- The e2e cases set `RIKU_SKIP_BUILD`, which nothing reads; it is gone,
+  and the comments that claimed the build was skipped now say it runs.
+- The `validate_node_version` comment said no runtime reads the node
+  version. The node plugin's build compares `[runtime] version` with the
+  server's node and fails on a mismatch.
+- `tests/deploy-smoke/quick-test.sh` is removed. It wrote a sample app and
+  printed push instructions, deploying nothing, and CI ran it as a test.
+- The first deploy hint (`riku apps`, `riku apps create`) and the
+  `riku deploy --from` git hint printed their follow up lines as
+  `▲    ...`; they are now `│` lines under the warning, on the same stream.
+- Security: a web facing worker listened on the socket an app named with
+  `RIKU_NGINX_SOCKET`, while the route build refused that key. Under nginx
+  the route check stopped the deploy or restart before a copy started,
+  but under Caddy or a router plugin nothing did, so a wsgi copy bound
+  uWSGI wherever the app said. The worker env now applies the route's own
+  refusal for every router: a deploy or restart of an app with a web
+  facing kind fails before any worker config changes, and every copy
+  listens on its own socket in `/run/riku-sockets`. A worker only app is
+  not affected.
+- Three tests passed without checking anything. The deploy smoke script's
+  env and nginx tests only wrote a file; they now run the built riku and
+  check that `riku config set` refuses each worker and routing setting,
+  names its `riku settings` key and leaves ENV untouched. The nginx value
+  sanitization test only checked its own input; it now renders a site
+  through the router helper's renderer and checks that every directive
+  breaking character is refused in a domain and a static path.
+- The docs no longer list `RIKU_WORKER_PROCESSES`, `LOG_LEVEL` or
+  `LOG_ROTATION_SIZE`: nothing reads them. Scale with `riku ps --scale`
+  or the SCALING file; log rotation sizes are fixed.
+- The post-receive hook reports a missing riku binary as one `■` line
+  instead of the old ` !     ` prefix, and the example server hooks print
+  plain lines instead of `-----> ` and indented text, which showed up
+  inside the deploy rail as stray prefixes. The pre-deploy example names
+  `riku config set`, not `config:set`.
+- Worker memory and CPU counted only the `sh -c` wrapper, so every app
+  showed about 2 MB and no CPU time. A worker with a cgroup now reports
+  the cgroup's `memory.current` and `cpu.stat` usage; one without sums its
+  whole process tree from `/proc`.
+- `/api/state` never sent a worker's memory limit, so the dashboard's
+  memory bar was relative to the app's biggest worker (always full for a
+  single worker). Each worker now carries `memory_limit_bytes`: its cgroup
+  `memory.max`, else the configured limit, `null` without one.
+- Under nginx, the dashboard and `riku apps info` looked for an app's
+  config in `~/.riku/nginx`, but the router helper writes it to
+  `/etc/riku/nginx`, so every nginx app showed "off". Both now check
+  `/etc/riku/nginx/<app>.conf`, and say unknown when the user cannot
+  read that directory (`config_known` in `/api/state`).
+- The ruby plugin's build printed "skipping gem install" and succeeded
+  when bundler was missing, then the app crashed on `bundle exec`. The
+  build now fails with one line saying bundler is not installed.
+- Under Caddy, `routing.static_paths` was dropped without a word. The
+  deploy now stops before any copy starts, saying the setting is nginx
+  only.
+- `ssh riku@host dashboard ...` without a tty kept the dashboard running,
+  holding its port, after the client disconnected: sshd sends no SIGHUP
+  without a pty. A dashboard whose stdin is a pipe or socket now stops when
+  stdin closes or its parent goes away.
+- When the deploy user may not open the engine socket
+  (`permission denied ... docker.sock`), `riku doctor` and a container
+  deploy now say so and name the two choices: add the deploy user to the
+  docker group (root-equivalent) or use rootless podman. A container
+  deploy checks the engine before it runs any hook or changes the env.
+- The embedded dashboard showed an app whose first deploy failed as
+  "Stopped", with Restart, Stop app and scaling active. `/api/state` now
+  carries `released`, and such an app shows "Never deployed" with only
+  Logs and Redeploy open. On a stopped app, Stop app and scaling are
+  disabled until a worker is up again.
+- The dashboard showed a "Web processes" stepper on every Procfile app,
+  a worker only app included, and sent `web` to the scale API. `/api/state`
+  now carries `process_kinds`, and the embedded dashboard shows one stepper
+  per kind and sends only those kinds. The Next.js card shows its web
+  control only when the app has a `web` kind.
+- Worker log lines carried no time (`web.1 | listening on :37139`). The
+  supervisor now writes each captured line behind its capture time in UTC
+  (`2026-11-12T08:14:03Z listening on :37139`), and container lines behind
+  the engine's time. `riku logs` shows it as local `HH:MM:SS` before the
+  worker name.
+- The dashboard logs panel showed every line at the time the browser
+  received it. The log stream now sends each line's own time (the stamp
+  above, or the deploy log's), and the panel shows it as local `HH:MM:SS`,
+  or no time for a line without one.
+- Under Caddy, the dashboard and `riku apps info` showed every app as
+  having no site, because the deploy user cannot read the root owned
+  `/etc/riku/caddy`. They now say the site is unknown. For the same reason
+  `riku doctor --fix` as the deploy user redeployed every Caddy app with a
+  domain or port on each run; it now redeploys nothing there and warns.
+- The runtimes docs said riku deploys a static site when no runtime
+  matches. It does not: static files are served only next to a runtime,
+  `routing.static = true` is the switch, and only nginx serves them. The
+  docs now say so, and a deploy of an app with `routing.static` set and no
+  matching runtime says static files need a runtime.
+- The node plugin on a server without Node.js printed the nub install hint
+  and then died with `npm: command not found`. It now stops with one line
+  saying Node.js is not installed. The python plugin (no uv, no python3)
+  and the go plugin (no go) say the same for their toolchain.
+- A failed build printed its output twice, streamed and then again under
+  `■ Build failed`, and under `riku deploy` over ssh the `■` line came
+  after the outro, because it went to stderr and the rest to stdout. The
+  output now prints once, and the build output, the failed step and the
+  outro all go to stdout in that order.
+- `sudo riku init` without `--ssh-key` warned "No deploy key added" on a
+  server that already had deploy keys. It now reports how many are
+  authorized and warns only when there are none.
+- `riku run` ran its command with no resource limits at all. It now runs
+  under the server wide `RIKU_MAX_*` limits with the app's own
+  `limits.max_*` values put over them, the same as the app's workers. A
+  long `riku run` job is therefore bound by the CPU time (3600 s by
+  default) and file size (1 GB by default) limits; raise them for the app
+  with `riku settings set <app> limits.max_cpu_seconds=...`.
+- `riku agent run` also ran its command with no resource limits. It now
+  runs under the same limits as `riku run`. Its 300 s timeout, output caps
+  and exit handling are unchanged.
+- A `RIKU_MAX_MEMORY_MB` or `RIKU_MAX_FILE_SIZE_MB` value (or the matching
+  `limits.max_*_mb` setting) too large to count in bytes panicked a debug
+  build and wrapped to a wrong limit, as low as 0 bytes, in a release
+  build. Such a value is
+  now ignored like one that is not a number, so the limit stays at the
+  server wide value or the default.
+- The same overflow hit `limits.isolation_max_memory_mb`
+  (`RIKU_ISOLATION_MAX_MEMORY_MB`): a value too large to count in bytes
+  panicked a debug build and could set the worker cgroup's `memory.max` to
+  a tiny value in a release build. Such a value now sets no memory limit,
+  the same as a value that is not a number.
+- A cron job took its env from whichever of the app's worker configs
+  sorted first, so a web copy's config sorting before the cron one gave
+  the job that copy's `PORT` and socket variables. Cron jobs now use the
+  app's cron worker config, and fall back to the first config only when
+  there is none. riku's own config names put `cron` before every web
+  facing kind, so this needed a hand placed config to happen.
+- The Procfile `release` and `preflight` commands ran with riku's own env
+  only, so a migration could not see the app's settings such as
+  `DATABASE_URL`. They now get the app env, the same one the workers get.
+- The per app `limits.max_*` settings (`riku settings set <app>
+  limits.max_open_files=...` and the other four) were stored but never
+  applied: every worker, cron job, build and `preflight`/`release` command
+  ran under the server wide `RIKU_MAX_*` limits. A value an app sets now
+  replaces the server wide one for that app; an app that sets none runs
+  under the same limits as before.
+- The push output printed a `Route  caddy` (or nginx) step for a worker
+  only app, which the router leaves out. Such an app now prints no Route
+  step, the same way a Procfile without `release` prints no Release step.
+  Web apps and static sites print the step as before.
+- A supervisor exiting cleanly unlinked `supervisor.pid` after releasing
+  its lock. A supervisor starting at that moment could win the lock on the
+  unlinked file while the next start locked a new one, leaving two
+  supervisors. The file now stays on exit; only the lock says a supervisor
+  runs, so `riku doctor` and the state dump ignore an unlocked file.
+- `riku restart` could leave an app half restarted: it wrote `LIVE_ENV`
+  and rewrote kinds sorting before `web` (such as `beat`) before asking the
+  router, so a router helper that was down failed the restart after those
+  had restarted. It now checks the router first, rolls web kinds before the
+  others and writes `LIVE_ENV` last. When the router does not confirm a
+  new copy (on a restart, a deploy or a scale), the previous routes are
+  published again and the new copy stopped, instead of leaving one copy
+  too many that a later restart kept for good; if the router cannot
+  confirm that either, the copy is still left running for the next deploy.
+- A `riku restart` that failed writing a non web kind's config after the
+  web kinds had rolled left web on the new env while `LIVE_ENV` still
+  described the old one and the supervisor was not told to reload. Every
+  non web config is now built before anything changes; if a write still
+  fails, `LIVE_ENV` follows the kinds now on the new env, the supervisor
+  reloads, and the error names which kinds run the new env and which may
+  still run the old one.
+- `riku restart` ran the runtime plugin's `env` without a build, so a
+  plugin whose env depends on its build output could hand the workers
+  wrong values. A deploy now keeps the plugin's env in
+  `~/.riku/envs/<app>/PLUGIN_ENV` (`0600`), with a sha256 of the app's ENV
+  and server settings files beside it in `PLUGIN_ENV.source`, and restart
+  uses it without running the plugin while those files are unchanged. When
+  ENV or the settings changed since (`riku config set`, `riku settings
+  set`), or nothing was stored, restart
+  runs the plugin's `env` with the current env as before, says so, and
+  stores the result for the next restart.
+- `sudo riku doctor` said nothing about the supervisor binary, since root
+  no longer reads the deploy user's pid file. It now prints a `▲` line
+  that the check was skipped, with the command to run it as the deploy
+  user (`Run as riku: riku doctor`).
+- `riku init` stopped a supervisor running outside systemd only when it
+  ran an older binary. One started from the current binary, for example
+  by a deploy while the unit was stopped, kept the pid file lock, so the
+  unit's supervisor failed its lock in a restart loop while init said the
+  service started. Init now stops any supervisor holding the lock that is
+  not the unit's own, and fails, naming the pid, when it does not stop
+  within 30 s.
+- A container app push that failed after its containers started being
+  replaced reset the checkout to the last release under the new
+  containers. The checkout now stays at the pushed commit once the first
+  copy starts being replaced, as it already did for Procfile workers. A
+  failure before that (copy counts, image builds and pulls, build hooks,
+  the release command) replaced nothing, so the checkout goes back to the
+  last release and the push says the previous release still runs.
+- A push whose `LIVE_ENV` could not be written left the checkout at the
+  pushed commit while the old workers kept running from it, and said the
+  previous release no longer ran. Nothing has changed at that point, so
+  the checkout now goes back to the last release and the push says the
+  previous release was left as it was. The same holds for a refusal of
+  the worker checks.
+- The laptop server list (`~/.config/riku/servers.toml`) was renamed into
+  place without an fsync, so a crash right after `rk server add` could
+  leave it empty. It is now written through the same private atomic write
+  as the server's ENV files, which syncs before the rename.
+- Swapping a symlink (enabling a worker config) built its temp link as
+  `.<link>.tmp-<pid>` and first removed whatever had that name, so two
+  threads swapping the same link removed or renamed each other's temp link
+  and one swap failed. The temp link now takes the per call name atomic
+  writes use, and a taken name is skipped, never removed.
+- The push summary showed a port or path mode URL on a private address
+  (the detected LAN address when `routing.server_ip` is not set) like any
+  other URL. It is still shown, now as `http://10.0.0.5:8100 (LAN)`,
+  so it is clear the link only works on the server's network. A public
+  address has no label.
+- `scripts/install.sh` installed the download unverified, as root, when
+  fetching its `.sha256` failed for any reason (a network error included)
+  or no sha256 tool was found, with only a warning. It now stops before
+  installing; `RIKU_SKIP_CHECKSUM=1` restores the old warn-and-install
+  behavior for a host that needs it. A mismatching checksum still stops.
+  An empty `.sha256` (an empty 200 reply) or an empty computed hash (the
+  hash tool failing) also stops it now: two empty values compared equal
+  and passed as a match.
+- `riku restart` opened every enabled worker entry for writing and followed
+  links, so an entry linked to a file outside `workers-available` had that
+  file's mtime changed, and one leading to a FIFO hung the restart. It now
+  only touches a regular file in `workers-available` that the deploy user
+  owns, opened without following a final link and without blocking.
+- `riku restart` (and a single worker restart from the dashboard) said
+  `Restarted N worker(s)` when the supervisor was not running and could not
+  be started, and it trusted any live process whose pid sat in a stale
+  `supervisor.pid`, so it could send that unrelated process a SIGHUP. The
+  supervisor's lock on its pid file is now what says it runs; signals go
+  only to a pid in a locked file, and a restart with no supervisor running
+  after the start attempt fails with an error instead.
+- A second supervisor start (for example `riku supervisor` by hand next to
+  the systemd one) emptied the running supervisor's `supervisor.pid` before
+  it failed the lock, so later deploys and restarts could not signal the
+  running one. The file is now emptied only after the lock is won.
+- A `supervisor.pid` holding `0` or a negative number was trusted, so the
+  reload signal after a deploy or restart could go to riku's own process
+  group (`0`) or to every process the deploy user may signal (`-1`). Only
+  a positive pid is read now.
+- A deploy that failed after it had written the new worker configs (for
+  example when the router step failed) reset the checkout to the last
+  release, so the new configs ran the old code. The checkout now stays at
+  the pushed commit once worker configs changed, and the failure outro no
+  longer says the previous release was left as it was.
+- A deploy refused while reading copy counts or checking ports and sockets
+  had already removed the enabled configs of the app's non-web workers, so
+  they stayed stopped. Every check and count now runs before any config is
+  removed. A `SCALING` line whose count is not a whole number (`worker=two`)
+  is now an error naming the line instead of quietly running one copy.
+- Atomic file writes (ENV files, worker configs, plugin records and the
+  rest) opened their temp file `.<name>.tmp-<pid>` with create and
+  truncate, so a symlink planted at that name was followed and the write
+  landed on its target, and two threads writing the same file shared one
+  temp file (one rename then failed). The temp file is now created
+  exclusively with `O_NOFOLLOW` under a name unique to each call, a taken
+  name is skipped, and the temp file is removed when the rename fails.
+- Two plugin installs at once (the CLI and the supervisor's install route)
+  could each rewrite `~/.riku/plugins/.bundled` from the copy they read,
+  dropping one plugin's entry, so `riku init` found no record for that
+  plugin and never refreshed it. The update now holds
+  an exclusive lock on `~/.riku/plugins/.bundled.lock` from read to write.
+- `scripts/install.sh` printed the old `-----> ` and ` !     ` lines and
+  `error: ...`. It now uses the rail: `┌  riku install  <version>`, the
+  `Download`, `Checksum` and `Install` steps, `▲` warnings, `■` errors,
+  `└` and the next command as a summary block. Colors only on a terminal
+  and not with `NO_COLOR`. Arguments, env vars and install steps are
+  unchanged.
+- The first push to a repo named without `.git` printed
+  `│  Linked <repos>/<app>.git to <repos>/<app>` above the deploy intro.
+  That link is internal and is now only logged at debug level.
+- `riku restart <app> <name>` and `riku agent restart <app> <name>` read
+  `<name>` only as a container service, so on a Procfile app they always
+  failed. For a Procfile app it is now a process kind (`web`, `worker`,
+  ...) and only that kind's workers restart; a kind the app does not run
+  is refused with the list of kinds it runs. `riku stop` still refuses a
+  name for a Procfile app.
+- The dashboard's restart button for one worker did nothing: it replaced
+  the enabled symlink, but the supervisor compares the mtime of the file
+  the link points at, which did not change. It now restarts the worker the
+  way `riku restart` does (the config's mtime advances, the supervisor gets
+  a SIGHUP). Restarting a worker that is not enabled is refused.
+- Every `riku init` restarted Caddy, which dropped every site for a moment
+  even with nothing to change. Caddy is now restarted only to move its admin
+  endpoint onto the socket (first run, or a changed drop-in), reloaded when
+  only the Caddyfile changed, and left running otherwise. Every such restart
+  runs `systemctl daemon-reload` first, so an init rerun after a failed
+  reload does not restart Caddy against the old unit.
+- `sudo riku init` on an upgrade left the old supervisor running: it ran
+  `systemctl start`, which does nothing for a running service. A running
+  supervisor is now restarted when it runs another binary than the
+  installed `/usr/local/bin/riku` (compared through `/proc/<pid>/exe`, by
+  inode and then by content), so the new binary takes over and its workers
+  restart with it; the `Service` step says `restarted (new binary)`.
+  Re-running `riku init` without an upgrade leaves it running (`running`)
+  and restarts no app. A supervisor a deploy started outside systemd on
+  an older binary held the pid file lock, so the service's own supervisor
+  failed to start in a loop while init said `started`. Init now stops it
+  first, as the deploy user, and prints a `Supervisor` step saying so.
+- `supervisor.pid` was read with a plain open, also by root (`riku
+  doctor`), so a link in the deploy user's tree made root read another
+  file and a FIFO hung it. Every reader now opens it without following
+  links or blocking, and ignores anything but a regular file the reader
+  owns.
+- A plain (not root) `riku init` on a host where root already installed
+  riku built a second install for the caller: its own `~/.riku`, a user
+  unit running a second supervisor, an ssh key and a forced command in
+  the caller's `authorized_keys`. It now refuses before changing anything
+  when `/etc/systemd/system/riku.service` exists or the deploy account
+  (`RIKU_USER`, default `riku`) is another account. The refusal names the
+  blocker it found and both ways out: `sudo riku init` to update the system
+  install, or, for a user only install, removing a leftover
+  `/etc/systemd/system/riku.service` (unit) or setting `RIKU_USER` to
+  another deploy user name (account). Single-user mode on a host without a
+  system install is unchanged.
+- A failed push printed the failure twice: once from the hook as
+  `remote: ■ ...`, then again without the `remote:` prefix and out of
+  order (`■  The push was received, but the deploy failed: ...`). The
+  second line is gone; `git push` still exits non-zero.
+- `riku init` output: ssh-keygen runs quietly, so its randomart no longer
+  breaks the rail, and the new key is one `SSH key` step; the key prompts
+  sit on the rail; `Prerequisites` lists git and each router found (or
+  `no router`); the root steps read `Label  detail` (`Sockets`,
+  `Shared files`, `Router files`, `Caddyfile`, `Caddy`, `Router helper`,
+  `Nginx include`, `Nginx sockets`, `Old binary`) instead of sentences.
+- The bundled python and node plugins printed their notices with a
+  `-----> ` prefix, which showed as `│  -----> ...` inside the deploy rail.
+  The prefix is gone.
+- On a server with no public address (no `routing.server_ip`), the push
+  summary of a port or path mode app showed
+  `http://<this server's address>:8100`. It now shows the address the
+  server was detected to use, which may be private
+  (`http://10.0.0.5:8100`), and keeps the placeholder only when none
+  is found.
+- `riku restart --hot` on a Procfile app only rewrote the worker configs
+  through their `workers-enabled` symlinks and sent no SIGHUP. A write
+  through a symlink lands in `workers-available`, outside the watched
+  directory, so the supervisor could miss it. Restart now also sends the
+  supervisor a SIGHUP.
+
+- A failed deploy left the app checkout at the commit that failed, while
+  the old processes kept running the previous build. The checkout now goes
+  back to the last recorded release. A failed first deploy leaves it alone.
+
+### Removed
+
+- Breaking: bare repos kept outside `~/.riku/repos/`. A push no longer
+  links `~/<app>.git` into `repos/`, `riku deploy` run inside a bare repo
+  no longer extracts it or installs a hook there, and `riku git-hook`
+  refuses a repo path outside `repos/`. Pushes to `riku@host:<app>` are
+  unchanged. The linking was broken anyway: it named `<app>.git.git` for
+  a push to `<app>.git`, and linked `repos/<app>.git` while git wrote to
+  `repos/<app>`.
+- `riku_util::echo` (`display::echo`, which picked a rail line by color
+  name and stripped a `-----> ` prefix) and the display aliases `info`,
+  `success`, `note`, `section`, `kv` and `blank`. Every caller now names
+  the rail function it always printed through, so no user visible line
+  changed and nothing moved between stdout and stderr.
+- Breaking: `workers.auto_restart` / `RIKU_AUTO_RESTART`. Every deploy
+  already ran the new build with the flag off; it only kept non-web
+  workers from being stopped first, and kept a process kind removed from
+  the Procfile running until `riku stop`. Deploys now always stop such a
+  kind. `workers.auto_restart` in riku.toml is an unknown key, and
+  `RIKU_AUTO_RESTART` in an app ENV is only an env var for the app.
+- Breaking: riku keeps no backward compatibility. Old env key names
+  (`NGINX_SERVER_NAME`, `NODE_VERSION`, `BIND_ADDRESS` and the rest of the
+  pre `RIKU_` names) get no hint at deploy or in `riku doctor`. The
+  nginx keys the route never supported (`RIKU_NGINX_CACHE_*`,
+  `RIKU_NGINX_CSP`, `RIKU_NGINX_CATCH_ALL`, `RIKU_NGINX_INCLUDE_FILE`,
+  `RIKU_NGINX_CLOUDFLARE_ACL`, the listen address keys, `RIKU_DISABLE_IPV6`)
+  no longer fail a deploy; they are plain env vars. A deploy no longer
+  deletes `RIKU_UPSTREAM_PORT`, `UWSGI_SOCKET` or `RIKU_NGINX_EXTERNAL_PORT`
+  from an app ENV, the `UWSGI_*` "deprecated" warnings are gone, and a
+  plugin manifest with `events.mode = "gate"` gets the same refusal as any
+  other mode that is not `observe`. `RIKU_NGINX_SOCKET` still fails a
+  deploy.
+- Breaking: `riku doctor --fix`. Doctor only reports now. The fix mode
+  redeployed apps missing a site file, moved the `ROUTER` and
+  `CONTAINER_ENGINE` files and the riku keys in app ENV files into
+  settings, rewrote stale forced commands and hooks, and added `[routing]`;
+  there is nothing left for it to migrate. The doctor checks for the old
+  files and for renamed or riku keys in app ENV files are gone with it.
+- Breaking: riku settings in an app's ENV file. riku reads its per app
+  settings only from `riku.toml` and the server override (`riku
+  settings`). A settings key such as `RIKU_DOMAINS`, `RIKU_HTTPS_ONLY` or
+  `RIKU_MAX_MEMORY_MB` written into ENV by hand is ignored without a
+  warning, and stays out of `LIVE_ENV`. Before, it sat between the two
+  `riku.toml` files and a deploy warned about it. A runtime version key
+  (`RIKU_NODE_VERSION` and the like) in ENV no longer picks the version:
+  the runtime plugin gets its `RIKU_<NAME>_VERSION` only from `[runtime]
+  version`, which also wins over the ENV line in the app's env. The ENV
+  line stays an env var for the app. Every other ENV line is unchanged.
+- Breaking: the `~/.riku/ROUTER` and `~/.riku/CONTAINER_ENGINE` files.
+  The router and the engine come only from `[router] name` and
+  `[engine] program` in settings.toml; a leftover file is not read. Engine
+  errors now name `engine.program` instead of `CONTAINER_ENGINE`. The
+  unused `RIKU_NGINX_SITES_ENABLED` override is gone too.
+- Breaking: the legacy routing mode. A settings.toml without `[routing]`
+  now means the defaults (no fallback domain, shared port 8080, ports
+  8100-8199), so an app without a domain is in port mode there, and
+  `routing.mode` and `routing.port` work. It used to route every app as
+  before routing modes existed, under nginx with a made up
+  `<app>.example.com` name. An nginx uWSGI or static site with no domain
+  and no fallback domain now fails its deploy, naming `routing.domains`,
+  instead of getting that name. `riku init` adds `[routing]` on every run
+  where it is missing, and `riku doctor` prints an ok `routing` line
+  saying which applies instead of warning about the missing section.
+- `riku init` no longer cleans up after older installs: it does not move
+  deploy writable files out of `/etc/nginx/sites-enabled` and
+  `/etc/nginx/conf.d`, does not delete foreign entries in
+  `/etc/riku/caddy`, does not remove `~/.local/bin/riku`, and does not
+  disable the old `riku-nginx.path` watcher units. The router directories
+  are kept root owned on every init and checked by the router helper
+  instead (see Added).
+- The `tests/stress/container` image and its scripts. It no longer built
+  against the current layout. The demo image in `tests/demo` now runs the
+  root `riku init --no-systemd`, starts the router helper, nginx and the
+  supervisor itself, authorizes bootstrap keys through `--ssh-key`, and no
+  longer includes `~/.riku/nginx` from its nginx site.
+- Breaking: worker configs written before limits and the sandbox were
+  split. cgroup limits kept beside `root_dir` in `[options.isolation]`
+  are ignored; only `[options.limits]` sets them. Removing an app's
+  workers deletes only its `.toml` worker configs; a leftover `.ini` file
+  (never run by the supervisor) stays where it is.
+- Breaking: `riku agent --json`. Agent output is always JSON, and the flag
+  is now an unknown option: a forced command that carries it fails to
+  parse, and a client request with it is refused with
+  `INVALID_PARAMETERS`. Drop `--json` from agent keys in
+  `authorized_keys`.
+- Breaking: a bundled plugin with no sha256 record in
+  `~/.riku/plugins/.bundled` counts as changed by you. `riku init` leaves
+  it alone with the same warning as an edited copy, naming `riku plugins
+  install <name>`, instead of its own list.
+- Breaking: the route riku sends the router helper always carries
+  `open_port` (`null` when unset), so a router helper from before port
+  mode refuses every route. Run `sudo riku init` after installing a new
+  binary so the helper matches.
+- The docs no longer claim compatibility with Piku: the Piku migration
+  steps, the shared layout and plugin claims and the Piku comparisons are
+  gone. The example apps no longer carry Piku names (the Django example's
+  package is `djangoapp`).
+- The `riku_supervisor::health::auth::constant_time_eq` re-export; callers
+  use `riku_util::secure::constant_time_eq`. The docs drop their old
+  version notes: the resource limits "Migration from Older Versions"
+  section, the `ROUTER` file fallback PLUGIN_PROTOCOL.md still described,
+  and the "legacy" label on name-based hooks, single-file plugins and
+  manifestless runtime plugins, which all stay supported.
+
 ## [0.1.4-rc.3] - 2026-11-11
 
 Release candidate, published as a GitHub prerelease. Install it with

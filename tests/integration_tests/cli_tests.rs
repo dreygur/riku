@@ -431,6 +431,173 @@ release: python migrate.py
     }
 }
 
+/// Multi line warnings put their follow up lines on the rail, on the same
+/// stream as the `▲` line, instead of an indented second `▲`.
+mod warning_lines {
+    use std::path::Path;
+    use std::process::{Command, Output, Stdio};
+
+    pub(super) fn riku(root: &Path, args: &[&str]) -> Output {
+        Command::new(env!("CARGO_BIN_EXE_riku"))
+            .arg("--local")
+            .args(args)
+            .env("RIKU_ROOT", root.join(".riku"))
+            .env("HOME", root)
+            .env("XDG_CONFIG_HOME", root)
+            .env_remove("SSH_ORIGINAL_COMMAND")
+            .current_dir(root)
+            .stdin(Stdio::null())
+            .output()
+            .unwrap()
+    }
+
+    fn stderr_lines(out: &Output) -> Vec<String> {
+        String::from_utf8_lossy(&out.stderr)
+            .lines()
+            .map(str::to_string)
+            .collect()
+    }
+
+    fn assert_follows(lines: &[String], expected: &[&str]) {
+        let start = lines.iter().position(|line| line == expected[0]);
+        let found = start.map(|i| &lines[i..(i + expected.len()).min(lines.len())]);
+        assert_eq!(
+            found.map(|run| run.iter().map(String::as_str).collect::<Vec<_>>()),
+            Some(expected.to_vec()),
+            "stderr was:\n{}",
+            lines.join("\n")
+        );
+    }
+
+    #[test]
+    fn first_deploy_hint_lists_its_commands_on_the_rail() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        let out = riku(tmp.path(), &["apps"]);
+
+        assert_follows(
+            &stderr_lines(&out),
+            &[
+                "▲  From your app's git repo on your laptop:",
+                "│  rk server add <name> riku@<host> --admin <login>@<host>",
+                "│  git push riku main",
+            ],
+        );
+    }
+
+    #[test]
+    fn deploy_from_a_plain_directory_hints_git_init_on_the_rail() {
+        let tmp = tempfile::tempdir().unwrap();
+        let source = tmp.path().join("src");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("Procfile"), "worker: true\n").unwrap();
+        std::fs::create_dir_all(tmp.path().join(".riku/apps/plain")).unwrap();
+
+        let out = riku(
+            tmp.path(),
+            &["deploy", "plain", "--from", source.to_str().unwrap()],
+        );
+
+        assert_follows(
+            &stderr_lines(&out),
+            &[
+                "▲  source is not a git repository.",
+                "│  Consider initializing git: git init",
+            ],
+        );
+    }
+
+    /// `--from` copies a plain directory, so the checkout has no git repo
+    /// to fetch into and the deploy must not warn that a fetch failed.
+    #[test]
+    fn deploy_from_a_plain_directory_does_not_try_a_git_fetch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let source = tmp.path().join("src");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("Procfile"), "worker: true\n").unwrap();
+        std::fs::create_dir_all(tmp.path().join(".riku/apps/plain")).unwrap();
+
+        let out = riku(
+            tmp.path(),
+            &["deploy", "plain", "--from", source.to_str().unwrap()],
+        );
+
+        let output = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            !output.contains("git fetch"),
+            "deploy of a plain directory tried a git fetch:\n{output}"
+        );
+    }
+}
+
+mod apps_info {
+    use super::warning_lines::riku;
+
+    /// The version riku hands the runtime plugin comes from riku.toml; an
+    /// ENV line of the same name is a plain app variable and must not be
+    /// shown as the version.
+    fn add_app(root: &std::path::Path, app: &str, riku_toml: Option<&str>) {
+        let riku_root = root.join(".riku");
+        let app_dir = riku_root.join("apps").join(app);
+        std::fs::create_dir_all(&app_dir).unwrap();
+        if let Some(text) = riku_toml {
+            std::fs::write(app_dir.join("riku.toml"), text).unwrap();
+        }
+        let env_dir = riku_root.join("envs").join(app);
+        std::fs::create_dir_all(&env_dir).unwrap();
+        std::fs::write(env_dir.join("ENV"), "RIKU_NODE_VERSION=99\n").unwrap();
+    }
+
+    fn version_lines(root: &std::path::Path, app: &str) -> (Vec<String>, String) {
+        let out = riku(root, &["apps", "info", app]);
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        let lines = stdout
+            .lines()
+            .filter(|line| line.to_lowercase().contains("version"))
+            .map(str::to_string)
+            .collect();
+        (lines, stdout)
+    }
+
+    #[test]
+    fn shows_the_runtime_version_from_riku_toml_not_env() {
+        let tmp = tempfile::tempdir().unwrap();
+        add_app(tmp.path(), "envonly", None);
+        add_app(
+            tmp.path(),
+            "shop",
+            Some("[runtime]\nname = \"node\"\nversion = \"22\"\n"),
+        );
+
+        let (lines, stdout) = version_lines(tmp.path(), "envonly");
+        assert!(
+            lines.is_empty(),
+            "an ENV version the plugin never gets is shown:\n{stdout}"
+        );
+
+        let (lines, stdout) = version_lines(tmp.path(), "shop");
+        assert_eq!(lines.len(), 1, "expected one version line in:\n{stdout}");
+        let words: Vec<&str> = lines[0].split_whitespace().collect();
+        assert_eq!(
+            words,
+            [
+                "│",
+                "Runtime",
+                "Version:",
+                "22",
+                "(RIKU_NODE_VERSION",
+                "from",
+                "riku.toml)"
+            ],
+            "info output:\n{stdout}"
+        );
+    }
+}
+
 mod server_cmd {
     use std::path::Path;
     use std::process::{Command, Output, Stdio};

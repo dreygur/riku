@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use crate::backend::Backend;
 use crate::domain::Domain;
 
-/// How a site answers plain HTTP. Written as `only` or `also_plain_http` in
-/// the router helper's route.
+/// How a site answers plain HTTP. Written as `only`, `also_plain_http` or
+/// `plain_http_only` in the router helper's route.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HttpsPolicy {
@@ -14,6 +14,10 @@ pub enum HttpsPolicy {
     Only,
     /// Plain HTTP is served too, through explicit `http://` addresses.
     AlsoPlainHttp,
+    /// Only plain HTTP, through explicit `http://` addresses, so Caddy asks
+    /// for no certificate. For a fallback name on a private address, which
+    /// no certificate authority can reach.
+    PlainHttpOnly,
 }
 
 /// An app's domains, their HTTPS policy and the backends that serve them.

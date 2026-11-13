@@ -14,6 +14,8 @@ fn port_entry(port: u16) -> Entry {
         picked: true,
         tls: None,
         cert_for: None,
+        domains: Vec::new(),
+        fallback: false,
     }
 }
 
@@ -76,6 +78,8 @@ fn restore_puts_back_the_entry_from_before_a_failed_apply() {
         picked: false,
         tls: None,
         cert_for: None,
+        domains: Vec::new(),
+        fallback: false,
     };
     with_routing_lock(&paths, |state| {
         state.set_entry("myapp", port_entry(8100));

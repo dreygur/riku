@@ -37,17 +37,12 @@ export function cardHtml(id, app) {
       </div>
       <div class="app-foot">
         <div class="controls" data-controls>
-          <div class="ctl">
-            <label class="ctl-label" for="${id}-scale">Web processes</label>
-            <div class="stepper" data-stepper>
-              <button type="button" class="st-btn" data-step="-1" aria-label="Fewer web processes">${I.minus}</button>
-              <input id="${id}-scale" type="number" min="0" max="${MAX_SCALE}" inputmode="numeric" data-scale />
-              <button type="button" class="st-btn" data-step="1" aria-label="More web processes">${I.plus}</button>
-            </div>
+          <div class="ctl" data-scale-ctl hidden>
+            <span class="ctl" data-kinds></span>
             <button type="button" class="btn" data-do="scale" disabled>Apply</button>
             <button type="button" class="btn ghost" data-do="reset" hidden>Reset</button>
           </div>
-          <span class="vsep" aria-hidden="true"></span>
+          <span class="vsep" aria-hidden="true" data-scale-sep hidden></span>
           ${releaseControlHtml(id)}
           <span class="grow"></span>
           <button type="button" class="btn danger" data-do="stop">${I.stop}Stop app</button>
@@ -59,6 +54,24 @@ export function cardHtml(id, app) {
           <button type="button" class="link" data-do="logs">Follow deploy output ${I.arrow}</button>
         </div>
       </div>`;
+}
+
+/**
+ * One stepper per process kind the scale API takes (`process_kinds` in
+ * /api/state), so a worker only app shows no web stepper.
+ * @param {string} id DOM id prefix of the card
+ * @param {string[]} kinds process kinds from the server
+ */
+export function kindSteppersHtml(id, kinds) {
+  return kinds.map((kind, i) => {
+    const k = esc(kind);
+    return `<label class="ctl-label" for="${id}-scale-${i}">${k} processes</label>
+            <div class="stepper" data-stepper="${k}">
+              <button type="button" class="st-btn" data-step="-1" data-kind="${k}" aria-label="Fewer ${k} processes">${I.minus}</button>
+              <input id="${id}-scale-${i}" type="number" min="0" max="${MAX_SCALE}" inputmode="numeric" data-scale="${k}" />
+              <button type="button" class="st-btn" data-step="1" data-kind="${k}" aria-label="More ${k} processes">${I.plus}</button>
+            </div>`;
+  }).join("");
 }
 
 /**

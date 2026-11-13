@@ -69,7 +69,7 @@ To move an app to a fresh server:
 2. Copy the archive to the new server.
 3. `riku init` (if not already initialized) on the new server.
 4. `riku restore myapp myapp.tar.gz`.
-5. Re-provision and bind any addons, then `riku restart myapp`.
+5. Re-provision and bind any addons, then `riku deploy myapp`.
 
 See also [Rollback](rollback.md) for reverting to a previous release without a
 full restore.

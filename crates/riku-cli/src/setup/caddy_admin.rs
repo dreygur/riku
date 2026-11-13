@@ -10,6 +10,9 @@
 //! and the directory is owned by `caddy` with mode `0750`, so only `caddy`
 //! and root reach the admin API. Every command runs with a fixed argv.
 
+// Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
+#![allow(clippy::question_mark)]
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -19,7 +22,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use nix::unistd::User;
 
-use crate::util::{echo, socket_dir, write_atomic};
+use crate::util::{display, socket_dir, write_atomic};
 
 use super::caddy_host::CADDY_USER;
 use super::system_service::{systemctl_ok, SYSTEMD_DIR};
@@ -33,18 +36,55 @@ const ADMIN_SOCKET: &str = "/run/caddy/admin.sock";
 const SOCKET_POLLS: u32 = 20;
 const SOCKET_POLL: Duration = Duration::from_millis(250);
 
-fn write_drop_in(systemd_dir: &Path) -> Result<()> {
+/// Writes the drop-in unless it already has this text. True when it changed.
+fn write_drop_in(systemd_dir: &Path) -> Result<bool> {
     let dir = systemd_dir.join(DROP_IN_DIR);
     if let Err(e) = fs::create_dir_all(&dir) {
         return Err(anyhow!("failed to create {}: {e}", dir.display()));
     }
     let file = dir.join(DROP_IN_FILE);
     if fs::read_to_string(&file).is_ok_and(|current| current == DROP_IN_TEXT) {
-        return Ok(());
+        return Ok(false);
     }
     match write_atomic(&file, DROP_IN_TEXT.as_bytes()) {
-        Ok(()) => Ok(()),
+        Ok(()) => Ok(true),
         Err(e) => Err(anyhow!("failed to write {}: {e}", file.display())),
+    }
+}
+
+/// What init found before deciding how to bring Caddy up to date.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct CaddyState {
+    pub drop_in_changed: bool,
+    pub caddyfile_changed: bool,
+    /// Caddy runs and its admin socket exists.
+    pub on_socket: bool,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum CaddyAction {
+    Restart,
+    Reload,
+    Nothing,
+}
+
+/// Only a restart moves Caddy's admin endpoint onto the socket, so a restart
+/// happens for that alone; a Caddyfile edit on a Caddy already on the socket
+/// is a reload, and an unchanged host is left running.
+fn caddy_action(state: CaddyState) -> CaddyAction {
+    match state {
+        CaddyState {
+            drop_in_changed: true,
+            ..
+        }
+        | CaddyState {
+            on_socket: false, ..
+        } => CaddyAction::Restart,
+        CaddyState {
+            caddyfile_changed: true,
+            ..
+        } => CaddyAction::Reload,
+        _ => CaddyAction::Nothing,
     }
 }
 
@@ -64,28 +104,60 @@ fn create_run_dir(group: &str) -> Result<()> {
 }
 
 /// Make `/run/caddy` exist for the admin socket, now and after every
-/// restart, then restart Caddy so it listens on the socket. A reload cannot do
-/// this: it targets the new Caddyfile's socket, while the running Caddy still
-/// listens on `localhost:2019`.
-pub(super) fn move_admin_to_socket(group: &str) -> Result<()> {
-    if let Err(e) = write_drop_in(Path::new(SYSTEMD_DIR)) {
-        return Err(anyhow!("{e}"));
-    }
-    if !systemctl_ok(&["daemon-reload"]) {
-        return Err(anyhow!("systemctl daemon-reload failed"));
-    }
+/// restart, and bring Caddy up to date with as little disruption as the
+/// change needs (see [`caddy_action`]). A reload cannot move the admin
+/// endpoint: it targets the new Caddyfile's socket, while a Caddy not yet
+/// moved still listens on `localhost:2019`.
+pub(super) fn move_admin_to_socket(group: &str, caddyfile_changed: bool) -> Result<()> {
+    let drop_in_changed = match write_drop_in(Path::new(SYSTEMD_DIR)) {
+        Ok(changed) => changed,
+        Err(e) => return Err(anyhow!("{e}")),
+    };
     if let Err(e) = create_run_dir(group) {
         return Err(anyhow!("{e}"));
     }
-    if !systemctl_ok(&["restart", "caddy"]) {
-        return Err(anyhow!("could not restart caddy onto the admin socket"));
-    }
+    let state = CaddyState {
+        drop_in_changed,
+        caddyfile_changed,
+        on_socket: systemctl_ok(&["is-active", "--quiet", "caddy"])
+            && Path::new(ADMIN_SOCKET).exists(),
+    };
+    let done = match caddy_action(state) {
+        CaddyAction::Nothing => "running",
+        CaddyAction::Reload => match systemctl_ok(&["reload", "caddy"]) {
+            true => "reloaded",
+            false => {
+                return Err(anyhow!(
+                    "could not reload caddy. See: journalctl -u caddy -n 20"
+                ))
+            }
+        },
+        CaddyAction::Restart => {
+            if let Err(e) = restart_with_current_unit() {
+                return Err(e);
+            }
+            "restarted"
+        }
+    };
     if !wait_for_socket(Path::new(ADMIN_SOCKET), SOCKET_POLLS) {
         return Err(anyhow!(
             "caddy did not create {ADMIN_SOCKET}. See: journalctl -u caddy -n 20"
         ));
     }
-    echo("Caddy restarted on the admin socket", "green");
+    display::step_done("Caddy", &format!("{done}, admin on {ADMIN_SOCKET}"));
+    Ok(())
+}
+
+/// Restarts Caddy after a `daemon-reload`, every time: an earlier init may
+/// have written the drop-in and then failed before reloading, and a rerun
+/// sees the drop-in unchanged. The reload does not touch the running Caddy.
+fn restart_with_current_unit() -> Result<()> {
+    if !systemctl_ok(&["daemon-reload"]) {
+        return Err(anyhow!("systemctl daemon-reload failed"));
+    }
+    if !systemctl_ok(&["restart", "caddy"]) {
+        return Err(anyhow!("could not restart caddy onto the admin socket"));
+    }
     Ok(())
 }
 

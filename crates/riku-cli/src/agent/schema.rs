@@ -186,7 +186,7 @@ pub fn cmd_agent_schema() -> Result<()> {
             },
             {
                 "name": "restart",
-                "description": "Restart an application",
+                "description": "Restart an application's running processes from the current build, without rebuilding. Use deploy to rebuild",
                 "parameters": {
                     "app": {
                         "type": "string",
@@ -196,7 +196,7 @@ pub fn cmd_agent_schema() -> Result<()> {
                     "process": {
                         "type": "string",
                         "required": false,
-                        "description": "Specific process to restart"
+                        "description": "Only this service of a container app, or this process kind (web, worker, ...) of a Procfile app"
                     }
                 },
                 "requires_confirmation": false,

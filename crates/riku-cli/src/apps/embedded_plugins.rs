@@ -10,6 +10,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 
+use super::bundled_record;
 use super::plugin_write::write_plugin_file;
 
 const EXECUTABLE: u32 = 0o755;
@@ -22,6 +23,18 @@ pub(crate) struct EmbeddedFile {
     pub name: &'static str,
     pub bytes: &'static [u8],
     pub mode: u32,
+}
+
+impl EmbeddedFile {
+    /// Where the file goes, relative to the plugin root: `python`,
+    /// `riku-notify/bin/on-event`.
+    pub(crate) fn relative_path(&self) -> String {
+        if self.dir.is_empty() {
+            self.name.to_string()
+        } else {
+            format!("{}/{}", self.dir, self.name)
+        }
+    }
 }
 
 /// A plugin riku carries, by the name `riku install-plugins` uses.
@@ -79,7 +92,8 @@ pub(crate) fn find(name: &str) -> Option<&'static EmbeddedPlugin> {
     EMBEDDED.iter().find(|plugin| plugin.name == name)
 }
 
-/// Write `plugin`'s files under `plugin_root`.
+/// Write `plugin`'s files under `plugin_root` and note their hashes in the
+/// bundled record, so a later `riku init` can tell them from edited copies.
 #[allow(clippy::question_mark)]
 pub(crate) fn write_out(plugin: &EmbeddedPlugin, plugin_root: &Path) -> Result<()> {
     for file in plugin.files {
@@ -91,7 +105,7 @@ pub(crate) fn write_out(plugin: &EmbeddedPlugin, plugin_root: &Path) -> Result<(
             return Err(e);
         }
     }
-    Ok(())
+    bundled_record::record_written(plugin, plugin_root)
 }
 
 #[cfg(test)]

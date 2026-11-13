@@ -1,6 +1,7 @@
 use std::time::{Duration, Instant};
 
 use riku_config::settings::EngineSettings;
+use riku_util::display::OutputTail;
 
 use crate::engine::fixture::{logging_engine, ID};
 use crate::engine::{BuildSpec, ContainerId};
@@ -43,7 +44,9 @@ fn pull_limit_applies() {
     let engine = engine.with_settings(short_limits());
     let started = Instant::now();
 
-    let err = engine.pull("registry.example/myapp:1").unwrap_err();
+    let err = engine
+        .pull("registry.example/myapp:1", &OutputTail::default())
+        .unwrap_err();
 
     let message = err.to_string();
     assert!(
@@ -71,7 +74,7 @@ fn build_limit_applies() {
         platform: None,
     };
 
-    let err = engine.build(&spec).unwrap_err();
+    let err = engine.build(&spec, &OutputTail::default()).unwrap_err();
 
     let message = err.to_string();
     assert!(
@@ -85,7 +88,9 @@ fn failed_pull_names_the_image_and_status() {
     let dir = tempfile::tempdir().unwrap();
     let (engine, _log) = logging_engine(dir.path(), "case \"$1\" in pull) exit 3;; esac");
 
-    let err = engine.pull("registry.example/myapp:1").unwrap_err();
+    let err = engine
+        .pull("registry.example/myapp:1", &OutputTail::default())
+        .unwrap_err();
 
     assert!(
         err.to_string().contains("registry.example/myapp:1") && err.to_string().contains('3'),

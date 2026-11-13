@@ -1,14 +1,16 @@
-//! `riku doctor` check for `<riku root>/settings.toml`.
+//! `riku doctor` checks for `<riku root>/settings.toml`.
 //!
 //! Read-only like every other doctor check: it parses the file and reports
-//! what the loader would refuse, naming the offending key.
+//! what the loader would refuse, naming the offending key, and which routing
+//! applies to an app without a domain.
 
-use crate::config::settings;
+use crate::config::settings::{self, RoutingSettings};
 use crate::config::RikuPaths;
 
 use super::Check;
 
 const NAME: &str = "settings";
+const ROUTING: &str = "routing";
 
 /// Fail when the settings file cannot be read or holds a bad key or value,
 /// ok otherwise.
@@ -22,35 +24,31 @@ pub fn settings_file(paths: &RikuPaths) -> Check {
     }
 }
 
-/// A warning when settings.toml has no `[routing]` section, so apps without
-/// a domain get no URL. `None` when it is there or the file does not parse
-/// (which [`settings_file`] reports).
-pub fn routing_section(paths: &RikuPaths) -> Option<Check> {
-    match settings::load(paths) {
-        Ok(loaded) if !loaded.routing.present => Some(Check::warn(
-            NAME,
-            "no [routing] section, so apps without a domain get no URL; `riku doctor --fix` adds it",
-        )),
-        _ => None,
+/// How an app without a domain of its own is reached under `routing`.
+fn routing_detail(routing: &RoutingSettings) -> String {
+    let defaults = if routing.present { "" } else { "defaults, " };
+    match (&routing.fallback_domain, routing.server_ip) {
+        (Some(pattern), _) if !pattern.needs_ip() => {
+            format!("{defaults}fallback domain {}", pattern.as_str())
+        }
+        (Some(pattern), Some(ip)) => {
+            format!("{defaults}fallback domain {} with {ip}", pattern.as_str())
+        }
+        (Some(pattern), None) => format!(
+            "{defaults}fallback domain {} off (no server_ip), port mode",
+            pattern.as_str()
+        ),
+        (None, _) => format!("{defaults}port mode, no fallback domain"),
     }
 }
 
-/// One warning per legacy single value file still present (`ROUTER`,
-/// `CONTAINER_ENGINE`); they are still read, but settings.toml replaces them.
-pub fn legacy_files(paths: &RikuPaths) -> Vec<Check> {
-    [&paths.router_file, &paths.container_engine_file]
-        .into_iter()
-        .filter(|file| file.exists())
-        .map(|file| {
-            Check::warn(
-                NAME,
-                format!(
-                    "{} is a legacy file; `riku doctor --fix` moves it into settings.toml",
-                    file.display()
-                ),
-            )
-        })
-        .collect()
+/// An ok line saying which routing applies to an app without a domain.
+/// `None` when the file does not parse, which [`settings_file`] reports.
+pub fn routing(paths: &RikuPaths) -> Option<Check> {
+    match settings::load(paths) {
+        Ok(loaded) => Some(Check::ok(ROUTING, routing_detail(&loaded.routing))),
+        Err(_) => None,
+    }
 }
 
 #[cfg(test)]

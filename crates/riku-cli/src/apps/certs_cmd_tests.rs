@@ -11,10 +11,14 @@ fn paths_with_app(tmp: &tempfile::TempDir) -> RikuPaths {
     paths
 }
 
-fn set_domains(paths: &RikuPaths, domains: &str) {
-    let dir = paths.env_root.join("myapp");
-    fs::create_dir_all(&dir).unwrap();
-    fs::write(dir.join("ENV"), format!("RIKU_DOMAINS={domains}\n")).unwrap();
+fn set_domains(paths: &RikuPaths, domains: &[&str]) {
+    fs::create_dir_all(paths.env_root.join("myapp")).unwrap();
+    let quoted: Vec<String> = domains.iter().map(|d| format!("\"{d}\"")).collect();
+    fs::write(
+        paths.app_settings_override("myapp"),
+        format!("[routing]\ndomains = [{}]\n", quoted.join(", ")),
+    )
+    .unwrap();
 }
 
 fn bundle(cert: &str, key: &str) -> String {
@@ -67,7 +71,10 @@ fn set_refuses_a_key_that_does_not_match_and_writes_nothing() {
 fn set_reports_domains_the_certificate_does_not_cover_but_still_installs() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = paths_with_app(&tmp);
-    set_domains(&paths, "edge.example, www.shop.example, other.example");
+    set_domains(
+        &paths,
+        &["edge.example", "www.shop.example", "other.example"],
+    );
 
     let outcome =
         install_bundle(&paths, "myapp", &bundle(VALID_CERT, VALID_KEY), |_| Ok(())).unwrap();
@@ -146,7 +153,7 @@ fn set_drops_the_acme_registration_so_a_renewal_cannot_overwrite_the_pair() {
 
     let tmp = tempfile::tempdir().unwrap();
     let paths = paths_with_app(&tmp);
-    set_domains(&paths, "shop.example");
+    set_domains(&paths, &["shop.example"]);
     fs::create_dir_all(paths.acme_sh_root.join("shop.example_ecc")).unwrap();
     let log = tmp.path().join("acme.log");
     let acme_sh = paths.acme_sh_root.join("acme.sh");

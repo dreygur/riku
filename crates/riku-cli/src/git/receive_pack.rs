@@ -1,36 +1,34 @@
 //! Git receive-pack and upload-pack command handlers.
 //!
 //! Security: the repository path comes from the SSH command line. It is
-//! reduced to a validated app name plus an optional `.git` before it is
-//! joined under `repos/`, and git runs with an argument vector, no shell.
+//! reduced to a validated app name, and the app's one repo
+//! `repos/<app>.git` is used whichever spelling was pushed; git runs with an
+//! argument vector, no shell.
 
 use anyhow::{anyhow, Result};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::NamedTempFile;
 
 use crate::config::RikuPaths;
-use crate::util::echo;
+use crate::util::display;
 use crate::util::validation::{validate_app_name, REPO_SUFFIX};
 
-use super::push_status::{deploy_failure, STATUS_ENV};
-use super::repo::{ensure_repo_symlink, post_receive_hook};
+use super::hook_repo::app_repo;
+use super::push_status::{deploy_result, DeployResult, STATUS_ENV};
+use super::repo::post_receive_hook;
 
-/// The directory under `repos/` a pushed path names. `riku@host:shop` and
-/// `riku@host:shop.git` both deploy app `shop`, and their repositories stay
-/// at `repos/shop` and `repos/shop.git` as before. App names cannot end in
-/// `.git`, so only one suffix is taken off. A trailing `/`, which git
-/// accepts in a remote path, goes first.
-fn repo_dir_name(requested: &str) -> Result<String> {
+/// The app's repo a pushed path names. `riku@host:shop` and
+/// `riku@host:shop.git` both name `repos/shop.git`, the one repo of app
+/// `shop`. App names cannot end in `.git`, so only one suffix is taken off.
+/// A trailing `/`, which git accepts in a remote path, goes first.
+fn requested_repo(paths: &RikuPaths, requested: &str) -> Result<PathBuf> {
     let requested = requested.trim_end_matches('/');
-    let (app, suffix) = match requested.strip_suffix(REPO_SUFFIX) {
-        Some(app) => (app, REPO_SUFFIX),
-        None => (requested, ""),
-    };
+    let app = requested.strip_suffix(REPO_SUFFIX).unwrap_or(requested);
     match validate_app_name(app) {
-        Ok(app) => Ok(format!("{app}{suffix}")),
+        Ok(app) => Ok(app_repo(paths, &app)),
         Err(e) => Err(e),
     }
 }
@@ -61,16 +59,10 @@ fn install_post_receive_hook(hook_path: &std::path::Path) -> Result<()> {
 /// then delegates to git-receive-pack directly.
 #[allow(clippy::question_mark)]
 pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
-    let repo = match repo_dir_name(app) {
+    let riku_repo = match requested_repo(paths, app) {
         Ok(repo) => repo,
         Err(e) => return Err(e),
     };
-
-    if let Err(e) = ensure_repo_symlink(paths, &repo) {
-        return Err(e);
-    }
-
-    let riku_repo = paths.git_root.join(&repo);
 
     // Check for an actual bare-repo marker (HEAD), not just the directory's
     // existence. `git init --bare` always creates the target directory
@@ -86,12 +78,16 @@ pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
             .arg("init")
             .arg("--quiet")
             .arg("--bare")
-            .arg(&repo)
-            .current_dir(&paths.git_root)
+            .arg(&riku_repo)
             .status();
         match status {
             Ok(status) if status.success() => {}
-            Ok(_) => echo("git init failed.", "red"),
+            Ok(status) => {
+                return Err(anyhow!(
+                    "git init failed for {} ({status})",
+                    riku_repo.display()
+                ))
+            }
             Err(e) => return Err(anyhow!("cannot run git init: {e}")),
         }
     }
@@ -115,43 +111,39 @@ pub fn cmd_git_receive_pack(paths: &RikuPaths, app: &str) -> Result<()> {
         Ok(status) => status,
         Err(e) => return Err(anyhow!("cannot run git-receive-pack: {e}")),
     };
-    let code = push_exit_code(status.code(), status_file.path());
+    let (code, message) = push_outcome(status.code(), status_file.path());
     drop(status_file);
+    if let Some(message) = message {
+        display::error(&message);
+    }
     std::process::exit(code);
 }
 
-/// git-receive-pack's own failure, else 1 when the deploy the hook ran
-/// failed. Its stderr reaches the pushing client, so the reason goes there.
-fn push_exit_code(receive_pack: Option<i32>, status_file: &Path) -> i32 {
+/// The exit code of the push: git-receive-pack's own failure, else 1 when
+/// the deploy the hook ran failed. Also what to print: a deploy failure is
+/// not printed here, because the hook already showed it to the pusher.
+fn push_outcome(receive_pack: Option<i32>, status_file: &Path) -> (i32, Option<String>) {
     match receive_pack {
         Some(0) => {}
-        Some(code) => return code,
-        None => return 1,
+        Some(code) => return (code, None),
+        None => return (1, None),
     }
-    match deploy_failure(status_file) {
-        Some(reason) => {
-            echo(
-                &format!("The push was received, but the deploy failed: {reason}"),
-                "red",
-            );
-            1
-        }
-        None => 0,
+    match deploy_result(status_file) {
+        DeployResult::Succeeded => (0, None),
+        DeployResult::Failed(_) => (1, None),
+        DeployResult::Unknown(why) => (1, Some(why)),
     }
 }
 
 /// Handle git upload-pack for an app.
 #[allow(clippy::question_mark)]
 pub fn cmd_git_upload_pack(paths: &RikuPaths, app: &str) -> Result<()> {
-    let repo = match repo_dir_name(app) {
+    let repo = match requested_repo(paths, app) {
         Ok(repo) => repo,
         Err(e) => return Err(e),
     };
 
-    let status = match Command::new("git-upload-pack")
-        .arg(paths.git_root.join(&repo))
-        .status()
-    {
+    let status = match Command::new("git-upload-pack").arg(&repo).status() {
         Ok(status) => status,
         Err(e) => return Err(anyhow!("cannot run git-upload-pack: {e}")),
     };

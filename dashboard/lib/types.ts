@@ -16,12 +16,15 @@ export interface Worker {
   status: ProcStatus;
   restart_count: number;
   memory_bytes: number;
+  /** Cgroup `memory.max` or the configured limit; `null` when there is none. */
+  memory_limit_bytes: number | null;
   cpu_time_ms: number;
 }
 
 // Mirrors `RouteState` in crates/riku-cli/src/apps/dump_state/route.rs.
 export type RouteState =
-  | { router: "nginx"; config_exists: boolean; enabled: boolean }
+  // config_known is false when the user cannot read /etc/riku/nginx.
+  | { router: "nginx"; config_exists: boolean; config_known: boolean; enabled: boolean }
   | { router: "caddy"; site: string | null }
   | { router: "plugin"; name: string }
   | { router: "unknown"; error: string };
@@ -32,12 +35,19 @@ export interface AppState {
   routing: Record<string, string>; // RIKU_DOMAINS, RIKU_HTTPS_ONLY, ...
   route: RouteState;
   workers: Worker[];
+  /** False while no deploy of the app has recorded a release. */
+  released: boolean;
+  /** Process kinds the scale API takes; empty for a container app. */
+  process_kinds: string[];
 }
 
 export interface RikuState {
   generated_at: number;
   riku_version: string;
-  supervisor_uptime_seconds: number;
+  /** `null` when no supervisor holds the pid file, or when it was not read. */
+  supervisor_uptime_seconds: number | null;
+  /** Why the uptime was not read (the server ran as root); absent otherwise. */
+  supervisor_uptime_unavailable?: string;
   apps: AppState[];
 }
 
@@ -97,7 +107,7 @@ export function routeBadge(route: RouteState): { label: string; live: boolean } 
   switch (route.router) {
     case "nginx":
       return {
-        label: `nginx ${route.enabled ? "live" : route.config_exists ? "staged" : "off"}`,
+        label: `nginx ${route.enabled ? "live" : !route.config_known ? "unknown" : route.config_exists ? "staged" : "off"}`,
         live: route.enabled,
       };
     case "caddy":

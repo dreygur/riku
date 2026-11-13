@@ -168,6 +168,22 @@ fn mode(path: &std::path::Path) -> u32 {
 }
 
 #[test]
+fn a_certs_dir_others_can_write_stops_any_reload() {
+    let host = Host::new();
+    apply_caddy(&host.roots, &app("shop"), &with_own_certificate(5000));
+    let certs = host.roots.cert_root();
+    fs::set_permissions(&certs, fs::Permissions::from_mode(0o2770)).unwrap();
+
+    let (_, error) = failure(apply_caddy(&host.roots, &app("other"), &route(5001)));
+
+    assert!(
+        error.contains(&certs.display().to_string()) && error.contains("2750"),
+        "the error names the dir and the expected mode: {error}"
+    );
+    assert_eq!(host.calls().lines().count(), 1, "{}", host.calls());
+}
+
+#[test]
 fn own_certificate_is_written_for_the_caddy_group_only_and_named_in_the_site() {
     let host = Host::new();
     let shop = app("shop");

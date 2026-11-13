@@ -22,20 +22,16 @@ curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.s
 sudo riku init --ssh-key ~/.ssh/authorized_keys
 ```
 
-After running `sudo riku init`, the binary is installed to `/usr/local/bin/riku`, owned by root so the deploy user cannot change it. Units, git hooks and deploy keys all name that path. A plain `riku init` as the deploy user needs it to exist already.
+After running `sudo riku init`, the binary is installed to `/usr/local/bin/riku`, owned by root so the deploy user cannot change it. Units, git hooks and deploy keys all name that path. A plain `riku init` (single-user mode, no system service) needs it to exist already, and is refused on a host where `sudo riku init` already ran (the system `riku.service` exists, or the deploy account is another user): it would build a second install next to the system one. Run `sudo riku init` again there instead.
 
 `sudo riku init` also installs and starts `riku-router-helper.service`, a small root service on `/run/riku-router.sock`. It writes the nginx or Caddy site of each app (`/etc/riku/nginx`, `/etc/riku/caddy`, certificates in `/etc/riku/certs`) and reloads the router. See [Nginx](nginx.md#the-router-helper).
 
-### Upgrading an existing host
+When docker is installed and the deploy user cannot open its socket, `sudo riku init` asks on the terminal whether to add the deploy user to the group that owns the socket, which is root-equivalent on the host. The default is no; see [settings.md](settings.md#router-and-engine).
+
+### Upgrading riku
 
 1. Install the new binary: the installer above, or `sudo cp riku /usr/local/bin/riku` from the release tarball.
-2. Run `sudo riku init`. It installs the router helper and rewrites the units.
-3. As the deploy user, run `riku doctor --fix`. It redeploys every app that has no site file in the router's site root (`/etc/riku/nginx` or `/etc/riku/caddy`) and rewrites stale keys and hooks.
-4. Restart the supervisor: `sudo systemctl restart riku`.
-
-`sudo riku init` does not delete what an older version left in `/etc/nginx/sites-enabled` and `/etc/nginx/conf.d` that the deploy user could write. It moves those files and links to `/etc/riku/removed/<unix time>/` (root only, mode `0700`), as links, and prints where each one went. Put one back if you wanted it. It does delete the old deploy owned `*.caddy` files in `/etc/riku/caddy`, which `riku doctor --fix` renders again.
-
-An app that sets a key the core route dropped (see [Removed keys](nginx.md#removed-keys)) fails its deploy and names the key. Unset it with `riku config unset`.
+2. Run `sudo riku init`. It rewrites the units and the router helper, sets the owner and mode of the router directories again, and restarts the supervisor when it runs another binary or the unit text changed. Its `Service` line says whether it did.
 
 ## The rk laptop client
 
@@ -47,7 +43,9 @@ Install it with the install script and the `--rk` flag:
 curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.sh | sh -s -- --rk
 ```
 
-The script downloads the matching release build (see [Release builds](#release-builds)), checks it against the release `.sha256` when one is published, and installs to `~/.local/bin` (or `/usr/local/bin` as root). `RIKU_INSTALL_DIR` and `RIKU_VERSION` override the directory and release tag. Set them on the `sh` side of the pipe, after `sudo` when there is one, or they never reach the script: `curl -fsSL .../install.sh | sudo RIKU_VERSION=v0.1.3 sh`. Without `--rk` the same script installs `riku`, which it only does as root, into `/usr/local/bin`.
+The script downloads the matching release build (see [Release builds](#release-builds)), checks it against the release `.sha256`, and installs to `~/.local/bin` (or `/usr/local/bin` as root). `RIKU_INSTALL_DIR` and `RIKU_VERSION` override the directory and release tag. Set them on the `sh` side of the pipe, after `sudo` when there is one, or they never reach the script: `curl -fsSL .../install.sh | sudo RIKU_VERSION=v0.1.3 sh`. Without `--rk` the same script installs `riku`, which it only does as root, into `/usr/local/bin`.
+
+When the `.sha256` cannot be fetched (a network error, a release without one) or the host has neither `sha256sum` nor `shasum`, the script stops before installing anything. `RIKU_SKIP_CHECKSUM=1` makes it warn and install the unverified download instead: `curl -fsSL .../install.sh | sudo RIKU_SKIP_CHECKSUM=1 sh`. A checksum that is fetched and does not match always stops the install.
 
 First use:
 
@@ -99,6 +97,16 @@ curl -fsSL https://raw.githubusercontent.com/dreygur/riku/main/scripts/install.s
 - **RAM**: 256 MB (512 MB recommended)
 - **Storage**: 50 MB for Riku + app dependencies
 - **OS**: Linux (Debian/Ubuntu/RHEL/Arch)
+
+### Supported distros
+
+`sudo riku init` creates the deploy user and its groups with the tools the host has:
+
+- Debian, Ubuntu, Fedora, RHEL, Arch and openSUSE: shadow-utils (`useradd`, `groupadd`, `usermod`).
+- Alpine: BusyBox (`adduser`, `addgroup`, `chpasswd`) when shadow-utils is not installed. The deploy user's login shell is `/bin/bash`, so install bash first (`apk add bash`).
+- NixOS: riku changes no users or groups. Init prints the `configuration.nix` lines to add (the deploy user, its group, `riku-sockets` and the extra groups it needs) and stops; run `nixos-rebuild switch`, then `sudo riku init` again.
+
+With neither tool set, init stops and names what to install.
 
 ### Required Software
 - **Rust** (for building from source)
@@ -161,7 +169,8 @@ only one of nginx and Caddy it finds, or a prompt when both are and init has a
 terminal. Without a terminal and with both installed, it stops and asks for
 `RIKU_ROUTER=nginx` or `RIKU_ROUTER=caddy`; with neither, it stops and says to
 install one. `RIKU_ROUTER` always wins, and a rerun keeps the router already
-stored (nginx for older installs that have nginx).
+stored. When none is stored but `~/.riku` already exists and nginx is
+installed, init uses nginx.
 
 It then copies the binary to `/usr/local/bin/riku`, creates the deploy user, installs the units and the router helper, and creates the directory structure in the deploy user's home:
 ```
@@ -330,18 +339,12 @@ cd ~/riku
 git pull
 cargo build --release
 
-# Install the new binary and rewrite units and the router helper
+# Install the new binary, rewrite units and the router helper, refresh
+# the built-in runtime plugins you have not changed, and restart the
+# supervisor when it runs the old binary
 sudo cp target/release/riku /usr/local/bin/riku
 sudo riku init
-
-# As the deploy user, redeploy apps without a site file and rewrite stale hooks
-riku doctor --fix
-
-# Restart the supervisor
-sudo systemctl restart riku
 ```
-
-`sudo riku init` also removes the deploy user's old `~/.local/bin/riku`, which would otherwise shadow `/usr/local/bin/riku`.
 
 ## Uninstalling
 

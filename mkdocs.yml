@@ -82,7 +82,7 @@ nav:
       - Caddy: caddy.md
       - Supervisor: supervisor.md
       - Resource Limits: resource-limits.md
-      - Plugins (legacy): plugins.md
+      - Single-File Plugins: plugins.md
       - Plugin Bundles: plugin-bundles.md
       - Plugin Gallery: plugin-gallery.md
       - AI Agents: ai-agents.md

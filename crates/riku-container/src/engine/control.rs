@@ -13,11 +13,13 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use riku_config::settings::EngineSettings;
+use riku_util::display::OutputTail;
 
 use super::env_file::write_env_file;
 use super::run_args::{run_args, whole_seconds_up};
 use super::run_spec::{PullPolicy, RunSpec};
 use super::spec_check::{check_positional, check_spec};
+use super::streamed::Teed;
 use super::{ContainerId, Engine};
 use crate::types::StopSignal;
 
@@ -81,6 +83,16 @@ impl Engine {
         self.run_quiet(&args_of(["rm", id.as_str()]))
     }
 
+    /// Remove the local image tag `image`. The engine refuses while a
+    /// container still uses it.
+    pub fn remove_image(&self, image: &str) -> Result<()> {
+        match check_positional("image", image) {
+            Ok(()) => {}
+            Err(e) => return Err(e),
+        }
+        self.run_quiet(&args_of(["image", "rm", image]))
+    }
+
     /// Block until the container exits and return its exit code. Bounded by
     /// the build limit, since it waits on one-off jobs such as a release
     /// command that can run as long as a build.
@@ -100,17 +112,19 @@ impl Engine {
         }
     }
 
-    /// Pull `image` from its registry, streaming the engine's output and
-    /// stopping it at the pull limit.
-    pub fn pull(&self, image: &str) -> Result<()> {
+    /// Pull `image` from its registry, putting the engine's output on the
+    /// rail and its last lines in `recent`, and stopping it at the pull limit.
+    pub fn pull(&self, image: &str, recent: &OutputTail) -> Result<()> {
         match check_positional("image", image) {
             Ok(()) => {}
             Err(e) => return Err(e),
         }
-        self.run_streamed(
+        self.run_teed(
             &args_of(["pull", image]),
             image,
             self.settings().pull_timeout,
+            recent,
+            Teed::Everything,
         )
     }
 }

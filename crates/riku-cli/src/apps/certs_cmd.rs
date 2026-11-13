@@ -177,8 +177,8 @@ pub fn cmd_certs_set(paths: &RikuPaths, app: &str) -> Result<()> {
     for domain in &outcome.uncovered {
         display::warn(&format!("the certificate does not cover {domain}"));
     }
-    display::success(&format!("'{app}' now serves your certificate"));
-    display::note(&expires_line(outcome.info.expires_at));
+    display::step_done(&format!("'{app}' now serves your certificate"), "");
+    display::detail(&expires_line(outcome.info.expires_at));
     Ok(())
 }
 
@@ -187,7 +187,7 @@ pub fn cmd_certs_set(paths: &RikuPaths, app: &str) -> Result<()> {
 pub fn cmd_certs_show(paths: &RikuPaths, app: &str) -> Result<()> {
     match show_lines(paths, app) {
         Ok(lines) => {
-            lines.iter().for_each(|line| display::note(line));
+            lines.iter().for_each(|line| display::detail(line));
             Ok(())
         }
         Err(e) => Err(e),
@@ -204,9 +204,10 @@ pub fn cmd_certs_unset(paths: &RikuPaths, app: &str) -> Result<()> {
     if let Err(e) = remove_own(paths, &app, |name| reconfigure(paths, name)) {
         return Err(e);
     }
-    display::success(&format!(
-        "removed the own certificate of '{app}'; the route now uses one riku issues"
-    ));
+    display::step_done(
+        &format!("removed the own certificate of '{app}'; the route now uses one riku issues"),
+        "",
+    );
     Ok(())
 }
 

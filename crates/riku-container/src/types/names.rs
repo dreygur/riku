@@ -25,6 +25,10 @@ pub mod labels {
     /// Restart policy riku applies itself, set by riku. The engine's own
     /// restart policy stays off.
     pub const RESTART: &str = "riku.restart";
+    /// Fingerprint of everything a copy of the service was started with
+    /// except its image id, set by riku. A deploy compares it to skip
+    /// services that did not change.
+    pub const SPEC: &str = "riku.spec";
     /// Label compose tools put on every container of a project.
     pub const COMPOSE_PROJECT: &str = "com.docker.compose.project";
 }

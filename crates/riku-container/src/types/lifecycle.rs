@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 /// How long a container gets to exit after the stop signal before it is killed.
-pub const DEFAULT_STOP_GRACE: Duration = Duration::from_secs(30);
+pub const DEFAULT_STOP_GRACE: Duration = Duration::from_secs(10);
 
 /// Signal sent to stop a container, such as `SIGTERM`.
 #[derive(Debug, Clone, PartialEq, Eq)]

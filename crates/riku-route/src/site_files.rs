@@ -59,6 +59,28 @@ pub(crate) fn ensure_dir(dir: &Path, mode: u32, owner: u32) -> Result<()> {
         .and_then(|()| set_mode(dir, mode))
 }
 
+/// Refuse to write into or reload from `dir` unless it is a real directory
+/// owned by `owner` that no group or other user can write. `expected` is the
+/// mode root init gives it, named in the error. A `dir` that does not exist
+/// yet is fine: [`ensure_dir`] creates it when a write needs it.
+///
+/// The router loads every file in its site root, so a root another account
+/// can write would let that account put config in front of root's router.
+pub(crate) fn check_router_dir(dir: &Path, owner: u32, expected: u32) -> Result<()> {
+    if let Err(e) = dir.symlink_metadata() {
+        if e.kind() == ErrorKind::NotFound {
+            return Ok(());
+        }
+    }
+    match check_write_dir(dir, owner) {
+        Ok(()) => Ok(()),
+        Err(e) => Err(anyhow!(
+            "{e}; it must be owned by root with mode {expected:o} (nobody else may write it). \
+             Run sudo riku init to set it"
+        )),
+    }
+}
+
 fn staged(path: &Path) -> PathBuf {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(".new");

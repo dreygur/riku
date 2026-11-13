@@ -20,7 +20,7 @@
 //!   (kernel ≥6.7). UDP and non-TCP protocols are out of scope for now and are
 //!   *not* blocked: declaring `network = false` is not yet a UDP guarantee.
 //!
-//! Legacy runtime plugins without a manifest (§8) carry no declared
+//! Runtime plugins without a manifest (§8) carry no declared
 //! capabilities and are spawned through their own path, so they are unaffected.
 
 mod apply;

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::apps::control_target::{control_target, ControlTarget};
 use crate::config::RikuPaths;
 use crate::deploy::containers::{scale_service, AppName, ServiceName};
-use crate::util::{echo, exit_if_invalid, parse_settings};
+use crate::util::{display, exit_if_invalid, parse_settings};
 
 #[allow(clippy::question_mark)]
 fn service_count(setting: &str) -> Result<(ServiceName, u32)> {
@@ -38,7 +38,7 @@ fn scale_containers(paths: &RikuPaths, app: &AppName, settings: &[String]) -> Re
         Err(e) => return Err(e),
     };
     for (service, copies) in &wanted {
-        echo(&format!("-----> Scaling '{service}' to {copies}"), "green");
+        display::step_done(&format!("Scaling '{service}' to {copies}"), "");
         if let Err(e) = scale_service(app, paths, service, *copies) {
             return Err(e);
         }
@@ -47,6 +47,7 @@ fn scale_containers(paths: &RikuPaths, app: &AppName, settings: &[String]) -> Re
 }
 
 /// Procfile apps: compute deltas against `SCALING` and deploy with them.
+/// Every setting is checked before the deploy starts; a bad one is an error.
 #[allow(clippy::question_mark)]
 fn scale_procfile(paths: &RikuPaths, app: &str, settings: &[String]) -> Result<()> {
     let config_file = paths.env_root.join(app).join("SCALING");
@@ -57,45 +58,44 @@ fn scale_procfile(paths: &RikuPaths, app: &str, settings: &[String]) -> Result<(
     };
 
     let mut deltas: HashMap<String, i64> = HashMap::new();
+    let mut added = Vec::new();
     for s in settings {
-        if let Some(eq_pos) = s.find('=') {
-            let k = s[..eq_pos].trim().to_string();
-            let v_str = s[eq_pos + 1..].trim().to_string();
-            match v_str.parse::<i64>() {
-                Ok(c) => {
-                    if c < 0 {
-                        echo(&format!("cannot scale type '{}' below 0", k), "red");
-                        return Ok(());
-                    }
-                    if let Some(current) = worker_count.get(&k) {
-                        match current.parse::<i64>() {
-                            Ok(current_val) => {
-                                deltas.insert(k, c - current_val);
-                            }
-                            Err(_) => {
-                                echo(&format!("malformed setting '{}'", s), "red");
-                                return Ok(());
-                            }
-                        }
-                    } else {
-                        echo(
-                            &format!("Adding new worker type '{}' with count {}", k, c),
-                            "green",
-                        );
-                        deltas.insert(k, c);
-                    }
-                }
-                Err(_) => {
-                    echo(&format!("malformed setting '{}'", s), "red");
-                    return Ok(());
-                }
+        let Some((k, v_str)) = s.split_once('=') else {
+            return Err(anyhow!("malformed setting '{s}', use <kind>=<copies>"));
+        };
+        let k = k.trim().to_string();
+        let c = match v_str.trim().parse::<i64>() {
+            Ok(c) if c < 0 => {
+                return Err(anyhow!(
+                    "cannot apply '{s}': cannot scale type '{k}' below 0"
+                ))
             }
-        } else {
-            echo(&format!("malformed setting '{}'", s), "red");
-            return Ok(());
+            Ok(c) => c,
+            Err(_) => {
+                return Err(anyhow!(
+                    "malformed setting '{s}', copies must be a whole number"
+                ))
+            }
+        };
+        match worker_count.get(&k).map(|current| current.parse::<i64>()) {
+            Some(Ok(current_val)) => {
+                deltas.insert(k, c - current_val);
+            }
+            Some(Err(_)) => {
+                return Err(anyhow!(
+                    "cannot apply '{s}': SCALING holds no whole number for '{k}'"
+                ))
+            }
+            None => {
+                added.push(format!("Adding new worker type '{k}' with count {c}"));
+                deltas.insert(k, c);
+            }
         }
     }
 
+    for line in &added {
+        display::step_done(line, "");
+    }
     crate::deploy::do_deploy(app, paths, &deltas, None)
 }
 
@@ -109,7 +109,7 @@ pub fn cmd_ps_scale(paths: &RikuPaths, app: &str, settings: &[String]) -> Result
     };
     match control_target(paths, &app, None) {
         Ok(ControlTarget::Containers { app, .. }) => scale_containers(paths, &app, settings),
-        Ok(ControlTarget::Procfile) => scale_procfile(paths, &app, settings),
+        Ok(ControlTarget::Procfile { .. }) => scale_procfile(paths, &app, settings),
         Err(e) => Err(e),
     }
 }

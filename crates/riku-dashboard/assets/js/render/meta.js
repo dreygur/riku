@@ -1,7 +1,7 @@
 // @ts-check
 // Markup for an app card's header: health badge, meta line and crash alert.
 // Pure string builders: every server value passes through esc() or num().
-import { esc, fmtAgo, fmtBytes, isOn, num } from "../format.js";
+import { esc, fmtAgo, fmtBytes, num } from "../format.js";
 import { I } from "../icons.js";
 import { workerName } from "./workers.js";
 
@@ -16,18 +16,49 @@ function routeTag(router, word, cls) {
   return `<span>${I.server}${esc(router)} <span class="${cls}">${esc(word)}</span></span>`;
 }
 
+/**
+ * The router name alone, for a site the deploy user cannot read, with why
+ * its state is unknown in the tooltip.
+ * @param {string} router @param {string} root where the router helper keeps its sites
+ */
+function unknownRouteTag(router, root) {
+  const why = `site state unknown: the deploy user cannot read ${root}`;
+  return `<span title="${esc(why)}">${I.server}${esc(router)}</span>`;
+}
+
 /** @param {import("../state.js").Route} [route] */
 export function routeHtml(route) {
   const r = route || {};
   if (r.router === "nginx") {
     if (r.enabled) { return routeTag("nginx", "live", "c-ok"); }
+    if (r.config_known === false) { return unknownRouteTag("nginx", "/etc/riku/nginx"); }
     return r.config_exists ? routeTag("nginx", "staged", "c-warn") : routeTag("nginx", "off", "c-dim");
   }
   if (r.router === "caddy") {
+    if (r.site_known === false) { return unknownRouteTag("caddy", "/etc/riku/caddy"); }
     return r.site ? routeTag("caddy", "configured", "c-ok") : routeTag("caddy", "off", "c-dim");
   }
   if (r.router === "plugin") { return routeTag(r.name, "plugin", "c-dim"); }
   return `<span title="${esc(r.error || "")}">${I.server}router <span class="c-bad">unknown</span></span>`;
+}
+
+/** Tags for the url labels the push output names; a domain needs none. */
+const URL_TAGS = { lan: "LAN", public: "public" };
+
+/**
+ * A link to one live url. Only http and https urls are linked.
+ * @param {import("../state.js").LiveUrl} u
+ */
+function urlLink(u) {
+  const url = String(u.url || "");
+  const parts = /^(https?):\/\/(.+)$/.exec(url);
+  if (!parts) {
+    return `<span>${esc(url)}</span>`;
+  }
+  const https = parts[1] === "https";
+  const shown = parts[2];
+  const tag = URL_TAGS[/** @type {"lan" | "public"} */ (u.label)];
+  return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${https ? I.https : ""}${esc(shown)}${https ? "" : '<span class="tag-http">http</span>'}${tag ? `<span class="tag-http">${tag}</span>` : ""}${I.ext}</a>`;
 }
 
 /**
@@ -36,17 +67,19 @@ export function routeHtml(route) {
  * @param {boolean} busy a deploy holds the lock
  */
 export function metaHtml(a, cur, busy) {
-  const https = isOn((a.routing || {}).RIKU_HTTPS_ONLY);
-  const doms = domainsOf(a);
+  const urls = a.urls || [];
   const parts = [];
-  if (doms.length) {
-    const d = doms[0];
-    parts.push(`<a href="${https ? "https" : "http"}://${esc(d)}" target="_blank" rel="noopener noreferrer">${https ? I.https : ""}${esc(d)}${https ? "" : '<span class="tag-http">http</span>'}${I.ext}</a>`);
-    if (doms.length > 1) {
-      parts.push(`<span class="c-dim" title="${esc(doms.slice(1).join(", "))}">+${doms.length - 1} more</span>`);
+  if (urls.length) {
+    parts.push(urlLink(urls[0]));
+    if (urls.length > 1) {
+      parts.push(`<span class="c-dim" title="${esc(urls.slice(1).map((u) => u.url).join(", "))}">+${urls.length - 1} more</span>`);
     }
   } else {
     parts.push('<span class="c-dim">no domain</span>');
+  }
+  const pending = a.pending_urls || [];
+  if (pending.length) {
+    parts.push(`<span class="c-warn">settings changed, redeploy to use ${esc(pending.map((u) => String(u.url || "")).join(", "))}</span>`);
   }
   parts.push(routeHtml(a.route));
   if (busy) {
@@ -60,15 +93,32 @@ export function metaHtml(a, cur, busy) {
 /**
  * @param {boolean} busy
  * @param {import("./workers.js").WorkerState[]} st
+ * @param {boolean} neverDeployed no deploy recorded a release and no worker exists
  */
-export function healthBadge(busy, st) {
+export function healthBadge(busy, st, neverDeployed) {
   const run = st.filter((s) => s.cls === "alive").length;
   const total = st.length;
   if (busy) { return badge("warn", I.spin + "Deploying"); }
+  if (neverDeployed) { return badge("", '<span class="g-ring"></span>Never deployed'); }
   if (!total || st.every((s) => s.cls === "off")) { return badge("", '<span class="g-ring"></span>Stopped'); }
   if (st.some((s) => s.cls === "dead")) { return badge("bad", `<span class="g-sq"></span>Degraded · ${run}/${total}`); }
   if (st.some((s) => s.cls === "warn")) { return badge("warn", `${I.spin}Starting · ${run}/${total}`); }
   return badge("ok", `<span class="g-sq"></span>Healthy · ${run}/${total}`);
+}
+
+/**
+ * Which app controls are locked. A deploy locks them all. An app never
+ * deployed has nothing to restart, stop or scale, so only Logs and Redeploy
+ * stay open. An app with no worker up (all stopped) has nothing to stop or
+ * scale; Restart and Redeploy bring it back.
+ * @param {boolean} busy
+ * @param {import("./workers.js").WorkerState[]} st
+ * @param {boolean} neverDeployed
+ */
+export function lockedControls(busy, st, neverDeployed) {
+  if (busy) { return { restart: true, redeploy: true, stop: true, scale: true }; }
+  const up = st.some((s) => s.cls !== "off");
+  return { restart: neverDeployed, redeploy: false, stop: !up, scale: !up };
 }
 
 /** @param {import("../state.js").Worker} w */

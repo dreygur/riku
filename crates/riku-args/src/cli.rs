@@ -13,7 +13,7 @@ use crate::cmds::{
     name = "riku",
     version = env!("CARGO_PKG_VERSION"),
     about = "riku: the smallest PaaS you've ever seen (Rust edition)",
-    long_about = "riku is a single-binary micro-PaaS that provides Heroku-like git push deployments.\nManage apps, config, processes, and plugins, all from one tool."
+    long_about = "riku is a single-binary micro-PaaS.\nManage apps, config, processes, and plugins, all from one tool."
 )]
 pub struct Cli {
     /// Run a forwarded command on this registered server
@@ -91,11 +91,6 @@ pub enum Commands {
         /// Confirmation token for destructive actions
         #[arg(long)]
         confirm: Option<String>,
-
-        /// Accepted so existing forced commands keep working. Agent output
-        /// is always JSON
-        #[arg(long)]
-        json: bool,
     },
 
     /// Manage app configuration
@@ -204,16 +199,21 @@ pub enum Commands {
         cmd: Vec<String>,
     },
 
-    /// Restart an app (hot reload for zero downtime)
+    /// Restart an app's running processes from the current build
     #[command(
-        after_help = "Examples:\n  riku restart myapp\n  riku restart myapp --hot\n  riku restart myapp web"
+        long_about = "Restart an app's running processes from the current build. Nothing is \
+                      built: a Procfile app's workers start again from the last deploy, a \
+                      container app's copies are replaced one at a time from the images they \
+                      run now. To rebuild, run riku deploy.",
+        after_help = "Examples:\n  riku restart myapp\n  riku restart myapp worker\n  riku deploy myapp    (rebuild and restart)"
     )]
     Restart {
         /// App name (default: the app of this repo's riku git remote)
         app: Option<String>,
-        /// Only this service of a container app
+        /// Only this service of a container app, or this process kind (web, worker, ...) of a Procfile app
+        #[arg(value_name = "PROCESS")]
         service: Option<String>,
-        /// Use hot reload (zero downtime)
+        /// Same as a plain restart, kept for scripts
         #[arg(long, conflicts_with = "service")]
         hot: bool,
     },
@@ -311,12 +311,8 @@ pub enum Commands {
     },
 
     /// Diagnose the Riku installation (deps, dirs, systemd, nginx, disk, SSH)
-    #[command(after_help = "Examples:\n  riku doctor\n  sudo riku doctor\n  riku doctor --fix")]
-    Doctor {
-        /// Redeploy apps whose nginx config exists only in the old ~/.riku/nginx
-        #[arg(long)]
-        fix: bool,
-    },
+    #[command(after_help = "Examples:\n  riku doctor\n  sudo riku doctor")]
+    Doctor,
 
     /// Serve the read-only web dashboard (embedded, single binary)
     #[command(
@@ -331,7 +327,7 @@ pub enum Commands {
         token: Option<String>,
     },
 
-    /// Manage addon instances (managed resources: databases, caches, …)
+    /// Manage addon instances (managed resources such as databases and caches)
     #[command(
         subcommand,
         after_help = "Examples:\n  riku addon list\n  riku addon create postgres db1\n  riku addon bind db1 myapp"
@@ -401,7 +397,7 @@ pub enum Commands {
     )]
     Plugin(PluginCmd),
 
-    /// Install/list/remove manifest-based plugin bundles (addons, notifiers, …)
+    /// Install/list/remove manifest-based plugin bundles (addons, notifiers and more)
     #[command(
         subcommand,
         after_help = "Examples:\n  riku plugins install ./examples/plugins/postgres\n  riku plugins list\n  riku plugins remove postgres"

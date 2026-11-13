@@ -22,8 +22,18 @@ fn running_copy() -> ContainerInfo {
         image_id: "sha256:test".to_string(),
         host_port: None,
         restart: None,
+        spec: None,
         state: ContainerState::Running,
     }
+}
+
+/// The log file text for `lines`, each behind the engine's time for it to
+/// the second, as the mocks below give it.
+fn stamped(lines: &[&str]) -> String {
+    lines
+        .iter()
+        .map(|text| format!("2026-11-04T10:00:00Z {text}\n"))
+        .collect()
 }
 
 /// The second call repeats the line stamped at its `--since` bound, as
@@ -49,7 +59,7 @@ fn pulls_append_each_line_once_in_timestamp_order() {
     puller.tick(&engine, &known, Start::All);
 
     let written = fs::read_to_string(log_root.join("myapp").join("web.1.log")).unwrap();
-    assert_eq!(written, "one\ntwo\nthree\nfour\n");
+    assert_eq!(written, stamped(&["one", "two", "three", "four"]));
     assert_eq!(
         logged(&argv_log),
         [
@@ -86,8 +96,12 @@ fn capped_pull_writes_complete_lines_and_continues_next_call() {
     puller.tick(&engine, &known, Start::All);
 
     let written = fs::read_to_string(log_root.join("myapp").join("web.1.log")).unwrap();
-    assert_eq!(first, "one\ntwo\n", "first call kept lines past the cut");
-    assert_eq!(written, "one\ntwo\nthree\nfour\n");
+    assert_eq!(
+        first,
+        stamped(&["one", "two"]),
+        "first call kept lines past the cut"
+    );
+    assert_eq!(written, stamped(&["one", "two", "three", "four"]));
     assert_eq!(
         logged(&argv_log)[1],
         format!("logs --timestamps --since 2026-11-04T10:00:00.000000002Z {ID}")

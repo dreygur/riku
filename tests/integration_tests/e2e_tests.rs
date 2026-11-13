@@ -33,8 +33,10 @@ mod tests {
 
     /// Build a `RikuPaths` rooted inside `tmp` and create all required directories.
     ///
-    /// The host router is Caddy: with no `RIKU_DOMAINS` set, routing is a
-    /// file removal, so deploys here need no `nginx` binary for `nginx -t`.
+    /// The host router is Caddy, so deploys here need no `nginx` binary for
+    /// `nginx -t`, and an app without `RIKU_DOMAINS` gets the fallback domain
+    /// `<app>.example` instead of port mode, whose listener check would find
+    /// nothing behind the mock Caddy.
     fn make_paths(tmp: &TempDir) -> riku::config::RikuPaths {
         let mut paths = riku::config::RikuPaths::from_dirs(tmp.path().join(".riku"), tmp.path());
         paths.caddy_root = tmp.path().join("caddy-sites");
@@ -54,6 +56,13 @@ mod tests {
         }
         riku::config::router::save(&paths, &riku::config::router::Router::Caddy)
             .expect("Failed to write router file");
+        riku::config::settings::save_key(
+            &paths,
+            "routing",
+            "fallback_domain",
+            Some("{app}.example"),
+        )
+        .expect("Failed to set the fallback domain");
         paths.reload_programs.caddy = tmp.path().join("mock_caddy");
         fs::write(&paths.reload_programs.caddy, "#!/bin/sh\nexit 0\n")
             .expect("Failed to write mock caddy");
@@ -418,9 +427,10 @@ esac
         );
 
         configure_route(&paths, app, None).unwrap();
+        let site = fs::read_to_string(&site_file).unwrap();
         assert!(
-            !site_file.exists(),
-            "dropping RIKU_DOMAINS must remove the stale site"
+            !site.contains("shop.example.com") && site.contains("shop.example"),
+            "dropping RIKU_DOMAINS must leave only the fallback domain: {site}"
         );
     }
 

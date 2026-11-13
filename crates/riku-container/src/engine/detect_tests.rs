@@ -55,7 +55,7 @@ fn setting_that_is_not_executable_is_refused() {
 
     let err = detect(Some(value), OsStr::new("")).unwrap_err().to_string();
 
-    assert!(err.contains("CONTAINER_ENGINE"), "{err}");
+    assert!(err.contains("engine.program"), "{err}");
     assert!(err.contains(value), "{err}");
 }
 
@@ -67,7 +67,7 @@ fn setting_with_relative_path_or_whitespace_is_refused() {
 
     for bad in ["bin/docker", "./docker", "docker --context x"] {
         let err = detect(Some(bad), &path).unwrap_err().to_string();
-        assert!(err.contains("CONTAINER_ENGINE"), "{bad}: {err}");
+        assert!(err.contains("engine.program"), "{bad}: {err}");
     }
 }
 

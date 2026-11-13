@@ -28,7 +28,9 @@ use std::path::Path;
 pub use acme::forget_acme;
 pub use backends::{bind_address, default_backends, upstream_port_number};
 pub use default_server::needs_catch_all;
-pub use host::{include_file_contents, include_line, includes_riku_sites, write_include_file};
+pub use host::{
+    include_file_contents, include_line, includes_riku_sites, site_path, write_include_file,
+};
 pub use paths_site::{render_paths_site, PathApp, PathsSite};
 pub use remove::remove_deploy_files;
 pub use route_site::{render_route_site, RouteSite, SiteFiles, SiteShape};
@@ -54,11 +56,8 @@ pub fn warn_about_app_nginx_configs(app: &str, app_path: &Path) {
             continue;
         }
         tracing::warn!("app '{app}' ships {name}, which riku ignores");
-        crate::util::echo(
-            &format!(
-                "-----> Ignoring {name}: custom nginx configs are not supported, using the generated config"
-            ),
-            "yellow",
-        );
+        crate::util::display::warn(&format!(
+            "Ignoring {name}: custom nginx configs are not supported, using the generated config"
+        ));
     }
 }

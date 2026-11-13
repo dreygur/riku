@@ -14,6 +14,23 @@ pub(super) fn argv(spec: &RunSpec) -> Vec<String> {
 }
 
 #[test]
+fn init_adds_the_flag_and_init_false_leaves_it_off() {
+    let mut spec = sample_spec();
+    spec.init = true;
+    let image_at = |args: &[String]| args.iter().position(|a| a == &spec.image).unwrap();
+    let args = argv(&spec);
+    let init_at = args.iter().position(|a| a == "--init");
+    assert!(
+        init_at.is_some_and(|at| at < image_at(&args)),
+        "--init missing or after the image: {args:?}"
+    );
+
+    spec.init = false;
+
+    assert!(!argv(&spec).contains(&"--init".to_string()));
+}
+
+#[test]
 fn pull_never_adds_the_flag_and_the_default_does_not() {
     let mut spec = sample_spec();
     assert!(!argv(&spec).iter().any(|a| a.starts_with("--pull")));
@@ -40,7 +57,7 @@ fn leading_flags_keep_the_engine_restart_policy_off() {
         args.starts_with(
             "run -d --name myapp.web.1 --restart no --network riku-myapp --network-alias web \
              --label riku.app=myapp --label riku.copy=1 --label riku.service=web \
-             --env-file /scratch/env-1 --stop-signal SIGTERM --stop-timeout 30 registry.example/myapp:1"
+             --env-file /scratch/env-1 --stop-signal SIGTERM --stop-timeout 10 registry.example/myapp:1"
         ),
         "{args}"
     );

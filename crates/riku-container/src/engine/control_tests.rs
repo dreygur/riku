@@ -46,7 +46,7 @@ fn stop_passes_grace_seconds() {
     assert_eq!(
         logged(&log),
         [
-            format!("stop -t 30 {ID}"),
+            format!("stop -t 10 {ID}"),
             format!("stop -t 5 {ID}"),
             format!("stop -t 1 {ID}")
         ]
@@ -142,7 +142,9 @@ fn pull_refuses_an_image_that_looks_like_a_flag() {
     let dir = tempfile::tempdir().unwrap();
     let (engine, log) = logging_engine(dir.path(), "");
 
-    assert!(engine.pull("--all-tags").is_err());
+    assert!(engine
+        .pull("--all-tags", &riku_util::display::OutputTail::default())
+        .is_err());
     assert!(
         logged(&log).is_empty(),
         "engine was called: {:?}",

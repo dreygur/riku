@@ -67,24 +67,26 @@ fn stop_request_then_confirm_with_its_token_reaches_stop() {
 }
 
 #[test]
-fn agent_restart_with_service_on_procfile_app_fails_not_container_app() {
+fn agent_restart_reads_the_second_argument_of_a_procfile_app_as_a_process_kind() {
     let tmp = tempfile::tempdir().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());
     fs::create_dir_all(paths.app_root.join("shop")).unwrap();
+    fs::create_dir_all(&paths.workers_enabled).unwrap();
+    fs::write(
+        paths.workers_enabled.join("shop@web.1.toml"),
+        "[worker]\napp = \"shop\"\nkind = \"web\"\n",
+    )
+    .unwrap();
 
-    let resp = cmd_agent_restart(&paths, "shop", Some("web"));
-    assert!(
-        !resp.success,
-        "expected restart to fail for Procfile app with service"
-    );
+    let resp = cmd_agent_restart(&paths, "shop", Some("db"));
 
     let err = match resp.error {
         Some(err) => err,
-        None => panic!("expected error in response, got none"),
+        None => panic!("restart of a kind shop does not run must fail"),
     };
     assert!(
-        err.message.contains("not a container app"),
-        "expected error message to say not a container app, got: {}",
+        err.message.contains("runs no process 'db'") && err.message.contains("web"),
+        "the error must name the unknown kind and the app's kinds, got: {}",
         err.message
     );
 }

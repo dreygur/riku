@@ -15,8 +15,6 @@ pub enum Kind {
     /// A bool whose reader checks presence or an on value: `true` renders
     /// `"true"`, `false` leaves the key out.
     Flag,
-    /// A bool whose reader needs an explicit `"false"` (it defaults to on).
-    Bool,
 }
 
 /// Which file may set a key.
@@ -124,7 +122,6 @@ pub const KEYS: &[Key] = &[
         Kind::Int,
     ),
     key("workers", "max_restarts", "RIKU_MAX_RESTARTS", Kind::Int),
-    key("workers", "auto_restart", "RIKU_AUTO_RESTART", Kind::Bool),
     key("health", "url", "RIKU_HEALTH_CHECK_URL", Kind::Text),
     key(
         "health",
@@ -172,6 +169,12 @@ pub const KEYS: &[Key] = &[
         "isolation_cpu_period_us",
         "RIKU_ISOLATION_CPU_PERIOD_US",
         Kind::Int,
+    ),
+    server(
+        "limits",
+        "isolation_root",
+        "RIKU_ISOLATION_ROOT",
+        Kind::Text,
     ),
     key(
         "containers",

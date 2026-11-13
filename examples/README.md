@@ -39,35 +39,43 @@ git push riku main
 
 ## Configuration Files
 
-### ENV File
+### App Environment
 
-The `ENV` file contains environment variables for your app:
+riku reads an app's environment only from the server
+(`~/.riku/envs/<app>/ENV`), never from a file in the repo. Set your app's own
+variables with `riku config set`:
 
 ```bash
-# Basic configuration
-RIKU_DOMAINS=example.com
-RIKU_HTTPS_ONLY=true
-
-# Worker settings
-RIKU_AUTO_RESTART=true
-RIKU_BIND_ADDRESS=127.0.0.1
-
-# Node.js specific
-RIKU_NODE_VERSION=18.17.0
+riku config set myapp DATABASE_URL=postgres://localhost/myapp SECRET_KEY=change-me
 ```
 
-See `../docs/docs/env.md` for the complete list of environment variables.
+See `../docs/docs/env.md` for the variables riku sets for your app.
 
-### SCALING File
+### riku.toml
 
-Control how many worker processes run:
+riku's own settings (domains, HTTPS, static files, workers, the runtime and
+its version) are not read from `ENV`. Commit them in a `riku.toml` next to
+your code, or set them with `riku settings set`:
+
+```toml
+[routing]
+domains = ["example.com"]
+https_only = true
+
+[runtime]
+name = "node"
+version = "22"
+```
+
+See `riku.toml` in this directory and `../docs/docs/riku-toml.md` for every key.
+
+### Scaling
+
+Each process kind runs one copy until you scale it. A `SCALING` file in the
+repo is not read; scale on the server, which redeploys the app:
 
 ```bash
-# Scale web workers
-web=2
-
-# Scale background workers
-worker=1
+riku ps myapp --scale web=2 worker=1
 ```
 
 ### Procfile
@@ -90,10 +98,6 @@ cron: 0 2 * * * /path/to/script.sh
 You can test examples before deploying:
 
 ```bash
-# Run the test script
-../tests/deploy-smoke/quick-test.sh test-node node
-
-# Or run manually
 cd nodejs
 node server.js
 ```

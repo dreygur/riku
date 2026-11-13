@@ -110,17 +110,15 @@ supervisor, and wires up nginx. That's the whole loop.
 
 ## Why Riku?
 
-| | Riku (Rust) | Original Piku (Python) |
-|---|-------------|------------------------|
-| Distribution | Single binary | Requires Python runtime |
-| Dependencies | None at runtime | Python 3 required |
-| Memory safety | Compile-time guarantees | Garbage collected |
-| Footprint | ~30 MB | ~100+ MB |
-| Startup | Fast | Slower |
+| | Riku |
+|---|------|
+| Distribution | Single binary |
+| Dependencies | None at runtime |
+| Memory safety | Compile-time guarantees |
+| Footprint | ~30 MB |
 
-Riku is a complete Rust port of [Piku](https://github.com/piku/piku) and competes
-with Piku, Dokku, and CapRover, winning on the single-binary, no-Docker story.
-It runs on one small box: 1 core, 256 MB RAM is enough.
+Riku competes with Dokku and CapRover, winning on the single-binary, no-Docker
+story. It runs on one small box: 1 core, 256 MB RAM is enough.
 
 !!! tip "Stands on the shoulders of giants"
     Thanks to the Piku team for creating the original micro-PaaS that inspired

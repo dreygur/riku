@@ -12,9 +12,10 @@ VENV_PATH="$APP_PATH/.venv"
 # which a git push deploy does not have on PATH.
 PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
-# RIKU_PYTHON_VERSION (riku.toml [runtime] version, or the app's ENV) picks
-# the interpreter: uv fetches it when it is missing, pip needs python<version>
-# installed. A venv made for another version is made again.
+# RIKU_PYTHON_VERSION (riku.toml [runtime] version; riku never passes an ENV
+# line of that name) picks the interpreter: uv fetches it when it is
+# missing, pip needs python<version> installed. A venv made for another
+# version is made again.
 PYTHON_VERSION="${RIKU_PYTHON_VERSION:-}"
 VERSION_MARK="$VENV_PATH/.riku-python-version"
 UV_PYTHON=()
@@ -62,8 +63,8 @@ build_with_pip() {
   if [ -n "$PYTHON_VERSION" ]; then
     python="python$PYTHON_VERSION"
     if ! command -v "$python" >/dev/null 2>&1; then
-      echo "-----> RIKU_PYTHON_VERSION is $PYTHON_VERSION but $python is not installed on the server." >&2
-      echo "       Install it, or install uv, which fetches the interpreter itself." >&2
+      echo "RIKU_PYTHON_VERSION is $PYTHON_VERSION but $python is not installed on the server." >&2
+      echo "Install it, or install uv, which fetches the interpreter itself." >&2
       exit 1
     fi
   fi
@@ -92,11 +93,15 @@ case "$CMD" in
 
   build)
     cd "$APP_PATH"
+    if ! command -v uv >/dev/null 2>&1 && [ -z "$PYTHON_VERSION" ] && ! command -v python3 >/dev/null 2>&1; then
+      echo "Python is not installed on this server (python3 not found). Install Python 3 or uv, then push again." >&2
+      exit 1
+    fi
     if command -v uv >/dev/null 2>&1; then
       build_with_uv
     else
-      echo "-----> uv not found, building with pip. Install uv for faster, locked builds:" >&2
-      echo "       curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
+      echo "uv not found, building with pip. Install uv for faster, locked builds:" >&2
+      echo "  curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
       build_with_pip
     fi
     ;;

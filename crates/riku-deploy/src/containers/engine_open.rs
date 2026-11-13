@@ -2,7 +2,7 @@
 //!
 //! # Security model
 //!
-//! The engine program comes from the operator's `CONTAINER_ENGINE` setting or a
+//! The engine program comes from the operator's `engine.program` setting or a
 //! fixed list searched on `PATH`, never from app input. `settings.toml` is
 //! operator owned input refused when invalid.
 
@@ -23,9 +23,37 @@ impl EngineUnreachable {
     }
 }
 
+/// What riku says when the engine refused its socket. Adding the deploy user
+/// to the docker group is the operator's call, since that group is root on
+/// the host, so riku names both ways out and takes neither. Root `riku
+/// init` prints the same text when the operator declines to add the group.
+pub const SOCKET_CHOICE: &str = "The deploy user cannot open the engine's socket. Choose one: \
+     add the deploy user to the docker group, which is root-equivalent on this host, \
+     or use a rootless engine such as rootless podman (engine.program in settings.toml). \
+     riku changes neither the group nor the socket.";
+
+impl EngineUnreachable {
+    /// Whether the engine failed because this user may not open its socket.
+    /// Older docker says "daemon socket"; docker 29 names only the path,
+    /// such as `unix:///var/run/docker.sock`.
+    fn socket_refused(&self) -> bool {
+        let reason = self.reason.to_lowercase();
+        reason.contains("permission denied")
+            && (reason.contains("socket") || reason.contains(".sock"))
+    }
+}
+
 impl std::fmt::Display for EngineUnreachable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "container engine unreachable: {}", self.reason)
+        if self.socket_refused() {
+            write!(
+                f,
+                "container engine unreachable: {}. {SOCKET_CHOICE}",
+                self.reason
+            )
+        } else {
+            write!(f, "container engine unreachable: {}", self.reason)
+        }
     }
 }
 
@@ -37,12 +65,8 @@ pub fn open_engine(paths: &RikuPaths) -> Result<Engine> {
         Ok(settings) => settings,
         Err(e) => return Err(anyhow!("invalid server settings: {e}")),
     };
-    let setting = match riku_config::container_engine::from_settings(paths, &settings) {
-        Ok(setting) => setting,
-        Err(e) => return Err(e),
-    };
     let search_path = std::env::var_os("PATH").unwrap_or_default();
-    let binary = match detect(setting.as_deref(), &search_path) {
+    let binary = match detect(settings.engine.program.as_deref(), &search_path) {
         Ok(binary) => binary,
         Err(e) => return Err(anyhow::Error::new(EngineUnreachable::new(e.to_string()))),
     };

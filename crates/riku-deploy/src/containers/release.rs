@@ -15,11 +15,14 @@ use std::collections::BTreeMap;
 use anyhow::{anyhow, Result};
 use riku_container::compose::ServiceDef;
 use riku_container::engine::{ContainerId, RunSpec};
-use riku_container::types::{labels, ContainerName, CopyIndex};
+use riku_container::types::{labels, ContainerName, CopyIndex, ServiceName};
 
 use super::context::ContainerApp;
 use super::copy_spec;
-use crate::util::{echo, parse_procfile};
+use super::release_deps::start_release_dependencies;
+use super::spec::app_env_for;
+use crate::util::display::OutputTail;
+use crate::util::{display, parse_procfile};
 
 /// The routed service, or else the first service riku builds.
 fn release_service<'a>(ctx: &'a ContainerApp<'a>) -> Result<&'a ServiceDef> {
@@ -50,7 +53,9 @@ fn release_labels(service: &ServiceDef) -> BTreeMap<String, String> {
 }
 
 /// A copy's spec for `service` with the release line as its only process:
-/// same image, env, network and mounts, but no ports and no health check.
+/// same image, network and mounts, but no ports and no health check. It
+/// always gets the app env, even when `service` is a pulled image: the
+/// release is the app's own command.
 fn release_spec(ctx: &ContainerApp, service: &ServiceDef, release: &str) -> Result<RunSpec> {
     let first = match CopyIndex::new(1) {
         Some(copy) => copy,
@@ -71,6 +76,7 @@ fn release_spec(ctx: &ContainerApp, service: &ServiceDef, release: &str) -> Resu
         Ok(name) => name,
         Err(e) => return Err(e),
     };
+    spec.env = app_env_for(&ctx.container_env, service);
     spec.ports = Vec::new();
     spec.healthcheck = None;
     spec.entrypoint = Some(vec![
@@ -95,21 +101,21 @@ fn remove_stale(ctx: &ContainerApp, name: &ContainerName) -> Result<()> {
     }
 }
 
-fn print_logs(ctx: &ContainerApp, id: &ContainerId) {
-    if let Err(e) = ctx.engine.print_logs(id) {
+fn print_logs(ctx: &ContainerApp, id: &ContainerId, recent: &OutputTail) {
+    if let Err(e) = ctx.engine.print_logs(id, recent) {
         tracing::warn!("cannot show the release output: {e}");
     }
 }
 
-/// Start the release container, wait for it, show its output and remove it,
-/// whatever the exit code.
-fn run_to_exit(ctx: &ContainerApp, spec: &RunSpec) -> Result<()> {
+/// Start the release container, wait for it, put its output on the rail and
+/// remove it, whatever the exit code.
+fn run_to_exit(ctx: &ContainerApp, spec: &RunSpec, recent: &OutputTail) -> Result<()> {
     let id = match ctx.engine.run(spec, ctx.scratch()) {
         Ok(id) => id,
         Err(e) => return Err(anyhow!("cannot start the release container: {e}")),
     };
     let waited = ctx.engine.wait(&id);
-    print_logs(ctx, &id);
+    print_logs(ctx, &id, recent);
     let removed = ctx.engine.remove(&id);
     match waited {
         Ok(0) => {}
@@ -120,15 +126,24 @@ fn run_to_exit(ctx: &ContainerApp, spec: &RunSpec) -> Result<()> {
 }
 
 /// Run the Procfile `release` command, when there is one, in a one-off
-/// container from the new image. A nonzero exit is an error.
-pub(super) fn run_release(ctx: &ContainerApp) -> Result<()> {
+/// container from the new image. A nonzero exit is an error. Its stdout and
+/// stderr go on the rail and their last lines into `recent`.
+///
+/// The services the release's service depends on are started first when
+/// none of their copies is up (see [`super::release_deps`]). Returns those
+/// services, so the rollout does not replace them again.
+pub(super) fn run_release(
+    ctx: &ContainerApp,
+    counts: &BTreeMap<String, u32>,
+    recent: &OutputTail,
+) -> Result<Vec<ServiceName>> {
     let procfile = match parse_procfile(&ctx.app_path.join("Procfile")) {
         Ok(procfile) => procfile.unwrap_or_default(),
         Err(e) => return Err(anyhow!("invalid Procfile: {e}")),
     };
     let release = match procfile.get("release") {
         Some(release) => release,
-        None => return Ok(()),
+        None => return Ok(Vec::new()),
     };
     let service = match release_service(ctx) {
         Ok(service) => service,
@@ -141,12 +156,19 @@ pub(super) fn run_release(ctx: &ContainerApp) -> Result<()> {
     if let Err(e) = remove_stale(ctx, &spec.name) {
         return Err(e);
     }
+    let started = match start_release_dependencies(ctx, service, counts) {
+        Ok(started) => started,
+        Err(e) => return Err(e.context("cannot start what the release command depends on")),
+    };
     if let Err(e) = ctx.engine.ensure_network(&spec.network) {
         return Err(anyhow!(
             "cannot create network {}: {e}",
             spec.network.as_str()
         ));
     }
-    echo("-----> Running release command", "green");
-    run_to_exit(ctx, &spec)
+    display::step_done("Running release command", "");
+    match run_to_exit(ctx, &spec, recent) {
+        Ok(()) => Ok(started),
+        Err(e) => Err(e),
+    }
 }

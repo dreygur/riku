@@ -121,6 +121,7 @@ pub(crate) fn container_rows(
             last_restart_at: None,
             cpu_time_ms: 0,
             memory_bytes,
+            memory_limit_bytes: None,
             requests_total: 0,
             requests_per_second: 0.0,
             container: Some(facts),

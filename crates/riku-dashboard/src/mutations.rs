@@ -230,7 +230,7 @@ pub(crate) fn authorize_mutation(state: &DashboardState, headers: &HeaderMap) ->
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "));
     let ok = provided
-        .map(|tok| crate::supervisor::health::auth::constant_time_eq(tok, expected))
+        .map(|tok| crate::util::secure::constant_time_eq(tok, expected))
         .unwrap_or(false);
     if ok {
         None

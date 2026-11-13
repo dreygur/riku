@@ -40,7 +40,7 @@ pub const SETTINGS_FILE: &str = "settings.toml";
 /// Everything in `settings.toml`.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ServerSettings {
-    /// `[router] name`. `None` means the legacy `ROUTER` file decides.
+    /// `[router] name`. `None` means nginx.
     pub router: Option<String>,
     pub engine: EngineSettings,
     pub routing: RoutingSettings,

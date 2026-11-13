@@ -1,7 +1,8 @@
 //! What a deploy prints, on the rail from `riku_util::display`: an intro
 //! naming the app and commit, one step per phase, then an outro and a
-//! summary. A failed deploy names the phase that failed, repeats the last
-//! lines of build output and says how to retry.
+//! summary. A failed deploy names the phase that failed and says how to
+//! retry. Everything goes to stdout, the build output streamed by
+//! `tee_output` included, so an ssh client keeps the order.
 //!
 //! Every line also lands in the deploy log through [`DeployLogger`].
 
@@ -11,7 +12,7 @@ use crate::config::RikuPaths;
 use crate::git_ops::Commit;
 use crate::releases::ReleaseLog;
 use crate::util::deploy_logger::DeployLogger;
-use crate::util::display::{self, OutputTail};
+use crate::util::display::{self, render_line, Mark, OutputTail, Stream};
 
 /// A deploy phase, as named in its step line and in a failure.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,17 +40,6 @@ impl Phase {
             Phase::Route => "Route",
         }
     }
-
-    /// Whether this phase streams command output worth repeating on failure.
-    fn streams_output(self) -> bool {
-        matches!(self, Phase::Preflight | Phase::Build | Phase::Release)
-    }
-
-    /// Whether the app's running processes are still the previous release
-    /// when this phase fails: nothing is restarted before `Processes`.
-    fn keeps_previous_release(self) -> bool {
-        !matches!(self, Phase::Processes | Phase::Route)
-    }
 }
 
 /// The facts the success summary lists.
@@ -68,6 +58,11 @@ pub(crate) struct DeployProgress {
     phase_started: Instant,
     output: OutputTail,
     had_release: bool,
+    /// Set once the deploy starts replacing what runs (worker configs or
+    /// containers). From then on the previous release no longer runs as it
+    /// was, and what replaces it runs the new checkout, so a failure keeps
+    /// the checkout where it is.
+    release_replaced: bool,
 }
 
 impl DeployProgress {
@@ -81,7 +76,26 @@ impl DeployProgress {
             phase_started: now,
             output: OutputTail::default(),
             had_release: !ReleaseLog::new(paths).list(app).is_empty(),
+            release_replaced: false,
         }
+    }
+
+    /// Record that worker configs or containers are about to change, so a
+    /// later failure neither resets the checkout under them nor claims the
+    /// old release still runs.
+    pub(crate) fn release_replacing(&mut self) {
+        self.release_replaced = true;
+    }
+
+    /// Whether the deploy started replacing what runs.
+    pub(crate) fn release_replaced(&self) -> bool {
+        self.release_replaced
+    }
+
+    /// Whether the app still runs its previous release unchanged after a
+    /// failure at this point.
+    pub(crate) fn previous_release_runs(&self) -> bool {
+        self.had_release && !self.release_replaced
     }
 
     /// `┌  Deploying <app>  <sha> "<subject>"`.
@@ -129,27 +143,59 @@ impl DeployProgress {
         display::summary(&as_pairs(&rows));
     }
 
-    /// The failed phase with `err`, the last build lines, the outro and the
-    /// summary that says how to retry.
+    /// The failed phase with `err`, the outro and the summary that says how
+    /// to retry, all on stdout like the rest of the rail. The deploy log,
+    /// which holds no streamed output, gets the last lines of it first, so
+    /// `riku logs <app> --deploy` shows why a command failed.
     pub(crate) fn failed(&mut self, err: &anyhow::Error, branch: &str) {
         let reason = format!("{err:#}");
         display::mark_failure_shown(&reason);
+        self.log_recent_output();
         self.log.log_raw(&format!("[ERROR] {reason}"));
         let label = format!("{} failed", self.phase.label());
-        let mut lines = without_label(&reason, &label).lines();
-        display::step_failed(&label, lines.next().unwrap_or(""));
-        for line in lines {
-            display::detail(line);
-        }
-        if self.phase.streams_output() {
-            for line in self.output.lines() {
-                display::detail(&line);
-            }
-        }
-        let previous_kept = self.had_release && self.phase.keeps_previous_release();
-        display::outro(failure_outro(previous_kept));
+        let block = render_failure(
+            &label,
+            &reason,
+            self.previous_release_runs(),
+            Stream::Stdout.colour(),
+        );
+        display::emit(Stream::Stdout, &block);
         display::summary(&as_pairs(&failure_summary(&self.app, branch)));
     }
+
+    fn log_recent_output(&mut self) {
+        let lines = self.output.lines();
+        if lines.is_empty() {
+            return;
+        }
+        self.log.log_raw("Last output:");
+        for line in lines {
+            self.log.log_raw(&format!("  {line}"));
+        }
+    }
+}
+
+/// The `■` line of the failed step, the rest of its reason on `│` lines,
+/// and the outro. One block on one stream: `■` on stderr reached an ssh
+/// client after the outro on stdout. The build output is not repeated
+/// here, since every line of it was already streamed on the rail.
+fn render_failure(label: &str, reason: &str, previous_kept: bool, colour: bool) -> String {
+    let mut lines = without_label(reason, label).lines();
+    let mut block = render_line(Mark::Error, label, lines.next().unwrap_or(""), colour);
+    for line in lines {
+        block.push('\n');
+        block.push_str(&render_line(Mark::Rail, line, "", colour));
+    }
+    block.push('\n');
+    block.push_str(&render_line(Mark::Rail, "", "", colour));
+    block.push('\n');
+    block.push_str(&render_line(
+        Mark::Outro,
+        failure_outro(previous_kept),
+        "",
+        colour,
+    ));
+    block
 }
 
 /// `reason` without a leading `<label>: `, so `Build failed: plugin ..`

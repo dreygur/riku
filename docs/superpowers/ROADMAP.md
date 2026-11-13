@@ -60,6 +60,10 @@ phase 4 come after.
 
 ### Done
 
+- cgroup v2 delegation fix on `fix/cgroup-delegation` (2026-11-12): riku
+  units say `Delegate=yes`, the supervisor takes over its own cgroup from
+  `/proc/self/cgroup` instead of `/sys/fs/cgroup/riku/apps`. Not merged,
+  not yet checked on a real systemd host.
 - Unused plugin mechanisms removed on `chore/remove-unused-plugin-parts`
   (2026-11-11): filters, UI panels, event gate mode and the supervisor's
   `GET /plugins` client plugin listing. Not merged yet.
@@ -318,6 +322,26 @@ phase 4 come after.
   directly when the controller is down.
 
 ## Known open problems, outside the plans
+
+- Server test of 0.1.4-rc.3 (2026-11-11), fixed on `fix/server-test-bugs`,
+  not pushed: restart after a failed push took the app down (checkout reset
+  to the last release, restart never builds), plain init beside a system
+  install, the doubled push failure, init and plugin output, the port URL
+  placeholder. Fixed after: the dashboard's per worker restart now bumps
+  the config mtime and sends SIGHUP (`app_restart::restart_configs`).
+  The `RIKU_AUTO_RESTART=false` item was a misreading: every deploy
+  rewrites the worker configs and `spawn_app` sends SIGHUP, so the new
+  build runs either way; the flag only skips stopping non web workers
+  first (and leaves a non web kind dropped from the Procfile running).
+  Owner decision 2026-11-11: the flag is removed; deploys always stop
+  non web kinds first and stop kinds no longer declared. Also fixed: the first push no longer prints
+  `Linked <repo> to <repo>` above the deploy intro (debug log only).
+  Also fixed: the `limits.isolation_*` settings were only applied with
+  `RIKU_ISOLATION_ROOT`, whose network namespace cuts a web worker off;
+  owner decision "limits alone": a limit now gives the worker its own
+  cgroup without chroot or namespaces (`config/limits.rs`). And
+  `sudo riku doctor` read root's `authorized_keys` and package tool dirs
+  instead of the deploy user's (`doctor/ssh_check.rs`).
 
 - Checked 2026-11-11: the two nginx bugs once listed here
   (`RIKU_NGINX_CACHE_PREFIXES`, `RIKU_NGINX_CATCH_ALL`) are gone; #73

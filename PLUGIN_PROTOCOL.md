@@ -37,8 +37,8 @@ that can never be a plugin; plugins extend Riku in exactly two ways:
 - **Additive** changes (new seam, new event, new optional manifest field) stay
   within an API version. **Breaking** a verb's I/O or an event's payload bumps
   the version. The kernel may support multiple versions simultaneously.
-- Legacy runtime plugins with no manifest are treated as **api = 0** and keep
-  working via the argv+env+line protocol (§8).
+- Runtime plugins with no manifest are treated as **api = 0** and speak the
+  argv+env+line protocol (§8).
 
 ## 3. Bundle & manifest
 
@@ -114,7 +114,7 @@ Every call is a fresh process:
 - **Output:**
   - **exit code**: `0` = success / affirmative; non-zero = failure / negative.
     `detect` decisions are expressed purely by exit code.
-  - **stdout**: either a single line (legacy runtime `start`/`env`) or a JSON
+  - **stdout**: either a single line (manifestless runtime `start`/`env`) or a JSON
     object, as the seam specifies. Never mix the two for one verb.
   - **stderr**: human-readable logs; streamed to the deploy log live.
 - **Timeout**: the kernel enforces a per-verb timeout (reusing the existing
@@ -163,10 +163,8 @@ context for bind/unbind.
 
 Exposes apps to the network. **Singleton**: exactly one router is active,
 chosen by `[router] name` in `settings.toml` (`nginx`, `caddy`, or a router
-plugin name; written by `RIKU_ROUTER=<name> riku init`; default `nginx`). A
-`<riku root>/ROUTER` file written by an older version is still read when
-`settings.toml` names no router. nginx and
-Caddy are built in; this seam is for third party routers.
+plugin name; written by `RIKU_ROUTER=<name> riku init`; default `nginx`).
+nginx and Caddy are built in; this seam is for third party routers.
 
 | Verb          | Input (stdin JSON)                                      | Output           |
 | ------------- | ------------------------------------------------------- | ---------------- |
@@ -209,10 +207,8 @@ behind it during a rolling deploy.
 deploy before the plugin is called.
 
 Owns its config directory. Env: `RIKU_APP` (for `configure`/`unconfigure`),
-`RIKU_ROOT`. `unconfigure` was added within API v1; the kernel treats a
-non-zero exit as "not implemented" and falls back to a plain `reload`, so older
-routers keep working. This holds for any protocol version, so an old plugin can
-still be unconfigured.
+`RIKU_ROOT`. `unconfigure` is best effort: the kernel treats a non-zero exit
+as "not implemented" and falls back to a plain `reload`.
 
 ## 7. Event bus _(new)_
 
@@ -232,7 +228,7 @@ JSON on stdin:
 
 ### 7.1 Catalog (v1)
 
-| Event                | Phase | Legacy hook    |
+| Event                | Phase | Name-based hook |
 | -------------------- | ----- | -------------- |
 | `deploy.requested`   | pre   | `pre-deploy`   |
 | `build.started`      | pre   | `pre-build`    |
@@ -246,8 +242,7 @@ JSON on stdin:
 | `app.restarted`      | post  | - |
 | `app.failed`         | post  | - |
 
-The four legacy hooks are emitted at the **same points** as today, step 1 of
-the refactor is to emit these events there with **zero behavior change**.
+The four name-based hooks run at the same points as their events.
 
 `app.restarted` and `app.failed` are the first `app.*` events to actually
 fire, both from the supervisor's crash-detection path
@@ -298,12 +293,12 @@ namespace:
   (§7.1–§7.2): a custom event is just a differently-sourced instance of the
   same envelope.
 
-## 8. Backward compatibility
+## 8. Manifestless runtime plugins
 
-Existing runtime shell plugins have no manifest. They are loaded as **api = 0
-legacy runtimes** and keep working unchanged via argv+env and line output (§5).
-Events, capabilities, and the addon/router seams all require a manifest with
-`api = 1`. No existing deployment breaks when v1 lands.
+The bundled runtime shell plugins have no manifest. They are loaded as
+**api = 0 runtimes** and speak argv+env and line output (§5). Events,
+capabilities, and the addon/router seams all require a manifest with
+`api = 1`.
 
 ## 9. What is deliberately *not* a seam (v1)
 
@@ -313,15 +308,14 @@ implementation. These stay in the kernel for v1:
 - **git intake** and **deploy orchestration**
 - **process supervisor** (health checks, restarts, scaling)
 - **riku's own on-disk state** (`RikuPaths`, ENV, worker TOML), a plugin
-  never reads or writes riku's control-plane data directly. Narrower than it
-  used to read: every plugin *does* now get its own scratch directory
-  (`RIKU_PLUGIN_DATA_PATH`, §4), that's net-new plugin-owned storage, not
-  access to the kernel's state, and doesn't change this bullet's intent.
+  never reads or writes riku's control-plane data directly. Every plugin
+  does get its own scratch directory (`RIKU_PLUGIN_DATA_PATH`, §4): that is
+  plugin-owned storage, not access to the kernel's state.
 - **dashboard auth as a plugin seam** (e.g. a pluggable auth-provider seam):
-  deferred to v2, keeping v1 small. This is narrower than it used to
-  read: the dashboard's own frontend now has a real login (single shared
-  password, session cookie), see [Dashboard](docs/docs/dashboard.md), it's
-  just not exposed as something a plugin can hook into yet.
+  deferred to v2, keeping v1 small. The dashboard's own frontend has a
+  login (single shared password, session cookie), see
+  [Dashboard](docs/docs/dashboard.md); it is not exposed as something a
+  plugin can hook into.
 
 ## 10. Security summary
 
@@ -345,7 +339,7 @@ implementation. These stay in the kernel for v1:
 
   Enforcement is unprivileged and **best-effort**: on a kernel without Landlock
   the filesystem/network limits degrade to a logged no-op while `no_new_privs`
-  still applies. Legacy manifest-less runtime plugins (§8) are not sandboxed.
+  still applies. Manifestless runtime plugins (§8) are not sandboxed.
 - The `privileged` capability requires explicit, elevated trust;
   third-party marketplaces are opt-in. `privileged = true` opts a plugin **out**
   of the sandbox, so it is the one capability that widens authority.

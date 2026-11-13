@@ -1,0 +1,3 @@
+# Serve the files Django's collectstatic writes to static/ (nginx only).
+[routing]
+static_paths = ["/static:static"]

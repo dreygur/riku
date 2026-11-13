@@ -7,6 +7,8 @@
 //! not through a shell, with only PATH, HOME and LIVE_ENV in its environment.
 //! Stdin is closed, each output stream is capped at `OUTPUT_CAP` bytes, and
 //! the process group is killed when the command ends or at `RUN_TIMEOUT`.
+//! It runs under the same rlimits as `riku run`: the server `RIKU_MAX_*`
+//! values with the app's own put over them.
 
 // Project rule 16 forbids `?`, and this lint asks for exactly that rewrite.
 #![allow(clippy::question_mark)]
@@ -27,6 +29,7 @@ use serde_json::json;
 use crate::agent::confirm;
 use crate::agent::types::AgentResponse;
 use crate::config::RikuPaths;
+use crate::util::resource_limits::ResourceLimits;
 use crate::util::{existing_app, parse_settings};
 
 const OUTPUT_CAP: usize = 64 * 1024;
@@ -164,13 +167,17 @@ fn command_env(live_env: HashMap<String, String>) -> HashMap<String, String> {
     env
 }
 
+/// Runs `cmd` with exactly `env`, under the server resource limits with the
+/// `RIKU_MAX_*` values in `env` put over them.
 fn run_captured(
     cmd: &[String],
     dir: &Path,
     env: &HashMap<String, String>,
     limit: Duration,
 ) -> io::Result<RunOutcome> {
-    let mut child = match Command::new(&cmd[0])
+    let limits = ResourceLimits::from_env().with_app_env(env);
+    let mut command = Command::new(&cmd[0]);
+    command
         .args(&cmd[1..])
         .current_dir(dir)
         .env_clear()
@@ -178,9 +185,11 @@ fn run_captured(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .process_group(0)
-        .spawn()
-    {
+        .process_group(0);
+    unsafe {
+        command.pre_exec(move || limits.apply());
+    }
+    let mut child = match command.spawn() {
         Ok(child) => child,
         Err(e) => return Err(e),
     };

@@ -1,4 +1,4 @@
-module github.com/piku/piku/examples/golang
+module example.com/riku/golang
 
 go 1.26.0
 

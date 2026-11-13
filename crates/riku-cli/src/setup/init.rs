@@ -21,12 +21,15 @@ use super::deploy_user::running_as_root;
 use super::git_hook::create_git_hook;
 use super::guidance::{print_finish, InstallScope};
 use super::init_router::persist_router;
+use super::outside_supervisor::replace_outside_supervisor;
 use super::prerequisites::{check_prerequisites, warn_not_root};
 use super::root_init::root_init;
 use super::router_choice;
+use super::runtime_plugins::refresh_runtime_plugins;
 use super::server_ip::{ensure_routing_section, FallbackDomain, SERVER_IP_HINT};
 use super::ssh::setup_ssh_key_interactive;
-use super::stale_binary::remove_stale_binary;
+use super::supervisor_binary::UnitScope;
+use super::system_install::refuse_beside_system_install;
 use super::systemd::setup_systemd_service;
 
 fn create_directory_structure(paths: &RikuPaths, router: &Router) -> Result<()> {
@@ -87,13 +90,6 @@ fn print_fallback(fallback: &FallbackDomain) {
             display::warn("Fallback domain off");
             display::detail(&format!("{why}. {SERVER_IP_HINT}"));
         }
-    }
-}
-
-fn remove_old_user_binary() -> Result<()> {
-    match env::var("HOME") {
-        Ok(home) => remove_stale_binary(&PathBuf::from(home)),
-        Err(_) => Err(anyhow!("HOME is not set")),
     }
 }
 
@@ -208,6 +204,9 @@ fn init_router_choice(paths: &RikuPaths, user_steps: bool) -> Result<Router> {
 fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<Router> {
     let user_steps = options.user_steps;
     if !user_steps {
+        if let Err(e) = refuse_beside_system_install() {
+            return Err(e);
+        }
         if let Err(e) = require_root_binary() {
             return Err(e);
         }
@@ -232,9 +231,14 @@ fn user_init(paths: &RikuPaths, options: &InitOptions) -> Result<Router> {
     if let Err(e) = prepare_tree(paths, &router) {
         return Err(e);
     }
+    refresh_runtime_plugins(paths);
     if user_steps {
-        if let Err(e) = remove_old_user_binary() {
-            return Err(e);
+        // Root starts the system unit next; only this deploy user child may
+        // signal the deploy user's supervisor.
+        if !options.no_systemd {
+            if let Err(e) = replace_outside_supervisor(paths, UnitScope::System) {
+                return Err(e);
+            }
         }
     } else {
         if let Err(e) = setup_user_service(paths, &router, options.no_systemd) {

@@ -10,7 +10,7 @@ use super::{Mapping, Value};
 use anyhow::{bail, Result};
 
 /// Service level keys riku supports.
-pub(crate) const SERVICE_KEYS: [&str; 17] = [
+pub(crate) const SERVICE_KEYS: [&str; 18] = [
     "build",
     "command",
     "depends_on",
@@ -19,6 +19,7 @@ pub(crate) const SERVICE_KEYS: [&str; 17] = [
     "environment",
     "healthcheck",
     "image",
+    "init",
     "labels",
     "networks",
     "ports",

@@ -16,16 +16,20 @@ use super::nginx_site::{app_name, helper_outcome};
 use super::route_build::build_route;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
+use crate::router::app_routing::AppRouting;
 use crate::util::backend::Backend;
+use crate::util::route_plan::HttpsPolicy;
 
 /// Have the router helper write `app`'s Caddy site and reload Caddy, or take
 /// the site out when the app sets no domain. Returns once Caddy accepted the
-/// reload.
+/// reload. A fallback name on a private address gets a plain HTTP only site,
+/// so Caddy never asks for a certificate it cannot get.
 #[allow(clippy::question_mark)]
 pub(super) fn apply_caddy_site(
     send: impl Fn(&Request) -> Result<Reply>,
     app: &str,
     env: &HashMap<String, String>,
+    routing: &AppRouting,
     backends: &[Backend],
     paths: &RikuPaths,
 ) -> Result<()> {
@@ -33,11 +37,14 @@ pub(super) fn apply_caddy_site(
         Ok(name) => name,
         Err(e) => return Err(e),
     };
-    let route = match build_route(&name, env, backends, paths, &Router::Caddy) {
+    let mut route = match build_route(&name, env, backends, paths, &Router::Caddy) {
         Ok(Some(route)) => route,
         Ok(None) => return remove_caddy_site(send, app).map(|_| ()),
         Err(e) => return Err(e),
     };
+    if routing.fallback && routing.fallback_private_ip.is_some() {
+        route.https = HttpsPolicy::PlainHttpOnly;
+    }
     let request = Request::Apply {
         app: name.to_string(),
         router: RouterKind::Caddy,
@@ -69,3 +76,7 @@ pub(super) fn remove_caddy_site(
         Err(e) => Err(e),
     }
 }
+
+#[cfg(test)]
+#[path = "caddy_tests.rs"]
+mod tests;

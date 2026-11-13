@@ -36,11 +36,14 @@ use crate::nginx_run::run;
 use crate::port_wait::wait_for_port;
 use crate::protocol::{Reply, Stage};
 use crate::schema::{Route, RouteBackend, Tls};
-use crate::site_files::{install, Planned, Snapshot};
+use crate::site_files::{check_router_dir, install, Planned, Snapshot};
 
 /// Readable by the `caddy` group through the site directory's group, which
 /// root init sets on the directory with the setgid bit.
 pub(crate) const SITE_FILE: u32 = 0o640;
+/// The mode root init gives the site directory and its `certs` directory:
+/// root writes, the `caddy` group reads, setgid keeps that group.
+pub(crate) const SITE_DIR_MODE: u32 = 0o2750;
 
 /// Where the helper keeps Caddy's site files and which program it runs.
 #[derive(Debug, Clone)]
@@ -123,6 +126,12 @@ pub(crate) fn commit(
     open_port: Option<u16>,
     probe: impl Fn() -> BTreeSet<u16>,
 ) -> Reply {
+    if let Err(e) = [roots.site_root.clone(), roots.cert_root()]
+        .iter()
+        .try_for_each(|dir| check_router_dir(dir, roots.owner_uid, SITE_DIR_MODE))
+    {
+        return failed(Stage::Render, e);
+    }
     let snapshot = match Snapshot::take(planned) {
         Ok(snapshot) => snapshot,
         Err(e) => return failed(Stage::Render, e),

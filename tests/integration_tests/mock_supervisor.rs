@@ -3,9 +3,11 @@
 //! web copy passes, and closes it once the config is gone.
 
 use std::collections::HashMap;
-use std::fs;
+use std::fs::{self, File};
+use std::io::Write;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
@@ -51,14 +53,40 @@ fn supervise(dir: PathBuf, running: Arc<AtomicBool>) {
     }
 }
 
+/// Writes `supervisor.pid` and holds its lock, the way a running supervisor
+/// does, so a deploy finds one running and never launches a real one.
+///
+/// The pid is a child `sleep`, not this test process: a deploy sends SIGHUP
+/// to that pid, which would kill the test runner.
+fn hold_pid_file(paths: &riku::config::RikuPaths) -> (File, Child) {
+    fs::create_dir_all(&paths.riku_root).expect("create the riku root");
+    let stand_in = Command::new("sleep")
+        .arg("600")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn the pid stand in");
+    let mut pid_file =
+        File::create(paths.riku_root.join("supervisor.pid")).expect("create supervisor.pid");
+    pid_file.lock().expect("lock supervisor.pid");
+    writeln!(pid_file, "{}", stand_in.id()).expect("write supervisor.pid");
+    (pid_file, stand_in)
+}
+
 /// Runs until dropped.
 pub struct MockSupervisor {
     running: Arc<AtomicBool>,
     handle: Option<JoinHandle<()>>,
+    /// Its lock is what makes the supervisor look running; it is released
+    /// when the mock is dropped.
+    _pid_file: File,
+    stand_in: Child,
 }
 
 impl MockSupervisor {
     pub fn start(paths: &riku::config::RikuPaths) -> MockSupervisor {
+        let (pid_file, stand_in) = hold_pid_file(paths);
         let running = Arc::new(AtomicBool::new(true));
         let dir = paths.workers_enabled.clone();
         let thread_running = Arc::clone(&running);
@@ -66,6 +94,8 @@ impl MockSupervisor {
         MockSupervisor {
             running,
             handle: Some(handle),
+            _pid_file: pid_file,
+            stand_in,
         }
     }
 }
@@ -76,5 +106,7 @@ impl Drop for MockSupervisor {
         if let Some(handle) = self.handle.take() {
             let _ = handle.join();
         }
+        let _ = self.stand_in.kill();
+        let _ = self.stand_in.wait();
     }
 }

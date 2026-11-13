@@ -58,7 +58,7 @@ async fn require_token(
         .and_then(|v| v.strip_prefix("Bearer "));
 
     match provided {
-        Some(token) if super::auth::constant_time_eq(token, &state.token) => {
+        Some(token) if crate::util::secure::constant_time_eq(token, &state.token) => {
             next.run(request).await
         }
         _ => (

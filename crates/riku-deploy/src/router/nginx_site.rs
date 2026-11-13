@@ -23,7 +23,7 @@ use super::routing_state::TlsState;
 use crate::config::router::Router;
 use crate::config::RikuPaths;
 use crate::util::backend::Backend;
-use crate::util::echo;
+use crate::util::display;
 use crate::util::flag::https_only;
 
 /// The backend a check renders with: the route gate never connects to it.
@@ -164,7 +164,10 @@ pub(super) fn apply_nginx_site(
         return Err(anyhow!("cannot publish static files for '{app}': {e}"));
     }
     let own_tls = https_only(env) && env.contains_key("RIKU_DOMAINS");
-    let fallback_domain = routing.domains.first().filter(|_| routing.fallback);
+    let fallback_domain = routing
+        .domains
+        .first()
+        .filter(|_| routing.fallback && routing.fallback_private_ip.is_none());
     drop_stale_pair(app, fallback_domain.map(String::as_str), paths);
     if (own_tls || fallback_domain.is_some()) && !has_pair(&name, paths) {
         let mut plain = env.clone();
@@ -174,10 +177,9 @@ pub(super) fn apply_nginx_site(
         }
         if let Some(domain) = fallback_domain {
             if fallback_certificate(app, domain, paths) != TlsState::Issued {
-                echo(
-                    &format!("-----> HTTPS for {domain} is not available yet; the app answers on plain HTTP"),
-                    "yellow",
-                );
+                display::warn(&format!(
+                    "HTTPS for {domain} is not available yet; the app answers on plain HTTP"
+                ));
                 return Ok(());
             }
         }

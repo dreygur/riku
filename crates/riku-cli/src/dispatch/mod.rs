@@ -100,7 +100,6 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
             command,
             args,
             confirm,
-            json: _,
         } => {
             let session = AgentSession::from_flags(scope.as_deref(), agent_id.as_deref());
             let mode = agent_mode((intro, schema, agent_help), command, args, confirm);
@@ -162,7 +161,7 @@ pub fn run_local(paths: &RikuPaths, command: Commands) -> Result<()> {
             require_app(app).and_then(|app| backup::cmd_backup(paths, &app, out.as_deref()))
         }
         Commands::Restore { app, file } => backup::cmd_restore(paths, &app, &file),
-        Commands::Doctor { fix } => doctor::cmd_doctor(paths, fix),
+        Commands::Doctor => doctor::cmd_doctor(paths),
         Commands::Dashboard { .. } => Err(anyhow!("dashboard is run by the riku binary")),
         Commands::Addon(cmd) => app_cmds::run_addon(paths, cmd),
         Commands::InstallPlugins { plugins } => install_plugins(paths, plugins),

@@ -126,16 +126,25 @@ Riku recommends installing nub on the server:
 npm install -g @nubjs/nub
 ```
 
-Without nub, Riku falls back to `npm` (`npm ci` / `npm install`) so existing
-deployments keep working, and prints how to install nub. `riku doctor` warns
-while nub is missing.
+Without nub, Riku falls back to `npm` (`npm ci` / `npm install`) and prints
+how to install nub. `riku doctor` warns
+while nub is missing. With neither nub nor npm on the server, the build stops
+with `Node.js is not installed on this server (npm not found)`.
 
-### Environment Variables
+### Node Version
 
-```bash
-RIKU_NODE_VERSION=18.17.0
-PORT=3000
+Pin the node the build must match in `riku.toml`:
+
+```toml
+[runtime]
+name = "node"
+version = "18.17.0"
 ```
+
+The plugin gets it as `RIKU_NODE_VERSION`, set only from `[runtime]
+version`. A `RIKU_NODE_VERSION` line in the app's ENV is an env var for the
+app and does not pick the version. See [Environment Variables](env.md) for
+what the version accepts.
 
 ### Example server.js
 
@@ -159,7 +168,9 @@ app.listen(port, '0.0.0.0', () => {
 
 ### Detection
 
-Riku detects Ruby apps by the presence of `Gemfile`.
+Riku detects Ruby apps by the presence of `Gemfile`. The build runs
+`bundle install`; without bundler on the server it stops with
+`Bundler is not installed on this server (bundle not found)`.
 
 ### Gemfile
 
@@ -181,7 +192,6 @@ web: bundle exec puma -p $PORT
 ### Environment Variables
 
 ```bash
-RUBY_VERSION=3.2.0
 PORT=3000
 ```
 
@@ -255,7 +265,6 @@ go build -o server .
 ### Environment Variables
 
 ```bash
-GO_VERSION=1.21
 PORT=8080
 ```
 
@@ -318,7 +327,6 @@ web: java -jar build/libs/myapp-1.0.0.jar
 ### Environment Variables
 
 ```bash
-JAVA_VERSION=17
 PORT=8080
 ```
 
@@ -398,7 +406,6 @@ cargo build --release
 ### Environment Variables
 
 ```bash
-RUST_VERSION=1.70.0
 PORT=8080
 ```
 
@@ -432,14 +439,22 @@ async fn main() -> std::io::Result<()> {
 Riku runs an app as containers when it has a compose file (`compose.yaml`,
 `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`, checked in that
 order) or a `Containerfile` or `Dockerfile` at the app root, and
-`RIKU_RUNTIME` is unset or `container`. Set `RIKU_RUNTIME` to another runtime
+`runtime.name` is unset or `container`. Set `runtime.name` to another runtime
 to keep deploying such a repo with that runtime instead.
 
-Riku drives the engine named in `~/.riku/CONTAINER_ENGINE`, or else the
+Riku drives the engine named by `[engine] program` in
+[settings.toml](settings.md), or else the
 first of `docker`, `podman`, `nerdctl` and `finch` found on `PATH`, in that
 order. Docker must be version 23 or newer (or an engine with a compatible
 CLI), since riku reads engine output with `--format json`. Riku reads the
 compose file itself and talks to the engine directly; no `compose` tool runs.
+With docker, install the buildx plugin (`docker-buildx-plugin` from
+Docker's repository): without it docker builds with its deprecated legacy
+builder. riku keeps docker's notice about that off the push output, and
+`riku doctor` warns while buildx is missing. Podman needs nothing extra.
+The deploy user must be able to open the engine's socket; for rootful
+docker, `sudo riku init` asks whether to add it to the socket's group (see
+[settings.md](settings.md#router-and-engine)).
 
 The compose file, or a folder on its path, may be a symlink as long as its
 real target stays inside the app directory (for example
@@ -496,8 +511,17 @@ services:
 
 On deploy riku logs in to the configured registry (see
 [GHCR authentication](#ghcr-authentication) below), pulls the `image`
-services, builds the `build` services, then replaces each service's
-containers in start order (see [Rolling replacement](#rolling-replacement)).
+services, builds the `build` services, then replaces the containers of each
+service that changed, in start order (see
+[Rolling replacement](#rolling-replacement)). A service is unchanged, and
+keeps running untouched, when all of its copies are up, there are as many as
+`SCALING` asks for, and each was started with exactly what the deploy would
+start it with now: the same image id (a rebuilt or newly pulled image under
+the same tag counts as a change), env, command, ports, mounts, labels,
+health check and the rest. The push prints `Keeping <service> (unchanged)`
+for each one. Containers started by a riku before this check carry no
+`riku.spec` label and are replaced once, as is every container after a riku
+upgrade that changes how the spec is recorded.
 Every copy is its own container, named `<app>.<service>.<n>`, on the app's
 network `riku-<app>`, where the other services reach it by its service name.
 Service names may not contain `.`, so no two apps can share a container name.
@@ -509,15 +533,47 @@ Containers of a service the compose file no longer has are removed.
 A container app's Procfile is read only for its `release` line. That command
 runs once per deploy, after the images are ready and before any copy is
 replaced, in a one-off container from the new image of the routed service
-(or else the first built service), with the app's env, network and mounts. A
-nonzero exit stops the deploy.
+(or else the first built service), with the app's env, network and mounts.
+Before it runs, the services that service depends on (`depends_on`, followed
+through their own `depends_on`) are started when none of their copies is
+up, so a migration can reach its database on a first deploy. A dependency
+that already runs is left alone for the release, and a service started for
+it is not replaced again by the same deploy. The release still runs before
+any routed copy is replaced. Its stdout and stderr print on the push
+output. A nonzero exit stops the deploy, and the last lines of output go
+to `riku logs <app> --deploy`.
 
-App env values are passed to every container, except `RIKU_*` keys, which
-configure riku itself. A service's own `environment` wins over the app env.
+The app env (everything `riku config set` stores, minus `RIKU_*` keys,
+which configure riku itself) goes to a service when riku builds it (a
+compose service with a `build` section, or the `app` service of a
+Dockerfile app) or when it is the routed service, the one riku sends the
+app's traffic to, even if that one is pulled with `image:`. Every other
+service, such as a pulled `redis` or `postgres`, gets only its own compose
+`environment`, so app secrets never reach a third party image. To pass an
+app value to such a service, name it in its `environment` with `${VAR}`,
+which riku fills from the app env when it reads the compose file:
 
-`riku destroy` stops and removes every copy and the app network and keeps
-the volumes. When the engine does not answer, destroy refuses and removes
-nothing, since the containers would keep running with no app behind them.
+```yaml
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+```
+
+A service's own `environment` wins over the app env. So a
+`riku config set` replaces the built and routed services on the deploy it
+starts, and the other pulled services keep running unless one of them
+uses a changed value through `${VAR}`. The `release` command always gets
+the app env, even when it runs in a pulled image.
+
+`riku destroy` stops and removes every copy, the app network and the images
+riku built for the app (`localhost/riku-<hash>`, one per `build` service),
+and keeps the volumes and pulled images such as `redis:7-alpine`, which
+other apps may use. An image the engine refuses to remove is a warning
+naming the `image rm` command to run by hand. When the engine does not
+answer, destroy refuses and removes nothing, since the containers would
+keep running with no app behind them.
 `riku destroy <app> --force` removes riku's files and route anyway and warns
 that the containers may still run.
 
@@ -559,6 +615,7 @@ one of them is refused:
 | `riku.copy` | The copy number, from 1 |
 | `riku.port` | The host port riku published for the routed service |
 | `riku.restart` | The compose `restart` policy, which the supervisor applies. The engine's own restart policy stays off |
+| `riku.spec` | A sha256 of everything the copy was started with except its image id. A deploy compares it to keep unchanged services running |
 
 ### Scaling
 
@@ -569,10 +626,12 @@ line each. A service without a line runs one copy.
 riku ps myapp --scale web=3
 ```
 
-This grows or shrinks the service without a rebuild and without restarting
-the copies it keeps, then records the count in `SCALING`. New copies take
-the lowest free numbers; shrinking stops the highest numbers first, each
-taken off the router before it stops.
+This grows or shrinks the service at once, without a rebuild, without
+restarting the copies it keeps and without touching any other service, then
+records the count in `SCALING` and prints what it did, such as
+`Started 1 copy of web, 3 running`. A later deploy keeps that count. New
+copies take the lowest free numbers; shrinking stops the highest numbers
+first, each taken off the router before it stops.
 
 One copy always works. More than one is refused, before anything changes,
 for a service that:
@@ -606,8 +665,8 @@ only after every copy of that dependency passes its engine health check.
 
 ### Rolling replacement
 
-Every deploy, `riku restart` and image watch update replaces copies one at a
-time. How depends on the service:
+Every deploy (for the services that changed), `riku restart` and image watch
+update replaces copies one at a time. How depends on the service:
 
 - The routed service without writable storage overlaps. For each old copy,
   riku starts a new one, waits for it to be healthy, adds it to the router,
@@ -631,9 +690,15 @@ copy first.
 ### Stopping a copy: the SIGTERM contract
 
 Riku stops a container with its compose `stop_signal` (default `SIGTERM`)
-and kills it once `stop_grace_period` (default 30 seconds, rounded up to a
+and kills it once `stop_grace_period` (default 10 seconds, rounded up to a
 whole second) has passed. A Procfile copy gets `SIGTERM` from the supervisor,
 then `SIGKILL` after the worker grace period (30 seconds).
+
+Every container runs under the engine's init (`--init`) as PID 1, which
+passes the stop signal on to the app and reaps its zombie processes. An app
+that runs as PID 1 itself, such as a `python app.py` command, would get no
+default signal handling from the kernel and ignore `SIGTERM` until killed.
+Set `init: false` on a service whose image brings its own init.
 
 An app should, on `SIGTERM`, finish the requests it is serving and exit
 within the grace period. For an overlapping service the router has already
@@ -643,11 +708,11 @@ stopped sending it new requests by then.
 
 A service that mounts writable storage never scales and always stops first,
 since two copies must not write the same data. It is down on every deploy
-and every `riku restart` that includes it, from the moment the old copy
-stops until the new one is healthy: up to 120 seconds with a compose
-healthcheck. Services that depend on it with `service_healthy` wait for it.
-Use `riku restart <app> <service>` to restart only the services that need
-it.
+that changes it and every `riku restart` that includes it, from the moment
+the old copy stops until the new one is healthy: up to 120 seconds with a
+compose healthcheck. Services that depend on it with `service_healthy`
+wait for it. Use `riku restart <app> <service>` to restart only the
+services that need it.
 
 ### Restarting and stopping one service
 
@@ -659,8 +724,8 @@ riku stop myapp             # every container of the app
 ```
 
 `riku restart` replaces the copies from the images they run now, without a
-rebuild, and starts a stopped service again. `riku restart --hot` does the
-same for a container app. `riku stop` takes the app off the router first when
+rebuild, and starts a stopped service again. `riku restart --hot` is the
+same as a plain restart. `riku stop` takes the app off the router first when
 the routed service is among the stopped ones, stops dependents before the
 services they depend on, and keeps volumes. Naming a service of a Procfile
 app is refused.
@@ -670,10 +735,10 @@ according to its compose `restart` policy (`no` when unset; `unless-stopped`
 for the service riku makes from a Dockerfile), with a delay of 1, 2, 4 and so
 on up to 60 seconds between attempts, and not while a deploy of that app
 holds its lock. A copy that `riku stop` or a scale down removed is never
-started again by the supervisor, whatever its policy. A copy's restart count starts at 0 again when a
-deploy or `riku restart` replaces it. Each copy's output goes to
-`~/.riku/logs/<app>/<service>.<n>.log`, which `riku logs <app> <service>`
-follows.
+started again by the supervisor, whatever its policy. A copy's restart
+count starts at 0 again when a deploy or `riku restart` replaces it. Each
+copy's output goes to `~/.riku/logs/<app>/<service>.<n>.log`, which
+`riku logs <app> <service>` follows.
 
 ### Switching an app to containers
 
@@ -726,19 +791,26 @@ variable reference.
 
 ## Static Sites
 
-### Detection
-
-Riku detects static sites when no runtime is detected but nginx can serve files directly.
-
-### Configuration
+`routing.static = true` is the switch. With it set, nginx serves the app's
+document root (`routing.document_root`, `public` by default) itself instead
+of proxying to the app. `routing.static_paths` adds more `location:directory`
+mappings, and works with or without `static = true`.
 
 ```toml
 # riku.toml
 [routing]
-static_paths = ["/:public"]
+static = true
 ```
 
-### Directory Structure
+Static files are served only next to a runtime. Riku has no runtime-less
+static deploy: the app must still match a runtime plugin, and it must declare
+a process or use a runtime whose `start` gives a command. A repo with only
+`public/index.html` and no runtime fails with `No runtime plugin matched`.
+
+Static files need the nginx router. Under Caddy the router helper refuses
+the route of an app with `static = true`, and a deploy that sets
+`static_paths` stops before any copy starts, with
+`routing.static_paths is nginx only`.
 
 ```
 myapp/
@@ -746,7 +818,8 @@ myapp/
 │   ├── index.html
 │   ├── css/
 │   └── js/
-└── Procfile  (optional, can be empty)
+├── package.json
+└── Procfile
 ```
 
 ---

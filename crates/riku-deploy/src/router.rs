@@ -47,7 +47,6 @@ mod route_build;
 mod route_env;
 pub(crate) mod routing_env;
 pub(crate) mod routing_state;
-mod site_expected;
 
 pub use backends::{copy_socket, current_backends};
 pub(crate) use backends::{parsed_worker, web_copies, worker_backend};
@@ -64,9 +63,9 @@ use reload::{record_outcome, reload_router_plugin};
 pub use remove::remove;
 pub use renew::renew;
 pub use route_build::build_route;
+pub(crate) use route_build::refused_key;
 use routing_env::{routing_env, Record};
 use routing_state::{restore, RoutingMode};
-pub use site_expected::site_expected;
 
 /// Caddy reaches an app over loopback whatever `RIKU_BIND_ADDRESS` says.
 /// nginx and router plugins keep the address each copy listens on, since a
@@ -85,8 +84,8 @@ fn backends_for(router: &Router, backends: Vec<Backend>) -> Vec<Backend> {
 }
 
 /// A container app (`engine` given) routes to its running routed copies; a
-/// Procfile app to its web copies, or to its old default backend when it has
-/// none.
+/// Procfile app to its web copies, or, a static site with none, to its
+/// default backend.
 #[allow(clippy::question_mark)]
 fn routed_backends(
     active: &Router,
@@ -111,9 +110,53 @@ fn routed_backends(
     }
 }
 
+/// Whether a Procfile app gets a route: it runs a web facing copy, or the
+/// router serves its static files. A worker only app answers no HTTP.
+pub(crate) fn has_route(
+    app: &str,
+    env: &HashMap<String, String>,
+    paths: &RikuPaths,
+) -> Result<bool> {
+    if app_routing::serves_static_site(env) {
+        return Ok(true);
+    }
+    match web_copies(app, paths) {
+        Ok(copies) => Ok(!copies.is_empty()),
+        Err(e) => Err(anyhow!("cannot route '{app}': {e}")),
+    }
+}
+
+/// Take an app with no route off the router. An app the routing state has no
+/// entry for was never routed (every apply records one), so there is nothing
+/// to remove and the router helper is not asked. An unreadable state counts
+/// as an entry, so a route is never left behind on a guess.
+fn unroute(app: &str, paths: &RikuPaths) -> Result<()> {
+    let recorded = match routing_state::RoutingState::load(paths) {
+        Ok(state) => state.entry(app).is_some(),
+        Err(_) => true,
+    };
+    if !recorded {
+        return Ok(());
+    }
+    remove(app, paths)
+}
+
+/// Refuse an app ENV key that names a path the helper picks. Path mode never
+/// builds a per app route, and the default backend would read the key, so
+/// every router entry point checks it before a backend is chosen.
+fn refuse_named_socket(app: &str, env: &HashMap<String, String>) -> Result<()> {
+    match refused_key(env) {
+        Some(reason) => Err(anyhow!("cannot route '{app}': {reason}")),
+        None => Ok(()),
+    }
+}
+
 /// Configure the active router so `app` is reachable, with a backend for
 /// every web copy it has today, and return once the router confirmed the new
-/// config. `engine` is `Some` for a container app.
+/// config. `engine` is `Some` for a container app. A Procfile app with no
+/// route (see [`has_route`]) is taken off the router instead, which also
+/// forgets its recorded port; one that was never routed needs no router
+/// helper.
 #[allow(clippy::question_mark)]
 pub fn configure(
     app: &str,
@@ -122,6 +165,16 @@ pub fn configure(
     paths: &RikuPaths,
     engine: Option<&Engine>,
 ) -> Result<()> {
+    if engine.is_none() {
+        match has_route(app, env, paths) {
+            Ok(true) => {}
+            Ok(false) => return unroute(app, paths),
+            Err(e) => return Err(e),
+        }
+    }
+    if let Err(e) = refuse_named_socket(app, env) {
+        return Err(e);
+    }
     let active = match Router::load(paths) {
         Ok(router) => router,
         Err(e) => return Err(e),
@@ -144,6 +197,9 @@ pub fn apply(
     paths: &RikuPaths,
     backends: &[Backend],
 ) -> Result<()> {
+    if let Err(e) = refuse_named_socket(app, env) {
+        return Err(e);
+    }
     let active = match Router::load(paths) {
         Ok(router) => router,
         Err(e) => return Err(e),
@@ -184,8 +240,8 @@ fn apply_to(
         }
         Router::Caddy => {
             let send = |request: &Request| send_to_helper(paths, request);
-            let outcome = apply_caddy_site(send, app, env, backends, paths);
-            if outcome.is_ok() && routing.fallback {
+            let outcome = apply_caddy_site(send, app, env, &routing, backends, paths);
+            if outcome.is_ok() && routing.fallback && routing.fallback_private_ip.is_none() {
                 mark_caddy_tls(app, paths);
             }
             record_outcome(paths, &outcome);

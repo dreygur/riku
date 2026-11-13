@@ -57,17 +57,20 @@ pub fn cmd_install_plugins(paths: &RikuPaths, only: Option<Vec<String>>) -> Resu
     let mut failures = Vec::new();
     for name in &targets {
         match install_runtime(paths, name) {
-            Ok(()) => display::success(&format!("Installed plugin: {name}")),
+            Ok(()) => display::step_done(&format!("Installed plugin: {name}"), ""),
             Err(e) => failures.push(format!("{name}: {e:#}")),
         }
     }
     if !failures.is_empty() {
         bail!("could not install {}", failures.join("; "));
     }
-    display::info(&format!(
-        "Installed {} plugin(s) to {}",
-        targets.len(),
-        paths.plugin_root.display()
-    ));
+    display::step_done(
+        &format!(
+            "Installed {} plugin(s) to {}",
+            targets.len(),
+            paths.plugin_root.display()
+        ),
+        "",
+    );
     Ok(())
 }

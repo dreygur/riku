@@ -2,18 +2,17 @@
 
 ## Overview
 
-Riku is a complete Rust port of the Piku micro-PaaS, designed to provide
-Heroku-like git push deployments to small servers without Docker. This
+Riku is a micro-PaaS written in Rust, designed to provide Heroku-like git
+push deployments to small servers without Docker. This
 document outlines the architecture, design decisions, and implementation
 details of the Riku system.
 
 ## Goals
 
 1. **Performance**: Efficient Rust implementation, no interpreted runtime
-2. **Compatibility**: Maintain full compatibility with existing Piku workflows
-3. **Reliability**: Improve stability and error handling
-4. **Maintainability**: Clean layering, no language-specific code in core
-5. **Extensibility**: A real plugin system, not just new runtimes, but
+2. **Reliability**: Stable processes and clear error handling
+3. **Maintainability**: Clean layering, no language-specific code in core
+4. **Extensibility**: A real plugin system, not just new runtimes, but
    addons, routers, and event subscribers
 
 ## High-Level Architecture
@@ -79,7 +78,7 @@ Repository layer: pure path/env resolution, no business logic:
 
 - **Path Resolution**: `RikuPaths::from_env()` resolves every on-disk
   directory from `$RIKU_ROOT`/`$HOME`
-- **Directory Structure**: maintains compatibility with Piku's layout
+- **Directory Structure**: everything under `~/.riku/` (see below)
 - **Default Values**: sensible defaults for every path field
 
 ### 3. Deployment Engine (`riku-deploy`)
@@ -202,11 +201,12 @@ Riku extends in two ways:
   install`/`remove`, always best-effort (a failing hook never blocks the
   install or removal it's attached to).
 
-There is also a legacy, separate hook mechanism (`manager.rs`/`hooks.rs`):
-four fixed `riku-*`-prefixed executables (`riku-pre-deploy`,
-`riku-pre-build`, `riku-post-build`, `riku-post-deploy`) invoked directly
-by `riku-deploy` at the corresponding stage: predates the manifest-based
-event bus and is kept for backward compatibility.
+There is also a separate, name-based hook mechanism
+(`manager.rs`/`hooks.rs`): four fixed `riku-*`-prefixed executables
+(`riku-pre-deploy`, `riku-pre-build`, `riku-post-build`,
+`riku-post-deploy`) invoked directly by `riku-deploy` at the corresponding
+stage. They need no manifest. A failing pre-deploy, pre-build or
+post-build hook aborts the deploy; a failing post-deploy hook only warns.
 
 **Trust model.** `PluginInstaller` verifies a pinned checksum (rejects on
 mismatch) and, if the manifest carries an Ed25519 `signature`, requires it
@@ -439,29 +439,14 @@ dispatch code, not mocks (see recent additions to `riku-plugins`,
 - Configuration updates
 - Error condition handling
 
-### Containerized Production Integration Suite
+### Stress and Demo
 
-`tests/stress/container/run_container_test.sh` builds a real
-target server image (Ubuntu 24.04, sshd, nginx, the compiled `riku`
-binary, bundled runtime plugins), provisions a throwaway SSH keypair,
-boots the container, performs an actual `git push` deploy of a mock app
-over SSH, then drives concurrent HTTP load against the nginx-proxied
-app and collects a structured pass/fail verdict (502/504 count, zombie
-process check, supervisor liveness). It runs with either Docker or
-Podman: the script detects whichever is on `PATH` and uses it
-transparently, no flags needed:
-
-```bash
-./tests/stress/container/run_container_test.sh
-```
-
-See `tests/stress/README.md` for the full suite (lifecycle stress,
-fd/leak monitor, chaos signal tests, resource limit audit) and
-`tests/stress/container/` for this containerized suite specifically.
-There is also a separate `tests/demo/` podman-compose sandbox used for
+See `tests/stress/README.md` for the supervisor stress suite (lifecycle
+stress, fd/leak monitor, chaos signal tests, resource limit audit).
+There is also a separate `tests/demo/` compose sandbox used for
 manual/browser-driven verification of dashboard and plugin changes.
 
-## Deployment Compatibility
+## On-Disk Layout
 
 ### Directory Structure
 
@@ -479,7 +464,7 @@ manual/browser-driven verification of dashboard and plugin changes.
 ├── workers-available/  # Available worker TOML configs
 ├── workers-enabled/    # Enabled worker configs (symlinks)
 ├── acme/               # ACME/Let's Encrypt certificates
-└── plugins/            # Plugin bundles (runtime, addon, router, event, legacy hooks)
+└── plugins/            # Plugin bundles (runtime, addon, router, event, name-based hooks)
 ```
 
 ### File Formats
@@ -507,5 +492,4 @@ See `docs/superpowers/ROADMAP.md` for what is next.
 - **Plugin Manifests**: `toml` + `serde`
 
 This architecture provides a solid foundation for a high-performance,
-reliable, extensible micro-PaaS while maintaining full compatibility with
-the existing Piku ecosystem.
+reliable, extensible micro-PaaS.

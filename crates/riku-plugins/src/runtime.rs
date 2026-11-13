@@ -16,8 +16,8 @@
 //!
 //! ## Detection resolution
 //!
-//! 1. If `RIKU_RUNTIME=<name>` is set in the app ENV, that plugin is used directly
-//!    (error if not found).
+//! 1. If the app env has `RIKU_RUNTIME=<name>` (the `runtime.name` setting),
+//!    that plugin is used directly (error if not found).
 //! 2. Otherwise plugins sorted alphabetically are tried in order; first
 //!    `detect` exit-0 wins. If multiple match, first alphabetically wins.
 
@@ -205,11 +205,11 @@ pub fn build(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>, recent: &OutputTa
     // script can't run unbounded. The memory ceiling (RLIMIT_AS) is opt-in
     // (`RIKU_MAX_MEMORY_MB`): a default virtual-address cap aborts node/v8 and
     // JVM builds, which reserve multiple GB of virtual memory at startup. See
-    // `ResourceLimits::from_env`.
+    // `ResourceLimits::from_env`. The app's own `limits.max_*` values win.
     build_with_limits(
         plugin,
         ctx,
-        crate::util::resource_limits::ResourceLimits::from_env(),
+        crate::util::resource_limits::ResourceLimits::from_env().with_app_env(ctx.app_env),
         plugin_timeout(),
         recent,
     )
@@ -342,7 +342,7 @@ pub fn get_start_cmd(plugin: &RuntimePlugin, ctx: &RuntimeContext<'_>) -> Result
 }
 
 /// Parse `KEY=VALUE` lines from raw bytes. Lines empty or starting with `#` are skipped.
-fn parse_env_lines(raw: &[u8]) -> Result<HashMap<String, String>> {
+pub fn parse_env_lines(raw: &[u8]) -> Result<HashMap<String, String>> {
     let mut env = HashMap::new();
     for line in BufReader::new(raw).lines().map_while(Result::ok) {
         let line = line.trim().to_string();

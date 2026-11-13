@@ -4,29 +4,20 @@
 
 **Q: Why Riku?**
 
-**A:** Riku is a complete Rust port of the original [Piku](https://github.com/piku/piku) micro-PaaS. The name honors the original project while signifying our independent implementation in Rust.
+**A:** Riku is a micro-PaaS written in Rust: `git push` to a small server and your app runs, Heroku style, from one binary.
 
 **Q: Why Rust?**
 
-**A:** Rust provides several advantages over the original Python implementation:
-- **Single binary deployment** - No Python runtime dependencies
+**A:** Rust gives Riku:
+- **Single binary deployment** - No interpreter or runtime dependencies
 - **Memory safety** - No garbage collection, no runtime errors
 - **Performance** - Compiled code runs faster with lower memory footprint
 - **Type safety** - Catch errors at compile time instead of runtime
 - **Low resource usage** - Ideal for small VPS and edge deployments
 
-**Q: Is Riku compatible with Piku?**
+**Q: What runs my app processes?**
 
-**A:** Yes. Riku maintains compatibility with Piku's:
-- Directory structure (`~/.riku/` instead of `~/.piku/`)
-- Environment variable format
-- Procfile syntax
-- Plugin system
-- Git-based deployment workflow
-
-**Q: Does Riku use uWSGI?**
-
-**A:** No. Riku implements its own process supervisor in Rust, replacing uWSGI Emperor. This gives us:
+**A:** Riku's own process supervisor, written in Rust. This gives us:
 - Better control over process lifecycle
 - Native health checking
 - Built-in log rotation
@@ -50,7 +41,7 @@
 
 **Q: How do I deploy an app?**
 
-**A:** Just like Heroku or Piku:
+**A:** Just like Heroku:
 ```bash
 git remote add riku riku@edge.example:myapp
 git push riku main
@@ -58,18 +49,12 @@ git push riku main
 
 **Q: How do I scale my app?**
 
-**A:** Use the `SCALING` file:
-```bash
-echo "web=4" > SCALING
-echo "worker=2" >> SCALING
-git add SCALING && git commit -m "scale"
-git push riku main
-```
-
-Or use the CLI:
+**A:** Use the CLI, which records the counts on the server and redeploys:
 ```bash
 riku ps myapp --scale web=4 worker=2
 ```
+
+A `SCALING` file committed to the app's repo is not read.
 
 **Q: How do I set environment variables?**
 
@@ -82,22 +67,7 @@ Or create an `ENV` file in `~/.riku/envs/myapp/ENV`.
 
 **Q: Can I use custom nginx configuration?**
 
-**A:** No. An `nginx.conf`, `nginx.custom.conf`, `nginx.custom` or `.nginx.conf` in your app directory is not supported: riku ignores it, prints a warning at deploy, and uses the generated config. There is no snippet file either, and `RIKU_NGINX_INCLUDE_FILE` fails a deploy. The route covers domains, backends, TLS, static files and the HTTP mode. Set headers and caching in the app.
-
-**Q: Can I store my bare git repo in a custom location?**
-
-**A:** Yes. Riku automatically symlinks custom repo locations to `~/.riku/repos/`:
-
-```bash
-# On server: create bare repo anywhere
-git init --bare ~/my-projects/myapp.git
-
-# Push to custom path
-git remote add riku riku@server:~/my-projects/myapp.git
-git push riku main
-
-# Riku creates: ~/.riku/repos/myapp.git → ~/my-projects/myapp.git
-```
+**A:** No. An `nginx.conf`, `nginx.custom.conf`, `nginx.custom` or `.nginx.conf` in your app directory is not supported: riku ignores it, prints a warning at deploy, and uses the generated config. There is no snippet file either. The route covers domains, backends, TLS, static files and the HTTP mode. Set headers and caching in the app.
 
 **Q: Does Riku auto-start the supervisor?**
 
@@ -129,7 +99,8 @@ riku logs myapp web
 riku restart myapp
 ```
 
-Or set `RIKU_AUTO_RESTART=false` and restart manually.
+This restarts the running workers from the current build. A new build
+starts with `git push` or `riku deploy myapp`.
 
 **Q: Where are logs stored?**
 
@@ -159,7 +130,7 @@ Then obtain SSL certificates (ACME support is built-in).
 
 **Q: Can I use Riku with Cloudflare?**
 
-**A:** Yes, as a plain proxy in front of your domain. Riku has no Cloudflare IP allow list: `RIKU_NGINX_CLOUDFLARE_ACL` fails a deploy. If you want to limit direct access to the origin, do it in a firewall.
+**A:** Yes, as a plain proxy in front of your domain. Riku has no Cloudflare IP allow list. If you want to limit direct access to the origin, do it in a firewall.
 
 **Q: How do I add custom cron jobs?**
 
@@ -170,30 +141,7 @@ cron: 0 2 * * * /path/to/script.sh
 
 **Q: Does Riku support zero-downtime deployments?**
 
-**A:** Yes. Use `riku restart myapp --hot` for a rolling zero-downtime restart. Standard `riku restart` does a graceful restart (brief downtime). Set `RIKU_AUTO_RESTART=true` (default) for automatic restarts on deploy.
-
-## Migration from Piku
-
-**Q: How do I migrate from Piku to Riku?**
-
-**A:** 
-1. Install Riku alongside Piku
-2. Riku uses `~/.riku/` instead of `~/.piku/`
-3. Copy your apps: `cp -r ~/.piku/apps/* ~/.riku/apps/`
-4. Copy your env files: `cp -r ~/.piku/envs/* ~/.riku/envs/`
-5. Update git remotes to point to Riku
-6. Test each app and migrate gradually
-
-**Q: Are Piku plugins compatible with Riku?**
-
-**A:** Yes. Shell-based plugins work with both. Place them in `~/.riku/plugins/`.
-
-**Q: What about uWSGI configuration?**
-
-**A:** Riku doesn't use uWSGI. Replace uWSGI-specific env vars with Riku equivalents:
-- `UWSGI_PROCESSES` → Use the `SCALING` file or `riku ps myapp --scale web=2`
-- `UWSGI_MAX_REQUESTS` → Not needed (handled by supervisor)
-- `UWSGI_*` → See [docs/docs/env.md](env.md) for the full variable reference
+**A:** For a worker with a health check, yes: a deploy or `riku restart myapp` starts the new copy next to the old one and swaps it in once it passes its probe. A worker without a health check is stopped and started again, with a brief gap. Container apps are replaced one copy at a time. `riku restart` never rebuilds; `riku deploy` does.
 
 ## Performance
 

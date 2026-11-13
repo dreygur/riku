@@ -33,29 +33,11 @@ fn switching_web_kind_drops_old_route_keys() {
 
     build_worker_env("shop", "wsgi", copy_one(), &base, &[], &paths).unwrap();
     let after_wsgi = persisted(&paths);
-    for key in ["RIKU_NGINX_PORTMAP", "RIKU_NGINX_EXTERNAL_PORT"] {
-        assert!(
-            !after_wsgi.contains_key(key),
-            "{key} left after web to wsgi: {after_wsgi:?}"
-        );
-    }
-    assert!(after_wsgi.contains_key("RIKU_NGINX_WSGI"), "{after_wsgi:?}");
-}
-
-#[test]
-fn stale_external_port_key_is_dropped() {
-    let tmp = TempDir::new().unwrap();
-    let paths = RikuPaths::for_tests(tmp.path());
-    let base = HashMap::from([("RIKU_NGINX_EXTERNAL_PORT".to_string(), "8080".to_string())]);
-
-    let env = build_worker_env("shop", "web", copy_one(), &base, &[], &paths).unwrap();
-
-    assert!(!env.contains_key("RIKU_NGINX_EXTERNAL_PORT"), "{env:?}");
     assert!(
-        !persisted(&paths).contains_key("RIKU_NGINX_EXTERNAL_PORT"),
-        "{:?}",
-        persisted(&paths)
+        !after_wsgi.contains_key("RIKU_NGINX_PORTMAP"),
+        "port map left after web to wsgi: {after_wsgi:?}"
     );
+    assert!(after_wsgi.contains_key("RIKU_NGINX_WSGI"), "{after_wsgi:?}");
 }
 
 #[test]
@@ -94,16 +76,21 @@ fn gives_up_when_the_picker_only_offers_taken_ports() {
     assert!(err.to_string().contains("distinct"), "{err}");
 }
 
+/// The route refuses an app chosen socket, so no copy may listen on one.
 #[test]
-fn custom_socket_is_where_worker_listens() {
+fn refuses_a_socket_the_app_names() {
     let tmp = TempDir::new().unwrap();
     let paths = RikuPaths::for_tests(tmp.path());
     let base = HashMap::from([("RIKU_NGINX_SOCKET".to_string(), "/srv/s.sock".to_string())]);
 
-    let env = build_worker_env("shop", "wsgi", copy_one(), &base, &[], &paths).unwrap();
-
-    assert_eq!(env["UWSGI_SOCKET"], "/srv/s.sock");
-    assert_eq!(env["SOCKET"], "unix:///srv/s.sock");
+    for kind in ["wsgi", "web"] {
+        let err = build_worker_env("shop", kind, copy_one(), &base, &[], &paths).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("RIKU_NGINX_SOCKET cannot be set by an app"),
+            "{kind}: {err}"
+        );
+    }
 }
 
 #[test]

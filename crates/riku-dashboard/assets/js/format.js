@@ -51,6 +51,16 @@ export const fmtDur = (s) => {
   return m + "m";
 };
 
+/**
+ * The uptime part of the supervisor pill: the uptime, the server's reason
+ * when it could not read one (a root run), or "uptime unknown".
+ * @param {{ supervisor_uptime_seconds?: number | null, supervisor_uptime_unavailable?: string }} d
+ */
+export const uptimeText = (d) => {
+  if (d.supervisor_uptime_seconds != null) { return "up " + fmtDur(d.supervisor_uptime_seconds); }
+  return d.supervisor_uptime_unavailable || "uptime unknown";
+};
+
 /** @param {unknown} ms CPU time in milliseconds */
 export const fmtCpu = (ms) => {
   let s = Math.round(num(ms) / 1000);
@@ -73,5 +83,17 @@ export const fmtWhen = (ts) => {
   catch (_) { return new Date(ts * 1000).toLocaleString(); }
 };
 
-/** @param {Date} d */
-export const fmtClock = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
+/** @param {Date} d local HH:MM:SS, as `riku logs` shows it */
+export const fmtClock = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+
+/**
+ * One `log` event from the stream: `<tag>\t<time>\t<text>`, the time the
+ * line's own UTC stamp or empty when it has none.
+ * @param {string} data
+ * @returns {{ tag: string, ts: Date | null, text: string }}
+ */
+export function parseLogEvent(data) {
+  const [tag, stamp, ...rest] = data.split("\t");
+  const ts = stamp ? new Date(stamp) : null;
+  return { tag, ts: ts && !isNaN(ts.getTime()) ? ts : null, text: rest.join("\t") };
+}

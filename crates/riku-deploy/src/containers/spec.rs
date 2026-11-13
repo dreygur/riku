@@ -3,10 +3,12 @@
 //! # Security model
 //!
 //! The compose parser already refuses the labels riku sets itself (app,
-//! service, copy, port, restart). The compose project label is dropped here,
-//! so a service cannot join another project's `list_project` results. App env
-//! entries named `RIKU_*` configure riku itself (registry credentials, for
-//! one) and are not passed on.
+//! service, copy, port, restart, spec). The compose project label is dropped here,
+//! so a service cannot join another project's `list_project` results. The app
+//! env, which holds the app's secrets, reaches only the services riku builds
+//! and the routed service, the app's own code; any other pulled image gets
+//! only its compose `environment`. App env entries named `RIKU_*` configure riku itself
+//! (registry credentials, for one) and are never passed on.
 
 use std::collections::BTreeMap;
 
@@ -16,6 +18,7 @@ use riku_container::engine::{PullPolicy, RunSpec};
 use riku_container::types::{
     labels, ContainerName, CopyIndex, NetworkName, PortBinding, RestartPolicy,
 };
+use sha2::{Digest, Sha256};
 
 use super::images::build_tag;
 use super::AppName;
@@ -75,7 +78,12 @@ fn copy_labels(
     labels_out
 }
 
-fn copy_env(app_env: &BTreeMap<String, String>, service: &ServiceDef) -> BTreeMap<String, String> {
+/// The app env without `RIKU_*` entries, overlaid by the service's own
+/// `environment`. What a built service and the release command run with.
+pub(super) fn app_env_for(
+    app_env: &BTreeMap<String, String>,
+    service: &ServiceDef,
+) -> BTreeMap<String, String> {
     let mut env: BTreeMap<String, String> = app_env
         .iter()
         .filter(|(name, _)| !name.starts_with(RIKU_ENV_PREFIX))
@@ -85,14 +93,82 @@ fn copy_env(app_env: &BTreeMap<String, String>, service: &ServiceDef) -> BTreeMa
     env
 }
 
-/// The run spec for copy `copy` of `service`.
+/// [`app_env_for`] for a service riku builds or routes traffic to (the app's
+/// own code either way); any other pulled image gets only its own
+/// `environment`.
+fn copy_env(
+    app_env: &BTreeMap<String, String>,
+    service: &ServiceDef,
+    routed: bool,
+) -> BTreeMap<String, String> {
+    if service.build.is_some() || routed {
+        return app_env_for(app_env, service);
+    }
+    service.environment.clone()
+}
+
+/// The run spec for copy `copy` of `service`, labelled with the service's
+/// [`spec_fingerprint`].
 ///
 /// `host_port` replaces the host port of the routed binding so every copy of
 /// the routed service listens on its own port; it is ignored for other
-/// services. The container env is the app env without `RIKU_*` entries,
-/// overlaid by the service's own `environment`. A service with a `build` runs
-/// the image tagged by `build_tag`, otherwise its `image`.
+/// services. A service with a `build`, or the routed service, gets the app
+/// env without `RIKU_*` entries, overlaid by its own `environment`; any
+/// other pulled service gets only its own `environment`. A service with a
+/// `build` runs the image tagged by `build_tag`, otherwise its `image`.
 pub fn copy_spec(
+    app: &AppName,
+    project: &ComposeProject,
+    service: &ServiceDef,
+    copy: CopyIndex,
+    host_port: Option<u16>,
+    env: &BTreeMap<String, String>,
+) -> Result<RunSpec> {
+    let fingerprint = match spec_fingerprint(app, project, service, env) {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => return Err(e),
+    };
+    let mut spec = match bare_spec(app, project, service, copy, host_port, env) {
+        Ok(spec) => spec,
+        Err(e) => return Err(e),
+    };
+    spec.labels.insert(labels::SPEC.to_string(), fingerprint);
+    Ok(spec)
+}
+
+/// A sha256 over everything a copy of `service` starts with apart from its
+/// image id: image reference, env values, labels, ports, mounts, command,
+/// health check and the rest. Every copy of a service gets the same value,
+/// since it is taken from copy 1 without a picked host port.
+///
+/// It is stored in the `riku.spec` label. Anyone who can read the label can
+/// read the container's env from the engine too, so it exposes nothing new.
+pub(crate) fn spec_fingerprint(
+    app: &AppName,
+    project: &ComposeProject,
+    service: &ServiceDef,
+    env: &BTreeMap<String, String>,
+) -> Result<String> {
+    let first = match CopyIndex::new(1) {
+        Some(copy) => copy,
+        None => return Err(anyhow!("copy index 1 was refused")),
+    };
+    let spec = match bare_spec(app, project, service, first, None, env) {
+        Ok(spec) => spec,
+        Err(e) => return Err(e),
+    };
+    let mut hasher = Sha256::new();
+    hasher.update(format!("{spec:?}").as_bytes());
+    for (name, value) in &spec.env {
+        hasher.update(name.as_bytes());
+        hasher.update([0u8]);
+        hasher.update(value.as_bytes());
+        hasher.update([0u8]);
+    }
+    Ok(hex::encode(hasher.finalize()))
+}
+
+fn bare_spec(
     app: &AppName,
     project: &ComposeProject,
     service: &ServiceDef,
@@ -123,6 +199,7 @@ pub fn copy_spec(
         Err(e) => return Err(e),
     };
     let ports = bindings_for_copy(service, routed.as_ref(), host_port);
+    let is_routed = routed.as_ref().is_some_and(|r| r.service == service.name);
     let published = routed
         .as_ref()
         .filter(|r| r.service == service.name)
@@ -134,7 +211,7 @@ pub fn copy_spec(
         network: NetworkName::for_app(app.as_str()),
         alias: service.name.clone(),
         labels: copy_labels(app, service, copy, published),
-        env: copy_env(env, service),
+        env: copy_env(env, service, is_routed),
         ports,
         mounts,
         entrypoint: service.entrypoint.clone(),
@@ -144,6 +221,7 @@ pub fn copy_spec(
         stop_signal: service.stop_signal.clone(),
         stop_grace: service.stop_grace,
         healthcheck: service.healthcheck.clone(),
+        init: service.init,
     })
 }
 

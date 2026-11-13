@@ -37,7 +37,36 @@ ssh -t -L 8088:127.0.0.1:8088 admin@edge.example sudo -u riku -H riku dashboard
 ```
 
 `admin` is any account on the server that may forward ports and run `sudo -u
-riku`. The dashboard stops when the ssh session ends.
+riku`. The dashboard stops when the ssh session ends. With `-t` the session's
+hangup stops it; without a tty, a dashboard whose stdin is a pipe or a socket
+stops once stdin closes or its parent process goes away. A dashboard with
+any other stdin, such as `/dev/null` under systemd, keeps running.
+
+Each app card links where the app is live now: the URLs of the route its
+last deploy applied, in the form a deploy prints them, from `/api/state`
+`urls` (each `{url, label}`, label `domain`, `lan` for an address only the
+server's network reaches, or `public`). A worker only app, or one never
+deployed, shows "no domain".
+
+A settings change (a domain, the fallback domain, the routing mode) reaches
+the router only on the next deploy. Until then `/api/state` `pending_urls`
+lists the URLs the current settings give, in the same form, and the card
+says "settings changed, redeploy to use <url>". It is empty when the
+settings match the route. When the deploy user cannot read the router's
+site directory (`/etc/riku/caddy` or `/etc/riku/nginx`), the card shows the
+router name alone and says why the site state is unknown in its tooltip.
+
+A worker's memory bar measures against its limit (`memory_limit_bytes`).
+A worker or container with no limit shows its memory with "no limit" and
+no bar, the value under the column header. A container app's table has a
+header row per compose service (from `/api/state` `services`), a stopped
+service included: its name, its image (the reference of a pulled image,
+`built` for one riku built, the full value in the tooltip), and its
+stepper, Apply, Restart, Stop and Logs. The service's copies are listed
+indented under it. Below the table sit the release picker, Roll back and
+Stop app. The release picker preselects the previous release, the one
+Roll back goes to; the current release is listed first and cannot be
+picked.
 
 ### Options
 

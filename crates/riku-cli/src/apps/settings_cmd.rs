@@ -130,7 +130,7 @@ pub fn cmd_settings_show(paths: &RikuPaths, app: &str) -> Result<()> {
     };
     let lines = show_lines(&settings);
     if lines.is_empty() {
-        display::note(&format!("No server settings for '{app}'."));
+        display::detail(&format!("No server settings for '{app}'."));
     }
     for line in lines {
         println!("{line}");

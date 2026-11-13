@@ -112,12 +112,11 @@ impl ContainerWatch {
             Ok(settings) => settings,
             Err(e) => return Err(e.context("cannot read the server settings")),
         };
-        let setting = match riku_config::container_engine::from_settings(paths, &server_settings) {
-            Ok(setting) => setting,
-            Err(e) => return Err(e.context("cannot read the engine setting")),
-        };
         let path_var = std::env::var_os("PATH").unwrap_or_default();
-        let binary = match riku_container::engine::detect(setting.as_deref(), &path_var) {
+        let binary = match riku_container::engine::detect(
+            server_settings.engine.program.as_deref(),
+            &path_var,
+        ) {
             Ok(binary) => binary,
             Err(e) => return Err(e.context("no container engine to watch")),
         };

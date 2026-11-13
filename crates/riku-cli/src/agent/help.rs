@@ -111,11 +111,14 @@ Response:
         "restart" => {
             r#"Usage: riku agent restart <app> [process]
 
-Restart an application or specific process.
+Restart an application's running processes from the current build. Nothing
+is built; use deploy to rebuild. For a container app, process names one
+service; for a Procfile app, one process kind (web, worker, ...). An
+unknown kind fails and lists the app's kinds.
 
 Example:
   riku agent restart myapp
-  riku agent restart myapp web
+  riku agent restart myapp worker
 
 Response:
   {"success": true}"#
@@ -193,7 +196,7 @@ fn print_general_help() {
     println!("  config:show   Show all configuration");
     println!("  logs          View application logs");
     println!("  ps            Show process status");
-    println!("  restart       Restart an application");
+    println!("  restart       Restart an application without rebuilding");
     println!("  stop          Stop an application");
     println!("  run           Run a command in the app context");
     println!("  stats         Show statistics");

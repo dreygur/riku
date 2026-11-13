@@ -167,20 +167,19 @@ fn a_certificate_without_its_key_is_an_error() {
 }
 
 #[test]
-fn removed_and_path_keys_fail_the_deploy_naming_the_key() {
+fn socket_path_key_fails_the_deploy_naming_the_key() {
     let tmp = TempDir::new().unwrap();
-    for key in ["RIKU_NGINX_CSP", "RIKU_NGINX_SOCKET"] {
-        for router in [Router::Nginx, Router::Caddy] {
-            let err = build_for(
-                &tmp,
-                &router,
-                &[("RIKU_DOMAINS", "myapp.example"), (key, "x")],
-                &[Backend::loopback(5001)],
-            )
-            .unwrap_err();
+    let key = "RIKU_NGINX_SOCKET";
+    for router in [Router::Nginx, Router::Caddy] {
+        let err = build_for(
+            &tmp,
+            &router,
+            &[("RIKU_DOMAINS", "myapp.example"), (key, "x")],
+            &[Backend::loopback(5001)],
+        )
+        .unwrap_err();
 
-            assert!(err.to_string().contains(key), "{key}: {err}");
-        }
+        assert!(err.to_string().contains(key), "{router:?}: {err}");
     }
 }
 
@@ -210,13 +209,30 @@ fn only_the_apps_own_sockets_are_accepted() {
 
     let route = build(
         &tmp,
-        &[("RIKU_NGINX_STATIC", "public")],
+        &[
+            ("RIKU_DOMAINS", "myapp.example"),
+            ("RIKU_NGINX_STATIC", "public"),
+        ],
         &[Backend::Unix(paths.socket_root.join("myapp.sock"))],
     )
     .unwrap();
     assert_eq!(route.backends, vec![RouteBackend::UnixDefault]);
-    assert_eq!(route.domains, vec!["myapp.example.com".to_string()]);
     assert_eq!(route.kind, SiteKind::Static);
+}
+
+#[test]
+fn an_nginx_route_with_no_domain_and_no_port_is_refused() {
+    let tmp = TempDir::new().unwrap();
+
+    let err = build(
+        &tmp,
+        &[("RIKU_NGINX_STATIC", "public")],
+        &[Backend::loopback(5001)],
+    )
+    .unwrap_err()
+    .to_string();
+
+    assert!(err.contains("no domain to route"), "{err}");
 }
 
 #[test]
@@ -287,6 +303,27 @@ fn caddy_route_keeps_only_what_caddy_uses() {
     )
     .unwrap_err();
     assert!(err.to_string().contains("Caddy does not take"), "{err}");
+}
+
+/// Caddy serves no static files, so `routing.static_paths` would be dropped
+/// without a word. The deploy stops instead, naming the setting, also for
+/// an app with no domain whose site is otherwise just removed.
+#[test]
+fn caddy_refuses_static_paths_naming_the_setting() {
+    let tmp = TempDir::new().unwrap();
+    let backends = [Backend::loopback(5000)];
+    for domain in [&[("RIKU_DOMAINS", "myapp.example")][..], &[][..]] {
+        let mut pairs = domain.to_vec();
+        pairs.push(("RIKU_NGINX_STATIC_PATHS", "/assets/:public"));
+
+        let err = build_for(&tmp, &Router::Caddy, &pairs, &backends).unwrap_err();
+
+        let text = format!("{err:#}");
+        assert!(
+            text.contains("routing.static_paths") && text.contains("nginx only"),
+            "{text}"
+        );
+    }
 }
 
 fn install_own_certificate(paths: &RikuPaths) {

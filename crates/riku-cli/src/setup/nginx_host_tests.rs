@@ -54,6 +54,40 @@ fn site_root_is_created_under_a_checked_parent_and_refused_when_writable() {
     assert!(err.contains("group or world writable"), "{err}");
 }
 
+/// Every init run puts the site root back to `0755`, not only the run that
+/// created it.
+#[test]
+fn an_existing_site_root_others_can_write_gets_its_mode_back() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let site = tmp.path().join("riku").join("nginx");
+    fs::create_dir_all(&site).unwrap();
+    fs::set_permissions(&site, fs::Permissions::from_mode(0o777)).unwrap();
+    let me = fs::metadata(tmp.path()).unwrap().uid();
+
+    prepare_site_root(&site, me).unwrap();
+
+    assert_eq!(fs::metadata(&site).unwrap().mode() & 0o7777, 0o755);
+}
+
+#[test]
+fn a_symlinked_site_root_is_refused() {
+    let tmp = tempfile::tempdir().unwrap();
+    let parent = tmp.path().join("riku");
+    let elsewhere = tmp.path().join("elsewhere");
+    fs::create_dir_all(&parent).unwrap();
+    fs::create_dir_all(&elsewhere).unwrap();
+    std::os::unix::fs::symlink(&elsewhere, parent.join("nginx")).unwrap();
+    let me = fs::metadata(tmp.path()).unwrap().uid();
+
+    let err = prepare_site_root(&parent.join("nginx"), me)
+        .unwrap_err()
+        .to_string();
+
+    assert!(err.contains("not a directory"), "{err}");
+}
+
 #[test]
 fn root_write_refuses_a_writable_or_foreign_owned_directory() {
     use std::os::unix::fs::PermissionsExt;

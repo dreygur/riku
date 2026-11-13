@@ -28,12 +28,6 @@ run_test() {
     test_home=$(mktemp -d /tmp/riku-test-XXXXXX)
     export RIKU_ROOT="$test_home"
 
-    # Keep the legacy sites-enabled path inside $test_home so nothing a test
-    # does can reach the real /etc/nginx/sites-enabled.
-    local sites_enabled="$test_home/nginx-sites-enabled"
-    mkdir -p "$sites_enabled"
-    export RIKU_NGINX_SITES_ENABLED="$sites_enabled"
-
     echo ""
     echo "━━━ $name ━━━"
     if bash "$script" 2>&1; then

@@ -25,6 +25,7 @@ use std::path::Path;
 use anyhow::Result;
 
 use crate::config::router::Router;
+use crate::doctor::ssh_check::{riku_key_count, Reader};
 use crate::util::display;
 use crate::util::public_key::PublicKey;
 use crate::util::ROOT_BINARY;
@@ -33,6 +34,7 @@ use super::binary::install_root_binary;
 use super::deploy_account::ensure_account;
 use super::deploy_keys::read_key_file;
 use super::deploy_user::{deploy_user_name, passwd_home, DeployUser};
+use super::engine_group::offer_engine_group;
 use super::helper_install::install_router_helper;
 use super::init::InitOptions;
 use super::init_router::{deploy_router, setup_router_host};
@@ -45,17 +47,31 @@ use super::var_root::setup_var_root;
 const RIKU_DIR: &str = ".riku";
 const ROUTER_ENV: &str = "RIKU_ROUTER";
 
-fn print_ssh_hint() {
-    display::warn("No deploy key added, git push needs one");
-    display::detail("Add yours with: sudo riku init --ssh-key <your .pub or authorized_keys file>");
+/// Without `--ssh-key`, names the deploy keys an earlier init authorized, and
+/// warns only when there are none, or they cannot be read.
+fn report_existing_keys(home: &Path) {
+    match riku_key_count(home, Reader::Root) {
+        Ok(count) if count > 0 => {
+            display::step_done("Deploy keys", &format!("{count} already authorized"));
+        }
+        _ => {
+            display::warn("No deploy key added, git push needs one");
+            display::detail(
+                "Add yours with: sudo riku init --ssh-key <your .pub or authorized_keys file>",
+            );
+        }
+    }
 }
 
-fn run_user_steps(user: &DeployUser, keys: &[PublicKey]) -> Result<()> {
+fn run_user_steps(user: &DeployUser, keys: &[PublicKey], no_systemd: bool) -> Result<()> {
     let key_args: Vec<String> = keys
         .iter()
         .flat_map(|key| ["--add-key".to_string(), key.to_string()])
         .collect();
     let mut args = vec!["init", "--user-steps"];
+    if no_systemd {
+        args.push("--no-systemd");
+    }
     args.extend(key_args.iter().map(String::as_str));
     user.run_relayed(Path::new(ROOT_BINARY), &args)
 }
@@ -144,7 +160,7 @@ pub fn root_init(options: &InitOptions) -> Result<(DeployUser, Router)> {
     // variable reaches them through `DeployUser`'s passed environment.
     std::env::set_var(ROUTER_ENV, router.name());
 
-    if let Err(e) = run_user_steps(&user, &keys) {
+    if let Err(e) = run_user_steps(&user, &keys, options.no_systemd) {
         return Err(e);
     }
     // Before the router: nginx host setup adds its worker to the group.
@@ -170,8 +186,10 @@ pub fn root_init(options: &InitOptions) -> Result<(DeployUser, Router)> {
             return Err(e);
         }
     }
+    // After the service: joining a group needs a supervisor restart.
+    offer_engine_group(&user, options.no_systemd);
     if keys.is_empty() {
-        print_ssh_hint();
+        report_existing_keys(&user.home);
     }
     Ok((user, router))
 }

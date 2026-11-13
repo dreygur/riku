@@ -13,13 +13,12 @@ use anyhow::Result;
 use riku_caddy::TlsFiles;
 use riku_container::types::AppName;
 
-use crate::caddy_apply::{CaddyRoots, SITE_FILE};
+use crate::caddy_apply::{CaddyRoots, SITE_DIR_MODE, SITE_FILE};
 use crate::nginx_render::{CERTIFICATE_FILE, KEY_FILE};
 use crate::schema::Tls;
 use crate::site_files::{ensure_dir, Planned};
 
 const CERT_DIR: &str = "certs";
-const CERT_DIR_MODE: u32 = 0o2750;
 
 impl CaddyRoots {
     pub(crate) fn cert_root(&self) -> PathBuf {
@@ -61,7 +60,7 @@ pub(crate) fn planned_pair(roots: &CaddyRoots, app: &AppName, tls: Option<&Tls>)
 pub(crate) fn prepare_dirs(roots: &CaddyRoots, app: &AppName) -> Result<()> {
     [roots.cert_root(), roots.cert_dir(app)]
         .iter()
-        .try_for_each(|dir| ensure_dir(dir, CERT_DIR_MODE, roots.owner_uid))
+        .try_for_each(|dir| ensure_dir(dir, SITE_DIR_MODE, roots.owner_uid))
 }
 
 /// Remove the app's certificate directory once its files are gone. A

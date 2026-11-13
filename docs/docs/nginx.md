@@ -89,13 +89,11 @@ checkout. A path or link that leads anywhere else fails the deploy. A
 missing source is published as an empty directory. `sudo riku init` creates
 `/var/lib/riku/static`; without it a static deploy fails and says so.
 
-### Removed keys
+### What the route does not do
 
-The core route does not do caching, Cloudflare allow lists, Content-Security-Policy headers, SPA catch-all, a snippet include file, or extra listen addresses. A deploy that finds one of these keys in the app's ENV fails and names the key:
+The route does not do caching, Cloudflare allow lists, Content-Security-Policy headers, SPA catch-all, a snippet include file, or extra listen addresses. An app that needs caching or a CSP sets the header itself.
 
-`RIKU_NGINX_CLOUDFLARE_ACL`, `RIKU_NGINX_CACHE_PATH`, `RIKU_NGINX_CACHE_PREFIXES`, `RIKU_NGINX_CACHE_SIZE`, `RIKU_NGINX_CACHE_TIME`, `RIKU_NGINX_CACHE_EXPIRY`, `RIKU_NGINX_CACHE_REDIRECTS`, `RIKU_NGINX_CACHE_ANY`, `RIKU_NGINX_CACHE_CONTROL`, `RIKU_NGINX_CATCH_ALL`, `RIKU_NGINX_CSP`, `RIKU_NGINX_INCLUDE_FILE`, `RIKU_NGINX_IPV4_ADDRESS`, `RIKU_NGINX_IPV6_ADDRESS`, `RIKU_DISABLE_IPV6`, `RIKU_NGINX_SOCKET`
-
-Remove them with `riku config unset myapp <KEY>` and deploy again. An app that needs caching or a CSP can set the header in the app itself.
+`RIKU_NGINX_SOCKET` fails a deploy or `riku restart` of an app with a web facing process, naming the key, before any worker changes: the router helper picks socket paths itself, and each uWSGI copy listens on its own socket in `/run/riku-sockets`. The route refuses it in every routing mode too, so a static site that sets it fails at the Route step.
 
 ---
 
@@ -247,8 +245,9 @@ Static files not found or wrong path.
 # Check the published copy nginx serves
 ls -la /var/lib/riku/static/myapp/
 
-# Verify RIKU_NGINX_STATIC_PATHS
-riku config get myapp RIKU_NGINX_STATIC_PATHS
+# Verify routing.static_paths: the repo's riku.toml, then the server override
+grep static_paths ~/.riku/apps/myapp/riku.toml
+riku settings get myapp routing.static_paths
 ```
 
 #### SSL Certificate Errors
