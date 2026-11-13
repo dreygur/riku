@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The go plugin detects an app that has `.go` files at its top and no
+  `go.mod`. Its check never matched: `find -quit` without `-print` prints
+  nothing. Building such an app still needs a `go.mod`, which go itself
+  says.
 - `sudo riku init` restarts the supervisor at most once. Before, an
   upgrade that also added the deploy user to docker's group restarted it
   twice, stopping every app twice. The docker group question now comes

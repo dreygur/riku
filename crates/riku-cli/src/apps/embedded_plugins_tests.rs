@@ -229,6 +229,31 @@ fn a_server_without_npm_or_nub_fails_the_build_saying_node_is_missing() {
     );
 }
 
+/// A Go app needs no go.mod: a `.go` file at the top of the app is enough,
+/// and one only in a subdirectory is not.
+#[test]
+fn go_detects_an_app_with_go_files_and_no_go_mod() {
+    let tmp = tempfile::tempdir().unwrap();
+    write_out(find("go").unwrap(), tmp.path()).unwrap();
+    let detect = |app: &std::path::Path| {
+        std::process::Command::new(tmp.path().join("go"))
+            .arg("detect")
+            .env("RIKU_APP_PATH", app)
+            .status()
+            .unwrap()
+            .success()
+    };
+    let flat = tmp.path().join("flat");
+    std::fs::create_dir_all(&flat).unwrap();
+    std::fs::write(flat.join("main.go"), "package main\n").unwrap();
+    let nested = tmp.path().join("nested");
+    std::fs::create_dir_all(nested.join("cmd")).unwrap();
+    std::fs::write(nested.join("cmd/main.go"), "package main\n").unwrap();
+
+    assert!(detect(&flat), "main.go at the top was not detected");
+    assert!(!detect(&nested), "a .go file below the top was detected");
+}
+
 #[test]
 fn python_go_and_ruby_builds_without_their_toolchain_say_it_is_missing() {
     for (plugin, marker, wanted) in [

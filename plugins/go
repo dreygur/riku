@@ -9,7 +9,7 @@ APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
 case "$CMD" in
   detect)
     [ -f "$APP_PATH/go.mod" ] \
-      || find "$APP_PATH" -maxdepth 1 -name "*.go" -quit 2>/dev/null | grep -q . \
+      || find "$APP_PATH" -maxdepth 1 -name "*.go" -print -quit 2>/dev/null | grep -q . \
       && exit 0
     exit 1
     ;;
