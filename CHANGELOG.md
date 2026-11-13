@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   checks. Podman lists a pulled image as `sha256:<id>` but gives a
   container's image as the bare id, so the two never matched; the ids are
   now compared without the prefix, as deploys already did.
+- A dashboard restart, stop, redeploy, scale or env edit naming an app
+  that does not exist answers 404 instead of stopping the dashboard, and
+  the same request on the supervisor's control plane (deploy, restart,
+  stop, destroy) is an error instead of stopping the supervisor. The CLI
+  functions they call exit the process for an unknown app.
 
 ## [0.1.4] - 2026-11-13
 

@@ -10,9 +10,12 @@ use anyhow::Result;
 use crate::config::RikuPaths;
 use crate::deploy::containers::{AppName, CopyIndex, ServiceName};
 use crate::supervisor::health::{ControlActions, RestartOutcome};
+use crate::util::existing_app;
 
 /// Routes control-plane requests to the same command functions `riku <cmd>`
-/// uses, so HTTP-triggered actions behave identically to the CLI.
+/// uses, so HTTP-triggered actions behave identically to the CLI. The app is
+/// checked with [`existing_app`] first: those functions exit the process
+/// for an unknown app, and here that process is the supervisor.
 pub struct CliControlActions;
 
 impl ControlActions for CliControlActions {
@@ -20,16 +23,28 @@ impl ControlActions for CliControlActions {
         crate::apps::cmd_apps_create(paths, app)
     }
     fn deploy(&self, paths: &RikuPaths, app: &str) -> Result<()> {
-        crate::apps::cmd_deploy(paths, app, None)
+        match existing_app(app, &paths.app_root) {
+            Ok(app) => crate::apps::cmd_deploy(paths, &app, None),
+            Err(e) => Err(e),
+        }
     }
     fn restart(&self, paths: &RikuPaths, app: &str) -> Result<()> {
-        crate::apps::cmd_restart(paths, app, None)
+        match existing_app(app, &paths.app_root) {
+            Ok(app) => crate::apps::cmd_restart(paths, &app, None),
+            Err(e) => Err(e),
+        }
     }
     fn stop(&self, paths: &RikuPaths, app: &str) -> Result<()> {
-        crate::apps::cmd_stop(paths, app, None)
+        match existing_app(app, &paths.app_root) {
+            Ok(app) => crate::apps::cmd_stop(paths, &app, None),
+            Err(e) => Err(e),
+        }
     }
     fn destroy(&self, paths: &RikuPaths, app: &str) -> Result<()> {
-        crate::apps::cmd_destroy(paths, app, crate::apps::DestroyMode::Safe)
+        match existing_app(app, &paths.app_root) {
+            Ok(app) => crate::apps::cmd_destroy(paths, &app, crate::apps::DestroyMode::Safe),
+            Err(e) => Err(e),
+        }
     }
     fn install_plugins(&self, paths: &RikuPaths, only: Option<Vec<String>>) -> Result<()> {
         crate::apps::cmd_install_plugins(paths, only)
@@ -59,3 +74,7 @@ impl ControlActions for CliControlActions {
         crate::deploy::containers::restart_copy(&app_name, paths, &service_name, copy_index)
     }
 }
+
+#[cfg(test)]
+#[path = "control_actions_tests.rs"]
+mod tests;
