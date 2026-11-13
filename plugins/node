@@ -6,6 +6,45 @@ set -eu
 CMD="${1:-}"
 APP_PATH="${RIKU_APP_PATH:-$(pwd)}"
 
+# RIKU_NODE_VERSION (riku.toml [runtime] version) names a major, a
+# major.minor or an exact version.
+wanted="${RIKU_NODE_VERSION:-}"
+wanted="${wanted#v}"
+wanted="${wanted%.x}"
+
+# nub resolves a node only for a pinned version, so a pin riku chooses is
+# written in an empty directory, never in the app.
+pinned_node() {
+  pin_dir="$(mktemp -d)"
+  found="$(cd "$pin_dir" && nub node pin "$1" >/dev/null && nub node install >/dev/null && nub node which 2>/dev/null)" || found=""
+  rm -rf "$pin_dir"
+  [ -n "$found" ] && printf '%s\n' "$found"
+}
+
+# The node nub provides (https://nubjs.com/docs/node): the version
+# RIKU_NODE_VERSION names, else the app's own pin (engines.node,
+# .node-version, .nvmrc), else the latest LTS.
+nub_node() {
+  if [ -n "$wanted" ]; then
+    pinned_node "$wanted"
+    return
+  fi
+  (cd "$APP_PATH" && nub node install >/dev/null 2>&1 && nub node which 2>/dev/null) || pinned_node lts
+}
+
+# A server with nub and no node runs the app on nub's node: build, the
+# PATH env gives the app's processes, and start all find it as `node`.
+case "$CMD" in
+  build | env | start)
+    if ! command -v node >/dev/null 2>&1 && command -v nub >/dev/null 2>&1; then
+      if node_path="$(nub_node)"; then
+        PATH="$(dirname "$node_path"):$PATH"
+        export PATH
+      fi
+    fi
+    ;;
+esac
+
 case "$CMD" in
   detect)
     [ -f "$APP_PATH/package.json" ] && exit 0
@@ -18,12 +57,12 @@ case "$CMD" in
       echo "Node.js is not installed on this server (npm not found). Install Node.js, then push again." >&2
       exit 1
     fi
-    # RIKU_NODE_VERSION (riku.toml [runtime] version) names a major, a
-    # major.minor or an exact version. riku uses the server's node, so a
-    # mismatch fails here rather than running the app on the wrong one.
-    wanted="${RIKU_NODE_VERSION:-}"
-    wanted="${wanted#v}"
-    wanted="${wanted%.x}"
+    if ! command -v node >/dev/null 2>&1; then
+      echo "nub could not provide Node.js for this app (see above). Pin a version with [runtime] version in riku.toml or engines.node in package.json." >&2
+      exit 1
+    fi
+    # riku uses the server's node or nub's, so a mismatch fails here rather
+    # than running the app on the wrong one.
     if [ -n "$wanted" ]; then
       installed="$(node --version 2>/dev/null || true)"
       installed="${installed#v}"

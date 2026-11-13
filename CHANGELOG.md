@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A Node app on a server with nub and no `node` built and then failed to
+  start with `node: not found`. The node plugin now runs it on the node
+  nub provides: the `[runtime] version`, else the app's own pin, else the
+  latest LTS.
+
 ## [0.1.7] - 2026-11-13
 
 ### Fixed
