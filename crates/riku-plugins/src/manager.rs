@@ -2,12 +2,14 @@
 
 use anyhow::Result;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use crate::config::RikuPaths;
 use crate::hooks::{HookContext, PluginHook};
+use crate::util::display;
 
 use super::executor::{emit_plugin_output, plugin_timeout, wait_with_timeout};
 
@@ -19,7 +21,9 @@ mod tests;
 ///
 /// For each hook, the manager looks for an executable file named after the
 /// hook (e.g. `riku-pre-deploy`) in the configured plugins directory.
-/// The file is executed with the hook's environment variables injected.
+/// The file is executed with the hook's environment variables injected. A
+/// file without an execute bit is skipped with a warning, never made
+/// executable, as runtime discovery skips it.
 ///
 /// # Failure policy
 ///
@@ -70,17 +74,21 @@ impl<'a> PluginManager<'a> {
             return Ok(false);
         }
 
-        // Ensure the plugin is executable
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let meta = fs::metadata(&plugin_path)?;
-            if meta.permissions().mode() & 0o111 == 0 {
-                fs::set_permissions(
-                    &plugin_path,
-                    fs::Permissions::from_mode(meta.permissions().mode() | 0o111),
-                )?;
+        let meta = match fs::metadata(&plugin_path) {
+            Ok(meta) => meta,
+            Err(e) => {
+                return Err(anyhow::anyhow!(
+                    "cannot inspect {}: {e}",
+                    plugin_path.display()
+                ))
             }
+        };
+        if meta.permissions().mode() & 0o111 == 0 {
+            display::warn(&format!(
+                "Skipped {}: not executable (chmod +x it to run it as a hook)",
+                plugin_path.display()
+            ));
+            return Ok(false);
         }
 
         let env = ctx.build_env();
@@ -92,7 +100,7 @@ impl<'a> PluginManager<'a> {
             "Running plugin hook"
         );
 
-        let mut child = super::executor::spawn_retrying_etxtbsy(
+        let spawned = super::executor::spawn_retrying_etxtbsy(
             Command::new(&plugin_path)
                 .envs(&env)
                 .stdout(Stdio::piped())
@@ -100,8 +108,15 @@ impl<'a> PluginManager<'a> {
                 // Own process group so a timeout can killpg() the whole tree,
                 // hooks are arbitrary scripts that may background work.
                 .process_group(0),
-        )
-        .map_err(|e| anyhow::anyhow!("Failed to spawn hook plugin '{}': {}", plugin_name, e))?;
+        );
+        let mut child = match spawned {
+            Ok(child) => child,
+            Err(e) => {
+                return Err(anyhow::anyhow!(
+                    "Failed to spawn hook plugin '{plugin_name}': {e}"
+                ))
+            }
+        };
 
         let timed_out = wait_with_timeout(&mut child, timeout);
 
@@ -124,7 +139,14 @@ impl<'a> PluginManager<'a> {
             };
         }
 
-        let status = child.wait()?;
+        let status = match child.wait() {
+            Ok(status) => status,
+            Err(e) => {
+                return Err(anyhow::anyhow!(
+                    "cannot wait for hook plugin '{plugin_name}': {e}"
+                ))
+            }
+        };
 
         if status.success() {
             tracing::info!(

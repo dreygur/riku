@@ -54,6 +54,37 @@ fn test_run_hook_no_plugin_returns_false() {
     assert!(!result, "Should return false when no plugin exists");
 }
 
+/// Like runtime discovery, a hook file without an execute bit is not a
+/// plugin: riku neither runs it nor makes it executable.
+#[test]
+fn a_non_executable_hook_is_skipped_and_left_as_it_was() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = TempDir::new().unwrap();
+    let paths = setup_paths(&temp);
+    let marker = temp.path().join("ran");
+    let plugin_path = paths.plugin_root.join("riku-pre-deploy");
+    fs::write(
+        &plugin_path,
+        format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+    )
+    .unwrap();
+    fs::set_permissions(&plugin_path, fs::Permissions::from_mode(0o644)).unwrap();
+
+    let manager = PluginManager::new(&paths);
+    let app_path = PathBuf::from("/tmp/myapp");
+    let env_path = PathBuf::from("/tmp/envs/myapp");
+    let riku_root = paths.riku_root.clone();
+    let app_env = HashMap::new();
+    let hook = PluginHook::PreDeploy;
+    let ctx = make_ctx("myapp", &hook, &app_path, &env_path, &riku_root, &app_env);
+
+    assert!(!manager.run_hook(&ctx).unwrap(), "the hook counted as run");
+    assert!(!marker.exists(), "the non-executable hook ran");
+    let mode = fs::metadata(&plugin_path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o644, "the hook's mode was changed");
+}
+
 #[test]
 fn test_run_hook_success() {
     let temp = TempDir::new().unwrap();

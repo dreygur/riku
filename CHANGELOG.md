@@ -34,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The post-receive hook a first push creates is mode 0755. It kept the
   write bits the umask allowed, so under umask 002 (common for ssh
   sessions with pam_umask) it was group writable.
+- A lifecycle hook (`riku-pre-deploy` and the others) without an execute
+  bit is skipped with a warning naming the file, as runtime plugins are.
+  riku used to make it executable and run it.
 
 ## [0.1.4] - 2026-11-13
 
