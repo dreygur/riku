@@ -80,7 +80,8 @@ pub struct RikuPaths {
     /// outside tests, not taken from the environment either.
     pub static_root: PathBuf,
     /// The root-owned file that makes nginx load `nginx_root/*.conf`
-    /// (`/etc/nginx/conf.d/riku.conf`). Only a root `riku init` writes it.
+    /// (`/etc/nginx/conf.d/riku.conf`, or Alpine's `http.d`; see
+    /// [`nginx_host::host_include_file`]). Only a root `riku init` writes it.
     /// See [`NginxHostPaths`] for overrides.
     pub nginx_include_file: PathBuf,
     /// Programs a router reload runs. Tests replace them with mock scripts.

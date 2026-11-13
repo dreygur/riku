@@ -3,7 +3,7 @@
 //! The router helper writes every site config into `/etc/riku/nginx` and
 //! never under `/etc/nginx`. Setup creates that root owned directory, installs
 //! the one root-owned file that loads it, `/etc/nginx/conf.d/riku.conf`
-//! and puts the nginx worker user in the `riku-sockets` group (see
+//! (Alpine: `/etc/nginx/http.d/riku.conf`) and puts the nginx worker user in the `riku-sockets` group (see
 //! [`super::nginx_worker`]).
 //!
 //! Security: the include file's text is a constant (see

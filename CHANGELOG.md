@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `sudo riku init` with the nginx router works with Alpine's nginx: when
+  `/etc/nginx/conf.d` is missing and `/etc/nginx/http.d` exists, the
+  include that loads riku's sites goes to `/etc/nginx/http.d/riku.conf`,
+  and `riku doctor` checks that file. Hosts with `conf.d` are unchanged.
 - `sudo riku init` restarts the supervisor at most once. Before, an
   upgrade that also added the deploy user to docker's group restarted it
   twice, stopping every app twice. The docker group question now comes
