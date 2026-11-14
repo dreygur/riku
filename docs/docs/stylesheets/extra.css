@@ -117,6 +117,9 @@ body { background: var(--rk-canvas); }
 .md-header__inner { height: 56px; padding: 0 16px; }
 .md-header__button.md-logo img,
 .md-header__button.md-logo svg { height: 22px; width: 22px; }
+/* logo.svg is filled near white and Material shows it as an <img>, so CSS
+   fill can't reach it. Inverting gives the light scheme a near black mark. */
+[data-md-color-scheme="default"] .md-logo img { filter: invert(1); }
 .md-header__title {
   height: 56px;
   margin-left: 4px;
@@ -643,201 +646,9 @@ body { background: var(--rk-canvas); }
 .md-social__link { color: var(--rk-text-2); }
 
 /* ============================================================
-   HOME (index.md): two-column hero, flat feature grid
-   ============================================================ */
-.riku-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  column-gap: 56px;
-  align-items: center;
-  margin: 0;
-  padding: 40px 0 72px;
-  text-align: left;
-}
-.riku-hero > :not(.riku-term) { grid-column: 1; }
-.riku-hero > .riku-term { grid-column: 2; grid-row: 1 / span 4; margin: 0; }
-
-.md-typeset .riku-eyebrow {
-  margin: 0 0 24px;
-  font: 500 12px/1 var(--rk-mono);
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--rk-text-3);
-}
-.riku-eyebrow .dot {
-  display: inline-block;
-  width: 4px;
-  height: 4px;
-  margin: 0 8px;
-  vertical-align: 2px;
-  overflow: hidden;
-  color: transparent;
-  background: var(--rk-line-strong);
-}
-.md-typeset .riku-hero h1 {
-  margin: 0 0 24px;
-  font-size: 56px;
-  font-weight: 600;
-  line-height: 1.04;
-  letter-spacing: -0.035em;
-}
-.riku-hero h1 .grad {
-  font-family: var(--rk-mono);
-  letter-spacing: -0.04em;
-  color: var(--rk-alive);
-  background: none;
-  -webkit-text-fill-color: currentColor;
-}
-.md-typeset .riku-hero .tagline {
-  max-width: 520px;
-  margin: 0 0 28px;
-  font-size: 17px;
-  line-height: 1.6;
-  color: var(--rk-text-2);
-}
-
-.riku-cta { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; }
-.md-typeset .md-button {
-  display: inline-flex;
-  align-items: center;
-  height: 44px;
-  padding: 0 18px;
-  margin: 0;
-  border: 1px solid var(--rk-line-strong);
-  background: var(--rk-raised);
-  color: var(--rk-text);
-  font: 500 14px/1 var(--rk-sans);
-  text-decoration: none;
-  transition: background 0.12s ease, border-color 0.12s ease;
-}
-.md-typeset .md-button:hover, .md-typeset .md-button:focus {
-  background: var(--rk-line);
-  border-color: var(--rk-line-strong);
-  color: var(--rk-text);
-}
-.md-typeset .md-button--primary {
-  background: var(--rk-text);
-  border-color: var(--rk-text);
-  color: var(--rk-canvas);
-  font-weight: 600;
-}
-.md-typeset .md-button--primary:hover, .md-typeset .md-button--primary:focus {
-  background: var(--rk-text);
-  border-color: var(--rk-text);
-  color: var(--rk-canvas);
-  opacity: 0.88;
-}
-.md-typeset .riku-cta .md-button:last-child { border-color: transparent; background: transparent; color: var(--rk-text-2); }
-
-/* Terminal */
-.riku-term {
-  border: 1px solid var(--rk-line-strong);
-  background: var(--rk-inset);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
-  overflow: hidden;
-}
-.riku-term__bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 38px;
-  padding: 0 14px;
-  background: var(--rk-surface);
-  border-bottom: 1px solid var(--rk-line);
-}
-.riku-term__bar i {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 6px;
-  box-sizing: border-box;
-  border: 1.5px solid var(--rk-line-strong);
-  background: none !important;
-}
-.riku-term__bar span {
-  margin: 0 auto;
-  font: 500 12px/1 var(--rk-mono);
-  color: var(--rk-text-3);
-  transform: translateX(-21px);
-}
-.riku-term .md-clipboard,
-.riku-term .md-code__nav { display: none; }
-.md-typeset .riku-term pre { margin: 0; }
-.md-typeset .riku-term pre > code {
-  padding: 20px 20px 22px;
-  font: 400 13.5px/1.9 var(--rk-mono);
-  color: var(--rk-text-2);
-  background: var(--rk-inset);
-  white-space: pre;
-}
-.riku-term .l { display: block; opacity: 0; animation: riku-line 0.01s ease forwards; }
-.riku-term .p   { color: var(--rk-text-3); }
-.riku-term .cmd { color: var(--rk-text); }
-.riku-term .k   { color: var(--rk-text-4); }
-.riku-term .dim { color: var(--rk-text-3); }
-.riku-term .ok  { color: var(--rk-alive); }
-.riku-term .url { color: var(--rk-info); }
-.riku-term .cur {
-  display: inline-block;
-  width: 8px;
-  height: 15px;
-  vertical-align: -3px;
-  background: var(--rk-text);
-  animation: riku-blink 1.05s steps(1) infinite;
-}
-.riku-term .l:nth-child(1) { animation-delay: 0.15s; }
-.riku-term .l:nth-child(2) { animation-delay: 0.55s; }
-.riku-term .l:nth-child(3) { animation-delay: 1.05s; }
-.riku-term .l:nth-child(4) { animation-delay: 1.55s; }
-.riku-term .l:nth-child(5) { animation-delay: 2.05s; }
-.riku-term .l:nth-child(6) { animation-delay: 2.55s; }
-.riku-term .l:nth-child(7) { animation-delay: 3.1s; }
-@keyframes riku-line { to { opacity: 1; } }
-@keyframes riku-blink { 50% { opacity: 0; } }
-
-/* Feature cards: one-pixel grid of flat panels */
-.md-typeset .grid.cards > ul {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1px;
-  margin: 0 0 24px;
-  background: var(--rk-line);
-  border: 1px solid var(--rk-line);
-}
-.md-typeset .grid.cards > ul > li {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 0;
-  padding: 28px;
-  border: 0;
-  background: var(--rk-surface);
-  box-shadow: none;
-  transition: none;
-}
-.md-typeset .grid.cards > ul > li:hover { border: 0; box-shadow: none; background: var(--rk-surface); }
-.md-typeset .grid.cards > ul > li > p { margin: 0; font-size: 14px; line-height: 1.6; }
-.md-typeset .grid.cards > ul > li > p:first-child { display: flex; flex-direction: column; gap: 12px; }
-.md-typeset .grid.cards > ul > li > p:first-child strong { font-size: 17px; line-height: 1.3; }
-.md-typeset .grid.cards > ul > li > hr { display: none; }
-.md-typeset .grid.cards > ul > li > p:last-child { margin-top: auto; padding-top: 8px; }
-.md-typeset .grid.cards > ul > li > p:last-child a { font: 500 13px/1 var(--rk-sans); text-decoration: none; }
-.md-typeset .grid.cards .twemoji.lg { height: 22px; width: 22px; color: var(--rk-alive); }
-.md-typeset .grid.cards .twemoji.lg svg { max-height: 22px; width: 22px; }
-
-/* Home page: tables and tabs keep the article styles above. The closing
-   CTA button sits alone in a paragraph. */
-.md-typeset > p:last-child > .md-button--primary { margin-top: 8px; }
-
-/* ============================================================
    ACCESSIBILITY AND RESPONSIVE
    ============================================================ */
 :focus-visible { outline: 2px solid var(--rk-info); outline-offset: 2px; }
-
-@media (prefers-reduced-motion: reduce) {
-  .riku-term .l { opacity: 1; animation: none; }
-  .riku-term .cur { animation: none; }
-}
 
 /* Below Material's TOC breakpoint the content fills the row. */
 @media screen and (max-width: 76.1875em) {
@@ -848,20 +659,12 @@ body { background: var(--rk-canvas); }
 }
 
 @media screen and (max-width: 59.9375em) {
-  .riku-hero { grid-template-columns: minmax(0, 1fr); row-gap: 0; padding-bottom: 48px; }
-  .riku-hero > .riku-term { grid-column: 1; grid-row: auto; margin-top: 40px; }
-  .md-typeset .riku-hero h1 { font-size: 44px; }
   .md-footer__inner { padding: 24px; }
 }
 
 @media screen and (max-width: 44.9375em) {
   .md-content__inner { margin: 0 16px 64px; }
   .md-typeset h1 { font-size: 30px; }
-  .md-typeset .riku-hero h1 { font-size: 34px; letter-spacing: -0.025em; }
-  .md-typeset .riku-hero .tagline { font-size: 16px; }
-  .md-typeset .riku-term pre > code { font-size: 12px; padding: 16px; }
-  .md-typeset .grid.cards > ul { grid-template-columns: minmax(0, 1fr); }
-  .md-typeset .grid.cards > ul > li { padding: 20px; }
   .md-footer__inner { flex-direction: column; padding: 20px 16px; }
   [dir] .md-footer__link { flex: 0 0 auto; }
   .md-footer__link--prev .md-footer__title { display: block; }
