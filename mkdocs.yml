@@ -150,6 +150,10 @@ plugins:
 # Custom styling
 extra_css:
   - stylesheets/extra.css
+  - stylesheets/home.css
+
+extra_javascript:
+  - javascripts/home.js
 
 extra:
   social:
