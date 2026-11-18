@@ -15,6 +15,12 @@ updates:
       interval: weekly
     commit-message:
       prefix: ci
+    groups:
+      # init, autobuild and analyze refuse to run at mixed versions, so a
+      # bump to one of them alone always fails CodeQL.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
 
   - package-ecosystem: cargo
     directory: /
