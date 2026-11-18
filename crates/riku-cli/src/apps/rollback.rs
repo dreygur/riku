@@ -37,7 +37,8 @@ fn show_history(paths: &RikuPaths, app: &str) -> Result<()> {
 }
 
 fn fmt_ts(ts: u64) -> String {
-    chrono::DateTime::from_timestamp(ts as i64, 0)
-        .map(|dt| dt.format("%Y-%m-%d %H:%M UTC").to_string())
-        .unwrap_or_else(|| ts.to_string())
+    match jiff::Timestamp::from_second(ts as i64) {
+        Ok(at) => at.strftime("%Y-%m-%d %H:%M UTC").to_string(),
+        Err(_) => ts.to_string(),
+    }
 }

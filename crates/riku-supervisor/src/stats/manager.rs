@@ -1,6 +1,6 @@
 //! Statistics manager for tracking process metrics.
 
-use chrono::Utc;
+use jiff::Timestamp;
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -43,7 +43,7 @@ impl StatsManager {
             app,
             kind,
             ordinal,
-            started_at: Some(Utc::now()),
+            started_at: Some(Timestamp::now()),
             status: ProcessStatus::Starting,
             restart_count: previous.map_or(0, |p| p.restart_count),
             last_restart_at: previous.and_then(|p| p.last_restart_at),
@@ -89,7 +89,7 @@ impl StatsManager {
         if let Some(stats) = self.stats.get_mut(process_id) {
             stats.status = ProcessStatus::Restarting;
             stats.restart_count += 1;
-            stats.last_restart_at = Some(Utc::now());
+            stats.last_restart_at = Some(Timestamp::now());
         }
     }
 
@@ -97,7 +97,7 @@ impl StatsManager {
     pub fn update_health_check(&mut self, process_id: &str, status: HealthStatus) {
         if let Some(stats) = self.stats.get_mut(process_id) {
             stats.health_check_status = status;
-            stats.last_health_check = Some(Utc::now());
+            stats.last_health_check = Some(Timestamp::now());
         }
     }
 

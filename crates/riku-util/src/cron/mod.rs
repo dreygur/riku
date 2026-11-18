@@ -9,7 +9,9 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::time::SystemTime;
 
+mod field;
 pub mod parser;
+mod schedule;
 
 pub use parser::validate_cron_expression;
 

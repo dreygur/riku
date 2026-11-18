@@ -22,7 +22,7 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{anyhow, Result};
-use chrono::{DateTime, SecondsFormat, Utc};
+use jiff::Timestamp;
 use riku_container::engine::{
     ContainerGone, ContainerId, ContainerInfo, Engine, LogRange, TimestampedLogs,
 };
@@ -41,23 +41,20 @@ pub(crate) enum Start {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Cursor {
-    at: DateTime<Utc>,
+    at: Timestamp,
     lines_at: usize,
 }
 
 struct Stamped<'a> {
-    at: DateTime<Utc>,
+    at: Timestamp,
     text: &'a str,
 }
 
 fn stamped(output: &str) -> impl Iterator<Item = Stamped<'_>> {
     output.lines().filter_map(|line| {
         let (at, text) = line.split_once(' ').unwrap_or((line, ""));
-        match DateTime::parse_from_rfc3339(at) {
-            Ok(at) => Some(Stamped {
-                at: at.with_timezone(&Utc),
-                text,
-            }),
+        match at.parse::<Timestamp>() {
+            Ok(at) => Some(Stamped { at, text }),
             Err(_) => None,
         }
     })
@@ -66,7 +63,7 @@ fn stamped(output: &str) -> impl Iterator<Item = Stamped<'_>> {
 /// The time up to which both streams are complete when one of them hit the
 /// byte cap: the newest line of the capped stream, or the older of the two
 /// when both were capped. `None` when neither was.
-fn cut_off(logs: &TimestampedLogs) -> Option<DateTime<Utc>> {
+fn cut_off(logs: &TimestampedLogs) -> Option<Timestamp> {
     [
         (&logs.stdout, logs.stdout_capped),
         (&logs.stderr, logs.stderr_capped),
@@ -223,7 +220,7 @@ impl LogPuller {
             None => return,
         };
         let range = match cursor {
-            Some(cursor) => LogRange::Since(cursor.at.to_rfc3339_opts(SecondsFormat::Nanos, true)),
+            Some(cursor) => LogRange::Since(format!("{:.9}", cursor.at)),
             None => LogRange::All,
         };
         let logs = match engine.timestamped_logs(&info.id, &range, self.stream_cap) {

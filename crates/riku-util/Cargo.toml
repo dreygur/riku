@@ -9,9 +9,8 @@ license = "MIT"
 
 [dependencies]
 anyhow = { workspace = true }
-chrono = { workspace = true }
-croner = "4"
 hex = { workspace = true }
+jiff = { workspace = true }
 rand = { workspace = true }
 libc = { workspace = true }
 nix = { workspace = true, features = ["resource", "user"] }

@@ -11,7 +11,7 @@
 use std::io::{IsTerminal, Read};
 
 use anyhow::{anyhow, bail, Result};
-use chrono::DateTime;
+use jiff::Timestamp;
 
 use super::certs_reapply::{reapply_route, reconfigure};
 use super::settings_cmd::known_app;
@@ -117,8 +117,8 @@ fn source_label(source: &Source) -> &'static str {
 }
 
 fn expires_line(expires_at: i64) -> String {
-    let date = DateTime::from_timestamp(expires_at, 0)
-        .map(|at| at.format("%Y-%m-%d").to_string())
+    let date = Timestamp::from_second(expires_at)
+        .map(|at| at.strftime("%Y-%m-%d").to_string())
         .unwrap_or_default();
     match info::classify(expires_at, info::now()) {
         Expiry::Expired => format!("expires: {date} (expired)"),

@@ -1,6 +1,6 @@
 //! Data types for process statistics and metrics.
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// Facts about a container process reported by the container engine.
@@ -27,11 +27,11 @@ pub struct ProcessStats {
     pub ordinal: u32,
     pub pid: Option<u32>,
     pub status: ProcessStatus,
-    pub started_at: Option<DateTime<Utc>>,
-    pub last_health_check: Option<DateTime<Utc>>,
+    pub started_at: Option<Timestamp>,
+    pub last_health_check: Option<Timestamp>,
     pub health_check_status: HealthStatus,
     pub restart_count: u32,
-    pub last_restart_at: Option<DateTime<Utc>>,
+    pub last_restart_at: Option<Timestamp>,
     pub cpu_time_ms: u64,
     pub memory_bytes: u64,
     /// The worker's memory limit: its cgroup `memory.max`, else the limit
@@ -140,5 +140,5 @@ pub struct AppStats {
     pub total_memory_bytes: u64,
     pub total_cpu_time_ms: u64,
     pub processes: Vec<ProcessStats>,
-    pub last_updated: DateTime<Utc>,
+    pub last_updated: Timestamp,
 }

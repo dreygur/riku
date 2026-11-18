@@ -27,7 +27,7 @@ fn app_stats(app: &str, processes: Vec<ProcessStats>) -> AppStats {
         total_memory_bytes: 0,
         total_cpu_time_ms: 0,
         processes,
-        last_updated: chrono::Utc::now(),
+        last_updated: jiff::Timestamp::now(),
     }
 }
 

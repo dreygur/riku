@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- riku no longer depends on `chrono` or `croner`. Times use `jiff`, and
+  cron schedules are evaluated by riku itself. `chrono` is unmaintained
+  (RUSTSEC-2026-0543), which failed `cargo deny` and `cargo audit`.
+- Cron schedules accept the plain 5 field syntax only: `*`, numbers,
+  ranges, steps, lists and month or weekday names. The croner extensions
+  `L`, `W`, `#`, `?` and the `+` weekday prefix are now rejected.
+
 ## [0.1.9] - 2026-11-13
 
 ### Fixed

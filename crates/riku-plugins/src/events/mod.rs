@@ -86,7 +86,7 @@ impl EventEnvelope {
         Self {
             api: RIKU_PLUGIN_API,
             event: event.as_str().to_string(),
-            ts: chrono::Utc::now().to_rfc3339(),
+            ts: jiff::Timestamp::now().to_string(),
             app: app.into(),
             data,
             source_plugin: None,
@@ -107,7 +107,7 @@ impl EventEnvelope {
         Self {
             api: RIKU_PLUGIN_API,
             event: name.into(),
-            ts: chrono::Utc::now().to_rfc3339(),
+            ts: jiff::Timestamp::now().to_string(),
             app: app.into(),
             data,
             source_plugin: Some(source_plugin.into()),

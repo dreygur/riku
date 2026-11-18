@@ -24,7 +24,7 @@ reqwest = { workspace = true }
 sha2 = "0.11"
 hex = { workspace = true }
 
-chrono = { workspace = true }
+jiff = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

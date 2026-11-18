@@ -1,9 +1,12 @@
-use chrono::TimeZone;
+use jiff::civil::date;
+use jiff::tz::TimeZone;
 
 use super::*;
 
-fn at(h: u32, m: u32, s: u32) -> DateTime<Utc> {
-    Utc.with_ymd_and_hms(2026, 11, 12, h, m, s).unwrap()
+fn at(h: i8, m: i8, s: i8) -> Timestamp {
+    TimeZone::UTC
+        .to_timestamp(date(2026, 11, 12).at(h, m, s, 0))
+        .unwrap()
 }
 
 #[test]

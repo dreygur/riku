@@ -23,7 +23,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Result};
-use chrono::Local;
+use jiff::ZonedDateTime;
 
 use crate::display;
 use crate::fs::write_private;
@@ -80,7 +80,10 @@ impl LogFile {
 }
 
 fn stamped(msg: &str) -> String {
-    format!("[{}] {msg}", Local::now().format("%Y-%m-%dT%H:%M:%S%z"))
+    format!(
+        "[{}] {msg}",
+        ZonedDateTime::now().strftime("%Y-%m-%dT%H:%M:%S%z")
+    )
 }
 
 /// A handle on the open deploy log that the threads reading a command's
