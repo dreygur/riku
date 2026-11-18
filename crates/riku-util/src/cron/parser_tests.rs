@@ -4,7 +4,7 @@ use jiff::civil::{date, DateTime, Weekday};
 use jiff::tz::TimeZone;
 use jiff::Timestamp;
 
-use super::calculate_next_run_after;
+use super::{calculate_next_run_after, validate_cron_expression};
 
 /// 2024-01-01 00:00:00 UTC, a Monday.
 const MONDAY_MIDNIGHT: u64 = 1_704_067_200;
@@ -40,4 +40,34 @@ fn restricted_day_fields_match_either_day() {
         date(2024, 1, 5).at(0, 0, 0, 0),
         "the first Friday comes before the 15th"
     );
+}
+
+#[test]
+fn rejects_malformed_fields() {
+    let malformed = [
+        "+5 * * * *",
+        "*/+5 * * * *",
+        "*/0 * * * *",
+        "5/10 * * * *",
+        "1,,2 * * * *",
+        "5-1 * * * *",
+        "60 * * * *",
+        "0 0 mon * *",
+        "0 0 * * 8",
+        "0 0 L * *",
+    ];
+
+    for schedule in malformed {
+        assert!(!validate_cron_expression(schedule), "accepted {schedule:?}");
+    }
+}
+
+/// A pre-epoch instant with a fractional second must round down, not
+/// toward zero, or the minute just after it is skipped.
+#[test]
+fn next_run_after_fractional_pre_epoch_instant() {
+    let after = UNIX_EPOCH - Duration::from_millis(60_500);
+    let next = calculate_next_run_after("* * * * *", after).unwrap();
+
+    assert_eq!(next, UNIX_EPOCH - Duration::from_secs(60));
 }

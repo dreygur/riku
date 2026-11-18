@@ -149,7 +149,10 @@ impl Schedule {
     /// The next fire time strictly after `after`, or an error when none
     /// falls within the search horizon.
     pub(super) fn next_after(&self, after: Timestamp) -> Result<Timestamp> {
-        let next_minute = (after.as_second().div_euclid(60) + 1) * 60;
+        // as_second truncates toward zero; a fractional pre-epoch instant
+        // needs one second off to round down.
+        let floor = after.as_second() - i64::from(after.subsec_nanosecond() < 0);
+        let next_minute = (floor.div_euclid(60) + 1) * 60;
         let start = match Timestamp::from_second(next_minute) {
             Ok(start) => TimeZone::UTC.to_datetime(start),
             Err(e) => return Err(anyhow!("time out of range: {e}")),

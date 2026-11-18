@@ -19,11 +19,13 @@
 //!
 //! # Day-of-month vs day-of-week semantics
 //!
-//! Standard Vixie-cron semantics are used: when **both** the day-of-month
-//! and day-of-week fields are restricted (i.e. neither is `*`), a match
-//! occurs if **either** field matches (logical OR). When at least one of the
-//! two is `*`, the fields are combined with logical AND. This means
-//! `0 9 * * 1` correctly fires only on Mondays.
+//! When **both** the day-of-month and day-of-week fields are restricted, a
+//! match occurs if **either** field matches (logical OR). When at least one
+//! of the two is a bare `*`, the fields are combined with logical AND. This
+//! means `0 9 * * 1` correctly fires only on Mondays. Anything other than a
+//! bare `*` counts as restricted, `*/2` included, as croner did. Vixie cron
+//! treats a field starting with `*` as unrestricted, so `0 9 */2 * 1` fires
+//! on odd days and on Mondays here, but only on odd day Mondays there.
 
 #![allow(clippy::question_mark)]
 

@@ -48,15 +48,23 @@ pub(super) const WEEKDAY: FieldSpec = FieldSpec {
     names: &WEEKDAY_NAMES,
 };
 
+/// `str::parse` takes a leading `+`, which cron does not.
+fn parse_digits<T: std::str::FromStr>(text: &str) -> Option<T> {
+    if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    text.parse().ok()
+}
+
 fn parse_value(text: &str, spec: &FieldSpec) -> Result<u8> {
     let named = spec
         .names
         .iter()
         .position(|name| name.eq_ignore_ascii_case(text));
-    let value = match (named, text.parse::<u8>()) {
+    let value = match (named, parse_digits::<u8>(text)) {
         (Some(index), _) => spec.min + index as u8,
-        (None, Ok(number)) => number,
-        (None, Err(_)) => return Err(anyhow!("'{text}' is not a number")),
+        (None, Some(number)) => number,
+        (None, None) => return Err(anyhow!("'{text}' is not a number")),
     };
 
     if value < spec.min || value > spec.max {
@@ -66,10 +74,10 @@ fn parse_value(text: &str, spec: &FieldSpec) -> Result<u8> {
 }
 
 fn parse_step(text: &str) -> Result<usize> {
-    match text.parse::<usize>() {
-        Ok(0) => Err(anyhow!("step must be at least 1")),
-        Ok(step) => Ok(step),
-        Err(_) => Err(anyhow!("'{text}' is not a step")),
+    match parse_digits::<usize>(text) {
+        Some(0) => Err(anyhow!("step must be at least 1")),
+        Some(step) => Ok(step),
+        None => Err(anyhow!("'{text}' is not a step")),
     }
 }
 
