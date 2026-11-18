@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use chrono::Utc;
+use jiff::Timestamp;
 
 use super::manager::StatsManager;
 use super::types::{AppStats, HealthStatus, ProcessStatus};
@@ -24,7 +24,7 @@ impl StatsManager {
                 total_memory_bytes: 0,
                 total_cpu_time_ms: 0,
                 processes: Vec::new(),
-                last_updated: Utc::now(),
+                last_updated: Timestamp::now(),
             });
 
             app_stats.total_processes += 1;

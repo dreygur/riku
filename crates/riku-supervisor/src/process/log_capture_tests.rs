@@ -114,7 +114,7 @@ fn each_captured_line_starts_with_its_capture_time() {
         .append(true)
         .open(&log_path)
         .unwrap();
-    let before = chrono::Utc::now() - chrono::Duration::seconds(1);
+    let before = jiff::Timestamp::now() - jiff::SignedDuration::from_secs(1);
 
     run_log_capture_thread(
         &b"listening on :37139\nready\n"[..],

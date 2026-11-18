@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- riku no longer depends on `chrono` or `croner`. Times use `jiff`, and
+  cron schedules are evaluated by riku itself. `chrono` is unmaintained
+  (RUSTSEC-2026-0543), which failed `cargo deny` and `cargo audit`.
+- Cron schedules accept the plain 5 field syntax only: `*`, numbers,
+  ranges, steps, lists and month or weekday names. The croner extensions
+  `L`, `W`, `#`, `?` and the `+` weekday prefix are now rejected, and so
+  is a `+` sign on any number.
+- Plugin event `ts` ends in `Z` instead of `+00:00`. It, the stats JSON
+  times and the agent audit log times print only the fractional digits
+  needed, not a fixed 3, 6 or 9. All stay RFC 3339.
+
 ## [0.1.9] - 2026-11-13
 
 ### Fixed

@@ -9,8 +9,8 @@ use std::thread;
 use std::time::Duration;
 
 use anyhow::Result;
-use chrono::Local;
 use colored::Colorize;
+use jiff::tz::TimeZone;
 
 use crate::util::log_stamp::split_stamp;
 
@@ -172,7 +172,9 @@ const CLOCK_WIDTH: usize = 8;
 fn prefixed(prefix: &str, col_width: usize, line: &str) -> String {
     let (clock, text) = match split_stamp(line) {
         Some((at, text)) => (
-            at.with_timezone(&Local).format("%H:%M:%S").to_string(),
+            at.to_zoned_datetime(TimeZone::system())
+                .strftime("%H:%M:%S")
+                .to_string(),
             text,
         ),
         None => (" ".repeat(CLOCK_WIDTH), line),

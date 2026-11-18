@@ -55,7 +55,7 @@ impl<'a> BackupService<'a> {
             Some(p) => p.to_path_buf(),
             None => std::env::current_dir()?.join(format!(
                 "{app}-backup-{}.tar.gz",
-                chrono::Utc::now().format("%Y%m%d-%H%M%S")
+                jiff::Timestamp::now().strftime("%Y%m%d-%H%M%S")
             )),
         };
 

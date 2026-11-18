@@ -5,7 +5,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::time::{Duration, Instant};
 
-use chrono::Utc;
+use jiff::Timestamp;
 
 use crate::util::log_stamp::stamp_line;
 
@@ -117,7 +117,7 @@ pub(super) fn run_log_capture_thread(
             reopen_if_rotated(log_path, &mut file, stream_name);
         }
 
-        let _ = writeln!(file, "{}", stamp_line(Utc::now(), &line));
+        let _ = writeln!(file, "{}", stamp_line(Timestamp::now(), &line));
         let _ = file.flush();
     }
 

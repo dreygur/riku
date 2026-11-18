@@ -13,7 +13,8 @@ use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, Result};
-use chrono::NaiveDateTime;
+use jiff::civil::DateTime;
+use jiff::tz::TimeZone;
 
 const DAY_SECS: i64 = 86_400;
 /// How many days before the end date `riku doctor` starts to warn.
@@ -80,8 +81,12 @@ pub(crate) fn parse_openssl(output: &str) -> Result<CertInfo> {
     let Some(end) = end else {
         return Err(anyhow!("openssl printed no end date"));
     };
-    let expires_at = match NaiveDateTime::parse_from_str(end.trim(), "%b %e %H:%M:%S %Y GMT") {
-        Ok(at) => at.and_utc().timestamp(),
+    let end_date = match DateTime::strptime("%b %e %H:%M:%S %Y GMT", end.trim()) {
+        Ok(at) => at,
+        Err(e) => return Err(anyhow!("cannot read the end date '{end}': {e}")),
+    };
+    let expires_at = match TimeZone::UTC.to_timestamp(end_date) {
+        Ok(at) => at.as_second(),
         Err(e) => return Err(anyhow!("cannot read the end date '{end}': {e}")),
     };
     let names = output

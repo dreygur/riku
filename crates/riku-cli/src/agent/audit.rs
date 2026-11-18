@@ -45,8 +45,9 @@ pub fn open_before_mutation(state: &Path, command: &str) -> Result<Option<File>>
 
 fn entry_line(entry: &AuditEntry) -> String {
     let status = if entry.success { "success" } else { "failed" };
+    let now = jiff::ZonedDateTime::now();
     let line = json!({
-        "time": chrono::Local::now().to_rfc3339(),
+        "time": now.timestamp().display_with_offset(now.offset()).to_string(),
         "agent": entry.agent,
         "action": entry.action,
         "app": entry.app,

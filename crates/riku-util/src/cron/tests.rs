@@ -1,6 +1,8 @@
 use super::parser::calculate_next_run_after;
 use super::*;
-use chrono::{Datelike, Timelike, Weekday};
+use jiff::civil::Weekday;
+use jiff::tz::TimeZone;
+use jiff::Timestamp;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 // validate_cron_expression
@@ -52,9 +54,8 @@ fn fixed_epoch_monday_midnight() -> SystemTime {
 }
 
 /// Convert a `SystemTime` next-run back into a UTC `DateTime` for assertions.
-fn as_utc(time: SystemTime) -> chrono::DateTime<chrono::Utc> {
-    let secs = time.duration_since(UNIX_EPOCH).unwrap().as_secs();
-    chrono::DateTime::from_timestamp(secs as i64, 0).unwrap()
+fn as_utc(time: SystemTime) -> jiff::civil::DateTime {
+    TimeZone::UTC.to_datetime(Timestamp::try_from(time).unwrap())
 }
 
 #[test]
@@ -111,7 +112,7 @@ fn test_next_run_monday_only_fires_on_monday() {
 
     assert_eq!(
         dt.weekday(),
-        Weekday::Mon,
+        Weekday::Monday,
         "0 9 * * 1 must fire on a Monday, got {dt}"
     );
     assert_eq!(dt.hour(), 9, "must fire at 09:00 UTC");
@@ -141,7 +142,7 @@ fn test_next_run_weekday_range() {
     let saturday = UNIX_EPOCH + Duration::from_secs(1704499200);
     let next = calculate_next_run_after("0 9 * * 1-5", saturday).unwrap();
     let dt = as_utc(next);
-    assert_eq!(dt.weekday(), Weekday::Mon);
+    assert_eq!(dt.weekday(), Weekday::Monday);
     assert_eq!(dt.day(), 8);
     assert_eq!(dt.hour(), 9);
 }
