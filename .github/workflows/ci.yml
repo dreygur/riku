@@ -89,7 +89,7 @@ jobs:
       # action steps: without it the action looks for the Node pin at the repo
       # root, finds none, and leaves the job on the runner's host Node.
       - name: Install nub
-        uses: nubjs/setup-nub@c7b970ec04655a2f0a111cd436cc182a3b660e7a # v0.6.0
+        uses: nubjs/setup-nub@8c7bade1432a9acf9a7ad169aa7288713d046161 # v0.6.2
         with:
           working-directory: dashboard
           cache-dependency-path: dashboard/nub.lock
