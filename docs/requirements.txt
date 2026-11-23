@@ -5,7 +5,7 @@
 mkdocs>=1.6.1
 
 # Material theme
-mkdocs-material>=9.8.1
+mkdocs-material>=9.8.2
 
 # Plugins
 mkdocs-minify-plugin>=0.8.0
